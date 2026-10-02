@@ -1,13 +1,15 @@
 import './postEditWidget.css';
-import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { type IContextKey, type RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { type IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { type INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
-import { type IBulkEditService, ResourceFileEdit, ResourceTextEdit } from '../../../browser/services/bulkEditService.js';
+import { IBulkEditService, ResourceFileEdit, ResourceTextEdit } from '../../../browser/services/bulkEditService.js';
 import { Range } from '../../../common/core/range.js';
 import { type DocumentDropEdit, type DocumentPasteEdit, type WorkspaceEdit, type WorkspaceEditEntry } from '../../../common/languages.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
@@ -26,7 +28,8 @@ export interface EditSet<T extends TransferEdit> {
 
 /** Owns the small editor-local selector shown after a paste or drop with alternatives. */
 class PostEditWidget<T extends TransferEdit> extends Disposable implements IContentWidget {
-	private readonly select: HTMLSelectElement;
+	private readonly domNode: HTMLElement;
+	private readonly dropdown: ActionWidgetDropdown;
 
 	constructor(
 		private readonly editor: ICodeEditor,
@@ -36,23 +39,25 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 		edits: EditSet<T>,
 		onSelect: (index: number) => void,
 		onDismiss: () => void,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
 		const document = editor.getDomNode()!.ownerDocument;
-		this.select = document.createElement('select');
-		this.select.className = 'stanza-editor-post-edit-selector';
-		this.select.setAttribute('aria-label', label);
-		this.select.setAttribute('aria-description', localize('dropOrPaste.selectorHelp', 'Use arrow keys to choose an edit. Press Escape to return to the editor.'));
-		this.select.title = label;
-		for (const [index, edit] of edits.allEdits.entries()) {
-			const option = document.createElement('option');
-			option.value = String(index);
-			option.textContent = edit.title;
-			this.select.add(option);
-		}
-		this.select.value = String(edits.activeEditIndex);
-		this._register(addDisposableListener(this.select, 'change', () => onSelect(Number(this.select.value))));
-		this._register(addDisposableListener<KeyboardEvent>(this.select, 'keydown', event => {
+		this.domNode = h(document, 'div');
+		this.domNode.className = 'stanza-editor-post-edit-selector';
+		this.dropdown = this._register(instantiationService.createInstance(ActionWidgetDropdown, this.domNode, {
+			label: edits.allEdits[edits.activeEditIndex]!.title,
+			ariaLabel: label,
+			actions: edits.allEdits.map((edit, index) => ({
+				id: `${id}.${index}`,
+				label: edit.title,
+				tooltip: edit.title,
+				enabled: true,
+				run: () => onSelect(index),
+			})),
+		}));
+		this.dropdown.element.setAttribute('aria-description', localize('dropOrPaste.selectorHelp', 'Press Down Arrow or Enter to open the options. Escape closes the menu; Escape on this button returns to the editor.'));
+		this._register(addDisposableListener<KeyboardEvent>(this.dropdown.element, 'keydown', event => {
 			if (event.key !== 'Escape') return;
 			event.stopPropagation();
 			onDismiss();
@@ -65,14 +70,17 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 	}
 
 	getId(): string { return this.id; }
-	getDomNode(): HTMLElement { return this.select; }
+	getDomNode(): HTMLElement { return this.domNode; }
 	getPosition(): IContentWidgetPosition {
 		return {
 			position: this.range.getEndPosition(),
 			preference: [ContentWidgetPositionPreference.BELOW, ContentWidgetPositionPreference.ABOVE],
 		};
 	}
-	showSelector(): void { this.select.focus(); }
+	showSelector(): void {
+		this.dropdown.element.focus();
+		this.dropdown.show();
+	}
 }
 
 export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
@@ -81,12 +89,13 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 
 	constructor(
 		private readonly editor: ICodeEditor,
-		private readonly bulkEdits: IBulkEditService,
-		private readonly notifications: INotificationService,
 		private readonly id: string,
-		private readonly label: string,
+		private readonly label: () => string,
 		visibleContext: RawContextKey<boolean>,
-		contextKeys: IContextKeyService,
+		@IBulkEditService private readonly bulkEdits: IBulkEditService,
+		@INotificationService private readonly notifications: INotificationService,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		this.visible = visibleContext.bindTo(contextKeys);
@@ -173,7 +182,8 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 		if (snippetController && snippet) snippetController.startSession(model, insertionStarts, snippet);
 		else this.editor.setPosition(anchor.getEndPosition());
 		if (!canShowWidget || edits.allEdits.length < 2) return;
-		this.widget.value = new PostEditWidget(this.editor, this.id, anchor, this.label, edits, newIndex => {
+		// The transient widget uses the current language, which may have changed since controller creation.
+		this.widget.value = this.instantiationService.createInstance(PostEditWidget<T>, this.editor, this.id, anchor, this.label(), edits, (newIndex: number) => {
 			if (newIndex === edits.activeEditIndex) return;
 			this.clear();
 			if (this.editor.getModel() !== model) return;

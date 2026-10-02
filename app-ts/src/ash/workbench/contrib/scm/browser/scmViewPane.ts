@@ -8,6 +8,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { registerOpenEditorListeners } from '../../../../platform/editor/browser/editor.js';
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -95,12 +96,12 @@ export class ScmViewPane extends ViewPane {
 				const content = row.querySelector<HTMLElement>('.ash-scm-section-heading, .ash-scm-change');
 				if (content) { this.renderedRows.deleteAndDispose(content); }
 			},
-			renderElement: element => 'group' in element ? this.renderGroup(element.group) : this.renderResource(element.resource),
+			renderElement: element => 'group' in element ? this.renderGroup(element.group) : this.renderResource(element),
 		}));
-		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use Up and Down to navigate, Left to collapse, and Right to expand a group. Press Enter to open a file. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.'));
+		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use Up and Down to preview files, Left to collapse, and Right to expand a group. Press Enter to open and pin a file, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.'));
 		this._register(this.tree.onDidOpen(event => {
 			if ('resource' in event.element) {
-				void event.element.resource.open({ pinned: event.editorOptions.pinned === true });
+				void event.element.resource.open(event.editorOptions, event.sideBySide);
 			} else if (event.browserEvent.type === 'keydown') {
 				this.tree.toggleCollapsed(event.element.id);
 			}
@@ -227,7 +228,8 @@ export class ScmViewPane extends ViewPane {
 		return heading;
 	}
 
-	private renderResource(resource: ISCMResource): HTMLElement {
+	private renderResource(element: { readonly id: string; readonly resource: ISCMResource }): HTMLElement {
+		const resource = element.resource;
 		const document = this.element.ownerDocument;
 		const item = h(document, 'div');
 		item.className = 'ash-scm-change';
@@ -250,14 +252,20 @@ export class ScmViewPane extends ViewPane {
 		open.append(fileLabel.element);
 		resources.add(addDisposableListener(open, 'mousedown', event => event.stopPropagation()));
 		resources.add(addDisposableListener(open, 'keydown', event => event.stopPropagation()));
-		resources.add(addDisposableListener(open, 'click', event => {
-			event.stopPropagation();
-			if ((event as MouseEvent).detail > 1) return;
-			void resource.open({ pinned: false });
+		resources.add(addDisposableListener(open, 'keydown', event => {
+			if (event.key === 'Enter' && (event.ctrlKey || event.metaKey || event.altKey)) {
+				event.preventDefault();
+				void resource.open({ pinned: true, preserveFocus: false }, true);
+			}
 		}));
-		resources.add(addDisposableListener(open, 'dblclick', event => {
-			event.stopPropagation();
-			void resource.open({ pinned: true });
+		resources.add(registerOpenEditorListeners(open, options => {
+			this.tree.setFocus(element.id);
+			this.tree.setSelection([element.id]);
+			// Git snapshots replace row buttons; previews keep focus on the retained tree instead.
+			if (options.editorOptions.preserveFocus) {
+				this.tree.domFocus();
+			}
+			void resource.open(options.editorOptions, options.openToSide);
 		}));
 		item.append(open);
 		this.renderActionToolbar(item, resource.actions, `Actions for ${resource.path}`, resources).classList.add('ash-scm-change-actions');
@@ -272,6 +280,7 @@ export class ScmViewPane extends ViewPane {
 	private renderActionToolbar(container: HTMLElement, actions: readonly IAction[], ariaLabel: string, resources: DisposableStore): HTMLDivElement {
 		const toolbar = resources.add(new WorkbenchToolBar(container, this.contextMenuProvider, {
 			ariaLabel,
+			presentation: 'inherit-foreground',
 			actionViewItemProvider: (action, options) => {
 				const item = new ScmActionViewItem(action, () => this.busy || this.provider?.isBusy === true, options);
 				this.actionViewItems.add(item);

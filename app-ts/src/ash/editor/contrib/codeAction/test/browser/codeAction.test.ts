@@ -170,7 +170,7 @@ async function flushPromises(): Promise<void> {
 	await Promise.resolve();
 }
 
-for (const outcome of ['accept', 'cancel', 'change', 'dispose'] as const) {
+for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] as const) {
 	test(`code action preview ${outcome} keeps edits behind approval and honours request cancellation`, async () => {
 		const dom = new JSDOM('<body><main></main></body>');
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -183,6 +183,10 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose'] as const) {
 			let applied = 0;
 			using bulkEdits = new BrowserBulkEditService({ apply: async () => {
 				applied++;
+				if (outcome === 'commit error') {
+					model.setValue('result');
+					throw new Error('Approved edit failed after retiring its request');
+				}
 				return { resources: [model.uri], undo: async () => {} };
 			} });
 			let finish!: (accepted: boolean) => void;
@@ -193,7 +197,8 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose'] as const) {
 			});
 			using services = new InstantiationService();
 			services.registerInstance(IBulkEditService, bulkEdits);
-			using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, ariaLabel: 'test.ts', languageFeaturesService: features, instantiationService: services, dimension: { width: 320, height: 80 } });
+			const errors: unknown[] = [];
+			using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, ariaLabel: 'test.ts', languageFeaturesService: features, instantiationService: services, dimension: { width: 320, height: 80 }, onLanguageError: error => errors.push(error) });
 			const input = dom.window.document.querySelector<HTMLElement>('.stanza-editor-input')!;
 			input.focus();
 			input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
@@ -209,8 +214,9 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose'] as const) {
 			finish(outcome !== 'cancel');
 			await flushPromises();
 			await flushPromises();
-			assert.equal(applied, outcome === 'accept' ? 1 : 0);
+			assert.equal(applied, outcome === 'accept' || outcome === 'commit error' ? 1 : 0);
 			assert.equal(previewSignal!.aborted, true);
+			assert.deepEqual(errors.map(error => (error as Error).message), outcome === 'commit error' ? ['Approved edit failed after retiring its request'] : []);
 		} finally {
 			dom.window.close();
 		}

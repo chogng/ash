@@ -728,6 +728,12 @@ SCM 同样通过 `IGitService → GitService → IGitApi` 访问仓库，并由 
 `IContentSearchService → BrowserContentSearchService → IContentSearchApi` 消费有界批次。
 两者的 contrib 都不接触 App Server notification union 或生成 DTO。
 
+SCM 的打开操作由 `scmViewPane.ts` 解释：预览保留列表焦点，双击固定文件，修饰键点击或 Enter
+请求侧边分组。打开链中的 `gitSCMProvider.ts` 解析 Git 版本并传递打开参数，`IEditorService` 和 Editor Part
+负责目标分组、pane 生命周期与布局。2026-10-02 已确认将该文件保留为 Ash 的 App Server→SCM
+适配器；VS Code 对应的仓库适配职责位于 `extensions/git/src/repository.ts` 和 `model.ts`，
+依赖扩展宿主 SCM API，不能直接承接 Ash 当前的 App Server 调用链。
+
 Terminal title actions 通过 `MenuId.TerminalTitle`、Context Key 与
 `MenuWorkbenchToolBar` 接入 MenuService；profile selector 仍由 Terminal 自定义 action view
 item 呈现。Command/Menu/Toolbar 的分层以 [`menu-system.md`](menu-system.md) 为准。

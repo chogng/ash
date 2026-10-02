@@ -4,11 +4,21 @@
 
 Quick Fix 的生产调用已经接入 `platform/actionWidget/browser/actionWidget.ts` 与 `actionList.ts`。`ActionWidgetService` 管理当前菜单，复用现有 `ContextView` 的定位、视口裁剪与外部点击关闭；`ActionList` 管理类型化动作及异步执行的忙碌状态，复用 `Menu` 的按钮、禁用态和键盘导航。Code Action 控制器继续管理提供者、原始 action、快照、取消与编辑提交，滚动或布局变化会关闭菜单。
 
-本批完成不带预览的动作菜单核心：打开、替换、关闭、焦点恢复，以及方向键、Home/End、Enter/Space 和 Alt+F1 帮助。帮助提示由 `accessibility.verbosity.actionWidget` 控制，文案接入英文和简体中文语言包。`ActionWidgetDropdown`、标签页、过滤、分组、预览和完整上游服务/列表契约尚未接入；本批没有将这些能力计为已对齐。
+动作菜单支持打开、替换、关闭、焦点恢复，以及方向键、Home/End、Enter/Space 和 Alt+F1 帮助。Quick Fix 根据动作 kind 显示快速修复、重构、源代码操作和其他操作的分组；菜单可按名称和分组名称进行多词筛选，隐藏空分组并播报匹配数量。Ctrl/Cmd+F 进入筛选，方向键返回动作列表；分组标题和禁用项不参与键盘导航。帮助提示由 `accessibility.verbosity.actionWidget` 控制，新增筛选、分组、预览与帮助文案接入英文和简体中文语言包。
+
+注册了预览处理器的宿主提供预览按钮和 Ctrl/Cmd+Enter，通过已有 `IBulkEditService` 打开批量编辑预览面板。控制器保留原提供者解析和版本有效性检查；关闭动作菜单不会取消待确认的预览，文档变化或编辑器释放会取消它。确认后提交由工作区编辑事务负责，提交自身产生的模型变化不能中途取消已确认的多文件编辑；提交错误仍向调用方报告。未注册预览处理器的独立编辑器只显示直接执行能力。
+
+`ActionWidgetDropdown` 已由粘贴与拖放的 `PostEditWidget` 消费，替换原先的 select 控件：按钮打开共享动作菜单，Escape 先关闭菜单并恢复按钮焦点，再次 Escape 返回编辑器；原有候选切换、附加资源撤销和 snippet 会话保持由编辑器贡献管理。控制器、事后控件管理器与下拉按钮通过实例化服务创建，词条在控件显示时按当前语言解析。
+
+Quick Fix 有多个类别时使用 `TabbedActionListWidget` 显示“全部操作”与各分类标签页；只有一个类别时保留普通动作列表。标签页复用 `TabList` 的焦点和选中语义，左右方向键移动焦点，Enter/Space 选择，向下方向键回到可用操作。切换分类更新同一份 `ActionList`，保留查询与异步执行状态，并继续通过原 action 索引执行或预览；类别页不重复显示自己的分组标题。弹层、关闭与焦点恢复仍由共享服务和 `ContextView` 管理。新增文件位于与上游对应的路径，实现由 Ash 现有组件组成；当前完成这些生产消费者所需的契约，没有将完整上游服务、列表或独立标签页弹层 API 计为已对齐。
 
 用户确认删除旧的 `contrib/codeAction/browser/media/codeAction.css`，生产调用与主题测试均已迁到共享菜单样式。帮助内容同时注册到 `AccessibleViewRegistry`，Workbench 帮助命令与独立编辑器使用相同的内容和焦点恢复规则。
 
-定向单测 11 项、Chromium 场景 32 项，以及 Web / Electron 各 1 项编辑器冒烟测试通过；Renderer 类型检查、Renderer / Host 构建和结构对齐检查通过。完整 Editor 检查的单测结果为 237/249 个文件通过，后续完整浏览器阶段未执行；12 个失败文件在将本批涉及的已有模块换回修改前版本后仍失败，涉及括号、颜色选择器、补全、语义着色、视图测试及 App Server 语言服务，未计为全量通过。
+第一批菜单核心验证：定向单测 11 项、Chromium 场景 32 项，以及 Web / Electron UI 各 1 项编辑器冒烟测试通过；Renderer 类型检查、Renderer / Host 构建和结构对齐检查通过。该批完整 Editor 检查的单测结果为 237/249 个文件通过，后续完整浏览器阶段未执行；12 个失败文件在将该批涉及的已有模块换回修改前版本后仍失败，涉及括号、颜色选择器、补全、语义着色、视图测试及 App Server 语言服务，未计为全量通过。
+
+筛选、分组与预览补齐后的验证：定向单测 28 项通过，覆盖共享菜单、Code Action 与批量编辑服务及面板，包括确认前取消、编辑器释放、多资源提交和请求失效后的提交错误；37 项相关 Chromium 场景通过，包含中文和四种主题。Renderer 类型检查、Renderer / Stanza 构建与 Web / Electron UI 各 1 项输入冒烟测试通过。完整 `--test=all` 检查仍为 237/249 个单测文件通过，失败文件与第一批相同，因此该入口未进入完整浏览器阶段；独立运行完整编辑器浏览器检查为 746/747 通过，边栏折叠控件几何用例单独复跑仍失败，本批没有修改该职责。结构、CSS、台账和 Stanza 类型检查通过，无新增源码 JavaScript 输出；未计为全量检查通过。
+
+下拉按钮与分类标签页接入后的验证：共享菜单、Code Action、粘贴和拖放共 41 项定向单测通过；41 项相关 Chromium 场景通过，覆盖标签页键盘激活、分类切换后保留查询与忙碌状态、原 action 派发、中文按钮及 Escape 焦点恢复。窄窗口下的标签页另经亮色、暗色及两种高对比主题复验，通过可见尺寸、弹层边界和焦点样式断言。Renderer / Build 类型检查、Renderer / Stanza 生产构建及 3 项既有分包与大小限制测试通过。语言目录从接近大小限制的共享包中独立分包，保留每个 JavaScript 包不超过 500 KB 的检查；Web、Electron UI、连接 App Server 的 Electron 各 1 项输入冒烟测试通过。完整 `--test=all` 重跑为 237/249 个单测文件通过，仍是上一批的 12 个失败文件，未进入完整浏览器阶段；结构、CSS、台账和 Stanza 类型检查通过。测试保留既有 JSDOM Canvas 与终端颜色变量提示，不计为全量检查通过。
 
 
 ## Token 清理与滚动测试（2026-10-01）
@@ -2216,7 +2226,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `common/cursor/cursorTypeEditOperations.ts` | `AutoClosingOvertypeOperation` | 只根据自动闭合来源和当前位置构造覆盖命令；多光标、完整字素和物理行边界由本地行为测试直接验证，不要求复刻上游私有执行阶段 |
 | `contrib/colorPicker/browser/colorPickerWidget.ts` | `ColorPickerWidget` | 已回到对应路径并拥有挂载、控件事件和释放；保留 Ash 的颜色模型与展示，构造器和其余上游公开接口仍未全量对齐 |
 | `contrib/peekView/browser/peekView.ts` | `PeekViewWidget` | 已回到对应路径并拥有标题、Escape 和关闭事件，导航 / 层级 / Quick Diff 接通释放；Ash 的内容容器与布局接口继续保留，未实现上游全部标题栏能力 |
-| `contrib/codeAction/browser/codeActionController.ts` | `CodeActionController` | 同路径贡献负责 Code Action 请求和编辑提交；动作列表、忙碌状态和菜单释放已迁入 platform/actionWidget，焦点只在菜单拥有焦点时恢复。搜索、分组、预览及完整上游公开契约仍待对应消费链验收 |
+| `contrib/codeAction/browser/codeActionController.ts` | `CodeActionController` | 同路径贡献负责 Code Action 请求和编辑提交；动作列表、筛选、分组、分类标签页、忙碌状态和菜单释放由 platform/actionWidget 管理，焦点只在菜单拥有焦点时恢复，预览接入既有 Bulk Edit。完整上游公开契约仍待核对 |
 | `contrib/codelens/browser/codelensWidget.ts` | `CodeLensWidget` | 当前已使用 `CodeLensWidget` 名称；其余公开契约仍待按生产调用方逐项验收 |
 | `contrib/colorPicker/browser/colorDetector.ts` | `ColorDetector` | 已恢复上游公开名；颜色 provider 结果写入标准 before decoration，动态 class ref 先于 CSS owner 释放，注入 marker 由标准鼠标目标读取 |
 | `contrib/find/browser/findController.ts` | `FindController` | 标准查找 / 替换动作及快捷键接通原控件；其余公开契约仍待分部验收 |

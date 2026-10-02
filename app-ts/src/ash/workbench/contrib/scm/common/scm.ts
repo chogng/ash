@@ -3,6 +3,7 @@ import type { IAction } from '../../../../base/common/actions.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
+import type { IEditorOptions } from '../../../../platform/editor/common/editor.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ISCMHistoryProvider } from './history.js';
@@ -20,7 +21,8 @@ export interface ISCMResource {
 	readonly decorations: ISCMResourceDecorations;
 	readonly openLabel: string;
 	readonly actions: readonly IAction[];
-	open(options: { readonly pinned: boolean }): Promise<void>;
+	/** The view supplies interaction intent; the editor service owns target-group selection. */
+	open(options: IEditorOptions, sideBySide: boolean): Promise<void>;
 }
 
 export interface ISCMResourceGroup {

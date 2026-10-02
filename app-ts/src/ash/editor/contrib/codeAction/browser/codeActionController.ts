@@ -147,6 +147,7 @@ export class CodeActionController extends Disposable {
 			}
 			items.push(...groupItems);
 		}
+		const groupEntries = [...groups.entries()];
 		this.actionWidgetService.show(CodeActionController.ID, this.bulkEditService.hasPreviewHandler(), items, {
 			onSelect: (index, preview) => this.apply(index, preview),
 			onHide: didCancel => {
@@ -158,7 +159,14 @@ export class CodeActionController extends Disposable {
 			top: bounds.top + coordinates.top,
 			width: 0,
 			height: coordinates.height,
-		}, { showFilter: true });
+		}, { showFilter: true }, groups.size > 1 ? {
+			tabs: [
+				{ id: 'all', label: localize('codeAction.allActions', 'All actions') },
+				...groupEntries.map(([title], index) => ({ id: String(index), label: title })),
+			],
+			initialTab: 'all',
+			createActionList: id => ({ items: id === 'all' ? items : groupEntries[Number(id)]![1] }),
+		} : undefined);
 	}
 
 	private async apply(index: number, preview = false): Promise<void> {
@@ -184,6 +192,7 @@ export class CodeActionController extends Disposable {
 			if (preview) {
 				// Dismissing the menu hands focus to the preview without cancelling its version-bound request.
 				this.actionWidgetService.hide(false);
+				editDispatched = true;
 				await this.bulkEditService.apply(resolved.edit, { editor: this.editor, showPreview: true, token: context.signal, label: resolved.title });
 			} else if (this.applyWorkspaceEdit) {
 				editDispatched = true;

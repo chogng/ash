@@ -5,11 +5,10 @@ import { onUnexpectedExternalError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { IContextKeyService, type IContextKeyService as ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { type INotificationService, INotificationService as NotificationService } from '../../../../platform/notification/common/notification.js';
 import { toExternalVSDataTransfer } from '../../../browser/dataTransfer.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { IBulkEditService, type IBulkEditService as BulkEditService } from '../../../browser/services/bulkEditService.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Position, type IPosition } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
@@ -38,13 +37,12 @@ export class DropIntoEditorController extends Disposable implements IEditorContr
 	constructor(
 		private readonly editor: ICodeEditor,
 		@ILanguageFeaturesService private readonly features: LanguageFeaturesService,
-		@IBulkEditService bulkEdits: BulkEditService,
 		@NotificationService private readonly notifications: INotificationService,
-		@IContextKeyService contextKeys: ContextKeyService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
-		this.postEditWidget = this._register(new PostEditWidgetManager(editor, bulkEdits, notifications,
-			'editor.widget.postDropSelector', localize('dropOrPaste.dropOptions', 'Drop options'), dropWidgetVisibleCtx, contextKeys));
+		this.postEditWidget = this._register(instantiationService.createInstance(PostEditWidgetManager<DropEditWithProvider>, editor,
+			'editor.widget.postDropSelector', () => localize('dropOrPaste.dropOptions', 'Drop options'), dropWidgetVisibleCtx));
 		this._register(editor.onDropIntoEditor(event => this.onDrop(event.position, event.event)));
 		const domNode = editor.getDomNode();
 		if (domNode) this._register(addDisposableListener<DragEvent>(domNode, 'dragover', event => this.onDragOver(event)));

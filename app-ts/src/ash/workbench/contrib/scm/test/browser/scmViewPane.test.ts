@@ -2,6 +2,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { setNlsResolver, resetNlsResolver } from '../../../../../nls.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import type { IEditorOptions } from '../../../../../platform/editor/common/editor.js';
 import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
 import assert from "node:assert/strict";
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -21,7 +22,7 @@ import { IContextMenuService } from "../../../../../platform/contextview/browser
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { IResourceIconRenderer } from "../../../../browser/labels.js";
 import { GitWorkspaceError, IGitService, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
-import { IEditorService, type EditorInput, type EditorOpenOptions } from "../../../../../workbench/services/editor/common/editorService.js";
+import { IEditorService, type EditorInput, type EditorOpenOptions, type EditorOpenTarget } from "../../../../../workbench/services/editor/common/editorService.js";
 import type { IViewsService } from '../../../../../workbench/services/views/browser/viewsService.js';
 import { WorkbenchState, IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { IWorkingCopyService } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
@@ -511,7 +512,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 			return { original: { kind: "text" as const, text: "before\n" }, modified: { kind: "text" as const, text: "after\n" } };
 		},
 	} as unknown as IGitService;
-	const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined }> = [];
+	const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget }> = [];
 	const editorService = testEditorService(opened);
 	const hoverService: IHoverService = {
 		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
@@ -612,6 +613,7 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 	const installedGlobals = installDomGlobals(browser);
 	using changes = new Emitter<void>();
 	const opened: Array<{ path: string; pinned: boolean }> = [];
+	const openIntents: Array<{ options: IEditorOptions; sideBySide: boolean }> = [];
 	let groupActions = 0;
 	let fileActions = 0;
 	const resource = (path: string) => ({
@@ -619,7 +621,10 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		decorations: { badge: 'M', tooltip: 'Modified', kind: 'modified' },
 		openLabel: `Open ${path}`,
 		actions: [{ id: 'stage', label: 'Stage', tooltip: 'Stage', enabled: true, run: () => { fileActions++; } }],
-		open: async (options: { readonly pinned: boolean }) => { opened.push({ path, pinned: options.pinned }); },
+		open: async (options: IEditorOptions, sideBySide: boolean) => {
+			opened.push({ path, pinned: options.pinned === true });
+			openIntents.push({ options, sideBySide });
+		},
 	});
 	const groupAction = { id: 'stageAll', label: 'Stage All', tooltip: 'Stage All', enabled: true, run: () => { groupActions++; } };
 	let groups = [{ id: 'changes', label: 'Changes', resources: [resource('first.ts')], actions: [groupAction] }];
@@ -653,6 +658,7 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		const key = (value: string): void => { tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: value, bubbles: true })); };
 		assert.equal(tree.getAttribute('aria-label'), '源代码管理更改');
 		assert.ok(tree.getAttribute('aria-description')?.includes('左方向键折叠分组'));
+		assert.ok(tree.getAttribute('aria-description')?.includes('侧边分组'));
 		assert.equal(group().getAttribute('aria-expanded'), 'true');
 		group().querySelector<HTMLElement>('.ash-scm-section-label')!.click();
 		assert.equal(group().getAttribute('aria-expanded'), 'false');
@@ -675,10 +681,16 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		key('ArrowRight');
 		key('Enter');
 		assert.deepEqual(opened, [{ path: 'first.ts', pinned: false }, { path: 'first.ts', pinned: true }]);
+		assert.deepEqual(openIntents, [
+			{ options: { pinned: false, preserveFocus: true }, sideBySide: false },
+			{ options: { pinned: true, preserveFocus: false }, sideBySide: false },
+		]);
+		tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true }));
+		assert.deepEqual(openIntents.at(-1), { options: { pinned: true, preserveFocus: false }, sideBySide: true });
 		const fileButton = tree.querySelector<HTMLButtonElement>('.ash-scm-change-actions [aria-label="Stage"]')!;
 		fileButton.click();
 		await waitFor(() => fileActions === 1);
-		assert.equal(opened.length, 2);
+		assert.equal(opened.length, 3);
 		group().querySelector<HTMLElement>('.ash-tree-twistie')!.click();
 		assert.equal(group().getAttribute('aria-expanded'), 'false');
 		await pane.refresh();
@@ -687,6 +699,9 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		group().querySelector<HTMLElement>('.ash-tree-twistie')!.click();
 		tree.querySelector<HTMLButtonElement>('[aria-label="Open second.ts"]')!.click();
 		assert.deepEqual(opened.at(-1), { path: 'second.ts', pinned: false });
+		assert.equal(browser.window.document.activeElement, tree);
+		await pane.refresh();
+		assert.equal(browser.window.document.activeElement, tree, 'Git row replacement retains preview focus');
 		using otherRepository = scm.registerSCMProvider({ ...provider, id: 'repo-2' });
 		group().querySelector<HTMLElement>('.ash-tree-twistie')!.click();
 		views.selectRepository(otherRepository.id);
@@ -712,7 +727,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 	const repositoryStatusChanges = new Emitter<GitStatus>();
 	statusListener = status => repositoryStatusChanges.fire(status);
 	const changeFileRequests: Array<{ readonly path: string; readonly comparison: "staged" | "unstaged"; readonly repositoryId: string | undefined }> = [];
-	const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined }> = [];
+	const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget }> = [];
 	const first: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-stream-1",
@@ -893,6 +908,23 @@ test("ScmViewPane groups App Server Git status", async () => {
 		assert.equal(conflictInput.readOnly, undefined);
 		assert.equal(opened[4].options?.pinned, false);
 		assert.equal(changeFileRequests.length, changeFileCount);
+
+		workingOpen.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true, altKey: true }));
+		await waitFor(() => opened.length === 6);
+		assert.deepEqual({ options: opened[5].options, target: opened[5].target }, {
+			options: { pinned: false, preserveFocus: true }, target: 'sideGroup',
+		});
+		conflictOpen.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'Enter', ctrlKey: true }));
+		await waitFor(() => opened.length === 7);
+		assert.ok(isScmMergeEditorInput(opened[6].input));
+		assert.deepEqual({ options: opened[6].options, target: opened[6].target }, {
+			options: { pinned: true, preserveFocus: false }, target: 'sideGroup',
+		});
+		stagedOpen.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: ' ' }));
+		await waitFor(() => opened.length === 8);
+		assert.deepEqual({ options: opened[7].options, target: opened[7].target }, {
+			options: { pinned: false, preserveFocus: true }, target: undefined,
+		});
 		dirtyConflict = true;
 		pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage conflict.ts"]')?.click();
 		assert.equal(stagedPaths, undefined);
@@ -1077,10 +1109,10 @@ function testManagedHover(): IManagedHover {
 	};
 }
 
-function testEditorService(opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined }> = []): IEditorService {
+function testEditorService(opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget }> = []): IEditorService {
 	return {
 		...emptyEditorServiceState,
-		openEditor: async (input, options) => { opened.push({ input, options }); },
+		openEditor: async (input, options, target) => { opened.push({ input, options, target }); },
 		focusActiveEditor() {},
 	};
 }

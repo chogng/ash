@@ -205,9 +205,9 @@
 }
 
 .ash-scm-graph-label > .ash-icon {
-  width: 13px;
-  height: 13px;
-  flex: 0 0 13px;
+  width: var(--ash-lxicon-font-size);
+  height: var(--ash-lxicon-font-size);
+  flex: 0 0 var(--ash-lxicon-font-size);
 }
 
 .ash-scm-graph-label-description {
@@ -398,8 +398,10 @@
 .ash-scm-commit-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
-  padding: 0 8px 8px;
+  gap: var(--ash-spacing-size60);
+  margin: 0 var(--ash-spacing-size80) var(--ash-spacing-size40);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+  padding: 0 0 var(--ash-spacing-size120);
 }
 
 .ash-scm-repository-selector {
@@ -432,17 +434,17 @@
 .ash-scm-commit-input {
   min-width: 0;
   resize: vertical;
-  border: var(--ash-stroke-thickness) solid color-mix(in srgb, currentColor 25%, transparent);
+  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
   border-radius: var(--ash-corner-radius-small);
   padding: 6px 8px;
-  color: inherit;
-  background: color-mix(in srgb, currentColor 6%, transparent);
+  color: var(--ash-input-foreground);
+  background: var(--ash-input-background);
   font: inherit;
 }
 
 .ash-scm-commit-input:focus {
-  border-color: var(--ash-focus-border);
   outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: -1px;
 }
 
 .ash-scm-commit.ash-button,
@@ -477,13 +479,15 @@
 .ash-scm-section-heading {
   display: flex;
   min-width: 0;
-  min-height: 22px;
+  height: var(--ash-spacing-size280);
+  flex: 1 1 auto;
   align-items: center;
   margin: 0;
   padding: 0;
   font-size: var(--ash-font-size-label1);
   font-weight: var(--ash-font-weight-semi-bold);
-  line-height: 22px;
+  gap: var(--ash-spacing-size40);
+  line-height: var(--ash-spacing-size280);
 }
 
 .ash-scm-section-label {
@@ -496,8 +500,10 @@
 
 .ash-scm-section-count {
   flex: 0 0 auto;
-  min-width: 18px;
-  opacity: 0.65;
+  min-width: var(--ash-spacing-size200);
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-size: var(--ash-font-size-label2);
+  font-weight: var(--ash-font-weight-regular);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -508,31 +514,34 @@
 
 .ash-scm-section-actions,
 .ash-scm-change-actions {
-  display: none;
+  /* Reserve the action width so labels and status markers stay put on hover. */
+  visibility: hidden;
 }
 
 .ash-scm-changes .ash-tree-row:hover .ash-scm-section-actions,
+.ash-scm-changes .ash-tree-row:hover .ash-scm-change-actions,
 .ash-scm-changes .ash-tree-row.focused .ash-scm-section-actions,
 .ash-scm-changes .ash-tree-row.focused .ash-scm-change-actions,
 .ash-scm-section-heading:focus-within > .ash-scm-section-actions,
 .ash-scm-change:hover > .ash-scm-change-actions,
 .ash-scm-change:focus-within > .ash-scm-change-actions {
-  display: flex;
+  visibility: visible;
 }
 
 .ash-scm-change {
   display: flex;
   min-width: 0;
-  min-height: 22px;
+  height: var(--ash-spacing-size240);
+  flex: 1 1 auto;
   align-items: center;
   padding: 0;
-  line-height: 22px;
+  line-height: var(--ash-spacing-size240);
 }
 
 .ash-scm-change-open {
   display: flex;
   min-width: 0;
-  min-height: 22px;
+  height: var(--ash-spacing-size240);
   flex: 1 1 auto;
   align-items: center;
   overflow: hidden;
@@ -543,10 +552,6 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
-}
-
-.ash-scm-change:hover {
-  background: var(--ash-list-hover-background);
 }
 
 .ash-scm-change-open:focus-visible {
@@ -569,16 +574,16 @@
   min-width: 0;
   flex: 1 10 auto;
   overflow: hidden;
-  margin-left: 6px;
-  color: var(--ash-muted-foreground);
+  margin-left: var(--ash-spacing-size60);
+  color: color-mix(in srgb, currentColor 70%, transparent);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ash-scm-change-status {
-  flex: 0 0 16px;
-  width: 16px;
-  margin-left: 4px;
+  flex: 0 0 var(--ash-spacing-size200);
+  width: var(--ash-spacing-size200);
+  margin-left: var(--ash-spacing-size40);
   color: color-mix(in srgb, currentColor 78%, transparent);
   font-weight: var(--ash-font-weight-semi-bold);
   text-align: center;

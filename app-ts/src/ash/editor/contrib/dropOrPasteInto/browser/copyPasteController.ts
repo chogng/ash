@@ -13,12 +13,11 @@ import { Mimes } from '../../../../base/common/mime.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { IContextKeyService, type IContextKeyService as ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { type INotificationService, INotificationService as NotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickInputService as QuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { type IClipboardCopyEvent, type IClipboardPasteEvent } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { IBulkEditService, type IBulkEditService as BulkEditService } from '../../../browser/services/bulkEditService.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Range } from '../../../common/core/range.js';
 import { Handler, type IEditorContribution } from '../../../common/editorCommon.js';
@@ -55,14 +54,13 @@ export class CopyPasteController extends Disposable implements IEditorContributi
 	constructor(
 		private readonly editor: ICodeEditor,
 		@ILanguageFeaturesService private readonly features: LanguageFeaturesService,
-		@IBulkEditService bulkEdits: BulkEditService,
 		@NotificationService private readonly notifications: INotificationService,
 		@IQuickInputService private readonly quickInput: QuickInputService,
-		@IContextKeyService contextKeys: ContextKeyService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
-		this.postEditWidget = this._register(new PostEditWidgetManager(editor, bulkEdits, notifications,
-			'editor.widget.postPasteSelector', localize('dropOrPaste.pasteOptions', 'Paste options'), pasteWidgetVisibleCtx, contextKeys));
+		this.postEditWidget = this._register(instantiationService.createInstance(PostEditWidgetManager<PasteEditWithProvider>, editor,
+			'editor.widget.postPasteSelector', () => localize('dropOrPaste.pasteOptions', 'Paste options'), pasteWidgetVisibleCtx));
 		this._register(editor.onWillPaste(event => this.handlePaste(event)));
 		this._register(editor.onWillCopy(event => this.prepareCopy(event)));
 		this._register(editor.onWillCut(event => this.prepareCopy(event)));

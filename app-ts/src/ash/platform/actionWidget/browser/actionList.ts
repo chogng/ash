@@ -72,7 +72,7 @@ export class ActionList<T> extends Disposable {
 
 	constructor(
 		private readonly user: string,
-		private readonly items: readonly IActionListItem<T>[],
+		private items: readonly IActionListItem<T>[],
 		private readonly delegate: IActionListDelegate<T>,
 		container: HTMLElement,
 		ariaHint: string | undefined,
@@ -122,7 +122,11 @@ export class ActionList<T> extends Disposable {
 			this.preview = this._register(new Button(previewHost, {
 				label: localize('actionWidget.preview', 'Preview'),
 				enabled: false,
-				onClick: () => { if (this.focusedEntry) void this.select(this.focusedEntry, true); },
+				onClick: () => {
+					if (this.focusedEntry) {
+						void this.select(this.focusedEntry, true);
+					}
+				},
 			}));
 		}
 		container.append(this.domNode);
@@ -232,6 +236,11 @@ export class ActionList<T> extends Disposable {
 		}
 	}
 
+	public updateItems(items: readonly IActionListItem<T>[]): void {
+		this.items = items;
+		this.renderItems();
+	}
+
 	private async select(entry: IActionListItem<T>, preview = false): Promise<void> {
 		if (this.busy || entry.kind !== ActionListItemKind.Action || entry.disabled || (preview && (!this.supportsPreview || !entry.canPreview))) {
 			return;
@@ -262,7 +271,7 @@ function createHelpProvider(source: Element | null): AccessibleContentProvider {
 	return new AccessibleContentProvider(
 		AccessibleViewProviderId.ActionWidget,
 		{ type: AccessibleViewType.Help },
-		() => localize('actionWidget.help', 'Use Up and Down Arrow to move between available actions. Home and End move to the first and last action. Enter or Space runs the focused action. When a filter is available, Ctrl+F or Command+F focuses it; type to filter, then Down Arrow returns to the actions. When Preview is available, Ctrl+Enter or Command+Enter previews the focused action. Escape closes the menu and returns focus to its source. Unavailable actions and group labels are skipped.'),
+		() => localize('actionWidget.help', 'Use Up and Down Arrow to move between available actions. Home and End move to the first and last action. Enter or Space runs the focused action. When tabs are available, Left and Right Arrow move between them, Enter or Space selects a tab, and Down Arrow returns to the actions. When a filter is available, Ctrl+F or Command+F focuses it; type to filter, then Down Arrow returns to the actions. When Preview is available, Ctrl+Enter or Command+Enter previews the focused action. Escape closes the menu and returns focus to its source. Unavailable actions and group labels are skipped.'),
 		() => {
 			if (isHTMLElement(source) && source.isConnected) {
 				source.focus({ preventScroll: true });

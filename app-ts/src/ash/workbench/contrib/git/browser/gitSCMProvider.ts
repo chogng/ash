@@ -5,6 +5,7 @@ import { Disposable, DisposableMap, DisposableStore } from '../../../../base/com
 import { URI } from '../../../../base/common/uri.js';
 import type { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import type { IEditorOptions } from '../../../../platform/editor/common/editor.js';
 import { createDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { IViewsService } from '../../../services/views/browser/viewsService.js';
@@ -181,7 +182,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider {
 			decorations: { badge: statusCode(state), tooltip: statusLabel(state), kind: state },
 			openLabel: change.conflicted ? `Open merge conflict in ${change.path}` : `Open ${side === 'index' ? 'staged changes' : 'changes'} for ${change.path}`,
 			actions,
-			open: ({ pinned }) => this.openChange(status, change, side, pinned),
+			open: (options, sideBySide) => this.openChange(status, change, side, options, sideBySide),
 		};
 	}
 
@@ -241,18 +242,19 @@ export class GitSCMProvider extends Disposable implements ISCMProvider {
 		return resultId;
 	}
 
-	private async openChange(status: GitStatus, change: GitRepositoryChange, side: ChangeSide, pinned: boolean): Promise<void> {
+	private async openChange(status: GitStatus, change: GitRepositoryChange, side: ChangeSide, options: IEditorOptions, sideBySide: boolean): Promise<void> {
+		const target = sideBySide ? 'sideGroup' : undefined;
 		try {
 			if (change.conflicted) {
 				const resource = URI.parse(`git-merge:/${encodeURIComponent(this.id)}/${change.path.split('/').map(encodeURIComponent).join('/')}`);
-				await this.services.editorService.openEditor(createScmMergeEditorInput(this.id, change.path, resource, repositoryFileUri(status.workspacePath, change.path)), { pinned });
+				await this.services.editorService.openEditor(createScmMergeEditorInput(this.id, change.path, resource, repositoryFileUri(status.workspacePath, change.path)), options, target);
 				return;
 			}
 			const comparison: GitChangeFileComparison = side === 'index' ? 'staged' : 'unstaged';
 			const inputs = await resolveGitChangeInputs(this.gitService, status, change, comparison);
-			if (inputs.original && inputs.modified) await this.services.editorService.openEditor(createDiffEditorInput(inputs.original, inputs.modified, `${inputs.original.label} ↔ ${inputs.modified.label}`), { pinned });
-			else if (inputs.modified) await this.services.editorService.openEditor(inputs.modified, { pinned });
-			else if (inputs.original) await this.services.editorService.openEditor(inputs.original, { pinned });
+			if (inputs.original && inputs.modified) await this.services.editorService.openEditor(createDiffEditorInput(inputs.original, inputs.modified, `${inputs.original.label} ↔ ${inputs.modified.label}`), options, target);
+			else if (inputs.modified) await this.services.editorService.openEditor(inputs.modified, options, target);
+			else if (inputs.original) await this.services.editorService.openEditor(inputs.original, options, target);
 		} catch (error) { this.showError(error); }
 	}
 

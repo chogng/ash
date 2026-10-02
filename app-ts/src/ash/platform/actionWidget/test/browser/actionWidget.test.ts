@@ -15,6 +15,7 @@ import { getSingletonServiceDescriptors } from '../../../instantiation/common/ex
 import { getIconDefinition } from '../../../theme/common/iconRegistry.js';
 import { IActionWidgetService } from '../../browser/actionWidget.js';
 import { ActionListItemKind } from '../../browser/actionList.js';
+import { ActionWidgetDropdown } from '../../browser/actionWidgetDropdown.js';
 
 function createServices(document: Document, resources: DisposableStore): InstantiationService {
 	setIconResolver(document, icon => getIconDefinition(icon));
@@ -218,6 +219,76 @@ test('preview requires an eligible focused action and shares the activation gate
 		await pending;
 		await Promise.resolve();
 		assert.equal(preview.disabled, false);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('changing action tabs preserves the filter and the pending execution gate', async () => {
+	const dom = new JSDOM('<body><button id="source">Open</button></body>');
+	try {
+		using resources = new DisposableStore();
+		const service = createServices(dom.window.document, resources).get(IActionWidgetService);
+		const source = dom.window.document.querySelector<HTMLButtonElement>('#source')!;
+		const items = [1, 2].map(item => ({ kind: ActionListItemKind.Action, item, label: `Run ${item}` }));
+		const selected: number[] = [];
+		let finish!: () => void;
+		const pending = new Promise<void>(resolve => { finish = resolve; });
+		let hidden = 0;
+		source.focus();
+		service.show('tabs', false, items, {
+			onSelect: async item => { selected.push(item); await pending; },
+			onHide: () => hidden++,
+		}, source, { showFilter: true }, {
+			tabs: [{ id: 'all', label: 'All' }, { id: 'second', label: 'Second' }],
+			initialTab: 'all',
+			createActionList: id => ({ items: id === 'all' ? items : [items[1]!] }),
+		});
+		const root = dom.window.document.querySelector<HTMLElement>('.ash-action-widget')!;
+		const filter = root.querySelector<HTMLInputElement>('input')!;
+		filter.value = 'run';
+		filter.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		root.querySelector<HTMLButtonElement>('[role=menuitem]')!.click();
+		root.querySelectorAll<HTMLButtonElement>('[role=tab]')[1]!.click();
+		const second = root.querySelector<HTMLButtonElement>('[role=menuitem]')!;
+		second.click();
+		assert.deepEqual({ selected, hidden, filter: filter.value, root: dom.window.document.querySelector('.ash-action-widget') }, { selected: [1], hidden: 0, filter: 'run', root });
+		assert.equal(root.querySelector('[role=tabpanel]')!.getAttribute('aria-labelledby'), root.querySelectorAll('[role=tab]')[1]!.id);
+		finish();
+		await Promise.resolve();
+		await Promise.resolve();
+		second.click();
+		assert.deepEqual(selected, [1, 2]);
+		service.hide();
+		assert.equal(hidden, 1);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('a dropdown opens typed actions and disposal cannot close a replacement menu', async () => {
+	const dom = new JSDOM('<body><main></main></body>');
+	try {
+		using resources = new DisposableStore();
+		const services = createServices(dom.window.document, resources);
+		const service = services.get(IActionWidgetService);
+		const selected: string[] = [];
+		const dropdown = resources.add(services.createInstance(ActionWidgetDropdown, dom.window.document.querySelector<HTMLElement>('main')!, {
+			label: 'Options', ariaLabel: 'Edit options',
+			actions: [{ id: 'edit', label: 'Apply edit', tooltip: 'Apply edit', enabled: true, run: () => selected.push('edit') }],
+		}));
+		dropdown.element.focus();
+		dropdown.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
+		assert.equal(dropdown.element.getAttribute('aria-expanded'), 'true');
+		dom.window.document.querySelector<HTMLButtonElement>('[role=menuitem]')!.click();
+		await Promise.resolve();
+		assert.deepEqual(selected, ['edit']);
+		assert.equal(dropdown.element.getAttribute('aria-expanded'), 'false');
+		dropdown.show();
+		service.show('replacement', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Replacement' }], { onSelect: () => {}, onHide: () => {} }, dropdown.element);
+		dropdown.dispose();
+		assert.equal(service.isVisible, true);
+		assert.equal(dom.window.document.querySelector('[role=menuitem]')!.textContent, 'Replacement');
 	} finally {
 		dom.window.close();
 	}

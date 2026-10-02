@@ -1,0 +1,4 @@
+.ash-tabbed-action-list-tabbar {
+	min-width: 0;
+	padding: var(--ash-spacing-size80);
+}

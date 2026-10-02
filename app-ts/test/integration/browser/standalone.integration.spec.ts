@@ -1711,9 +1711,9 @@ test('paste providers show a keyboard accessible selector and switch the applied
 	});
 	const selector = page.locator('.stanza-editor-post-edit-selector');
 	await expect(selector).toBeVisible();
-	await expect(selector).toHaveAttribute('aria-label', 'Paste options');
-	await expect(selector.locator('option')).toHaveCount(2);
-	const surface = await selector.evaluate(element => {
+	const trigger = selector.getByRole('button', { name: 'Paste options' });
+	await expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+	const surface = await trigger.evaluate(element => {
 		const bounds = element.getBoundingClientRect();
 		const style = getComputedStyle(element);
 		return { width: bounds.width, border: style.borderStyle, background: style.backgroundColor };
@@ -1722,14 +1722,15 @@ test('paste providers show a keyboard accessible selector and switch the applied
 	expect(surface.border).toBe('solid');
 	expect(surface.background).not.toBe('rgba(0, 0, 0, 0)');
 	await page.evaluate(() => window.ashStandaloneIntegration.setStickyTheme('ash-high-contrast-dark'));
-	await expect(selector).toHaveCSS('border-style', 'solid');
+	await expect(trigger).toHaveCSS('border-style', 'solid');
 	await page.locator('#caller .stanza-editor-input').focus();
 	await page.keyboard.press('ControlOrMeta+.');
-	await expect(selector).toBeFocused();
-	await selector.selectOption({ label: 'Insert Plain Text' });
+	await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.getByRole('menuitem')).toHaveCount(2);
+	await page.getByRole('menuitem', { name: 'Insert Plain Text', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('plain');
 	await expect(selector).toBeVisible();
-	await selector.focus();
+	await trigger.focus();
 	await page.keyboard.press('Escape');
 	await expect(selector).toHaveCount(0);
 	await page.keyboard.press('ControlOrMeta+z');
@@ -1759,7 +1760,8 @@ test('switching a snippet paste choice restores the additional resource edit', a
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.runPasteSnippetWithAdditionalEdit());
-	await page.locator('.stanza-editor-post-edit-selector').selectOption({ label: 'Insert Plain Text' });
+	await page.getByRole('button', { name: 'Paste options', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Insert Plain Text', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('plain');
 	expect(await page.evaluate(() => window.ashStandaloneIntegration.getOwnedValue())).toBe('trail');
 	expect(errors).toEqual([]);
@@ -3150,7 +3152,7 @@ test('code action accessibility help returns to the menu and uses the Chinese ca
 test('code action menu stays inside a narrow viewport and follows light and high contrast themes', async ({ page }) => {
 	await page.setViewportSize({ width: 350, height: 220 });
 	await page.goto('/standalone.html');
-	await page.evaluate(() => window.ashStandaloneIntegration.enableCodeActions('navigation'));
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCodeActions('grouped'));
 	const input = page.locator('#caller .stanza-editor-input');
 	for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
 		await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), theme);
@@ -3177,6 +3179,16 @@ test('code action menu stays inside a narrow viewport and follows light and high
 		expect(style.border).toBe('solid');
 		expect(style.outline).toBe('solid');
 		expect(style.outlineColor).not.toBe('rgba(0, 0, 0, 0)');
+		const tab = page.getByRole('tab', { name: 'All actions', exact: true });
+		await expect(tab).toBeVisible();
+		await tab.focus();
+		await expect(tab).toHaveCSS('outline-style', 'solid');
+		const tabBounds = await tab.boundingBox();
+		expect(tabBounds!.height).toBeGreaterThan(0);
+		expect(tabBounds!.y).toBeGreaterThanOrEqual(0);
+		expect(tabBounds!.y + tabBounds!.height).toBeLessThanOrEqual(220);
+		await page.keyboard.press('ArrowDown');
+		await expect(action).toBeFocused();
 		await page.keyboard.press('Escape');
 	}
 });
@@ -5817,6 +5829,8 @@ test('code action group labels and filter feedback use the Chinese catalog', asy
 	await page.keyboard.press('ControlOrMeta+.');
 	const root = page.locator('.ash-action-widget');
 	await expect(root.locator('.ash-action-widget-header')).toHaveText(['快速修复', '重构']);
+	await expect(root.getByRole('tablist', { name: '操作类别' })).toBeVisible();
+	await expect(root.getByRole('tab', { name: '全部操作' })).toHaveAttribute('aria-selected', 'true');
 	await root.getByRole('searchbox', { name: '筛选操作' }).fill('重构 last');
 	await expect(root.locator('.ash-action-widget-header')).toHaveText(['重构']);
 	await expect(root.getByRole('status')).toHaveText('找到 1 个操作。');
@@ -5832,11 +5846,14 @@ for (const outcome of ['accept', 'cancel', 'change'] as const) {
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionPreview());
+		if (outcome === 'cancel') {
+			await page.evaluate(() => window.ashStandaloneIntegration.setActionMenuLanguage('zh-CN'));
+		}
 		await page.locator('#action-preview-editor .stanza-editor-input').focus();
 		await page.keyboard.press('ControlOrMeta+.');
 		const root = page.locator('.ash-action-widget');
 		await expect(root.getByRole('menuitem', { name: 'Replace value with result' })).toBeFocused();
-		await expect(root.getByRole('button', { name: 'Preview', exact: true })).toBeEnabled();
+		await expect(root.getByRole('button', { name: outcome === 'cancel' ? '预览' : 'Preview', exact: true })).toBeEnabled();
 		if (outcome === 'accept') await root.getByRole('button', { name: 'Preview', exact: true }).click();
 		else await page.keyboard.press('ControlOrMeta+Enter');
 		const pane = page.locator('#action-preview-pane');
@@ -5855,3 +5872,62 @@ for (const outcome of ['accept', 'cancel', 'change'] as const) {
 		expect(errors).toEqual([]);
 	});
 }
+
+test('code action category tabs preserve the query, skip labels and dispatch the original action', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCodeActions('grouped'));
+	await page.locator('#caller .stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+.');
+	const root = page.locator('.ash-action-widget');
+	const all = root.getByRole('tab', { name: 'All actions' });
+	await expect(all).toHaveAttribute('aria-selected', 'true');
+	await all.focus();
+	await page.keyboard.press('ArrowRight');
+	const quickFix = root.getByRole('tab', { name: 'Quick Fix', exact: true });
+	await expect(quickFix).toBeFocused();
+	await expect(all).toHaveAttribute('aria-selected', 'true');
+	await page.keyboard.press('Enter');
+	await expect(quickFix).toHaveAttribute('aria-selected', 'true');
+	await expect(root.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', await quickFix.getAttribute('id') as string);
+	await expect(root.locator('.ash-action-widget-header')).toHaveCount(0);
+	await page.keyboard.press('ArrowDown');
+	await expect(root.getByRole('menuitem', { name: 'First action', exact: true })).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+f');
+	const filter = root.getByRole('searchbox', { name: 'Filter actions' });
+	await filter.fill('last');
+	await expect(root.getByRole('status')).toHaveText('No matching actions.');
+	await root.getByRole('tab', { name: 'Refactor', exact: true }).click();
+	await expect(filter).toHaveValue('last');
+	await expect(root.getByRole('menuitem')).toHaveCount(1);
+	await root.getByRole('tab', { name: 'Refactor', exact: true }).focus();
+	await page.keyboard.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: 'Action menu accessibility help' });
+	await expect(help).toContainText('Left and Right Arrow');
+	await page.keyboard.press('Escape');
+	await expect(root.getByRole('tab', { name: 'Refactor', exact: true })).toBeFocused();
+	await page.keyboard.press('ArrowDown');
+	await page.keyboard.press('Enter');
+	await expect(root).toHaveCount(0);
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('last');
+});
+
+test('Chinese paste options open a shared action menu and Escape restores its trigger', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.setActionMenuLanguage('zh-CN');
+	});
+	await page.evaluate(() => window.ashStandaloneIntegration.runPasteProviderSelector());
+	const trigger = page.getByRole('button', { name: '粘贴选项', exact: true });
+	await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+	await trigger.focus();
+	await page.keyboard.press('ArrowDown');
+	await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.getByRole('menuitem')).toHaveCount(2);
+	await page.keyboard.press('Escape');
+	await expect(trigger).toBeFocused();
+	await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('CUSTOM');
+	await page.keyboard.press('Escape');
+	await expect(trigger).toHaveCount(0);
+	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+});
