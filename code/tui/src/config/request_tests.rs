@@ -154,6 +154,7 @@ fn advisor_model_command_selects_a_configured_provider_model() {
         .collect();
     let catalog = ModelListResult {
         models: vec![ModelCatalogEntry {
+            discovered: None,
             model: model.clone(),
             display_name: "Reviewer".into(),
 
@@ -357,6 +358,10 @@ fn custom_provider_saves_settings_and_key_separately_then_refreshes() {
         provider: "custom-one".into(),
         custom: Some(
             ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
+                model_aliases: Some(std::collections::BTreeMap::from([(
+                    "alias".into(),
+                    "upstream-model".into(),
+                )])),
                 context_window: 272_000,
                 order: 0,
                 model: None,

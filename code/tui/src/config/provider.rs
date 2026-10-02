@@ -424,7 +424,13 @@ impl Panel {
         let url = normalize_url(self.url.query(), self.protocol)?;
         let model = self.model.query().trim();
         let mut config = self.settings.config.clone();
+        // This form edits connection defaults; model settings own aliases and per-model
+        // context declarations, which must survive saves here.
         config.custom = Some(CustomProviderConfigDto {
+            model_aliases: config
+                .custom
+                .as_ref()
+                .and_then(|custom| custom.model_aliases.clone()),
             context_window: self.context,
             model: (!model.is_empty()).then(|| model.to_owned()),
             name: name.into(),
@@ -433,7 +439,6 @@ impl Panel {
         });
         config.base_url = Some(url);
         config.max_output_tokens = None;
-        config.model_context.clear();
         if !model.is_empty() {
             ash_protocol::ModelId::new(model).map_err(|_| "Enter a valid model ID")?;
         }

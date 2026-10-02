@@ -1284,6 +1284,7 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
  connection: id.into(),
                 provider: id.into(), base_url: Some("https://example.invalid/v1".into()), max_output_tokens: None, model_context: Default::default(),
                 custom: Some(ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
+                    model_aliases: None,
                     context_window: 272_000, order: 0, name: id.into(), model: Some("shared-alias".into()),
                     protocol: ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses,
                 }),
@@ -1369,6 +1370,7 @@ fn model_picker_uses_builtin_catalog_and_allows_manual_custom_selection() {
         model_context: Default::default(),
         custom: Some(
             ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
+                model_aliases: None,
                 context_window: 272_000,
                 order: 0,
                 model: None,

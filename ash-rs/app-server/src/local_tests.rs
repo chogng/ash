@@ -813,7 +813,19 @@ fn kimi_discovered_catalog_tracks_the_active_connection_and_persists_by_vendor()
             .unwrap(),
         ModelAccess::ApiKey
     );
-    assert_eq!(service.list().unwrap(), subscribed);
+    let mut api_catalog = subscribed.clone();
+    let kimi = api_catalog
+        .iter_mut()
+        .find(|entry| {
+            entry.model == ModelRef::new(provider.clone(), ModelId::new("kimi-k2.7-code").unwrap())
+        })
+        .unwrap();
+    assert_eq!(
+        kimi.capabilities.fast_mode,
+        ash_protocol::CapabilitySupport::Supported
+    );
+    kimi.capabilities.fast_mode = ash_protocol::CapabilitySupport::Unsupported;
+    assert_eq!(service.list().unwrap(), api_catalog);
     assert_eq!(
         service.config.read_snapshot().unwrap().values.providers[&provider]
             .connection
@@ -2349,7 +2361,7 @@ fn configured_provider_resolves_default_model_with_its_saved_endpoint() {
         request.model,
         ModelRef::new(
             ProviderId::new("openai").unwrap(),
-            ModelId::new("gpt-6-astra").unwrap(),
+            ModelId::new("gpt-6.1-sol").unwrap(),
         )
     );
     assert_eq!(request.config, config);
@@ -3382,7 +3394,17 @@ fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_
             model_provider: runtime,
         }),
     };
-    let catalog = service.list().unwrap();
+    let mut catalog = service.list().unwrap();
+    for entry in &mut catalog {
+        if entry.model.provider.as_str() == "glm" && entry.context_window == Some(1_000_000) {
+            entry.auto_compact_token_limit = Some(900_000);
+            entry.available_context_window = Some(
+                900_000
+                    - DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS
+                    - MODEL_CONTEXT_SAFETY_MARGIN_TOKENS,
+            );
+        }
+    }
     let model = ModelRef::new(
         ProviderId::new("glm").unwrap(),
         ModelId::new("glm-5.1").unwrap(),

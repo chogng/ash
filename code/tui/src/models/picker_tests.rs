@@ -184,6 +184,7 @@ fn model_picker_keeps_all_builtin_models_selectable_before_configuration() {
             connection: "custom-empty".into(),
             provider: "custom-empty".into(),
             custom: Some(CustomProviderConfigDto {
+                model_aliases: None,
                 context_window: 100_000,
                 order: 1,
                 name: "Empty gateway".into(),

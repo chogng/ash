@@ -368,6 +368,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
     config.advisor = Some(AdvisorConfig::new(model.clone()));
     let mut catalog = ModelListResult {
         models: vec![ModelCatalogEntry {
+            discovered: None,
             model,
             display_name: "GPT Ash".into(),
 
@@ -1266,6 +1267,7 @@ fn only_custom_provider_rows_offer_delete_and_order_does_not_follow_names() {
                 connection: id.into(),
                 provider: id.into(),
                 custom: Some(CustomProviderConfigDto {
+                    model_aliases: None,
                     context_window: 272_000,
                     model: None,
                     name: name.into(),

@@ -436,6 +436,7 @@ fn collaboration_effort_selector_applies_a_supported_value_and_restores_focus() 
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                discovered: None,
                 model: ash_protocol::ModelRef::new(
                     ash_protocol::ProviderId::new("openai").unwrap(),
                     ash_protocol::ModelId::new("test-model").unwrap(),

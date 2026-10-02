@@ -101,6 +101,34 @@ fn save_keeps_original_model_id_and_selected_context_without_output_override() {
 }
 
 #[test]
+fn editing_provider_name_preserves_model_aliases_and_context_declarations() {
+    let mut config = populated().config().unwrap();
+    config.custom.as_mut().unwrap().model_aliases = Some(BTreeMap::from([(
+        "local-model".into(),
+        "upstream-model".into(),
+    )]));
+    config.model_context.insert(
+        "local-model".into(),
+        ModelContextConfigDto {
+            context_window: 128_000,
+            auto_compact_token_limit: Some(100_000),
+        },
+    );
+    let mut panel = Panel::new(Settings {
+        revision: 1,
+        config: config.clone(),
+        key_saved: false,
+        inherited_model: None,
+    });
+    key(&mut panel, KeyCode::Enter);
+    panel.handle_paste("-renamed".into());
+    let saved = request(key(&mut panel, KeyCode::Enter));
+    config.custom.as_mut().unwrap().name.push_str("-renamed");
+    assert_eq!(saved.operation, Operation::Save);
+    assert_eq!(saved.config, config);
+}
+
+#[test]
 fn test_uses_unsaved_values_ignores_stale_results_and_clears_when_edited() {
     let mut panel = populated();
     panel.focus = 6;
@@ -219,7 +247,10 @@ fn saved_model_selection_survives_other_model_ids_and_can_be_cleared() {
         inherited_model: None,
     });
     assert!(reopened.model.query().is_empty());
-    assert!(reopened.settings.config.model_context.is_empty());
+    assert_eq!(
+        reopened.settings.config.model_context,
+        panel.settings.config.model_context
+    );
 }
 
 fn render(panel: &Panel, width: u16, height: u16, now: Instant) -> ratatui::buffer::Buffer {

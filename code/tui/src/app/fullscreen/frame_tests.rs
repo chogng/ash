@@ -2611,6 +2611,7 @@ fn configured_model_summary() -> ModelSummary {
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                discovered: None,
                 model: ash_protocol::ModelRef::new(
                     ash_protocol::ProviderId::new("anthropic").unwrap(),
                     ash_protocol::ModelId::new("claude-sonnet").unwrap(),
@@ -2708,6 +2709,7 @@ fn custom_model_choices(
             max_output_tokens: None,
             model_context: Default::default(),
             custom: Some(CustomProviderConfigDto {
+                model_aliases: None,
                 context_window: 272_000,
                 order: 1,
                 name: "My gateway".into(),
@@ -2729,6 +2731,7 @@ fn custom_model_choices(
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                discovered: None,
                 model: ash_protocol::ModelRef::new(
                     ash_protocol::ProviderId::new("custom-gateway").unwrap(),
                     ash_protocol::ModelId::new("gateway-model").unwrap(),
