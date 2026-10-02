@@ -109,7 +109,7 @@ flowchart TD
 - SDK 固定 `46ce71d0da7b97bb531a33e175bf4166ffa730c0`，请求直接使用发布的 1.0 类型；保留独立 ACL 授权、文件对象身份检查、目录例外及进程生命周期补丁。Linux 网络监控丢失提供进程时终止工作负载，进程树清理后才回收 PID。
 - Windows 的 Ash 请求要求 MXC 只使用 PSEC；内部其他 ProcessContainer 实现不能代替它。准备阶段必须区分确定的能力不足与运行故障，不能把任意探测错误转换成 `UnsupportedPolicy`。
 - 按运行时能力检查 PSEC，不能用“24H2 以上”代替检查。
-- Linux 与 macOS 继续通过同一适配器接入 Bubblewrap 和 Seatbelt。
+- Linux 与 macOS 继续通过同一适配器接入 Bubblewrap 和 Seatbelt。Bubblewrap 在启动时安装禁止 `AF_VSOCK` 的 seccomp 过滤器，阻止 WSL 互操作创建不受 Linux 命名空间约束的 Windows 进程；过滤器由后代继承。
 - 本轮自写 `mxc-user` 账户运行器已退出源码、编译、打包、签名和 CI 配置；不再安装它。
 
 补丁来源与校验见 [MXC 依赖](../ash-rs/vendor/mxc/README.md)。原型源码与校验清单保存在本机 `.build/acceptance/mxc-local/prototype-source`，历史测试与系统清理结果保留在 [Windows 验收手册](windows-sandbox-acceptance-runbook.md)。
@@ -155,27 +155,30 @@ WindowsAccount 在执行前检查工作目录、Grant、临时目录、用户目
 
 每次执行独占账户租约，ACL 日志位于安装根下按账户隔离的私有目录，不放进子进程可写的运行目录。结束后先回收进程树，再恢复 ACL；未完成的执行阻止账户复用，显式删除安装时恢复遗留日志。FullAccess 与受限网络的组合仍不由此账户后端提供。
 
-这些能力已有本机账户模型证据，但不能扩大为所有 Windows 版本均受支持、PSEC 已验收或整个宿主不可写。缺少合格且支持完整请求的实现时，受限执行必须拒绝。
+这些能力已有本机账户模型证据，但不能扩大为所有 Windows 版本均受支持或整个宿主不可写。PSEC 的 ARM64 CI 成功证据独立记录，不能替代本机 x64 的能力检查。缺少合格且支持完整请求的实现时，受限执行必须拒绝。
 
 ## 当前验证范围
 
-下表引用 2026-09-11 的 [验收记录](windows-sandbox-acceptance-runbook.md#2026-09-11-windowsaccount-模型验收) 和 2026-09-12 的源码核对，不表示本次文档修订重新执行了产品测试。
+下表引用 2026-09-11 的历史验收、2026-09-12 的源码核对，以及 2026-10-02 的 [服务及账户验收](windows-sandbox-acceptance-runbook.md#2026-10-02-服务及账户管理员验收)、[WSL2 实机验收](windows-sandbox-acceptance-runbook.md#2026-10-02-wsl2-实机验收) 和 [PSEC、WSLC 与网络补充验收](windows-sandbox-acceptance-runbook.md#2026-10-02-psecwslc-与网络补充验收)。每项结果限于记录中的系统与实际用例。
 
 | 项目 | 状态 |
 | --- | --- |
 | 执行前选择、故障停止、启动不重跑、每进程拒绝判定 | 有本机单测与 Executor 调用链回归 |
 | PSEC 探测错误分类 | 已完成准备链修复；明确能力缺失才允许检查下一候选，运行故障保留操作和系统错误码并停止 |
-| PSEC 受管代理与 Windows UI 策略 | UI 请求已显式配置但待 PSEC 实机验证；无法保持默认禁止入站的 PSEC Managed 组合会在准备阶段拒绝，正式代理身份仍未完成 |
+| PSEC 受管代理与 Windows UI 策略 | UI 策略下 cmd/PowerShell 在 25H2 ARM64 CI 上执行通过；无法保持默认禁止入站的 PSEC Managed 组合会在准备阶段拒绝，正式代理身份仍未完成 |
 | MXC 与 Windows 账户后端的组合选择 | 已接线；两个隔离模型的真实组合验证待补 |
 | 路径级规则、最小读取基线、受控 IPC | 对齐目标；现有目录作用域及全禁 Unix socket 策略不足以覆盖 |
 | 沙箱内 PTY、持续输入与会话管理 | 已接线并有 macOS 真实进程测试；Windows/Linux 交叉编译不代表实机验收 |
 | macOS MXC 执行、目录与代理隔离 | 保留真实进程回归入口 |
-| Linux MXC 受管网络 | 保留实机入口；依赖相应内核与隔离工具 |
-| Windows MXC PSEC | 当前 23H2 本机不具备相应能力，不能据此宣布端到端通过 |
+| Linux MXC 受管网络 | WSL2 Ubuntu x64 的 NAT/mirrored HTTP/CONNECT/SOCKS、域名策略、IPv4/IPv6 与 TCP/UDP A/AAAA DNS 矩阵通过；NAT Windows IPv6 链路本地和 mirrored Windows IPv4 回环目标通过；公网 IPv6 无可达性对照 |
+| Windows MXC PSEC | Windows 11 25H2 ARM64 CI 的 7 项指定成功路径通过；23H2 x64 本机能力不足；PSEC 网络流量矩阵与 ConPTY 未验证 |
 | 已退出的账户原型 | 曾完成 2 项完整用例、4 项失败；测试账户、网络对象和运行时目录已清理 |
-| 独立 Windows 账户后端 | 23H2 本机 21 项单测与 9 项完整执行用例通过 |
+| 独立 Windows 账户后端 | 23H2 本机 34 项账户单测、9 项服务测试与 10 项完整执行用例通过，安装、两种程序更新和清理通过 |
 | IPv6 断网、双账户并发 | 实机通过 |
+| WindowsAccount DNS/IPv6 网络矩阵 | 23H2 x64 的 Denied/Managed/Allowed、实际 IPv6 端口 53、域名及代理授权、后代与监听用例通过；其他系统 CI 有 ACL 继承控制标记恢复失败 |
 | 崩溃恢复 | 已验证准备期间进程被终止后的日志恢复；运行中全部崩溃组合未穷尽 |
-| WSL、其他 Windows 系统 | 本轮未验证 |
+| WSL2 | 本机受限账户不能进入调用者/系统发行版；Linux 文件系统及 `/mnt/c` 的文件、进程、互操作与上述网络矩阵通过；PTY 未验证 |
+| WSLC | SDK 一次性执行的 5 项行为、持久容器 7 步生命周期通过；一次性清理报 `0x80010108`，状态为部分通过；Ash 未接入，Managed 强制代理不具备资格 |
+| WSL1、其他 Windows 系统 | 本轮未验证 |
 
 发布依据必须包含具体平台、系统 build、请求模型、依赖和补丁版本、实际执行及跳过的用例。统一接口、编译和部分测试不能替代系统隔离验收。

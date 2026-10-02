@@ -1,6 +1,6 @@
 # Windows 沙箱验收手册
 
-本手册分别验证 MXC PSEC 路径和独立 Windows 账户实现，保留各轮实机证据。2026-10-02 的 Windows 11 23H2 x64 管理员验收已通过当前服务安装、更新、完整账户执行和清理；同机仍缺少完整 PSEC 能力。旧 SDK 继承重算的副作用与恢复边界见文末记录。
+本手册分别验证 MXC PSEC 路径和独立 Windows 账户实现，保留各轮实机证据。2026-10-02 的 Windows 11 23H2 x64 管理员验收已通过当前服务安装、更新、账户执行和清理；随后完成 WSL2 回归与 DNS/IPv6 网络矩阵。PSEC 在 Windows 11 25H2 ARM64 CI 上取得成功路径证据，本机 23H2 仍缺少能力。WSLC SDK 部分通过，一次性容器清理仍报错；Ash 尚未接入它。具体范围见 [补充验收](#2026-10-02-psecwslc-与网络补充验收)。
 实现契约见 [mxc-sandbox](../ash-rs/mxc-sandbox/README.md) 与 [windows-sandbox](../ash-rs/windows-sandbox/README.md)。历史账户原型的结果不能作为当前候选的通过证据。
 
 ## 当前入口
@@ -32,7 +32,7 @@ just test ash-mxc-sandbox --lib --test windows
 | Windows Server 2025 x64 | 启动前明确返回能力不支持 | 实际执行、权限与清理 |
 | Windows 11 ARM64 | PSEC 准备及执行成功 | 实际执行、权限与清理 |
 
-这是固定测试环境的预期，不是产品按版本分流的代码。产品仍按本次请求准备结果选择 MXC 或账户后端，严格策略不降低要求，启动错误不重跑。Server 2025 和 ARM64 的预期依据已运行镜像；Server 2022 的预期仍需 CI 验证。镜像能力改变时测试应失败并要求复核，不能自动把失败变为通过。Windows 11 x64 和具体旧版客户端仍需对应运行器，不由 Server 或 ARM64 结果替代。
+这是固定测试环境的预期，不是产品按版本分流的代码。产品仍按本次请求准备结果选择 MXC 或账户后端，严格策略不降低要求，启动错误不重跑。三种运行器的 PSEC 预期均已有 CI 结果，见 [补充验收](#2026-10-02-psecwslc-与网络补充验收)。镜像能力改变时测试应失败并要求复核，不能自动把失败变为通过。Windows 11 x64 和具体旧版客户端仍需对应运行器，不由 Server 或 ARM64 结果替代。
 
 PSEC 检查不安装账户、不改变系统权限。`test-psec.ps1 -Capability absent` 只在适配器明确返回 `UnsupportedPolicy` 时通过；其他准备故障仍失败。默认 `required` 则必须先成功创建 PSEC 环境，再逐项运行命令、文件和生命周期测试，汇总全部失败。不存在的测试名不能计为通过。
 
@@ -71,13 +71,13 @@ Windows、WSL 2 中的 Linux 进程和 MXC 的 WSL Container（WSLC）是不同�
 | 场景 | 验收要求 | 当前范围 |
 | --- | --- | --- |
 | Windows 版 Ash 执行 Windows 命令 | 按所选后端分别验证账户模型与 PSEC | WindowsAccount 的本机 23H2 服务路径已通过；同机 PSEC 能力不足，未执行成功路径 |
-| Windows 受限命令调用 `wsl.exe` | 检查能否跨入 WSL 后越权访问文件、直连网络或留下存活进程 | 纳入 Windows 绕过检查；需要可正常执行命令的 WSL 环境 |
-| WSL 2 内运行 Linux 版 Ash | 在 WSL 2 内执行 Linux 沙箱验收，并检查跨系统边界 | 若将此用法列入支持范围，发布前必须单独通过 |
-| Windows 通过 MXC WSLC 启动 Linux 容器 | 验证 WSLC 的文件、网络、输入输出及完整容器生命周期 | 当前未启用，不属于已接入功能的验收 |
+| Windows 受限命令调用 `wsl.exe` | 检查能否跨入 WSL 后越权访问文件、直连网络或留下存活进程 | 本机调用者发行版和 `--system` 入口在禁止/允许网络下均被拒绝；其他入口未穷尽 |
+| WSL 2 内运行 Linux 版 Ash | 在 WSL 2 内执行 Linux 沙箱验收，并检查跨系统边界 | Ubuntu x64 的文件、生命周期、互操作，以及下述 NAT/mirrored DNS/IPv6 矩阵通过；PTY 未验证 |
+| Windows 通过 MXC WSLC 启动 Linux 容器 | 验证 WSLC 的文件、网络、输入输出及完整容器生命周期 | SDK 已实际验证，一次性清理报错；Ash 未接入，不能计为产品执行链通过 |
 | WSL 1 内运行 Linux 版 Ash | 独立验证其系统能力，不能沿用 WSL 2 结果 | 本轮不作支持或验收通过声明 |
 
 当前 Ash 直接使用 Windows PSEC、Linux Bubblewrap、macOS Seatbelt 运行器，没有接入 WSLC。
-固定上游版本将 WSLC 列为需要显式启用的实验能力，见 [WSLC SDK 说明](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/wsl/wsl-container-getting-started.md#rust-sdk)。
+当前固定上游版本将 WSLC 列为 v0.9 后端，不要求运行时实验开关；Rust 构建仍需启用 `wslc` feature、携带独立的 `wslcsdk.dll`，并具备 WSL 2.9.9+。本机 WSL 3.0.1 满足版本要求，其他组件须由 WSLC SDK 实际探测。可以单独验证 SDK，但 Ash 尚无 WSLC 执行链，SDK 通过不能计为 Ash 接入通过，见 [固定版本的 WSLC 说明](https://github.com/microsoft/mxc/blob/46ce71d0da7b97bb531a33e175bf4166ffa730c0/docs/wsl/wsl-container-getting-started.md)。
 
 WSL 2 的 Linux 验收复用 [Linux 测试入口](../ash-rs/mxc-sandbox/README.md#验证)，另外必须覆盖：
 
@@ -88,6 +88,60 @@ WSL 2 的 Linux 验收复用 [Linux 测试入口](../ash-rs/mxc-sandbox/README.m
 
 WSL 2 使用 Linux 内核，但提供跨系统文件与命令互操作；mirrored 模式还改变宿主回环的可达性。
 因此普通 Linux CI 通过不足以证明上述边界通过，见 [WSL 版本区别](https://learn.microsoft.com/en-us/windows/wsl/compare-versions)、[文件与命令互操作](https://learn.microsoft.com/en-us/windows/wsl/filesystems)、[网络模式](https://learn.microsoft.com/en-us/windows/wsl/networking)。
+
+## 2026-10-02 WSL2 实机验收
+
+在同一台 Windows 11 23H2 / `22631.6199` x64 上安装 WSL `3.0.1.0`，Linux 内核 `6.18.40.1-microsoft-standard-WSL2`，导入 Ubuntu `24.04.5 LTS` 为 `AshAcceptance`。Linux 验收使用普通用户 `ashcheck`（UID 1000）、Rust `1.98.0`、Bubblewrap `0.9.0`、slirp4netns `1.2.1` 和 Just `1.58.0`；没有用 root 执行 Linux 用例。安装器提示重启，但本轮实际 Linux 命令与隔离测试均已成功执行，未重启 Windows。
+
+源码基线为 `1bd1217ef490b2e6787c6a14edd10e33d5c09369`，另包含本轮互操作修复与新增回归；MXC pin 仍为 `46ce71d0da7b97bb531a33e175bf4166ffa730c0`。Windows 完整入口运行于北京时间 07:48:54–07:50:44。mirrored 阶段为 08:19:59–08:21:42，实际 `wslinfo --networking-mode` 返回 `mirrored`；结束后撤销本轮临时 `.wslconfig`，再次读取结果为原来的 `nat`。
+
+| 验证 | 实际结果 |
+| --- | --- |
+| Windows 服务与账户完整入口 | 9 项服务、34 项账户、10 项执行用例通过；运行器更新后重跑 10 项，服务程序更新后文件用例通过 |
+| Windows → WSL 账户边界 | 1 项回归通过：调用者发行版/系统发行版 × 禁止/允许网络共 4 次受限执行均未进入 Linux；同一入口的普通调用者对照先成功 |
+| WSL2 Linux 文件系统及 `/mnt/c` | 每种网络模式和文件系统组合的 3 项回归均通过：目录写入、参考目录只读、隐藏兄弟路径与符号链接、`.git` 保护、退出码 125、进程树关闭、互操作拒绝 |
+| Linux 退出、超时和取消 | 每种文件系统分别验证三个结束方式；先证明工作负载已启动，再确认后代延迟写入没有发生 |
+| Linux → Windows 可执行文件互操作 | 可读 Windows `cmd.exe` 在禁止和受管网络下均不能启动；每轮先证明未受限 Linux 进程能正常调用它，未关闭宿主互操作 |
+| NAT/mirrored 受管网络 | 两种模式分别通过同一实机探针：获批 HTTP/SOCKS 请求成功，未获批请求拒绝，IPv4 回环及代理网关直连被阻止，UDP 未到达宿主接收端 |
+| SDK 及适配器 | 正常 Cargo 构建、check、warning 门禁通过；SDK 运行器 39 项测试通过，Linux ARM64 测试目标交叉检查通过；补丁与固定上游源码复核通过 |
+| 清理 | 服务和安装目录不存在，没有新增账户残留；WFP 删除按对象查询确认；临时网络模式配置已撤销 |
+
+**发现并修复的互操作越界：** 首轮 Linux 测试中，在 Windows 系统目录获只读授权后，`cmd.exe` 仍能启动，产生 `windows-interop-started`，测试以 101 失败。WSL 的 binfmt 解释器持有内核保存的 `/init` 引用，隐藏路径不能消除这条通道。Bubblewrap 现在在工作负载启动前安装禁止 `AF_VSOCK` 的 seccomp 过滤器，由后代继承；过滤器不限制 IP/Unix socket，传入的描述符在执行前关闭。修复后互操作回归与两种网络模式的代理测试均通过。解释器引用和互操作机制见 [Linux binfmt 文档](https://www.kernel.org/doc/html/latest/admin-guide/binfmt-misc.html) 与 [WSL 互操作说明](https://github.com/microsoft/WSL/blob/master/doc/docs/technical-documentation/interop.md)。
+
+SDK 复测还发现一个旧用例让外部代理携带 MXC 主机列表，却期望通过校验。当前 SDK 不把该列表传给外部代理，已有相应用例检查拒绝；本轮将成功用例改为 SDK 自带测试代理，保留其应通过策略校验并到达环境检查的断言。
+
+本机证据目录为 `.build/acceptance/wsl/run-20261002-073047/`。`wsl-result.json` 汇总各阶段与未覆盖项，`result.json` 和 `acceptance.log` 保存 Windows 完整入口及清理；`linux-wsl-nat.log` 保留原始越界失败，`linux-wsl-nat-rerun.log`、`linux-network-nat-after-fix.log`、`linux-wsl-mirrored.log` 保存修复后的实机结果；`linux-sdk.log` 保留旧用例失败，`linux-sdk-rerun.log` 保存修正后的结果。`sources/`、`source-final.diff` 和 `source-manifest.json` 保存最终源码及摘要，`plans/` 保存 Windows 安装、更新与移除清单。这些本机证据不随 Git 提交。复跑入口见 [Windows 后端](../ash-rs/windows-sandbox/README.md) 和 [MXC 适配器](../ash-rs/mxc-sandbox/README.md#验证)。
+
+WSL、发行版和构建工具保留在本机用于复测。上述早轮结果只覆盖这些用例；DNS/IPv6、Windows 宿主地址、WSLC SDK 和 PSEC CI 证据由下轮补充，不能沿用早轮结论。WSL1、ARM64 Linux 实机、Linux PTY、完整崩溃恢复与 App Server 产品链路仍未验证。Bubblewrap 也未通过 Ash `Allowed` 执行路径，其要求的全部入站权限由 SDK 拒绝；没有降低该请求。PSEC 成功资格不受 WSL 结果影响。
+
+## 2026-10-02 PSEC、WSLC 与网络补充验收
+
+本轮证据位于 `.build/acceptance/sandbox-followup/run-20261002-083938/`。新增网络回归走 CommandExecutor 与真实平台后端，先在沙箱外逐个确认目标可达，再执行沙箱与后代进程；接收端计数检查实际 TCP/DNS 事务没有外泄。不是只检查代理环境变量或连接错误。
+
+| 环境与请求 | 结果及范围 |
+| --- | --- |
+| WindowsAccount，23H2 x64，Denied / Managed / Allowed | `tests/network_matrix.rs` 通过，包含 IPv4/IPv6 TCP、HTTP/CONNECT/SOCKS 的地址与域名授权、未获批域名及 IPv6 目标拒绝、TCP/UDP DNS 的 A/AAAA、IPv6 端口 53、后代继承与监听拒绝；Allowed 的直连与 DNS 对照成功 |
+| WSL2 Ubuntu x64，NAT，Denied / Managed | 同一矩阵通过；Windows 宿主 IPv4 网关及 IPv6 链路本地地址先证明可达，受限命令及后代不能直连或发送 DNS；Windows IPv6 DNS 接收端实际监听端口 53 |
+| WSL2 Ubuntu x64，mirrored，Denied / Managed | 同一矩阵通过，Windows IPv4 回环服务及 DNS 对照成功；Linux IPv6 目标与代理授权成功，直连及原始 DNS 被阻止 |
+| 依赖与构建 | 两个平台的代理库 8 项测试通过；三个受影响包的 check 与 warning 门禁、Windows 探针与账户 helper、Linux 适配器的正常构建通过；vendor 与固定上游复核通过 |
+
+镜像模式的 Windows IPv6 回环 `::1` 在沙箱外即不可达，不计为隔离通过；Windows 物理接口 IPv6 地址的对照也未连通。微软文档明确 mirrored 的宿主回环仅支持 `127.0.0.1`，见 [WSL 网络说明](https://learn.microsoft.com/en-us/windows/wsl/networking#mirrored-mode-networking)。本机没有公网 IPv6 地址和默认 IPv6 路由，因此没有公网 IPv6 成功路径证据。NAT 的 Windows IPv6 链路本地目标、两种模式的 Linux IPv6 目标和域名代理已验证；这些边界仍需区分。Bubblewrap `Allowed`、PTY、App Server 产品链路不在本轮通过范围。
+
+复跑 Windows 矩阵时，向既有入口显式提供一个在宿主可达、同时支持 TCP/UDP DNS 的端点：`./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -NetworkDnsServer '<resolver-ip>:53'`。多个端点使用逗号分隔，IPv6 使用 `[address]:53`。Linux 入口与可选 Windows 宿主目标见 [适配器验证](../ash-rs/mxc-sandbox/README.md#验证)。本轮专用接收端共享计数，相关实机测试必须串行执行。
+
+**PSEC CI：** 已读取并归档 [run 36941123878](https://github.com/chogng/ash/actions/runs/36941123878/job/110632598456) 的日志和原始 ZIP。Windows 11 Enterprise 25H2 ARM64，build `26200.9457`，Rust `1.98.0`，MXC pin `46ce71d0da7b97bb531a33e175bf4166ffa730c0`。适配器库 12 项、普通回归 2 项通过；随后 7 项指定验收各自实际执行且通过：PSEC 准备、cmd/PowerShell 输出与退出码、文件作用域和元数据、取消/超时及后代回收、跨执行写入隔离、正常退出后代回收。ZIP SHA-256 为 `d59bf71b427265351805fe9cb7e14e8eff2e75796b4852db6546affe049aef5c`，原始报告为 `passed-listed-scope`。
+
+该 CI 提交为 `1bd1217ef490b2e6787c6a14edd10e33d5c09369`；与本轮源码核对，PSEC 生产代码、请求契约、Cargo 清单/锁文件及 PSEC 脚本未变。本轮新增 Linux 过滤器与网络测试不属于该 CI 的覆盖。Server 2022/2025 只通过能力不足时拒绝的用例。PSEC ConPTY、Allowed/Denied 网络流量矩阵和产品链路仍未验证，也不能用 ARM64 结果声明 Windows 11 x64 成功。
+
+整个 CI run 不是全绿：账户任务的文件作用域用例因恢复后多出 DACL `AI` 标记而失败（ARM64 日志中 ACE 和所有者相同，继承控制标记不同）。该失败保留在本轮证据中；本机账户路径通过不能替代其他系统上的恢复验证。
+
+**WSLC SDK：** 在同一台 23H2 主机，使用固定上游源码独立构建 `wxc-exec --features wslc` 和 `wxc-wslc-daemon`，未改 Ash 后端选择。SDK NuGet `Microsoft.WSL.Containers 2.9.9` 与固定 SHA-256 核对后加载，`WslcGetMissingComponents` 返回 0；实际拉取 `alpine:3.22`，镜像 ID 为 `c83674e1999044d33d751661371b873539f47e5b5c5ca3320c7e0377acca6238`。
+
+一次性容器的输出/退出码 42、只读/读写目录及隐藏兄弟目录、断网、超时与正常退出后代回收共 5 项行为通过；延迟写入未发生。但每次退出都报告 `WslcStopContainer` 清理失败，HRESULT `0x80010108`。源码同时启用 `AUTO_REMOVE` 并在退出后手动 stop/delete；这是错误报告的排查线索，尚不能据此宣布清理已经合格。持久容器的 provision → start → 写入 → 后续命令读取同一状态 → 退出码 7 → stop → deprovision 7 步通过，daemon 随后按本轮短空闲期限退出。
+
+WSLC 状态为**部分通过**。SDK 的 cooperative 外部代理只设置代理环境，不保证任意客户端流量均经代理，不能据此满足 Ash Managed；Ash 仍没有 WSLC 执行链。PTY、输入、完整取消/崩溃矩阵未验证。上游 executor 构建另有硬编码 PowerShell 7 安装路径的测试前置 warning；本机使用另一位置的 pwsh，该 warning 不影响已执行的 Alpine 用例，但不计为该上游全部 E2E 测试通过。
+
+`network-windows.log`、`network-nat-host.log`、`network-mirrored-host.log` 保存最终网络结果；原始测试配置错误、共享接收端并发造成的无效轮次和运行器源文件被重建导致的身份拒绝另存日志，不计为通过。本轮把执行 helper 复制到独立验收目录后安装，避免 Cargo 重建改变已批准摘要。`.wslconfig` 已恢复为原来的不存在状态，实际网络模式再次为 NAT；服务、账户、WFP 与临时接收端已清理。WSL 发行版和隔离于证据目录内的 SDK、镜像缓存保留以便复测。
 
 ## 已退出账户原型的受管网络记录
 

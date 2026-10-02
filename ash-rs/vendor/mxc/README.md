@@ -15,13 +15,15 @@
 | --- | --- |
 | `wxc_common` | 文件对象身份与 ACL 授权及受信交接序列化；独立日志和严格恢复；不传播到子项的祖先属性授权；退出观察保留 PID 到回收；代理环境保留 SOCKS 协议 |
 | `seatbelt_common` | 隐藏父目录中的授权例外；独立禁止 Unix socket；完整环境与句柄生命周期 |
-| `bwrap_common` | 固定执行路径；恢复根挂载后的虚拟文件系统；封闭隐藏父目录；代理环境与退出观察；网络监控在进程树清理前不回收 PID |
+| `bwrap_common` | 固定执行路径；恢复根挂载后的虚拟文件系统；封闭隐藏父目录；代理环境与退出观察；网络监控在进程树清理前不回收 PID；以 seccomp 禁止绕过 Linux 命名空间的 `AF_VSOCK` 宿主通信 |
 | `process_container_common` | 按本次请求构造 PSEC 规格并实际准备，保留能力缺失与运行故障的结构化区别；Ash 直接调用 PSEC 运行器 |
 
 Cargo 清单具体化了上游 workspace 继承，以便根 Cargo 与 Bazel 对路径依赖得到同一结果。
 上游仓库根的四份 telemetry-consent、三份 provision 配置及开发契约的完整请求 fixture，随包复制到 `wxc_common/tests/fixtures`，对应测试使用包内路径。
 上游的 `mod.rs` 改为同名文件模块，保留模块路径与可见性。
 框架源代码不依赖 `ash-*`、`sandboxing` 或 `network-proxy`。
+
+Bubblewrap 在执行命令前安装套接字过滤器，并由后代继承。WSL 的可执行文件互操作可使用内核保存的 `/init` 解释器引用，单靠隐藏 `/init` 或 Windows 挂载不能阻止 Windows 进程创建；拒绝 `AF_VSOCK` 阻止其建立跨系统启动通道。过滤器保留 IP 和 Unix socket 操作，支持 Linux x86_64 与 aarch64 的 64 位系统调用 ABI；不允许兼容的 32 位或 x32 ABI 绕过检查。传递过滤器的文件描述符仅由本次 Bubblewrap 继承，在工作负载启动前关闭。
 
 ## 复核
 

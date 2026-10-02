@@ -1,6 +1,9 @@
 # Keep the Just entrypoint in the formatter's canonical line ending.
 /justfile text eol=lf
 
+# Unified diff blank context lines require a space prefix.
+/ash-rs/vendor/mxc/changes.patch whitespace=-blank-at-eol
+
 # Embed identical shared prompt assets on every platform.
 /ash-rs/prompts/templates/** text eol=lf
 /ash-rs/collaboration-mode-templates/templates/** text eol=lf

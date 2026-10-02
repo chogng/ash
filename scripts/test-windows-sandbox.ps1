@@ -1,4 +1,8 @@
-param([Parameter(Mandatory)][ValidateSet('x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc')][string]$Target)
+param(
+    [Parameter(Mandatory)][ValidateSet('x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc')][string]$Target,
+    [ValidateNotNullOrEmpty()][string]$WslDistribution,
+    [ValidateNotNullOrEmpty()][string]$NetworkDnsServer
+)
 $ErrorActionPreference = 'Stop'
 $workspace = Split-Path -Parent $PSScriptRoot
 $output = Join-Path $workspace ".build/acceptance/windows-sandbox-$Target"
@@ -14,6 +18,11 @@ function Invoke-Checked([string]$Program, [string[]]$Arguments) {
 Invoke-Checked python @('-B', 'scripts/cargo.py', 'build', '-p', 'ash-windows-sandbox', '--bin', 'ash-windows-sandbox', '--locked', '--target', $Target)
 Invoke-Checked python @('-B', 'scripts/cargo.py', 'build', '-p', 'ash-windows-sandbox-service', '--bin', 'ash-windows-sandbox-service', '--locked', '--target', $Target)
 Invoke-Checked python @('-B', 'scripts/cargo.py', 'build', '-p', 'ash-network-proxy', '--example', 'probe', '--locked', '--target', $Target)
+if ($NetworkDnsServer) {
+    Invoke-Checked python @('-B', 'scripts/cargo.py', 'build', '-p', 'ash-network-proxy', '--example', 'matrix', '--locked', '--target', $Target)
+    $env:ASH_NETWORK_MATRIX_PROBE = Join-Path $workspace ".build/cargo/$Target/debug/examples/matrix.exe"
+    $env:ASH_DNS_SERVER = $NetworkDnsServer
+}
 $bin = Join-Path $output 'bin'
 New-Item -ItemType Directory -Force -Path $bin | Out-Null
 $binary = Join-Path $bin 'ash-windows-sandbox.exe'
@@ -52,6 +61,13 @@ try {
     Invoke-Checked $binary @('status')
     Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox-service', '--locked', '--target', $Target)
     Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox', '--lib', '--test', 'windows', '--locked', '--target', $Target, '--', '--include-ignored', '--test-threads=1')
+    if ($NetworkDnsServer) {
+        Invoke-Checked python @('-B', 'scripts/cargo.py', '--process-tests', 'test', '-p', 'ash-windows-sandbox', '--test', 'network_matrix', '--locked', '--target', $Target, '--', '--ignored', '--nocapture', '--test-threads=1')
+    }
+    if ($WslDistribution) {
+        $env:ASH_WSL_DISTRO = $WslDistribution
+        Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox', '--test', 'wsl', '--locked', '--target', $Target, '--', '--ignored', '--test-threads=1')
+    }
     $beforeFile = Join-Path $output 'before-update-plan.json'
     & $binary plan remove | Set-Content -LiteralPath $beforeFile -Encoding utf8
     if ($LASTEXITCODE -ne 0) { throw 'Could not read account identities before update.' }

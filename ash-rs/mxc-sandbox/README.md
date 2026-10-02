@@ -43,7 +43,7 @@ App Server 的固定沙箱配置允许策略范围内的宿主 ACL 改动，命�
 Windows 账户候选的 ACL 恢复由独立后端维护；异常退出仍需实机验收。
 子进程退出码不再经过私有运行器重映射。输出中的权限错误只产生“可能已有副作用”的诊断，不能证明进程未启动或授权重跑。
 启动失败保留 SDK 错误类别、说明与扩展系统错误；PTY helper 传回实际启动和等待错误。所有启动失败均关闭本次执行，不重新选择后端。
-Linux 网络提供进程退出时，SDK 监控终止工作负载并报告网络丢失；监控与退出观察均不提前回收进程，进程树关闭后才释放 PID。
+Linux 网络提供进程退出时，SDK 监控终止工作负载并报告网络丢失；监控与退出观察均不提前回收进程，进程树关闭后才释放 PID。Bubblewrap 在命令启动前安装禁止 `AF_VSOCK` 的 seccomp 过滤器，防止 WSL 可执行文件互操作绕过 Linux 文件与网络限制；这一约束由工作负载后代继承，适用于禁止和受管网络。
 
 ## PTY 启动
 
@@ -71,7 +71,7 @@ Linux 网络提供进程退出时，SDK 监控终止工作负载并报告网络�
 
 ## 验证
 
-2026-10-02 在 Windows 11 23H2（build 22631）完成适配器、执行器、执行服务与账户后端的活动测试、执行服务 Cargo 构建、依赖检查和 warning 门禁。另显式运行 PSEC 不可用用例，确认执行前拒绝。Linux x64 与 macOS ARM64 的适配器及 SDK 测试目标编译通过；这些平台的实际隔离执行、PSEC 成功路径与 Bazel 打包本轮未验证。
+2026-10-02 在 Windows 11 23H2（build 22631）完成适配器、执行器、执行服务与账户后端的活动测试、执行服务 Cargo 构建、依赖检查和 warning 门禁。另显式运行 PSEC 不可用用例，确认执行前拒绝。同机 WSL2 的 Ubuntu 24.04.5 x64 已实际验证 Bubblewrap：NAT 和 mirrored 模式下，Linux 文件系统及 `/mnt/c` 上的目录权限、隐藏路径与别名、元数据保护、退出码、后代回收和 Windows 可执行文件互操作回归均通过，受管代理用例分别通过。正常构建、适配器及 SDK 的 check 和 warning 门禁通过；SDK 运行器测试 39 项通过。Windows 11 25H2 ARM64 CI 另有 7 项 PSEC 成功路径证据；它不能证明本机 x64 支持。macOS ARM64 仍只有本轮测试目标编译结果，Bazel 打包未验证。具体环境、原始失败及范围见 [WSL 验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-wsl2-实机验收) 与 [补充验收](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-psecwslc-与网络补充验收)。
 
 ```sh
 just test ash-mxc-sandbox
@@ -90,5 +90,27 @@ python3 -B scripts/cargo.py build -p ash-network-proxy --example probe
 export ASH_NETWORK_PROBE="$PWD/.build/cargo/debug/examples/probe"
 just test ash-mxc-sandbox --test linux -- --ignored
 ```
+
+WSL2 的跨系统回归入口为 `tests/wsl.rs`。在可正常使用 Windows 可执行文件互操作的 WSL 发行版内运行，先验证 Linux 文件系统，再将 `TMPDIR` 指向 Windows 挂载上的测试目录；下例假定仓库位于 `/mnt/c`。关闭宿主互操作不能作为通过依据，测试在每轮受限执行前验证普通进程能启动 Windows 程序。
+
+```sh
+export ASH_BWRAP_PATH=/usr/bin/bwrap
+export ASH_WSL_WINDOWS_PROGRAM=/mnt/c/Windows/System32/cmd.exe
+TMPDIR=/tmp just test ash-mxc-sandbox --test wsl --locked -- --ignored --test-threads=1
+mkdir -p .build/acceptance/wsl/fixtures
+TMPDIR="$PWD/.build/acceptance/wsl/fixtures" just test ash-mxc-sandbox --test wsl --locked -- --ignored --test-threads=1
+```
+
+Bubblewrap 当前拒绝 Ash `Allowed` 所要求的全部入站权限；不能把该请求的拒绝当作允许网络的执行验收。`tests/network_matrix.rs` 另通过 CommandExecutor 验证 Denied/Managed：IPv4/IPv6 HTTP、CONNECT、SOCKS 的地址和域名授权、未获批目标拒绝、直接 TCP 与 TCP/UDP DNS 的 A/AAAA、实际接收计数和后代继承。NAT/mirrored 实机均通过；NAT 还覆盖可达的 Windows IPv6 链路本地端口 53，mirrored 覆盖 Windows IPv4 回环。公网 IPv6 和 mirrored 的 Windows IPv6 宿主目标没有可达性对照，不计为通过。Linux PTY 未验证；独立 WSLC SDK 已实测但一次性清理报错，Ash 未接入它。
+
+```sh
+python3 -B scripts/cargo.py build -p ash-network-proxy --example matrix
+export ASH_NETWORK_MATRIX_PROBE="$PWD/.build/cargo/debug/examples/matrix"
+# 使用宿主实际可达、支持 TCP/UDP DNS 的端点；可逗号分隔，IPv6 写为 [address]:53。
+export ASH_DNS_SERVER="10.255.255.254:53"
+just test ash-mxc-sandbox --test network_matrix --locked -- --ignored --nocapture
+```
+
+设置了 `CARGO_TARGET_DIR` 时，探针路径使用该目录的 `debug/examples/matrix`。可提供 `ASH_WINDOWS_NETWORK_ENDPOINT` 和 `ASH_WINDOWS_DNS_ENDPOINT`，向同一矩阵增加 Windows 接收端；格式为逗号分隔的 socket 地址，链路本地 IPv6 的 scope ID 使用 Linux 接口编号。所有端点必须先通过普通进程的可达性检查。自建接收端可通过 `ASH_WINDOWS_NETWORK_COUNTER` 提供原子发布的累计请求数文件；对照后若计数增加，受限执行即失败。共享接收端的测试须串行运行。
 
 Windows 实机步骤见 [验收手册](../../docs/windows-sandbox-acceptance-runbook.md)。

@@ -1,6 +1,11 @@
 //! Windows acceptance uses the executor → Windows account backend → restricted process chain.
 #![cfg(windows)]
 
+#[path = "support/windows.rs"]
+mod support;
+use support::executor;
+use support::sandbox_policy;
+
 use ash_async_utils::CancellationSource;
 use ash_file_access::Dir;
 use ash_sandboxing::FileSystemAccess;
@@ -8,18 +13,13 @@ use ash_sandboxing::NetworkAccess;
 use ash_sandboxing::SandboxBackend;
 use ash_sandboxing::SandboxDirAccess;
 use ash_sandboxing::SandboxDirGrant;
-use ash_sandboxing::SandboxKind;
 use ash_sandboxing::SandboxPolicy;
 use ash_sandboxing::SandboxScope;
-use ash_tool_executor::ApprovalPolicy;
-use ash_tool_executor::ApprovalRequirement;
 use ash_tool_executor::CommandExecutionAuthority;
 use ash_tool_executor::CommandExecutionOutcome;
-use ash_tool_executor::CommandExecutor;
 use ash_tool_executor::CommandInput;
 use ash_tool_executor::CommandRequest;
 use ash_tool_executor::ExecutionError;
-use ash_tool_executor::ExecutionLimits;
 use network_proxy::NetworkDecision;
 use network_proxy::NetworkPolicyHandle;
 use std::io::Read;
@@ -30,38 +30,6 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use windows_sandbox::WindowsSandbox;
-
-struct Approved;
-impl ApprovalPolicy for Approved {
-    fn requirement_for(&self, _: &str) -> ApprovalRequirement {
-        ApprovalRequirement::NotRequired
-    }
-}
-
-fn executor(dir: &Dir, timeout: Duration) -> CommandExecutor<Approved, WindowsSandbox> {
-    let backend = WindowsSandbox::new(ash_install_context::InstallContext::current());
-    assert_eq!(
-        backend.kind(),
-        SandboxKind::Restricted,
-        "the adapter must prepare restricted execution"
-    );
-    assert!(backend.requires_shared_network_proxy());
-    CommandExecutor::new(
-        dir.clone(),
-        backend,
-        Approved,
-        ExecutionLimits {
-            timeout,
-            max_output_bytes: 64 * 1024,
-        },
-    )
-}
-
-fn sandbox_policy(files: FileSystemAccess, network: NetworkAccess) -> SandboxPolicy {
-    SandboxPolicy::new(files, network)
-        .with_host_acl_changes(ash_sandboxing::HostAclChanges::ScopedWithTraversal)
-        .with_file_system_isolation(ash_sandboxing::FileSystemIsolation::WindowsAccount)
-}
 
 fn powershell(script: String) -> CommandRequest {
     let program = Path::new(&std::env::var_os("SystemRoot").unwrap())

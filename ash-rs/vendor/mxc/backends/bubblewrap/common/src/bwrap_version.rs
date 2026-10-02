@@ -38,6 +38,7 @@ use crate::probe_exec::{self, CapturedOutput};
 ///
 /// `--clearenv` is therefore the flag that sets the floor. If the argument
 /// builder ever adopts a newer flag, raise this constant in the same change.
+/// The runner's `--seccomp` socket filter is also supported at this floor.
 pub const MIN_BWRAP_VERSION: BwrapVersion = BwrapVersion::new(0, 5, 0);
 
 /// Why [`MIN_BWRAP_VERSION`] is the compatibility floor.

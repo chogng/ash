@@ -422,6 +422,9 @@ impl BubblewrapScriptRunner {
         logger: &mut Logger,
         stdio: StdioMode,
     ) -> Result<BwrapChild, ScriptResponse> {
+        let socket_filter = crate::seccomp::SocketFilter::new().map_err(|error| {
+            ScriptResponse::error(&format!("Bubblewrap: failed to create socket filter: {error}"))
+        })?;
         // 1. Start the network proxy if configured. Must happen before
         //    arg-building so the proxy's loopback address can be injected as
         //    HTTP_PROXY / HTTPS_PROXY into the sandbox environment.
@@ -597,6 +600,7 @@ impl BubblewrapScriptRunner {
                 .as_deref()
                 .unwrap_or_else(|| std::path::Path::new("bwrap")),
         );
+        socket_filter.configure(&mut command);
         command.args(&args);
         match stdio {
             StdioMode::Pipes => {
@@ -2117,16 +2121,16 @@ mod tests {
     }
 
     #[test]
-    fn validate_accepts_host_rules_when_a_proxy_enforces_them_at_0_8() {
-        // The proxy is the mechanism, so a valid allow-default blocklist
-        // reaches the environmental probe instead of failing policy validation.
+    fn validate_accepts_host_rules_when_the_builtin_proxy_enforces_them_at_0_8() {
+        // Only the SDK's builtin test proxy consumes these host lists; an
+        // external proxy owns its policy and does not receive them from MXC.
         let mut req = base_request();
         req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.default_network_policy = wxc_common::models::NetworkPolicy::Allow;
         req.policy.blocked_hosts = vec!["evil.example.com".into()];
         req.policy.network_proxy = ProxyConfig {
-            address: Some(ProxyAddress::new("127.0.0.1".into(), 3128)),
-            builtin_test_server: false,
+            address: None,
+            builtin_test_server: true,
         };
 
         let unavailable = bwrap_version::BwrapUnavailable::NotFound;
