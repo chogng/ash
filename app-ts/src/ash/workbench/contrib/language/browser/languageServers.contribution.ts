@@ -1,31 +1,18 @@
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { localizedString } from '../../../../platform/action/common/action.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
-import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { OPEN_LANGUAGE_SERVERS_COMMAND_ID } from '../../../../platform/language/common/languageServerService.js';
-import { Registry } from '../../../../platform/registry/common/platform.js';
-import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
-import { ViewContainerLocation, ViewsRegistry } from '../../../common/views.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
-import { LanguageServersViewPane } from './languageServersViewPane.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { createSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
+import { LanguageServerSettingsTarget } from './languageServerSettingsContent.js';
 
-Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
-	key: 'accessibility.verbosity.languageServers', defaultValue: true,
-	parse: value => { if (typeof value !== 'boolean') { throw new TypeError('Language servers accessibility verbosity must be boolean'); } return value; },
-	setting: { valueType: 'boolean', title: 'Language servers accessibility help', description: 'Announce keyboard help when the language servers view receives focus.' },
-});
+registerAction2(class OpenLanguageServerSettings extends Action2 {
+	constructor() { super({ id: OPEN_LANGUAGE_SERVERS_COMMAND_ID, title: localizedString('ash.settings', 'lsp.open', 'Configure Language Servers'), f1: true }); }
 
-registerWorkbenchContribution('workbench.contrib.languageServers', WorkbenchPhase.BlockStartup, () => {
-	const registrations = new DisposableStore();
-	registrations.add(ViewsRegistry.registerViewContainer({ id: 'ash.languageServers', title: 'Language servers', location: ViewContainerLocation.Sidebar, order: 9 }));
-	registrations.add(ViewsRegistry.registerViews('ash.languageServers', [{ id: 'ash.languageServers.view', title: 'Language servers', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(LanguageServersViewPane) }]));
-	registrations.add(registerAction2(class OpenView extends Action2 {
-		constructor() { super({ id: OPEN_LANGUAGE_SERVERS_COMMAND_ID, title: 'Open language servers', f1: true }); }
-		public override run(accessor: ServicesAccessor, languageId?: string): void {
-			const view = accessor.get(IViewsService).openView('ash.languageServers.view');
-			if (view instanceof LanguageServersViewPane) { view.open(languageId); }
-		}
-	}));
-	return registrations;
+	public override async run(accessor: ServicesAccessor, languageId?: string): Promise<void> {
+		const language = languageId ?? accessor.get(ICodeEditorService).getActiveCodeEditor()?.getModel()?.getLanguageId();
+		const input = createSettingsEditorInput(LanguageServerSettingsTarget, language ? { languageId: language } : {});
+		await accessor.get(IEditorService).openEditor(input, { pinned: true }, 'modalGroup');
+	}
 });

@@ -302,6 +302,13 @@ struct BlockingCatalog {
 }
 
 impl ModelCatalog for BlockingCatalog {
+    fn set_preferences(
+        &self,
+        _: crate::model_catalog::ModelPreferencesCommand,
+    ) -> Result<ash_config::ConfigCommandResult, crate::model_catalog::ModelPreferencesError> {
+        unreachable!("this catalog fixture does not accept preference writes")
+    }
+
     fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError> {
         self.started.send(()).unwrap();
         let mut released = self.release.0.lock().unwrap();

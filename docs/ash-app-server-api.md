@@ -272,6 +272,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `session/subscribe` | connection + session tree | Session 视图 + 每个 child Thread 的 snapshot 和 durable gap；Session 没有 `afterSequence` |
 | `session/request` | `session_id` grouping boundary | tagged request；树级动作枚举 Thread，Thread/Turn 写入绑定具体 Thread |
 | `session/unsubscribe` | connection | 删除订阅 |
+| `model/preferences/update` | model preferences | 更新当前接入的 Fast 或上下文档位；带配置版本校验，后端验证模型能力及可选档位 |
 | `model/list` | model catalog | 参数 `{}`；各端使用固定内置目录，登录和接入切换不改变模型身份集合；目录不证明请求成功 |
 | `session/thread/read` | Session + Thread | 读取 Thread 及其正文快照 |
 | `session/thread/subscribe` | Session + Thread + connection | Thread 与正文快照，加上 `afterSequence` 之后的 durable gap |
@@ -781,6 +782,10 @@ App Server 在创建 Turn 时读取执行配置，并把实际 model、approval 
 冻结到该 Turn。产品当前选中的分支属于产品导航状态，不进入 Core Session 视图。
 
 `model/list` 参数为 `{}`，桌面端、Rust 桌面端和 TUI 使用同一份静态目录。模型身份始终为厂商＋模型，条目包含名称、规格和能力，不携带认证方式或执行适配器。
+
+目录中的 `contextWindow` 是当前生效容量，`defaultContextWindow` 是未设置模型偏好时的容量，`maximumContextWindow` 是上限。`contextWindowOptions` 由后端按当前接入提供，按容量递增排列：未知容量返回空数组，固定容量返回一个值，可切换容量返回两个值。客户端仅在两个选项时显示开关，不能从上限推导档位。`fastEnabled` 表示当前接入保存的开关状态，`capabilities.fastMode` 表示该接入是否支持 Fast。接入未就绪不清除已保存偏好。
+
+`model/preferences/update` 接收 `commandId`、`expectedRevision`、模型身份以及可选的 `fast`、`contextWindow`；至少包含一项更新。后端选择当前接入，只修改该模型的偏好，保留其他模型及自动压缩设置。不支持的 Fast、目录未声明的容量返回 `InvalidParams`；配置版本变化返回 `ConfigRevisionConflict`。成功返回配置写入回执，并发出已有的配置变更通知。
 
 接入定义和凭据由后端分别管理。GLM 的模型厂商为 `glm`，四个服务 ID 是独立接入。每轮调用前从已就绪连接中选择，订阅优先于 API；GLM 按 BigModel 订阅、Z.AI 订阅、BigModel API、Z.AI API 排序。凭据变化只影响后续调用。
 

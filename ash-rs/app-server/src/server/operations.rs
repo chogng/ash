@@ -25,6 +25,7 @@ use ash_app_server_protocol::protocol::initialize::ProtocolVersion;
 use ash_app_server_protocol::protocol::initialize::ServerCapabilities;
 use ash_app_server_protocol::protocol::model::ModelListParams;
 use ash_app_server_protocol::protocol::model::ModelListResult;
+use ash_app_server_protocol::protocol::model::ModelPreferencesUpdateParams;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureCodeDto;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureDto;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
@@ -335,6 +336,34 @@ impl AppServer {
         result(&ModelListResult {
             models: self.model_catalog.list().map_err(core_error)?,
         })
+    }
+
+    pub(super) fn model_preferences_update(&self, params: &Value) -> Result<Value, RpcError> {
+        use crate::model_catalog::ModelPreferencesCommand;
+        use crate::model_catalog::ModelPreferencesError;
+        let params: ModelPreferencesUpdateParams = decode(params)?;
+        let outcome = self
+            .model_catalog
+            .set_preferences(ModelPreferencesCommand {
+                command_id: params.command_id,
+                expected_revision: ash_config::ConfigRevision::new(params.expected_revision),
+                model: params.model,
+                update: ash_models_manager::ModelPreferencesUpdate {
+                    fast: params.fast,
+                    context_window: params.context_window,
+                },
+            })
+            .map_err(|error| match error {
+                ModelPreferencesError::Catalog(error) => core_error(error),
+                ModelPreferencesError::InvalidPreferences(error) => RpcError {
+                    detail: Some(error.to_string()),
+                    ..RpcError::new(-32602, AppServerErrorName::InvalidParams)
+                },
+                ModelPreferencesError::Configuration(error) => {
+                    super::config_operations::config_operation_error(error)
+                }
+            })?;
+        result(&super::config_operations::config_command_result(outcome))
     }
 
     pub(super) fn provider_models_list(&self, params: &Value) -> Result<Value, RpcError> {

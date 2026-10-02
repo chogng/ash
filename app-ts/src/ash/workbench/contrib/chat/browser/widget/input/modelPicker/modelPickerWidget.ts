@@ -59,7 +59,7 @@ export class ModelPickerWidget extends Disposable {
 						{ type },
 						() => {
 							if (type === AccessibleViewType.Help) {
-								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow opens model settings. Space toggles Fast or 1M context when supported. Use the thinking effort menu beside the model button to change thinking level. Alt+Left Arrow returns to search. Escape closes the menu.');
+								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow opens model settings. Space toggles Fast or the context window when supported. Use the thinking effort menu beside the model button to change thinking level. Alt+Left Arrow returns to search. Escape closes the menu.');
 							}
 							return content.innerText;
 						},

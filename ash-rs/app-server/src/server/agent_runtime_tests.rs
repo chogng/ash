@@ -264,6 +264,13 @@ impl ModelService for GuidanceModel {
 
 struct SelectedModel(ash_protocol::ModelRef);
 impl crate::model_catalog::ModelCatalog for SelectedModel {
+    fn set_preferences(
+        &self,
+        _: crate::model_catalog::ModelPreferencesCommand,
+    ) -> Result<ash_config::ConfigCommandResult, crate::model_catalog::ModelPreferencesError> {
+        unreachable!("this catalog fixture does not accept preference writes")
+    }
+
     fn list(
         &self,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {

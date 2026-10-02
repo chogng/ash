@@ -1,4 +1,3 @@
-import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { DialogSeverity, type IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
@@ -6,16 +5,30 @@ import { type IWorkspaceContextService } from "../../../../platform/workspace/co
 import { type LanguageServerMessageNotification, type LanguageServerMessageSeverityDto, type LanguageServerProgressNotification, type LanguageServerStateDto, type LanguageServerStateNotification } from "../../../../platform/app-server/common/generated/index.js";
 import type { IOutputChannel, IOutputService } from "../../output/common/outputService.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../statusbar/browser/statusbar.js";
-import { type ILanguageServerStatusService, type LanguageServerLifecycleState, type LanguageServerProgressState } from "../common/languageServerStatusService.js";
+
+interface LanguageServerProgressState {
+	readonly server: string;
+	readonly token: string;
+	readonly title: string;
+	readonly message?: string;
+	readonly percentage?: number;
+}
+
+interface LanguageServerLifecycleState {
+	readonly server: string;
+	readonly state: "starting" | "ready" | "backingOff" | "crashLoop" | "failed" | "stopped";
+	readonly attempt?: number;
+	readonly retryAfterMillis?: number;
+	readonly restartAttempts?: number;
+	readonly message?: string;
+}
 
 /** Projects App Server language notifications into Workbench dialogs, logs, and status. */
-export class AppServerLanguageServerStatusService extends Disposable implements ILanguageServerStatusService {
-	private readonly changeEmitter = this._register(new Emitter<void>());
+export class AppServerLanguageServerStatusService extends Disposable {
 	private readonly channels = new Map<string, IOutputChannel>();
 	private readonly progress = new Map<string, LanguageServerProgressState>();
 	private readonly states = new Map<string, LanguageServerLifecycleState>();
 	private readonly status = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
-	readonly onDidChange = this.changeEmitter.event;
 
 	constructor(events: IServerEventApi, private readonly dialogs: IDialogService, private readonly outputService: IOutputService, private readonly statusbar: IStatusbarService, private readonly workspace?: IWorkspaceContextService) {
 		super();
@@ -25,14 +38,6 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 			if (event.method === "language/serverState") this.acceptState(event.params);
 		});
 		this._register(toDisposable(() => subscription.dispose()));
-	}
-
-	getProgress(): readonly LanguageServerProgressState[] {
-		return Object.freeze([...this.progress.values()]);
-	}
-
-	getStates(): readonly LanguageServerLifecycleState[] {
-		return Object.freeze([...this.states.values()]);
 	}
 
 	private acceptMessage(message: LanguageServerMessageNotification): void {
@@ -50,7 +55,6 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 		const presentation = lifecyclePresentation(state);
 		this.ensureChannel(server).appendLine({ severity: presentation.severity, category: "lifecycle", text: presentation.text });
 		this.updateStatus();
-		this.changeEmitter.fire();
 	}
 
 	private acceptProgress(update: LanguageServerProgressNotification): void {
@@ -65,7 +69,6 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 			this.progress.set(key, Object.freeze({ server, token: update.token, title, ...(update.message?.trim() ? { message: update.message.trim() } : current?.message ? { message: current.message } : {}), ...(update.percentage === null ? current?.percentage === undefined ? {} : { percentage: current.percentage } : { percentage: update.percentage }) }));
 		}
 		this.updateStatus();
-		this.changeEmitter.fire();
 	}
 
 	private updateStatus(): void {

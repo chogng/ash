@@ -1207,6 +1207,8 @@ use crate::protocol::model::ModelCatalogEntry;
 use crate::protocol::model::ModelListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelPreferencesUpdateParams;
 use crate::protocol::notification::ThreadTranscriptUpdateEnvelope;
 use crate::protocol::notification::ThreadUpdateEnvelope;
 #[cfg(any(test, feature = "export"))]
@@ -3001,6 +3003,11 @@ client_methods! {
         response: ModelListResult,
         serialization: GlobalSharedRead,
     },
+    ModelPreferencesUpdate => "model/preferences/update" {
+        params: ModelPreferencesUpdateParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
     ProviderList => "provider/list" {
         params: EmptyParams,
         response: ProviderListResult,
@@ -4677,6 +4684,7 @@ typescript_bindings! {
     ModelCatalogEntry,
     ModelListParams,
     ModelListResult,
+    ModelPreferencesUpdateParams,
     ProviderApiKeyDto,
     ProviderApiKeyPolicyDto,
     ProviderApiKeySetParams,

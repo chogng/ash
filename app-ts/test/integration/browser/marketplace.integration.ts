@@ -3,6 +3,10 @@ import '../../../src/ash/base/browser/ui/button/button.css';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
+import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -16,11 +20,14 @@ import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID, type MarketplaceInsta
 import { ISkillService } from '../../../src/ash/platform/skills/common/skillService.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
-import { ILanguageServerStatusService } from '../../../src/ash/workbench/services/language/common/languageServerStatusService.js';
+import { ILocalizationService } from '../../../src/ash/workbench/services/localization/common/localizationService.js';
+import { IRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/remoteAgentService.js';
+import { createSettingsEditorInput } from '../../../src/ash/workbench/services/preferences/common/settingsEditorInput.js';
+import { CLOSE_EDITOR_COMMAND_ID } from '../../../src/ash/workbench/browser/parts/editor/editorCommands.js';
 import { AppServerMarketplaceService } from '../../../src/ash/workbench/services/marketplace/browser/appServerMarketplaceService.js';
 import { MarketplaceViewPane } from '../../../src/ash/workbench/contrib/marketplace/browser/marketplaceViewPane.js';
 import { SkillsSettingsContent } from '../../../src/ash/workbench/contrib/skills/browser/skillsSettingsContent.js';
-import { LanguageServersViewPane } from '../../../src/ash/workbench/contrib/language/browser/languageServersViewPane.js';
+import { LanguageServerSettingsContent } from '../../../src/ash/workbench/contrib/language/browser/languageServerSettingsContent.js';
 
 const disposables = new DisposableStore();
 const services = disposables.add(new InstantiationService());
@@ -67,7 +74,7 @@ services.registerInstance(IConfigurationService, { getValue: () => true } as unk
 const dialogs = disposables.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
 disposables.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
-services.registerInstance(ICommandService, { executeCommand: async (id: string, options: MarketplaceOpenOptions) => { requests.push(['command', id, options]); if (id !== OPEN_MARKETPLACE_COMMAND_ID) { throw new Error(id); } await marketplace.open(options); } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, options: MarketplaceOpenOptions) => { requests.push(['command', id, options]); if (id === CLOSE_EDITOR_COMMAND_ID) { return; } if (id !== OPEN_MARKETPLACE_COMMAND_ID) { throw new Error(id); } await marketplace.open(options); } } as unknown as ICommandService);
 let revision = 3;
 let enabled = true;
 const skillId = { source: 'marketplace:example/web', name: 'review' };
@@ -81,13 +88,19 @@ services.registerInstance(ILanguageServerService, {
 	configure: async (id, config, expectedRevision) => { requests.push(['configure', id, config, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } revision++; },
 	removeConfiguration: async () => {},
 });
-services.registerInstance(ILanguageServerStatusService, { onDidChange: Event.None, getStates: () => [{ server: 'typescript-language-server', state: 'ready' }], getProgress: () => [] });
+services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
+services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(document.body)));
+services.registerInstance(ILocalizationService, { onDidChange: Event.None, whenReady: Promise.resolve(), translate: (_bundle, _key, text, parameters) => text.replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match)) });
+services.registerInstance(IRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IRemoteAgentService);
+services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
 services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ getModel: () => ({ getLanguageId: () => 'typescriptreact' }) }) } as unknown as ICodeEditorService);
 services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None } as IEditorService);
 services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'fixture', folders: [] }) } as unknown as IWorkspaceContextService);
 const marketplace = disposables.add(services.createInstance(MarketplaceViewPane, document.getElementById('marketplace')!, { id: 'marketplace', title: 'Marketplace' }));
 const skills = disposables.add(services.createInstance(SkillsSettingsContent, document.getElementById('skills')!));
-const lsp = disposables.add(services.createInstance(LanguageServersViewPane, document.getElementById('lsp')!, { id: 'lsp', title: 'Language servers' }));
+const lsp = disposables.add(services.createInstance(LanguageServerSettingsContent, document.getElementById('lsp')!));
+document.getElementById('lsp')!.append(lsp.domNode);
+lsp.setInput(createSettingsEditorInput());
 document.getElementById('skills')!.append(skills.domNode);
 marketplace.setVisible(true); skills.setVisible(true); lsp.setVisible(true);
 

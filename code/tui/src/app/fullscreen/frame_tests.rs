@@ -2621,6 +2621,9 @@ fn configured_model_summary() -> ModelSummary {
                 context_window: Some(200_000),
 
                 maximum_context_window: Some(200_000),
+                default_context_window: Some(200_000),
+                context_window_options: vec![200_000],
+                fast_enabled: false,
                 auto_compact_token_limit: None,
                 available_context_window: Some(180_000),
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
@@ -2741,6 +2744,9 @@ fn custom_model_choices(
                 context_window: Some(272_000),
 
                 maximum_context_window: Some(272_000),
+                default_context_window: Some(272_000),
+                context_window_options: vec![272_000],
+                fast_enabled: false,
                 auto_compact_token_limit: None,
                 available_context_window: Some(240_000),
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,

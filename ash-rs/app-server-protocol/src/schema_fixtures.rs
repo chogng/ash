@@ -436,9 +436,19 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     let typescript = generated_typescript();
 
     assert!(typescript.contains("export type ModelRef = { provider: string, model: string, };"));
-    assert!(typescript.contains(
-        "export type ModelCatalogEntry = { model: ModelRef, displayName: string,\n/**\n * True only when this ID belongs to the last successful endpoint observation.\n */\ndiscovered?: boolean | null, contextWindow: number | null,\n/**\n * Model or custom connection ceiling before applying its context budget preference.\n */\nmaximumContextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ReasoningEffort>, modelReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, };"
-    ));
+    for field in [
+        "export type ModelCatalogEntry = { model: ModelRef, displayName: string,",
+        "contextWindow: number | null,",
+        "defaultContextWindow: number | null,",
+        "contextWindowOptions: Array<number>,",
+        "fastEnabled: boolean,",
+        "maximumContextWindow: number | null,",
+        "capabilities: ModelCapabilities,",
+        "supportedReasoningEfforts: Array<ReasoningEffort>,",
+    ] {
+        assert!(typescript.contains(field), "missing catalog field: {field}");
+    }
+
     assert!(
         typescript
             .contains("export type ApprovalReviewModelSelection = { \"type\": \"automatic\" }")

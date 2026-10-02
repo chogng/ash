@@ -71,6 +71,7 @@ use ash_model_provider_config::find_static_model;
 use ash_models_manager::CatalogQuery;
 use ash_models_manager::ModelRequirements;
 use ash_models_manager::ModelsManager;
+use ash_protocol::ContextWindow;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelBillingScope;
 use ash_protocol::ModelImageInputPolicy;
@@ -2278,6 +2279,38 @@ impl ModelService for ConfigBackedModelService {
 }
 
 impl ModelCatalog for ConfigBackedModelService {
+    fn set_preferences(
+        &self,
+        command: crate::model_catalog::ModelPreferencesCommand,
+    ) -> Result<ash_config::ConfigCommandResult, crate::model_catalog::ModelPreferencesError> {
+        use crate::model_catalog::ModelPreferencesError;
+        let config = self
+            .resolved_config()
+            .map_err(ModelPreferencesError::Catalog)?;
+        let entry = self
+            .context_catalog(&config)
+            .and_then(|catalog| catalog.entry(&command.model))
+            .map_err(ModelPreferencesError::Catalog)?;
+        let mut provider = config
+            .providers
+            .get(&command.model.provider)
+            .cloned()
+            .unwrap_or_else(|| ModelProviderConfig::new(command.model.provider.clone()));
+        entry
+            .apply_preferences(&mut provider, &command.update)
+            .map_err(ModelPreferencesError::InvalidPreferences)?;
+        self.config
+            .apply(ash_config::ConfigCommandRequest {
+                command_id: command.command_id,
+                expected_revision: command.expected_revision,
+                command: ash_config::UserConfigCommand::SaveConnection {
+                    connection: provider.connection.clone(),
+                    config: provider,
+                },
+            })
+            .map_err(ModelPreferencesError::Configuration)
+    }
+
     fn refresh(
         &self,
         id: &ash_protocol::ModelConnectionId,
@@ -2456,10 +2489,13 @@ impl ConfigBackedModelService {
             resolve_local_config(user, self.dir_config.as_deref()).map_err(|error| {
                 CoreError::Model(format!("failed to resolve directory config: {}", error.0))
             })?;
-        config.providers = self
-            .catalog_provider
-            .preferred_connections(&config.connections)
-            .map_err(|error| CoreError::Model(error.to_string()))?;
+        // Account readiness chooses the request path, but an unready connection still
+        // owns saved preferences. Keep that configuration until a ready path replaces it.
+        config.providers.extend(
+            self.catalog_provider
+                .preferred_connections(&config.connections)
+                .map_err(|error| CoreError::Model(error.to_string()))?,
+        );
         Ok(config)
     }
 }
@@ -2495,6 +2531,12 @@ fn runtime_catalog_entry(
         &context.info,
     );
     result.maximum_context_window = context.maximum_window;
+    result.context_window_options = entry.context_window_options(provider_config);
+    result.fast_enabled = provider_config.fast_models.contains(&entry.model().model);
+    result.default_context_window = match entry.default_context_window(provider_config) {
+        ContextWindow::Known(tokens) => Some(tokens),
+        ContextWindow::Unknown => None,
+    };
     result.available_context_window = context.available_input();
     Ok(result)
 }

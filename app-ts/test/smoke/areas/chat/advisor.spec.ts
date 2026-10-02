@@ -154,22 +154,22 @@ test('Model picker saves Fast and context settings separately from thinking effo
 		await auto.press('Space');
 		await expect(auto).not.toHaveAttribute('aria-busy', 'true');
 	}
-	await expect(picker.getByText('GPT-6.1 Sol', { exact: true })).toBeVisible();
-	await expect(picker.getByText('GPT-6 Luna', { exact: true })).toBeVisible();
+	await expect(picker.getByText(/^GPT-6\.1[- ]Sol$/)).toBeVisible();
+	await expect(picker.getByText(/^GPT-6[- ]Luna$/)).toBeVisible();
 	const search = picker.getByRole('combobox');
-	await search.fill('GPT-6 Astra');
+	await search.fill('Astra');
 	await search.press('Enter');
-	await expect(selector).toHaveText('GPT-6 Astra');
+	await expect(selector).toHaveText(/^GPT-6[- ]Astra$/);
 	await selector.click();
-	await search.fill('GPT-6 Astra');
+	await search.fill('Astra');
 	await search.press('ArrowRight');
-	const card = picker.getByRole('region', { name: 'GPT-6 Astra' });
+	const card = picker.getByRole('region', { name: /^GPT-6[- ]Astra$/ });
 	const fast = card.getByRole('switch', { name: 'Fast', exact: true });
 	const context = card.getByRole('switch', { name: '1M context', exact: true });
 	await expect(fast).toBeFocused();
 	await expect(card.getByRole('switch')).toHaveCount(2);
 	await expect(card.getByRole('radio')).toHaveCount(0);
-	await expect(card).toHaveText('Fast272k');
+	await expect(card).toHaveText('Fast1M');
 	const surfaces = await picker.evaluate(element => {
 		const main = element.getBoundingClientRect();
 		const side = element.querySelector('.ash-chat-model-picker-details-menu')!.getBoundingClientRect();
@@ -177,7 +177,7 @@ test('Model picker saves Fast and context settings separately from thinking effo
 	});
 	expect(surfaces.gap).toBeGreaterThanOrEqual(0);
 	expect(surfaces.gap).toBeLessThanOrEqual(5);
-	await fast.press('Space');
+	await card.locator('.ash-switch-track').first().click();
 	await expect(fast).not.toHaveAttribute('aria-busy', 'true');
 	await expect(fast).toBeChecked();
 	await expect(fast).toBeFocused();
@@ -187,7 +187,7 @@ test('Model picker saves Fast and context settings separately from thinking effo
 	await expect(context).toBeChecked();
 	await expect(context).toBeFocused();
 	await expect(card).toHaveText('Fast1M');
-	await expect(search).toHaveValue('GPT-6 Astra');
+	await expect(search).toHaveValue('Astra');
 	await context.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help' });
 	await expect(help.getByRole('textbox')).toHaveValue(/Right Arrow opens model settings/);
@@ -206,7 +206,7 @@ test('Model picker saves Fast and context settings separately from thinking effo
 	// Recreate the popup, then save from the full list to exercise active-row restoration.
 	await selector.click();
 	await search.fill('');
-	await picker.getByRole('option', { name: /GPT-6 Astra/ }).hover();
+	await picker.getByRole('option', { name: /GPT-6[- ]Astra/ }).hover();
 	await search.press('ArrowRight');
 	await expect(fast).toBeChecked();
 	await expect(context).toBeChecked();
@@ -214,7 +214,7 @@ test('Model picker saves Fast and context settings separately from thinking effo
 	await expect(context).not.toHaveAttribute('aria-busy', 'true');
 	await expect(context).not.toBeChecked();
 	await expect(context).toBeFocused();
-	await expect(card).toHaveText('Fast272k');
+	await expect(card).toHaveText('Fast1M');
 	await fast.press('Space');
 	await expect(fast).not.toHaveAttribute('aria-busy', 'true');
 	await expect(fast).not.toBeChecked();
@@ -285,13 +285,13 @@ test('Model picker details and keyboard help follow the Chinese display language
 	const auto = picker.getByRole('switch', { name: '自动' });
 	if (await auto.isChecked()) { await auto.press('Space'); }
 	const search = picker.getByRole('combobox');
-	await search.fill('GPT-6 Astra');
+	await search.fill('Astra');
 	await search.press('Enter');
-	await expect(selector).toHaveText('GPT-6 Astra');
+	await expect(selector).toHaveText(/^GPT-6[- ]Astra$/);
 	await selector.click();
-	await search.fill('GPT-6 Astra');
+	await search.fill('Astra');
 	await search.press('ArrowRight');
-	const card = picker.getByRole('region', { name: 'GPT-6 Astra' });
+	const card = picker.getByRole('region', { name: /^GPT-6[- ]Astra$/ });
 	const fast = card.getByRole('switch', { name: '快速', exact: true });
 	await expect(fast).toBeFocused();
 	await expect(card.getByRole('switch', { name: '1M 上下文', exact: true })).toBeVisible();

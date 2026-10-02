@@ -11,6 +11,8 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
 import { ISkillService } from '../../../../../platform/skills/common/skillService.js';
 import { IMarketplaceService } from '../../../../../platform/marketplace/common/marketplaceService.js';
+import { ILanguageServerService } from '../../../../../platform/language/common/languageServerService.js';
+import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -552,6 +554,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		setEnabled: async () => {},
 	});
 	services.registerInstance(IMarketplaceService, { onDidChangeInstalled: Event.None } as IMarketplaceService);
+	services.registerInstance(ILanguageServerService, { read: async () => ({ revision: 0, configurations: {}, servers: [] }), configure: async () => {}, removeConfiguration: async () => {} });
+	services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => null } as ICodeEditorService);
 	services.registerInstance(IDialogService, disposables.add(new DialogService()));
 	services.registerInstance(ClipboardServiceId, clipboardService);
 	services.registerInstance(ConfigurationServiceId, configuration);

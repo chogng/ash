@@ -9,7 +9,7 @@ const environment = new JSDOM('<!doctype html><body></body>');
 suiteTeardown(() => environment.window.close());
 const entry: ModelCatalogEntry = {
 	model: { provider: 'openai', model: 'test-model' }, displayName: 'Test Model',
-	contextWindow: 272_000, maximumContextWindow: 1_050_000, supportsFast: true, fast: false,
+	contextWindow: 272_000, contextWindowOptions: [272_000, 1_000_000], maximumContextWindow: 1_050_000, supportsFast: true, fast: false,
 };
 
 function saved(card: ModelCard): Promise<void> {
@@ -54,7 +54,7 @@ test('Model card saves the context window while retaining both switches across c
 	card.update({ entry, setPreferences });
 	document.body.append(card.domNode);
 	const inputs = [...card.domNode.querySelectorAll<HTMLInputElement>('input')];
-	assert.equal(card.domNode.textContent, 'Fast272k');
+	assert.equal(card.domNode.textContent, 'Fast1M');
 	inputs[1].focus();
 	const completed = saved(card);
 	inputs[1].click();
@@ -68,9 +68,33 @@ test('Model card saves the context window while retaining both switches across c
 
 test('Model card hides fixed capacity and disables unsupported preferences', () => {
 	using card = new ModelCard(environment.window.document);
-	card.update({ entry: { ...entry, contextWindow: 500_000, maximumContextWindow: 500_000, supportsFast: false }, setPreferences: async () => {} });
+	card.update({ entry: { ...entry, contextWindow: 500_000, contextWindowOptions: [500_000], maximumContextWindow: 500_000, supportsFast: false }, setPreferences: async () => {} });
 	assert.equal(card.domNode.querySelector<HTMLInputElement>('input[aria-label="Fast"]')!.disabled, true);
 	assert.equal((card.domNode.querySelector('.ash-chat-model-card-context') as HTMLElement).hidden, true);
 	assert.equal(card.domNode.textContent, 'Fast');
 	assert.equal(card.domNode.querySelectorAll('[role="radio"]').length, 0);
+});
+
+
+test('Model card uses backend choices even below 1M and with an unrelated ceiling', async () => {
+	using card = new ModelCard(environment.window.document);
+	const calls: ModelPreferencesUpdate[] = [];
+	let current = { ...entry, contextWindow: 256_000, contextWindowOptions: [256_000, 500_000], maximumContextWindow: 2_000_000 };
+	const setPreferences = async (update: ModelPreferencesUpdate): Promise<void> => {
+		calls.push(update);
+		current = { ...current, contextWindow: update.contextWindow! };
+		card.update({ entry: current, setPreferences });
+	};
+	card.update({ entry: current, setPreferences });
+	environment.window.document.body.append(card.domNode);
+	const input = card.domNode.querySelector<HTMLInputElement>('input[aria-label="500k context"]')!;
+	assert.equal(card.domNode.textContent, 'Fast500k');
+	let completed = saved(card);
+	input.click();
+	await completed;
+	assert.equal(input.checked, true);
+	completed = saved(card);
+	input.click();
+	await completed;
+	assert.deepEqual(calls, [{ contextWindow: 500_000 }, { contextWindow: 256_000 }]);
 });

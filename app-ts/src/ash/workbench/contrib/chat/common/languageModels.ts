@@ -1,3 +1,4 @@
+import type { ModelListResult } from '../../../../platform/app-server/common/generated/index.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -60,7 +61,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		const models = await this.modelApi.listProviderModels(connection);
 		if (this.modelCatalogLoad) { await this.modelCatalogLoad; }
 		await this.refreshModels();
-		return models;
+		return models.map(modelCatalogEntry);
 	}
 	public async listModels(): Promise<readonly ModelCatalogEntry[]> {
 		const catalog = await this.listModelCatalog();
@@ -129,41 +130,22 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	}
 
 	private async loadModelCatalog(): Promise<readonly ModelCatalogEntry[]> {
-		const [catalog, providers, fastModels] = await Promise.all([this.modelApi.listModels(), this.modelApi.listProviders(), this.modelApi.listFastModels()]);
+		const [catalog, providers] = await Promise.all([this.modelApi.listModels(), this.modelApi.listProviders()]);
 		const models: Parameters<typeof this.acceptModelCatalog>[0][number][] = [...catalog.models];
 		for (const connection of ['kimi-desktop', 'kimi-cli']) {
 			if (!providers.providers.some(provider => provider.connection === connection && provider.ready)) { continue; }
 			models.push(...await this.modelApi.listProviderModels(connection));
 		}
-		return this.acceptModelCatalog(models, new Set(fastModels.map(modelRefIdentity)));
+		return this.acceptModelCatalog(models);
 	}
 
-	private acceptModelCatalog(entries: readonly {
-		readonly model: ModelRef;
-		readonly displayName: string;
-		readonly discovered?: boolean | null;
-		readonly contextWindow?: number | null;
-		readonly maximumContextWindow?: number | null;
-		readonly capabilities?: { readonly fastMode: string };
-		readonly supportedReasoningEfforts?: ModelCatalogEntry['supportedReasoningEfforts'];
-		readonly modelReasoningEffort?: ModelCatalogEntry['modelReasoningEffort'] | null;
-	}[], fastModels: ReadonlySet<string>): readonly ModelCatalogEntry[] {
+	private acceptModelCatalog(entries: Readonly<ModelListResult['models']>): readonly ModelCatalogEntry[] {
 		const identities = new Set<string>();
 		const catalog = entries.map(entry => {
 			const identity = modelRefIdentity(entry.model);
 			if (identities.has(identity)) { throw new Error(`Model catalog contains duplicate entry '${entry.model.provider}/${entry.model.model}'`); }
 			identities.add(identity);
-			return Object.freeze({
-				model: Object.freeze({ ...entry.model }),
-				displayName: entry.displayName,
-				maximumContextWindow: entry.maximumContextWindow,
-				supportsFast: entry.capabilities?.fastMode === 'supported',
-				fast: fastModels.has(identity),
-				...(entry.discovered === true ? { discovered: true } : {}),
-				...(entry.contextWindow !== undefined ? { contextWindow: entry.contextWindow } : {}),
-				...(entry.supportedReasoningEfforts !== undefined ? { supportedReasoningEfforts: Object.freeze([...entry.supportedReasoningEfforts]) } : {}),
-				...(entry.modelReasoningEffort != null ? { modelReasoningEffort: entry.modelReasoningEffort } : {}),
-			});
+			return modelCatalogEntry(entry);
 		});
 		const changed = !sameModelCatalog(this.modelCatalog, catalog);
 		this.modelCatalog = Object.freeze(catalog);
@@ -171,6 +153,22 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		if (changed) { this.changed.fire(); }
 		return this.modelCatalog;
 	}
+}
+
+function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatalogEntry {
+	return Object.freeze({
+		model: Object.freeze({ ...entry.model }),
+		displayName: entry.displayName,
+		defaultContextWindow: entry.defaultContextWindow,
+		maximumContextWindow: entry.maximumContextWindow,
+		supportsFast: entry.capabilities.fastMode === 'supported',
+		fast: entry.fastEnabled,
+		contextWindowOptions: Object.freeze([...entry.contextWindowOptions]),
+		...(entry.discovered === true ? { discovered: true } : {}),
+		contextWindow: entry.contextWindow,
+		supportedReasoningEfforts: Object.freeze([...entry.supportedReasoningEfforts]),
+		...(entry.modelReasoningEffort != null ? { modelReasoningEffort: entry.modelReasoningEffort } : {}),
+	});
 }
 
 function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly ModelCatalogEntry[]): boolean {
@@ -181,9 +179,11 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 			&& entry.discovered === candidate.discovered
 			&& modelRefIdentity(entry.model) === modelRefIdentity(candidate.model)
 			&& entry.contextWindow === candidate.contextWindow
+			&& entry.defaultContextWindow === candidate.defaultContextWindow
 			&& entry.maximumContextWindow === candidate.maximumContextWindow
 			&& entry.supportsFast === candidate.supportsFast
 			&& entry.fast === candidate.fast
+			&& entry.contextWindowOptions.join('\0') === candidate.contextWindowOptions.join('\0')
 			&& entry.modelReasoningEffort === candidate.modelReasoningEffort
 			&& entry.supportedReasoningEfforts?.join('\0') === candidate.supportedReasoningEfforts?.join('\0');
 	});

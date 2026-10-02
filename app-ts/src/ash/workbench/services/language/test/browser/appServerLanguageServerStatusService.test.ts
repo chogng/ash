@@ -24,13 +24,11 @@ test("language-server status service publishes channels and only projects active
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Right), []);
 
 	events.fire({ method: "language/serverProgress", params: { server: "rust-analyzer", token: "index", title: "Indexing", message: "1/2 files", percentage: 50, done: false } });
-	assert.equal(service.getProgress()[0]?.title, "Indexing");
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Right)[0]?.entry.text, "Indexing 50%");
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Right)[0]?.entry.run?.(), undefined);
 	assert.deepEqual(reveals, [["language-server.rust-analyzer", "take"]]);
 	assert.equal(output.activeChannel?.label, "rust-analyzer");
 	events.fire({ method: "language/serverProgress", params: { server: "rust-analyzer", token: "index", title: null, message: "done", percentage: null, done: true } });
-	assert.deepEqual(service.getProgress(), []);
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Right), []);
 
 	events.fire({ method: "language/serverMessage", params: { server: "typescript-language-server", severity: "log", source: "stderr", show: false, message: "ready" } });
@@ -54,7 +52,6 @@ test("language-server lifecycle is projected from the backend state machine", ()
 	events.fire({ method: "language/serverState", params: { server: "rust-analyzer", state: { type: "backingOff", attempt: 2, retryAfterMillis: 1_500 } } });
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Right)[0]?.entry.text, "rust-analyzer: Restarting");
 	events.fire({ method: "language/serverState", params: { server: "rust-analyzer", state: { type: "crashLoop", restartAttempts: 3, message: "exited 1" } } });
-	assert.deepEqual(service.getStates(), [{ server: "rust-analyzer", state: "crashLoop", restartAttempts: 3, message: "exited 1" }]);
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Right)[0]?.entry.text, "rust-analyzer: Failed");
 	assert.match(output.activeChannel?.getText() ?? "", /Starting language server/);
 	assert.match(output.activeChannel?.getText() ?? "", /restart attempt 2 begins in 1.5s/);

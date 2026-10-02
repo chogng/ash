@@ -24,6 +24,7 @@ pub use instructions::ModelInstructionError;
 pub use instructions::ModelInstructionProfile;
 pub use manager::CatalogReadSource;
 pub use manager::ModelsManager;
+pub use model_info::ModelPreferencesUpdate;
 pub use model_info::ResolvedModel;
 pub use policy::CatalogFreshnessPolicy;
 pub use policy::CatalogReadPolicy;

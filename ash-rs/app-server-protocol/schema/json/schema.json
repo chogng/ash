@@ -6239,6 +6239,22 @@
         {
           "properties": {
             "method": {
+              "const": "model/preferences/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ModelPreferencesUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "provider/list",
               "type": "string"
             },
@@ -11304,6 +11320,22 @@
             },
             "result": {
               "$ref": "#/$defs/ModelListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "model/preferences/update",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
             }
           },
           "required": [
@@ -29481,6 +29513,24 @@
             "null"
           ]
         },
+        "contextWindowOptions": {
+          "description": "Selectable budgets in ascending order: empty for unknown, one for fixed capacity,\nor two for a compact/expanded switch. Clients must not infer choices from the ceiling.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "defaultContextWindow": {
+          "description": "Context budget without a per-model preference, distinct from the effective budget and ceiling.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "defaultPersonality": {
           "anyOf": [
             {
@@ -29500,6 +29550,10 @@
         },
         "displayName": {
           "type": "string"
+        },
+        "fastEnabled": {
+          "description": "Current preference on the active connection; capability support is reported separately.",
+          "type": "boolean"
         },
         "maximumContextWindow": {
           "description": "Model or custom connection ceiling before applying its context budget preference.",
@@ -29533,6 +29587,8 @@
       "required": [
         "model",
         "displayName",
+        "contextWindowOptions",
+        "fastEnabled",
         "capabilities",
         "supportedReasoningEfforts"
       ],
@@ -29843,6 +29899,42 @@
       "required": [
         "currency",
         "picoUnits"
+      ],
+      "type": "object"
+    },
+    "ModelPreferencesUpdateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "contextWindow": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fast": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "model": {
+          "$ref": "#/$defs/ModelRef"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "model"
       ],
       "type": "object"
     },

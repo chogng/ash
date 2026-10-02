@@ -63,7 +63,7 @@ function fixture(provider: CustomModelProvider) {
 	};
 }
 const provider: CustomModelProvider = { id: 'custom-test', name: 'Test gateway', baseUrl: 'https://test.example/v1', apiFormat: 'chatCompletions', order: 1, models: [] };
-const discovered = (id: string): ModelCatalogEntry => ({ model: { provider: provider.id, model: id }, displayName: id, discovered: true });
+const discovered = (id: string): ModelCatalogEntry => ({ model: { provider: provider.id, model: id }, displayName: id, contextWindowOptions: [], discovered: true });
 
 test('Test models discovers an empty table once, tests every row and reports one summary without enabling models', async () => {
 	const context = fixture(provider);
@@ -84,7 +84,7 @@ test('Refreshing and reopening retain discovered membership, context mappings an
 	const config = { ...provider, models: [{ id: 'available', contextWindow: 1_000_000 }, { id: 'local-alias', contextWindow: 128_000, upstreamModel: 'available' }] };
 	const context = fixture(config);
 	using resources = context.resources;
-	context.catalog = [discovered('available'), { model: { provider: provider.id, model: 'local-alias' }, displayName: 'local-alias' }];
+	context.catalog = [discovered('available'), { model: { provider: provider.id, model: 'local-alias' }, displayName: 'local-alias', contextWindowOptions: [] }];
 	await context.view.initialize();
 	await context.view.setEnabled('available', true);
 	await context.view.removeModel('available');

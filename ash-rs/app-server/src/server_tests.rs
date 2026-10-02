@@ -551,6 +551,13 @@ struct FixedModelCatalog {
 }
 
 impl crate::model_catalog::ModelCatalog for FixedModelCatalog {
+    fn set_preferences(
+        &self,
+        _: crate::model_catalog::ModelPreferencesCommand,
+    ) -> Result<ash_config::ConfigCommandResult, crate::model_catalog::ModelPreferencesError> {
+        unreachable!("this catalog fixture does not accept preference writes")
+    }
+
     fn list(
         &self,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
@@ -759,6 +766,14 @@ fn provider_models_rpc_distinguishes_models_empty_and_classified_failure() {
     use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
     struct Catalog(Result<Vec<ModelCatalogEntry>, ModelCatalogRefreshError>);
     impl crate::model_catalog::ModelCatalog for Catalog {
+        fn set_preferences(
+            &self,
+            _: crate::model_catalog::ModelPreferencesCommand,
+        ) -> Result<ash_config::ConfigCommandResult, crate::model_catalog::ModelPreferencesError>
+        {
+            unreachable!("this catalog fixture does not accept preference writes")
+        }
+
         fn refresh(
             &self,
             provider: &ash_protocol::ModelConnectionId,

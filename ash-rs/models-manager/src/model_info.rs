@@ -48,6 +48,88 @@ impl ResolvedModel {
 }
 
 impl ModelCatalogEntry {
+    /// Selectable budgets for the active connection, ordered from compact to expanded.
+    /// A fixed capacity has one choice; unknown capacity has none. The picker switches
+    /// between the two declared presets rather than interpreting the model ceiling.
+    pub fn context_window_options(&self, config: &ModelProviderConfig) -> Vec<u32> {
+        let ContextWindow::Known(default) = self.default_context_window(config) else {
+            return Vec::new();
+        };
+        if config.custom.is_none()
+            && self.info().id.as_str().starts_with("gpt-")
+            && let ContextWindow::Known(limit) = self.info().context_window
+            && limit >= 1_000_000
+            && default < 1_000_000
+        {
+            vec![default, 1_000_000]
+        } else {
+            vec![default]
+        }
+    }
+
+    /// Validates the complete update before changing the selected model's preferences.
+    /// Other models, connection details and compaction settings retain their values.
+    pub fn apply_preferences(
+        &self,
+        config: &mut ModelProviderConfig,
+        update: &ModelPreferencesUpdate,
+    ) -> Result<(), ProviderConfigError> {
+        let info = self.model_info(config)?;
+        let invalid = |message: &str| ProviderConfigError::InvalidProvider {
+            provider: config.provider.clone(),
+            message: message.to_owned(),
+        };
+        if update.fast.is_none() && update.context_window.is_none() {
+            return Err(invalid("model preference update must contain a change"));
+        }
+        if update.fast == Some(true)
+            && info.capabilities.fast_mode != ash_protocol::CapabilitySupport::Supported
+        {
+            return Err(invalid("Fast is unavailable for this model connection"));
+        }
+        if let Some(window) = update.context_window
+            && !self.context_window_options(config).contains(&window)
+        {
+            return Err(invalid("context window is not a selectable budget"));
+        }
+        if let Some(fast) = update.fast {
+            if fast {
+                config.fast_models.insert(info.id.clone());
+            } else {
+                config.fast_models.remove(&info.id);
+            }
+        }
+        if let Some(window) = update.context_window {
+            config
+                .model_context
+                .entry(info.id)
+                .or_insert(ModelContextConfig {
+                    context_window: window,
+                    auto_compact_token_limit: None,
+                })
+                .context_window = window;
+        }
+        Ok(())
+    }
+
+    /// Context budget before a per-model preference, capped by known catalog capacity.
+    pub fn default_context_window(&self, config: &ModelProviderConfig) -> ContextWindow {
+        let window = if let Some(custom) = &config.custom {
+            Some(custom.context_window)
+        } else if self.info().id.as_str().starts_with("gpt-") {
+            Some(272_000)
+        } else {
+            None
+        };
+        match (self.info().context_window, window) {
+            (ContextWindow::Known(limit), Some(window)) => ContextWindow::Known(limit.min(window)),
+            (ContextWindow::Unknown, Some(window)) if config.custom.is_some() => {
+                ContextWindow::Known(window)
+            }
+            (catalog, _) => catalog,
+        }
+    }
+
     /// Builds effective metadata for this catalog entry using provider-scoped configuration.
     ///
     /// The catalog entry, provenance, generation, and warnings remain the original evidence.
@@ -80,13 +162,13 @@ impl ModelCatalogEntry {
                 ContextWindow::Unknown => context.context_window,
             });
             info.auto_compact_token_limit = context.auto_compact_token_limit;
-        } else if info.id.as_str().starts_with("gpt-")
-            && let ContextWindow::Known(limit) = info.context_window
-        {
+        } else {
             // The catalog keeps the model ceiling; GPT execution starts at 272k unless
             // the user explicitly selects a different budget. Every client consumes this value.
-            info.context_window = ContextWindow::Known(limit.min(272_000));
-            info.auto_compact_token_limit = None;
+            info.context_window = self.default_context_window(config);
+            if info.id.as_str().starts_with("gpt-") {
+                info.auto_compact_token_limit = None;
+            }
         }
         if let ContextWindow::Known(window) = info.context_window {
             // Ash's automatic compaction recommendation reserves ten percent of the context.
@@ -99,6 +181,12 @@ impl ModelCatalogEntry {
         }
         Ok(info)
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModelPreferencesUpdate {
+    pub fast: Option<bool>,
+    pub context_window: Option<u32>,
 }
 
 pub(crate) fn unlisted_entry(provider: &ProviderId, model: &ModelId) -> ModelCatalogEntry {

@@ -19,6 +19,13 @@ pub struct ModelCatalogEntry {
     #[ts(optional = nullable)]
     pub discovered: Option<bool>,
     pub context_window: Option<u32>,
+    /// Context budget without a per-model preference, distinct from the effective budget and ceiling.
+    pub default_context_window: Option<u32>,
+    /// Selectable budgets in ascending order: empty for unknown, one for fixed capacity,
+    /// or two for a compact/expanded switch. Clients must not infer choices from the ceiling.
+    pub context_window_options: Vec<u32>,
+    /// Current preference on the active connection; capability support is reported separately.
+    pub fast_enabled: bool,
     /// Model or custom connection ceiling before applying its context budget preference.
     pub maximum_context_window: Option<u32>,
     pub auto_compact_token_limit: Option<u32>,
@@ -47,6 +54,15 @@ impl ModelCatalogEntry {
                 ContextWindow::Known(tokens) => Some(tokens),
                 ContextWindow::Unknown => None,
             },
+            default_context_window: match info.context_window {
+                ContextWindow::Known(tokens) => Some(tokens),
+                ContextWindow::Unknown => None,
+            },
+            context_window_options: match info.context_window {
+                ContextWindow::Known(tokens) => vec![tokens],
+                ContextWindow::Unknown => Vec::new(),
+            },
+            fast_enabled: false,
             auto_compact_token_limit: info.auto_compact_token_limit,
             available_context_window: None,
             capabilities: info.capabilities,
@@ -60,6 +76,22 @@ impl ModelCatalogEntry {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ModelListParams {}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModelPreferencesUpdateParams {
+    pub command_id: ash_protocol::CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub model: ModelRef,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub fast: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub context_window: Option<u32>,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

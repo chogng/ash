@@ -61,13 +61,7 @@ export interface ISessionApi {
 	stop(params: SessionOperationInput<"stop">): Promise<SessionResult>;
 }
 
-interface ProviderModelCatalogEntry {
-	readonly model: ModelRef;
-	readonly displayName: string;
-	readonly discovered?: boolean;
-	readonly contextWindow?: number | null;
-	readonly supportedReasoningEfforts?: readonly ReasoningEffort[];
-}
+type ProviderModelCatalogEntry = ModelListResult['models'][number];
 
 export type ModelProviderApiFormat = 'responses' | 'chatCompletions' | 'anthropicMessages';
 
@@ -89,7 +83,6 @@ export interface ModelPreferencesUpdate {
 }
 
 export interface IModelApi {
-	listFastModels(): Promise<readonly ModelRef[]>;
 	setModelPreferences(model: ModelRef, update: ModelPreferencesUpdate): Promise<void>;
 	readAdvisorDefault(): Promise<AdvisorConfig | null>;
 	readConfiguredProviderIds(): Promise<readonly string[]>;

@@ -2079,17 +2079,18 @@ test('A manual model choice stays with its chat while later new chats use the ne
 });
 
 test('Model discovery refreshes the picker after an older catalog request completes', async () => {
-	const discovered = { model: { provider: 'custom-gateway', model: 'private-model' }, displayName: 'Private model', discovered: true };
+	const discovered: Awaited<ReturnType<IRendererHost['model']['listProviderModels']>>[number] = {
+		model: { provider: 'custom-gateway', model: 'private-model' }, displayName: 'Private model', discovered: true,
+		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, contextWindowOptions: [], fastEnabled: false,
+		autoCompactTokenLimit: null, capabilities: { tools: 'supported', reasoning: 'unknown', parallelToolCalls: 'unknown', personality: 'unknown', imageDetailOriginal: 'unknown', fastMode: 'unknown' },
+		supportedReasoningEfforts: [], modelReasoningEffort: null, defaultPersonality: null,
+	};
 	const initial = new DeferredPromise<Awaited<ReturnType<IRendererHost['model']['listModels']>>>();
 	const fake = fakeApi();
 	let loads = 0;
 	using chat = createChatService({ ...fake.api, model: {
 		...fake.api.model,
-		listModels: async () => ++loads === 1 ? initial.p : { models: [{
-			...discovered, contextWindow: null, maximumContextWindow: null, autoCompactTokenLimit: null,
-			capabilities: { tools: 'supported', reasoning: 'unknown', parallelToolCalls: 'unknown', personality: 'unknown', imageDetailOriginal: 'unknown', fastMode: 'unknown' },
-			supportedReasoningEfforts: [], modelReasoningEffort: null, defaultPersonality: null,
-		}] },
+		listModels: async () => ++loads === 1 ? initial.p : { models: [discovered] },
 		listProviderModels: async () => [discovered],
 	} });
 	const models = modelsFor(chat);
@@ -2097,8 +2098,12 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	const discovery = models.discoverProviderModels('custom-gateway');
 	await initial.complete({ models: [] });
 	assert.deepEqual(await oldCatalog, []);
-	assert.deepEqual(await discovery, [discovered]);
-	const pickerEntry = { ...discovered, contextWindow: null, supportedReasoningEfforts: [] };
+	const pickerEntry = {
+		model: discovered.model, displayName: discovered.displayName, discovered: true,
+		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, contextWindowOptions: [],
+		supportsFast: false, fast: false, supportedReasoningEfforts: [],
+	};
+	assert.deepEqual(await discovery, [pickerEntry]);
 	assert.deepEqual(await models.listModelCatalog(), [pickerEntry]);
 	assert.deepEqual(await models.listModels(), []);
 	await models.setModelVisible(discovered.model, true);
@@ -2589,7 +2594,6 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		model: {
-			listFastModels: async () => [],
 			setModelPreferences: async () => {},
 			listModels: async () => {
 				modelListRequests.push(undefined);

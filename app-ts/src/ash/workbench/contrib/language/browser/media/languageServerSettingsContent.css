@@ -1,0 +1,27 @@
+.ash-language-server-settings {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size120);
+	min-width: 0;
+	padding: var(--ash-spacing-size160);
+	font-size: var(--ash-font-size-body1);
+}
+
+.ash-language-server-settings > p {
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.ash-language-server-settings-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+	min-width: 0;
+}
+
+.ash-language-server-settings-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}

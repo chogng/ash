@@ -321,6 +321,7 @@ import type { MessageCheckpointsParams } from './types/MessageCheckpointsParams.
 import type { MessageCheckpointsResult } from './types/MessageCheckpointsResult.js';
 import type { ModelListParams } from './types/ModelListParams.js';
 import type { ModelListResult } from './types/ModelListResult.js';
+import type { ModelPreferencesUpdateParams } from './types/ModelPreferencesUpdateParams.js';
 import type { PluginCommandResultDto } from './types/PluginCommandResultDto.js';
 import type { PluginListResult } from './types/PluginListResult.js';
 import type { PluginPackageCommandParams } from './types/PluginPackageCommandParams.js';
@@ -588,6 +589,7 @@ export interface AppServerRequestMap {
   "plugin/revokeGrant": { params: PluginPackageCommandParams; response: PluginCommandResultDto };
   "plugin/uninstall": { params: PluginPackageCommandParams; response: PluginCommandResultDto };
   "model/list": { params: ModelListParams; response: ModelListResult };
+  "model/preferences/update": { params: ModelPreferencesUpdateParams; response: ConfigCommandResult };
   "provider/list": { params: Record<string, never>; response: ProviderListResult };
   "provider/probe": { params: ProviderProbeParams; response: ProviderProbeResult };
   "provider/models/list": { params: ProviderModelsListParams; response: ProviderModelsListResult };
@@ -917,6 +919,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "plugin/revokeGrant": { method: "plugin/revokeGrant" },
   "plugin/uninstall": { method: "plugin/uninstall" },
   "model/list": { method: "model/list" },
+  "model/preferences/update": { method: "model/preferences/update" },
   "provider/list": { method: "provider/list" },
   "provider/probe": { method: "provider/probe" },
   "provider/models/list": { method: "provider/models/list" },

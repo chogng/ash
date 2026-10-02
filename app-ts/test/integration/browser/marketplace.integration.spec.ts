@@ -59,9 +59,9 @@ test('Marketplace reviews the whole package and manages the selected installatio
 
 test('LSP and Skills share capability discovery while retaining their own configuration', async ({ page }) => {
 	await page.goto('/marketplace.html');
-	const lsp = page.locator('.ash-language-servers');
+	const lsp = page.locator('.ash-language-server-settings');
 	await expect(lsp.getByLabel('Language ID', { exact: true })).toHaveValue('typescriptreact');
-	await expect(lsp.getByLabel('Server status', { exact: true })).toContainText('ready');
+	await expect(lsp.getByRole('status')).toContainText('1 servers available.');
 	await lsp.getByRole('button', { name: 'Find language servers in Marketplace', exact: true }).click();
 	await expect(page.locator('.ash-marketplace').getByLabel('Language server for language ID')).toHaveValue('typescriptreact');
 	await expect.poll(() => page.evaluate(() => window.ashMarketplaceIntegration.requests.some((entry: any) => entry[0] === 'search' && entry[1].languageId === 'typescriptreact' && entry[1].capabilityKind === 'executable' && entry[1].packageType === null))).toBe(true);
@@ -74,7 +74,8 @@ test('LSP and Skills share capability discovery while retaining their own config
 	await expect(skills.getByRole('button', { name: 'Enable skill', exact: true })).toBeEnabled();
 	expect(await page.evaluate(() => window.ashMarketplaceIntegration.requests.filter((entry: any) => entry[0] === 'skill'))).toEqual([['skill', { source: 'marketplace:example/web', name: 'review' }, false, 3]]);
 	await lsp.getByRole('button', { name: 'Save server configuration', exact: true }).click();
-	await expect(lsp.getByRole('status')).toHaveText('Configuration changed. Refresh before saving.');
+	await expect(lsp.getByRole('status')).toContainText('Refresh before saving again.');
+	await expect(lsp.getByRole('button', { name: 'Save server configuration', exact: true })).toBeDisabled();
 	await lsp.getByRole('button', { name: 'Refresh', exact: true }).click();
 	await expect(lsp.getByRole('status')).toContainText('1 servers available.');
 	await lsp.getByLabel('Executable path (optional)', { exact: true }).fill('/tools/server');
@@ -87,5 +88,5 @@ test('LSP and Skills share capability discovery while retaining their own config
 	await page.keyboard.press('Escape');
 	await expect(skills.getByLabel('Skills', { exact: true })).toBeFocused();
 	await page.evaluate(() => window.ashMarketplaceIntegration.dispose());
-	await expect(page.locator('.ash-marketplace, .ash-skills, .ash-language-servers')).toHaveCount(0);
+	await expect(page.locator('.ash-marketplace, .ash-skills, .ash-language-server-settings')).toHaveCount(0);
 });

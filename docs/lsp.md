@@ -72,9 +72,10 @@ flowchart LR
 - 同 ID 的已安装 provider 负责该服务器；用户显式 executable 配置传给该 provider，避免再创建同名 PATH 实例。
 - Node 服务器包的源码保留固定版本、lockfile 和构建配方；Marketplace 在发布时组装依赖并签名。Ash 按需安装整个语言包，校验后缓存，不在用户机器上运行 npm。
 - Marketplace 当前带服务器的语言包为 CSS/Less/SCSS、JSON/JSONC、Python、JavaScript/TypeScript 和 YAML；其他语法包的服务器需另行提供。
-- Web/Electron 的 `/lsp` 显示当前编辑器语言、可用服务器、运行状态及配置；“查找服务器”打开统一 Marketplace 页面，
+- Web/Electron 的 `/lsp` 打开设置的“编辑器 → 语言服务器”，显示当前编辑器语言、可用服务器及配置；“查找服务器”打开统一 Marketplace 页面，
   使用 `languageId` 与 `capabilityKind=executable` 查找明确路由，排除只有语法资源的包。安装前展示整个包。
-  `/lsp` 可按工作区目录检查可用性，启用/停用服务器、保存宿主 executable 路径或移除配置覆盖。入口职责见
+  `/lsp` 可按工作区目录检查可用性，启用/停用服务器、保存宿主 executable 路径或移除配置覆盖。
+  不再提供独立侧栏；日志与启动故障归 Output，各服务器使用独立通道，状态栏显示进度及异常，点击打开对应日志。入口职责见
   [Slash Commands](slash-commands.md#marketplace-与领域管理入口)。
 - Ash Code 的 `/lsp [language-id]` 提供可用服务器、显式配置和会话目录页签；可编辑程序路径、启用状态和恢复默认值。
   查找入口将精确语言 ID 与 executable 能力筛选交给同一 Marketplace。可用列表不启动服务器，也不代表进程正在运行。

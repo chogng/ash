@@ -26,6 +26,9 @@ fn wide_header_keeps_pet_and_identity_information_together() {
                 context_window: None,
 
                 maximum_context_window: None,
+                default_context_window: None,
+                context_window_options: Vec::new(),
+                fast_enabled: false,
                 auto_compact_token_limit: None,
                 available_context_window: None,
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,

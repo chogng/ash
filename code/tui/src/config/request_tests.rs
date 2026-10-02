@@ -161,6 +161,9 @@ fn advisor_model_command_selects_a_configured_provider_model() {
             context_window: None,
 
             maximum_context_window: None,
+            default_context_window: None,
+            context_window_options: Vec::new(),
+            fast_enabled: false,
             auto_compact_token_limit: None,
             available_context_window: None,
             capabilities: ModelCapabilities::UNKNOWN,

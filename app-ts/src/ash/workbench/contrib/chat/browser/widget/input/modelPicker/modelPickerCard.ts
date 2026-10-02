@@ -37,7 +37,7 @@ export class ModelCard extends Disposable {
 		this.contextLabelDomNode = h(ownerDocument, 'span');
 		this.context = this._register(new Switch(this.contextRow, {
 			content: this.contextLabelDomNode,
-			ariaLabel: localize('chat.modelPicker.largeContext', '1M context'),
+			ariaLabel: localize('chat.modelPicker.contextChoice', '{0} context', ''),
 			contentPlacement: 'before-control',
 		}));
 		this.errorDomNode = h(ownerDocument, 'p');
@@ -46,7 +46,7 @@ export class ModelCard extends Disposable {
 		this.errorDomNode.hidden = true;
 		this.domNode.append(this.errorDomNode);
 		this._register(this.fast.onDidChange(fast => { void this.save({ fast }); }));
-		this._register(this.context.onDidChange(large => { void this.save({ contextWindow: large ? 1_000_000 : 272_000 }); }));
+		this._register(this.context.onDidChange(large => { void this.save({ contextWindow: this.options!.entry.contextWindowOptions[large ? 1 : 0] }); }));
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
@@ -64,16 +64,18 @@ export class ModelCard extends Disposable {
 
 	private render(): void {
 		const entry = this.options!.entry;
-		const canExpand = (entry.maximumContextWindow ?? 0) >= 1_000_000;
+		const canExpand = entry.contextWindowOptions.length === 2;
+		const expanded = entry.contextWindowOptions[1];
+		const label = canExpand ? (expanded >= 1_000_000 ? `${Number((expanded / 1_000_000).toFixed(2))}M` : `${Number((expanded / 1_000).toFixed(1))}k`) : '';
 		const capacity = entry.contextWindow;
-		const label = capacity ? (capacity >= 1_000_000 ? `${Number((capacity / 1_000_000).toFixed(2))}M` : `${Number((capacity / 1_000).toFixed(1))}k`) : '';
 		this.fast.checked = entry.fast === true;
 		this.fast.enabled = entry.supportsFast === true && !this.isSaving;
 		this.fast.busy = this.isSaving;
-		this.context.checked = (capacity ?? 0) >= 1_000_000;
+		this.context.checked = canExpand && capacity === expanded;
+		this.context.setAriaLabel(localize('chat.modelPicker.contextChoice', '{0} context', label));
 		this.context.enabled = canExpand && !this.isSaving;
 		this.context.busy = this.isSaving;
-		this.contextLabelDomNode.textContent = canExpand ? label : '';
+		this.contextLabelDomNode.textContent = label;
 		this.contextRow.hidden = !canExpand || !capacity;
 	}
 

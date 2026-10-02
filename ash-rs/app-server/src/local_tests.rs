@@ -4064,3 +4064,102 @@ fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_
     }
     assert_eq!(config.read_snapshot().unwrap().values.connections.len(), 4);
 }
+
+#[test]
+fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_updates() {
+    use crate::model_catalog::ModelPreferencesCommand;
+    use crate::model_catalog::ModelPreferencesError;
+    use ash_models_manager::ModelPreferencesUpdate;
+
+    let path = config_path("model-preferences-unready");
+    let config = Arc::new(ConfigStore::open(&path).unwrap());
+    let model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-6-astra").unwrap(),
+    );
+    let mut provider = ModelProviderConfig::for_connection(
+        ash_protocol::ModelConnectionId::new("chatgpt-subscription").unwrap(),
+    );
+    provider.max_output_tokens = Some(24_000);
+    provider.model_context.insert(
+        model.model.clone(),
+        ModelContextConfig {
+            context_window: 272_000,
+            auto_compact_token_limit: Some(200_000),
+        },
+    );
+    let other = ModelId::new("gpt-6-sol").unwrap();
+    provider.fast_models.insert(other.clone());
+    let original = provider.clone();
+    let saved = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("configure-unready").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SaveConnection {
+                connection: provider.connection.clone(),
+                config: provider,
+            },
+        })
+        .unwrap();
+    let registry = ProviderConfigRegistry::builtin();
+    let runtime = Arc::new(ModelProviderRuntime::with_secrets(
+        registry.clone(),
+        Arc::new(MemorySecretStore::default()),
+    ));
+    let service = ConfigBackedModelService {
+        config: config.clone(),
+        dir_config: None,
+        provider_configs: registry,
+        models_manager: runtime.models_manager(),
+        catalog_provider: runtime,
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+        resolver: Arc::new(RecordingSnapshotResolver {
+            gate: Arc::new(ResponseGate::default()),
+        }),
+    };
+    let command = |id: &str, revision, window| ModelPreferencesCommand {
+        command_id: CommandId::new(id).unwrap(),
+        expected_revision: revision,
+        model: model.clone(),
+        update: ModelPreferencesUpdate {
+            fast: Some(true),
+            context_window: Some(window),
+        },
+    };
+    assert!(matches!(
+        service.set_preferences(command("invalid-budget", saved.revision, 500_000)),
+        Err(ModelPreferencesError::InvalidPreferences(_))
+    ));
+    assert_eq!(config.read_snapshot().unwrap().revision, saved.revision);
+    let updated = service
+        .set_preferences(command("expand", saved.revision, 1_000_000))
+        .unwrap();
+    let read = config.read_snapshot().unwrap();
+    let mut expected = original;
+    expected.fast_models.insert(model.model.clone());
+    expected
+        .model_context
+        .get_mut(&model.model)
+        .unwrap()
+        .context_window = 1_000_000;
+    assert_eq!(read.values.connections[&expected.connection], expected);
+    let catalog = service.list().unwrap();
+    let entry = catalog.iter().find(|entry| entry.model == model).unwrap();
+    assert!(entry.fast_enabled);
+    assert_eq!(entry.context_window, Some(1_000_000));
+    assert_eq!(entry.default_context_window, Some(272_000));
+    assert_eq!(entry.context_window_options, vec![272_000, 1_000_000]);
+    let grok = catalog
+        .iter()
+        .find(|entry| entry.model.model.as_str() == "grok-4.7")
+        .unwrap();
+    assert_eq!(grok.context_window_options, vec![500_000]);
+    assert!(matches!(
+        service.set_preferences(command("stale", saved.revision, 272_000)),
+        Err(ModelPreferencesError::Configuration(
+            ash_config::ConfigCommandError::RevisionConflict { .. }
+        ))
+    ));
+    assert_eq!(config.read_snapshot().unwrap().revision, updated.revision);
+    remove_config_files(&path);
+}

@@ -9,9 +9,11 @@ export const SettingsFileSystemScheme = 'ash-settings';
 export const UserSettingsResource = URI.parse(`${SettingsFileSystemScheme}:/user/settings.json`);
 
 /** Creates the singleton input routed to the Workbench Settings editor. */
-export function createSettingsEditorInput(target?: string): EditorInput {
+export function createSettingsEditorInput(target?: string, parameters: Readonly<Record<string, string>> = {}): EditorInput {
+	const query = Object.entries(target ? { ...parameters, target } : parameters)
+		.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&');
 	return {
-		resource: target ? SettingsEditorResource.with({ query: `target=${encodeURIComponent(target)}` }) : SettingsEditorResource,
+		resource: SettingsEditorResource.with({ query }),
 		contentType: SettingsEditorContentType,
 		get label(): string { return localize({ bundle: 'ash.settings', key: 'chrome.modalTitle' }, 'Ash Settings'); },
 		onDidChangeLabel: onDidChangeNls,

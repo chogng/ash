@@ -261,7 +261,6 @@ import { AppServerLanguageDiagnosticsService } from "../services/language/browse
 import { AppServerCodeIntelligenceDocumentService } from "../services/codeIntelligence/browser/appServerCodeIntelligenceDocumentService.js";
 import { ICodeIntelligenceDocumentService } from "../services/codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageServerStatusService } from "../services/language/browser/appServerLanguageServerStatusService.js";
-import { ILanguageServerStatusService } from "../services/language/common/languageServerStatusService.js";
 import { ILanguageDiagnosticsService } from "../services/language/common/languageDiagnosticsService.js";
 import { LanguageDiagnosticsMarkerBridge } from "../services/language/browser/languageDiagnosticsMarkerBridge.js";
 import { OutputService } from "../services/output/browser/outputService.js";
@@ -756,8 +755,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IResourceLabelService, services.createInstance(ResourceLabelService));
 		const statusbarService = this._register(new StatusbarService());
 		services.registerInstance(IStatusbarService, statusbarService);
-		const languageServerStatusService = this._register(new AppServerLanguageServerStatusService(api.events, dialogService, outputService, statusbarService, workspaceContext));
-		services.registerInstance(ILanguageServerStatusService, languageServerStatusService);
+		this._register(new AppServerLanguageServerStatusService(api.events, dialogService, outputService, statusbarService, workspaceContext));
 		services.registerInstance(
 			IWorkbenchDialogHandler,
 			dialogHandler ?? new BrowserDialogHandler(workbenchRoot),

@@ -2446,6 +2446,9 @@ impl AppServer {
             Some(ClientMethod::PluginRevokeGrant) => self.plugin_revoke_grant(&request.params),
             Some(ClientMethod::PluginUninstall) => self.plugin_uninstall(&request.params),
             Some(ClientMethod::ModelList) => self.model_list(&request.params),
+            Some(ClientMethod::ModelPreferencesUpdate) => {
+                self.model_preferences_update(&request.params)
+            }
             Some(ClientMethod::ProviderModelsList) => self.provider_models_list(&request.params),
             Some(ClientMethod::ProviderProbe) => {
                 self.provider_probe(std::mem::take(&mut request.params))

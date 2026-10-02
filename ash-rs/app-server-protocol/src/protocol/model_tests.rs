@@ -79,3 +79,28 @@ fn catalog_exposes_fast_support_and_the_declared_context_ceiling() {
         entry
     );
 }
+
+#[test]
+fn model_preferences_catalog_fields_keep_unknown_capacity_explicit() {
+    let model = ModelRef::new(
+        ash_protocol::ProviderId::new("test").unwrap(),
+        ash_protocol::ModelId::new("unknown").unwrap(),
+    );
+    let info = ModelInfo::new(model.model.clone(), "Unknown");
+    let entry = ModelCatalogEntry::from_info(model, &info);
+    let value = serde_json::to_value(&entry).unwrap();
+    assert_eq!(value["defaultContextWindow"], serde_json::Value::Null);
+    assert_eq!(value["contextWindowOptions"], serde_json::json!([]));
+    assert_eq!(value["fastEnabled"], false);
+}
+
+#[test]
+fn model_preferences_request_is_strict_and_accepts_targeted_updates() {
+    let request = serde_json::json!({ "commandId": "model-settings", "expectedRevision": 1, "model": { "provider": "openai", "model": "gpt-6-astra" }, "fast": true });
+    let params: ModelPreferencesUpdateParams = serde_json::from_value(request.clone()).unwrap();
+    assert_eq!(params.fast, Some(true));
+    assert_eq!(params.context_window, None);
+    let mut invalid = request;
+    invalid["config"] = serde_json::json!({});
+    assert!(serde_json::from_value::<ModelPreferencesUpdateParams>(invalid).is_err());
+}

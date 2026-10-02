@@ -10,6 +10,19 @@ export type ModelCatalogEntry = { model: ModelRef, displayName: string,
  */
 discovered?: boolean | null, contextWindow: number | null,
 /**
+ * Context budget without a per-model preference, distinct from the effective budget and ceiling.
+ */
+defaultContextWindow: number | null,
+/**
+ * Selectable budgets in ascending order: empty for unknown, one for fixed capacity,
+ * or two for a compact/expanded switch. Clients must not infer choices from the ceiling.
+ */
+contextWindowOptions: Array<number>,
+/**
+ * Current preference on the active connection; capability support is reported separately.
+ */
+fastEnabled: boolean,
+/**
  * Model or custom connection ceiling before applying its context budget preference.
  */
 maximumContextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ReasoningEffort>, modelReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, };

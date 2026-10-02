@@ -33,6 +33,7 @@ import { DefaultSettings, SettingsEditorModel } from '../../../services/preferen
 import { SettingsRenderer } from './settingsRenderers.js';
 import { SkillsSettingsContent } from '../../skills/browser/skillsSettingsContent.js';
 import { HooksSettingsContent } from '../../hooks/browser/hooksSettingsContent.js';
+import { LanguageServerSettingsContent } from '../../language/browser/languageServerSettingsContent.js';
 import { AdvisorSettingsContent } from '../../chat/browser/advisorSettingsContent.js';
 import { ModelSettingsContent } from '../../chat/browser/modelSettingsContent.js';
 import { DictationSettingsContent } from '../../chat/browser/speechToText/dictationSettingsContent.js';
@@ -65,6 +66,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	private navigationScrollable!: ScrollableElement;
 	private readonly settingsModel: ISettingsEditorModel;
 	private agentCapabilitiesSettings!: AgentCapabilitiesSettings;
+	private languageServerSettings!: LanguageServerSettingsContent;
 	private readonly contents: SettingsContent[] = [];
 	private settingsTree!: SettingsTree<ISetting | SettingsContentItem>;
 	private tocTree!: TOCTree;
@@ -206,6 +208,8 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 			this._register(this.instantiationService.createInstance(DictationSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(HooksSettingsContent, settingsContent, async () => { await this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(CLOSE_EDITOR_COMMAND_ID)); })),
 		);
+		this.languageServerSettings = this._register(this.instantiationService.createInstance(LanguageServerSettingsContent, settingsContent));
+		this.contents.push(this.languageServerSettings);
 		this.rebuildContent();
 		for (const content of this.contents) {
 			this._register(content.onDidChange(() => this.rebuildContent()));
@@ -254,6 +258,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
 		if (!isSettingsEditorInput(input)) throw new TypeError(`Settings editor cannot open ${input.resource}`);
 		if (signal.aborted) throw signal.reason;
+		this.languageServerSettings.setInput(input);
 		this.search(this.searchWidget?.value ?? '');
 		const targetId = new URLSearchParams(input.resource.toEncodedComponents().query).get('target');
 		if (targetId) {

@@ -729,6 +729,7 @@ export type { ModelListParams } from './ModelListParams.js';
 export type { ModelListResult } from './ModelListResult.js';
 export type { ModelMoneyAmount } from './ModelMoneyAmount.js';
 export type { ModelOutputTransport } from './ModelOutputTransport.js';
+export type { ModelPreferencesUpdateParams } from './ModelPreferencesUpdateParams.js';
 export type { ModelRef } from './ModelRef.js';
 export type { ModelReferenceCostReason } from './ModelReferenceCostReason.js';
 export type { ModelReferenceCostRecord } from './ModelReferenceCostRecord.js';

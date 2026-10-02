@@ -4,6 +4,20 @@ use ash_protocol::ModelRef;
 use core_api::CoreError;
 use std::sync::Arc;
 
+pub(crate) struct ModelPreferencesCommand {
+    pub command_id: ash_protocol::CommandId,
+    pub expected_revision: ash_config::ConfigRevision,
+    pub model: ModelRef,
+    pub update: ash_models_manager::ModelPreferencesUpdate,
+}
+
+#[derive(Debug)]
+pub(crate) enum ModelPreferencesError {
+    Catalog(CoreError),
+    InvalidPreferences(ash_model_provider_config::ProviderConfigError),
+    Configuration(ash_config::ConfigCommandError),
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ModelCatalogRefreshError {
     Authentication,
@@ -52,6 +66,11 @@ impl From<ash_models_manager::ModelsManagerError> for ModelCatalogRefreshError {
 /// Runtime configuration, authentication, entitlement, rate limits, and transport are checked by the
 /// selected Turn backend and become errors on that Turn.
 pub(crate) trait ModelCatalog: Send + Sync {
+    /// Updates the active connection after validating the model's declared choices.
+    fn set_preferences(
+        &self,
+        command: ModelPreferencesCommand,
+    ) -> Result<ash_config::ConfigCommandResult, ModelPreferencesError>;
     fn refresh(
         &self,
         _connection: &ash_protocol::ModelConnectionId,
@@ -67,6 +86,14 @@ pub(crate) trait ModelCatalog: Send + Sync {
 pub(crate) struct UnavailableModelCatalog;
 
 impl ModelCatalog for UnavailableModelCatalog {
+    fn set_preferences(
+        &self,
+        _: ModelPreferencesCommand,
+    ) -> Result<ash_config::ConfigCommandResult, ModelPreferencesError> {
+        Err(ModelPreferencesError::Catalog(CoreError::Model(
+            "model catalog unavailable".to_owned(),
+        )))
+    }
     fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError> {
         Ok(Vec::new())
     }

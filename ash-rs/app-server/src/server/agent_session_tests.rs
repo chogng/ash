@@ -39,6 +39,13 @@ impl ModelService for CaptureModel {
 
 struct TestModels;
 impl ModelCatalog for TestModels {
+    fn set_preferences(
+        &self,
+        _: crate::model_catalog::ModelPreferencesCommand,
+    ) -> Result<ash_config::ConfigCommandResult, crate::model_catalog::ModelPreferencesError> {
+        unreachable!("this catalog fixture does not accept preference writes")
+    }
+
     fn list(
         &self,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {

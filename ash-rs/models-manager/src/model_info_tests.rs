@@ -298,3 +298,142 @@ fn every_builtin_gpt_uses_272k_by_default_and_preserves_explicit_budgets() {
     }
     assert!(count > 0);
 }
+
+#[test]
+fn model_preferences_choices_distinguish_expansion_from_fixed_capacity() {
+    let manager = ModelsManager::new(ProviderConfigRegistry::builtin());
+    for (provider, id, expected) in [
+        ("openai", "gpt-6-astra", vec![272_000, 1_000_000]),
+        ("xai", "grok-4.7", vec![500_000]),
+    ] {
+        let model = ModelRef::new(
+            ProviderId::new(provider).unwrap(),
+            ModelId::new(id).unwrap(),
+        );
+        let entry = manager
+            .resolve_static(&model, &ModelRequirements::agent())
+            .unwrap();
+        let config = ModelProviderConfig::new(model.provider.clone());
+        assert_eq!(entry.entry().context_window_options(&config), expected);
+    }
+}
+
+#[test]
+fn model_preferences_update_is_atomic_and_preserves_other_settings() {
+    let model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-6-astra").unwrap(),
+    );
+    let manager = ModelsManager::new(ProviderConfigRegistry::builtin());
+    let entry = manager
+        .resolve_static(&model, &ModelRequirements::agent())
+        .unwrap();
+    let mut config = ModelProviderConfig::for_connection(
+        ash_protocol::ModelConnectionId::new("chatgpt-subscription").unwrap(),
+    );
+    config.max_output_tokens = Some(24_000);
+    let other = ModelId::new("gpt-6-sol").unwrap();
+    config.fast_models.insert(other.clone());
+    config.model_context.insert(
+        other,
+        ModelContextConfig {
+            context_window: 272_000,
+            auto_compact_token_limit: None,
+        },
+    );
+    config.model_context.insert(
+        model.model.clone(),
+        ModelContextConfig {
+            context_window: 272_000,
+            auto_compact_token_limit: Some(200_000),
+        },
+    );
+    let original = config.clone();
+    assert!(
+        entry
+            .entry()
+            .apply_preferences(
+                &mut config,
+                &crate::ModelPreferencesUpdate {
+                    fast: Some(true),
+                    context_window: Some(500_000)
+                }
+            )
+            .is_err()
+    );
+    assert_eq!(config, original);
+    entry
+        .entry()
+        .apply_preferences(
+            &mut config,
+            &crate::ModelPreferencesUpdate {
+                fast: Some(true),
+                context_window: Some(1_000_000),
+            },
+        )
+        .unwrap();
+    let mut expected = original;
+    expected.fast_models.insert(model.model.clone());
+    expected
+        .model_context
+        .get_mut(&model.model)
+        .unwrap()
+        .context_window = 1_000_000;
+    assert_eq!(config, expected);
+    entry
+        .entry()
+        .apply_preferences(
+            &mut config,
+            &crate::ModelPreferencesUpdate {
+                fast: Some(false),
+                context_window: Some(272_000),
+            },
+        )
+        .unwrap();
+    assert!(!config.fast_models.contains(&model.model));
+    assert_eq!(
+        config.model_context[&model.model].auto_compact_token_limit,
+        Some(200_000)
+    );
+    assert!(
+        entry
+            .entry()
+            .apply_preferences(
+                &mut config,
+                &crate::ModelPreferencesUpdate {
+                    fast: None,
+                    context_window: None
+                }
+            )
+            .is_err()
+    );
+}
+
+#[test]
+fn model_preferences_reject_fast_on_an_unsupported_connection() {
+    let model = ModelRef::new(
+        ProviderId::new("xai").unwrap(),
+        ModelId::new("grok-4.7").unwrap(),
+    );
+    let manager = ModelsManager::new(ProviderConfigRegistry::builtin());
+    let entry = manager
+        .resolve_static(&model, &ModelRequirements::agent())
+        .unwrap();
+    let mut config = ModelProviderConfig::for_connection(
+        ash_protocol::ModelConnectionId::new("xai-subscription").unwrap(),
+    );
+    let original = config.clone();
+    assert!(
+        entry
+            .entry()
+            .apply_preferences(
+                &mut config,
+                &crate::ModelPreferencesUpdate {
+                    fast: Some(true),
+                    context_window: None
+                }
+            )
+            .is_err()
+    );
+    assert_eq!(config, original);
+}

@@ -218,6 +218,9 @@ fn status_line_context_follows_thread_snapshots() {
                 context_window: Some(100),
 
                 maximum_context_window: Some(100),
+                default_context_window: Some(100),
+                context_window_options: vec![100],
+                fast_enabled: false,
                 auto_compact_token_limit: None,
                 available_context_window: Some(100),
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
