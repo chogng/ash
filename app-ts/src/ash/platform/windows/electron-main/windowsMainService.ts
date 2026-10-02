@@ -21,7 +21,7 @@ import { focusWindow, type IFocusableWindow, type WorkspaceContextMainService } 
 import { CodeWindow, type IWindowCreationOptions } from './windowImpl.js';
 import type { IWindowConstructorOptions, IWindowWebPreferences, IOpenConfiguration, IWindowsMainService } from './windows.js';
 import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesResponse, type IWindowFilesRequest, type WindowFilesResponse } from '../../window/common/window.js';
-import type { IWindowState } from '../../window/electron-main/window.js';
+import type { IWindowBounds, IWindowState } from '../../window/electron-main/window.js';
 
 export interface IWorkbenchWindow<TWindow> extends IFocusableWindow {
 	readonly id: number;
@@ -44,6 +44,8 @@ export interface IWorkbenchWindow<TWindow> extends IFocusableWindow {
 	isFullScreen(): boolean;
 	close(): void;
 	show(): void;
+	getBounds(): IWindowBounds;
+	setBounds(bounds: IWindowBounds): void;
 	maximize(): void;
 	setFullScreen(fullscreen: boolean): void;
 	destroy(): void;

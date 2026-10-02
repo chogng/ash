@@ -9,7 +9,7 @@ test.beforeEach(({}, testInfo) => {
 	test.skip(testInfo.project.name !== 'electron-ui', 'Window restoration is a Desktop process lifecycle scenario.');
 });
 
-for (const scaleFactor of [1, 1.25, 1.5, 2]) {
+for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 	test(`Desktop retains logical Workbench and Agents geometry at ${scaleFactor * 100}% display scaling`, async ({}, testInfo) => {
 		test.setTimeout(90_000);
 		const userDataDirectory = testInfo.outputPath('user-data');
@@ -25,8 +25,7 @@ for (const scaleFactor of [1, 1.25, 1.5, 2]) {
 				const height = Math.min(800, area.height);
 				return { x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2), width, height };
 			});
-			const defaultFrame = await constructorFrame(application, defaults);
-			await expect.poll(() => geometryDelta(application!, defaultFrame, 'current')).toBeLessThanOrEqual(2);
+			await expect.poll(() => geometryDelta(application!, defaults, 'current')).toBeLessThanOrEqual(2);
 			const opened = application.waitForEvent('window');
 			await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 			await expect((await opened).locator('.ash-sessions-window')).toBeVisible();
@@ -43,9 +42,6 @@ for (const scaleFactor of [1, 1.25, 1.5, 2]) {
 			// Fractional DPI rounds the operating-system frame to physical pixels.
 			await expect.poll(() => geometryDelta(application!, requested, 'current')).toBeLessThanOrEqual(2);
 			const expected = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getBounds());
-			// Measure the frame conversion of a new Electron window independently of
-			// Ash's placement policy, which is checked exactly by the owner tests.
-			const expectedFrame = await constructorFrame(application, expected);
 			await application.close();
 			application = undefined;
 
@@ -72,15 +68,28 @@ for (const scaleFactor of [1, 1.25, 1.5, 2]) {
 			await writeFile(statePath, JSON.stringify(saved));
 			application = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
 			await expect.poll(() => application!.windows().length).toBe(2);
+			for (const page of application.windows()) {
+				await expect(page.locator('.ash-workbench, .ash-sessions-window').first()).toBeVisible();
+			}
 			await expect.poll(() => application!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.isMaximized()).sort())).toEqual([false, true]);
 			const geometryPath = testInfo.outputPath('restored-geometry.json');
-			await writeFile(geometryPath, JSON.stringify({ expected, expectedFrame, actual: await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({ bounds: window.getNormalBounds(), maximized: window.isMaximized() }))) }, null, 2));
+			await writeFile(geometryPath, JSON.stringify({ expected, actual: await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({ bounds: window.getNormalBounds(), maximized: window.isMaximized() }))) }, null, 2));
 			await testInfo.attach('restored-window-geometry', { path: geometryPath, contentType: 'application/json' });
-			await expect.poll(() => geometryDelta(application!, expectedFrame, 'normal')).toBeLessThanOrEqual(2);
+			await expect.poll(() => geometryDelta(application!, expected, 'normal')).toBeLessThanOrEqual(2);
 			await application.evaluate(({ BrowserWindow }) => {
 				BrowserWindow.getAllWindows().find(window => window.isMaximized())!.unmaximize();
 			});
-			await expect.poll(() => geometryDelta(application!, expectedFrame, 'current')).toBeLessThanOrEqual(2);
+			await expect.poll(() => geometryDelta(application!, expected, 'current')).toBeLessThanOrEqual(2);
+			for (let restart = 0; restart < 2; restart++) {
+				await application.close();
+				application = undefined;
+				application = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
+				await expect.poll(() => application!.windows().length).toBe(2);
+				for (const page of application.windows()) {
+					await expect(page.locator('.ash-workbench, .ash-sessions-window').first()).toBeVisible();
+				}
+				await expect.poll(() => geometryDelta(application!, expected, 'current')).toBeLessThanOrEqual(2);
+			}
 		} finally {
 			await application?.close();
 		}
@@ -371,21 +380,6 @@ async function launch(userDataDirectory: string, folder?: string, extraArgs?: re
 async function geometryDelta(application: ElectronApplication, expected: { x: number; y: number; width: number; height: number }, kind: 'normal' | 'current'): Promise<number> {
 	const bounds = await application.evaluate(({ BrowserWindow }, kind) => BrowserWindow.getAllWindows().map(window => kind === 'normal' ? window.getNormalBounds() : window.getBounds()), kind);
 	return Math.max(...bounds.flatMap(rectangle => (['x', 'y', 'width', 'height'] as const).map(key => Math.abs(rectangle[key] - expected[key]))));
-}
-
-async function constructorFrame(application: ElectronApplication, bounds: { x: number; y: number; width: number; height: number }): Promise<typeof bounds> {
-	return application.evaluate(({ BrowserWindow }, bounds) => {
-		const probe = new BrowserWindow({
-			...bounds, show: false, minWidth: 400, minHeight: 270,
-			titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
-			titleBarOverlay: process.platform === 'darwin' ? true : { height: 35, color: '#181818', symbolColor: '#d6d6d6' },
-		});
-		try {
-			return probe.getBounds();
-		} finally {
-			probe.destroy();
-		}
-	}, bounds);
 }
 
 async function workspaceFolder(page: Page): Promise<string | undefined> {

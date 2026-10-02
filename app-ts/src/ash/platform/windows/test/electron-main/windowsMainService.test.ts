@@ -4,7 +4,7 @@ import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle
 import { URI } from '../../../../base/common/uri.js';
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../../window/common/window.js';
 import { LifecycleMainService } from '../../../lifecycle/electron-main/lifecycleMainService.js';
-import { WindowMode } from '../../../window/electron-main/window.js';
+import { WindowMode, type IWindowBounds } from '../../../window/electron-main/window.js';
 import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } from '../../../workspaces/node/workspaces.js';
 import { WindowsMainService, windowOperationIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
 import type { IOpenConfiguration } from '../../electron-main/windows.js';
@@ -49,6 +49,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public fullscreen = false;
 	public shown = 0;
 	public maximized = 0;
+	public bounds: IWindowBounds = { x: 0, y: 0, width: 800, height: 600 };
 	public deferClose = false;
 
 	constructor(public readonly id: number, private readonly title: string) {}
@@ -85,6 +86,8 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public isFullScreen(): boolean { return this.fullscreen; }
 	public close(): void { this.calls.push('close'); let prevented = false; for (const listener of this.closeListeners) listener({ preventDefault: () => { prevented = true; } }); if (!prevented && !this.deferClose) this.destroy(); }
 	public show(): void { this.shown++; }
+	public getBounds(): IWindowBounds { return this.bounds; }
+	public setBounds(bounds: IWindowBounds): void { this.bounds = bounds; }
 	public maximize(): void { this.maximized++; }
 	public setFullScreen(fullscreen: boolean): void { this.fullscreen = fullscreen; }
 	public destroy(): void { if (this.destroyed) return; this.destroyed = true; this.emit('closed'); }

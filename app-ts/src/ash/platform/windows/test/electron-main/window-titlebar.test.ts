@@ -27,6 +27,7 @@ test("window options apply the custom titlebar host policy", () => {
 		platform: "win32",
 	});
 	assert.equal(customWindows.titleBarStyle, "hidden");
+	assert.equal(customWindows.frame, false);
 	assert.deepEqual(customWindows.titleBarOverlay, {
 		color: "#181818",
 		symbolColor: "#d6d6d6",
@@ -39,6 +40,7 @@ test("window options apply the custom titlebar host policy", () => {
 		platform: "darwin",
 	});
 	assert.equal(customMac.titleBarStyle, "hiddenInset");
+	assert.equal(customMac.frame, undefined);
 	assert.equal(customMac.titleBarOverlay, true);
 
 	const customLinux = resolveBrowserWindowOptions({
@@ -47,6 +49,7 @@ test("window options apply the custom titlebar host policy", () => {
 		platform: "linux",
 	});
 	assert.equal(customLinux.titleBarStyle, "hidden");
+	assert.equal(customLinux.frame, false);
 	assert.deepEqual(customLinux.titleBarOverlay, {
 		color: "#181818",
 		symbolColor: "#d6d6d6",
@@ -55,6 +58,7 @@ test("window options apply the custom titlebar host policy", () => {
 	for (const platform of ['win32', 'linux', 'darwin'] as const) {
 		const systemTitleBar = resolveBrowserWindowOptions({ state, webPreferences, platform, titleBarStyle: 'system' });
 		assert.equal(systemTitleBar.titleBarStyle, undefined);
+		assert.equal(systemTitleBar.frame, undefined);
 		assert.equal(systemTitleBar.titleBarOverlay, undefined);
 	}
 });

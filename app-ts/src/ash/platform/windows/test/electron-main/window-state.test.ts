@@ -227,6 +227,9 @@ test('new window defaults are centered and constrained to the current logical wo
 	] as const) {
 		for (const workArea of [
 			{ x: 100, y: 50, width: 1920, height: 1040 },
+			{ x: 0, y: 0, width: 1280, height: 984 },
+			{ x: 0, y: 0, width: 2560, height: 1040 },
+			{ x: 0, y: 0, width: 800, height: 1240 },
 			{ x: -1024, y: 20, width: 1024, height: 700 },
 			{ x: 0, y: 0, width: 300, height: 200 },
 		]) {

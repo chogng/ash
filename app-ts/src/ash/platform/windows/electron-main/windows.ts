@@ -44,6 +44,7 @@ export interface IWindowConstructorOptions {
 	height: number;
 	minWidth: number;
 	minHeight: number;
+	frame?: boolean;
 	titleBarStyle?: "hidden" | "hiddenInset";
 	titleBarOverlay?: boolean | {
 		readonly color: string;
@@ -101,6 +102,7 @@ export function resolveBrowserWindowOptions({
 	if (titleBarStyle === 'system') return browserWindowOptions;
 
 	if (platform === "win32" || platform === "linux") {
+		browserWindowOptions.frame = false;
 		browserWindowOptions.titleBarStyle = "hidden";
 		browserWindowOptions.titleBarOverlay = {
 			color: "#181818",
