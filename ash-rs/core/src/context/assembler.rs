@@ -227,6 +227,7 @@ impl ContextAssembler {
             ToolChoice::Auto
         };
         Ok(ModelRequest {
+            service_tier: None,
             instructions: resolved_instructions(plan),
             input,
             tools: plan.tools().to_vec(),

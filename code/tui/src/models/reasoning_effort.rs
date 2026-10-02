@@ -113,6 +113,7 @@ pub(super) fn update<T: JsonRpcTransport>(
                             }
                         };
                         return Ok(ModelUpdate {
+                            catalog: None,
                             summary: ModelSummary::from_catalog(
                                 config.model.clone(),
                                 config.model_reasoning_effort,
@@ -156,6 +157,7 @@ pub(super) fn update<T: JsonRpcTransport>(
         Some(catalog),
     );
     Ok(ModelUpdate {
+        catalog: None,
         notice: ModelNotice::Silent,
         summary,
         config,

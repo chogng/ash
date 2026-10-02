@@ -1514,6 +1514,7 @@ fn provider_entries_validate_their_key_and_static_settings() {
             command: UserConfigCommand::ConfigureConnection {
                 connection: connection_id("openai"),
                 config: ModelProviderConfig {
+                    fast_models: Default::default(),
                     connection: connection_id("anthropic"),
                     custom: None,
                     provider: provider_id("anthropic"),

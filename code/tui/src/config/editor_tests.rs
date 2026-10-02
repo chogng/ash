@@ -372,6 +372,8 @@ fn configured_advisor_model_is_selected_when_opening_config() {
             display_name: "GPT Ash".into(),
 
             context_window: None,
+
+            maximum_context_window: None,
             auto_compact_token_limit: None,
             available_context_window: None,
             capabilities: ModelCapabilities::UNKNOWN,
@@ -390,6 +392,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
     config.providers.insert(
         "openai".into(),
         ash_app_server_protocol::protocol::config::ProviderConfigDto {
+            fast_models: Default::default(),
             connection: "openai".into(),
             provider: "openai".into(),
             custom: None,
@@ -1259,6 +1262,7 @@ fn only_custom_provider_rows_offer_delete_and_order_does_not_follow_names() {
         config.providers.insert(
             id.into(),
             ProviderConfigDto {
+                fast_models: Default::default(),
                 connection: id.into(),
                 provider: id.into(),
                 custom: Some(CustomProviderConfigDto {

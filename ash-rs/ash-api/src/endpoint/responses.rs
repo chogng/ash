@@ -196,6 +196,7 @@ fn build_count_request(model: &str, request: &ModelRequest) -> Result<Value, Api
         "max_output_tokens",
         "temperature",
         "prompt_cache_key",
+        "service_tier",
     ] {
         body.remove(field);
     }
@@ -253,6 +254,26 @@ pub(super) fn build_request(
         ("stream".into(), Value::Bool(false)),
         ("store".into(), Value::Bool(false)),
     ]);
+    match request.service_tier {
+        Some(ash_protocol::ModelServiceTier::Priority) => {
+            body.insert("service_tier".into(), Value::String("priority".into()));
+        }
+        Some(ash_protocol::ModelServiceTier::Fast) => {
+            let tier = if endpoint == ApiEndpoint::ChatGptResponses {
+                "priority"
+            } else {
+                "fast"
+            };
+            body.insert("service_tier".into(), Value::String(tier.into()));
+        }
+        Some(ash_protocol::ModelServiceTier::Standard)
+            if endpoint != ApiEndpoint::ChatGptResponses =>
+        {
+            // An explicit default overrides a project's Fast setting when the user switches it off.
+            body.insert("service_tier".into(), Value::String("default".into()));
+        }
+        Some(ash_protocol::ModelServiceTier::Standard) | None => {}
+    }
     if let Some(instructions) = &request.instructions {
         body.insert("instructions".into(), Value::String(instructions.clone()));
     }

@@ -2153,13 +2153,18 @@ fn configured_model_context_enables_core_managed_compaction() {
         .iter()
         .find(|entry| entry.model == ModelRef::new(provider.clone(), model.clone()))
         .unwrap();
-    assert_eq!(entry.context_window, None);
-    assert_eq!(entry.auto_compact_token_limit, None);
-    assert_eq!(entry.available_context_window, None);
+    assert_eq!(entry.context_window, Some(20_000));
+    assert_eq!(entry.maximum_context_window, Some(1_050_000));
+    assert_eq!(entry.discovered, None);
+    assert_eq!(entry.auto_compact_token_limit, Some(15_000));
+    assert_eq!(
+        entry.available_context_window,
+        Some(15_000 - 2_048 - MODEL_CONTEXT_SAFETY_MARGIN_TOKENS)
+    );
     let serialized = serde_json::to_value(entry).unwrap();
-    assert_eq!(serialized["contextWindow"], serde_json::Value::Null);
-    assert_eq!(serialized["autoCompactTokenLimit"], serde_json::Value::Null);
-    assert!(serialized.get("availableContextWindow").is_none());
+    assert_eq!(serialized["contextWindow"], 20_000);
+    assert_eq!(serialized["autoCompactTokenLimit"], 15_000);
+    assert!(serialized.get("availableContextWindow").is_some());
 }
 
 #[test]
@@ -2623,7 +2628,7 @@ fn built_in_catalog_excludes_configured_custom_models() {
             entry.model.provider.as_str() == "openai" && entry.model.model.as_str() == "gpt-5.6"
         })
         .unwrap();
-    assert_eq!(openai.context_window, None);
+    assert_eq!(openai.context_window, Some(1_050_000));
     assert_eq!(
         openai.capabilities.image_detail_original,
         ash_protocol::CapabilitySupport::Supported
@@ -2722,11 +2727,21 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
         built_in
             .iter()
             .filter(|entry| entry.model.provider == provider)
-            .map(|entry| (entry.model.model.as_str(), entry.context_window))
+            .map(|entry| (
+                entry.model.model.as_str(),
+                entry.context_window,
+                entry.maximum_context_window,
+                entry.discovered
+            ))
             .collect::<Vec<_>>(),
         [
-            ("private-first", Some(272_000)),
-            ("private-second", Some(1_000_000))
+            ("private-first", Some(272_000), Some(1_000_000), Some(false)),
+            (
+                "private-second",
+                Some(1_000_000),
+                Some(1_000_000),
+                Some(false)
+            )
         ]
     );
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
@@ -2743,6 +2758,8 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
             ModelId::new("custom-model").unwrap(),
         )]
     );
+    assert_eq!(fetched[0].discovered, Some(true));
+    assert_eq!(fetched[0].maximum_context_window, Some(1_000_000));
     let listed = model.list().unwrap();
     assert_eq!(
         listed

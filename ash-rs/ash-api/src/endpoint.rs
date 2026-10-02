@@ -105,7 +105,7 @@ impl ApiEndpoint {
             ApiProtocol::OpenAiCompletions => {
                 chat_completions::headers(self, request, &mut headers)?
             }
-            ApiProtocol::AnthropicMessages => anthropic::headers(&mut headers)?,
+            ApiProtocol::AnthropicMessages => anthropic::headers(request, &mut headers)?,
         }
         Ok(headers)
     }

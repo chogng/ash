@@ -1090,6 +1090,7 @@ fn durable_tool_result_preserves_structured_image_content_and_reads_legacy_text(
 #[test]
 fn model_request_final_gate_sanitizes_message_and_tool_result_images() {
     let mut request = ModelRequest {
+        service_tier: None,
         instructions: None,
         input: vec![
             InputItem::Message(Message {

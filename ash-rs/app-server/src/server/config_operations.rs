@@ -1135,6 +1135,11 @@ fn approval_review_model_update_from_dto(
 
 fn provider_config_dto(config: ModelProviderConfig) -> ProviderConfigDto {
     ProviderConfigDto {
+        fast_models: config
+            .fast_models
+            .into_iter()
+            .map(|model| model.to_string())
+            .collect(),
         connection: config.connection.to_string(),
         provider: config.provider.to_string(),
         custom: config.custom.map(|custom| ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
@@ -1219,6 +1224,14 @@ pub(super) fn provider_config_from_dto(
         .transpose()?
         .unwrap_or_default();
     Ok(ModelProviderConfig {
+        fast_models: config
+            .fast_models
+            .into_iter()
+            .map(|model| {
+                ModelId::new(model)
+                    .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))
+            })
+            .collect::<Result<_, _>>()?,
         connection: ash_protocol::ModelConnectionId::new(config.connection)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
         custom: config.custom.map(|custom| ash_model_provider_config::CustomProviderConfig {

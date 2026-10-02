@@ -205,3 +205,54 @@ fn compaction_recommendation_preserves_the_ratio_for_large_windows() {
         Some(3_865_470_565)
     );
 }
+
+#[test]
+fn effective_fast_mode_support_follows_the_connection_without_mutating_static_evidence() {
+    use ash_protocol::CapabilitySupport;
+    use ash_protocol::ModelConnectionId;
+    let manager = ModelsManager::new(ProviderConfigRegistry::builtin());
+    for (provider, model, connection, expected) in [
+        ("xai", "grok-4.7", "xai", CapabilitySupport::Supported),
+        (
+            "xai",
+            "grok-4.7",
+            "xai-subscription",
+            CapabilitySupport::Unsupported,
+        ),
+        (
+            "kimi",
+            "kimi-k2.7-code",
+            "kimi",
+            CapabilitySupport::Unsupported,
+        ),
+        (
+            "kimi",
+            "kimi-k2.7-code",
+            "kimi-subscription",
+            CapabilitySupport::Supported,
+        ),
+    ] {
+        let model = ModelRef::new(
+            ProviderId::new(provider).unwrap(),
+            ModelId::new(model).unwrap(),
+        );
+        let resolved = manager
+            .resolve_static(&model, &ModelRequirements::agent())
+            .unwrap();
+        let config =
+            ModelProviderConfig::for_connection(ModelConnectionId::new(connection).unwrap());
+        assert_eq!(
+            resolved
+                .entry()
+                .model_info(&config)
+                .unwrap()
+                .capabilities
+                .fast_mode,
+            expected
+        );
+        assert_eq!(
+            resolved.entry().info().capabilities.fast_mode,
+            CapabilitySupport::Supported
+        );
+    }
+}

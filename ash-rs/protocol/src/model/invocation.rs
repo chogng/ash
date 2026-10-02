@@ -17,6 +17,15 @@ use serde_json::Value;
 use ts_rs::TS;
 use ts_rs::TypeVisitor;
 
+/// Provider service classes used by model invocations.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelServiceTier {
+    Standard,
+    Fast,
+    Priority,
+}
+
 /// Pixel and patch ceilings applied to one ephemeral provider-bound image clone.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ModelImageInputLimits {
@@ -78,6 +87,9 @@ impl Default for ModelImageInputPolicy {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRequest {
+    /// Requested provider service tier; absence uses the provider default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_tier: Option<ModelServiceTier>,
     pub instructions: Option<String>,
     pub input: Vec<InputItem>,
     pub tools: Vec<ToolDefinition>,
@@ -153,6 +165,7 @@ fn sanitize_content(
 impl ModelRequest {
     pub fn text(prompt: impl Into<String>) -> Self {
         Self {
+            service_tier: None,
             instructions: None,
             input: vec![InputItem::Message(Message::text(MessageRole::User, prompt))],
             tools: Vec::new(),

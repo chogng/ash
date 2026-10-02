@@ -155,6 +155,7 @@ pub use model::ModelReferenceCostSummary;
 pub use model::ModelRequest;
 pub use model::ModelResponse;
 pub use model::ModelResponseBilling;
+pub use model::ModelServiceTier;
 pub use model::ModelStreamEvent;
 pub use model::ModelUsage;
 pub use model::ModelUsageSummary;

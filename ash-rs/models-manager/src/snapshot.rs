@@ -57,6 +57,7 @@ pub struct ModelCapabilitiesProvenance {
     pub parallel_tool_calls: Option<MetadataSource>,
     pub personality: Option<MetadataSource>,
     pub image_detail_original: Option<MetadataSource>,
+    pub fast_mode: Option<MetadataSource>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

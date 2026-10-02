@@ -3,6 +3,71 @@ use crate::ImageDetail;
 use crate::ReasoningConfig;
 
 #[test]
+fn fast_mode_uses_speed_and_preserves_existing_beta_headers() {
+    let mut request = ModelRequest::text("hello");
+    request.service_tier = Some(ash_protocol::ModelServiceTier::Fast);
+    assert_eq!(
+        build_request("claude-opus-5-5", &request).unwrap()["speed"],
+        "fast"
+    );
+    assert!(
+        build_count_request("claude-opus-5-5", &request)
+            .unwrap()
+            .get("speed")
+            .is_none()
+    );
+    let mut values = vec![ash_http_client::HttpHeader::new(
+        "anthropic-beta",
+        "other-beta",
+    )];
+    headers(&request, &mut values).unwrap();
+    headers(&request, &mut values).unwrap();
+    assert_eq!(
+        values
+            .iter()
+            .find(|header| header.name() == "anthropic-beta")
+            .unwrap()
+            .value(),
+        "other-beta,fast-mode-2026-02-01"
+    );
+    request.service_tier = Some(ash_protocol::ModelServiceTier::Standard);
+    assert!(
+        build_request("claude-opus-5-5", &request)
+            .unwrap()
+            .get("speed")
+            .is_none()
+    );
+    let mut values = Vec::new();
+    headers(&request, &mut values).unwrap();
+    assert!(
+        values
+            .iter()
+            .all(|header| header.name() != "anthropic-beta")
+    );
+    assert_eq!(
+        build_request("claude-opus-5-5", &request).unwrap()["service_tier"],
+        "standard_only"
+    );
+    request.service_tier = Some(ash_protocol::ModelServiceTier::Priority);
+    assert_eq!(
+        build_request("claude-sonnet-4-6", &request).unwrap()["service_tier"],
+        "auto"
+    );
+    assert!(
+        build_request("claude-sonnet-4-6", &request)
+            .unwrap()
+            .get("speed")
+            .is_none()
+    );
+    assert!(
+        build_count_request("claude-sonnet-4-6", &request)
+            .unwrap()
+            .get("service_tier")
+            .is_none()
+    );
+}
+
+#[test]
 fn reasoning_uses_anthropic_effort_for_messages_and_token_counts() {
     let mut request = ModelRequest::text("Explain the result");
     request.reasoning = Some(ReasoningConfig {

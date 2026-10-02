@@ -575,3 +575,61 @@ fn read_only_overlays_stay_in_their_own_modes_instead_of_following_editor_handof
     switch(&mut app, ScreenMode::Inline);
     assert_eq!(app.overlay().unwrap().title(), "Inline detail");
 }
+
+#[test]
+fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
+    use super::AppCommand;
+    use crate::models::Command as ModelCommand;
+    use crate::models::Event as ModelEvent;
+    use crate::models::ModelOption;
+    let model = ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("gpt-6-astra").unwrap(),
+    );
+    let mut info = ash_protocol::ModelInfo::new(model.model.clone(), "GPT-6 Astra");
+    info.context_window = ash_protocol::ContextWindow::Known(1_050_000);
+    info.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+    info.supported_reasoning_efforts = vec![
+        ash_protocol::ReasoningEffort::Low,
+        ash_protocol::ReasoningEffort::Medium,
+        ash_protocol::ReasoningEffort::High,
+    ];
+    info.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::Medium);
+    let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        models: vec![
+            ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(model, &info),
+        ],
+    };
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        switch(&mut app, mode);
+        app.insert_text("preserved draft");
+        let mut config = crate::test_support::empty_config_snapshot();
+        config.revision = 8;
+        app.update(ModelEvent::PickerOpened(
+            crate::models::model_choices(&catalog, &config).unwrap(),
+        ));
+        for (key, option) in [('f', ModelOption::FastOn), ('c', ModelOption::Context272k)] {
+            assert_eq!(
+                app.handle_key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE)),
+                Some(AppCommand::Models(ModelCommand::Configure {
+                    preference: "openai/gpt-6-astra".into(),
+                    revision: 8,
+                    option
+                }))
+            );
+            assert!(app.command_panel().is_some());
+        }
+        let mut terminal = Terminal::new(TestBackend::new(120, 20)).unwrap();
+        terminal
+            .draw(|frame| super::frame::draw(frame, &app))
+            .unwrap();
+        let output = terminal.backend().to_string();
+        assert!(output.contains("[Fast off]"));
+        assert!(output.contains("[1m]"));
+        crate::tui_assert_snapshot!(format!("model_options_{mode:?}"), output);
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.command_panel().is_none());
+        assert_eq!(app.input(), "preserved draft");
+    }
+}

@@ -2,6 +2,43 @@ use super::*;
 use crate::Message;
 
 #[test]
+fn fast_service_tier_uses_each_endpoint_contract_and_is_omitted_from_token_counting() {
+    let mut request = ModelRequest::text("hello");
+    for (endpoint, tier) in [
+        (ApiEndpoint::OpenAiResponses, "fast"),
+        (ApiEndpoint::ChatGptResponses, "priority"),
+    ] {
+        request.service_tier = Some(ash_protocol::ModelServiceTier::Fast);
+        let body = build_request(endpoint, "gpt-6-astra", &request).unwrap();
+        assert_eq!(body["service_tier"], tier);
+        assert!(
+            build_count_request("gpt-6-astra", &request)
+                .unwrap()
+                .get("service_tier")
+                .is_none()
+        );
+        request.service_tier = Some(ash_protocol::ModelServiceTier::Standard);
+        let body = build_request(endpoint, "gpt-6-astra", &request).unwrap();
+        if endpoint == ApiEndpoint::OpenAiResponses {
+            assert_eq!(body["service_tier"], "default");
+        } else {
+            assert!(body.get("service_tier").is_none());
+        }
+    }
+    request.service_tier = Some(ash_protocol::ModelServiceTier::Priority);
+    assert_eq!(
+        build_request(ApiEndpoint::OpenAiResponses, "grok-4.7", &request).unwrap()["service_tier"],
+        "priority"
+    );
+    assert!(
+        build_count_request("grok-4.7", &request)
+            .unwrap()
+            .get("service_tier")
+            .is_none()
+    );
+}
+
+#[test]
 fn xai_replays_complete_encrypted_reasoning_and_requests_it_without_a_summary() {
     let item = json!({"id":"reasoning-1","type":"reasoning","summary":[],"encrypted_content":"opaque-ciphertext","provider_extension":{"revision":2}});
     let mut events = ResponsesEventDecoder::new();

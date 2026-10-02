@@ -1,0 +1,13 @@
+---
+source: code/tui/src/models/picker_tests.rs
+expression: terminal.backend().to_string()
+---
+"╭──────────────────────────────────────╮"
+"│ Search models                        │"
+"╰──────────────────────────────────────╯"
+"> GPT-6 Astra                           "
+"  GPT-4o                                "
+"                                        "
+"                                        "
+"                                        "
+"                                        "

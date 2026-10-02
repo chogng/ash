@@ -29,6 +29,14 @@ pub(crate) enum ModelSelectionAction {
         effort: Option<ReasoningEffort>,
         default_effort: Option<ReasoningEffort>,
         supported_efforts: Vec<ReasoningEffort>,
+        revision: u64,
+        fast: Option<bool>,
+        context: Option<u32>,
+    },
+    Configure {
+        preference: String,
+        revision: u64,
+        option: ModelOption,
     },
     Pin {
         preference: String,
@@ -36,7 +44,51 @@ pub(crate) enum ModelSelectionAction {
     },
 }
 
+/// Per-model execution settings saved independently of the selected model and draft effort.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ModelOption {
+    FastOn,
+    FastOff,
+    Context272k,
+    Context1m,
+}
+
 impl ModelSelectionAction {
+    fn configure(&self, control: &str) -> Option<Self> {
+        let Self::Select {
+            preference,
+            revision,
+            fast,
+            context,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        let option = match control {
+            "fast" => {
+                if (*fast)? {
+                    ModelOption::FastOff
+                } else {
+                    ModelOption::FastOn
+                }
+            }
+            "context" => {
+                if (*context)? == 272_000 {
+                    ModelOption::Context1m
+                } else {
+                    ModelOption::Context272k
+                }
+            }
+            _ => return None,
+        };
+        Some(Self::Configure {
+            preference: preference.clone(),
+            revision: *revision,
+            option,
+        })
+    }
+
     pub(crate) fn supports_effort(&self) -> bool {
         matches!(self, Self::Select { supported_efforts, .. } if supported_efforts.len() > 1)
     }
@@ -132,8 +184,7 @@ fn effort_display(
 
 pub(crate) type ModelChoices = ListSelectionSpec<ModelSelectionAction>;
 
-/// The model catalog is fixed for this TUI session; connection configuration only changes how
-/// those models are selected and used.
+/// Model identities come from the product catalog; effective budgets are refreshed after edits.
 pub(crate) struct ModelPickerData {
     catalog: ModelListResult,
     config: ConfigReadResult,
@@ -146,6 +197,10 @@ impl ModelPickerData {
 
     pub(crate) fn catalog(&self) -> &ModelListResult {
         &self.catalog
+    }
+
+    pub(crate) fn update_catalog(&mut self, catalog: ModelListResult) {
+        self.catalog = catalog;
     }
 
     pub(crate) fn update_config(&mut self, config: ConfigReadResult) {
@@ -186,6 +241,23 @@ impl ListSelection<ModelSelectionAction> {
                 }
                 return ListSelectionOutcome::Consumed;
             }
+            if matches!(key.code, KeyCode::Char('f') | KeyCode::Char('c')) {
+                let control = if key.code == KeyCode::Char('f') {
+                    "fast"
+                } else {
+                    "context"
+                };
+                return self
+                    .state()
+                    .selected_item()
+                    .and_then(|item| item.id())
+                    .and_then(|id| self.action(id))
+                    .and_then(|action| action.configure(control))
+                    .map_or(
+                        ListSelectionOutcome::Consumed,
+                        ListSelectionOutcome::Activate,
+                    );
+            }
             if key.code == KeyCode::Char('p')
                 && let Some(ModelSelectionAction::Select {
                     preference, pinned, ..
@@ -212,6 +284,14 @@ impl ListSelection<ModelSelectionAction> {
         if !self.state_mut().focus_pointer(target) {
             return ListSelectionOutcome::Consumed;
         }
+        if let ListSelectionPointerTarget::ItemControl { control, .. } = target {
+            let code = match control.as_str() {
+                "fast" => KeyCode::Char('f'),
+                "context" => KeyCode::Char('c'),
+                _ => return ListSelectionOutcome::Consumed,
+            };
+            return self.handle_model_key(KeyEvent::new(code, KeyModifiers::NONE));
+        }
         if matches!(target, ListSelectionPointerTarget::Item(_))
             && click == ListSelectionClick::Double
         {
@@ -224,7 +304,14 @@ impl ListSelection<ModelSelectionAction> {
         if !self.state().items_focused() {
             return self.key_hints();
         }
-        let Some(action @ ModelSelectionAction::Select { pinned, .. }) = self
+        let Some(
+            action @ ModelSelectionAction::Select {
+                pinned,
+                fast,
+                context,
+                ..
+            },
+        ) = self
             .state()
             .selected_item()
             .and_then(|item| item.id())
@@ -232,24 +319,33 @@ impl ListSelection<ModelSelectionAction> {
         else {
             return self.key_hints();
         };
-        static HINTS: std::sync::LazyLock<[[crate::widgets::key_hint::KeyHints; 2]; 2]> =
+        static HINTS: std::sync::LazyLock<Vec<crate::widgets::key_hint::KeyHints>> =
             std::sync::LazyLock::new(|| {
-                ["pin", "unpin"].map(|pin_action| {
-                    [false, true].map(|supports_effort| {
+                (0..16)
+                    .map(|bits| {
                         let mut hints = crate::widgets::key_hint::KeyHints::compact()
                             .with_compact_action("↑↓", "select");
-                        if supports_effort {
+                        if bits & 1 != 0 {
                             hints = hints.with_compact_action("←→", "adjust");
+                        }
+                        if bits & 2 != 0 {
+                            hints = hints.with_compact_action("f", "Fast");
+                        }
+                        if bits & 4 != 0 {
+                            hints = hints.with_compact_action("c", "context");
                         }
                         hints
                             .with_compact_action("/", "search")
-                            .with_compact_action("p", pin_action)
+                            .with_compact_action("p", if bits & 8 != 0 { "unpin" } else { "pin" })
                             .with_compact_action("Enter", "apply")
                             .with_compact_action("Esc", "cancel")
                     })
-                })
+                    .collect()
             });
-        &HINTS[usize::from(*pinned)][usize::from(action.supports_effort())]
+        &HINTS[usize::from(action.supports_effort())
+            | (usize::from(fast.is_some()) << 1)
+            | (usize::from(context.is_some()) << 2)
+            | (usize::from(*pinned) << 3)]
     }
 
     pub(crate) fn replace_model_choices(&mut self, choices: ModelChoices) {
@@ -312,6 +408,28 @@ pub(crate) fn model_choices(
             .flatten()
             .filter(|effort| supported_efforts.contains(effort));
         let default_effort = entry.model_reasoning_effort;
+        let provider = config.providers.get(&model.provider);
+        let fast = (entry.capabilities.fast_mode == ash_protocol::CapabilitySupport::Supported)
+            .then(|| provider.is_some_and(|config| config.fast_models.contains(&model.model)));
+        let context = entry
+            .maximum_context_window
+            .filter(|window| *window >= 1_000_000)
+            .map(|_| {
+                provider
+                    .and_then(|config| {
+                        config
+                            .custom
+                            .as_ref()
+                            .map(|custom| custom.context_window)
+                            .or_else(|| {
+                                config
+                                    .model_context
+                                    .get(&model.model)
+                                    .map(|context| context.context_window)
+                            })
+                    })
+                    .unwrap_or(1_000_000)
+            });
         actions.insert(
             id.clone(),
             ModelSelectionAction::Select {
@@ -320,6 +438,9 @@ pub(crate) fn model_choices(
                 effort,
                 default_effort,
                 supported_efforts: supported_efforts.clone(),
+                revision: config.revision,
+                fast,
+                context,
             },
         );
         let mut item = ListSelectionItem::new(entry.display_name.clone()).with_id(id);
@@ -327,6 +448,23 @@ pub(crate) fn model_choices(
             let value = effort_display(&supported_efforts, effort.or(default_effort));
             item = item.with_segmented_value(value);
         }
+        item = match fast {
+            Some(enabled) => {
+                item.with_control("fast", if enabled { "Fast on" } else { "Fast off" })
+            }
+            None => item.with_readonly_control("—"),
+        };
+        item = match context {
+            Some(window) => item.with_control(
+                "context",
+                match window {
+                    272_000 => "272k".into(),
+                    1_000_000 => "1m".into(),
+                    window => format!("{}k", window / 1000),
+                },
+            ),
+            None => item.with_readonly_control("—"),
+        };
         if pinned {
             pinned_items.push(item);
         } else {

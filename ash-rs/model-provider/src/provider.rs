@@ -407,6 +407,30 @@ impl Provider {
     fn prepare_request(&self, model: &Model, request: &ModelRequest) -> ModelRequest {
         let mut request = request.clone();
         request.max_output_tokens = request.max_output_tokens.or(self.config.max_output_tokens);
+        use ash_protocol::ModelServiceTier;
+        request.service_tier = if self.config.provider.as_str() == "openai"
+            || (model.capabilities.fast_mode == CapabilitySupport::Supported
+                && self.config.connection.as_str() != "xai-subscription")
+        {
+            match (
+                self.config.provider.as_str(),
+                self.config.fast_models.contains(&model.id),
+            ) {
+                ("openai", true) => Some(ModelServiceTier::Fast),
+                // Claude's speed flag and Priority capacity are separate upstream features.
+                ("anthropic", true) => Some(match model.id.as_str() {
+                    "claude-opus-5-5" | "claude-opus-4-8" => ModelServiceTier::Fast,
+                    _ => ModelServiceTier::Priority,
+                }),
+                ("google" | "xai", true) => Some(ModelServiceTier::Priority),
+                ("openai" | "anthropic" | "google" | "xai", false) => {
+                    Some(ModelServiceTier::Standard)
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
         let _ = request.sanitize_image_details(
             model.capabilities.image_detail_original == CapabilitySupport::Supported,
         );

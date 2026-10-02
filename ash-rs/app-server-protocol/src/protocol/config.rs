@@ -164,6 +164,9 @@ pub struct ProviderConfigDto {
     pub max_output_tokens: Option<u32>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub model_context: BTreeMap<String, ModelContextConfigDto>,
+    /// Per-connection model IDs requesting Fast service on subsequent invocations.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fast_models: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -8,4 +8,8 @@ export type ModelCatalogEntry = { model: ModelRef, displayName: string,
 /**
  * True only when this ID belongs to the last successful endpoint observation.
  */
-discovered?: boolean | null, contextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ReasoningEffort>, modelReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, };
+discovered?: boolean | null, contextWindow: number | null,
+/**
+ * Model or custom connection ceiling before applying its context budget preference.
+ */
+maximumContextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ReasoningEffort>, modelReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, };

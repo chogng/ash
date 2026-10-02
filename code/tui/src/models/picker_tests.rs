@@ -30,6 +30,7 @@ fn catalog_entry(provider: &str, model: &str, name: &str) -> ModelCatalogEntry {
 
 fn provider_config(provider: &str) -> ProviderConfigDto {
     ProviderConfigDto {
+        fast_models: Default::default(),
         connection: provider.into(),
         provider: provider.into(),
         custom: None,
@@ -397,4 +398,291 @@ fn malformed_or_duplicate_pins_are_rejected() {
         tui.0.insert("pinnedModels".into(), value);
         assert!(super::pinned_models(&tui).is_err());
     }
+}
+
+#[test]
+fn model_controls_share_keyboard_and_pointer_actions_without_consuming_search_input() {
+    use crate::widgets::list_selection::ListSelection;
+    use crate::widgets::list_selection::ListSelectionClick;
+    use crate::widgets::list_selection::ListSelectionOutcome;
+    use crate::widgets::list_selection::ListSelectionPointerTarget;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
+    entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+    entry.maximum_context_window = Some(1_050_000);
+    let catalog = ModelListResult {
+        models: vec![entry, catalog_entry("openai", "gpt-4o", "GPT-4o")],
+    };
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.revision = 7;
+    let choices = model_choices(&catalog, &config).unwrap();
+    let mut picker = ListSelection::new(choices.model, choices.actions);
+    let id = crate::widgets::list_selection::ListSelectionItemId::new("openai/gpt-6-astra");
+    for (key, control, option) in [
+        ('f', "fast", super::ModelOption::FastOn),
+        ('c', "context", super::ModelOption::Context272k),
+    ] {
+        let expected = ListSelectionOutcome::Activate(ModelSelectionAction::Configure {
+            preference: "openai/gpt-6-astra".into(),
+            revision: 7,
+            option,
+        });
+        assert_eq!(
+            picker.handle_model_key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE)),
+            expected
+        );
+        assert_eq!(
+            picker.handle_model_click(
+                &ListSelectionPointerTarget::ItemControl {
+                    item: id.clone(),
+                    control: control.into()
+                },
+                ListSelectionClick::Single
+            ),
+            expected
+        );
+    }
+    assert!(picker.model_key_hints().text().contains("f Fast"));
+    assert!(picker.model_key_hints().text().contains("c context"));
+    picker.handle_model_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert!(!picker.model_key_hints().text().contains("f Fast"));
+    assert!(!picker.model_key_hints().text().contains("c context"));
+    assert_eq!(
+        picker.handle_model_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE)),
+        ListSelectionOutcome::Consumed
+    );
+    picker.handle_model_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    for key in ['f', 'c'] {
+        picker.handle_model_key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE));
+    }
+    assert_eq!(picker.state().query(), "fc");
+}
+
+#[test]
+fn model_controls_use_rendered_columns_for_hit_testing_and_localize_labels() {
+    assert_model_controls(100, crate::nls::Language::English);
+}
+
+#[test]
+fn model_controls_localize_labels_and_pointer_columns_in_chinese() {
+    assert_model_controls(100, crate::nls::Language::Chinese);
+}
+
+#[test]
+fn model_controls_hide_pointer_columns_on_narrow_terminals() {
+    assert_model_controls(40, crate::nls::Language::English);
+}
+
+fn assert_model_controls(width: u16, language: crate::nls::Language) {
+    use crate::widgets::list_selection::{ListSelectionPointerTarget, pointer_target_at};
+    use ratatui::layout::{Position, Rect};
+    let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
+    entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+    entry.maximum_context_window = Some(1_050_000);
+    let catalog = ModelListResult {
+        models: vec![entry, catalog_entry("openai", "gpt-4o", "GPT-4o")],
+    };
+    let choices = model_choices(&catalog, &crate::test_support::empty_config_snapshot()).unwrap();
+    let mut view = ListSelectionState::new(choices.model);
+    view.localize(language);
+    let mut terminal = Terminal::new(TestBackend::new(width, 9)).unwrap();
+    terminal
+        .draw(|frame| {
+            draw_body_with_pointer(
+                frame,
+                frame.area(),
+                &view,
+                None,
+                None,
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let body = Rect::new(0, 0, width, 9);
+    let mut hits = Vec::new();
+    for y in 0..9 {
+        for x in 0..width {
+            if let Some(target @ ListSelectionPointerTarget::ItemControl { .. }) =
+                pointer_target_at(&view, Rect::default(), body, Position::new(x, y))
+            {
+                assert_eq!(y, 3, "controls only belong to the supported model row");
+                // Wide glyph continuation cells carry no independently rendered style.
+                if buffer[(x, y)].symbol() != " " {
+                    assert_eq!(buffer[(x, y)].fg, crate::render::test_context().focus());
+                }
+                hits.push(target);
+            }
+        }
+    }
+    if width == 40 {
+        assert!(hits.is_empty());
+    } else {
+        assert!(hits.iter().any(|target| matches!(target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "fast")));
+        assert!(hits.iter().any(|target| matches!(target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "context")));
+    }
+    crate::tui_assert_snapshot!(
+        format!("model_controls_{width}_{language:?}"),
+        terminal.backend().to_string()
+    );
+}
+
+#[test]
+fn other_provider_controls_follow_capabilities_and_saved_preferences() {
+    use crate::widgets::list_selection::ListSelection;
+    use crate::widgets::list_selection::ListSelectionClick;
+    use crate::widgets::list_selection::ListSelectionItemId;
+    use crate::widgets::list_selection::ListSelectionOutcome;
+    use crate::widgets::list_selection::ListSelectionPointerTarget;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let rows = [
+        (
+            "anthropic",
+            "claude-opus-5-5",
+            "Claude Opus 5.5",
+            true,
+            Some(1_000_000),
+        ),
+        (
+            "google",
+            "gemini-3.8-flash",
+            "Gemini 3.8 Flash",
+            true,
+            Some(1_048_576),
+        ),
+        ("xai", "grok-4.7", "Grok 4.7", true, Some(500_000)),
+        (
+            "minimax",
+            "MiniMax-M2.7",
+            "MiniMax M2.7",
+            true,
+            Some(204_800),
+        ),
+        (
+            "qwen",
+            "qwen3.8-max",
+            "Qwen 3.8 Max",
+            false,
+            Some(1_000_000),
+        ),
+        ("kimi", "kimi-k3", "Kimi K3", false, Some(1_000_000)),
+        (
+            "deepseek",
+            "deepseek-v4-pro",
+            "DeepSeek V4 Pro",
+            false,
+            Some(1_000_000),
+        ),
+        (
+            "mimo",
+            "mimo-v2.6-pro",
+            "MiMo V2.6 Pro",
+            false,
+            Some(1_000_000),
+        ),
+        ("glm", "glm-5.3", "GLM-5.3", false, Some(1_000_000)),
+    ];
+    let catalog = ModelListResult {
+        models: rows
+            .iter()
+            .map(|(provider, model, name, fast, window)| {
+                let mut entry = catalog_entry(provider, model, name);
+                if *fast {
+                    entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+                }
+                entry.maximum_context_window = *window;
+                entry
+            })
+            .collect(),
+    };
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.revision = 9;
+    let mut google = provider_config("google");
+    google.fast_models.push("gemini-3.8-flash".into());
+    config.providers.insert("google".into(), google);
+    let mut qwen = provider_config("qwen");
+    qwen.model_context.insert(
+        "qwen3.8-max".into(),
+        ash_app_server_protocol::protocol::config::ModelContextConfigDto {
+            context_window: 272_000,
+            auto_compact_token_limit: None,
+        },
+    );
+    config.providers.insert("qwen".into(), qwen);
+    for (provider, model, _, fast, window) in rows {
+        let preference = format!("{provider}/{model}");
+        let choices = model_choices(&catalog, &config).unwrap();
+        let mut picker = ListSelection::new(choices.model, choices.actions);
+        assert!(
+            picker
+                .state_mut()
+                .focus_item(&ListSelectionItemId::new(&preference))
+        );
+        for (key, control, option) in [
+            (
+                'f',
+                "fast",
+                fast.then_some(if provider == "google" {
+                    super::ModelOption::FastOff
+                } else {
+                    super::ModelOption::FastOn
+                }),
+            ),
+            (
+                'c',
+                "context",
+                window.filter(|maximum| *maximum >= 1_000_000).map(|_| {
+                    if provider == "qwen" {
+                        super::ModelOption::Context1m
+                    } else {
+                        super::ModelOption::Context272k
+                    }
+                }),
+            ),
+        ] {
+            let expected = option.map_or(ListSelectionOutcome::Consumed, |option| {
+                ListSelectionOutcome::Activate(ModelSelectionAction::Configure {
+                    preference: preference.clone(),
+                    revision: 9,
+                    option,
+                })
+            });
+            assert_eq!(
+                picker.handle_model_key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE)),
+                expected
+            );
+            if option.is_some() {
+                assert_eq!(
+                    picker.handle_model_click(
+                        &ListSelectionPointerTarget::ItemControl {
+                            item: ListSelectionItemId::new(&preference),
+                            control: control.into()
+                        },
+                        ListSelectionClick::Single
+                    ),
+                    expected
+                );
+            }
+        }
+    }
+    let choices = model_choices(&catalog, &config).unwrap();
+    let mut view = ListSelectionState::new(choices.model);
+    view.localize(crate::nls::Language::Chinese);
+    let mut terminal = Terminal::new(TestBackend::new(100, 15)).unwrap();
+    terminal
+        .draw(|frame| {
+            draw_body_with_pointer(
+                frame,
+                frame.area(),
+                &view,
+                None,
+                None,
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    crate::tui_assert_snapshot!(
+        "other_provider_model_controls_chinese",
+        terminal.backend().to_string()
+    );
 }

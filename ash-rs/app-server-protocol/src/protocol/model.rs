@@ -19,6 +19,8 @@ pub struct ModelCatalogEntry {
     #[ts(optional = nullable)]
     pub discovered: Option<bool>,
     pub context_window: Option<u32>,
+    /// Model or custom connection ceiling before applying its context budget preference.
+    pub maximum_context_window: Option<u32>,
     pub auto_compact_token_limit: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
@@ -38,6 +40,10 @@ impl ModelCatalogEntry {
             display_name: info.display_name.clone(),
             discovered: None,
             context_window: match info.context_window {
+                ContextWindow::Known(tokens) => Some(tokens),
+                ContextWindow::Unknown => None,
+            },
+            maximum_context_window: match info.context_window {
                 ContextWindow::Known(tokens) => Some(tokens),
                 ContextWindow::Unknown => None,
             },

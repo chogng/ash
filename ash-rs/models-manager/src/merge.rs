@@ -35,6 +35,7 @@ impl CatalogRecord {
             parallel_tool_calls: known_capability_source(info.capabilities.parallel_tool_calls),
             personality: known_capability_source(info.capabilities.personality),
             image_detail_original: known_capability_source(info.capabilities.image_detail_original),
+            fast_mode: known_capability_source(info.capabilities.fast_mode),
         };
         let provenance = ModelMetadataProvenance {
             display_name: Some(MetadataSource::ProviderSeed),
@@ -186,6 +187,12 @@ fn apply_live_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch) {
         patch.capabilities.image_detail_original,
         source,
     );
+    apply_capability(
+        &mut record.info.capabilities.fast_mode,
+        &mut record.provenance.capabilities.fast_mode,
+        patch.capabilities.fast_mode,
+        source,
+    );
     if let Some(efforts) = &patch.supported_reasoning_efforts {
         record.info.supported_reasoning_efforts = efforts.clone();
         record.provenance.supported_reasoning_efforts = Some(source);
@@ -233,6 +240,7 @@ fn highest_metadata_source(provenance: &ModelMetadataProvenance) -> Option<Metad
         provenance.capabilities.parallel_tool_calls,
         provenance.capabilities.personality,
         provenance.capabilities.image_detail_original,
+        provenance.capabilities.fast_mode,
         provenance.supported_reasoning_efforts,
         provenance.model_reasoning_effort,
         provenance.default_personality,

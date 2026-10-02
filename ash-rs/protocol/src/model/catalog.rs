@@ -206,6 +206,8 @@ pub struct ModelCapabilities {
     pub personality: CapabilitySupport,
     #[serde(default = "unknown_capability_support")]
     pub image_detail_original: CapabilitySupport,
+    #[serde(default = "unknown_capability_support")]
+    pub fast_mode: CapabilitySupport,
 }
 
 impl ModelCapabilities {
@@ -215,6 +217,7 @@ impl ModelCapabilities {
         parallel_tool_calls: CapabilitySupport::Unknown,
         personality: CapabilitySupport::Unknown,
         image_detail_original: CapabilitySupport::Unknown,
+        fast_mode: CapabilitySupport::Unknown,
     };
 }
 

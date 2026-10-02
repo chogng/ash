@@ -55,6 +55,7 @@ fn collaboration_effort_completion_preserves_the_running_turn_and_draft() {
         super::Completion::ModelUpdated {
             command: crate::models::Command::IncreaseEffort,
             result: Ok(crate::models::ModelUpdate {
+                catalog: None,
                 summary: crate::models::ModelSummary::from_catalog(
                     Some(ash_app_server_protocol::protocol::config::ModelRefDto {
                         provider: "openai".into(),
@@ -71,7 +72,6 @@ fn collaboration_effort_completion_preserves_the_running_turn_and_draft() {
         origin,
         &mut None,
         &mut app,
-        &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
     );
     assert_eq!(app.status(), &Status::Working);
     assert!(app.steers_active_turn());
@@ -91,12 +91,62 @@ fn collaboration_effort_completion_preserves_the_running_turn_and_draft() {
         origin,
         &mut None,
         &mut app,
-        &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
     );
     assert_eq!(app.status(), &Status::Working);
     assert!(app.steers_active_turn());
     assert_eq!(app.input(), "next task draft");
     assert_eq!(app.messages().len(), rows + 1);
+}
+
+#[test]
+fn model_option_failure_is_visible_without_interrupting_the_turn_or_draft() {
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = App::new();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        settings.set_language(crate::nls::Language::Chinese);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.set_active_turn(TurnId::new("running").unwrap());
+        app.update(crate::thread::Event::TurnActivityChanged(
+            crate::thread::TurnActivity::Working,
+        ));
+        app.insert_text("keep draft");
+        let catalog = ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] };
+        app.update(crate::models::Event::PickerOpened(
+            crate::models::model_choices(&catalog, &crate::test_support::empty_config_snapshot())
+                .unwrap(),
+        ));
+        let origin = crate::app::requests::RequestOrigin {
+            mode,
+            panel_generation: app.panels().generation(),
+        };
+        super::apply_request_completion(
+            super::Completion::ModelUpdated {
+                command: crate::models::Command::Configure {
+                    preference: "openai/gpt-6-astra".into(),
+                    revision: 7,
+                    option: crate::models::ModelOption::FastOn,
+                },
+                result: Err("Model settings changed; reopen /model and try again".into()),
+            },
+            origin,
+            &mut None,
+            &mut app,
+        );
+        assert_eq!(app.status(), &Status::Working);
+        assert_eq!(app.input(), "keep draft");
+        assert_eq!(
+            app.command_panel()
+                .unwrap()
+                .list_selection()
+                .unwrap()
+                .message(),
+            Some("模型设置已更改，请重新打开 /model 后重试")
+        );
+    }
 }
 
 #[test]
@@ -165,6 +215,8 @@ fn status_line_context_follows_thread_snapshots() {
                 display_name: "model".into(),
 
                 context_window: Some(100),
+
+                maximum_context_window: Some(100),
                 auto_compact_token_limit: None,
                 available_context_window: Some(100),
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,

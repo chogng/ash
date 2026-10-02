@@ -281,6 +281,7 @@ fn provider_config_with_endpoint(
     base_url: impl Into<String>,
 ) -> ModelProviderConfig {
     ModelProviderConfig {
+        fast_models: Default::default(),
         connection: ash_protocol::ModelConnectionId::new(provider).unwrap(),
         custom: None,
         provider: ash_model_provider_config::connection_provider(
@@ -1102,6 +1103,21 @@ fn kimi_subscription_runtime_uses_local_oauth_and_the_coding_api() {
             .any(|header| { header.name() == "X-Msh-Platform" && header.value() == "Ash" })
     );
     assert_eq!(request["model"], "kimi-for-coding");
+
+    let mut fast_config = provider_config("kimi-subscription");
+    fast_config
+        .fast_models
+        .insert(ModelId::new("kimi-k2.7-code").unwrap());
+    let fast_model = runtime
+        .build_model(&fast_config, &model_ref("kimi", "kimi-k2.7-code"))
+        .unwrap();
+    assert_eq!(
+        invoke_text(fast_model.as_ref(), "hello"),
+        "Hello from Kimi Code"
+    );
+    let (_, _, request) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(request["model"], "kimi-for-coding-highspeed");
+    assert!(request.get("service_tier").is_none());
 
     let binding = runtime
         .catalog_binding(&provider_config("kimi-subscription"))
@@ -2000,6 +2016,7 @@ fn final_image_detail_gate_uses_model_capability_not_protocol_family() {
 
 fn request_with_original_image() -> ModelRequest {
     ModelRequest {
+        service_tier: None,
         instructions: None,
         input: vec![ash_api::InputItem::Message(ash_api::Message {
             role: ash_api::MessageRole::User,
@@ -2535,5 +2552,103 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
                 vec![]
             }
         );
+    }
+}
+
+#[test]
+fn fast_model_preference_reaches_openai_requests_and_off_selects_standard() {
+    let transport = Arc::new(CapturingTransport::new(responses_response("ok")));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    for enabled in [true, false] {
+        let mut config = provider_config("openai");
+        if enabled {
+            config
+                .fast_models
+                .insert(ModelId::new("gpt-6-astra").unwrap());
+        }
+        let model = runtime
+            .build_model(&config, &model_ref("openai", "gpt-6-astra"))
+            .unwrap();
+        model.invoke(&ModelRequest::text("hello")).unwrap();
+        let (_, _, body) = transport.request.lock().unwrap().clone().unwrap();
+        assert_eq!(
+            body["service_tier"],
+            if enabled { "fast" } else { "default" }
+        );
+    }
+}
+
+#[test]
+fn fast_mode_reaches_other_provider_requests_and_off_restores_standard_inference() {
+    for (provider, id) in [
+        ("anthropic", "claude-opus-5-5"),
+        ("anthropic", "claude-opus-4-8"),
+        ("anthropic", "claude-opus-4-7"),
+        ("anthropic", "claude-opus-4-6"),
+        ("anthropic", "claude-sonnet-4-6"),
+        ("anthropic", "claude-haiku-4-5-20251001"),
+        ("google", "gemini-3.8-flash"),
+        ("xai", "grok-4.7"),
+        ("minimax", "MiniMax-M2.7"),
+        ("minimax", "MiniMax-M2.5"),
+        ("minimax", "MiniMax-M2.1"),
+    ] {
+        let response = match provider {
+            "anthropic" => {
+                json!({"content":[{"type":"text","text":"ok"}], "stop_reason":"end_turn", "usage":{"input_tokens":1,"output_tokens":1}})
+            }
+            "xai" => responses_response("ok"),
+            _ => completion_response("ok"),
+        };
+        let transport = Arc::new(CapturingTransport::new(response));
+        let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+        for enabled in [true, false] {
+            let mut config = provider_config(provider);
+            if enabled {
+                config.fast_models.insert(ModelId::new(id).unwrap());
+            }
+            let model = runtime
+                .build_model(&config, &model_ref(provider, id))
+                .unwrap();
+            assert_eq!(invoke_text(model.as_ref(), "hello"), "ok");
+            let (_, headers, body) = transport.request.lock().unwrap().clone().unwrap();
+            match provider {
+                "anthropic" => {
+                    let speed = enabled && matches!(id, "claude-opus-5-5" | "claude-opus-4-8");
+                    assert_eq!(body.get("speed"), speed.then_some(&json!("fast")));
+                    assert_eq!(
+                        headers
+                            .iter()
+                            .any(|header| header.name() == "anthropic-beta"
+                                && header.value() == "fast-mode-2026-02-01"),
+                        speed
+                    );
+                    assert_eq!(
+                        body["service_tier"],
+                        if enabled && !speed {
+                            "auto"
+                        } else {
+                            "standard_only"
+                        }
+                    );
+                }
+                "google" | "xai" => assert_eq!(
+                    body["service_tier"],
+                    if enabled { "priority" } else { "default" }
+                ),
+                "minimax" => {
+                    assert_eq!(
+                        body["model"],
+                        if enabled {
+                            format!("{id}-highspeed")
+                        } else {
+                            id.into()
+                        }
+                    );
+                    assert!(body.get("service_tier").is_none());
+                }
+                _ => unreachable!(),
+            }
+        }
     }
 }

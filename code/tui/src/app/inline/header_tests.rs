@@ -23,6 +23,8 @@ fn wide_header_keeps_pet_and_identity_information_together() {
                 display_name: "gpt-5.6".into(),
 
                 context_window: None,
+
+                maximum_context_window: None,
                 auto_compact_token_limit: None,
                 available_context_window: None,
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,

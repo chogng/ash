@@ -46,6 +46,7 @@ pub use invocation::ModelInputEstimate;
 pub use invocation::ModelRequest;
 pub use invocation::ModelResponse;
 pub use invocation::ModelResponseBilling;
+pub use invocation::ModelServiceTier;
 pub use invocation::ModelStreamEvent;
 pub use invocation::ModelUsage;
 pub use invocation::ModelUsageSummary;

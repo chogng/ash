@@ -2618,6 +2618,8 @@ fn configured_model_summary() -> ModelSummary {
                 display_name: "Claude Sonnet".into(),
 
                 context_window: Some(200_000),
+
+                maximum_context_window: Some(200_000),
                 auto_compact_token_limit: None,
                 available_context_window: Some(180_000),
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
@@ -2699,6 +2701,7 @@ fn custom_model_choices(
     config.providers.insert(
         "custom-gateway".into(),
         ProviderConfigDto {
+            fast_models: Default::default(),
             connection: "custom-gateway".into(),
             provider: "custom-gateway".into(),
             base_url: Some("https://example.test/v1".into()),
@@ -2733,6 +2736,8 @@ fn custom_model_choices(
                 display_name: "gateway-model".into(),
 
                 context_window: Some(272_000),
+
+                maximum_context_window: Some(272_000),
                 auto_compact_token_limit: None,
                 available_context_window: Some(240_000),
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
@@ -2786,6 +2791,7 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_in_one_chinese_list() {
         config.providers.insert(
             provider.into(),
             ProviderConfigDto {
+                fast_models: Default::default(),
                 connection: provider.into(),
                 provider: provider.into(),
                 custom: None,

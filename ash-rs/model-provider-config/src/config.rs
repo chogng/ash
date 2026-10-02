@@ -8,6 +8,7 @@ use ash_protocol::ProviderId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 /// Model-specific context limits supplied by user or host configuration.
 ///
@@ -35,6 +36,9 @@ pub struct ModelProviderConfig {
     pub max_output_tokens: Option<u32>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub model_context: BTreeMap<ModelId, ModelContextConfig>,
+    /// Models whose subsequent invocations use the connection's accelerated inference option.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub fast_models: BTreeSet<ModelId>,
 }
 
 impl ModelProviderConfig {
@@ -46,6 +50,7 @@ impl ModelProviderConfig {
             base_url: None,
             max_output_tokens: None,
             model_context: BTreeMap::new(),
+            fast_models: BTreeSet::new(),
         }
     }
 
@@ -65,6 +70,29 @@ impl ModelProviderConfig {
             | "bigmodel-coding-plan"
             | "zai-coding-plan" => ProviderAccessMode::Subscription,
             _ => ProviderAccessMode::Api,
+        }
+    }
+
+    /// Combines model support with the selected connection's invocation contract.
+    /// Subscription proxies do not inherit features from their vendor's public API.
+    pub fn fast_mode_support(&self, model: &ModelId) -> ash_protocol::CapabilitySupport {
+        use ash_protocol::CapabilitySupport;
+        match self.connection.as_str() {
+            "xai-subscription" => CapabilitySupport::Unsupported,
+            connection
+                if self.provider.as_str() == "kimi"
+                    && model.as_str() == "kimi-k2.7-code"
+                    && connection != "kimi-subscription" =>
+            {
+                CapabilitySupport::Unsupported
+            }
+            _ => crate::find_static_model(&ash_protocol::ModelRef::new(
+                self.provider.clone(),
+                model.clone(),
+            ))
+            .map_or(CapabilitySupport::Unknown, |model| {
+                model.capabilities.fast_mode
+            }),
         }
     }
 
@@ -98,6 +126,14 @@ impl ModelProviderConfig {
                 return Err(ProviderConfigError::InvalidModelContext {
                     provider: self.provider.clone(),
                     model: model.clone(),
+                });
+            }
+        }
+        for model in &self.fast_models {
+            if self.fast_mode_support(model) != ash_protocol::CapabilitySupport::Supported {
+                return Err(ProviderConfigError::InvalidProvider {
+                    provider: self.provider.clone(),
+                    message: "Fast mode is not supported by this model and connection".into(),
                 });
             }
         }
@@ -258,6 +294,7 @@ pub struct NormalizedModelProviderConfig {
     pub access_mode: ProviderAccessMode,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub model_aliases: BTreeMap<ModelId, ModelId>,
+    pub fast_models: BTreeSet<ModelId>,
     pub api_profile: ApiProfile,
     pub base_url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -276,6 +313,16 @@ impl NormalizedModelProviderConfig {
             .find_map(|(id, upstream)| (id.as_str() == model).then_some(upstream))
         {
             return upstream.as_str();
+        }
+        // These providers expose speed as a paired upstream model ID rather than a tier field.
+        if self.fast_models.iter().any(|id| id.as_str() == model) {
+            match (self.provider.as_str(), model) {
+                ("minimax", "MiniMax-M2.7") => return "MiniMax-M2.7-highspeed",
+                ("minimax", "MiniMax-M2.5") => return "MiniMax-M2.5-highspeed",
+                ("minimax", "MiniMax-M2.1") => return "MiniMax-M2.1-highspeed",
+                ("kimi", "kimi-k2.7-code") => return "kimi-for-coding-highspeed",
+                _ => {}
+            }
         }
         match (self.connection.as_str(), model) {
             ("kimi-subscription", "kimi-k2.7-code") => "kimi-for-coding",

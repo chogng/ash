@@ -704,6 +704,18 @@ impl App {
             CommandPanelOutcome::Model(ModelSelectionAction::Pin { preference, pinned }) => {
                 Some(ModelCommand::Pin { preference, pinned }.into())
             }
+            CommandPanelOutcome::Model(ModelSelectionAction::Configure {
+                preference,
+                revision,
+                option,
+            }) => Some(
+                ModelCommand::Configure {
+                    preference,
+                    revision,
+                    option,
+                }
+                .into(),
+            ),
             CommandPanelOutcome::GitBranch(action) => match action {
                 crate::git::BranchSelectionAction::NewBranch => None,
                 crate::git::BranchSelectionAction::Occupied { .. } => None,

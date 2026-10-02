@@ -136,11 +136,13 @@ pub(crate) fn count_input_tokens(
     client: &dyn OperationClient,
     cancellation: &CancellationToken,
 ) -> Result<InputTokenCount, ApiError> {
+    let mut count_request = request.clone();
+    count_request.service_tier = None;
     let response = crate::requests::post_json_to_path(
         client,
         target,
         &format!("{}/count_tokens", endpoint.relative_path()),
-        endpoint.headers(target, request)?,
+        endpoint.headers(target, &count_request)?,
         build_count_request(model, request)?,
         cancellation,
     )?;
@@ -157,7 +159,7 @@ fn build_count_request(model: &str, request: &ModelRequest) -> Result<Value, Api
     let Value::Object(mut body) = build_request(model, request)? else {
         unreachable!("Anthropic request builders always return an object");
     };
-    for field in ["max_tokens", "temperature"] {
+    for field in ["max_tokens", "temperature", "speed", "service_tier"] {
         body.remove(field);
     }
     Ok(Value::Object(body))
@@ -213,6 +215,19 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
             json!(request.max_output_tokens.unwrap_or(4096)),
         ),
     ]);
+    match request.service_tier {
+        Some(ash_protocol::ModelServiceTier::Fast) => {
+            body.insert("speed".into(), Value::String("fast".into()));
+            body.insert("service_tier".into(), Value::String("standard_only".into()));
+        }
+        Some(ash_protocol::ModelServiceTier::Priority) => {
+            body.insert("service_tier".into(), Value::String("auto".into()));
+        }
+        Some(ash_protocol::ModelServiceTier::Standard) => {
+            body.insert("service_tier".into(), Value::String("standard_only".into()));
+        }
+        None => {}
+    }
     if let Some(instructions) = &request.instructions {
         body.insert(
             "system".into(),
@@ -524,6 +539,31 @@ pub(super) fn path(endpoint: ApiEndpoint) -> &'static str {
         "v1/messages"
     }
 }
-pub(super) fn headers(headers: &mut Vec<ash_http_client::HttpHeader>) -> Result<(), ApiError> {
-    crate::headers::insert(headers, "anthropic-version", "2023-06-01")
+pub(super) fn headers(
+    request: &ModelRequest,
+    headers: &mut Vec<ash_http_client::HttpHeader>,
+) -> Result<(), ApiError> {
+    crate::headers::insert(headers, "anthropic-version", "2023-06-01")?;
+    if request.service_tier == Some(ash_protocol::ModelServiceTier::Fast) {
+        const FAST_BETA: &str = "fast-mode-2026-02-01";
+        if let Some(header) = headers
+            .iter_mut()
+            .find(|header| header.name().eq_ignore_ascii_case("anthropic-beta"))
+        {
+            // Preserve any independently enabled betas on the authenticated target.
+            if !header
+                .value()
+                .split(',')
+                .any(|beta| beta.trim() == FAST_BETA)
+            {
+                *header = ash_http_client::HttpHeader::new(
+                    "anthropic-beta",
+                    format!("{},{FAST_BETA}", header.value()),
+                );
+            }
+        } else {
+            crate::headers::insert(headers, "anthropic-beta", FAST_BETA)?;
+        }
+    }
+    Ok(())
 }

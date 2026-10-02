@@ -671,6 +671,7 @@ fn model_command_updates_and_clears_model_with_config_revision() {
             command_id: CommandId::new("configure-test-provider").unwrap(),
             expected_revision: revision,
             config: ProviderConfigDto {
+                fast_models: Default::default(),
                 connection: "test".into(),
                 custom: None,
                 provider: "test".into(),
@@ -1279,6 +1280,7 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
         client.configure_provider(ProviderConfigureParams {
             command_id: CommandId::new(format!("configure-{id}")).unwrap(), expected_revision: revision,
             config: ProviderConfigDto {
+ fast_models: Default::default(),
  connection: id.into(),
                 provider: id.into(), base_url: Some("https://example.invalid/v1".into()), max_output_tokens: None, model_context: Default::default(),
                 custom: Some(ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
@@ -1359,6 +1361,7 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
 fn model_picker_uses_builtin_catalog_and_allows_manual_custom_selection() {
     let (mut client, root, transport) = client_with_model_probe();
     let mut config = ProviderConfigDto {
+        fast_models: Default::default(),
         connection: "custom-gateway".into(),
         provider: "custom-gateway".into(),
         base_url: Some("https://example.invalid/v1".into()),
@@ -1412,6 +1415,7 @@ fn model_picker_lists_builtin_models_without_provider_discovery() {
             command_id: CommandId::new("configure-openai-picker").unwrap(),
             expected_revision: revision,
             config: ProviderConfigDto {
+                fast_models: Default::default(),
                 connection: "openai".into(),
                 provider: "openai".into(),
                 base_url: None,
@@ -1438,6 +1442,7 @@ fn model_picker_lists_builtin_models_without_provider_discovery() {
 fn set_model_sets_and_clears_model_reasoning_effort() {
     let (mut client, root, transport) = client_with_model_probe();
     let config = ProviderConfigDto {
+        fast_models: Default::default(),
         connection: "openai".into(),
         provider: "openai".into(),
         base_url: None,
@@ -1605,4 +1610,230 @@ fn apply_conversation_change(app: &mut App, change: ConversationChange, snapshot
         ),
     ));
     app.update(crate::thread::Event::ProductNotice(change.notice));
+}
+
+#[test]
+fn model_options_save_without_changing_selected_model_and_refresh_context_budget() {
+    let (mut client, root, model) = client_with_model_probe();
+    let config = client.read_config().unwrap();
+    client
+        .configure_provider(ProviderConfigureParams {
+            command_id: CommandId::new("model-options-provider").unwrap(),
+            expected_revision: config.revision,
+            config: ProviderConfigDto {
+                fast_models: Vec::new(),
+                connection: "openai".into(),
+                provider: "openai".into(),
+                custom: None,
+                base_url: Some("https://example.test/v1".into()),
+                max_output_tokens: Some(8192),
+                model_context: Default::default(),
+            },
+        })
+        .unwrap();
+    client
+        .set_provider_api_key(ash_app_server_client::ProviderApiKeySetRequest::new(
+            "openai".into(),
+            "test-api-key".into(),
+        ))
+        .unwrap();
+    let catalog = client.list_models().unwrap();
+    crate::models::execute(
+        &mut *client,
+        ModelCommand::SetModel {
+            preference: "openai/gpt-6-astra high".into(),
+        },
+        &catalog,
+    )
+    .unwrap();
+    let before = client.read_config().unwrap();
+    let mut catalog = catalog;
+    for option in [
+        crate::models::ModelOption::FastOn,
+        crate::models::ModelOption::Context272k,
+        crate::models::ModelOption::Context1m,
+        crate::models::ModelOption::FastOff,
+    ] {
+        let config = client.read_config().unwrap();
+        let update = crate::models::execute(
+            &mut *client,
+            ModelCommand::Configure {
+                preference: "openai/gpt-6-astra".into(),
+                revision: config.revision,
+                option,
+            },
+            &catalog,
+        )
+        .unwrap();
+        assert_eq!(update.config.model, before.model);
+        assert_eq!(
+            update.config.model_reasoning_effort,
+            before.model_reasoning_effort
+        );
+        assert!(update.picker.is_some());
+        catalog = update.catalog.unwrap();
+        let entry = catalog
+            .models
+            .iter()
+            .find(|entry| entry.model.model.as_str() == "gpt-6-astra")
+            .unwrap();
+        assert_eq!(entry.maximum_context_window, Some(1_050_000));
+        if option == crate::models::ModelOption::Context272k {
+            assert_eq!(entry.context_window, Some(272_000));
+            assert!(update.summary.context_capacity().unwrap() < 272_000);
+        }
+        if option == crate::models::ModelOption::Context1m {
+            assert_eq!(entry.context_window, Some(1_000_000));
+        }
+    }
+    let after = client.read_config().unwrap();
+    assert!(after.providers["openai"].fast_models.is_empty());
+    assert_eq!(
+        after.providers["openai"].model_context["gpt-6-astra"].context_window,
+        1_000_000
+    );
+    let other_model = crate::models::execute(
+        &mut *client,
+        ModelCommand::Configure {
+            preference: "openai/gpt-6-sol".into(),
+            revision: after.revision,
+            option: crate::models::ModelOption::FastOn,
+        },
+        &catalog,
+    )
+    .unwrap();
+    assert_eq!(other_model.config.model, before.model);
+    assert_eq!(
+        other_model.config.providers["openai"].fast_models,
+        vec!["gpt-6-sol"]
+    );
+    let stale = crate::models::execute(
+        &mut *client,
+        ModelCommand::Configure {
+            preference: "openai/gpt-6-astra".into(),
+            revision: before.revision,
+            option: crate::models::ModelOption::FastOn,
+        },
+        &catalog,
+    );
+    assert!(stale.is_err());
+    assert_eq!(model.calls(), 0);
+    drop(client);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn model_options_save_for_other_providers_and_refresh_their_context_budgets() {
+    let (mut client, root, model) = client_with_model_probe();
+    let before = client.read_config().unwrap();
+    for (provider, id, fast, context) in [
+        ("anthropic", "claude-opus-5-5", true, true),
+        ("google", "gemini-3.8-flash", true, true),
+        ("xai", "grok-4.7", true, false),
+        ("qwen", "qwen3.8-max", false, true),
+        ("kimi", "kimi-k3", false, true),
+        ("deepseek", "deepseek-v4-pro", false, true),
+        ("minimax", "MiniMax-M3", false, true),
+        ("minimax", "MiniMax-M2.7", true, false),
+        ("mimo", "mimo-v2.6-pro", false, true),
+        ("glm", "glm-5.3", false, true),
+        ("meta", "muse-spark-1.3", false, true),
+    ] {
+        let connection = if provider == "glm" {
+            "bigmodel"
+        } else {
+            provider
+        };
+        let config = client.read_config().unwrap();
+        client
+            .configure_provider(ProviderConfigureParams {
+                command_id: crate::client::new_command_id("other-model-options"),
+                expected_revision: config.revision,
+                config: ProviderConfigDto {
+                    fast_models: Vec::new(),
+                    connection: connection.into(),
+                    provider: provider.into(),
+                    custom: None,
+                    base_url: Some("https://example.test/v1".into()),
+                    max_output_tokens: Some(8192),
+                    model_context: Default::default(),
+                },
+            })
+            .unwrap();
+        client
+            .set_provider_api_key(ash_app_server_client::ProviderApiKeySetRequest::new(
+                connection.into(),
+                "test-api-key".into(),
+            ))
+            .unwrap();
+        let mut catalog = client.list_models().unwrap();
+        let maximum = catalog
+            .models
+            .iter()
+            .find(|entry| {
+                entry.model.provider.as_str() == provider && entry.model.model.as_str() == id
+            })
+            .unwrap()
+            .maximum_context_window;
+        let options = [
+            fast.then_some(crate::models::ModelOption::FastOn),
+            context.then_some(crate::models::ModelOption::Context272k),
+            context.then_some(crate::models::ModelOption::Context1m),
+            fast.then_some(crate::models::ModelOption::FastOff),
+        ];
+        for option in options.into_iter().flatten() {
+            let config = client.read_config().unwrap();
+            let update = crate::models::execute(
+                &mut *client,
+                ModelCommand::Configure {
+                    preference: format!("{provider}/{id}"),
+                    revision: config.revision,
+                    option,
+                },
+                &catalog,
+            )
+            .unwrap();
+            assert_eq!(update.config.model, before.model);
+            assert_eq!(
+                update.config.model_reasoning_effort,
+                before.model_reasoning_effort
+            );
+            assert!(update.picker.is_some());
+            let provider_config = &update.config.providers[provider];
+            if matches!(
+                option,
+                crate::models::ModelOption::FastOn | crate::models::ModelOption::FastOff
+            ) {
+                assert_eq!(
+                    provider_config.fast_models.iter().any(|model| model == id),
+                    option == crate::models::ModelOption::FastOn
+                );
+            }
+            catalog = update.catalog.unwrap();
+            let entry = catalog
+                .models
+                .iter()
+                .find(|entry| {
+                    entry.model.provider.as_str() == provider && entry.model.model.as_str() == id
+                })
+                .unwrap();
+            assert_eq!(entry.maximum_context_window, maximum);
+            if matches!(
+                option,
+                crate::models::ModelOption::Context272k | crate::models::ModelOption::Context1m
+            ) {
+                let window = if option == crate::models::ModelOption::Context272k {
+                    272_000
+                } else {
+                    1_000_000
+                };
+                assert_eq!(provider_config.model_context[id].context_window, window);
+                assert_eq!(entry.context_window, Some(window));
+                assert!(entry.available_context_window.unwrap() < window);
+            }
+        }
+    }
+    assert_eq!(model.calls(), 0);
+    drop(client);
+    fs::remove_dir_all(root).unwrap();
 }

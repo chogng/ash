@@ -219,6 +219,7 @@ impl ContextCompactionService for ModelContextCompactionService {
                 tool_choice: ToolChoice::None,
                 parallel_tool_calls: false,
                 reasoning: None,
+                service_tier: None,
                 max_output_tokens: Some(request.target_tokens.get()),
                 temperature: None,
                 prompt_cache_key: None,

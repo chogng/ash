@@ -46,6 +46,7 @@ impl Settings {
             .get(id)
             .cloned()
             .unwrap_or_else(|| ProviderConfigDto {
+                fast_models: Default::default(),
                 provider: custom_id.clone(),
                 connection: custom_id,
                 custom: None,

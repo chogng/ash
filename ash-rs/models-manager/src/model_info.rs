@@ -65,6 +65,9 @@ impl ModelCatalogEntry {
         }
         config.validate_static()?;
         let mut info = self.info().clone();
+        if info.capabilities.fast_mode == ash_protocol::CapabilitySupport::Supported {
+            info.capabilities.fast_mode = config.fast_mode_support(&info.id);
+        }
         let context = config
             .custom
             .as_ref()

@@ -120,6 +120,7 @@ fn model_ref(provider: &str, model: &str) -> ash_protocol::ModelRef {
 #[test]
 fn model_provider_config_is_serializable_and_has_a_schema() {
     let config = ModelProviderConfig {
+        fast_models: Default::default(),
         connection: ModelConnectionId::new("openai").unwrap(),
         custom: None,
         provider: provider_id("openai"),
@@ -251,6 +252,7 @@ fn token_count_targets_and_model_support_are_normalized_explicitly() {
     let registry = ProviderConfigRegistry::builtin();
     let openai = registry
         .normalize(&ModelProviderConfig {
+            fast_models: Default::default(),
             connection: ModelConnectionId::new("openai").unwrap(),
             custom: None,
             provider: provider_id("openai"),
@@ -264,6 +266,7 @@ fn token_count_targets_and_model_support_are_normalized_explicitly() {
         .unwrap();
     let google_override = registry
         .normalize(&ModelProviderConfig {
+            fast_models: Default::default(),
             connection: ModelConnectionId::new("google").unwrap(),
             custom: None,
             provider: provider_id("google"),
@@ -425,6 +428,7 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
 
     let normalized = registry
         .normalize(&ModelProviderConfig {
+            fast_models: Default::default(),
             connection: ModelConnectionId::new("custom").unwrap(),
             custom: None,
             provider: provider_id("custom"),
@@ -439,6 +443,7 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
 #[test]
 fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
     let invalid_url = ModelProviderConfig {
+        fast_models: Default::default(),
         connection: ModelConnectionId::new("custom").unwrap(),
         custom: None,
         provider: provider_id("custom"),
@@ -452,6 +457,7 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
     ));
 
     let invalid_tokens = ModelProviderConfig {
+        fast_models: Default::default(),
         connection: ModelConnectionId::new("custom").unwrap(),
         custom: None,
         provider: provider_id("custom"),
@@ -469,6 +475,7 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
 fn static_validation_rejects_zero_model_context_limits() {
     let model = ModelId::new("model").unwrap();
     let config = ModelProviderConfig {
+        fast_models: Default::default(),
         connection: ModelConnectionId::new("custom").unwrap(),
         custom: None,
         provider: provider_id("custom"),
@@ -974,6 +981,157 @@ fn transcription_protocol_is_explicit_for_each_direct_api_provider() {
         restored.transcription_api_profile,
         crate::TranscriptionApiProfile::Unavailable
     );
+}
+
+#[test]
+fn fast_models_are_persisted_per_connection_and_validated_against_model_support() {
+    for model in [
+        "gpt-6-astra",
+        "gpt-6.1-sol",
+        "gpt-6-sol",
+        "gpt-6-luna",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
+        "gpt-5.6",
+    ] {
+        let model = crate::find_static_model(&model_ref("openai", model)).unwrap();
+        assert_eq!(
+            model.capabilities.fast_mode,
+            ash_protocol::CapabilitySupport::Supported
+        );
+        assert_eq!(
+            model.context_window,
+            ash_protocol::ContextWindow::Known(1_050_000)
+        );
+    }
+    let mut config = ModelProviderConfig::new(ProviderId::new("openai").unwrap());
+    config
+        .fast_models
+        .insert(ModelId::new("gpt-6-astra").unwrap());
+    config.validate_static().unwrap();
+    let encoded = serde_json::to_value(&config).unwrap();
+    assert_eq!(encoded["fastModels"], serde_json::json!(["gpt-6-astra"]));
+    assert_eq!(
+        serde_json::from_value::<ModelProviderConfig>(encoded).unwrap(),
+        config
+    );
+    let normalized = ProviderConfigRegistry::builtin()
+        .normalize(&config)
+        .unwrap();
+    assert_eq!(normalized.fast_models, config.fast_models);
+    config.fast_models.insert(ModelId::new("gpt-4o").unwrap());
+    assert!(config.validate_static().is_err());
+    let mut other = ModelProviderConfig::new(ProviderId::new("deepseek").unwrap());
+    other
+        .fast_models
+        .insert(ModelId::new("deepseek-v4-pro").unwrap());
+    assert!(other.validate_static().is_err());
+}
+
+#[test]
+fn fast_modes_use_the_selected_connection_and_upstream_model_contract() {
+    use ash_protocol::CapabilitySupport;
+    use ash_protocol::ModelConnectionId;
+    for (connection, model, expected_upstream) in [
+        ("anthropic", "claude-opus-5-5", "claude-opus-5-5"),
+        ("anthropic", "claude-opus-4-7", "claude-opus-4-7"),
+        ("anthropic", "claude-sonnet-4-6", "claude-sonnet-4-6"),
+        ("google", "gemini-3.8-flash", "gemini-3.8-flash"),
+        ("xai", "grok-4.7", "grok-4.7"),
+        ("minimax", "MiniMax-M2.7", "MiniMax-M2.7-highspeed"),
+        ("minimax", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"),
+        ("minimax", "MiniMax-M2.1", "MiniMax-M2.1-highspeed"),
+        (
+            "kimi-subscription",
+            "kimi-k2.7-code",
+            "kimi-for-coding-highspeed",
+        ),
+    ] {
+        let mut config =
+            ModelProviderConfig::for_connection(ModelConnectionId::new(connection).unwrap());
+        let id = ModelId::new(model).unwrap();
+        assert_eq!(config.fast_mode_support(&id), CapabilitySupport::Supported);
+        config.fast_models.insert(id);
+        let normalized = ProviderConfigRegistry::builtin()
+            .normalize(&config)
+            .unwrap();
+        assert_eq!(normalized.upstream_model(model), expected_upstream);
+        let encoded = serde_json::to_value(&config).unwrap();
+        assert_eq!(
+            serde_json::from_value::<ModelProviderConfig>(encoded).unwrap(),
+            config
+        );
+        config.fast_models.clear();
+        let normalized = ProviderConfigRegistry::builtin()
+            .normalize(&config)
+            .unwrap();
+        assert_eq!(
+            normalized.upstream_model(model),
+            if connection == "kimi-subscription" {
+                "kimi-for-coding"
+            } else {
+                model
+            }
+        );
+    }
+    for (connection, model) in [
+        ("xai-subscription", "grok-4.7"),
+        ("kimi", "kimi-k2.7-code"),
+        ("anthropic", "claude-fable-5-1"),
+        ("deepseek", "deepseek-v4-pro"),
+        ("qwen", "qwen3.8-max"),
+        ("mimo", "mimo-v2.6-pro"),
+        ("glm", "glm-5.3"),
+    ] {
+        let mut config =
+            ModelProviderConfig::for_connection(ModelConnectionId::new(connection).unwrap());
+        config.fast_models.insert(ModelId::new(model).unwrap());
+        assert!(config.validate_static().is_err(), "{connection}/{model}");
+    }
+}
+
+#[test]
+fn one_million_context_models_include_other_vendors_without_widening_smaller_models() {
+    for (provider, model, window) in [
+        ("anthropic", "claude-fable-5-1", 1_000_000),
+        ("anthropic", "claude-opus-5-5", 1_000_000),
+        ("anthropic", "claude-sonnet-5", 1_000_000),
+        ("anthropic", "claude-opus-4-8", 1_000_000),
+        ("anthropic", "claude-opus-4-7", 1_000_000),
+        ("anthropic", "claude-opus-4-6", 1_000_000),
+        ("anthropic", "claude-sonnet-4-6", 1_000_000),
+        ("anthropic", "claude-haiku-4-5-20251001", 200_000),
+        ("anthropic", "claude-sonnet-4-5-20250929", 200_000),
+        ("xai", "grok-4.7", 500_000),
+        ("xai", "grok-4.6", 500_000),
+        ("xai", "grok-4.5", 500_000),
+        ("deepseek", "deepseek-v4-pro", 1_000_000),
+        ("glm", "glm-5.3", 1_000_000),
+        ("glm", "glm-5.3-flash", 1_000_000),
+        ("glm", "glm-5.3-flashx", 1_000_000),
+        ("glm", "glm-5.2", 1_000_000),
+    ] {
+        assert_eq!(
+            crate::find_static_model(&model_ref(provider, model))
+                .unwrap()
+                .context_window,
+            ash_protocol::ContextWindow::Known(window)
+        );
+    }
+    for model in crate::STATIC_MODEL_CATALOG
+        .iter()
+        .filter(|model| model.provider_id == "google")
+    {
+        assert_eq!(
+            model.context_window,
+            ash_protocol::ContextWindow::Known(1_048_576)
+        );
+        assert_eq!(
+            model.capabilities.fast_mode,
+            ash_protocol::CapabilitySupport::Supported
+        );
+    }
 }
 
 #[test]

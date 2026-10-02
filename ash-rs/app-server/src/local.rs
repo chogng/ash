@@ -2333,24 +2333,42 @@ impl ModelCatalog for ConfigBackedModelService {
             .into_iter()
             .filter(|entry| entry.availability() == ash_protocol::ModelAvailability::Available)
             .map(|entry| {
-                runtime_catalog_entry(&entry, &config, &registry)
-                    .map_err(|_| ModelCatalogRefreshError::InvalidConfiguration)
+                let mut result = runtime_catalog_entry(&entry, &config, &registry)
+                    .map_err(|_| ModelCatalogRefreshError::InvalidConfiguration)?;
+                result.discovered = Some(true);
+                Ok(result)
             })
             .collect()
     }
     fn list(
         &self,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
+        let config = self.resolved_config()?;
+        let registry = self
+            .provider_configs
+            .with_configs(config.providers.values())
+            .map_err(|error| CoreError::Model(error.to_string()))?;
+        let manager = self.models_manager.with_registry(registry.clone());
+        // Product identities and order stay fixed; configured rows expose the same
+        // effective context budget that subsequent invocations will use.
         let mut models: Vec<_> = ash_model_provider_config::STATIC_MODEL_CATALOG
             .iter()
             .map(|spec| {
-                ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
-                    spec.model_ref(),
-                    &spec.model(),
-                )
+                let model = spec.model_ref();
+                if !config.providers.contains_key(&model.provider) {
+                    return Ok(
+                        ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                            model,
+                            &spec.model(),
+                        ),
+                    );
+                }
+                let resolved = manager
+                    .resolve_static(&model, &ModelRequirements::agent())
+                    .map_err(|error| CoreError::Model(error.to_string()))?;
+                runtime_catalog_entry(resolved.entry(), &config, &registry)
             })
-            .collect();
-        let config = self.resolved_config()?;
+            .collect::<Result<_, CoreError>>()?;
         let mut custom: Vec<_> = config
             .providers
             .values()
@@ -2359,11 +2377,6 @@ impl ModelCatalog for ConfigBackedModelService {
         custom.sort_by_key(|provider| {
             std::cmp::Reverse(provider.custom.as_ref().expect("custom provider").order)
         });
-        let registry = self
-            .provider_configs
-            .with_configs(config.providers.values())
-            .map_err(|error| CoreError::Model(error.to_string()))?;
-        let manager = self.models_manager.with_registry(registry.clone());
         for provider in custom {
             let mut discovered = std::collections::BTreeSet::new();
             let binding = match self.catalog_provider.catalog_binding(provider) {
@@ -2380,7 +2393,9 @@ impl ModelCatalog for ConfigBackedModelService {
                 {
                     discovered.insert(entry.model().model.clone());
                     if !provider.model_context.contains_key(&entry.model().model) {
-                        models.push(runtime_catalog_entry(&entry, &config, &registry)?);
+                        let mut result = runtime_catalog_entry(&entry, &config, &registry)?;
+                        result.discovered = Some(true);
+                        models.push(result);
                     }
                 }
             }
@@ -2394,6 +2409,7 @@ impl ModelCatalog for ConfigBackedModelService {
                         ash_protocol::ModelRef::new(provider.provider.clone(), id.clone()),
                         &info,
                     );
+                entry.maximum_context_window = Some(1_000_000);
                 entry.discovered = Some(discovered.contains(id));
                 models.push(entry);
             }
@@ -2560,7 +2576,14 @@ fn runtime_catalog_entry(
         entry.model().clone(),
         &info,
     );
-    result.discovered = Some(true);
+    result.maximum_context_window = if provider_config.custom.is_some() {
+        Some(1_000_000)
+    } else {
+        match entry.info().context_window {
+            ContextWindow::Known(tokens) => Some(tokens),
+            ContextWindow::Unknown => None,
+        }
+    };
     if config.providers.contains_key(&entry.model().provider) {
         match context_budget_for_model(&info, provider_config, registry)?
             .resolve()

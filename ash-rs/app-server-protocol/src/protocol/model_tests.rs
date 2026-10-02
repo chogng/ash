@@ -60,3 +60,22 @@ fn catalog_metadata_does_not_expose_an_execution_path() {
     assert!(value.get("access").is_none());
     assert!(value.get("outputTransport").is_none());
 }
+
+#[test]
+fn catalog_exposes_fast_support_and_the_declared_context_ceiling() {
+    let model = ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("gpt-6-astra").unwrap(),
+    );
+    let mut info = ModelInfo::new(model.model.clone(), "GPT-6 Astra");
+    info.context_window = ContextWindow::Known(1_050_000);
+    info.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+    let entry = ModelCatalogEntry::from_info(model, &info);
+    let value = serde_json::to_value(&entry).unwrap();
+    assert_eq!(value["maximumContextWindow"], 1_050_000);
+    assert_eq!(value["capabilities"]["fastMode"], "supported");
+    assert_eq!(
+        serde_json::from_value::<ModelCatalogEntry>(value).unwrap(),
+        entry
+    );
+}

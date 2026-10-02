@@ -242,6 +242,7 @@ impl ProviderConfigRegistry {
             provider: config.provider.clone(),
             connection: config.connection.clone(),
             access_mode: config.access_mode(),
+            fast_models: config.fast_models.clone(),
             api_profile: definition.api_profile,
             base_url,
             input_token_count,

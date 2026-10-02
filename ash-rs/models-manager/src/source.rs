@@ -20,6 +20,7 @@ pub struct ModelCapabilitiesPatch {
     pub parallel_tool_calls: Option<CapabilitySupport>,
     pub personality: Option<CapabilitySupport>,
     pub image_detail_original: Option<CapabilitySupport>,
+    pub fast_mode: Option<CapabilitySupport>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

@@ -76,6 +76,7 @@ fn entry(provider: &str, model: &str, _access: ModelAccess) -> ModelCatalogEntry
         ),
         display_name: model.into(),
         context_window: None,
+        maximum_context_window: None,
         auto_compact_token_limit: None,
         available_context_window: None,
         capabilities: ModelCapabilities::UNKNOWN,

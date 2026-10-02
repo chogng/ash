@@ -188,6 +188,7 @@ fn collaboration_effort_changes_update_status_without_a_notice() {
                 super::completion::Completion::ModelUpdated {
                     command,
                     result: Ok(crate::models::ModelUpdate {
+                        catalog: None,
                         summary: crate::models::ModelSummary::from_catalog(
                             config.model.clone(),
                             config.model_reasoning_effort,
@@ -201,7 +202,6 @@ fn collaboration_effort_changes_update_status_without_a_notice() {
                 origin,
                 &mut None,
                 &mut app,
-                &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
             );
             assert_eq!(
                 app.status_line().model_label(),
@@ -259,6 +259,7 @@ fn collaboration_effort_boundaries_are_silent_inline_and_localized_fullscreen() 
                 super::completion::Completion::ModelUpdated {
                     command,
                     result: Ok(crate::models::ModelUpdate {
+                        catalog: None,
                         summary: crate::models::ModelSummary::from_catalog(
                             config.model.clone(),
                             config.model_reasoning_effort,
@@ -274,7 +275,6 @@ fn collaboration_effort_boundaries_are_silent_inline_and_localized_fullscreen() 
                 origin,
                 &mut None,
                 &mut app,
-                &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
             );
             assert_eq!(app.messages().len(), rows);
             assert_eq!(app.input(), "keep this draft");
@@ -442,6 +442,7 @@ fn collaboration_effort_selector_applies_a_supported_value_and_restores_focus() 
                 ),
                 display_name: "Test Model".into(),
                 context_window: None,
+                maximum_context_window: None,
                 auto_compact_token_limit: None,
                 available_context_window: None,
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,

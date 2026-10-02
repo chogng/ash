@@ -44,7 +44,7 @@ pub(super) enum Completion {
         generation: u64,
         result: Result<ConversationCompletion, String>,
     },
-    ConfigRefreshed(Result<ConfigReadResult, String>),
+    ConfigRefreshed(Result<(ConfigReadResult, ModelListResult), String>),
     Sessions(SessionCompletion),
     ProductCommand {
         command: String,
@@ -122,7 +122,6 @@ pub(super) fn apply_request_completion(
     origin: super::requests::RequestOrigin,
     active: &mut Option<Conversation>,
     app: &mut App,
-    model_catalog: &ModelListResult,
 ) {
     let panel_generation = origin.panel_generation;
     if completion.thread_scope().is_some_and(|scope| {
@@ -161,8 +160,8 @@ pub(super) fn apply_request_completion(
             Err(error) => app.finish_issue_start(origin.mode, generation, Err(error)),
         },
         Completion::Memory(_) => unreachable!("memory completions are owned by AppDriver"),
-        Completion::ConfigRefreshed(Ok(config)) => {
-            apply_tui_config(config, Some(model_catalog), app);
+        Completion::ConfigRefreshed(Ok((config, catalog))) => {
+            apply_tui_config(config, Some(&catalog), app);
         }
         Completion::ConfigRefreshed(Err(error)) => {
             app.update_for_panel(panel_generation, ThreadEvent::FailureReported(error));
@@ -348,12 +347,10 @@ pub(super) fn apply_request_completion(
             result: Ok(update),
         } => {
             let picker = update.picker;
-            if picker.is_none() {
-                app.update_for_panel(
-                    panel_generation,
-                    ModelEvent::SummaryReceived(update.summary),
-                );
-            }
+            app.update_for_panel(
+                panel_generation,
+                ModelEvent::SummaryReceived(update.summary),
+            );
             match update.notice {
                 models::ModelNotice::Silent => {}
                 models::ModelNotice::ThinkingEffort(mut notice) => {
@@ -397,6 +394,16 @@ pub(super) fn apply_request_completion(
                         error: crate::nls::localize_owned(app.language(), error),
                     },
                 );
+            }
+            models::Command::Configure { .. } => {
+                let error = crate::nls::localize_owned(app.language(), error);
+                if panel_generation == app.panels().generation()
+                    && let Some(super::command_panel::CommandPanel::Model(panel)) =
+                        app.panels_mut().command_mut()
+                {
+                    panel.state_mut().set_message(Some(error.clone()));
+                }
+                app.report_composer_option_error(error);
             }
             models::Command::OpenEffortPicker => {
                 unreachable!("effort picker does not start a request")

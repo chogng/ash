@@ -23,6 +23,7 @@ impl Command {
             | Self::IncreaseEffort
             | Self::SetEffort { .. } => "ash-tui-effort",
             Self::SetModel { .. } => "ash-tui-set-model",
+            Self::Configure { .. } => "ash-tui-configure-model",
         }
     }
 
@@ -37,6 +38,7 @@ impl Command {
                 "/effort".into()
             }
             Self::SetEffort { effort } => format!("/effort {}", effort.as_str()),
+            Self::Configure { preference, .. } => format!("/model {preference}"),
         }
     }
 }
@@ -51,6 +53,11 @@ where
 {
     match command {
         Command::SetModel { preference } => set_model(client, &preference, catalog),
+        Command::Configure {
+            preference,
+            revision,
+            option,
+        } => configure_model(client, &preference, revision, option, catalog),
         Command::Pin { preference, pinned } => set_pin(client, &preference, pinned, catalog),
         Command::DecreaseEffort => reasoning_effort::update(
             client,
@@ -197,6 +204,7 @@ where
         notice: ModelNotice::Command(crate::nls::Text::literal(notice)),
         picker: None,
         config,
+        catalog: None,
     })
 }
 
@@ -208,6 +216,97 @@ fn model_label(model: Option<&ModelRefDto>, effort: Option<ReasoningEffort>) -> 
         (Some(model), None) => format!("{}/{}", model.provider, model.model),
         (None, _) => "not configured".into(),
     }
+}
+
+fn configure_model<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    preference: &str,
+    revision: u64,
+    option: super::ModelOption,
+    catalog: &ModelListResult,
+) -> Result<ModelUpdate, ModelCommandError> {
+    use super::ModelOption;
+    use ash_app_server_protocol::protocol::config::ModelContextConfigDto;
+    use ash_app_server_protocol::protocol::config::ProviderConfigureParams;
+
+    let config = client.read_config()?;
+    if config.revision != revision {
+        return Err(ModelCommandError(
+            "Model settings changed; reopen /model and try again".into(),
+        ));
+    }
+    let entry = catalog
+        .models
+        .iter()
+        .find(|entry| format!("{}/{}", entry.model.provider, entry.model.model) == preference)
+        .ok_or_else(|| ModelCommandError("Model no longer available".into()))?;
+    let provider_id = entry.model.provider.as_str();
+    let model_id = entry.model.model.as_str();
+    let mut provider = config.providers.get(provider_id).cloned().ok_or_else(|| {
+        ModelCommandError("Configure a provider in /config before changing model settings".into())
+    })?;
+    match option {
+        ModelOption::FastOn | ModelOption::FastOff => {
+            if entry.capabilities.fast_mode != ash_protocol::CapabilitySupport::Supported {
+                return Err(ModelCommandError(
+                    "Fast mode is not supported by this model".into(),
+                ));
+            }
+            provider.fast_models.retain(|model| model != model_id);
+            if option == ModelOption::FastOn {
+                provider.fast_models.push(model_id.into());
+            }
+        }
+        ModelOption::Context272k | ModelOption::Context1m => {
+            if !entry
+                .maximum_context_window
+                .is_some_and(|maximum| maximum >= 1_000_000)
+            {
+                return Err(ModelCommandError(
+                    "This model does not support the 1m context preset".into(),
+                ));
+            }
+            let context_window = if option == ModelOption::Context1m {
+                1_000_000
+            } else {
+                272_000
+            };
+            if let Some(custom) = &mut provider.custom {
+                custom.context_window = context_window;
+            } else {
+                provider.model_context.insert(
+                    model_id.into(),
+                    ModelContextConfigDto {
+                        context_window,
+                        // Recompute the backend's recommendation for the newly selected window.
+                        auto_compact_token_limit: None,
+                    },
+                );
+            }
+        }
+    }
+    client.configure_provider(ProviderConfigureParams {
+        command_id: new_command_id("model-options"),
+        expected_revision: revision,
+        config: provider,
+    })?;
+    let config = client.read_config()?;
+    // Input capacity includes output reservation and compaction policy; only the backend
+    // computes it. Refresh effective catalog metadata after changing its budget preference.
+    let catalog = client.list_models()?;
+    let summary = ModelSummary::from_catalog(
+        config.model.clone(),
+        config.model_reasoning_effort,
+        Some(&catalog),
+    );
+    let picker = model_choices(&catalog, &config).map_err(ModelCommandError)?;
+    Ok(ModelUpdate {
+        summary,
+        notice: ModelNotice::Silent,
+        picker: Some(picker),
+        config,
+        catalog: Some(catalog),
+    })
 }
 
 fn write_pins<T: JsonRpcTransport>(
@@ -286,6 +385,7 @@ fn set_pin<T: JsonRpcTransport>(
         ),
         picker: Some(picker),
         config,
+        catalog: None,
     })
 }
 pub(crate) fn remove_provider_pins<T: JsonRpcTransport>(

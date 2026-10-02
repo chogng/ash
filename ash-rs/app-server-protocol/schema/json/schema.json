@@ -29423,6 +29423,10 @@
     },
     "ModelCapabilities": {
       "properties": {
+        "fastMode": {
+          "$ref": "#/$defs/CapabilitySupport",
+          "default": "unknown"
+        },
         "imageDetailOriginal": {
           "$ref": "#/$defs/CapabilitySupport",
           "default": "unknown"
@@ -29496,6 +29500,15 @@
         },
         "displayName": {
           "type": "string"
+        },
+        "maximumContextWindow": {
+          "description": "Model or custom connection ceiling before applying its context budget preference.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "model": {
           "$ref": "#/$defs/ModelRef"
@@ -31175,6 +31188,13 @@
               "type": "null"
             }
           ]
+        },
+        "fastModels": {
+          "description": "Per-connection model IDs requesting Fast service on subsequent invocations.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "maxOutputTokens": {
           "format": "uint32",

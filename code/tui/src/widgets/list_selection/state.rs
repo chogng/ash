@@ -29,6 +29,7 @@ pub(crate) struct ListSelectionItem {
     description: Option<Text>,
     details: Option<Text>,
     columns: Option<ListSelectionItemColumns>,
+    controls: Vec<ListSelectionItemControl>,
     selection_foreground: Option<Color>,
     presentation_focus: Option<Color>,
     preview: Option<ListSelectionPreview>,
@@ -57,6 +58,13 @@ pub(crate) struct ListSelectionSegmentedValue {
     pub(crate) adjustable: bool,
 }
 
+/// Opaque row actions interpreted by the feature that owns the list.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct ListSelectionItemControl {
+    pub(super) id: Option<String>,
+    pub(super) label: Text,
+}
+
 impl ListSelectionItem {
     pub(crate) fn new(label: impl Into<Text>) -> Self {
         Self {
@@ -65,6 +73,7 @@ impl ListSelectionItem {
             description: None,
             details: None,
             columns: None,
+            controls: Vec::new(),
             selection_foreground: None,
             presentation_focus: None,
             preview: None,
@@ -158,6 +167,26 @@ impl ListSelectionItem {
             segmented: Some(value),
         });
         self
+    }
+
+    pub(crate) fn with_control(mut self, id: impl Into<String>, label: impl Into<Text>) -> Self {
+        self.controls.push(ListSelectionItemControl {
+            id: Some(id.into()),
+            label: label.into(),
+        });
+        self
+    }
+
+    pub(crate) fn with_readonly_control(mut self, label: impl Into<Text>) -> Self {
+        self.controls.push(ListSelectionItemControl {
+            id: None,
+            label: label.into(),
+        });
+        self
+    }
+
+    pub(super) fn controls(&self) -> &[ListSelectionItemControl] {
+        &self.controls
     }
 
     pub(crate) fn with_selection_foreground(mut self, color: Color) -> Self {
@@ -644,7 +673,10 @@ impl ListSelectionState {
                 true
             }
             super::ListSelectionPointerTarget::Search => self.focus_search(),
-            super::ListSelectionPointerTarget::Item(id) => self.focus_item(id),
+            super::ListSelectionPointerTarget::Item(id)
+            | super::ListSelectionPointerTarget::ItemControl { item: id, .. } => {
+                self.focus_item(id)
+            }
         }
     }
 
@@ -1146,6 +1178,9 @@ fn localize_groups(groups: &mut [ListSelectionGroup], language: crate::nls::Lang
         group.label.localize(language);
         for item in &mut group.items {
             item.label.localize(language);
+            for control in &mut item.controls {
+                control.label.localize(language);
+            }
             if let Some(description) = item.description.as_mut() {
                 description.localize(language);
             }

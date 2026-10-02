@@ -78,6 +78,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
             command_id: CommandId::new("configure-openai-conversation-test").unwrap(),
             expected_revision: revision,
             config: ProviderConfigDto {
+                fast_models: Default::default(),
                 connection: "openai".into(),
                 custom: None,
                 provider: "openai".into(),

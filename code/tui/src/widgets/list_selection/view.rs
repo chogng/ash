@@ -29,6 +29,10 @@ pub(crate) enum ListSelectionPointerTarget {
     Action,
     Search,
     Item(super::ListSelectionItemId),
+    ItemControl {
+        item: super::ListSelectionItemId,
+        control: String,
+    },
 }
 
 pub(crate) fn pointer_target_at(
@@ -60,11 +64,27 @@ pub(crate) fn pointer_target_at(
     if detail > 0 {
         return None;
     }
-    view.visible_items()
-        .get(index)
-        .and_then(|item| item.id())
-        .cloned()
-        .map(ListSelectionPointerTarget::Item)
+    let items = view.visible_items();
+    let item = *items.get(index)?;
+    let id = item.id()?.clone();
+    let row = Rect::new(
+        with_state_column(viewport.items).x,
+        position.y,
+        with_state_column(viewport.items).width,
+        1,
+    );
+    let controls = RowControls::new(row, &items);
+    for (control, area) in item.controls().iter().zip(controls.areas(row)) {
+        if area.contains(position)
+            && let Some(control) = &control.id
+        {
+            return Some(ListSelectionPointerTarget::ItemControl {
+                item: id,
+                control: control.clone(),
+            });
+        }
+    }
+    Some(ListSelectionPointerTarget::Item(id))
 }
 
 pub(crate) fn draw_tabs(
@@ -152,7 +172,9 @@ pub(crate) fn draw_body_with_pointer(
         );
     } else {
         let list_area = with_state_column(areas[1]);
-        let column_layout = ItemColumnLayout::new(list_area.width, &visible_items);
+        let controls = RowControls::new(list_area, &visible_items);
+        let column_layout =
+            ItemColumnLayout::new(controls.content_width(list_area), &visible_items);
         let rows = view.item_rows(areas[1].width);
         for (row, &(index, detail)) in rows
             .iter()
@@ -189,7 +211,14 @@ pub(crate) fn draw_body_with_pointer(
             }
             draw_item(
                 frame,
-                row_area,
+                if item.section_heading() {
+                    row_area
+                } else {
+                    Rect {
+                        width: controls.content_width(row_area),
+                        ..row_area
+                    }
+                },
                 item,
                 selected,
                 selected && view.items_focused(),
@@ -199,6 +228,40 @@ pub(crate) fn draw_body_with_pointer(
                 view.expandable().then_some(view.expanded(item)),
                 context,
             );
+            for (control, area) in item.controls().iter().zip(controls.areas(row_area)) {
+                let target = item.id().zip(control.id.as_ref()).map(|(id, control)| {
+                    ListSelectionPointerTarget::ItemControl {
+                        item: id.clone(),
+                        control: control.clone(),
+                    }
+                });
+                let mut style = crate::render::interaction_style(
+                    context,
+                    crate::render::InteractionState {
+                        target: if control.id.is_some() {
+                            crate::render::InteractionTarget::Rest
+                        } else {
+                            crate::render::InteractionTarget::Disabled
+                        },
+                        selected: control.id.is_some() && selected && view.items_focused(),
+                        hovered: target.is_some() && target.as_ref() == hovered,
+                        pressed: target.is_some() && target.as_ref() == pressed,
+                    },
+                );
+                if control.id.is_some()
+                    && selected
+                    && view.items_focused()
+                    && target.as_ref() != pressed
+                {
+                    style = style.fg(context.focus());
+                }
+                let label = if control.id.is_some() {
+                    format!("[{}]", control.label.to_string())
+                } else {
+                    control.label.to_string()
+                };
+                frame.render_widget(Paragraph::new(label).style(style), area);
+            }
         }
         for (area, count, position) in [
             (viewport.above, viewport.start, "above"),
@@ -266,6 +329,58 @@ pub(crate) fn draw_body_with_pointer(
         if let Some(caption) = preview.caption() {
             frame.render_widget(Paragraph::new(line_to_borrowed(caption)), preview_areas[4]);
         }
+    }
+}
+
+// Shared row-column geometry keeps rendered controls and pointer activation aligned.
+struct RowControls {
+    widths: Vec<u16>,
+}
+
+impl RowControls {
+    fn new(area: Rect, items: &[&ListSelectionItem]) -> Self {
+        let count = items
+            .iter()
+            .map(|item| item.controls().len())
+            .max()
+            .unwrap_or(0);
+        let widths = (0..count)
+            .map(|index| {
+                items
+                    .iter()
+                    .filter_map(|item| item.controls().get(index))
+                    .map(|control| control.label.width() as u16 + 2)
+                    .max()
+                    .unwrap_or(0)
+            })
+            .collect::<Vec<_>>();
+        // On small terminals retain the model name and effort; keyboard actions remain available.
+        let required = widths.iter().map(|width| width + 2).sum::<u16>();
+        Self {
+            widths: if area.width >= required + 36 {
+                widths
+            } else {
+                Vec::new()
+            },
+        }
+    }
+
+    fn content_width(&self, area: Rect) -> u16 {
+        area.width
+            .saturating_sub(self.widths.iter().map(|width| width + 2).sum::<u16>())
+    }
+
+    fn areas(&self, row: Rect) -> Vec<Rect> {
+        let mut x = row.x + self.content_width(row);
+        self.widths
+            .iter()
+            .map(|width| {
+                x += 2;
+                let area = Rect::new(x, row.y, *width, 1);
+                x += width;
+                area
+            })
+            .collect()
     }
 }
 

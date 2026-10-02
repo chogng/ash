@@ -184,6 +184,19 @@ pub(crate) fn build_request(model: &str, request: &ModelRequest) -> Result<Value
         ("messages".into(), Value::Array(messages)),
         ("stream".into(), Value::Bool(false)),
     ]);
+    if let Some(tier) = request.service_tier {
+        body.insert(
+            "service_tier".into(),
+            Value::String(
+                match tier {
+                    ash_protocol::ModelServiceTier::Standard => "default",
+                    ash_protocol::ModelServiceTier::Fast => "fast",
+                    ash_protocol::ModelServiceTier::Priority => "priority",
+                }
+                .into(),
+            ),
+        );
+    }
     if !request.tools.is_empty() {
         body.insert(
             "tools".into(),

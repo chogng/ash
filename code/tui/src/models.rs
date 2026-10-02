@@ -11,12 +11,24 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
-    SetModel { preference: String },
+    SetModel {
+        preference: String,
+    },
     OpenEffortPicker,
     DecreaseEffort,
     IncreaseEffort,
-    SetEffort { effort: ReasoningEffort },
-    Pin { preference: String, pinned: bool },
+    SetEffort {
+        effort: ReasoningEffort,
+    },
+    Pin {
+        preference: String,
+        pinned: bool,
+    },
+    Configure {
+        preference: String,
+        revision: u64,
+        option: ModelOption,
+    },
 }
 
 use ash_app_server_client::ClientError;
@@ -26,6 +38,7 @@ use ash_protocol::ReasoningEffort;
 use std::fmt;
 
 pub(crate) use picker::ModelChoices;
+pub(crate) use picker::ModelOption;
 pub(crate) use picker::ModelPickerData;
 pub(crate) use picker::ModelSelectionAction;
 pub(crate) use picker::model_choices;
@@ -111,6 +124,7 @@ pub(crate) struct ModelUpdate {
     pub(crate) notice: ModelNotice,
     pub(crate) picker: Option<ModelChoices>,
     pub(crate) config: ash_app_server_protocol::protocol::config::ConfigReadResult,
+    pub(crate) catalog: Option<ModelListResult>,
 }
 
 #[derive(Debug)]

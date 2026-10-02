@@ -238,8 +238,9 @@ impl AppDriver {
                     self.publish_memory_status(previous);
                 }
                 Ok(RequestCompletion { completion, origin }) => {
-                    if let Completion::ConfigRefreshed(Ok(config)) = &completion {
+                    if let Completion::ConfigRefreshed(Ok((config, catalog))) = &completion {
                         self.model_picker.update_config(config.clone());
+                        self.model_picker.update_catalog(catalog.clone());
                         if matches!(
                             self.app.command_panel(),
                             Some(super::command_panel::CommandPanel::Model(_))
@@ -256,13 +257,15 @@ impl AppDriver {
                     } = &completion
                     {
                         self.model_picker.update_config(update.config.clone());
+                        if let Some(catalog) = &update.catalog {
+                            self.model_picker.update_catalog(catalog.clone());
+                        }
                     }
                     apply_request_completion(
                         completion,
                         origin,
                         &mut self.conversation,
                         &mut self.app,
-                        self.model_picker.catalog(),
                     );
                 }
                 Err(error) => self
@@ -583,9 +586,11 @@ impl AppDriver {
                 Some(RequestKey::Config),
                 "ash-tui-refresh-config",
                 move || {
-                    Completion::ConfigRefreshed(
-                        client.read_config().map_err(|error| error.to_string()),
-                    )
+                    Completion::ConfigRefreshed((|| {
+                        let config = client.read_config().map_err(|error| error.to_string())?;
+                        let catalog = client.list_models().map_err(|error| error.to_string())?;
+                        Ok((config, catalog))
+                    })())
                 },
                 &mut self.app,
                 origin,
