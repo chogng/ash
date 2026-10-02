@@ -1,5 +1,13 @@
 import './designPropertiesWidget.css';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
+import { Button } from '../../../../../../base/browser/ui/button/button.js';
+import { ColorPicker } from '../../../../../../base/browser/ui/colorPicker/colorPicker.js';
+import { Color } from '../../../../../../base/common/color.js';
+import { ContextViewFocusRestore, ContextViewHideReason } from '../../../../../../base/browser/ui/contextview/contextview.js';
+import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
+import { IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
+import { AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IAction } from '../../../../../../base/common/actions.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
@@ -14,8 +22,18 @@ type GeometryField = 'x' | 'y' | 'width' | 'height' | 'rotation';
 /** Owns geometry, text and path-property controls; edits use the shared document history. */
 export class DesignPropertiesWidget extends Disposable {
 	public readonly domNode: HTMLElement;
+	private readonly headingDomNode: HTMLElement;
+	private readonly positionSection: HTMLDetailsElement;
 	private readonly geometryInputs = new Map<GeometryField, HTMLInputElement>();
-	private readonly fillInput: HTMLInputElement;
+	private readonly appearanceProperties: HTMLElement;
+	private readonly fillButton: Button;
+	private readonly fillSwatchDomNode: HTMLElement;
+	private readonly colorPicker: ColorPicker;
+	private pickerVisible = false;
+	private pickerShapeId: string | undefined;
+	private isCommittingColor = false;
+	private colorPreview: DesignShape | undefined;
+	private readonly recentColors: string[] = [];
 	private readonly textProperties: HTMLElement;
 	private readonly textInput: HTMLTextAreaElement;
 	private readonly fontSizeInput: HTMLInputElement;
@@ -26,11 +44,26 @@ export class DesignPropertiesWidget extends Disposable {
 	private readonly pathProperties: HTMLElement;
 	private readonly nodeInput: HTMLSelectElement;
 	private readonly closedInput: HTMLInputElement;
+	private readonly strokeWidthInput: HTMLInputElement;
 	private readonly pathInputs = new Map<string, HTMLInputElement>();
 
-	constructor(ownerDocument: Document, private readonly documentController: DesignDocumentController, private readonly commands: DocumentCommands, private readonly selection: DesignSelection, private readonly refresh: () => void) {
+	constructor(
+		ownerDocument: Document,
+		private readonly documentController: DesignDocumentController,
+		private readonly commands: DocumentCommands,
+		private readonly selection: DesignSelection,
+		private readonly refresh: () => void,
+		@IContextViewService private readonly contextViews: IContextViewService,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+	) {
 		super();
 		this.domNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-properties', attributes: { role: 'group', 'aria-label': localize('sessions.design.properties', 'Shape properties') } });
+		this.headingDomNode = h(ownerDocument, 'h2', { className: 'ash-design-properties-heading' });
+		this.domNode.append(this.headingDomNode);
+		const position = this.createSection(localize('sessions.design.position', 'Position'));
+		this.positionSection = position.parentElement as HTMLDetailsElement;
+		const layout = this.createSection(localize('sessions.design.layout', 'Layout'));
 		for (const [field, label] of [
 			['x', localize('sessions.design.x', 'X')],
 			['y', localize('sessions.design.y', 'Y')],
@@ -41,7 +74,8 @@ export class DesignPropertiesWidget extends Disposable {
 			const input = h(ownerDocument, 'input', { properties: { type: 'number', step: 'any' }, attributes: { 'aria-label': label } });
 			if (field === 'width' || field === 'height') { input.min = '0.001'; }
 			this.geometryInputs.set(field, input);
-			this.domNode.append(h(ownerDocument, 'label', {}, label, input));
+			const fieldDomNode = h(ownerDocument, 'label', { className: field === 'rotation' ? 'ash-design-property-wide' : '' }, h(ownerDocument, 'span', {}, label), input);
+			(field === 'width' || field === 'height' ? layout : position).append(fieldDomNode);
 			this._register(addDisposableListener(input, 'change', () => {
 				const shape = this.selectedShape;
 				if (shape && input.checkValidity() && Number.isFinite(input.valueAsNumber)) {
@@ -49,15 +83,35 @@ export class DesignPropertiesWidget extends Disposable {
 				} else { this.refresh(); }
 			}));
 		}
-		this.fillInput = h(ownerDocument, 'input', { properties: { type: 'color' }, attributes: { 'aria-label': localize('sessions.design.fill', 'Fill') } });
-		this.domNode.append(h(ownerDocument, 'label', {}, localize('sessions.design.fill', 'Fill'), this.fillInput));
-		this._register(addDisposableListener(this.fillInput, 'change', () => {
-			if (this.selectedShape) { this.commands.updateShape({ ...this.selectedShape, fill: this.fillInput.value }); }
+		this.appearanceProperties = this.createSection(localize('sessions.design.appearance', 'Appearance'));
+		const fill = h(ownerDocument, 'div', { className: 'ash-design-property-wide ash-design-fill' }, h(ownerDocument, 'span', {}, localize('sessions.design.fill', 'Fill')));
+		this.appearanceProperties.append(fill);
+		this.fillButton = this._register(new Button(fill, { label: '', ariaLabel: localize('sessions.design.fill', 'Fill'), onClick: () => this.openColorPicker() }));
+		this.fillButton.domNode.setAttribute('aria-haspopup', 'dialog');
+		this.fillButton.domNode.setAttribute('aria-expanded', 'false');
+		this.fillSwatchDomNode = h(ownerDocument, 'span', { className: 'ash-design-fill-swatch', attributes: { 'aria-hidden': 'true' } });
+		this.fillButton.domNode.prepend(this.fillSwatchDomNode);
+		this.colorPicker = this._register(new ColorPicker(ownerDocument));
+		this._register(contextKeys.createScoped(this.colorPicker.domNode)).createKey('sessionsDesignColorPickerFocused', true);
+		this._register(this.colorPicker.onDidChangeColor(color => {
+			const shape = this.selectedShape;
+			if (!shape) { return; }
+			this.colorPreview = { ...shape, fill: Color.Format.CSS.formatHexA(color, true) };
+			this.renderFill(this.colorPreview.fill);
+			this.refresh();
 		}));
-		this.textProperties = h(ownerDocument, 'div', { className: 'ash-sessions-design-special-properties' });
+		this._register(this.colorPicker.onDidCommitColor(color => this.commitColor(color)));
+		this._register(this.colorPicker.onDidRequestClose(() => {
+			this.commitColor(this.colorPicker.color);
+			this.cancel();
+		}));
+		this._register(documentController.model.onDidChange(() => {
+			if (!this.isCommittingColor) { this.cancel(); }
+		}));
+		this.textProperties = this.createSection(localize('sessions.design.typography', 'Typography'));
 		this.textInput = h(ownerDocument, 'textarea', { attributes: { 'aria-label': localize('sessions.design.textContent', 'Text content'), rows: '2' } });
 		this.fontSizeInput = h(ownerDocument, 'input', { properties: { type: 'number', min: '0.001', step: 'any' }, attributes: { 'aria-label': localize('sessions.design.fontSize', 'Font size') } });
-		this.textProperties.append(h(ownerDocument, 'label', {}, localize('sessions.design.textContent', 'Text content'), this.textInput), h(ownerDocument, 'label', {}, localize('sessions.design.fontSize', 'Font size'), this.fontSizeInput));
+		this.textProperties.append(h(ownerDocument, 'label', { className: 'ash-design-property-wide' }, localize('sessions.design.textContent', 'Text content'), this.textInput), h(ownerDocument, 'label', {}, localize('sessions.design.fontSize', 'Font size'), this.fontSizeInput));
 		this._register(addDisposableListener(this.textInput, 'change', () => {
 			const shape = this.selectedShape;
 			if (shape?.kind === 'text') { this.commands.updateShape({ ...shape, text: this.textInput.value }); }
@@ -67,10 +121,18 @@ export class DesignPropertiesWidget extends Disposable {
 			if (shape?.kind === 'text' && this.fontSizeInput.checkValidity() && Number.isFinite(this.fontSizeInput.valueAsNumber)) { this.commands.updateShape({ ...shape, fontSize: this.fontSizeInput.valueAsNumber }); }
 			else { this.refresh(); }
 		}));
-		this.pathProperties = h(ownerDocument, 'div', { className: 'ash-sessions-design-special-properties' });
+		this.pathProperties = this.createSection(localize('sessions.design.path', 'Bézier path'));
+		this.strokeWidthInput = h(ownerDocument, 'input', { properties: { type: 'number', min: '0.001', step: 'any' }, attributes: { 'aria-label': localize('sessions.design.strokeWidth', 'Stroke width') } });
+		this.pathProperties.append(h(ownerDocument, 'label', { className: 'ash-design-property-wide' }, localize('sessions.design.strokeWidth', 'Stroke width'), this.strokeWidthInput));
+		this._register(addDisposableListener(this.strokeWidthInput, 'change', () => {
+			const shape = this.selectedShape;
+			if (shape?.kind === 'path' && this.strokeWidthInput.checkValidity() && Number.isFinite(this.strokeWidthInput.valueAsNumber)) {
+				this.commands.updateShape({ ...shape, strokeWidth: this.strokeWidthInput.valueAsNumber });
+			} else { this.refresh(); }
+		}));
 		this.nodeInput = h(ownerDocument, 'select', { attributes: { 'aria-label': localize('sessions.design.node', 'Path node') } });
 		this.closedInput = h(ownerDocument, 'input', { properties: { type: 'checkbox' }, attributes: { 'aria-label': localize('sessions.design.closed', 'Closed path') } });
-		this.pathProperties.append(h(ownerDocument, 'label', {}, localize('sessions.design.node', 'Path node'), this.nodeInput), h(ownerDocument, 'label', {}, localize('sessions.design.closed', 'Closed path'), this.closedInput));
+		this.pathProperties.append(h(ownerDocument, 'label', { className: 'ash-design-property-wide' }, localize('sessions.design.node', 'Path node'), this.nodeInput), h(ownerDocument, 'label', { className: 'ash-design-property-toggle ash-design-property-wide' }, this.closedInput, localize('sessions.design.closed', 'Closed path')));
 		this._register(addDisposableListener(this.nodeInput, 'change', () => { this.selection.nodeIndex = Number(this.nodeInput.value); this.refresh(); }));
 		this._register(addDisposableListener(this.closedInput, 'change', () => {
 			const shape = this.selectedShape;
@@ -98,7 +160,7 @@ export class DesignPropertiesWidget extends Disposable {
 				this.commands.updateShape({ ...shape, nodes });
 			}));
 		}
-		this.imageProperties = h(ownerDocument, 'div', { className: 'ash-sessions-design-special-properties' });
+		this.imageProperties = this.createSection(localize('sessions.design.imageCrop', 'Image crop'));
 		for (const [field, label] of [
 			['x', localize('sessions.design.cropX', 'Crop left (%)')],
 			['y', localize('sessions.design.cropY', 'Crop top (%)')],
@@ -120,14 +182,83 @@ export class DesignPropertiesWidget extends Disposable {
 				this.commands.updateShape({ ...shape, crop });
 			}));
 		}
-		this.frameProperties = h(ownerDocument, 'div', { className: 'ash-sessions-design-special-properties' });
+		this.frameProperties = h(ownerDocument, 'div', { className: 'ash-design-frame-properties ash-design-property-wide' });
 		this.clipInput = h(ownerDocument, 'input', { properties: { type: 'checkbox' }, attributes: { 'aria-label': localize('sessions.design.clip', 'Clip contents') } });
-		this.frameProperties.append(h(ownerDocument, 'label', {}, localize('sessions.design.clip', 'Clip contents'), this.clipInput));
+		this.frameProperties.append(h(ownerDocument, 'label', { className: 'ash-design-property-toggle' }, this.clipInput, localize('sessions.design.clip', 'Clip contents')));
 		this._register(addDisposableListener(this.clipInput, 'change', () => {
 			const shape = this.selectedShape;
 			if (shape?.kind === 'frame') { this.commands.updateShape({ ...shape, clip: this.clipInput.checked }); }
 		}));
-		this.domNode.append(this.textProperties, this.pathProperties, this.imageProperties, this.frameProperties);
+		layout.append(this.frameProperties);
+	}
+
+	public get preview(): DesignShape | undefined { return this.colorPreview; }
+
+	public cancel(): void {
+		if (this.pickerVisible) { this.contextViews.hide(); }
+	}
+
+	private openColorPicker(): void {
+		const shape = this.selectedShape;
+		if (!shape || this.documentController.isBusy) { return; }
+		if (this.pickerVisible) { this.commitColor(this.colorPicker.color); this.cancel(); return; }
+		this.colorPicker.setColor(Color.Format.CSS.parseHex(shape.fill)!);
+		this.colorPicker.setPalettes([
+			{ label: localize('sessions.design.documentColors', 'Document colors'), colors: [...new Set(flattenDesignShapes(this.documentController.model.value.shapes).filter(shape => shape.kind !== 'group' && shape.kind !== 'image').map(shape => shape.fill.toLowerCase()))].map(fill => Color.Format.CSS.parseHex(fill)!) },
+			{ label: localize('sessions.design.recentColors', 'Recent colors'), colors: this.recentColors.map(fill => Color.Format.CSS.parseHex(fill)!) },
+		]);
+		const title = localize('colorPicker.title', 'Color picker');
+		this.colorPicker.domNode.setAttribute('aria-label', this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.DesignCanvas) ? `${title}. ${localize('sessions.design.colorHelpHint', 'Press Alt+F1 for color picker help.')}` : title);
+		this.pickerVisible = true;
+		this.pickerShapeId = shape.id;
+		this.fillButton.domNode.setAttribute('aria-expanded', 'true');
+		this.contextViews.show({
+			anchor: this.fillButton.domNode,
+			content: this.colorPicker.domNode,
+			presentation: 'dialog',
+			focusRestore: ContextViewFocusRestore.Previous,
+			onHide: reason => {
+				if (reason === ContextViewHideReason.OutsidePointer) { this.commitColor(this.colorPicker.color); }
+				this.pickerVisible = false;
+				this.pickerShapeId = undefined;
+				this.colorPreview = undefined;
+				const shape = this.selectedShape;
+				if (shape) { this.colorPicker.setColor(Color.Format.CSS.parseHex(shape.fill)!); }
+				this.fillButton.domNode.setAttribute('aria-expanded', 'false');
+				if (!this.isDisposed) { this.refresh(); }
+			},
+		});
+		this.colorPicker.focus();
+	}
+
+	private commitColor(color: Color): void {
+		const shape = this.selectedShape;
+		if (!shape || this.documentController.isBusy) { return; }
+		const fill = Color.Format.CSS.formatHexA(color, true);
+		this.colorPreview = undefined;
+		if (fill.toLowerCase() === shape.fill.toLowerCase()) { this.refresh(); return; }
+		this.isCommittingColor = true;
+		try { this.commands.updateShape({ ...shape, fill }); }
+		finally { this.isCommittingColor = false; }
+		const index = this.recentColors.indexOf(fill);
+		if (index >= 0) { this.recentColors.splice(index, 1); }
+		this.recentColors.unshift(fill);
+		this.recentColors.length = Math.min(this.recentColors.length, 16);
+	}
+
+	private renderFill(fill: string): void {
+		this.fillButton.label = fill.toUpperCase();
+		this.fillSwatchDomNode.style.setProperty('--ash-design-fill', fill);
+	}
+
+	private createSection(title: string): HTMLElement {
+		const ownerDocument = this.domNode.ownerDocument;
+		const section = h(ownerDocument, 'details', { className: 'ash-design-property-section', properties: { open: true } });
+		const summary = h(ownerDocument, 'summary', {}, title);
+		const body = h(ownerDocument, 'div', { className: 'ash-design-property-fields', attributes: { role: 'group', 'aria-label': title } });
+		section.append(summary, body);
+		this.domNode.append(section);
+		return body;
 	}
 
 	private get selectedShape(): DesignShape | undefined {
@@ -143,22 +274,34 @@ export class DesignPropertiesWidget extends Disposable {
 		];
 	}
 
-	public focus(): void { this.geometryInputs.get('x')!.focus(); }
+	public focus(): void { this.positionSection.open = true; this.geometryInputs.get('x')!.focus(); }
 
 	public update(shape: DesignShape | undefined, isVisible: boolean): void {
+		if (!shape || !isVisible || this.documentController.isBusy || (this.pickerVisible && shape.id !== this.pickerShapeId)) { this.cancel(); }
 		this.domNode.classList.toggle('visible', !!shape && isVisible);
-		this.textProperties.classList.toggle('visible', shape?.kind === 'text');
-		this.pathProperties.classList.toggle('visible', shape?.kind === 'path');
-		this.imageProperties.classList.toggle('visible', shape?.kind === 'image');
-		this.frameProperties.classList.toggle('visible', shape?.kind === 'frame');
+		this.appearanceProperties.parentElement!.hidden = !shape || shape.kind === 'group' || shape.kind === 'image';
+		this.textProperties.parentElement!.hidden = shape?.kind !== 'text';
+		this.pathProperties.parentElement!.hidden = shape?.kind !== 'path';
+		this.imageProperties.parentElement!.hidden = shape?.kind !== 'image';
+		this.frameProperties.hidden = shape?.kind !== 'frame';
 		if (!shape) { return; }
+		const titles: Record<DesignShape['kind'], string> = {
+			rectangle: localize('sessions.design.rectangle', 'Rectangle'),
+			ellipse: localize('sessions.design.ellipse', 'Ellipse'),
+			text: localize('sessions.design.text', 'Text'),
+			path: localize('sessions.design.path', 'Bézier path'),
+			group: localize('sessions.design.group', 'Group'),
+			frame: localize('sessions.design.frame', 'Frame'),
+			image: localize('sessions.design.image', 'Image'),
+		};
+		this.headingDomNode.textContent = titles[shape.kind];
 		for (const field of ['x', 'y', 'width', 'height', 'rotation'] as const) {
 			const input = this.geometryInputs.get(field)!;
 			input.value = `${shape[field]}`;
 			input.disabled = this.documentController.isBusy;
 		}
-		this.fillInput.value = shape.fill;
-		this.fillInput.disabled = this.documentController.isBusy || shape.kind === 'group' || shape.kind === 'image';
+		this.renderFill(this.colorPreview?.fill ?? shape.fill);
+		this.fillButton.enabled = !this.documentController.isBusy && shape.kind !== 'group' && shape.kind !== 'image';
 		if (shape.kind === 'frame') { this.clipInput.checked = shape.clip; this.clipInput.disabled = this.documentController.isBusy; }
 		if (shape.kind === 'image') {
 			for (const [field, input] of this.cropInputs) {
@@ -173,6 +316,8 @@ export class DesignPropertiesWidget extends Disposable {
 			this.textInput.disabled = this.fontSizeInput.disabled = this.documentController.isBusy;
 		}
 		if (shape.kind === 'path') {
+			this.strokeWidthInput.value = `${shape.strokeWidth}`;
+			this.strokeWidthInput.disabled = this.documentController.isBusy;
 			this.selection.nodeIndex = Math.min(this.selection.nodeIndex, shape.nodes.length - 1);
 			if (this.nodeInput.options.length !== shape.nodes.length) {
 				this.nodeInput.replaceChildren(...shape.nodes.map((_, index) => h(this.domNode.ownerDocument, 'option', { properties: { value: `${index}` } }, `${index + 1}`)));
@@ -205,6 +350,11 @@ export class DesignPropertiesWidget extends Disposable {
 		const shape = this.selectedShape;
 		if (shape?.kind !== 'path' || shape.nodes.length <= 2 || this.documentController.isBusy) { return; }
 		this.commands.updateShape({ ...shape, nodes: shape.nodes.filter((_, index) => index !== this.selection.nodeIndex) });
+	}
+
+	protected override disposeCore(): void {
+		this.cancel();
+		super.disposeCore();
 	}
 
 }

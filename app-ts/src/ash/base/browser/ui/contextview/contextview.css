@@ -18,6 +18,21 @@
   overflow: auto;
 }
 
+.ash-context-view-dialog {
+  color: var(--ash-foreground);
+  background: var(--ash-editor-background);
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-x-large);
+  box-shadow: 0 4px 16px var(--ash-widget-shadow);
+  overflow: auto;
+}
+
+[data-color-scheme="high-contrast-dark"] .ash-context-view-dialog,
+[data-color-scheme="high-contrast-light"] .ash-context-view-dialog {
+  border-color: var(--ash-contrast-border);
+  box-shadow: none;
+}
+
 .ash-context-view-hover {
   color: var(--ash-hover-foreground);
   background: var(--ash-hover-background);

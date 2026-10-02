@@ -992,6 +992,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "straw",
+      "file": "straw.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "summary",
       "file": "summary.svg",
       "rendering": "symbolic"

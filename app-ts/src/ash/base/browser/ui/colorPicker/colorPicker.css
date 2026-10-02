@@ -1,0 +1,175 @@
+.ash-color-picker {
+	box-sizing: border-box;
+	width: 300px;
+	max-width: calc(100vw - 16px);
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size160);
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background);
+	font-size: var(--ash-font-size-label1);
+	font-weight: var(--ash-font-weight-regular);
+	border-radius: var(--ash-corner-radius-x-large);
+}
+
+.ash-color-picker-heading {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-weight: var(--ash-font-weight-semi-bold);
+}
+
+.ash-color-picker-area {
+	position: relative;
+	aspect-ratio: 1;
+	flex-shrink: 0;
+	border-radius: var(--ash-corner-radius-medium);
+	background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent), var(--ash-color-picker-hue);
+	touch-action: none;
+	cursor: crosshair;
+}
+
+.ash-color-picker-marker {
+	position: absolute;
+	left: var(--ash-color-picker-saturation);
+	top: var(--ash-color-picker-brightness);
+	width: var(--ash-spacing-size120);
+	height: var(--ash-spacing-size120);
+	border: 2px solid #fff;
+	box-shadow: 0 0 0 1px #000;
+	border-radius: var(--ash-corner-radius-circle);
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+}
+
+.ash-color-picker input,
+.ash-color-picker select {
+	box-sizing: border-box;
+	min-width: 0;
+	width: 100%;
+	height: var(--ash-spacing-size320);
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-small);
+	padding: var(--ash-spacing-size40);
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	font: inherit;
+}
+
+.ash-color-picker .ash-color-picker-hue,
+.ash-color-picker .ash-color-picker-alpha {
+	appearance: none;
+	height: var(--ash-spacing-size200);
+	padding: 0;
+	margin: 0;
+	border-radius: var(--ash-corner-radius-circle);
+	cursor: pointer;
+}
+
+/* These ramps represent color data, so their endpoints do not change with the UI theme. */
+.ash-color-picker .ash-color-picker-hue {
+	background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+
+.ash-color-picker-checker {
+	height: var(--ash-spacing-size200);
+	border-radius: var(--ash-corner-radius-circle);
+	background: repeating-conic-gradient(var(--ash-input-background) 0% 25%, var(--ash-description-foreground) 0% 50%) 0 / 8px 8px;
+}
+
+.ash-color-picker .ash-color-picker-alpha {
+	background: linear-gradient(to right, transparent, var(--ash-color-picker-opaque));
+}
+
+.ash-color-picker input[type="range"]::-webkit-slider-thumb {
+	appearance: none;
+	width: var(--ash-spacing-size200);
+	height: var(--ash-spacing-size200);
+	border: 2px solid #fff;
+	border-radius: var(--ash-corner-radius-circle);
+	box-shadow: 0 0 0 1px #000;
+	background: transparent;
+}
+
+.ash-color-picker-fields {
+	display: grid;
+	grid-template-columns: 60px minmax(0, 1fr) 56px;
+	gap: var(--ash-spacing-size80);
+	align-items: start;
+}
+
+.ash-color-picker-values,
+.ash-color-picker-channel {
+	min-width: 0;
+}
+
+.ash-color-picker-channels {
+	display: none;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-color-picker-values.channels > .ash-color-picker-channels {
+	display: flex;
+}
+
+.ash-color-picker-values.channels > .ash-color-picker-value {
+	display: none;
+}
+
+.ash-color-picker-channel {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-color-picker input[type="number"] {
+	appearance: textfield;
+}
+
+.ash-color-picker input::-webkit-inner-spin-button {
+	appearance: none;
+}
+
+.ash-color-picker-opacity {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size20);
+}
+
+.ash-color-picker-palettes,
+.ash-color-picker-palette {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-color-picker-swatches {
+	display: grid;
+	grid-template-columns: repeat(8, minmax(0, 1fr));
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-color-picker-swatch {
+	position: absolute;
+	width: var(--ash-spacing-size200);
+	height: var(--ash-spacing-size200);
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-small);
+	background: linear-gradient(var(--ash-color-picker-value), var(--ash-color-picker-value)), repeating-conic-gradient(var(--ash-input-background) 0% 25%, var(--ash-description-foreground) 0% 50%) 0 / 8px 8px;
+	pointer-events: none;
+}
+
+.ash-color-picker-area:focus-visible,
+.ash-color-picker input:focus-visible,
+.ash-color-picker select:focus-visible {
+	outline: 2px solid var(--ash-focus-border);
+	outline-offset: 2px;
+}
+
+.ash-color-picker-message {
+	color: var(--ash-error-foreground);
+}
+

@@ -25,7 +25,6 @@ import { TitlebarPart } from '../../browser/parts/titlebar/titlebarPart.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 
 class TestPart extends WorkbenchPart {
-	public setCompositeBarVisible(_visible: boolean): void {}
 	public getTabsHeight(): number { return 35; }
 	public setContentRightInset(_inset: number): void {}
 	public setEditorContentVisible(_visible: boolean): void {}

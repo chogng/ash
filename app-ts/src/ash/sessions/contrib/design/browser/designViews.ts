@@ -4,6 +4,7 @@ import { h } from '../../../../base/browser/dom.js';
 import { autorunWithStore } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import type { DesignShape } from '../common/model/document.js';
@@ -73,10 +74,11 @@ export class DesignLayersView extends ViewPane {
 
 /** AuxiliaryBarPart hosts the editor-owned property component without copying its model. */
 export class DesignPropertiesView extends ViewPane {
-	constructor(container: HTMLElement, options: IViewPaneOptions, @IDesignEditorService private readonly editors: IDesignEditorService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IDesignEditorService private readonly editors: IDesignEditorService, @IContextKeyService contextKeys: IContextKeyService) {
 		super(container, options);
 		this.contentElement.classList.add('ash-design-properties-view');
 		this.contentElement.tabIndex = 0;
+		this._register(contextKeys.createScoped(this.contentElement)).createKey('sessionsDesignPropertiesFocused', true);
 		const empty = h(container.ownerDocument, 'p', { className: 'ash-design-panel-message' });
 		empty.textContent = localize('sessions.design.propertiesEmpty', 'Select one object to edit its properties.');
 		this.contentElement.append(empty);

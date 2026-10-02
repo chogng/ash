@@ -29,7 +29,7 @@ export enum ContextViewHideReason {
 }
 
 /** Named shell treatments owned by ContextView consumers. */
-export type ContextViewPresentation = "default" | "hover" | "menu";
+export type ContextViewPresentation = "default" | "hover" | "menu" | "dialog";
 
 export interface ContextViewOptions {
 	readonly anchor: ContextViewAnchor;

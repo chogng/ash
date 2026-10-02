@@ -233,6 +233,37 @@ test('Sessions Design canvas keeps grid and cursor readable across themes', asyn
 		await canvas.focus();
 		await page.keyboard.press('ArrowLeft');
 		await expect(viewport).toHaveCSS('outline-style', 'solid');
+		await canvas.press('r');
+		const properties = page.locator('[data-part="auxiliarybar"]');
+		const field = properties.getByRole('spinbutton', { name: 'X', exact: true });
+		const fieldColors = await field.evaluate(input => {
+			const style = getComputedStyle(input);
+			return { foreground: style.color, background: style.backgroundColor, border: style.borderColor };
+		});
+		expect(fieldColors.foreground).not.toBe(fieldColors.background);
+		expect(fieldColors.border).not.toBe(fieldColors.background);
+		await properties.locator('summary').filter({ hasText: /^Position$/u }).focus();
+		await expect(properties.locator('summary').filter({ hasText: /^Position$/u })).toHaveCSS('outline-style', 'solid');
+		const fill = properties.getByRole('button', { name: 'Fill', exact: true });
+		await fill.focus();
+		await fill.press('Enter');
+		const colorPicker = page.getByRole('dialog', { name: /^Color picker/u });
+		await expect(colorPicker).toBeVisible();
+		await expect(colorPicker).toHaveCSS('font-size', '12px');
+		await expect(colorPicker).toHaveCSS('gap', '12px');
+		await expect(colorPicker.getByRole('slider', { name: 'Saturation and brightness' })).toHaveCSS('outline-style', 'solid');
+		const popup = page.locator('.ash-context-view-dialog');
+		await expect(popup).toHaveCSS('border-radius', '12px');
+		if (scheme.startsWith('high-contrast')) {
+			await expect(popup).toHaveCSS('box-shadow', 'none');
+			const colors = await popup.evaluate(element => {
+				const style = getComputedStyle(element);
+				return { border: style.borderColor, background: style.backgroundColor };
+			});
+			expect(colors.border).not.toBe(colors.background);
+		}
+		await page.keyboard.press('Escape');
+		await canvas.press('Delete');
 		const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
 		await returnFromSessions(page);
 		await closed;
@@ -265,6 +296,11 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
 	await expect(page.locator('[data-part="sidebar"]').getByRole('tree', { name: 'Layers' })).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
+	const properties = page.locator('[data-part="auxiliarybar"]');
+	await expect(properties.locator('.ash-composite-bar')).toBeHidden();
+	await expect(properties.locator('.ash-pane-composite-title')).toBeHidden();
+	await expect(properties.getByRole('tab')).toHaveCount(0);
+	await expect(properties).toContainText('Select one object to edit its properties.');
 	await expect(canvas.locator('.ash-sessions-design-properties')).toHaveCount(0);
 	const viewport = canvas.locator('.ash-sessions-design-viewport');
 	await expect(viewport).toHaveCSS('background-image', /linear-gradient[\s\S]*linear-gradient/u);
@@ -356,8 +392,12 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(page.locator('[data-part="sessions"]')).toBeVisible();
 	await expect(canvas).toBeHidden();
+	await expect(properties.getByRole('spinbutton', { name: 'X', exact: true })).toBeHidden();
+	await expect(properties.getByRole('tab')).toHaveCount(0);
 	await design.click();
 	await expect(canvas).toBeVisible();
+	await expect(properties.locator('.ash-pane-composite-title')).toBeHidden();
+	await expect(properties.getByRole('spinbutton', { name: 'X', exact: true })).toHaveValue('42');
 	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('x', '42');
 	await expect(layers.getByRole('treeitem', { name: 'Rectangle', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
@@ -690,6 +730,201 @@ test('Sessions Design edits vector geometry and preserves a complete undo gestur
 	await expect(canvas.locator('.ash-sessions-design-zoom')).toContainText('Unsaved changes');
 });
 
+test('Sessions Design color picker preserves formats, previews gestures and exports transparent fills', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	test.setTimeout(90_000);
+	let page = workbench.page;
+	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
+	else {
+		if (!('windows' in application)) { throw new Error('Expected Electron application'); }
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	const canvas = page.getByRole('region', { name: 'Design canvas' });
+	await canvas.press('r');
+	const shape = canvas.locator('rect[data-shape-id]');
+	const fill = page.locator('[data-part="auxiliarybar"]').getByRole('button', { name: 'Fill', exact: true });
+	await fill.click();
+	const picker = page.getByRole('dialog', { name: /^Color picker/u });
+	const format = picker.getByRole('combobox', { name: 'Color format' });
+	const value = picker.getByRole('textbox', { name: 'Color value' });
+	const area = picker.getByRole('slider', { name: 'Saturation and brightness' });
+	await expect(area).toBeFocused();
+	await expect(format.locator('option')).toHaveText(['Hex', 'RGB', 'CSS', 'HSL', 'HSB']);
+	await expect(page.locator('.ash-context-view-dialog')).toHaveCSS('border-radius', '12px');
+	await format.selectOption('css');
+	await value.fill('hsl(210 100% 50% / 0.4)'); await value.press('Enter');
+	await expect(shape).toHaveAttribute('fill', '#0080ff66');
+	for (const selected of ['hex', 'rgb', 'hsl', 'hsb', 'css']) {
+		await format.selectOption(selected);
+		await expect(shape).toHaveAttribute('fill', '#0080ff66');
+	}
+	await value.fill('var(--unknown-color)'); await value.press('Enter');
+	await expect(value).toHaveAttribute('aria-invalid', 'true');
+	await expect(shape).toHaveAttribute('fill', '#0080ff66');
+	await value.fill('rebeccapurple'); await value.press('Enter');
+	await expect(shape).toHaveAttribute('fill', '#663399');
+	await value.fill('rgba(200, 100, 50, 0.01)'); await value.press('Enter');
+	await expect(shape).toHaveAttribute('fill', '#c8643203');
+	await format.selectOption('hex');
+	await value.fill('ff000080'); await value.press('Enter');
+	await expect(shape).toHaveAttribute('fill', '#ff000080');
+	for (const selected of ['rgb', 'css', 'hsl', 'hsb', 'hex']) {
+		await format.selectOption(selected);
+		await expect(shape).toHaveAttribute('fill', '#ff000080');
+	}
+	await value.fill('ff8000'); await value.press('Enter');
+	await expect(shape).toHaveAttribute('fill', '#ff800080');
+	await format.selectOption('rgb');
+	for (const [channel, number] of [['R', '255'], ['G', '0'], ['B', '64']]) {
+		const input = picker.getByRole('spinbutton', { name: `RGB ${channel}`, exact: true });
+		await input.fill(number); await input.press('Enter');
+	}
+	await expect(shape).toHaveAttribute('fill', '#ff004080');
+	await format.selectOption('hsl');
+	for (const [channel, number] of [['H', '120'], ['S', '100'], ['L', '50']]) {
+		const input = picker.getByRole('spinbutton', { name: `HSL ${channel}`, exact: true });
+		await input.fill(number); await input.press('Enter');
+	}
+	await expect(shape).toHaveAttribute('fill', '#00ff0080');
+	await format.selectOption('hsb');
+	for (const [channel, number] of [['H', '240'], ['S', '100'], ['B', '100']]) {
+		const input = picker.getByRole('spinbutton', { name: `HSB ${channel}`, exact: true });
+		await input.fill(number); await input.press('Enter');
+	}
+	await expect(shape).toHaveAttribute('fill', '#0000ff80');
+	await picker.getByRole('spinbutton', { name: 'Opacity (%)', exact: true }).fill('30');
+	await picker.getByRole('spinbutton', { name: 'Opacity (%)', exact: true }).press('Enter');
+	await expect(shape).toHaveAttribute('fill', '#0000ff4d');
+	await area.press('ArrowLeft');
+	await expect(area).toHaveAttribute('aria-valuenow', '99');
+	await area.press('ArrowRight');
+	await expect(shape).toHaveAttribute('fill', '#0000ff4d');
+	await area.focus();
+	await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Color picker[\s\S]*HSB[\s\S]*Escape/u);
+	await page.keyboard.press('Escape');
+	await expect(area).toBeFocused();
+	await page.keyboard.press('Alt+F2');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Hex: #0000ff4d[\s\S]*Opacity: 30%/u);
+	await page.keyboard.press('Escape');
+	const bounds = (await area.boundingBox())!;
+	await page.mouse.move(bounds.x + bounds.width * 0.2, bounds.y + bounds.height * 0.2);
+	await page.mouse.down();
+	await page.mouse.move(bounds.x + bounds.width * 0.8, bounds.y + bounds.height * 0.6, { steps: 5 });
+	await expect(shape).not.toHaveAttribute('fill', '#0000ff4d');
+	await page.keyboard.press('Escape');
+	await page.mouse.up();
+	await expect(shape).toHaveAttribute('fill', '#0000ff4d');
+	await expect(fill).toBeFocused();
+	await fill.click();
+	await page.mouse.move(bounds.x + bounds.width * 0.3, bounds.y + bounds.height * 0.3);
+	await page.mouse.down();
+	await page.mouse.move(bounds.x + bounds.width * 0.7, bounds.y + bounds.height * 0.5, { steps: 5 });
+	await page.mouse.up();
+	const changedFill = await shape.getAttribute('fill');
+	await picker.getByRole('button', { name: 'Close', exact: true }).click();
+	await canvas.press('ControlOrMeta+z');
+	await expect(shape).toHaveAttribute('fill', '#0000ff4d');
+	await canvas.press('ControlOrMeta+Shift+Z');
+	await expect(shape).toHaveAttribute('fill', changedFill!);
+	await fill.click();
+	await expect(picker.getByRole('group', { name: 'Recent colors' })).toBeVisible();
+	const swatches = picker.getByRole('group', { name: 'Document colors' }).getByRole('button');
+	await swatches.first().focus(); await page.keyboard.press('ArrowRight');
+	await expect(swatches.first()).toBeFocused();
+	await picker.getByRole('group', { name: 'Recent colors' }).getByRole('button', { name: '#0000FF4D', exact: true }).press('Enter');
+	await expect(shape).toHaveAttribute('fill', '#0000ff4d');
+	await page.keyboard.press('Escape');
+	await expect(picker).toBeHidden();
+	await expect(fill).toBeFocused();
+	await canvas.press('ControlOrMeta+z');
+	await expect(shape).toHaveAttribute('fill', changedFill!);
+	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Code', exact: true }).click();
+	const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
+	expect(code).toContain(`background: ${changedFill}`);
+	const saved = code.match(/<script type="application\/json" id="ash-design-document">([\s\S]*?)<\/script>/u)![1];
+	expect(parseDesignDocument(saved).shapes[0].fill).toBe(changedFill);
+	if (target.kind === 'browser') {
+		const preview = await page.context().newPage();
+		try {
+			await preview.setContent(code);
+			await expect(preview.locator('[data-design-id]')).toHaveCSS('background-color', /rgba\(.+, 0\.3\d*\)/u);
+		} finally { await preview.close(); }
+		await page.setViewportSize({ width: 620, height: 700 });
+	}
+	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Design', exact: true }).click();
+	await fill.click();
+	const popup = (await picker.boundingBox())!;
+	const viewport = page.viewportSize();
+	if (viewport) { expect(popup.x).toBeGreaterThanOrEqual(0); expect(popup.x + popup.width).toBeLessThanOrEqual(viewport.width); }
+	await page.keyboard.press('Escape');
+});
+
+test('Sessions Design property pane groups fields, collapses with the keyboard and edits path strokes', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
+	else {
+		if (!('windows' in application)) { throw new Error('Expected Electron application'); }
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	const canvas = page.getByRole('region', { name: 'Design canvas' });
+	const pane = page.locator('[data-part="auxiliarybar"]');
+	await canvas.press('r');
+	await expect(pane.getByRole('heading', { name: 'Rectangle', exact: true })).toBeVisible();
+	await expect(pane.locator('details:visible > summary')).toHaveText(['Position', 'Layout', 'Appearance']);
+	const position = pane.locator('summary').filter({ hasText: /^Position$/u });
+	await position.focus();
+	await page.keyboard.press('Enter');
+	await expect(pane.getByRole('spinbutton', { name: 'X', exact: true })).toBeHidden();
+	await expect(position).toBeFocused();
+	await page.keyboard.press('Space');
+	await page.keyboard.press('Tab');
+	const x = pane.getByRole('spinbutton', { name: 'X', exact: true });
+	await expect(x).toBeFocused();
+	await expect(x).toHaveCSS('outline-style', 'solid');
+	await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/collapsible sections[\s\S]*Stroke width/u);
+	await page.keyboard.press('Escape');
+	await expect(x).toBeFocused();
+	await canvas.press('p');
+	await expect(pane.locator('details:visible > summary')).toHaveText(['Position', 'Layout', 'Appearance', 'Bézier path']);
+	const path = canvas.locator('path[data-shape-id]');
+	const originalWidth = await path.getAttribute('stroke-width');
+	const stroke = pane.getByRole('spinbutton', { name: 'Stroke width', exact: true });
+	await stroke.fill('6.5'); await stroke.press('Tab');
+	await expect(path).toHaveAttribute('stroke-width', '6.5');
+	await canvas.press('ControlOrMeta+z');
+	await expect(path).toHaveAttribute('stroke-width', originalWidth!);
+	await canvas.press('t');
+	await expect(pane.getByRole('group', { name: 'Typography', exact: true })).toBeVisible();
+	await expect(stroke).toBeHidden();
+	const content = pane.getByRole('textbox', { name: 'Text content', exact: true });
+	await content.fill('A long text value that stays inside the property pane');
+	await content.press('Tab');
+	await expect(canvas.locator('svg[data-shape-id] > text')).toContainText('A long text value');
+	// Resize the actual retained Part, so the field geometry follows its layout constraints.
+	const sash = pane.locator('xpath=../../..').locator(':scope > .ash-sash').nth(1);
+	const sashBounds = await sash.boundingBox();
+	expect(sashBounds).not.toBeNull();
+	const paneWidth = (await pane.boundingBox())!.width;
+	await page.mouse.move(sashBounds!.x + sashBounds!.width / 2, sashBounds!.y + sashBounds!.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(sashBounds!.x + sashBounds!.width / 2 + paneWidth - 200, sashBounds!.y + sashBounds!.height / 2, { steps: 4 });
+	await page.mouse.up();
+	await expect.poll(async () => (await pane.boundingBox())!.width).toBeLessThanOrEqual(200);
+	const properties = pane.locator('.ash-sessions-design-properties');
+	const overflow = await properties.evaluate(root => ({ width: root.clientWidth, scrollWidth: root.scrollWidth, fieldsFit: [...root.querySelectorAll('input, textarea, select')].filter(field => (field as HTMLElement).offsetParent).every(field => field.getBoundingClientRect().right <= root.getBoundingClientRect().right) }));
+	expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.width);
+	expect(overflow.fieldsFit).toBe(true);
+});
+
 test('Sessions Design frames keep child geometry, nested selection and whole-gesture undo', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
@@ -844,12 +1079,17 @@ test('Sessions Design saves and reopens an editable file through App Server', as
 	const width = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Width', exact: true });
 	await width.fill('120.5');
 	await width.press('Tab');
+	await page.locator('[data-part="auxiliarybar"]').getByRole('button', { name: 'Fill', exact: true }).click();
+	const colors = page.getByRole('dialog', { name: /^Color picker/u });
+	await colors.getByRole('textbox', { name: 'Color value' }).fill('2670ee80');
+	await colors.getByRole('textbox', { name: 'Color value' }).press('Enter');
+	await colors.getByRole('button', { name: 'Close', exact: true }).click();
 	await canvas.focus();
 	await page.keyboard.press('ControlOrMeta+s');
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Saved design.ash-design');
 	const saved = JSON.parse(await readFile(filePath, 'utf8'));
 	expect(saved.schemaVersion).toBe(2);
-	expect(parseDesignDocument(JSON.stringify(saved)).shapes).toMatchObject([{ kind: 'rectangle', width: 120.5 }]);
+	expect(parseDesignDocument(JSON.stringify(saved)).shapes).toMatchObject([{ kind: 'rectangle', width: 120.5, fill: '#2670ee80' }]);
 	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
 	await canvas.focus();
 	await page.keyboard.press('e');
@@ -857,6 +1097,7 @@ test('Sessions Design saves and reopens an editable file through App Server', as
 	await clickCanvasMenu(canvas, 'Open design', application);
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Opened design.ash-design');
 	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('width', '120.5');
+	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('fill', '#2670ee80');
 	await expect(canvas.locator('ellipse[data-shape-id]')).toHaveCount(0);
 	await canvas.focus();
 	await page.keyboard.press('Tab');

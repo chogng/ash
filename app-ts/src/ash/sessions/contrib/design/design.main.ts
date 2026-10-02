@@ -6,13 +6,14 @@ import { DesignPropertiesWidget } from './contrib/properties/browser/designPrope
 import { DesignMotionWidget } from './contrib/motion/browser/designMotionWidget.js';
 import { DesignCodeWidget } from './contrib/code/browser/designCodeWidget.js';
 import { generateDesignCode } from './contrib/code/browser/designCodeGenerator.js';
+import type { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 
 /** Product assembly selects concrete features; the browser editor consumes only their contracts. */
-export function createDesignEditorContributions(context: DesignEditorContributionContext): IDesignEditorContributions {
+export function createDesignEditorContributions(context: DesignEditorContributionContext, instantiationService: IInstantiationService): IDesignEditorContributions {
 	const resources = new DisposableStore();
 	const { ownerDocument, documentController, commands, selection } = context;
 	const drawing = resources.add(new DesignDrawingController(context, commands));
-	const properties = resources.add(new DesignPropertiesWidget(ownerDocument, documentController, commands, selection, () => context.renderCanvas()));
+	const properties = resources.add(instantiationService.createInstance(DesignPropertiesWidget, ownerDocument, documentController, commands, selection, () => context.renderCanvas()));
 	const motion = resources.add(new DesignMotionWidget(ownerDocument, documentController.model, commands));
 	const code = resources.add(new DesignCodeWidget(ownerDocument, documentController, () => context.runFileOperation(() => documentController.exportDocument({
 		title: localize('sessions.design.exportCode', 'Export code'),

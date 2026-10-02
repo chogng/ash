@@ -16,7 +16,9 @@ import { DesignConfiguration } from '../../contrib/design/common/config/editorCo
 import { Event as AshEvent } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
-import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
+import { ContextView } from '../../../base/browser/ui/contextview/contextview.js';
+import type { DesignEditorContributionContext } from '../../contrib/design/browser/designEditorBrowser.js';
 import { ConfirmResult, IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { FileKind, FileRevisionConflictError, FileNotFoundError, IFileService, type IFileWriteRequest } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -33,6 +35,10 @@ import { CommandService } from '../../../workbench/services/commands/common/comm
 
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+browser.window.HTMLElement.prototype.scrollTo = function (left: number | ScrollToOptions = {}, top?: number): void {
+	this.scrollLeft = typeof left === 'number' ? left : left.left ?? this.scrollLeft;
+	this.scrollTop = typeof left === 'number' ? top ?? this.scrollTop : left.top ?? this.scrollTop;
+};
 for (const [name, value] of Object.entries({
 	window: browser.window,
 	document: browser.window.document,
@@ -55,6 +61,8 @@ const { DESIGN_EDITOR_RESOURCE } = await import('../../contrib/design/browser/de
 await import('../../contrib/design/browser/design.contribution.js');
 const { createDesignEditorContributions } = await import('../../contrib/design/design.main.js');
 const services = new InstantiationService();
+const colorContextView = new ContextView(browser.window.document.body);
+services.registerInstance(IContextViewService, Object.assign(colorContextView, { container: browser.window.document.body }));
 const contextKeys = new ContextKeyService();
 const configuration = new WorkbenchConfigurationService();
 const theme = new TestThemeService(lightColorTheme);
@@ -118,6 +126,7 @@ services.registerInstance(IFileService, {
 services.registerInstance(ILifecycleService, { startupKind: StartupKind.NewWindow, phase: LifecyclePhase.Ready, willShutdown: false, onBeforeShutdown: AshEvent.None, onBeforeShutdownError: AshEvent.None, onShutdownVeto: AshEvent.None, onWillShutdown: AshEvent.None, onDidShutdown: AshEvent.None, when: async () => {}, shutdown: async () => {} });
 
 suiteTeardown(() => {
+	colorContextView.dispose();
 	services.dispose();
 	contextKeys.dispose();
 	configuration.dispose();
@@ -315,6 +324,87 @@ test('Design canvas resolves its accessible name from the Chinese language pack'
 	}
 });
 
+test('Design color formats preserve alpha, reject invalid values and share document undo', () => {
+	using view = createView();
+	view.domNode.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'r', bubbles: true }));
+	const model = view.designEditors.document.model;
+	view.propertiesDomNode.querySelector<HTMLButtonElement>('button[aria-label="Fill"]')!.click();
+	const picker = browser.window.document.querySelector<HTMLElement>('.ash-color-picker')!;
+	const format = picker.querySelector<HTMLSelectElement>('select')!;
+	assert.deepEqual(Array.from(format.options, option => option.text), ['Hex', 'RGB', 'CSS', 'HSL', 'HSB']);
+	const alpha = picker.querySelector<HTMLInputElement>('input[aria-label="Opacity (%)"]')!;
+	alpha.value = '25'; alpha.dispatchEvent(new browser.window.Event('change'));
+	const fill = model.value.shapes[0].fill;
+	assert.equal(fill, '#80808040');
+	const version = model.version;
+	for (const value of ['rgb', 'css', 'hsl', 'hsb', 'hex']) {
+		format.value = value; format.dispatchEvent(new browser.window.Event('change'));
+		assert.equal(model.version, version);
+		assert.equal(model.value.shapes[0].fill, fill);
+	}
+	const value = picker.querySelector<HTMLInputElement>('input[aria-label="Color value"]')!;
+	value.value = 'invalid'; value.dispatchEvent(new browser.window.Event('change'));
+	assert.equal(value.getAttribute('aria-invalid'), 'true');
+	assert.equal(model.version, version);
+	value.value = '#ff0000'; value.dispatchEvent(new browser.window.Event('change'));
+	assert.equal(model.value.shapes[0].fill, '#ff000040');
+	assert.equal(alpha.value, '25');
+	format.value = 'hsb'; format.dispatchEvent(new browser.window.Event('change'));
+	const brightness = picker.querySelector<HTMLInputElement>('input[aria-label="HSB B"]')!;
+	brightness.value = '50'; brightness.dispatchEvent(new browser.window.Event('change'));
+	assert.equal(model.value.shapes[0].fill, '#80000040');
+	view.designEditors.document.model.undo();
+	assert.equal(model.value.shapes[0].fill, '#ff000040');
+	assert.equal(colorContextView.visible, false);
+});
+
+test('Design color preview cancels without editing and one committed range gesture undoes once', () => {
+	using view = createView();
+	view.domNode.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'r', bubbles: true }));
+	const model = view.designEditors.document.model;
+	const fillButton = view.propertiesDomNode.querySelector<HTMLButtonElement>('button[aria-label="Fill"]')!;
+	fillButton.focus(); fillButton.click();
+	const picker = browser.window.document.querySelector<HTMLElement>('.ash-color-picker')!;
+	const alpha = picker.querySelector<HTMLInputElement>('input[aria-label="Opacity"]')!;
+	const initial = model.version;
+	for (const value of ['80', '60', '40']) {
+		alpha.value = value; alpha.dispatchEvent(new browser.window.Event('input'));
+	}
+	assert.equal(model.version, initial);
+	assert.equal(view.domNode.querySelector('rect[data-shape-id]')!.getAttribute('fill'), '#80808066');
+	alpha.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.equal(model.version, initial);
+	assert.equal(view.domNode.querySelector('rect[data-shape-id]')!.getAttribute('fill'), '#808080');
+	assert.equal(browser.window.document.activeElement, fillButton);
+	fillButton.click();
+	for (const value of ['90', '70', '50']) { alpha.value = value; alpha.dispatchEvent(new browser.window.Event('input')); }
+	alpha.dispatchEvent(new browser.window.Event('change'));
+	assert.equal(model.value.shapes[0].fill, '#80808080');
+	view.designEditors.document.model.undo();
+	assert.equal(model.value.shapes[0].fill, '#808080');
+	view.designEditors.document.model.redo();
+	assert.equal(model.value.shapes[0].fill, '#80808080');
+});
+
+test('Design color picker uses Chinese labels and releases its overlay when the editor is hidden', async () => {
+	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using view = createView();
+		view.domNode.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'r', bubbles: true }));
+		view.propertiesDomNode.querySelector<HTMLButtonElement>('button[aria-label="填充"]')!.click();
+		const picker = browser.window.document.querySelector<HTMLElement>('.ash-color-picker')!;
+		assert.match(picker.getAttribute('aria-label')!, /^颜色选择器/u);
+		assert.ok(picker.querySelector('[aria-label="颜色格式"]'));
+		assert.ok(picker.querySelector('[aria-label="饱和度和亮度"]'));
+		assert.ok(picker.querySelector('[aria-label="文档颜色"]'));
+		view.pane.setVisible(EditorPaneVisibility.Hidden);
+		assert.equal(colorContextView.visible, false);
+	} finally { resetNlsResolver(); }
+});
+
 function pressCanvas(view: { readonly domNode: HTMLElement }, key: string, options: KeyboardEventInit = {}): void {
 	view.domNode.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key, cancelable: true, bubbles: true, ...options }));
 }
@@ -501,6 +591,37 @@ test('Design edits text and path nodes, groups a selection, and exports safe SVG
 	assert.equal(view.domNode.querySelectorAll('.ash-sessions-design-shapes > [data-shape-id]').length, 1);
 });
 
+test('Design property sections follow the selected object and path stroke edits share undo history', () => {
+	using view = createView();
+	const sections = (): string[] => [...view.propertiesDomNode.querySelectorAll<HTMLDetailsElement>('details')].filter(section => !section.hidden).map(section => section.querySelector('summary')!.textContent!);
+	pressCanvas(view, 'r');
+	assert.deepEqual(sections(), ['Position', 'Layout', 'Appearance']);
+	const position = view.propertiesDomNode.querySelector<HTMLDetailsElement>('details')!;
+	position.open = false;
+	pressCanvas(view, 't');
+	assert.deepEqual(sections(), ['Position', 'Layout', 'Appearance', 'Typography']);
+	assert.equal(position.open, false);
+	DesignEditorWidget.getFocused(view.domNode)!.focusProperties();
+	assert.equal(position.open, true);
+	assert.equal(browser.window.document.activeElement?.getAttribute('aria-label'), 'X');
+	pressCanvas(view, 'p');
+	assert.deepEqual(sections(), ['Position', 'Layout', 'Appearance', 'Bézier path']);
+	const path = view.domNode.querySelector<SVGPathElement>('path[data-shape-id]')!;
+	const original = path.getAttribute('stroke-width');
+	const stroke = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Stroke width"]')!;
+	stroke.value = '6.5';
+	stroke.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+	assert.equal(path.getAttribute('stroke-width'), '6.5');
+	DesignEditorWidget.getFocused(view.domNode)!.undo();
+	assert.equal(path.getAttribute('stroke-width'), original);
+	stroke.value = '0';
+	stroke.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+	assert.equal(path.getAttribute('stroke-width'), original);
+	pressCanvas(view, 'f');
+	assert.deepEqual(sections(), ['Position', 'Layout', 'Appearance']);
+	assert.equal(view.propertiesDomNode.querySelector<HTMLElement>('.ash-design-frame-properties')!.hidden, false);
+});
+
 test('Chinese Design actions and new property labels are localized', async () => {
 	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
@@ -510,8 +631,10 @@ test('Chinese Design actions and new property labels are localized', async () =>
 		using view = createView();
 		pressCanvas(view, 't');
 		assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties textarea')!.getAttribute('aria-label'), '文字内容');
+		assert.deepEqual([...view.propertiesDomNode.querySelectorAll<HTMLDetailsElement>('details')].filter(section => !section.hidden).map(section => section.querySelector('summary')!.textContent), ['位置', '布局', '外观', '文字排版']);
 		pressCanvas(view, 'p');
 		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="出控制点 X"]'));
+		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="描边宽度"]'));
 		pressCanvas(view, 'F10', { shiftKey: true });
 		assert.ok(contextMenu!.getActions().some(action => action.label === '导出 SVG'));
 		assert.equal(chinese.bundles.ash['sessions.design.contextMenuHelp'].includes('Shift+F10'), true);
@@ -523,8 +646,8 @@ test('Chinese Design actions and new property labels are localized', async () =>
 
 test('Design editors share document edits and history while keeping selection, camera and lifetime separate', () => {
 	using document = services.createInstance(DesignDocumentController);
-	using first = services.createInstance(DesignEditorWidget, browser.window.document, document, createDesignEditorContributions);
-	using second = services.createInstance(DesignEditorWidget, browser.window.document, document, createDesignEditorContributions);
+	using first = services.createInstance(DesignEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, services));
+	using second = services.createInstance(DesignEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, services));
 	for (const editor of [first, second]) {
 		editor.initialize();
 		editor.layout({ width: 400, height: 300 });
@@ -808,6 +931,7 @@ test('Frame image properties, package media, backup recovery and SVG export keep
 	controller.restoreBackup(JSON.stringify({ manifest: serializeDesignDocument(documentFromShapes([frame], undefined, [asset])), media: { [sha256]: Buffer.from(bytes).toString('base64') } }));
 	const editor = DesignEditorWidget.getFocused(view.domNode)!;
 	editor.selectShape(image.id);
+	assert.deepEqual([...view.propertiesDomNode.querySelectorAll<HTMLDetailsElement>('details')].filter(section => !section.hidden).map(section => section.querySelector('summary')!.textContent), ['Position', 'Layout', 'Image crop']);
 	const crop = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Crop width (%)"]')!;
 	crop.value = '50'; crop.dispatchEvent(new browser.window.Event('change'));
 	assert.equal(view.domNode.querySelector('svg[data-shape-id] svg[data-shape-id]')!.getAttribute('viewBox'), '0 0 0.5 1');

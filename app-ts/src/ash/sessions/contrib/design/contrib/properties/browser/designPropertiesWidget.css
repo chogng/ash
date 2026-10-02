@@ -1,78 +1,130 @@
 .ash-sessions-design-properties {
 	display: none;
 	min-height: 0;
+	min-width: 0;
 	flex: 1;
 	overflow: auto;
 	flex-direction: column;
 	align-items: stretch;
-	gap: var(--ash-spacing-size120);
-	padding: var(--ash-spacing-size80);
-	font-size: var(--ash-fontSize-label1);
+	gap: var(--ash-spacing-size240);
+	padding: var(--ash-spacing-size160) var(--ash-spacing-size120);
+	font-size: var(--ash-font-size-label1);
+	line-height: 1.4;
 }
 
 .ash-sessions-design-properties.visible {
 	display: flex;
 }
 
+.ash-design-properties-heading {
+	margin: 0;
+	font-size: var(--ash-font-size-body1);
+	font-weight: var(--ash-font-weight-semi-bold);
+}
+
+.ash-design-property-section {
+	min-width: 0;
+}
+
+.ash-design-property-section[hidden],
+.ash-design-frame-properties[hidden] {
+	display: none;
+}
+
+.ash-design-property-section > summary {
+	padding: var(--ash-spacing-size40) 0;
+	font-size: var(--ash-font-size-body1);
+	font-weight: var(--ash-font-weight-semi-bold);
+	cursor: pointer;
+}
+
+.ash-design-property-fields {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--ash-spacing-size120) var(--ash-spacing-size80);
+	padding-top: var(--ash-spacing-size120);
+}
+
+.ash-sessions-design-properties .ash-design-property-wide {
+	grid-column: 1 / -1;
+}
+
 .ash-sessions-design-properties label {
 	display: flex;
-	align-items: center;
-	gap: var(--ash-spacing-size40);
-	justify-content: space-between;
-}
-
-.ash-sessions-design-properties input {
-	box-sizing: border-box;
-	width: 96px;
-	min-height: 28px;
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-small);
-	font: inherit;
-}
-
-.ash-sessions-design-properties input:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: -1px;
-}
-
-.ash-sessions-design-special-properties {
-	display: none;
+	min-width: 0;
 	flex-direction: column;
 	align-items: stretch;
-	gap: var(--ash-spacing-size120);
-	width: 100%;
+	gap: var(--ash-spacing-size40);
+	color: var(--ash-description-foreground);
 }
 
-.ash-sessions-design-special-properties.visible {
-	display: flex;
-}
-
+.ash-sessions-design-properties input,
 .ash-sessions-design-properties textarea,
 .ash-sessions-design-properties select {
 	box-sizing: border-box;
-	max-width: 100%;
-	min-height: var(--ash-spacing-size280);
+	width: 100%;
+	min-width: 0;
+	min-height: var(--ash-spacing-size320);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-small);
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-medium);
 	font: inherit;
 }
 
+.ash-sessions-design-properties input:focus-visible,
+.ash-sessions-design-properties textarea:focus-visible,
+.ash-sessions-design-properties select:focus-visible,
+.ash-design-property-section > summary:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
+
+.ash-sessions-design-properties input:disabled,
+.ash-sessions-design-properties textarea:disabled,
+.ash-sessions-design-properties select:disabled {
+	color: var(--ash-muted-foreground);
+}
+
 .ash-sessions-design-properties textarea {
-	width: 240px;
 	resize: vertical;
 }
 
-.ash-sessions-design-properties textarea:focus-visible,
-.ash-sessions-design-properties select:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: -1px;
+.ash-sessions-design-properties .ash-design-property-toggle {
+	flex-direction: row;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	min-height: var(--ash-spacing-size280);
+	color: var(--ash-foreground);
 }
 
 .ash-sessions-design-properties input[type="checkbox"] {
 	width: var(--ash-spacing-size160);
+	height: var(--ash-spacing-size160);
 	min-height: var(--ash-spacing-size160);
+	margin: 0;
+	padding: 0;
+	flex-shrink: 0;
+}
+
+.ash-design-fill {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+	color: var(--ash-description-foreground);
+}
+
+.ash-design-fill > .ash-button {
+	justify-content: start;
+	width: 100%;
+}
+
+.ash-design-fill-swatch {
+	width: var(--ash-spacing-size200);
+	height: var(--ash-spacing-size200);
+	flex-shrink: 0;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-small);
+	background: linear-gradient(var(--ash-design-fill), var(--ash-design-fill)), repeating-conic-gradient(var(--ash-input-background) 0% 25%, var(--ash-description-foreground) 0% 50%) 0 / 8px 8px;
 }

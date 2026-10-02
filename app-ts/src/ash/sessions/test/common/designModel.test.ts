@@ -8,6 +8,21 @@ import { DesignViewport } from '../../contrib/design/common/viewport.js';
 import { getDesignShapeEntries, hitTestDesignShapes } from '../../contrib/design/common/model/hitTest.js';
 import { sampleDesignMotion } from '../../contrib/design/contrib/motion/common/motion.js';
 
+test('Design transparent fills survive serialization and the committed undo history', () => {
+	using model = new DesignModel();
+	const commands = new DocumentCommands(model);
+	commands.addShape('rectangle', { x: 60, y: 40 });
+	commands.updateShape({ ...model.value.shapes[0], fill: '#ff800040' });
+	assert.equal(parseDesignDocument(serializeDesignDocument(model.value)).shapes[0].fill, '#ff800040');
+	model.undo();
+	assert.equal(model.value.shapes[0].fill, '#808080');
+	model.redo();
+	assert.equal(model.value.shapes[0].fill, '#ff800040');
+	for (const fill of ['#fff', '#ff80004', '#ff8000400', 'rgba(255, 0, 0, 0.5)']) {
+		assert.throws(() => parseDesignDocument(JSON.stringify({ version: 1, shapes: [{ ...model.value.shapes[0], fill }] })), TypeError);
+	}
+});
+
 test('Design documents round trip fractional coordinates and discard redo after a new edit', () => {
 	using model = new DesignModel();
 	const commands = new DocumentCommands(model);

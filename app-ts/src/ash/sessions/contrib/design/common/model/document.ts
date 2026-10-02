@@ -170,7 +170,7 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 	if (!isRecord(value) || !isUuid(value.id) || ids.has(value.id)
 		|| !isFiniteNumber(value.x) || !isFiniteNumber(value.y) || !isFiniteNumber(value.rotation)
 		|| !isPositiveNumber(value.width) || !isPositiveNumber(value.height)
-		|| typeof value.fill !== 'string' || !/^#[0-9a-f]{6}$/iu.test(value.fill)) {
+		|| typeof value.fill !== 'string' || !/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(value.fill)) {
 		throw new TypeError(localize('sessions.design.invalidShape', 'Invalid design shape'));
 	}
 	ids.add(value.id);

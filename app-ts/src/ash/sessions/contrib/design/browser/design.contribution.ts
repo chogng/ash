@@ -21,6 +21,7 @@ import { DESIGN_EDITOR_RESOURCE } from './designDocumentController.js';
 import { DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from './designEditorService.js';
 import { DesignLayersView, DesignPropertiesView } from './designViews.js';
 import { designToolActions, designModeActions } from './widget/designToolsWidget.js';
+import { ColorPicker } from '../../../../base/browser/ui/colorPicker/colorPicker.js';
 
 EditorPanes.registerStatic({
 	id: DesignEditorPage.ID,
@@ -94,6 +95,23 @@ AccessibleViewRegistry.register({
 });
 
 AccessibleViewRegistry.register({
+	type: AccessibleViewType.Help,
+	priority: 100,
+	name: 'sessionsDesignPropertiesHelp',
+	when: ContextKeyExpr.has('sessionsDesignPropertiesFocused'),
+	getProvider: accessor => {
+		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
+		return new AccessibleContentProvider(
+			AccessibleViewProviderId.DesignCanvas,
+			{ type: AccessibleViewType.Help },
+			() => localize('sessions.design.propertiesHelp', 'Shape properties are grouped into collapsible sections. Use Tab to move between section headings and fields; press Enter or Space on a section heading to collapse or expand it. Position edits X, Y and rotation; Layout edits width, height and frame clipping. Appearance opens the color picker with Hex, RGB, CSS, HSL, HSB and opacity controls. Press Alt+F1 inside the color picker for keyboard help. Typography, Bézier path and Image crop show controls for the selected object type. Stroke width changes the selected path. Each committed change uses the design document undo history.'),
+			() => focused.focus(),
+			AccessibilityVerbositySettingId.DesignCanvas,
+		);
+	},
+});
+
+AccessibleViewRegistry.register({
 	type: AccessibleViewType.View,
 	priority: 100,
 	name: 'sessionsDesignCanvasContent',
@@ -109,6 +127,36 @@ AccessibleViewRegistry.register({
 			() => focused.focus(),
 			AccessibilityVerbositySettingId.DesignCanvas,
 		);
+	},
+});
+
+AccessibleViewRegistry.register({
+	type: AccessibleViewType.Help,
+	priority: 110,
+	name: 'sessionsDesignColorPickerHelp',
+	when: ContextKeyExpr.has('sessionsDesignColorPickerFocused'),
+	getProvider: accessor => {
+		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
+		return new AccessibleContentProvider(
+			AccessibleViewProviderId.DesignCanvas,
+			{ type: AccessibleViewType.Help },
+			() => localize('sessions.design.colorHelp', 'Color picker\nUse Left and Right to change saturation, Up and Down to change brightness. Hold Shift for larger steps. Tab moves through hue, opacity, format, color values and palettes. Choose Hex, RGB, CSS, HSL or HSB; HSB means hue, saturation and brightness. CSS accepts absolute CSS color values. Opacity ranges from 0 to 100%. Arrow keys navigate palette colors; Enter selects a color. Dragging previews the canvas and commits once when released. Escape discards an unfinished edit and returns focus to Fill. Close or clicking outside commits a valid edit. <keybinding:editor.action.accessibleView> reads the current color in all formats.'),
+			() => focused.focus(),
+			AccessibilityVerbositySettingId.DesignCanvas,
+		);
+	},
+});
+
+AccessibleViewRegistry.register({
+	type: AccessibleViewType.View,
+	priority: 110,
+	name: 'sessionsDesignColorPickerContent',
+	when: ContextKeyExpr.has('sessionsDesignColorPickerFocused'),
+	getProvider: accessor => {
+		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
+		const picker = ColorPicker.getFocused(focused);
+		if (!picker) { return undefined; }
+		return new AccessibleContentProvider(AccessibleViewProviderId.DesignCanvas, { type: AccessibleViewType.View }, () => picker.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.DesignCanvas);
 	},
 });
 

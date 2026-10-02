@@ -7,7 +7,7 @@ import { PaneComposite } from '../../../../workbench/browser/parts/views/paneCom
 import { IViewDescriptorService } from '../../../../workbench/services/views/common/viewDescriptorService.js';
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 
-/** Composes Sessions contributions in the shared retained Auxiliary Bar. */
+/** Hosts Code details and Design properties; editor tabs and activity pages own their navigation. */
 export class AuxiliaryBarPart extends AuxiliarybarPart {
 
 	override get minimumWidth(): number { return 180; }
@@ -22,7 +22,6 @@ export class AuxiliaryBarPart extends AuxiliarybarPart {
 	) {
 		super(container, { viewDescriptorService: descriptors, contextKeyService: contextKeys, storageService: storage });
 		this.domNode.classList.add('ash-sessions-auxiliarybar');
-		this.setCompositeBarVisible(true);
 		this._register(this.onDidSelectComposite(event => this.showComposite(event.compositeId)));
 	}
 

@@ -9,6 +9,7 @@ import { type DesignDocumentController, DESIGN_EDITOR_RESOURCE } from './designD
 import { IDesignEditorService } from './designEditorService.js';
 import { DesignEditorWidget } from './widget/designEditorWidget.js';
 import { createDesignEditorContributions } from '../design.main.js';
+import type { DesignEditorContributionContext } from './designEditorBrowser.js';
 
 /** EditorPart owns Design panes and their editing state; the window Design service owns the shared document. */
 export class DesignEditorPage extends Disposable implements IEditorPane {
@@ -28,7 +29,7 @@ export class DesignEditorPage extends Disposable implements IEditorPane {
 	}
 
 	public create(parent: HTMLElement): void {
-		this.editor = this._register(this.instantiationService.createInstance(DesignEditorWidget, parent.ownerDocument, this.workingCopy, createDesignEditorContributions));
+		this.editor = this._register(this.instantiationService.createInstance(DesignEditorWidget, parent.ownerDocument, this.workingCopy, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, this.instantiationService)));
 		this.domNode = this.editor.domNode;
 		parent.append(this.domNode);
 		this.editor.initialize();

@@ -5,7 +5,6 @@ import { Sash } from '../../base/browser/ui/sash/sash.js';
 import { localize } from '../../nls.js';
 import type { EditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
 import type { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
-import type { AuxiliaryBarPart } from './parts/auxiliarybar/auxiliaryBarPart.js';
 
 /** Geometry stays with the window layout; this host mounts Details below the shared editor tabs. */
 export class DockedAuxiliaryBarController extends Disposable {
@@ -36,7 +35,6 @@ export class DockedAuxiliaryBarController extends Disposable {
 	}
 
 	public layout(dimension: IDimension, docked: boolean, editorVisible: boolean, detailsVisible: boolean): void {
-		(this.details.part as AuxiliaryBarPart).setCompositeBarVisible(!docked);
 		this.dockDomNode.hidden = !docked || !detailsVisible;
 		this.sash.element.hidden = !docked || !editorVisible || !detailsVisible;
 		if (!docked) {

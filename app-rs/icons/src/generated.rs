@@ -206,6 +206,7 @@ mod artwork {
     pub(crate) const STAR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/star.svg"));
     pub(crate) const STAR_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/star-filled.svg"));
     pub(crate) const START: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/start.svg"));
+    pub(crate) const STRAW: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/straw.svg"));
     pub(crate) const SUMMARY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/summary.svg"));
     pub(crate) const SYMBOL_COLOR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/symbol-color.svg"));
     pub(crate) const SYMBOL_COLOR_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/symbol-color-filled.svg"));
@@ -444,6 +445,7 @@ pub mod icons {
     pub const STAR: Icon = Icon::new(IconId::new("star"), artwork::STAR);
     pub const STAR_FILLED: Icon = Icon::new(IconId::new("star-filled"), artwork::STAR_FILLED);
     pub const START: Icon = Icon::new(IconId::new("start"), artwork::START);
+    pub const STRAW: Icon = Icon::new(IconId::new("straw"), artwork::STRAW);
     pub const SUMMARY: Icon = Icon::new(IconId::new("summary"), artwork::SUMMARY);
     pub const SYMBOL_COLOR: Icon = Icon::new(IconId::new("symbol-color"), artwork::SYMBOL_COLOR);
     pub const SYMBOL_COLOR_FILLED: Icon = Icon::new(IconId::new("symbol-color-filled"), artwork::SYMBOL_COLOR_FILLED);
@@ -678,6 +680,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::STAR,
     icons::STAR_FILLED,
     icons::START,
+    icons::STRAW,
     icons::SUMMARY,
     icons::SYMBOL_COLOR,
     icons::SYMBOL_COLOR_FILLED,
@@ -913,6 +916,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("star", artwork::STAR),
     ("star-filled", artwork::STAR_FILLED),
     ("start", artwork::START),
+    ("straw", artwork::STRAW),
     ("summary", artwork::SUMMARY),
     ("symbol-color", artwork::SYMBOL_COLOR),
     ("symbol-color-filled", artwork::SYMBOL_COLOR_FILLED),

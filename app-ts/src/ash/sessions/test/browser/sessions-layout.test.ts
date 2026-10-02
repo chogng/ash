@@ -35,7 +35,6 @@ type SessionsPartId = import("../../common/layoutConstants.js").SessionsPartId;
 type WorkbenchPartInstance = import("../../../workbench/browser/part.js").WorkbenchPart;
 
 class TestSessionsPart extends WorkbenchPart {
-	public setCompositeBarVisible(_visible: boolean): void {}
 	public getTabsHeight(): number { return 35; }
 	public contentInset = 0;
 	public contentVisible = true;

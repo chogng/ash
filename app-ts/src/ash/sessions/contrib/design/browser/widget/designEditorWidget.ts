@@ -151,6 +151,7 @@ export class DesignEditorWidget extends Disposable {
 	public setVisible(visible: boolean): void {
 		if (!visible) {
 			this.cancelGesture();
+			this.properties.cancel();
 			if (this.contextMenuVisible) this.contextMenus.hideContextMenu();
 		}
 		this.motion.setActive(visible && this.mode === DesignMode.Motion);
@@ -256,7 +257,8 @@ export class DesignEditorWidget extends Disposable {
 	private renderShapes(): void {
 		const scene = this.mode === DesignMode.Motion ? this.motion.getScene() : undefined;
 		const preview = (shape: DesignShape): DesignShape => {
-			const updated = this.input.preview.find(preview => preview.id === shape.id) ?? shape;
+			const fillPreview = this.properties.preview;
+			const updated = fillPreview?.id === shape.id ? fillPreview : this.input.preview.find(preview => preview.id === shape.id) ?? shape;
 			return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(preview) } : updated;
 		};
 		const shapes = (scene?.shapes ?? this.documentController.model.value.shapes).map(preview);

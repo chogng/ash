@@ -19,6 +19,12 @@ test("CSS consumes registered design tokens and isolates intentional color sampl
 	const registered = new Set([...Colors.getColors().map(({ id }) => colorCssVariable(id)), ...Sizes.getSizes().map(({ id }) => asCssVariableName(id))]);
 	const platformVariables = new Set(["--ash-font-family", "--ash-font-family-monospace", "--ash-context-view-layer", "--ash-z-index-context-view", "--ash-z-index-quick-input", "--ash-z-index-sash"]);
 	const componentPresentationVariables = new Set([
+		"--ash-color-picker-hue",
+		"--ash-color-picker-opaque",
+		"--ash-color-picker-saturation",
+		"--ash-color-picker-brightness",
+		"--ash-color-picker-value",
+		"--ash-design-fill",
 		"--ash-editor-token-foreground",
 		"--ash-scrollbar-slider-size",
 		"--ash-icon-label-text-overflow",
@@ -28,6 +34,7 @@ test("CSS consumes registered design tokens and isolates intentional color sampl
 		"--ash-terminal-command-gutter-width",
 	]);
 	const intentionalColorFiles = new Set([
+		"base/browser/ui/colorPicker/colorPicker.css",
 		"base/browser/ui/lxicons/lxicon.css",
 		"editor/browser/viewParts/viewLines/viewLines.css",
 		"editor/browser/viewParts/decorations/decorations.css",
