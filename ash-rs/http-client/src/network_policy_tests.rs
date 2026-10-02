@@ -80,31 +80,6 @@ fn cancellable_transport_preserves_custom_tls_trust() {
 }
 
 #[test]
-fn both_transports_preserve_system_trust_with_an_additional_ca() {
-    for asynchronous in [false, true] {
-        let server = Server::reply(
-            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok".to_vec(),
-        );
-        let roots = CertificateBundle::from_der(vec![CA_DER.to_vec()]).unwrap();
-        let network = OutboundNetworkSnapshot::new(
-            HttpClientConfig::new()
-                .with_proxy_policy(ProxyPolicy::Direct)
-                .with_tls_policy(TlsPolicy::SystemPlus(roots)),
-        )
-        .unwrap();
-        let client: Box<dyn HttpClient> = if asynchronous {
-            Box::new(ReqwestHttpClient::with_network(network).unwrap())
-        } else {
-            Box::new(UreqHttpClient::with_network(network).unwrap())
-        };
-        let request =
-            HttpRequest::new(HttpMethod::Get, server.url(), Vec::new(), Vec::new()).unwrap();
-        assert_eq!(client.execute(&request).unwrap().body(), b"ok");
-        assert_eq!(server.request().line, "GET / HTTP/1.1");
-    }
-}
-
-#[test]
 fn cancellable_transport_rejects_private_ip_before_connecting() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();

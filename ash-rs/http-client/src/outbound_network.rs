@@ -511,3 +511,7 @@ enum SystemTrust {
     Use,
     Skip,
 }
+
+#[cfg(test)]
+#[path = "outbound_network_tests.rs"]
+mod tests;

@@ -244,9 +244,14 @@ bazel test //ash-rs/http-client:http-client-unit-tests
 - HTTPS 跨来源重定向不发送认证头、响应未完成时触发整体超时、截断响应报脱敏传输错误；
 - bypass domain/IP/port matching 和 direct route；
 - 纯 HTTP 不创建系统证书验证器，HTTPS 惰性创建并缓存失败；
+- 系统信任接受额外 CA，同时拒绝证书域名不匹配；
 - custom trust/mTLS invalid material；
 - response body hard limit 与 `limit + 1` headroom；
 - telemetry 只发出 safe facts。
+
+`tests/fixtures/system-trust-*.der` 是独立的 P-256/SHA-256 测试 CA 与服务端证书，不含私钥。
+服务端证书覆盖 `localhost`，有效期为 2026-01-01 至 2027-01-01；系统信任测试固定在
+2026-10-02 校验，遵守操作系统的证书有效期限制，也不随测试运行日期过期。不修改系统信任。
 
 ## 当前限制与潜在演进
 
