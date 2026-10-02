@@ -96,6 +96,62 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 	});
 }
 
+test('Desktop places a new Agents window on the primary display of a simulated mixed-DPI desktop', async ({}, testInfo) => {
+	const userDataDirectory = testInfo.outputPath('user-data');
+	await mkdir(userDataDirectory, { recursive: true });
+	const application = await launch(userDataDirectory);
+	try {
+		const page = await application.firstWindow();
+		await new Workbench(page).waitForReady();
+		const expected = await application.evaluate(({ screen }) => {
+			const originalAll = screen.getAllDisplays;
+			const originalPrimary = screen.getPrimaryDisplay;
+			const originalMatching = screen.getDisplayMatching;
+			const display = screen.getPrimaryDisplay();
+			const area = display.workArea;
+			const split = Math.floor(area.width / 2);
+			const primary = { ...display, id: 10, scaleFactor: 2, workArea: { ...area, x: area.x + split, width: area.width - split } };
+			const secondary = { ...display, id: 20, scaleFactor: 1, workArea: { ...area, width: split } };
+			primary.bounds = primary.workArea;
+			secondary.bounds = secondary.workArea;
+			(globalThis as { restoreTestDisplay?: () => void }).restoreTestDisplay = () => {
+				screen.getAllDisplays = originalAll;
+				screen.getPrimaryDisplay = originalPrimary;
+				screen.getDisplayMatching = originalMatching;
+			};
+			screen.getAllDisplays = () => [primary, secondary];
+			screen.getPrimaryDisplay = () => primary;
+			screen.getDisplayMatching = bounds => {
+				const overlap = (display: typeof primary): number => {
+					const area = display.workArea;
+					return Math.max(0, Math.min(bounds.x + bounds.width, area.x + area.width) - Math.max(bounds.x, area.x)) * Math.max(0, Math.min(bounds.y + bounds.height, area.y + area.height) - Math.max(bounds.y, area.y));
+				};
+				return overlap(primary) > overlap(secondary) ? primary : secondary;
+			};
+			const width = Math.min(1180, primary.workArea.width);
+			const height = Math.min(780, primary.workArea.height);
+			return { x: Math.round(primary.workArea.x + (primary.workArea.width - width) / 2), y: Math.round(primary.workArea.y + (primary.workArea.height - height) / 2), width, height };
+		});
+		const opened = application.waitForEvent('window');
+		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+		const agents = await opened;
+		await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+		const agentsWindow = await application.browserWindow(agents);
+		await expect.poll(async () => {
+			const bounds = await agentsWindow.evaluate(window => window.getBounds());
+			return Math.max(...(['x', 'y', 'width', 'height'] as const).map(key => Math.abs(bounds[key] - expected[key])));
+		}).toBeLessThanOrEqual(2);
+		await agentsWindow.dispose();
+	} finally {
+		await application.evaluate(() => {
+			const context = globalThis as { restoreTestDisplay?: () => void };
+			context.restoreTestDisplay?.();
+			delete context.restoreTestDisplay;
+		});
+		await application.close();
+	}
+});
+
 test('Desktop adapts open Workbench and Agents windows to display changes without changing zoom or focus', async ({}, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });

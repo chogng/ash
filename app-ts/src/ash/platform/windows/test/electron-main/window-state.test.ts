@@ -161,6 +161,7 @@ function createHandler(
 		displayService: {
 			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [primaryDisplay],
+			getPrimaryDisplay: () => primaryDisplay,
 			getDisplayMatching: () => primaryDisplay,
 		},
 	});
@@ -236,7 +237,7 @@ test('new window defaults are centered and constrained to the current logical wo
 			const display = { id: 1, bounds: workArea, workArea };
 			const handler = new WindowsStateHandler({
 				stateService: new TestStateService(), workspace,
-				displayService: { onDidChangeDisplays: Event.None, getAllDisplays: () => [display], getDisplayMatching: () => display },
+				displayService: { onDidChangeDisplays: Event.None, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getDisplayMatching: () => display },
 			});
 			const width = Math.min(size.width, workArea.width);
 			const height = Math.min(size.height, workArea.height);
@@ -248,6 +249,21 @@ test('new window defaults are centered and constrained to the current logical wo
 			});
 		}
 	}
+});
+
+test('first startup uses the primary display when a larger secondary display overlaps the default rectangle', () => {
+	const primary = { id: 10, scaleFactor: 2, bounds: { x: 0, y: 0, width: 800, height: 600 }, workArea: { x: 0, y: 0, width: 800, height: 560 } };
+	const secondary = { id: 20, scaleFactor: 1, bounds: { x: 800, y: 0, width: 2560, height: 1440 }, workArea: { x: 800, y: 0, width: 2560, height: 1400 } };
+	const displayService = {
+		onDidChangeDisplays: Event.None,
+		getAllDisplays: () => [primary, secondary],
+		getPrimaryDisplay: () => primary,
+		getDisplayMatching: () => secondary,
+	};
+	const handler = new WindowsStateHandler({ stateService: new TestStateService(), workspace: folderWorkspace, displayService });
+	assert.deepEqual(handler.restoreWindowState(), {
+		mode: WindowMode.Normal, x: 0, y: 0, width: 800, height: 560, displayId: primary.id, workArea: primary.workArea,
+	});
 });
 
 test('resolution changes keep a fitting saved rectangle and bring partially hidden windows fully into view', () => {
@@ -572,6 +588,7 @@ test("dedicated window state restores without changing the main window state", a
 		displayService: {
 			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [primaryDisplay],
+			getPrimaryDisplay: () => primaryDisplay,
 			getDisplayMatching: () => primaryDisplay,
 		},
 	};
@@ -643,6 +660,7 @@ test('window persistence retains logical size and position when display resoluti
 		displayService: {
 			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [display],
+			getPrimaryDisplay: () => display,
 			getDisplayMatching: () => display,
 		},
 	};
@@ -692,6 +710,7 @@ test('resolution changes apply once after OS resize events and defer maximized g
 		displayService: {
 			onDidChangeDisplays: changes.event,
 			getAllDisplays: () => [display],
+			getPrimaryDisplay: () => display,
 			getDisplayMatching: () => display,
 		},
 	};
@@ -739,7 +758,7 @@ test('display changes preserve fullscreen mode and normal bounds for leaving ful
 	let display = primaryDisplay;
 	const handler = new WindowsStateHandler({
 		stateService: new TestStateService(), workspace: folderWorkspace,
-		displayService: { onDidChangeDisplays: changes.event, getAllDisplays: () => [display], getDisplayMatching: () => display },
+		displayService: { onDidChangeDisplays: changes.event, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getDisplayMatching: () => display },
 	});
 	const window = new TestWindow();
 	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
@@ -773,6 +792,7 @@ test('dragging between displays preserves logical size and the dropped position'
 		displayService: {
 			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [primaryDisplay, secondDisplay],
+			getPrimaryDisplay: () => primaryDisplay,
 			getDisplayMatching: bounds => bounds.x < 1920 ? primaryDisplay : secondDisplay,
 		},
 	});
@@ -788,12 +808,60 @@ test('dragging between displays preserves logical size and the dropped position'
 	assert.deepEqual(window.bounds, { x: 3000, y: 800, width: 1100, height: 760 });
 });
 
+test('mixed-DPI displays retain logical placement across moves, restarts, scaling changes and disconnection', async () => {
+	for (const secondary of [
+		{ id: 2, scaleFactor: 1.25, bounds: { x: 1920, y: 0, width: 1536, height: 864 }, workArea: { x: 1920, y: 0, width: 1536, height: 824 } },
+		{ id: 2, scaleFactor: 2, bounds: { x: -1080, y: 0, width: 1080, height: 1920 }, workArea: { x: -1080, y: 0, width: 1080, height: 1880 } },
+	]) {
+		using changes = new Emitter<void>();
+		const stateService = new TestStateService();
+		let target = secondary;
+		let displays = [primaryDisplay, target];
+		let currentDisplay: IWindowDisplay = primaryDisplay;
+		const options = {
+			stateService, workspace: folderWorkspace,
+			displayService: {
+				onDidChangeDisplays: changes.event,
+				getAllDisplays: () => displays,
+				getPrimaryDisplay: () => primaryDisplay,
+				getDisplayMatching: () => currentDisplay,
+			},
+		};
+		const handler = new WindowsStateHandler(options);
+		const window = new TestWindow();
+		window.bounds = { x: 120, y: 80, width: 980, height: 640 };
+		const expected = { x: secondary.workArea.x + 50, y: 80, width: 980, height: 640 };
+		using tracking = handler.trackWindow(window);
+		currentDisplay = secondary;
+		window.bounds = expected;
+		window.emit('move');
+		window.emit('moved');
+		await handler.saveWindowState(window);
+		assert.deepEqual(new WindowsStateHandler(options).restoreWindowState(), {
+			mode: WindowMode.Normal, ...expected, displayId: secondary.id, workArea: secondary.workArea,
+		});
+		target = { ...secondary, scaleFactor: 1, bounds: { ...secondary.bounds, width: secondary.bounds.width * 2, height: secondary.bounds.height * 2 }, workArea: { ...secondary.workArea, width: secondary.workArea.width * 2, height: secondary.workArea.height * 2 } };
+		displays = [primaryDisplay, target];
+		currentDisplay = target;
+		changes.fire();
+		assert.deepEqual(window.bounds, expected);
+		await handler.saveWindowState(window);
+		assert.deepEqual(new WindowsStateHandler(options).restoreWindowState(), {
+			mode: WindowMode.Normal, ...expected, displayId: target.id, workArea: target.workArea,
+		});
+		displays = [primaryDisplay];
+		assert.deepEqual(new WindowsStateHandler(options).restoreWindowState(), {
+			mode: WindowMode.Normal, x: 50, y: 80, width: 980, height: 640, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
+		});
+	}
+});
+
 test('work areas smaller than the default minimum remain reachable through Electron sizing limits', () => {
 	using changes = new Emitter<void>();
 	let display = primaryDisplay;
 	const handler = new WindowsStateHandler({
 		stateService: new TestStateService(), workspace: folderWorkspace,
-		displayService: { onDidChangeDisplays: changes.event, getAllDisplays: () => [display], getDisplayMatching: () => display },
+		displayService: { onDidChangeDisplays: changes.event, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getDisplayMatching: () => display },
 	});
 	const window = new TestWindow();
 	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
@@ -818,6 +886,7 @@ test('fullscreen persistence uses the current display and retains logical normal
 		displayService: {
 			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [primaryDisplay, secondDisplay],
+			getPrimaryDisplay: () => primaryDisplay,
 			getDisplayMatching: bounds => bounds.x < 1920 ? primaryDisplay : secondDisplay,
 		},
 	});

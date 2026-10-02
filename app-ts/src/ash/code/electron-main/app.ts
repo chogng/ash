@@ -1949,6 +1949,7 @@ export class AshApplication extends Disposable {
 					});
 				},
 				getAllDisplays: () => screen.getAllDisplays(),
+				getPrimaryDisplay: () => screen.getPrimaryDisplay(),
 				getDisplayMatching: (bounds) => screen.getDisplayMatching(bounds),
 			},
 			onError: (error) => {

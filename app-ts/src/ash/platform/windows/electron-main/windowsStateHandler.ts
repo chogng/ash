@@ -19,6 +19,7 @@ const WINDOW_SESSION_STATE_KEY = 'windowSession';
 export interface IWindowDisplayService {
 	readonly onDidChangeDisplays: Event<void>;
 	getAllDisplays(): readonly IWindowDisplay[];
+	getPrimaryDisplay(): IWindowDisplay;
 	getDisplayMatching(bounds: IWindowBounds): IWindowDisplay;
 }
 
@@ -134,7 +135,11 @@ export class WindowsStateHandler {
 		}
 
 		const state = this.defaultState ?? defaultWindowState(this.workbenchState);
-		const display = this.displayService.getDisplayMatching({ x: state.x ?? 0, y: state.y ?? 0, width: state.width, height: state.height });
+		// A default size is not a saved position: matching a rectangle at the
+		// origin can select a larger secondary display on a mixed-DPI desktop.
+		const display = state.x !== undefined && state.y !== undefined
+			? this.displayService.getDisplayMatching({ x: state.x, y: state.y, width: state.width, height: state.height })
+			: this.displayService.getPrimaryDisplay();
 		const area = display.workArea;
 		const width = Math.min(area.width, Math.max(WINDOW_MINIMUM_SIZE.width, state.width));
 		const height = Math.min(area.height, Math.max(WINDOW_MINIMUM_SIZE.height, state.height));
