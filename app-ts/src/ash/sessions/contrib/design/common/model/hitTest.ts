@@ -15,11 +15,38 @@ export function hitTestDesignShapes(shapes: readonly DesignShape[], point: Desig
 		const inside = shape.kind === 'ellipse'
 			? (x / (shape.width / 2)) ** 2 + (y / (shape.height / 2)) ** 2 <= 1
 			: Math.abs(x) <= shape.width / 2 && Math.abs(y) <= shape.height / 2;
+		if (shape.kind === 'frame') {
+			if (inside || !shape.clip) {
+				const child = hitTestDesignShapes(shape.children, local);
+				if (child) { return child; }
+			}
+		}
 		if (inside) {
 			return shape;
 		}
 	}
 	return undefined;
+}
+
+/** Frame children use local coordinates; selection outlines and input use their world geometry. */
+export function getDesignShapeEntries(shapes: readonly DesignShape[], parent?: Extract<DesignShape, { kind: 'frame' }>, ancestors: readonly string[] = []): readonly { readonly ancestors: readonly string[]; readonly shape: DesignShape; readonly world: DesignShape; readonly parent: Extract<DesignShape, { kind: 'frame' }> | undefined }[] {
+	return shapes.flatMap(shape => {
+		let world = shape;
+		if (parent) {
+			const angle = parent.rotation * Math.PI / 180;
+			const dx = shape.x + shape.width / 2 - parent.width / 2;
+			const dy = shape.y + shape.height / 2 - parent.height / 2;
+			world = { ...shape, x: parent.x + parent.width / 2 + dx * Math.cos(angle) - dy * Math.sin(angle) - shape.width / 2, y: parent.y + parent.height / 2 + dx * Math.sin(angle) + dy * Math.cos(angle) - shape.height / 2, rotation: shape.rotation + parent.rotation };
+			if (shape.motion) {
+				world = { ...world, motion: { ...shape.motion, keyframes: shape.motion.keyframes.map(frame => {
+					const dx = frame.x + shape.width / 2 - parent.width / 2;
+					const dy = frame.y + shape.height / 2 - parent.height / 2;
+					return { ...frame, x: parent.x + parent.width / 2 + dx * Math.cos(angle) - dy * Math.sin(angle) - shape.width / 2, y: parent.y + parent.height / 2 + dx * Math.sin(angle) + dy * Math.cos(angle) - shape.height / 2, rotation: frame.rotation + parent.rotation };
+				}) } };
+			}
+		}
+		return [{ shape, world, parent, ancestors }, ...(shape.kind === 'frame' ? getDesignShapeEntries(shape.children, world as Extract<DesignShape, { kind: 'frame' }>, [...ancestors, shape.id]) : [])];
+	});
 }
 
 function hitTestPath(shape: Extract<DesignShape, { kind: 'path' }>, point: DesignPoint): boolean {

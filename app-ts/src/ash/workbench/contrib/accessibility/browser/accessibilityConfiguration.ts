@@ -154,3 +154,9 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		get description() { return localize('inspectEditorTokens.verbosityDescription', 'Announce how to open accessibility help in token inspection.'); },
 	},
 });
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Testing, defaultValue: true,
+	parse(value: unknown): boolean { if (typeof value !== 'boolean') { throw new TypeError('Testing verbosity must be boolean'); } return value; },
+	setting: { valueType: 'boolean', title: localize('testing.verbosityTitle', 'Testing accessibility help'), description: localize('testing.verbosityDescription', 'Announce how to open accessibility help when the test tree receives focus.') },
+});

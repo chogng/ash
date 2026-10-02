@@ -494,6 +494,8 @@ Plugin request 是 config intent；legacy Plugin lifecycle authority 是另一�
 且 granted 时才进入 activation。新的远端 package 只能通过 `marketplace/*` 方法进入
 `PluginsManager`；Plugin authority 不再拥有 Marketplace catalog 或安装入口。
 
+`marketplace/search` 和 `marketplace/get` 查询远程目录，在后台处理且不持有本地状态的全局许可；慢目录请求不阻塞配置读取、保存或 Session 操作。客户端打开 Marketplace 后即可结束导航命令，目录加载与错误由 Marketplace 页面显示。
+
 同一 profile 的 App Server daemon 是 Marketplace mutation 的 single writer。成功的
 install/update/uninstall 在 consumer reconcile 后推进共享 generation，并向该 profile 的全部
 App Server connection 广播 `marketplace/changed { instanceId, generation }`。该通知只表示“本地安装投影可能
@@ -1316,3 +1318,25 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 返回 `{ servers: [{ id, languageIds }] }`，只包含当前配置下可解析的服务器；无服务器时数组为空。
 该查询不启动服务器，也不暴露可执行文件路径。非法目录或权限不足按现有目录错误返回；配置或运行时不可用返回
 `LanguageServiceUnavailable`。客户端在 `config/changed`、`marketplace/changed` 和工作区变化后重新查询。
+
+## 工作区测试
+
+`ash-rs/testing` 持有测试目录、执行进程和结果。Renderer 负责测试树、编辑器入口、保存脏文件与显示输出；Electron Main 仅转发现有 App Server 消息。
+
+| 归属 | 实现入口 |
+| --- | --- |
+| Rust 测试领域 | `ash-rs/testing/src/lib.rs`，App Server 在 `ash-rs/app-server/src/server/testing_operations.rs` 分发并转换类型 |
+| 前端公共契约与工作区生命周期 | `app-ts/src/ash/platform/testing/common/testExecutionService.ts`、`app-ts/src/ash/workbench/services/testing/common/testingService.ts`、同级 `browser/testingService.ts` |
+| 协议适配 | `app-ts/src/ash/platform/testing/browser/appServerTestExecutionService.ts` |
+| 测试树与编辑器按钮 | `app-ts/src/ash/workbench/contrib/testing/browser/testingViewPane.ts`、`testingEditorContribution.ts` |
+| 协议与生成物 | `ash-rs/app-server-protocol/src/protocol/testing.rs`、`schema/typescript/`，包括 method map 和 `AppServerProtocolDecoder.ts`；Renderer 绑定由生成任务同步 |
+
+桌面调用沿用 `appServerProtocolClient.ts` → `appServerMessagePortTransport.ts` → `appServerConnectionRelay.ts` → 共享 App Server。前两者位于 `app-ts/src/ash/platform/app-server/` 的 `browser/`、`electron-browser/`，Relay 与进程启动入口 `appServerProcessLauncher.ts` 位于 `electron-main/`。每个 Renderer 使用独立连接，进程由现有启动层共享。本次新增测试领域，没有替换旧 Host。测试脚本保留既有 Tasks 与终端执行链，不生成单条测试结果。
+
+当前内置支持 Cargo 工作区中的普通 Rust `#[test]` 函数，包括库、二进制、集成测试与外部模块。测试目录通过 Cargo metadata 和 Rust 语法树发现，不编译项目。宏生成测试、异步测试属性和文档测试尚未支持。源代码中存在但编译配置未启用的测试，执行匹配到零条时显示错误，不算通过。
+
+客户端先监听 `testing/updated`，再发送带唯一 `operationId` 和 `dirId` 的 `testing/discover`。发现需要目录的 `ReadFiles` 与 `ExecuteCommands` 权限；返回接受响应后，按 `sequence` 接收最终目录。测试身份来自包、目标与限定函数名；`path` 是授权根目录下的相对路径，使用 `/` 分隔。
+
+`testing/run` 使用已完成目录的 `catalogId` 和确切 `testIds`；目录与运行都归当前连接，且必须使用同一个授权目录。后端按目标编译测试程序，再用 `--exact` 运行所选函数。通过、失败、忽略、执行错误和取消分别记录，脚本退出码不会生成这些单条测试结果。Workbench 的“测试脚本”仍独立委托 Tasks 与终端运行。
+
+`testing/read` 读取已有操作的完整快照，不重新执行。`testing/cancel` 等待进程终止与最终更新；`testing/release` 还删除操作状态。连接关闭取消并回收该连接的所有操作。操作最多保留 10,000 个测试，单条结果输出最多 16 KiB，每次运行保留的总输出最多 2 MiB；超出部分明确标记 `outputTruncated`。`TestingNotFound` 表示当前连接没有对应操作，`TestingBusy` 表示操作数量达到上限，`TestingOperationFailed` 表示后端无法完成操作。

@@ -12,7 +12,8 @@ import { ICommandService } from '../../../src/ash/platform/commands/common/comma
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
-import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
+import '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
+import { IDialogsModel, IWorkbenchDialogHandler } from '../../../src/ash/workbench/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { ILanguageServerService } from '../../../src/ash/platform/language/common/languageServerService.js';
 import type { IMarketplaceApi } from '../../../src/ash/platform/marketplace/common/marketplaceApi.js';
@@ -26,6 +27,10 @@ import { createSettingsEditorInput } from '../../../src/ash/workbench/services/p
 import { CLOSE_EDITOR_COMMAND_ID } from '../../../src/ash/workbench/browser/parts/editor/editorCommands.js';
 import { AppServerMarketplaceService } from '../../../src/ash/workbench/services/marketplace/browser/appServerMarketplaceService.js';
 import { MarketplaceViewPane } from '../../../src/ash/workbench/contrib/marketplace/browser/marketplaceViewPane.js';
+import '../../../src/ash/workbench/contrib/marketplace/browser/marketplace.contribution.js';
+import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
+import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/browser/viewsService.js';
 import { SkillsSettingsContent } from '../../../src/ash/workbench/contrib/skills/browser/skillsSettingsContent.js';
 import { LanguageServerSettingsContent } from '../../../src/ash/workbench/contrib/language/browser/languageServerSettingsContent.js';
 
@@ -73,7 +78,8 @@ services.registerInstance(IMarketplaceService, disposables.add(new AppServerMark
 services.registerInstance(IConfigurationService, { getValue: () => true } as unknown as IConfigurationService);
 const dialogs = disposables.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
-disposables.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
+services.registerInstance(IDialogsModel, dialogs.model);
+services.registerInstance(IWorkbenchDialogHandler, new BrowserDialogHandler(document.body));
 services.registerInstance(ICommandService, { executeCommand: async (id: string, options: MarketplaceOpenOptions) => { requests.push(['command', id, options]); if (id === CLOSE_EDITOR_COMMAND_ID) { return; } if (id !== OPEN_MARKETPLACE_COMMAND_ID) { throw new Error(id); } await marketplace.open(options); } } as unknown as ICommandService);
 let revision = 3;
 let enabled = true;
@@ -97,6 +103,10 @@ services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ ge
 services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None } as IEditorService);
 services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'fixture', folders: [] }) } as unknown as IWorkspaceContextService);
 const marketplace = disposables.add(services.createInstance(MarketplaceViewPane, document.getElementById('marketplace')!, { id: 'marketplace', title: 'Marketplace' }));
+services.registerInstance(IViewsService, { openView: () => marketplace } as unknown as IViewsService);
+const contributions = disposables.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }));
+contributions.advance(WorkbenchPhase.BlockStartup);
+const commands = disposables.add(new CommandService(services));
 const skills = disposables.add(services.createInstance(SkillsSettingsContent, document.getElementById('skills')!));
 const lsp = disposables.add(services.createInstance(LanguageServerSettingsContent, document.getElementById('lsp')!));
 document.getElementById('lsp')!.append(lsp.domNode);
@@ -110,6 +120,8 @@ window.ashMarketplaceIntegration = {
 	setOffline: () => { offline = true; },
 	changeRevision: () => { revision++; },
 	startHeldSearch: () => { holdSearch = true; heldOpen = marketplace.open({ query: 'old query' }); },
+	startHeldCommand: async () => { holdSearch = true; await commands.executeCommand(OPEN_MARKETPLACE_COMMAND_ID, 'held query'); },
+	executeCommand: id => commands.executeCommand(id),
 	failHeldSearch: async () => { rejectSearch!(new Error('Old request failed')); await heldOpen; },
 	addOtherPackage: () => { installed.unshift({ ...installed[0]!, installationId: 'other-package', package: { ...reference, id: 'other@example' } }); },
 	addSecondVersion: () => { installed.push({ ...installed[0]!, installationId: 'version-two', package: { ...reference, version: '2.0.0' } }); },
@@ -117,6 +129,6 @@ window.ashMarketplaceIntegration = {
 };
 declare global {
 	interface Window {
-		ashMarketplaceIntegration: { requests: unknown[]; open(options: MarketplaceOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void };
+		ashMarketplaceIntegration: { requests: unknown[]; open(options: MarketplaceOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void };
 	}
 }

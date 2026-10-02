@@ -36,6 +36,7 @@ import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js
 import type { IAutomationService } from '../../automation/common/automationService.js';
 import type { ITeamApi } from '../../teams/common/teamApi.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import type { ITestExecutionService } from '../../testing/common/testExecutionService.js';
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {
@@ -58,6 +59,7 @@ export function mergeRendererHostCapabilities(capabilities: readonly RendererHos
 
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
+	readonly testing: ITestExecutionService;
 	readonly calls?: ICallService;
 	readonly dictation?: IDictationService;
 	readonly automation?: IAutomationService;

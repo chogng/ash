@@ -1,4 +1,5 @@
 import { createDisconnectedHooksApi } from '../../hooks/browser/hooksApi.js';
+import { Event } from '../../../base/common/event.js';
 import { createDisconnectedLanguageServerService } from "../../language/browser/languageServerService.js";
 import { createDisconnectedAppServerApi, createDisconnectedResourceApi, createDisconnectedServerEventApi } from "./appServerApi.js";
 import { createDisconnectedFileApi } from "../../files/browser/fileApi.js";
@@ -56,6 +57,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		git: createDisconnectedGitApi(unavailableOperation),
 		contentSearch: createDisconnectedContentSearchApi(unavailableOperation),
 		terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),
+		testing: { onDidUpdate: Event.None, onDidDisconnect: Event.None, discover: unavailableOperation, run: unavailableOperation, read: unavailableOperation, cancel: unavailableOperation, release: unavailableOperation },
 		events: createDisconnectedServerEventApi(),
 		codebase: createDisconnectedCodebaseApi(unavailableOperation),
 		codebaseSymbols: createDisconnectedCodebaseSymbolsApi(unavailableOperation),

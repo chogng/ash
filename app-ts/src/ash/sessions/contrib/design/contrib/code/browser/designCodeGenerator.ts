@@ -1,17 +1,17 @@
 import { mainWindow } from '../../../../../../base/browser/window.js';
 import { localize } from '../../../../../../nls.js';
-import { designBounds } from '../../../common/core/geometry.js';
 import { serializeDesignDocument, type DesignDocument, type DesignShape } from '../../../common/model/document.js';
-import { renderDesignShape } from '../../../browser/svgRenderer.js';
+import type { DesignImageSource } from '../../../browser/designMedia.js';
+import { getDesignRenderBounds, renderDesignShape } from '../../../browser/svgRenderer.js';
 
 /** Generates runnable source from committed data, retaining IDs and JSON for agent edits. */
-export function generateDesignCode(document: DesignDocument): string {
+export function generateDesignCode(document: DesignDocument, images: ReadonlyMap<string, DesignImageSource> = new Map()): string {
 	const ownerDocument = mainWindow.document;
 	const scene = ownerDocument.createElement('div');
 	scene.className = 'ash-design-scene';
 	const rules = ['body { margin: 0; }', '.ash-design-scene { position: relative; overflow: visible; }', '.ash-design-object { position: absolute; transform-origin: center; }'];
 	const frames = document.shapes.flatMap(shape => [shape, ...(shape.motion?.keyframes.map(frame => ({ ...shape, ...frame })) ?? [])]);
-	const bounds = designBounds(frames);
+	const bounds = getDesignRenderBounds(frames);
 	const padding = strokePadding(document.shapes);
 	rules.push(`.ash-design-scene { width: ${bounds.width + padding * 2}px; height: ${bounds.height + padding * 2}px; }`);
 	function render(shape: DesignShape, originX: number, originY: number): HTMLElement {
@@ -24,6 +24,9 @@ export function generateDesignCode(document: DesignDocument): string {
 		let appearance = '';
 		if (shape.kind === 'rectangle' || shape.kind === 'ellipse') {
 			appearance = ` background: ${shape.fill};${shape.kind === 'ellipse' ? ' border-radius: 50%;' : ''}`;
+		} else if (shape.kind === 'frame') {
+			appearance = ` background: ${shape.fill}; overflow: ${shape.clip ? 'hidden' : 'visible'};`;
+			node.append(...shape.children.map(child => render(child, 0, 0)));
 		} else if (shape.kind === 'group') {
 			const content = ownerDocument.createElement('div');
 			content.className = `${className}-content`;
@@ -36,7 +39,7 @@ export function generateDesignCode(document: DesignDocument): string {
 			svg.setAttribute('height', `${shape.height}`);
 			svg.setAttribute('viewBox', `0 0 ${shape.width} ${shape.height}`);
 			svg.setAttribute('overflow', 'visible');
-			svg.append(renderDesignShape({ ...shape, x: 0, y: 0, rotation: 0 }));
+			svg.append(renderDesignShape({ ...shape, x: 0, y: 0, rotation: 0 }, undefined, images));
 			svg.querySelector('[data-shape-id]')!.removeAttribute('data-shape-id');
 			if (shape.kind === 'text') { svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', shape.text); }
 			node.append(svg);
@@ -61,6 +64,7 @@ export function generateDesignCode(document: DesignDocument): string {
 function strokePadding(shapes: readonly DesignShape[]): number {
 	return Math.max(0, ...shapes.map(shape => {
 		if (shape.kind === 'path') { return shape.strokeWidth; }
+		if (shape.kind === 'frame') { return shape.clip ? 0 : strokePadding(shape.children); }
 		if (shape.kind === 'group') { return strokePadding(shape.children) * shape.width / shape.contentWidth; }
 		return 0;
 	}));

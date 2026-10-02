@@ -162,6 +162,9 @@ mod team_operations;
 #[path = "server/team_operations_tests.rs"]
 mod team_operations_tests;
 mod terminal_operations;
+mod testing_operations;
+#[cfg(test)]
+mod testing_operations_tests;
 mod thread_dir_binding;
 mod thread_dirs;
 mod turn_backend_router;
@@ -233,6 +236,7 @@ pub struct AppServer {
     pub(super) mcp_status: Arc<RwLock<ash_mcp_extension::McpRuntimeStatusSnapshot>>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
     syntax_documents: Mutex<HashMap<(u64, String), Arc<Mutex<syntax_operations::SyntaxSession>>>>,
+    testing: testing::TestingService,
     approval_review_model: Option<ash_core::ApprovalReviewerFactory>,
     login: Option<Arc<ash_login::LoginService>>,
     chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
@@ -553,6 +557,7 @@ impl AppServer {
                 updates.clone(),
             )),
             syntax_documents: Mutex::new(HashMap::new()),
+            testing: testing::TestingService::default(),
             approval_review_model: None,
             login: None,
             chatgpt: None,
@@ -915,6 +920,7 @@ impl AppServer {
         for terminals in self.configured_terminal_services() {
             terminals.close_owner(connection.connection_id);
         }
+        self.testing.close_owner(connection.connection_id);
         for debug_adapters in self.configured_debug_adapter_services() {
             debug_adapters.close_owner(connection.connection_id);
         }
@@ -2775,6 +2781,11 @@ impl AppServer {
             Some(ClientMethod::DebugAdapterStart) => {
                 self.debug_adapter_start(connection, &request.params)
             }
+            Some(ClientMethod::TestingDiscover) => self.testing_discover(connection, &request.params),
+            Some(ClientMethod::TestingRun) => self.testing_run(connection, &request.params),
+            Some(ClientMethod::TestingRead) => self.testing_read(connection, &request.params),
+            Some(ClientMethod::TestingCancel) => self.testing_cancel(connection, &request.params),
+            Some(ClientMethod::TestingRelease) => self.testing_release(connection, &request.params),
             Some(ClientMethod::DebugAdapterSend) => {
                 self.debug_adapter_send(connection, &request.params)
             }

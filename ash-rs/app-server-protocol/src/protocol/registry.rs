@@ -1,4 +1,25 @@
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingDiscoverParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingRunParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingOperationParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingTargetKind;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingItem;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingState;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingOperationKind;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingOperationStatus;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingSnapshot;
+use crate::protocol::testing::TestingUpdate;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountCreditBalanceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountDto;
@@ -2948,12 +2969,13 @@ client_methods! {
     MarketplaceSearch => "marketplace/search" {
         params: MarketplaceSearchParams,
         response: MarketplaceSearchResult,
-        serialization: GlobalSharedRead,
+        // Catalog queries do not read local configuration or installation state.
+        serialization: None,
     },
     MarketplaceGet => "marketplace/get" {
         params: MarketplaceGetParams,
         response: MarketplacePackageDetailsDto,
-        serialization: GlobalSharedRead,
+        serialization: None,
     },
     MarketplaceDownload => "marketplace/download" {
         params: MarketplaceDownloadParams,
@@ -3919,6 +3941,31 @@ client_methods! {
         response: (),
         serialization: None,
     },
+    TestingDiscover => "testing/discover" {
+        params: TestingDiscoverParams,
+        response: (),
+        serialization: None,
+    },
+    TestingRun => "testing/run" {
+        params: TestingRunParams,
+        response: (),
+        serialization: None,
+    },
+    TestingRead => "testing/read" {
+        params: TestingOperationParams,
+        response: TestingSnapshot,
+        serialization: None,
+    },
+    TestingCancel => "testing/cancel" {
+        params: TestingOperationParams,
+        response: TestingSnapshot,
+        serialization: None,
+    },
+    TestingRelease => "testing/release" {
+        params: TestingOperationParams,
+        response: (),
+        serialization: None,
+    },
     DebugAdapterStart => "debug/adapter/start" {
         params: DebugAdapterStartParams,
         response: DebugAdapterStartResult,
@@ -4112,6 +4159,9 @@ macro_rules! notification_storage {
 }
 
 server_notifications! {
+    TestingUpdated => "testing/updated" {
+        params: TestingUpdate,
+    },
     AccountLoginCompleted => "account/login/completed" {
         params: AccountLoginCompleted,
     },
@@ -5287,6 +5337,17 @@ typescript_bindings! {
     TerminalCommandStatusEvent,
     TerminalReadResult,
     TerminalCloseParams,
+    TestingDiscoverParams,
+    TestingRunParams,
+    TestingOperationParams,
+    TestingTargetKind,
+    TestingItem,
+    TestingState,
+    TestingResult,
+    TestingOperationKind,
+    TestingOperationStatus,
+    TestingSnapshot,
+    TestingUpdate,
     DebugAdapterStartParams,
     DebugAdapterStartResult,
     DebugAdapterSendParams,

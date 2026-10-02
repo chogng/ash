@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { generateUuid } from '../../../base/common/uuid.js';
 import { Separator } from '../../../base/common/actions.js';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -15,7 +17,7 @@ import { URI } from '../../../base/common/uri.js';
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { ConfirmResult, IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import { FileKind, FileRevisionConflictError, IFileService, type IFileWriteRequest } from '../../../platform/files/common/files.js';
+import { FileKind, FileRevisionConflictError, FileNotFoundError, IFileService, type IFileWriteRequest } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -41,6 +43,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
+const { documentFromShapes, parseDesignDocument, serializeDesignDocument } = await import('../../contrib/design/common/model/document.js');
 const { DesignEditorWidget } = await import('../../contrib/design/browser/widget/designEditorWidget.js');
 const { DesignDocumentController } = await import('../../contrib/design/browser/designDocumentController.js');
 const { EditorPart } = await import('../../../workbench/browser/parts/editor/editorPart.js');
@@ -61,7 +64,9 @@ services.registerSingleton(IWorkingCopyService, () => new BrowserWorkingCopyServ
 services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IWorkspaceContextService, new WorkspaceContextService({ id: 'design-test', folders: [] }));
-const resource = URI.file('/design.ash-design.json');
+const resource = URI.file('/design.ash-design');
+const binaryFiles = new Map<string, Uint8Array>();
+const directories = new Set<string>();
 let fileContent = '';
 let revision = '0';
 let errors: string[] = [];
@@ -82,8 +87,24 @@ services.registerInstance(IFileDialogService, { pickFileToSave: unexpected, show
 services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
 services.registerInstance(IFileService, {
 	onDidChangeFiles: AshEvent.None,
-	stat: unexpected, readDirectory: unexpected, readFileBytes: unexpected, writeFileBytes: unexpected, createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
-	readFile: async () => ({ resource, content: fileContent, revision }),
+	stat: async target => {
+		if (directories.has(target.toString())) { return { resource: target, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }; }
+		if (binaryFiles.has(target.toString()) || !target.path.includes('/assets/')) { return { resource: target, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }; }
+		throw new FileNotFoundError(target);
+	},
+	readDirectory: unexpected,
+	readFileBytes: async target => {
+		const bytes = binaryFiles.get(target.toString());
+		if (!bytes) { throw new FileNotFoundError(target); }
+		return { resource: target, bytes, revision: 'binary' };
+	},
+	writeFileBytes: async (target, bytes) => {
+		binaryFiles.set(target.toString(), bytes);
+		return { revision: 'binary', stat: { resource: target, kind: FileKind.File, sizeBytes: bytes.length, readonly: false, modifiedAtMillis: undefined } };
+	},
+	createDirectory: async target => { directories.add(target.toString()); return { resource: target, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }; },
+	createFile: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
+	readFile: async target => { if (!fileContent) { throw new FileNotFoundError(target); } return { resource: target, content: fileContent, revision }; },
 	writeFile: async request => {
 		writes.push(request);
 		if (request.expectedRevision !== undefined && request.expectedRevision !== revision) { throw new FileRevisionConflictError(resource); }
@@ -319,7 +340,7 @@ test('Design canvas menu keeps selection, applies edits and disappears with its 
 		pressCanvas(view, 'ContextMenu');
 		assert.deepEqual(contextMenu!.getActions().filter(action => !(action instanceof Separator)).map(action => [action.label, action.enabled]), [
 			['Undo', false], ['Redo', false], ['Delete', false], ['Select all', false],
-			['Group', false], ['Ungroup', false], ['Export SVG', false], ['Open design', true],
+			['Duplicate image', false], ['Group', false], ['Ungroup', false], ['Add frame (F)', true], ['Import image', true], ['Export SVG', false], ['Open design', true],
 		]);
 		pressCanvas(view, 'r');
 		pressCanvas(view, 'e');
@@ -390,7 +411,7 @@ test('Design saves and reopens the complete document, rejecting stale writes and
 	pressCanvas(view, 'e');
 	await clickCanvasMenu(view, 'Open design');
 	assert.equal(view.domNode.querySelectorAll('[data-shape-id]').length, 1);
-	assert.equal(JSON.parse(saved).shapes[0].kind, 'rectangle');
+	assert.equal(parseDesignDocument(saved).shapes[0].kind, 'rectangle');
 	pressCanvas(view, 'Tab');
 	pressCanvas(view, 'ArrowRight');
 	revision = '99';
@@ -627,7 +648,7 @@ test('Motion keyframes round trip, scrub without editing, undo and export runnab
 	assert.equal(view.domNode.querySelector<HTMLSelectElement>('select[aria-label="Keyframe"]')!.options.length, 3);
 	await DesignEditorWidget.getFocused(view.domNode)!.saveDocument();
 	const saved = fileContent;
-	assert.equal(JSON.parse(saved).shapes[0].motion.keyframes.length, 3);
+	assert.equal(parseDesignDocument(saved).shapes[0].motion!.keyframes.length, 3);
 	timeline.value = '750'; timeline.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
 	assert.equal(view.domNode.classList.contains('dirty'), false);
 	await clickAction(view, 'Code');
@@ -672,7 +693,7 @@ test('Code contribution escapes user text and Chinese tool, mode and timeline na
 		const source = view.domNode.querySelector<HTMLTextAreaElement>('textarea[aria-label="生成的代码"]')!.value;
 		const html = new browser.window.DOMParser().parseFromString(source, 'text/html');
 		assert.equal(html.querySelectorAll('script').length, 1);
-		assert.equal(JSON.parse(html.querySelector('script')!.textContent!).shapes[0].text, text.value);
+		assert.deepEqual(parseDesignDocument(html.querySelector('script')!.textContent!).shapes.map(shape => shape.kind === 'text' ? shape.text : undefined), [text.value]);
 		assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /doctype html/u);
 	} finally { resetNlsResolver(); }
 });
@@ -720,7 +741,7 @@ test('Design editor tabs use shared save, cancel and discard confirmation', asyn
 		assert.equal(part.activePane!.workingCopy!.isDirty, true);
 		saveDecision = ConfirmResult.SAVE;
 		assert.equal(await part.closeEditor(input), true);
-		assert.equal(JSON.parse(fileContent).shapes.length, 1);
+		assert.equal(parseDesignDocument(fileContent).shapes.length, 1);
 		assert.equal(designEditors.activeEditor.get(), undefined);
 		await part.openEditor(input, { pinned: true });
 		editor = designEditors.activeEditor.get()!;
@@ -772,4 +793,127 @@ test('Design split panes share the window document and retain independent editin
 	first.focus();
 	assert.equal(designEditors.activeEditor.get(), first);
 	assert.equal(first.selection.ids.size, 1);
+});
+
+test('Frame image properties, package media, backup recovery and SVG export keep one editable document', async () => {
+	using view = createView();
+	const controller = view.pane.workingCopy;
+	const bytes = new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=', 'base64'));
+	const sha256 = createHash('sha256').update(bytes).digest('hex');
+	const asset = { id: generateUuid(), name: 'product.png', versions: [{ id: generateUuid(), sha256, path: `assets/${sha256}`, mediaType: 'image/png' as const, width: 1, height: 1 }] };
+	const image = { id: generateUuid(), kind: 'image' as const, assetId: asset.id, assetVersionId: asset.versions[0].id, crop: { x: 0, y: 0, width: 1, height: 1 }, x: 20, y: 30, width: 200, height: 100, rotation: 0, fill: '#ffffff' };
+	const frame = { id: generateUuid(), kind: 'frame' as const, clip: true, children: [image], x: 100, y: 200, width: 640, height: 480, rotation: 0, fill: '#ffffff' };
+	controller.restoreBackup(JSON.stringify({ manifest: serializeDesignDocument(documentFromShapes([frame], undefined, [asset])), media: { [sha256]: Buffer.from(bytes).toString('base64') } }));
+	const editor = DesignEditorWidget.getFocused(view.domNode)!;
+	editor.selectShape(image.id);
+	const crop = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Crop width (%)"]')!;
+	crop.value = '50'; crop.dispatchEvent(new browser.window.Event('change'));
+	assert.equal(view.domNode.querySelector('svg[data-shape-id] svg[data-shape-id]')!.getAttribute('viewBox'), '0 0 0.5 1');
+	pressCanvas(view, 'ArrowRight');
+	assert.equal((controller.model.value.shapes[0] as typeof frame).children[0].x, 21);
+	editor.selectShape(frame.id);
+	const width = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Width"]')!;
+	width.value = '800'; width.dispatchEvent(new browser.window.Event('change'));
+	assert.equal((controller.model.value.shapes[0] as typeof frame).children[0].width, 200);
+	const beforeSave = controller.model.value;
+	fileContent = ''; revision = '0'; errors = []; binaryFiles.clear();
+	assert.equal(await editor.saveDocument(), true);
+	assert.deepEqual(binaryFiles.get(URI.joinPath(resource, `assets/${sha256}`).toString()), bytes);
+	assert.equal(writes.at(-1)!.resource.path, '/design.ash-design/manifest.json');
+	assert.deepEqual(parseDesignDocument(fileContent), beforeSave);
+	assert.equal(controller.isDirty, false);
+	const backup = controller.backup();
+	using recovered = services.createInstance(DesignDocumentController);
+	recovered.restoreBackup(backup);
+	assert.deepEqual(recovered.readMedia(asset.versions[0]), bytes);
+	assert.deepEqual(recovered.model.value, beforeSave);
+	assert.equal(recovered.isDirty, true);
+	await clickCanvasMenu(view, 'Export SVG');
+	assert.match(fileContent, /href="data:image\/png;base64,/u);
+	assert.equal(controller.isDirty, false);
+	fileContent = serializeDesignDocument(beforeSave);
+	await controller.openDocument();
+	assert.deepEqual(controller.model.value, beforeSave);
+	assert.equal(controller.model.canUndo, false);
+	const active = controller.model.value;
+	binaryFiles.set(URI.joinPath(resource, `assets/${sha256}`).toString(), new Uint8Array([1, 2, 3]));
+	await controller.openDocument();
+	assert.equal(controller.model.value, active);
+	assert.equal(errors.length, 1);
+	assert.equal(errors[0], 'Could not open the design.');
+	assert.throws(() => recovered.restoreBackup(JSON.stringify({ manifest: serializeDesignDocument(beforeSave), media: {} })), /Missing design backup media/u);
+	assert.equal(recovered.model.value.documentId, beforeSave.documentId);
+});
+
+test('Frame rotation keeps keyboard movement in canvas directions and unclipped exports retain overflow', async () => {
+	using view = createView();
+	const controller = view.pane.workingCopy;
+	const child = { id: generateUuid(), kind: 'rectangle' as const, x: 20, y: 30, width: 50, height: 40, rotation: 0, fill: '#ffffff' };
+	const frame = { id: generateUuid(), kind: 'frame' as const, clip: false, children: [child], x: 100, y: 200, width: 100, height: 100, rotation: 90, fill: '#ffffff' };
+	controller.model.replace(documentFromShapes([frame]));
+	DesignEditorWidget.getFocused(view.domNode)!.selectShape(child.id);
+	pressCanvas(view, 'ArrowRight');
+	const updated = controller.model.value.shapes[0];
+	assert.equal(updated.kind, 'frame');
+	if (updated.kind !== 'frame') { throw new Error('Expected frame'); }
+	assert.equal(updated.children[0].x, 20);
+	assert.equal(updated.children[0].y, 29);
+	const { exportDesignSvg } = await import('../../contrib/design/browser/svgRenderer.js');
+	const overflowing = { ...frame, rotation: 0, children: [{ ...child, x: -50, y: -20 }] };
+	assert.match(exportDesignSvg(documentFromShapes([overflowing])), /viewBox="50 180 150 120"/u);
+	assert.match(exportDesignSvg(documentFromShapes([{ ...overflowing, clip: true }])), /viewBox="100 200 100 100"/u);
+	const { generateDesignCode } = await import('../../contrib/design/contrib/code/browser/designCodeGenerator.js');
+	const motion = { duration: 1000, loop: false, keyframes: [{ offset: 0, x: -50, y: -20, rotation: 0, opacity: 1 }, { offset: 1, x: 40, y: -20, rotation: 0, opacity: 1 }] };
+	const code = generateDesignCode(documentFromShapes([{ ...overflowing, children: [{ ...overflowing.children[0], motion }] }]));
+	assert.match(code, new RegExp(`@keyframes ash-design-object-${child.id}-motion`, 'u'));
+	assert.match(code, /overflow: visible/u);
+});
+
+test('Saving captures a baseline while later edits and Save As retain dirty state and history', async () => {
+	fileContent = ''; revision = '0';
+	const files = services.get(IFileService);
+	let release: (() => void) | undefined;
+	let entered: (() => void) | undefined;
+	const writing = new Promise<void>(resolve => { entered = resolve; });
+	const pending = new Promise<void>(resolve => { release = resolve; });
+	const childServices = services.createChild();
+	childServices.registerInstance(IFileService, { ...files, writeFile: async request => { entered!(); await pending; return files.writeFile(request); } });
+	using controller = childServices.createInstance(DesignDocumentController);
+	const shape = { id: generateUuid(), kind: 'rectangle' as const, x: 0, y: 0, width: 50, height: 40, rotation: 0, fill: '#ffffff' };
+	controller.model.applyEdit([shape]);
+	const saving = controller.saveDocument();
+	await writing;
+	controller.model.applyEdit([{ ...shape, x: 20 }]);
+	release!();
+	assert.equal(await saving, false);
+	assert.equal(parseDesignDocument(fileContent).shapes[0].x, 0);
+	assert.equal(controller.isDirty, true);
+	controller.model.undo();
+	assert.equal(controller.isDirty, false);
+	controller.model.redo();
+	const originalIdentity = controller.model.value.documentId;
+	assert.equal(await controller.saveDocument(URI.file('/copy.ash-design')), true);
+	const copied = parseDesignDocument(fileContent);
+	assert.notEqual(copied.documentId, originalIdentity);
+	controller.model.undo();
+	assert.equal(controller.model.value.documentId, copied.documentId);
+	assert.equal(controller.model.value.shapes[0].x, 0);
+	assert.equal(controller.isDirty, true);
+	childServices.dispose();
+});
+
+test('Chinese frame and image controls use translated labels and accessible descriptions', async () => {
+	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using view = createView();
+		pressCanvas(view, 'f');
+		assert.equal(view.domNode.querySelector('button[aria-label="添加画板 (F)"]') !== null, true);
+		assert.equal(view.domNode.querySelector('button[aria-label="导入图片"]') !== null, true);
+		assert.equal(view.propertiesDomNode.querySelector('input[aria-label="裁切画板内容"]') !== null, true);
+		assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /画板/u);
+		assert.match(chinese.bundles.ash['sessions.design.mediaHelp'], /原图保持完整/u);
+	} finally { resetNlsResolver(); }
 });

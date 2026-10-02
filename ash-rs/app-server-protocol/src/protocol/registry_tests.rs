@@ -192,6 +192,18 @@ fn session_directory_move_is_session_exclusive() {
     );
 }
 #[test]
+fn marketplace_catalog_queries_do_not_hold_the_global_mutation_lock() {
+    for method in ["marketplace/search", "marketplace/get"] {
+        assert_eq!(
+            definition(method)
+                .serialization_scope(&serde_json::json!({}))
+                .unwrap(),
+            None,
+        );
+    }
+}
+
+#[test]
 fn account_usage_queries_do_not_hold_the_global_mutation_lock() {
     assert_eq!(
         definition("account/read")

@@ -99,7 +99,7 @@ export class DesignMotionWidget extends Disposable {
 			const frame = sampleDesignMotion(shape, this.time);
 			opacity.set(shape.id, frame.opacity);
 			const geometry = { ...shape, x: frame.x, y: frame.y, rotation: frame.rotation };
-			return geometry.kind === 'group' ? { ...geometry, children: geometry.children.map(sample) } : geometry;
+			return geometry.kind === 'group' || geometry.kind === 'frame' ? { ...geometry, children: geometry.children.map(sample) } : geometry;
 		};
 		return { shapes: this.model.value.shapes.map(sample), opacity };
 	}
@@ -135,11 +135,11 @@ export class DesignMotionWidget extends Disposable {
 	}
 
 	private hasMotion(shapes: readonly DesignShape[]): boolean {
-		return shapes.some(shape => !!shape.motion || (shape.kind === 'group' && this.hasMotion(shape.children)));
+		return shapes.some(shape => !!shape.motion || ((shape.kind === 'group' || shape.kind === 'frame') && this.hasMotion(shape.children)));
 	}
 
 	private hasLoop(shapes: readonly DesignShape[]): boolean {
-		return shapes.some(shape => shape.motion?.loop || (shape.kind === 'group' && this.hasLoop(shape.children)));
+		return shapes.some(shape => shape.motion?.loop || ((shape.kind === 'group' || shape.kind === 'frame') && this.hasLoop(shape.children)));
 	}
 
 	private addKeyframe(): void {

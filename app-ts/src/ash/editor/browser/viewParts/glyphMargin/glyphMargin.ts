@@ -190,7 +190,7 @@ export class GlyphMarginWidgets extends ViewPart {
 			for (let lineNumber = start; lineNumber <= end; lineNumber += 1) {
 				const modelPosition = this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(lineNumber, 1));
 				const laneIndex = this._context.viewModel.glyphLanes.getLanesAtLine(modelPosition.lineNumber).indexOf(lane);
-				candidates.push({ kind: 'decoration', lineNumber, laneIndex, zIndex: decoration.options.zIndex ?? 0, className });
+				candidates.push({ kind: 'decoration', lineNumber, laneIndex, lane, zIndex: decoration.options.zIndex ?? 0, className });
 			}
 		}
 		candidates.sort(comparePreparedGlyphCandidates);
@@ -234,7 +234,9 @@ export class GlyphMarginWidgets extends ViewPart {
 		for (let index = 0; index < this.preparedModelDecorations.length; index += 1) {
 			const decoration = this.preparedModelDecorations[index];
 			const node = this.modelDecorationNodes[index] ?? this.createModelDecorationNode();
-			node.setClassName(`cgmr ${decoration.className}`);
+			// Hit testing consumes the semantic lane, not the current visual lane index.
+			node.setClassName(`cgmr stanza-editor-glyph-margin-decoration stanza-editor-glyph-margin-lane ${decoration.className}`);
+			node.setAttribute('data-glyph-margin-lane', String(decoration.lane));
 			node.setTop(context.viewportData.relativeVerticalOffset[decoration.lineNumber - context.viewportData.startLineNumber] ?? 0);
 			node.setLeft(this.glyphMarginLeft + decoration.laneIndex * this.lineHeight);
 			node.setWidth(laneWidth);
@@ -280,6 +282,7 @@ type PreparedGlyphCandidate =
 
 interface PreparedModelDecoration {
 	readonly kind: 'decoration';
+	readonly lane: GlyphMarginLane;
 	readonly lineNumber: number;
 	readonly laneIndex: number;
 	readonly zIndex: number;

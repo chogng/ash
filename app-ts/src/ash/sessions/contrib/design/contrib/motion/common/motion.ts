@@ -14,5 +14,5 @@ export function sampleDesignMotion(shape: DesignShape, time: number): DesignKeyf
 }
 
 export function designMotionDuration(shapes: readonly DesignShape[]): number {
-	return Math.max(1000, ...shapes.map(shape => Math.max(shape.motion?.duration ?? 0, shape.kind === 'group' ? designMotionDuration(shape.children) : 0)));
+	return Math.max(1000, ...shapes.map(shape => Math.max(shape.motion?.duration ?? 0, shape.kind === 'group' || shape.kind === 'frame' ? designMotionDuration(shape.children) : 0)));
 }

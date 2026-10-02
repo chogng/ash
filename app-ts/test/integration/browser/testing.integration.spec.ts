@@ -1,0 +1,56 @@
+import { expect, test } from '@playwright/test';
+
+test('test tree runs exact selection, reports failures and keeps script tasks separate', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/testing.html');
+	const tree = page.getByRole('tree', { name: 'Tests' });
+	await expect(tree).toContainText('checks::passes');
+	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row', { hasText: 'checks::fails' }) }).click();
+	await page.getByRole('button', { name: 'Run Selected', exact: true }).click();
+	await expect(page.getByRole('status')).toContainText('1 failed');
+	expect(await page.evaluate(() => window.ashTestingIntegration.runs())).toEqual([['fixture:lib:fixture:checks::fails']]);
+	await expect(page.getByRole('region', { name: 'Test result' })).toContainText('fixture failure');
+	await page.getByRole('button', { name: 'Open Failure Location', exact: true }).click();
+	expect(await page.evaluate(() => window.ashTestingIntegration.opened)).toContainEqual({ path: '/workspace/src/lib.rs', line: 4 });
+	await page.getByRole('button', { name: 'Rerun Failed', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashTestingIntegration.runs().length)).toBe(2);
+	await expect(page.getByRole('button', { name: 'Run All Tests', exact: true })).toBeEnabled();
+	await page.getByRole('button', { name: 'Run All Tests', exact: true }).click();
+	await expect(page.getByRole('status')).toContainText('1 passed');
+	expect(await page.evaluate(() => window.ashTestingIntegration.scriptRuns())).toBe(0);
+	await page.getByText('Test Scripts', { exact: true }).click();
+	await page.getByRole('button', { name: 'Run Script', exact: true }).click();
+	await expect(page.getByRole('status')).toHaveText('Script invoked');
+	expect(await page.evaluate(() => window.ashTestingIntegration.scriptRuns())).toBe(1);
+	expect(await page.evaluate(() => window.ashTestingIntegration.accessible())).toContain('checks::fails: Failed');
+	expect(errors).toEqual([]);
+});
+
+test('keyboard navigation, gutter execution, cancellation and disconnect preserve test ownership', async ({ page }) => {
+	await page.goto('/testing.html');
+	await expect(page.locator('.ash-testing-gutter')).toHaveCount(2);
+	await page.locator('.ash-testing-gutter').first().click();
+	await expect.poll(() => page.evaluate(() => window.ashTestingIntegration.runs().length)).toBe(1);
+	const tree = page.getByRole('tree', { name: 'Tests' });
+	await expect(page.getByRole('button', { name: 'Run All Tests', exact: true })).toBeEnabled();
+	await tree.focus();
+	await expect(tree).toBeFocused();
+	await page.keyboard.press('Home');
+	await page.keyboard.press('ArrowDown');
+	await page.keyboard.press('ArrowDown');
+	await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashTestingIntegration.opened.length)).toBeGreaterThan(0);
+	await page.evaluate(() => window.ashTestingIntegration.hold());
+	await page.getByRole('button', { name: 'Run All Tests', exact: true }).click();
+	await expect(page.getByRole('status')).toHaveText('Running tests…');
+	await expect(page.getByRole('button', { name: 'Refresh Tests', exact: true })).toBeDisabled();
+	await page.getByRole('button', { name: 'Cancel Tests', exact: true }).click();
+	await expect(tree).toContainText('Cancelled');
+	await expect(page.getByRole('button', { name: 'Run All Tests', exact: true })).toBeEnabled();
+	await page.evaluate(() => window.ashTestingIntegration.edit());
+	await expect(page.locator('.ash-testing-gutter')).toHaveCount(0);
+	await page.evaluate(() => window.ashTestingIntegration.disconnect());
+	await expect(tree.getByRole('treeitem')).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Run All Tests', exact: true })).toBeDisabled();
+});

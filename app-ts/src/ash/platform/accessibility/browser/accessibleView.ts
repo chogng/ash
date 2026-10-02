@@ -21,6 +21,7 @@ export const enum AccessibleViewProviderId {
 	Notifications = 'notifications',
 	ScmMerge = 'scmMerge',
 	DiffEditor = 'diffEditor',
+	Testing = 'testing',
 }
 
 export const enum AccessibleViewType {
@@ -48,6 +49,7 @@ export const enum AccessibilityVerbositySettingId {
 	Notifications = 'accessibility.verbosity.notifications',
 	ScmMerge = 'accessibility.verbosity.scmMerge',
 	DiffEditor = 'accessibility.verbosity.diffEditor',
+	Testing = 'accessibility.verbosity.testing',
 }
 
 export interface IAccessibleViewOptions {

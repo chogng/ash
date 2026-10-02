@@ -2131,6 +2131,9 @@
         "InvalidParams",
         "AdvisorDisabled",
         "InternalError",
+        "TestingNotFound",
+        "TestingBusy",
+        "TestingOperationFailed",
         "QueueUnavailable",
         "QueueNotFound",
         "QueueConflict",
@@ -9103,6 +9106,86 @@
         {
           "properties": {
             "method": {
+              "const": "testing/discover",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TestingDiscoverParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "testing/run",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TestingRunParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "testing/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TestingOperationParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "testing/cancel",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TestingOperationParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "testing/release",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TestingOperationParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "debug/adapter/start",
               "type": "string"
             },
@@ -14212,6 +14295,86 @@
           "properties": {
             "method": {
               "const": "terminal/close",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "testing/discover",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "testing/run",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "testing/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TestingSnapshot"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "testing/cancel",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TestingSnapshot"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "testing/release",
               "type": "string"
             },
             "result": {
@@ -32927,6 +33090,22 @@
         {
           "properties": {
             "method": {
+              "const": "testing/updated",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TestingUpdate"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "account/login/completed",
               "type": "string"
             },
@@ -37207,6 +37386,276 @@
       "required": [
         "terminalId",
         "data"
+      ],
+      "type": "object"
+    },
+    "TestingDiscoverParams": {
+      "additionalProperties": false,
+      "description": "Discovers conventional Rust #[test] functions without building the workspace.",
+      "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId"
+      ],
+      "type": "object"
+    },
+    "TestingItem": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "line": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "package": {
+          "type": "string"
+        },
+        "path": {
+          "description": "Slash-separated path relative to the authorized workspace directory.",
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "targetKind": {
+          "$ref": "#/$defs/TestingTargetKind"
+        }
+      },
+      "required": [
+        "id",
+        "package",
+        "target",
+        "targetKind",
+        "name",
+        "path",
+        "line"
+      ],
+      "type": "object"
+    },
+    "TestingOperationKind": {
+      "enum": [
+        "discovery",
+        "run"
+      ],
+      "type": "string"
+    },
+    "TestingOperationParams": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId"
+      ],
+      "type": "object"
+    },
+    "TestingOperationStatus": {
+      "enum": [
+        "running",
+        "completed",
+        "cancelled",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "TestingResult": {
+      "properties": {
+        "durationMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "failureLine": {
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "failurePath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "output": {
+          "type": "string"
+        },
+        "outputTruncated": {
+          "type": "boolean"
+        },
+        "state": {
+          "$ref": "#/$defs/TestingState"
+        },
+        "testId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "testId",
+        "state",
+        "durationMs",
+        "output",
+        "outputTruncated"
+      ],
+      "type": "object"
+    },
+    "TestingRunParams": {
+      "additionalProperties": false,
+      "description": "Selects exact identities from a completed, connection-owned discovery.",
+      "properties": {
+        "catalogId": {
+          "type": "string"
+        },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "testIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "operationId",
+        "catalogId",
+        "testIds"
+      ],
+      "type": "object"
+    },
+    "TestingSnapshot": {
+      "description": "Read restores the state of an already-started operation; it never replays execution.",
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/TestingOperationKind"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/$defs/TestingResult"
+          },
+          "type": "array"
+        },
+        "sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/TestingOperationStatus"
+        },
+        "tests": {
+          "items": {
+            "$ref": "#/$defs/TestingItem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "operationId",
+        "kind",
+        "status",
+        "tests",
+        "results",
+        "sequence"
+      ],
+      "type": "object"
+    },
+    "TestingState": {
+      "enum": [
+        "running",
+        "passed",
+        "failed",
+        "skipped",
+        "errored",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "TestingTargetKind": {
+      "enum": [
+        "library",
+        "binary",
+        "integration"
+      ],
+      "type": "string"
+    },
+    "TestingUpdate": {
+      "description": "Sequence-ordered updates go only to the issuing connection. Cancel waits for the final\nupdate and process termination; release additionally discards the operation's backend state.",
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TestingResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/TestingOperationStatus"
+        },
+        "tests": {
+          "items": {
+            "$ref": "#/$defs/TestingItem"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "sequence",
+        "status"
       ],
       "type": "object"
     },

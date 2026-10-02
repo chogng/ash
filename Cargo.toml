@@ -84,6 +84,7 @@ members = [
     "ash-rs/core-api",
     "ash-rs/diff",
     "ash-rs/debug-adapter",
+    "ash-rs/testing",
     "ash-rs/extensions",
     "ash-rs/editor-extension-host",
     "ash-rs/environment",
@@ -231,6 +232,7 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+testing = { package = "ash-testing", path = "ash-rs/testing" }
 cli = { package = "ash-utils-cli", path = "ash-rs/utils/cli" }
 cargo-bin = { package = "ash-utils-cargo-bin", path = "ash-rs/utils/cargo-bin" }
 runfiles = { git = "https://github.com/dzbarsky/rules_rust", rev = "b56cbaa8465e74127f1ea216f813cd377295ad81" }

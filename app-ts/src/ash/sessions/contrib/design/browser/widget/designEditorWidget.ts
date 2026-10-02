@@ -8,7 +8,7 @@ import { IContextKeyService } from '../../../../../platform/contextkey/browser/c
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { DesignMode, DesignTool } from '../../common/config/editorConfiguration.js';
 import type { DesignShape } from '../../common/model/document.js';
-import { hitTestDesignShapes } from '../../common/model/hitTest.js';
+import { getDesignShapeEntries, hitTestDesignShapes } from '../../common/model/hitTest.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import type { DesignPoint } from '../../common/core/geometry.js';
 import { DocumentCommands } from '../../common/commands/documentCommands.js';
@@ -16,6 +16,8 @@ import { DesignSelection } from '../../common/selection.js';
 import type { DesignDocumentController } from '../designDocumentController.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { DesignMediaPreview } from '../designMedia.js';
+import { generateUuid } from '../../../../../base/common/uuid.js';
 import { DesignView } from '../view.js';
 import { DesignViewport } from '../../common/viewport.js';
 import { DesignInputController } from '../controller/designInputController.js';
@@ -32,6 +34,7 @@ export class DesignEditorWidget extends Disposable {
 	public readonly selection = new DesignSelection();
 	private readonly viewChange = this._register(new Emitter<void>());
 	public readonly onDidChangeView = this.viewChange.event;
+	private readonly mediaPreview = this._register(new DesignMediaPreview());
 	private readonly camera = new DesignViewport();
 	private readonly canvas: DesignView;
 	private readonly properties: IDesignPropertiesContribution;
@@ -70,7 +73,7 @@ export class DesignEditorWidget extends Disposable {
 		this.canvas = this._register(instantiationService.createInstance(DesignView, ownerDocument));
 		this.canvas.setTool(this.tool);
 		const stage = h(ownerDocument, 'div', { className: 'ash-sessions-design-stage' });
-		this.toolsWidget = this._register(instantiationService.createInstance(DesignToolsWidget, ownerDocument, (tool: DesignTool) => commandService.executeCommand(`sessions.design.tool.${tool}`, this), (mode: DesignMode) => commandService.executeCommand(`sessions.design.mode.${mode}`, this)));
+		this.toolsWidget = this._register(instantiationService.createInstance(DesignToolsWidget, ownerDocument, (tool: DesignTool) => commandService.executeCommand(`sessions.design.tool.${tool}`, this), (mode: DesignMode) => commandService.executeCommand(`sessions.design.mode.${mode}`, this), (action: string) => commandService.executeCommand(`sessions.design.${action}`, this)));
 		const contributions = this._register(createContributions({
 			ownerDocument,
 			documentController,
@@ -101,7 +104,7 @@ export class DesignEditorWidget extends Disposable {
 		this._register(this.documentController.model.onDidChange(kind => {
 			this.cancelGesture();
 			if (kind === 'replace') { this.select([]); }
-			else if (this.selection.retain(this.documentController.model.value.shapes)) { this.announceSelection(); }
+			else if (this.selection.retain(getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape))) { this.announceSelection(); }
 			this.render();
 		}));
 		this._register(documentController.onDidChange(event => {
@@ -169,7 +172,7 @@ export class DesignEditorWidget extends Disposable {
 	}
 
 	private get selectedShape(): DesignShape | undefined { return this.selection.ids.size === 1 ? this.selectedShapes[0] : undefined; }
-	private get selectedShapes(): readonly DesignShape[] { return this.documentController.model.value.shapes.filter(shape => this.selection.ids.has(shape.id)); }
+	private get selectedShapes(): readonly DesignShape[] { return getDesignShapeEntries(this.documentController.model.value.shapes).filter(entry => this.selection.ids.has(entry.shape.id) && !entry.ancestors.some(id => this.selection.ids.has(id))).map(entry => entry.shape); }
 
 	private select(ids: readonly string[]): void {
 		this.selection.set(ids);
@@ -211,20 +214,54 @@ export class DesignEditorWidget extends Disposable {
 		this.render();
 	}
 
+	public addFrame(): void {
+		if (this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion) { return; }
+		this.cancelGesture();
+		this.select([this.commands.addFrame(this.viewportCenter())]);
+		this.render();
+		this.focus();
+	}
+
+	private viewportCenter(): DesignPoint { return this.camera.toWorld({ x: this.dimension.width / 2, y: this.canvas.domNode.clientHeight / 2 }); }
+
+	public async importImage(): Promise<void> {
+		if (this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion) { return; }
+		this.cancelGesture();
+		const selected = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => this.selection.ids.has(entry.shape.id));
+		const center = selected?.world.kind === 'frame' ? { x: selected.world.x + selected.world.width / 2, y: selected.world.y + selected.world.height / 2 } : this.viewportCenter();
+		const id = await this.documentController.importImage(center);
+		if (this.isDisposed) { return; }
+		if (id) { this.select([id]); this.render(); }
+		this.focus();
+	}
+
+	private duplicateImage(): void {
+		if (this.documentController.isBusy || this.selectedShape?.kind !== 'image') { return; }
+		const shape = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === this.selectedShape!.id)!.world;
+		const id = generateUuid();
+		this.commands.insertShape({ ...shape, id, x: shape.x + 20, y: shape.y + 20, ...(shape.motion ? { motion: { ...shape.motion, keyframes: shape.motion.keyframes.map(frame => ({ ...frame, x: frame.x + 20, y: frame.y + 20 })) } } : {}) });
+		this.select([id]); this.render(); this.focus();
+	}
+
 	private renderShapes(): void {
 		const scene = this.mode === DesignMode.Motion ? this.motion.getScene() : undefined;
-		const shapes = (scene?.shapes ?? this.documentController.model.value.shapes).map(shape => this.input.preview.find(preview => preview.id === shape.id) ?? shape);
-		const selected = shapes.filter(shape => this.selection.ids.has(shape.id));
+		const preview = (shape: DesignShape): DesignShape => {
+			const updated = this.input.preview.find(preview => preview.id === shape.id) ?? shape;
+			return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(preview) } : updated;
+		};
+		const shapes = (scene?.shapes ?? this.documentController.model.value.shapes).map(preview);
+		const selected = getDesignShapeEntries(shapes).filter(entry => this.selection.ids.has(entry.shape.id));
 		this.canvas.render({
 			shapes,
-			selectedShapes: selected,
+			selectedShapes: selected.map(entry => entry.world),
+			images: this.mediaPreview.getSources(this.documentController.model.value, version => this.documentController.readMedia(version)),
 			draft: this.drawing.preview,
 			showPathHandles: this.mode !== DesignMode.Motion,
 			scale: this.camera.scale,
 			opacity: scene?.opacity,
 		});
 		const showProperties = this.mode === DesignMode.Design || this.mode === DesignMode.Draw;
-		this.properties.update(showProperties && selected.length === 1 ? selected[0] : undefined, showProperties);
+		this.properties.update(showProperties && selected.length === 1 ? selected[0].shape : undefined, showProperties);
 		this.viewChange.fire();
 	}
 
@@ -265,10 +302,13 @@ export class DesignEditorWidget extends Disposable {
 			new Separator(),
 			this.action('delete', localize('sessions.design.delete', 'Delete'), () => this.deleteSelected(), !this.documentController.isBusy && this.selection.ids.size > 0),
 			this.action('selectAll', localize('sessions.design.selectAll', 'Select all'), () => this.selectAll(), !this.documentController.isBusy && shapes.length > 0),
-			this.action('group', localize('sessions.design.group', 'Group'), () => this.groupSelected(), !this.documentController.isBusy && this.selection.ids.size > 1),
+			this.action('duplicateImage', localize('sessions.design.duplicateImage', 'Duplicate image'), () => this.duplicateImage(), !this.documentController.isBusy && selected?.kind === 'image'),
+			this.action('group', localize('sessions.design.group', 'Group'), () => this.groupSelected(), !this.documentController.isBusy && this.commands.canGroup(this.selection.ids)),
 			this.action('ungroup', localize('sessions.design.ungroup', 'Ungroup'), () => this.ungroupSelected(), !this.documentController.isBusy && selected?.kind === 'group' && !selected.motion),
 			...this.properties.getActions(),
 			new Separator(),
+			this.action('addFrame', localize('sessions.design.addFrame', 'Add frame (F)'), () => this.addFrame(), !this.documentController.isBusy && this.mode !== DesignMode.Code && this.mode !== DesignMode.Motion),
+			this.action('importImage', localize('sessions.design.importImage', 'Import image'), () => this.importImage(), !this.documentController.isBusy && this.mode !== DesignMode.Code && this.mode !== DesignMode.Motion),
 			this.action('export', localize('sessions.design.export', 'Export SVG'), () => this.runFileOperation(() => this.documentController.exportDocument()), !this.documentController.isBusy && shapes.length > 0),
 			this.action('open', localize('sessions.design.open', 'Open design'), () => this.runFileOperation(() => this.documentController.openDocument()), !this.documentController.isBusy),
 		];
@@ -289,12 +329,15 @@ export class DesignEditorWidget extends Disposable {
 				text: localize('sessions.design.text', 'Text'),
 				path: localize('sessions.design.path', 'Bézier path'),
 				group: localize('sessions.design.group', 'Group'),
+				frame: localize('sessions.design.frame', 'Frame'),
+				image: localize('sessions.design.image', 'Image'),
 			};
 			let content = localize('sessions.design.shapeDescription', '{0}. {1}: X {2}, Y {3}, width {4}, height {5}, rotation {6} degrees, fill {7}', index + 1, labels[shape.kind], shape.x, shape.y, shape.width, shape.height, shape.rotation, shape.fill);
 			if (this.selection.ids.has(shape.id)) { content += ' · ' + localize('sessions.design.selected', 'Selected'); }
 			if (shape.kind === 'text') { content += `\n${shape.text}`; }
 			if (shape.kind === 'path') { content += '\n' + localize('sessions.design.pathDescription', '{0} nodes; closed: {1}', shape.nodes.length, shape.closed ? localize('sessions.design.yes', 'Yes') : localize('sessions.design.no', 'No')); }
-			if (shape.kind === 'group') { content += '\n' + shape.children.map(describe).join('\n'); }
+			if (shape.kind === 'image') { content += '\n' + this.documentController.model.value.assets.find(asset => asset.id === shape.assetId)!.name; }
+			if (shape.kind === 'group' || shape.kind === 'frame') { content += '\n' + shape.children.map(describe).join('\n'); }
 			if (shape.motion) { content += '\n' + localize('sessions.design.motionDescription', '{0} keyframes, duration {1} ms, loop: {2}', shape.motion.keyframes.length, shape.motion.duration, shape.motion.loop ? localize('sessions.design.yes', 'Yes') : localize('sessions.design.no', 'No')); }
 			return content;
 		};
@@ -348,10 +391,18 @@ export class DesignEditorWidget extends Disposable {
 		const directions: Record<string, DesignPoint> = { ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 } };
 		const direction = directions[event.key];
 		if (direction) {
-			if (shapes.length) { this.commands.updateShapes(shapes.map(shape => ({ ...shape, x: shape.x + direction.x * distance, y: shape.y + direction.y * distance }))); }
+			if (shapes.length) {
+				const entries = getDesignShapeEntries(this.documentController.model.value.shapes);
+				this.commands.updateShapes(shapes.map(shape => {
+					const radians = -(entries.find(entry => entry.shape.id === shape.id)!.parent?.rotation ?? 0) * Math.PI / 180;
+					return { ...shape, x: shape.x + (direction.x * Math.cos(radians) - direction.y * Math.sin(radians)) * distance, y: shape.y + (direction.x * Math.sin(radians) + direction.y * Math.cos(radians)) * distance };
+				}));
+			}
 			else { this.camera.panBy(-direction.x * KEYBOARD_PAN_DISTANCE, -direction.y * KEYBOARD_PAN_DISTANCE); this.applyTransform(); }
 		} else {
 			 switch (event.key.toLowerCase()) {
+				case 'f': this.addFrame(); break;
+				case 'i': void this.importImage(); break;
 				case 'v': this.setTool(DesignTool.Select); break;
 				case 'h': this.setTool(DesignTool.Hand); break;
 				case 'r': this.addShape('rectangle'); break;
@@ -361,14 +412,14 @@ export class DesignEditorWidget extends Disposable {
 				case 'g': this.groupSelected(); break;
 				case 'u': this.ungroupSelected(); break;
 				case 'n': {
-					const shapes = this.documentController.model.value.shapes;
+					const shapes = getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape);
 					const next = shapes.find(shape => !this.selection.ids.has(shape.id));
 					if (next) { this.selection.add(next.id); this.announceSelection(); this.render(); }
 					break;
 				}
 				case 'delete': case 'backspace': this.deleteSelected(); break;
 				case 'tab': {
-					const shapes = this.documentController.model.value.shapes;
+					const shapes = getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape);
 					const index = shapes.findIndex(item => item.id === this.selectedShapes.at(-1)?.id);
 					const next = index + (event.shiftKey ? -1 : 1);
 					if (next < 0 || next >= shapes.length) { return; }

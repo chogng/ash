@@ -9,12 +9,16 @@ import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/p
 import type { DesignShape } from '../common/model/document.js';
 import { IDesignEditorService } from './designEditorService.js';
 
+interface DesignLayer { readonly element: DesignShape; readonly children?: readonly DesignLayer[]; }
+
 function shapeLabel(shape: DesignShape): string {
 	switch (shape.kind) {
 		case 'rectangle': return localize('sessions.design.rectangle', 'Rectangle');
 		case 'ellipse': return localize('sessions.design.ellipse', 'Ellipse');
 		case 'text': return shape.text || localize('sessions.design.text', 'Text');
 		case 'path': return localize('sessions.design.path', 'Bézier path');
+		case 'frame': return localize('sessions.design.frame', 'Frame');
+		case 'image': return localize('sessions.design.image', 'Image');
 		case 'group': return localize('sessions.design.group', 'Group');
 	}
 }
@@ -54,7 +58,8 @@ export class DesignLayersView extends ViewPane {
 				if (shapes !== renderedShapes) {
 					renderedShapes = shapes;
 					// Frontmost objects appear first, without changing the document's paint order.
-					this.tree.setChildren([...(shapes ?? [])].reverse().map(element => ({ element })));
+					const layers = (items: readonly DesignShape[]): DesignLayer[] => [...items].reverse().map(element => ({ element, ...(element.kind === 'frame' ? { children: layers(element.children) } : {}) }));
+					this.tree.setChildren(layers(shapes ?? []));
 				}
 				empty.hidden = !!shapes?.length;
 				this.tree.setSelection([...(editor?.selection.ids ?? [])]);

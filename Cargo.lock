@@ -659,6 +659,7 @@ dependencies = [
  "ash-supergrok",
  "ash-syntax",
  "ash-teams",
+ "ash-testing",
  "ash-thread-transcript",
  "ash-tools",
  "ash-typst",
@@ -2834,6 +2835,22 @@ version = "0.1.0"
 dependencies = [
  "libtest-mimic",
  "tempfile",
+]
+
+[[package]]
+name = "ash-testing"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-exec-server",
+ "ash-file-access",
+ "ash-sandboxing",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tree-sitter",
+ "tree-sitter-rust",
 ]
 
 [[package]]

@@ -115,6 +115,12 @@ test("native host routes validate folder picking and developer tools", async () 
 	assert.throws(() => pickFile.validate({ canSelectFiles: true, canSelectFolders: false, filters: [{ name: 'Text', extensions: ['../txt'] }] }), /Invalid file filter/);
 	const openOptions = { canSelectFiles: true, canSelectFolders: false, canSelectMany: true, filters: [{ name: 'Text', extensions: ['txt'] }] };
 	assert.deepEqual(await pickFile.invoke(pickFile.validate(openOptions)), ['C:\\project\\paper.md']);
+	const packageFilters = [{ name: 'Design', extensions: ['ash-design', 'ash-design.json'] }];
+	assert.deepEqual(pickFile.validate({ ...openOptions, canSelectFolders: true, filters: packageFilters }), { ...openOptions, canSelectFolders: true, filters: packageFilters });
+	assert.deepEqual(saveFile.validate({ filters: packageFilters }), { filters: packageFilters });
+	for (const extension of ['.json', 'ash/design', 'ash\\design', 'ash..json', '*.json']) {
+		assert.throws(() => saveFile.validate({ filters: [{ name: 'Invalid', extensions: [extension] }] }), /Invalid file filter/);
+	}
 	assert.throws(
 		() => saveFile.validate({ defaultName: "" }),
 		/default name must be a non-empty string/,

@@ -5,7 +5,7 @@ import type { DesignDocumentController } from '../designDocumentController.js';
 import type { DocumentCommands } from '../../common/commands/documentCommands.js';
 import { toDesignLocal, type DesignPoint } from '../../common/core/geometry.js';
 import type { DesignShape } from '../../common/model/document.js';
-import { hitTestDesignShapes } from '../../common/model/hitTest.js';
+import { getDesignShapeEntries, hitTestDesignShapes } from '../../common/model/hitTest.js';
 import type { DesignSelection } from '../../common/selection.js';
 import type { DesignViewport } from '../../common/viewport.js';
 import { DesignMode, DesignTool } from '../../common/config/editorConfiguration.js';
@@ -59,7 +59,7 @@ export class DesignInputController extends Disposable {
 
 	public get isGesturing(): boolean { return !!this.gesture || this.drawingPointerId !== undefined; }
 	public get preview(): readonly DesignShape[] { return this.gesture?.preview ?? []; }
-	private get selectedShapes(): readonly DesignShape[] { return this.documentController.model.value.shapes.filter(shape => this.selection.ids.has(shape.id)); }
+	private get selectedShapes(): readonly DesignShape[] { return getDesignShapeEntries(this.documentController.model.value.shapes).filter(entry => this.selection.ids.has(entry.shape.id) && !entry.ancestors.some(id => this.selection.ids.has(id))).map(entry => entry.shape); }
 	private get selectedShape(): DesignShape | undefined { return this.selection.ids.size === 1 ? this.selectedShapes[0] : undefined; }
 	private select(ids: readonly string[]): void { this.selection.set(ids); this.host.selectionChanged(); }
 	private announceSelection(): void { this.host.selectionChanged(); }
@@ -131,7 +131,8 @@ export class DesignInputController extends Disposable {
 		const path = gesture.shapes[0];
 		if (gesture.handle && path.kind === 'path') {
 			const world = this.camera.toWorld(point);
-			const local = toDesignLocal(path, world);
+			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world;
+			const local = toDesignLocal(placed, world);
 			const position = {
 				x: Math.max(0, Math.min(1, local.x / path.width)),
 				y: Math.max(0, Math.min(1, local.y / path.height)),
@@ -144,7 +145,14 @@ export class DesignInputController extends Disposable {
 			gesture.preview = [{ ...path, nodes }];
 			this.host.render();
 		} else if (gesture.shapes.length) {
-			gesture.preview = gesture.shapes.map(shape => ({ ...shape, x: shape.x + (point.x - gesture.start.x) / this.camera.scale, y: shape.y + (point.y - gesture.start.y) / this.camera.scale }));
+			const entries = getDesignShapeEntries(this.documentController.model.value.shapes);
+			gesture.preview = gesture.shapes.map(shape => {
+				const parent = entries.find(entry => entry.shape.id === shape.id)!.parent;
+				const angle = (parent?.rotation ?? 0) * Math.PI / 180;
+				const dx = (point.x - gesture.start.x) / this.camera.scale;
+				const dy = (point.y - gesture.start.y) / this.camera.scale;
+				return { ...shape, x: shape.x + dx * Math.cos(angle) + dy * Math.sin(angle), y: shape.y - dx * Math.sin(angle) + dy * Math.cos(angle) };
+			});
 			this.host.render();
 		} else {
 			this.camera.panBy(point.x - gesture.last.x, point.y - gesture.last.y);

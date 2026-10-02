@@ -67,7 +67,9 @@ export class BrowserFileService extends Disposable implements IFileService, ISys
 	}
 
 	async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
-		const result = await this.api.readDirectory(this.fileTarget(resource));
+		let result: FsReadDirectoryResult;
+		try { result = await this.api.readDirectory(this.fileTarget(resource)); }
+		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		return result.entries.map((entry) => ({
 			resource: resource.joinPathSegment(entry.name),
 			name: entry.name,
@@ -76,12 +78,16 @@ export class BrowserFileService extends Disposable implements IFileService, ISys
 	}
 
 	async readFile(resource: URI): Promise<IFileContent> {
-		const result = await this.api.readFile(this.fileTarget(resource));
+		let result: FsReadFileResult;
+		try { result = await this.api.readFile(this.fileTarget(resource)); }
+		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		return Object.freeze({ resource, content: result.content, revision: result.revision });
 	}
 
 	async readFileBytes(resource: URI): Promise<IFileBytes> {
-		const result = await this.api.readBinaryFile(this.fileTarget(resource));
+		let result: FsReadBinaryFileResult;
+		try { result = await this.api.readBinaryFile(this.fileTarget(resource)); }
+		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		try {
 			const bytes = await this.readResourceBytes(result.resource);
 			return Object.freeze({ resource, bytes, revision: result.revision });

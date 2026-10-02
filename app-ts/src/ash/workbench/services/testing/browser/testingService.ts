@@ -1,16 +1,46 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import type { ILogService } from "../../../../platform/log/common/log.js";
-import { type ITaskRun, type ITaskService } from "../../tasks/common/taskService.js";
-import { type ITestProfile, type ITestRun, type ITestingService, type TestProfileContribution, type TestProfileProvider, type TestProfileProviderRegistration, type TestRunStatus } from "../common/testingService.js";
+import { ILogService } from "../../../../platform/log/common/log.js";
+import { type ITaskRun, ITaskService } from "../../tasks/common/taskService.js";
+import { type ITestCase, type ITestCaseResult, type ITestProfile, type ITestRun, type ITestingService, type TestProfileContribution, type TestProfileProvider, type TestProfileProviderRegistration, type TestRunStatus } from "../common/testingService.js";
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import { URI } from '../../../../base/common/uri.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
+import { localize } from '../../../../nls.js';
+import { ITestExecutionService, type TestUpdate } from '../../../../platform/testing/common/testExecutionService.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
+
+interface TestOperation {
+	readonly id: string;
+	readonly dirId: string;
+	readonly kind: 'discovery' | 'run';
+	readonly completion: Promise<void>;
+	readonly resolve: () => void;
+	readonly reject: (error: Error) => void;
+	sequence: number;
+	start?: Promise<void>;
+	accepted: boolean;
+	abandoned: boolean;
+}
 
 interface OwnedTestProfileProvider {
 	readonly owner: object;
 	readonly provider: TestProfileProvider;
 }
 
-/** Projects test-group workspace tasks into a dedicated testing workflow. */
+/** Owns workspace test catalogs and runs; script profiles retain their task lifecycle. */
 export class TestingService extends Disposable implements ITestingService {
+	private readonly testsEmitter = this._register(new Emitter<void>());
+	private currentTests: readonly ITestCase[] = [];
+	private readonly caseResults = new Map<string, ITestCaseResult>();
+	private readonly operations = new Map<string, TestOperation>();
+	private readonly catalogs = new Map<string, string>();
+	private discovery: Promise<void> | undefined;
+	private discoveryController: AbortController | undefined;
+	private workspaceGeneration = 0;
+	private runController: AbortController | undefined;
+	readonly onDidChangeTests = this.testsEmitter.event;
 	private readonly profilesEmitter = this._register(new Emitter<readonly ITestProfile[]>());
 	private readonly startRunEmitter = this._register(new Emitter<ITestRun>());
 	private readonly changeRunEmitter = this._register(new Emitter<ITestRun>());
@@ -27,8 +57,32 @@ export class TestingService extends Disposable implements ITestingService {
 	readonly onDidStartRun: Event<ITestRun> = this.startRunEmitter.event;
 	readonly onDidChangeRun: Event<ITestRun> = this.changeRunEmitter.event;
 
-	constructor(private readonly taskService: ITaskService, private readonly logService?: ILogService) {
+	constructor(@ITaskService private readonly taskService: ITaskService, @ITestExecutionService private readonly execution: ITestExecutionService, @IWorkspaceContextService private readonly workspace: IWorkspaceContextService, @IWorkingCopyService private readonly workingCopies: IWorkingCopyService, @ILogService private readonly logService: ILogService) {
 		super();
+		this._register(execution.onDidUpdate(update => this.acceptUpdate(update)));
+		this._register(execution.onDidDisconnect(() => {
+			const error = new Error(localize('testing.disconnected', 'The test connection closed. Refresh tests to reconnect.'));
+			for (const operation of this.operations.values()) { operation.abandoned = true; operation.reject(error); }
+			this.workspaceGeneration++;
+			this.runController?.abort();
+			this.discovery = undefined;
+			this.operations.clear();
+			this.catalogs.clear();
+			this.currentTests = [];
+			for (const [key, result] of this.caseResults) {
+				if (result.state === 'running') { this.caseResults.set(key, { ...result, state: 'errored', output: error.message }); }
+			}
+			this.testsEmitter.fire();
+		}));
+		this._register(workspace.onDidChangeWorkspace(() => {
+			void this.releaseTestOperations().catch(error => this.reportError(error));
+			this.currentTests = [];
+			this.caseResults.clear();
+			this.testsEmitter.fire();
+		}));
+		this._register(toDisposable(() => {
+			void this.releaseTestOperations().catch(error => this.reportError(error));
+		}));
 		this._register(taskService.onDidChangeTasks(() => {
 			this.projectProfiles();
 			if (this.loaded && this.refreshingTasks === 0 && !this.activeProviderRefresh) void this.refreshProviderProfiles().catch(error => this.reportError(error));
@@ -45,6 +99,165 @@ export class TestingService extends Disposable implements ITestingService {
 
 	get profiles(): readonly ITestProfile[] { return this.currentProfiles; }
 	get runs(): readonly ITestRun[] { return this.currentRuns; }
+	get tests(): readonly ITestCase[] { return this.currentTests; }
+	get testResults(): readonly ITestCaseResult[] { return [...this.caseResults.values()]; }
+	get isDiscovering(): boolean { return this.discovery !== undefined; }
+	get isRunningTests(): boolean { return this.runController !== undefined; }
+
+	refreshTests(): Promise<void> {
+		if (this.isRunningTests) { return Promise.reject(new Error(localize('testing.alreadyRunning', 'A test run is already active.'))); }
+		return this.loadTests();
+	}
+
+	private loadTests(): Promise<void> {
+		if (this.discovery) { return this.discovery; }
+		this.assertNotDisposed();
+		const controller = new AbortController();
+		this.discoveryController = controller;
+		const discovery = this.discoverTests(controller.signal).finally(() => {
+			if (this.discovery === discovery) { this.discovery = undefined; this.discoveryController = undefined; }
+			if (!this.isDisposed) { this.testsEmitter.fire(); }
+		});
+		this.discovery = discovery;
+		this.testsEmitter.fire();
+		return discovery;
+	}
+
+	async runTests(keys: readonly string[]): Promise<void> {
+		this.assertNotDisposed();
+		if (this.isRunningTests) { throw new Error(localize('testing.alreadyRunning', 'A test run is already active.')); }
+		if (keys.length === 0) { return; }
+		const selected = this.currentTests.filter(test => keys.includes(test.key));
+		if (selected.length !== new Set(keys).size) { throw staleSelection(); }
+		const controller = new AbortController();
+		this.runController = controller;
+		this.testsEmitter.fire();
+		try {
+			const directories = new Set(selected.map(test => test.dirId));
+			const roots = this.workspace.getWorkspace().folders.filter(folder => directories.has(folder.id)).map(folder => folder.uri);
+			for (const copy of this.workingCopies.getAll()) {
+				if (controller.signal.aborted) { return; }
+				if (copy.isDirty && roots.some(root => extUriBiasedIgnorePathCase.isEqualOrParent(copy.resource, root))) {
+					await copy.save(controller.signal);
+				}
+			}
+			if (controller.signal.aborted) { return; }
+			await this.loadTests();
+			if (controller.signal.aborted) { return; }
+			// Validate every folder before starting any process: a stale selection must
+			// not leave a partially launched multi-folder run behind.
+			const groups = [...directories].map(dirId => {
+				const tests = this.currentTests.filter(test => test.dirId === dirId && keys.includes(test.key));
+				const catalogId = this.catalogs.get(dirId);
+				if (!catalogId || tests.length !== selected.filter(test => test.dirId === dirId).length) { throw staleSelection(); }
+				return { dirId, tests, catalogId };
+			});
+			await settle(groups.map(async ({ dirId, tests, catalogId }) => {
+				for (const test of tests) { this.caseResults.delete(test.key); }
+				const operation = this.createOperation(dirId, 'run');
+				try { await this.startOperation(operation, () => this.execution.run(operation.id, dirId, catalogId, tests.map(test => test.id))); }
+				finally { await this.releaseOperation(operation); }
+			}));
+		} finally {
+			if (this.runController === controller) { this.runController = undefined; }
+			if (!this.isDisposed) { this.testsEmitter.fire(); }
+		}
+	}
+
+	rerunFailedTests(): Promise<void> {
+		return this.runTests(this.testResults.filter(result => result.state === 'failed' || result.state === 'errored').map(result => result.key));
+	}
+
+	async cancelTests(): Promise<void> {
+		this.discoveryController?.abort();
+		this.runController?.abort();
+		await settle([...this.operations.values()].map(async operation => {
+			await operation.start?.catch(() => undefined);
+			if (this.operations.get(operation.id) === operation && operation.accepted && !operation.abandoned) { await this.execution.cancel(operation.id); }
+		}));
+	}
+
+	private async discoverTests(signal: AbortSignal): Promise<void> {
+		const generation = this.workspaceGeneration;
+		const oldCatalogs = [...this.catalogs.values()];
+		this.catalogs.clear();
+		await settle(oldCatalogs.map(id => this.execution.release(id)));
+		if (signal.aborted || generation !== this.workspaceGeneration || this.isDisposed) { return; }
+		await settle(this.workspace.getWorkspace().folders.map(async folder => {
+			const operation = this.createOperation(folder.id, 'discovery');
+			try {
+				await this.startOperation(operation, () => this.execution.discover(operation.id, folder.id));
+				// Workspace changes remove the operation before late responses arrive.
+				if (this.operations.get(operation.id) !== operation) { return; }
+				this.catalogs.set(folder.id, operation.id);
+				this.operations.delete(operation.id);
+			} catch (error) {
+				await this.releaseOperation(operation);
+				throw error;
+			}
+		}));
+		const keys = new Set(this.currentTests.map(test => test.key));
+		for (const key of this.caseResults.keys()) { if (!keys.has(key)) { this.caseResults.delete(key); } }
+	}
+
+	private createOperation(dirId: string, kind: TestOperation['kind']): TestOperation {
+		let resolve!: () => void;
+		let reject!: (error: Error) => void;
+		const completion = new Promise<void>((accept, fail) => { resolve = accept; reject = fail; });
+		const operation: TestOperation = { id: generateUuid(), dirId, kind, completion, resolve, reject, sequence: 0, accepted: false, abandoned: false };
+		this.operations.set(operation.id, operation);
+		return operation;
+	}
+
+	private async startOperation(operation: TestOperation, start: () => Promise<void>): Promise<void> {
+		// Observe completion before start: a final notification can precede its response.
+		operation.start = Promise.resolve().then(start).then(() => { operation.accepted = true; });
+		try { await Promise.all([operation.start, operation.completion]); }
+		catch (error) { operation.resolve(); throw error; }
+	}
+
+	private async releaseOperation(operation: TestOperation): Promise<void> {
+		this.operations.delete(operation.id);
+		await operation.start?.catch(() => undefined);
+		if (operation.accepted && !operation.abandoned) { await this.execution.release(operation.id); }
+	}
+
+	private acceptUpdate(update: TestUpdate): void {
+		const operation = this.operations.get(update.operationId);
+		if (!operation || update.sequence <= operation.sequence) { return; }
+		operation.sequence = update.sequence;
+		if (update.tests) {
+			const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === operation.dirId);
+			if (folder) {
+				this.currentTests = [...this.currentTests.filter(test => test.dirId !== folder.id), ...update.tests.map(test => ({
+					...test, key: folder.id + ':' + test.id, dirId: folder.id,
+					resource: URI.joinPath(folder.uri, test.path),
+				}))];
+			}
+		}
+		if (update.result) {
+			const key = operation.dirId + ':' + update.result.testId;
+			this.caseResults.set(key, { ...update.result, key });
+		}
+		if (update.status === 'completed' || update.status === 'cancelled' && operation.kind === 'run') { operation.resolve(); }
+		if (update.status === 'cancelled' && operation.kind === 'discovery') { operation.reject(new Error(localize('testing.cancelled', 'Test operation cancelled.'))); }
+		if (update.status === 'failed') { operation.reject(new Error(update.error ?? localize('testing.operationFailed', 'Test operation failed.'))); }
+		this.testsEmitter.fire();
+	}
+
+	private async releaseTestOperations(): Promise<void> {
+		this.workspaceGeneration++;
+		this.discoveryController?.abort();
+		this.runController?.abort();
+		this.discovery = undefined;
+		const ids = [...this.catalogs.values()];
+		this.catalogs.clear();
+		for (const operation of this.operations.values()) { operation.reject(new Error(localize('testing.cancelled', 'Test operation cancelled.'))); }
+		this.operations.clear();
+		// Each pending operation releases itself after its start response. Catalogs
+		// have completed start responses and are released by this workspace owner.
+		await settle(ids.map(id => this.execution.release(id)));
+	}
 
 	registerTestProfileProvider(provider: TestProfileProvider): IDisposable {
 		return this.registerTestProfileProviders([provider]);
@@ -70,6 +283,11 @@ export class TestingService extends Disposable implements ITestingService {
 	}
 
 	async refresh(): Promise<readonly ITestProfile[]> {
+		await settle([this.refreshScriptProfiles(), this.refreshTests()]);
+		return this.currentProfiles;
+	}
+
+	private async refreshScriptProfiles(): Promise<readonly ITestProfile[]> {
 		this.assertNotDisposed();
 		this.refreshingTasks += 1;
 		try { await this.taskService.refresh(); }
@@ -88,8 +306,8 @@ export class TestingService extends Disposable implements ITestingService {
 		return run;
 	}
 
-	async runAll(): Promise<readonly ITestRun[]> {
-		const profiles = await this.refresh();
+	async runAllScripts(): Promise<readonly ITestRun[]> {
+		const profiles = await this.refreshScriptProfiles();
 		const runs: ITestRun[] = [];
 		for (const profile of profiles) runs.push(await this.run(profile));
 		return runs;
@@ -190,7 +408,7 @@ export class TestingService extends Disposable implements ITestingService {
 
 
 	private reportError(error: unknown): void {
-		this.logService?.error("testing.profiles", "Could not refresh Test Profiles", error);
+		this.logService.error("testing", "Test operation failed", error);
 	}
 }
 
@@ -239,4 +457,14 @@ function projectProviderProfile(providerId: string, contribution: TestProfileCon
 function normalizeText(value: string, owner: string, maximum: number, trim = true): string {
 	if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum || value.includes("\0")) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
 	return trim ? value.trim() : value;
+}
+
+function staleSelection(): Error {
+	return new Error(localize('testing.staleSelection', 'The selected tests have changed. Refresh tests and select them again.'));
+}
+
+async function settle(promises: readonly Promise<unknown>[]): Promise<void> {
+	const results = await Promise.allSettled(promises);
+	const failed = results.find(result => result.status === 'rejected');
+	if (failed?.status === 'rejected') { throw failed.reason; }
 }

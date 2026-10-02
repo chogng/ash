@@ -2,87 +2,111 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  gap: 8px;
   padding: 8px;
 }
 
 .ash-testing-controls {
   display: flex;
-  gap: 6px;
-}
-
-.ash-testing-controls button,
-.ash-testing-run,
-.ash-testing-run-result {
-  border: 0;
-  border-radius: var(--ash-corner-radius-small);
-  padding: 4px 8px;
-  color: inherit;
-  background: color-mix(in srgb, currentColor 8%, transparent);
-  font: inherit;
-  cursor: pointer;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .ash-testing-status {
   min-height: 18px;
-  padding: 6px 2px;
   color: var(--ash-description-foreground);
   font-size: 12px;
 }
 
-.ash-testing-list {
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  overflow: auto;
-  list-style: none;
+.ash-testing-tree {
+  flex: 1;
+  min-height: 120px;
+  overflow: hidden;
 }
 
-.ash-testing-profile {
-  display: grid;
-  grid-template-columns: auto minmax(70px, 1fr);
-  gap: 2px 8px;
+.ash-testing-row {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
   align-items: center;
-  padding: 4px 2px;
 }
 
-.ash-testing-run {
-  grid-row: 1 / 3;
-}
-
-.ash-testing-label,
-.ash-testing-detail {
+.ash-testing-row > span:first-child,
+.ash-testing-script > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ash-testing-detail {
-  color: var(--ash-muted-foreground);
+.ash-testing-case-state {
+  margin-left: auto;
+  flex-shrink: 0;
   font-size: 11px;
+  color: var(--ash-description-foreground);
 }
 
-.ash-testing-result {
-  margin-top: 4px;
-}
-
-.ash-testing-run-result {
-  width: 100%;
-  text-align: left;
-}
-
-.ash-testing-result.passed .ash-testing-run-result {
+.ash-testing-case-state.passed {
   color: var(--ash-success-foreground);
 }
 
-.ash-testing-result.failed .ash-testing-run-result {
+.ash-testing-case-state.failed,
+.ash-testing-case-state.errored {
   color: var(--ash-error-foreground);
 }
 
-.ash-testing button:hover {
-  background: var(--ash-toolbar-hover-background);
+.ash-testing-output {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 35%;
+  overflow: auto;
 }
 
-.ash-testing button:focus-visible {
+.ash-testing-result-label {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.ash-testing-output pre {
+  max-height: 160px;
+  margin: 4px 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--ash-monospace-font-family);
+  font-size: 12px;
+}
+
+.ash-testing-scripts {
+  display: flex;
+  flex-direction: column;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.ash-testing-script {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ash-testing summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ash-description-foreground);
+}
+
+.ash-testing summary:focus-visible,
+.ash-testing-output pre:focus-visible {
   outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
+}
+
+.ash-testing-tree {
+  display: flex;
+  flex-direction: column;
+}
+
+.ash-testing-tree > .ash-list-scrollable {
+  flex: 1;
 }

@@ -9,12 +9,14 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { DesignConfiguration, DesignTool } from '../common/config/editorConfiguration.js';
 import type { DesignShape } from '../common/model/document.js';
 import type { DesignViewport } from '../common/viewport.js';
+import type { DesignImageSource } from './designMedia.js';
 import { renderDesignShape } from './svgRenderer.js';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 interface DesignRenderState {
 	readonly shapes: readonly DesignShape[];
+	readonly images: ReadonlyMap<string, DesignImageSource>;
 	readonly selectedShapes: readonly DesignShape[];
 	readonly draft: DesignShape | undefined;
 	readonly showPathHandles: boolean;
@@ -77,7 +79,7 @@ export class DesignView extends Disposable {
 		}
 		for (const shape of state.shapes) {
 			const previous = this.renderedShapes.get(shape.id);
-			const element = renderDesignShape(shape, previous);
+			const element = renderDesignShape(shape, previous, state.images);
 			for (const node of [element, ...element.querySelectorAll<SVGGraphicsElement>('[data-shape-id]')]) {
 				if (state.opacity) { node.setAttribute('opacity', `${state.opacity.get(node.dataset.shapeId!)!}`); }
 				else { node.removeAttribute('opacity'); }

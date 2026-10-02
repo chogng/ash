@@ -3,6 +3,7 @@ import { h } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
+import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
 import type { DesignDocument } from '../../../common/model/document.js';
 import { generateDesignCode } from './designCodeGenerator.js';
 
@@ -13,7 +14,7 @@ export class DesignCodeWidget extends Disposable {
 	private readonly exportButton: Button;
 	private document: DesignDocument | undefined;
 
-	constructor(ownerDocument: Document, exportCode: () => Promise<void>) {
+	constructor(ownerDocument: Document, private readonly documentController: DesignDocumentController, exportCode: () => Promise<void>) {
 		super();
 		this.domNode = h(ownerDocument, 'section', { className: 'ash-design-code-widget', attributes: { 'aria-label': localize('sessions.design.generatedCode', 'Generated code') } });
 		const header = h(ownerDocument, 'div', { className: 'ash-design-code-header' });
@@ -26,7 +27,7 @@ export class DesignCodeWidget extends Disposable {
 	public update(document: DesignDocument, isActive: boolean, isBusy: boolean): void {
 		this.domNode.classList.toggle('visible', isActive);
 		this.exportButton.enabled = !isBusy && document.shapes.length > 0;
-		if (isActive && this.document !== document) { this.source.value = generateDesignCode(document); this.document = document; }
+		if (isActive && this.document !== document) { this.source.value = generateDesignCode(document, this.documentController.getEmbeddedImageSources(document)); this.document = document; }
 	}
 
 	public getAccessibleContent(): string { return this.source.value; }

@@ -233,7 +233,7 @@ function validateFileFilters(value: unknown): readonly FileFilter[] | undefined 
 		if (!filter || typeof filter !== 'object' || Array.isArray(filter)) throw new TypeError('Invalid file filter');
 		const fields = filter as Record<string, unknown>;
 		if (Object.keys(fields).sort().join(',') !== 'extensions,name' || typeof fields.name !== 'string' || !fields.name
-			|| !Array.isArray(fields.extensions) || !fields.extensions.every(extension => typeof extension === 'string' && (extension === '*' || /^[a-z0-9]+(?:\.[a-z0-9]+)*$/i.test(extension)))) {
+			|| !Array.isArray(fields.extensions) || !fields.extensions.every(extension => typeof extension === 'string' && (extension === '*' || /^[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*$/i.test(extension)))) {
 			throw new TypeError('Invalid file filter');
 		}
 	}

@@ -1,24 +1,55 @@
-import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
-import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
-import { ITestingService } from "../../../services/testing/common/testingService.js";
-import { IViewsService } from "../../../services/views/browser/viewsService.js";
-import { REFRESH_TESTS_COMMAND_ID, RUN_ALL_TESTS_COMMAND_ID, TESTING_VIEW_ID } from "../common/testing.js";
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import { localize } from '../../../../nls.js';
+import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
+import { ITestingService } from '../../../services/testing/common/testingService.js';
+import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { REFRESH_TESTS_COMMAND_ID, RUN_ALL_TESTS_COMMAND_ID, TESTING_VIEW_ID } from '../common/testing.js';
 
 registerAction2(class RunAllTestsAction extends Action2 {
 	constructor() {
-		super({ id: RUN_ALL_TESTS_COMMAND_ID, title: "Run All Tests", f1: true, menu: { id: MenuId.MenubarRunMenu, group: "3_testing", order: 1 } });
+		super({ id: RUN_ALL_TESTS_COMMAND_ID, title: localize('testing.runAll', 'Run All Tests'), f1: true, menu: { id: MenuId.MenubarRunMenu, group: '3_testing', order: 1 } });
 	}
 
-	override run(accessor: ServicesAccessor): void {
+	override async run(accessor: ServicesAccessor): Promise<void> {
 		const service = accessor.get(ITestingService);
+		const notifications = accessor.get(INotificationService);
 		accessor.get(IViewsService).focusView(TESTING_VIEW_ID);
-		void service.runAll().catch(error => console.error("Could not run tests", error));
+		try { await service.refreshTests(); await service.runTests(service.tests.map(test => test.key)); }
+		catch (error) { notifications.error(String(error)); }
 	}
 });
 
 registerAction2(class RefreshTestsAction extends Action2 {
-	constructor() { super({ id: REFRESH_TESTS_COMMAND_ID, title: "Refresh Tests", f1: true }); }
-	override run(accessor: ServicesAccessor): void {
-		void accessor.get(ITestingService).refresh().catch(error => console.error("Could not refresh tests", error));
+	constructor() { super({ id: REFRESH_TESTS_COMMAND_ID, title: localize('testing.refresh', 'Refresh Tests'), f1: true }); }
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const service = accessor.get(ITestingService);
+		const notifications = accessor.get(INotificationService);
+		try { await service.refresh(); }
+		catch (error) { notifications.error(String(error)); }
+	}
+});
+
+registerAction2(class RunTestAtCursorAction extends Action2 {
+	constructor() { super({ id: 'workbench.action.testing.runAtCursor', title: localize('testing.runAtCursor', 'Run Test on Current Line'), f1: true }); }
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const editors = accessor.get(ICodeEditorService);
+		const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
+		const model = editor?.getModel();
+		const position = editor?.getPosition();
+		const testing = accessor.get(ITestingService);
+		const notifications = accessor.get(INotificationService);
+		if (!model || !position) { return; }
+		if (accessor.get(IWorkingCopyService).get(model.uri).some(copy => copy.isDirty)) {
+			notifications.info(localize('testing.saveCursor', 'Save the file and refresh tests before running a test on the current line.'));
+			return;
+		}
+		try {
+			const tests = testing.tests.filter(test => test.resource.toString() === model.uri.toString() && test.line === position.lineNumber);
+			if (tests.length === 0) { notifications.info(localize('testing.noTestAtCursor', 'Place the cursor on a discovered test declaration to run it.')); return; }
+			await testing.runTests(tests.map(test => test.key));
+		} catch (error) { notifications.error(String(error)); }
 	}
 });

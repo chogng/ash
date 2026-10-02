@@ -46,6 +46,7 @@ import { ILogService } from "../../platform/log/common/log.js";
 import { LogService } from "../../platform/log/common/logServiceImpl.js";
 import { ILifecycleService, LifecyclePhase, type ShutdownReason } from "../services/lifecycle/common/lifecycle.js";
 import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAdapterProcessService.js";
+import { ITestExecutionService } from '../../platform/testing/common/testExecutionService.js';
 import { IExtensionHostApi } from "../../platform/extensionHost/common/extensionHostApi.js";
 import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
 import { IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
@@ -463,6 +464,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);
 		if (api.debugAdapter) services.registerInstance(IDebugAdapterProcessService, api.debugAdapter);
+		services.registerInstance(ITestExecutionService, api.testing);
 		if (api.memories) { services.registerInstance(IMemoriesService, api.memories); }
 		if (api.memoryDiagnostics) { services.registerInstance(IMemoryDiagnosticsService, api.memoryDiagnostics); }
 		if (api.calls) { services.registerInstance(ICallService, api.calls); }

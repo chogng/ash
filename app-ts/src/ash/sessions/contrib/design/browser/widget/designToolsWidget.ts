@@ -39,15 +39,17 @@ export class DesignToolsWidget extends Disposable {
 	private readonly tools: ActionBar;
 	private readonly modes: ActionBar;
 	private readonly toolActions = new Map<DesignTool, IAction>();
+	private readonly documentActions: readonly IAction[];
 	private readonly modeActions = new Map<DesignMode, IAction>();
 	private pointerTool = DesignTool.Select;
 	private shapeTool = DesignTool.Rectangle;
 	private menuVisible = false;
 	private renderedState: { tool: DesignTool; mode: DesignMode; isBusy: boolean } | undefined;
 
-	constructor(ownerDocument: Document, selectTool: (tool: DesignTool) => unknown, selectMode: (mode: DesignMode) => unknown, @IContextMenuService contextMenus: IContextMenuService) {
+	constructor(ownerDocument: Document, selectTool: (tool: DesignTool) => unknown, selectMode: (mode: DesignMode) => unknown, runDocumentAction: (action: string) => unknown, @IContextMenuService contextMenus: IContextMenuService) {
 		super();
 		this.domNode = h(ownerDocument, 'div', { className: 'ash-design-tools-widget' });
+		this.documentActions = ([['addFrame', 'sessions.design.addFrame', 'Add frame (F)', Lxicon.square], ['importImage', 'sessions.design.importImage', 'Import image', Lxicon.add]] as const).map(([id, key, label, icon]) => ({ id: `sessions.design.${id}`, label: localize(key, label), tooltip: localize(key, label), icon, enabled: true, run: () => runDocumentAction(id) }));
 		const tools = h(ownerDocument, 'div', { className: 'ash-design-tools-group' });
 		const modes = h(ownerDocument, 'div', { className: 'ash-design-tools-group ash-design-modes' });
 		this.domNode.append(tools, modes);
@@ -94,6 +96,7 @@ export class DesignToolsWidget extends Disposable {
 			{ ...this.toolActions.get(this.shapeTool)!, id: 'sessions.design.tool.shape' },
 			this.toolActions.get(DesignTool.Pen)!,
 			this.toolActions.get(DesignTool.Text)!,
+			...this.documentActions.map(action => ({ ...action, enabled: !isBusy && mode !== DesignMode.Code && mode !== DesignMode.Motion })),
 		]);
 		this.modes.updateActions([...this.modeActions].map(([value, action]) => ({ ...action, checked: value === mode })));
 	}

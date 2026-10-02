@@ -5,6 +5,13 @@ import type { Page } from '@playwright/test';
 import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 
+test.beforeEach(async ({ target, workbench }) => {
+	if (target.workbenchMode === 'code') {
+		// Fresh profiles restore Welcome after startup services; earlier input can be replaced during restoration.
+		await expect(workbench.page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
+	}
+});
+
 async function expectHelp(page: Page, application: PlaywrightApplication, title: string, open: () => Promise<unknown>): Promise<void> {
 	if (!('windows' in application)) {
 		await open();
@@ -99,7 +106,10 @@ test('Marketplace slash commands open their Workbench owners without sending a c
 	}
 	await expect(page.locator('.ash-chat-item-userMessage')).toHaveCount(0);
 	const lsp = page.locator('.ash-language-server-settings');
+	await expect(lsp).toHaveAttribute('aria-busy', 'false');
+	await expect(lsp.getByLabel('Language ID', { exact: true })).toBeEnabled();
 	await lsp.getByLabel('Language ID', { exact: true }).focus();
+	await expect(lsp.getByLabel('Language ID', { exact: true })).toBeFocused();
 	await page.keyboard.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
 	await expect(help.getByRole('textbox')).toHaveValue(/Language Servers[\s\S]*Logs and startup failures are in Output/);

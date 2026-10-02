@@ -2,6 +2,18 @@ import { type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { type ITaskRun } from "../../tasks/common/taskService.js";
+import type { URI } from '../../../../base/common/uri.js';
+import type { TestItem, TestResult } from '../../../../platform/testing/common/testExecutionService.js';
+
+export interface ITestCase extends TestItem {
+	readonly key: string;
+	readonly dirId: string;
+	readonly resource: URI;
+}
+
+export interface ITestCaseResult extends TestResult {
+	readonly key: string;
+}
 
 export type TestRunStatus = "running" | "completed" | "passed" | "failed" | "canceled";
 
@@ -38,8 +50,17 @@ export interface ITestRun {
 	readonly onDidChangeStatus: Event<TestRunStatus>;
 }
 
-/** Test workflow over explicit test-group workspace tasks. */
+/** Workspace test cases with backend results, plus independently executed script profiles. */
 export interface ITestingService extends IDisposable {
+	readonly tests: readonly ITestCase[];
+	readonly testResults: readonly ITestCaseResult[];
+	readonly isDiscovering: boolean;
+	readonly isRunningTests: boolean;
+	readonly onDidChangeTests: Event<void>;
+	refreshTests(): Promise<void>;
+	runTests(keys: readonly string[]): Promise<void>;
+	rerunFailedTests(): Promise<void>;
+	cancelTests(): Promise<void>;
 	readonly profiles: readonly ITestProfile[];
 	readonly runs: readonly ITestRun[];
 	readonly onDidChangeProfiles: Event<readonly ITestProfile[]>;
@@ -50,7 +71,7 @@ export interface ITestingService extends IDisposable {
 	registerTestProfileProviders(providers: readonly TestProfileProvider[]): TestProfileProviderRegistration;
 	refresh(): Promise<readonly ITestProfile[]>;
 	run(profile: ITestProfile): Promise<ITestRun>;
-	runAll(): Promise<readonly ITestRun[]>;
+	runAllScripts(): Promise<readonly ITestRun[]>;
 	rerun(run: ITestRun): Promise<ITestRun>;
 	cancel(run: ITestRun): Promise<void>;
 }

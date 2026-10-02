@@ -49,6 +49,7 @@ pub mod slash_commands;
 pub mod syntax;
 pub mod teams;
 pub mod terminal;
+pub mod testing;
 pub mod transcript;
 pub mod turn;
 pub mod turn_changes;

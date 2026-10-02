@@ -1,4 +1,5 @@
 import { createAppServerHooksApi } from '../../hooks/browser/hooksApi.js';
+import { AppServerTestExecutionService } from '../../testing/browser/appServerTestExecutionService.js';
 import { createAppServerLanguageServerService } from "../../language/browser/languageServerService.js";
 import { AppServerCallService } from '../../call/browser/appServerCallService.js';
 import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
@@ -111,6 +112,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		git: createAppServerGitApi(connection),
 		contentSearch: createAppServerContentSearchApi(connection),
 		terminal: new AppServerTerminalProcessService(connection, appServer),
+		testing: new AppServerTestExecutionService(connection),
 		...capabilities,
 		events: createAppServerServerEventApi(connection),
 		codebase: createAppServerCodebaseApi(connection),

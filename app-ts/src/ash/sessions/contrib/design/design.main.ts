@@ -14,11 +14,11 @@ export function createDesignEditorContributions(context: DesignEditorContributio
 	const drawing = resources.add(new DesignDrawingController(context, commands));
 	const properties = resources.add(new DesignPropertiesWidget(ownerDocument, documentController, commands, selection, () => context.renderCanvas()));
 	const motion = resources.add(new DesignMotionWidget(ownerDocument, documentController.model, commands));
-	const code = resources.add(new DesignCodeWidget(ownerDocument, () => context.runFileOperation(() => documentController.exportDocument({
+	const code = resources.add(new DesignCodeWidget(ownerDocument, documentController, () => context.runFileOperation(() => documentController.exportDocument({
 		title: localize('sessions.design.exportCode', 'Export code'),
 		filename: 'design.html',
 		extension: 'html',
-		content: generateDesignCode(documentController.model.value),
+		content: generateDesignCode(documentController.model.value, documentController.getEmbeddedImageSources()),
 	}))));
 	return Object.assign(resources, { drawing, properties, motion, code });
 }

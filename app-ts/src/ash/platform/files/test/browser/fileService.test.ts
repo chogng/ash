@@ -5,7 +5,7 @@ import { URI } from "../../../../base/common/uri.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { createDisconnectedFileApi } from "../../../../platform/files/browser/fileApi.js";
 import { BrowserFileService, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
-import { FileKind, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
+import { FileKind, FileNotFoundError, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
 import type { FsChanged } from "../../../app-server/common/generated/index.js";
 import { workspaceRelativePath, type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { WorkspaceContextService } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
@@ -32,15 +32,15 @@ test("BrowserFileService passes the paste destination and move request to App Se
 });
 
 test("workspaceRelativePath confines resources to the folder", () => {
-	const root = URI.file("C:\\project");
+	const root = URI.parse("file:///C:/project");
 	const releasedResources: string[] = [];
-	assert.equal(workspaceRelativePath(root, URI.file("C:\\project")), ".");
+	assert.equal(workspaceRelativePath(root, URI.parse("file:///C:/project")), ".");
 	assert.equal(
-		workspaceRelativePath(root, URI.file("C:\\project\\src\\main.ts")),
+		workspaceRelativePath(root, URI.parse("file:///C:/project/src/main.ts")),
 		"src/main.ts",
 	);
 	assert.throws(
-		() => workspaceRelativePath(root, URI.file("C:\\project-other\\file.ts")),
+		() => workspaceRelativePath(root, URI.parse("file:///C:/project-other/file.ts")),
 		/outside/,
 	);
 });
@@ -59,11 +59,11 @@ test("workspace paths preserve backslashes as POSIX filename characters for Remo
 
 	assert.equal(workspaceRelativePath(root, resource), "src\\generated/main.ts");
 	assert.equal(workspaceResourceFromPath(root, "src\\generated/main.ts")?.toString(), resource.toString());
-	assert.equal(workspaceResourceFromPath(URI.file("C:\\project"), "src\\generated\\main.ts")?.toString(), "file:///C:/project/src/generated/main.ts");
+	assert.equal(workspaceResourceFromPath(URI.parse("file:///C:/project"), "src\\generated\\main.ts")?.toString(), "file:///C:/project/src/generated/main.ts");
 });
 
 test("BrowserFileService maps wire entries back to resource URIs", async () => {
-	const root = URI.file("C:\\project");
+	const root = URI.parse("file:///C:/project");
 	const releasedResources: string[] = [];
 	using workspaceContextService: IWorkspaceContextService =
 		new WorkspaceContextService({ id: "workspace", uri: root });
@@ -138,32 +138,32 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 
 	assert.equal((await service.stat(root)).kind, FileKind.Directory);
 	assert.deepEqual(
-		(await service.readDirectory(URI.file("C:\\project\\src"))).map(entry => ({ ...entry, resource: entry.resource.toString() })),
+		(await service.readDirectory(URI.parse("file:///C:/project/src"))).map(entry => ({ ...entry, resource: entry.resource.toString() })),
 		[{
-			resource: URI.file("C:\\project\\src\\main.ts").toString(),
+			resource: URI.parse("file:///C:/project/src/main.ts").toString(),
 			name: "main.ts",
 			kind: FileKind.File,
 		}],
 	);
 	assert.deepEqual(
-		await service.readFile(URI.file("C:\\project\\src\\main.ts")),
-		{ resource: URI.file("C:\\project\\src\\main.ts"), content: "export {};", revision: "revision-read" },
+		await service.readFile(URI.parse("file:///C:/project/src/main.ts")),
+		{ resource: URI.parse("file:///C:/project/src/main.ts"), content: "export {};", revision: "revision-read" },
 	);
 	assert.deepEqual(
-		await service.readFileBytes(URI.file("C:\\project\\paper.pdf")),
-		{ resource: URI.file("C:\\project\\paper.pdf"), bytes: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55, 10]), revision: "revision-binary" },
+		await service.readFileBytes(URI.parse("file:///C:/project/paper.pdf")),
+		{ resource: URI.parse("file:///C:/project/paper.pdf"), bytes: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55, 10]), revision: "revision-binary" },
 	);
 	assert.deepEqual(releasedResources, ["resource-pdf"]);
-	assert.equal((await service.createDirectory(URI.file('C:\\project\\new-folder'))).kind, FileKind.Directory);
+	assert.equal((await service.createDirectory(URI.parse('file:///C:/project/new-folder'))).kind, FileKind.Directory);
 	assert.deepEqual(
 		await service.writeFile({
-			resource: URI.file("C:\\project\\src\\main.ts"),
+			resource: URI.parse("file:///C:/project/src/main.ts"),
 			content: "export const saved = true;",
 			expectedRevision: "revision-read",
 		}),
 		{
 			stat: {
-				resource: URI.file("C:\\project\\src\\main.ts"),
+				resource: URI.parse("file:///C:/project/src/main.ts"),
 				kind: FileKind.File,
 				sizeBytes: 26,
 				readonly: false,
@@ -172,15 +172,15 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 			revision: "revision-write",
 		},
 	);
-	assert.deepEqual(await service.writeFileBytes(URI.file('C:\\project\\payload.bin'), new Uint8Array([0, 255, 42])), {
-		stat: { resource: URI.file('C:\\project\\payload.bin'), kind: FileKind.File, sizeBytes: 3, readonly: false, modifiedAtMillis: undefined },
+	assert.deepEqual(await service.writeFileBytes(URI.parse('file:///C:/project/payload.bin'), new Uint8Array([0, 255, 42])), {
+		stat: { resource: URI.parse('file:///C:/project/payload.bin'), kind: FileKind.File, sizeBytes: 3, readonly: false, modifiedAtMillis: undefined },
 		revision: 'revision-bytes',
 	});
 });
 
 test("BrowserFileService maps App Server revision conflicts to the file contract", async () => {
-	const resource = URI.file("C:\\project\\src\\main.ts");
-	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+	const resource = URI.parse("file:///C:/project/src/main.ts");
+	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: URI.parse("file:///C:/project") });
 	const service = new BrowserFileService({
 		workspaceContextService,
 		resourceApi: unavailableResourceApi(),
@@ -203,9 +203,27 @@ test("BrowserFileService maps App Server revision conflicts to the file contract
 	await assert.rejects(service.writeFile({ resource, content: "local", expectedRevision: "stale" }), FileRevisionConflictError);
 });
 
+test('BrowserFileService reports missing entries through the file contract for every read operation', async () => {
+	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	const resource = URI.file('/project/missing');
+	let error: Error = new AppServerRemoteError(-32000, 'Missing entry', { kind: 'FileSystemNotFound' });
+	const missing = async (): Promise<never> => { throw error; };
+	using service = new BrowserFileService({
+		workspaceContextService: workspace,
+		resourceApi: unavailableResourceApi(),
+		api: { ...unavailableFileApi(), getMetadata: missing, readDirectory: missing, readFile: missing, readBinaryFile: missing },
+	});
+	const reads = [() => service.stat(resource), () => service.readDirectory(resource), () => service.readFile(resource), () => service.readFileBytes(resource)];
+	for (const read of reads) {
+		await assert.rejects(read, value => value instanceof FileNotFoundError && value.resource.toString() === resource.toString());
+	}
+	error = new Error('Read access failed');
+	for (const read of reads) { await assert.rejects(read, value => value === error); }
+});
+
 test("BrowserFileService reads connection-owned binary resources in bounded chunks", async () => {
-	const root = URI.file("C:\\project");
-	const resource = URI.file("C:\\project\\large.pdf");
+	const root = URI.parse("file:///C:/project");
+	const resource = URI.parse("file:///C:/project/large.pdf");
 	const bytes = new Uint8Array(262_145);
 	bytes[0] = 37;
 	bytes[262_144] = 70;
@@ -255,7 +273,7 @@ test("BrowserFileService reads connection-owned binary resources in bounded chun
 });
 
 test("BrowserFileService maps App Server invalidations to workspace resources", () => {
-	const root = URI.file("C:\\project");
+	const root = URI.parse("file:///C:/project");
 	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: root });
 	using changes = new Emitter<FsChanged>();
 	using service = new BrowserFileService({
@@ -270,17 +288,17 @@ test("BrowserFileService maps App Server invalidations to workspace resources", 
 	changes.fire({ type: "pathsChanged", paths: ["src/main.ts", "src/main.ts", "README.md"] });
 	changes.fire({ type: "rescanRequired" });
 
-	assert.deepEqual(observed, [[URI.file("C:\\project\\src\\main.ts"), URI.file("C:\\project\\README.md")], undefined]);
+	assert.deepEqual(observed, [[URI.parse("file:///C:/project/src/main.ts"), URI.parse("file:///C:/project/README.md")], undefined]);
 });
 
 test("BrowserFileService routes nested multi-root resources by Workspace folder id", async () => {
 	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({
 		id: "multi-root",
 		folders: [
-			{ id: "parent", uri: URI.file("C:\\project"), name: "parent", index: 0 },
-			{ id: "nested", uri: URI.file("C:\\project\\packages\\nested"), name: "nested", index: 1 },
+			{ id: "parent", uri: URI.parse("file:///C:/project"), name: "parent", index: 0 },
+			{ id: "nested", uri: URI.parse("file:///C:/project/packages/nested"), name: "nested", index: 1 },
 		],
-		configuration: URI.file("C:\\project.code-workspace"),
+		configuration: URI.parse("file:///C:/project.code-workspace"),
 	});
 	const requests: { readonly dirId?: string; readonly path: string }[] = [];
 	const copies: unknown[] = [];
@@ -299,19 +317,19 @@ test("BrowserFileService routes nested multi-root resources by Workspace folder 
 		},
 	});
 
-	await service.readFile(URI.file("C:\\project\\README.md"));
-	await service.readFile(URI.file("C:\\project\\packages\\nested\\src\\main.ts"));
+	await service.readFile(URI.parse("file:///C:/project/README.md"));
+	await service.readFile(URI.parse("file:///C:/project/packages/nested/src/main.ts"));
 
 	assert.deepEqual(requests, [
 		{ dirId: "parent", path: "README.md" },
 		{ dirId: "nested", path: "src/main.ts" },
 	]);
-	await service.copy(URI.file("C:\\project\\README.md"), URI.file("C:\\project\\packages\\nested\\README.md"));
+	await service.copy(URI.parse("file:///C:/project/README.md"), URI.parse("file:///C:/project/packages/nested/README.md"));
 	assert.deepEqual(copies, [{ sourceDirId: 'parent', source: 'README.md', targetDirId: 'nested', target: 'README.md' }]);
-	assert.equal(await service.pasteSystemFiles(URI.file('C:\\project\\packages\\nested'), true), true);
+	assert.equal(await service.pasteSystemFiles(URI.parse('file:///C:/project/packages/nested'), true), true);
 	assert.deepEqual(pastes, [{ dirId: 'nested', path: '.', moveRequested: true }]);
-	assert.throws(() => service.pasteSystemFiles(URI.file('C:\\outside'), false), /current workspace folder/);
-	assert.throws(() => service.rename(URI.file("C:\\project\\README.md"), URI.file("C:\\project\\packages\\nested\\README.md"), "error"), /across workspace folders/i);
+	assert.throws(() => service.pasteSystemFiles(URI.parse('file:///C:/outside'), false), /current workspace folder/);
+	assert.throws(() => service.rename(URI.parse("file:///C:/project/README.md"), URI.parse("file:///C:/project/packages/nested/README.md"), "error"), /across workspace folders/i);
 });
 
 function unavailableFileApi() {

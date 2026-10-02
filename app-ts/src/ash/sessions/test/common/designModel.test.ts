@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/design/common/model/document.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignAsset, type DesignShape } from '../../contrib/design/common/model/document.js';
+import { generateUuid } from '../../../base/common/uuid.js';
 import { DesignModel } from '../../contrib/design/common/model/designModel.js';
 import { DocumentCommands } from '../../contrib/design/common/commands/documentCommands.js';
 import { DesignViewport } from '../../contrib/design/common/viewport.js';
-import { hitTestDesignShapes } from '../../contrib/design/common/model/hitTest.js';
+import { getDesignShapeEntries, hitTestDesignShapes } from '../../contrib/design/common/model/hitTest.js';
 import { sampleDesignMotion } from '../../contrib/design/contrib/motion/common/motion.js';
 
 test('Design documents round trip fractional coordinates and discard redo after a new edit', () => {
@@ -158,4 +159,136 @@ test('Open path hit testing follows its cubic curve instead of its rectangular b
 	const path = model.value.shapes[0];
 	assert.equal(hitTestDesignShapes([path], { x: 60, y: 40 })?.id, path.id);
 	assert.equal(hitTestDesignShapes([path], { x: 60, y: 0 }), undefined);
+});
+
+test('Frame children keep local geometry through resizing, grouping and versioned file round trips', () => {
+	using model = new DesignModel();
+	const commands = new DocumentCommands(model);
+	const frameId = commands.addFrame({ x: 500, y: 400 });
+	const childId = commands.addShape('rectangle', { x: 500, y: 400 });
+	const textId = commands.addShape('text', { x: 600, y: 400 }, '产品');
+	const original = flattenDesignShapes(model.value.shapes).find(shape => shape.id === childId)!;
+	const frame = model.value.shapes[0];
+	assert.equal(original.x, 260);
+	commands.updateGeometry(frame, 'width', 1000);
+	assert.deepEqual(flattenDesignShapes(model.value.shapes).find(shape => shape.id === childId), original);
+	const groupId = commands.group(new Set([childId, textId]))!;
+	assert.ok(groupId);
+	assert.deepEqual(commands.ungroup(groupId), [childId, textId]);
+	assert.deepEqual(flattenDesignShapes(model.value.shapes).find(shape => shape.id === childId), original);
+	const content = serializeDesignDocument(model.value);
+	const manifest = JSON.parse(content);
+	assert.deepEqual(manifest.artifacts[model.value.artifactId].roots, [frameId]);
+	assert.deepEqual(manifest.artifacts[model.value.artifactId].objects[frameId].children, [childId, textId]);
+	assert.deepEqual(parseDesignDocument(content), model.value);
+	assert.equal(hitTestDesignShapes(model.value.shapes, { x: 450, y: 400 })!.id, childId);
+});
+
+test('Image uses share immutable media versions while crop edits and deletion undo independently', () => {
+	using model = new DesignModel();
+	const commands = new DocumentCommands(model);
+	const asset: DesignAsset = { id: generateUuid(), name: 'product.png', versions: [{ id: generateUuid(), sha256: 'a'.repeat(64), path: `assets/${'a'.repeat(64)}`, mediaType: 'image/png', width: 800, height: 600 }] };
+	const image: DesignShape = { id: generateUuid(), kind: 'image', assetId: asset.id, assetVersionId: asset.versions[0].id, crop: { x: 0, y: 0, width: 1, height: 1 }, x: 0, y: 0, width: 400, height: 300, rotation: 0, fill: '#ffffff' };
+	commands.insertShape(image, [asset]);
+	const second = { ...image, id: generateUuid(), x: 500 };
+	commands.insertShape(second);
+	commands.updateShape({ ...image, crop: { x: 0.2, y: 0, width: 0.8, height: 1 } });
+	assert.deepEqual(model.value.shapes[1], second);
+	assert.equal(model.value.assets.length, 1);
+	assert.deepEqual(parseDesignDocument(serializeDesignDocument(model.value)), model.value);
+	commands.removeShapes(new Set([image.id, second.id]));
+	assert.equal(model.value.assets[0].versions[0].id, asset.versions[0].id);
+	model.undo();
+	assert.equal(model.value.shapes.length, 2);
+	model.undo();
+	assert.deepEqual(model.value.shapes[0], image);
+});
+
+test('Version 2 rejects cycles, duplicate placement, unowned objects and missing or escaping media references', () => {
+	using model = new DesignModel();
+	const commands = new DocumentCommands(model);
+	const frameId = commands.addFrame({ x: 0, y: 0 });
+	const childId = commands.addShape('rectangle', { x: 0, y: 0 });
+	const source = serializeDesignDocument(model.value);
+	type Manifest = { artifacts: Record<string, { roots: string[]; objects: Record<string, Record<string, unknown>> }> };
+	for (const mutate of [
+		(value: Manifest) => { value.artifacts[model.value.artifactId].objects[frameId].children = [frameId]; },
+		(value: Manifest) => { value.artifacts[model.value.artifactId].roots.push(childId); },
+		(value: Manifest) => { value.artifacts[model.value.artifactId].objects[frameId].children = []; },
+		(value: Manifest) => { Object.assign(value.artifacts[model.value.artifactId].objects[childId], { kind: 'image', assetId: generateUuid(), assetVersionId: generateUuid(), crop: { x: 0, y: 0, width: 1, height: 1 } }); },
+	]) {
+		const value = JSON.parse(source) as Manifest;
+		mutate(value);
+		assert.throws(() => parseDesignDocument(JSON.stringify(value)), TypeError);
+	}
+	const image: DesignShape = { id: generateUuid(), kind: 'image', assetId: generateUuid(), assetVersionId: generateUuid(), crop: { x: 0, y: 0, width: 1, height: 1 }, x: 0, y: 0, width: 1, height: 1, rotation: 0, fill: '#ffffff' };
+	const asset: DesignAsset = { id: image.assetId, name: 'image', versions: [{ id: image.assetVersionId, sha256: 'a'.repeat(64), path: '../external.png', mediaType: 'image/png', width: 1, height: 1 }] };
+	assert.throws(() => parseDesignDocument(serializeDesignDocument(documentFromShapes([image], undefined, [asset]))), TypeError);
+	const validAsset = { ...asset, versions: asset.versions.map(version => ({ ...version, path: `assets/${version.sha256}` })) };
+	const duplicate = { ...validAsset, id: generateUuid() };
+	assert.throws(() => parseDesignDocument(serializeDesignDocument(documentFromShapes([image], undefined, [validAsset, duplicate]))), /Invalid design asset version/u);
+});
+
+test('Edit tokens change on undo, redo, replacement and Save As while no-op edits retain the token', () => {
+	using model = new DesignModel();
+	const commands = new DocumentCommands(model);
+	const initial = model.version;
+	commands.addShape('rectangle', { x: 0, y: 0 });
+	const edited = model.version;
+	const identity = model.value.documentId;
+	assert.notEqual(initial, edited);
+	model.applyEdit(model.value.shapes);
+	assert.equal(model.version, edited);
+	model.undo();
+	assert.notEqual(model.version, initial);
+	model.redo();
+	assert.notEqual(model.version, edited);
+	const replacement = model.version;
+	model.replace(model.value);
+	assert.notEqual(model.version, replacement);
+	commands.addShape('ellipse', { x: 0, y: 0 });
+	const copyId = generateUuid();
+	model.changeIdentity(copyId);
+	model.undo();
+	assert.equal(model.value.documentId, copyId);
+	assert.notEqual(model.value.documentId, identity);
+	assert.equal(model.value.shapes.length, 1);
+});
+
+test('Rotated frames use the same local coordinates for rendering, input and hit testing', () => {
+	using model = new DesignModel();
+	const commands = new DocumentCommands(model);
+	commands.addFrame({ x: 500, y: 400 });
+	commands.updateGeometry(model.value.shapes[0], 'rotation', 90);
+	const id = commands.addShape('rectangle', { x: 500, y: 500 });
+	const entry = getDesignShapeEntries(model.value.shapes).find(entry => entry.shape.id === id)!;
+	assert.deepEqual([entry.world.x, entry.world.y, entry.world.rotation], [440, 460, 0]);
+	assert.equal(hitTestDesignShapes(model.value.shapes, { x: 500, y: 500 })!.id, id);
+	const animated: DesignShape = { ...entry.world, id: generateUuid(), motion: { duration: 1000, loop: false, keyframes: [{ offset: 0, x: 440, y: 460, rotation: 0, opacity: 1 }, { offset: 1, x: 480, y: 460, rotation: 45, opacity: 1 }] } };
+	commands.insertShape(animated);
+	const stored = getDesignShapeEntries(model.value.shapes).find(entry => entry.shape.id === animated.id)!;
+	assert.deepEqual(stored.world.motion, animated.motion);
+	assert.deepEqual(parseDesignDocument(serializeDesignDocument(model.value)), model.value);
+});
+
+test('Ungrouping scaled frames preserves their visible contents and nested text', () => {
+	using model = new DesignModel();
+	const commands = new DocumentCommands(model);
+	const frameId = commands.addFrame({ x: 0, y: 0 });
+	const textId = commands.addShape('text', { x: 0, y: 0 }, 'Product');
+	const otherId = commands.addShape('rectangle', { x: 1000, y: 0 });
+	const groupId = commands.group(new Set([frameId, otherId]))!;
+	commands.updateGeometry(model.value.shapes[0], 'width', model.value.shapes[0].width * 2);
+	commands.ungroup(groupId);
+	const frame = model.value.shapes.find(shape => shape.id === frameId)!;
+	assert.equal(frame.kind, 'frame');
+	assert.equal(frame.width, 1280);
+	const text = flattenDesignShapes(model.value.shapes).find(shape => shape.id === textId)!;
+	assert.equal(text.kind, 'text');
+	if (text.kind !== 'text') { throw new Error('Expected text'); }
+	assert.equal(text.width, 480);
+	assert.equal(text.fontSize, 48);
+	assert.equal(text.x, 400);
+	model.undo();
+	assert.equal(model.value.shapes[0].kind, 'group');
 });

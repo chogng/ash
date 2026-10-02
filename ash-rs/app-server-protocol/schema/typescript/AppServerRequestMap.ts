@@ -431,6 +431,10 @@ import type { TerminalReadParams } from './types/TerminalReadParams.js';
 import type { TerminalReadResult } from './types/TerminalReadResult.js';
 import type { TerminalResizeParams } from './types/TerminalResizeParams.js';
 import type { TerminalWriteParams } from './types/TerminalWriteParams.js';
+import type { TestingDiscoverParams } from './types/TestingDiscoverParams.js';
+import type { TestingOperationParams } from './types/TestingOperationParams.js';
+import type { TestingRunParams } from './types/TestingRunParams.js';
+import type { TestingSnapshot } from './types/TestingSnapshot.js';
 import type { ThreadGoalClearParams } from './types/ThreadGoalClearParams.js';
 import type { ThreadGoalClearResponse } from './types/ThreadGoalClearResponse.js';
 import type { ThreadGoalGetParams } from './types/ThreadGoalGetParams.js';
@@ -770,6 +774,11 @@ export interface AppServerRequestMap {
   "terminal/resize": { params: TerminalResizeParams; response: null };
   "terminal/read": { params: TerminalReadParams; response: TerminalReadResult };
   "terminal/close": { params: TerminalCloseParams; response: null };
+  "testing/discover": { params: TestingDiscoverParams; response: null };
+  "testing/run": { params: TestingRunParams; response: null };
+  "testing/read": { params: TestingOperationParams; response: TestingSnapshot };
+  "testing/cancel": { params: TestingOperationParams; response: TestingSnapshot };
+  "testing/release": { params: TestingOperationParams; response: null };
   "debug/adapter/start": { params: DebugAdapterStartParams; response: DebugAdapterStartResult };
   "debug/adapter/send": { params: DebugAdapterSendParams; response: null };
   "debug/adapter/read": { params: DebugAdapterReadParams; response: DebugAdapterReadResult };
@@ -1102,6 +1111,11 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "terminal/resize": { method: "terminal/resize" },
   "terminal/read": { method: "terminal/read" },
   "terminal/close": { method: "terminal/close" },
+  "testing/discover": { method: "testing/discover" },
+  "testing/run": { method: "testing/run" },
+  "testing/read": { method: "testing/read" },
+  "testing/cancel": { method: "testing/cancel" },
+  "testing/release": { method: "testing/release" },
   "debug/adapter/start": { method: "debug/adapter/start" },
   "debug/adapter/send": { method: "debug/adapter/send" },
   "debug/adapter/read": { method: "debug/adapter/read" },

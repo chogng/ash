@@ -6,7 +6,7 @@ import { localize } from '../../../../../../nls.js';
 import type { DesignPoint } from '../../../common/core/geometry.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
 import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
-import type { DesignShape } from '../../../common/model/document.js';
+import { flattenDesignShapes, type DesignImageCrop, type DesignShape } from '../../../common/model/document.js';
 import type { DesignSelection } from '../../../common/selection.js';
 
 type GeometryField = 'x' | 'y' | 'width' | 'height' | 'rotation';
@@ -19,6 +19,10 @@ export class DesignPropertiesWidget extends Disposable {
 	private readonly textProperties: HTMLElement;
 	private readonly textInput: HTMLTextAreaElement;
 	private readonly fontSizeInput: HTMLInputElement;
+	private readonly imageProperties: HTMLElement;
+	private readonly cropInputs = new Map<keyof DesignImageCrop, HTMLInputElement>();
+	private readonly frameProperties: HTMLElement;
+	private readonly clipInput: HTMLInputElement;
 	private readonly pathProperties: HTMLElement;
 	private readonly nodeInput: HTMLSelectElement;
 	private readonly closedInput: HTMLInputElement;
@@ -94,11 +98,40 @@ export class DesignPropertiesWidget extends Disposable {
 				this.commands.updateShape({ ...shape, nodes });
 			}));
 		}
-		this.domNode.append(this.textProperties, this.pathProperties);
+		this.imageProperties = h(ownerDocument, 'div', { className: 'ash-sessions-design-special-properties' });
+		for (const [field, label] of [
+			['x', localize('sessions.design.cropX', 'Crop left (%)')],
+			['y', localize('sessions.design.cropY', 'Crop top (%)')],
+			['width', localize('sessions.design.cropWidth', 'Crop width (%)')],
+			['height', localize('sessions.design.cropHeight', 'Crop height (%)')],
+		] as const) {
+			const input = h(ownerDocument, 'input', { properties: { type: 'number', min: field === 'width' || field === 'height' ? '0.001' : '0', max: '100', step: 'any' }, attributes: { 'aria-label': label } });
+			this.cropInputs.set(field, input);
+			this.imageProperties.append(h(ownerDocument, 'label', {}, label, input));
+			this._register(addDisposableListener(input, 'change', () => {
+				const shape = this.selectedShape;
+				if (shape?.kind !== 'image' || !Number.isFinite(input.valueAsNumber)) { this.refresh(); return; }
+				input.setCustomValidity('');
+				const crop = { ...shape.crop, [field]: input.valueAsNumber / 100 };
+				if (!input.checkValidity() || crop.x + crop.width > 1 || crop.y + crop.height > 1) {
+					input.setCustomValidity(localize('sessions.design.cropOutside', 'Keep the crop inside the original image.'));
+					input.reportValidity(); this.refresh(); return;
+				}
+				this.commands.updateShape({ ...shape, crop });
+			}));
+		}
+		this.frameProperties = h(ownerDocument, 'div', { className: 'ash-sessions-design-special-properties' });
+		this.clipInput = h(ownerDocument, 'input', { properties: { type: 'checkbox' }, attributes: { 'aria-label': localize('sessions.design.clip', 'Clip contents') } });
+		this.frameProperties.append(h(ownerDocument, 'label', {}, localize('sessions.design.clip', 'Clip contents'), this.clipInput));
+		this._register(addDisposableListener(this.clipInput, 'change', () => {
+			const shape = this.selectedShape;
+			if (shape?.kind === 'frame') { this.commands.updateShape({ ...shape, clip: this.clipInput.checked }); }
+		}));
+		this.domNode.append(this.textProperties, this.pathProperties, this.imageProperties, this.frameProperties);
 	}
 
 	private get selectedShape(): DesignShape | undefined {
-		return this.selection.ids.size === 1 ? this.documentController.model.value.shapes.find(shape => this.selection.ids.has(shape.id)) : undefined;
+		return this.selection.ids.size === 1 ? flattenDesignShapes(this.documentController.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
 	}
 
 	public getActions(): readonly IAction[] {
@@ -116,6 +149,8 @@ export class DesignPropertiesWidget extends Disposable {
 		this.domNode.classList.toggle('visible', !!shape && isVisible);
 		this.textProperties.classList.toggle('visible', shape?.kind === 'text');
 		this.pathProperties.classList.toggle('visible', shape?.kind === 'path');
+		this.imageProperties.classList.toggle('visible', shape?.kind === 'image');
+		this.frameProperties.classList.toggle('visible', shape?.kind === 'frame');
 		if (!shape) { return; }
 		for (const field of ['x', 'y', 'width', 'height', 'rotation'] as const) {
 			const input = this.geometryInputs.get(field)!;
@@ -123,7 +158,15 @@ export class DesignPropertiesWidget extends Disposable {
 			input.disabled = this.documentController.isBusy;
 		}
 		this.fillInput.value = shape.fill;
-		this.fillInput.disabled = this.documentController.isBusy || shape.kind === 'group';
+		this.fillInput.disabled = this.documentController.isBusy || shape.kind === 'group' || shape.kind === 'image';
+		if (shape.kind === 'frame') { this.clipInput.checked = shape.clip; this.clipInput.disabled = this.documentController.isBusy; }
+		if (shape.kind === 'image') {
+			for (const [field, input] of this.cropInputs) {
+				input.value = `${shape.crop[field] * 100}`;
+				input.disabled = this.documentController.isBusy;
+				input.setCustomValidity('');
+			}
+		}
 		if (shape.kind === 'text') {
 			this.textInput.value = shape.text;
 			this.fontSizeInput.value = `${shape.fontSize}`;

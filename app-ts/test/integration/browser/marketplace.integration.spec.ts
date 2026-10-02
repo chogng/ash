@@ -1,5 +1,19 @@
 import { expect, test } from '@playwright/test';
 
+test('Marketplace navigation completes while the catalog request is pending', async ({ page }) => {
+	await page.goto('/marketplace.html');
+	const view = page.locator('.ash-marketplace');
+	await expect(view.getByRole('button', { name: 'Install package', exact: true })).toBeEnabled();
+	await page.evaluate(() => window.ashMarketplaceIntegration.startHeldCommand());
+	await expect(view.getByLabel('Search packages', { exact: true })).toHaveValue('held query');
+	await expect(view.getByRole('status')).toHaveText('Loading packages…');
+	await page.evaluate(() => window.ashMarketplaceIntegration.executeCommand('ash.plugins.open'));
+	await expect(view.getByLabel('Package list', { exact: true })).toHaveValue('installed');
+	await expect(view.getByRole('status')).toHaveText('0 packages.');
+	await page.evaluate(() => window.ashMarketplaceIntegration.failHeldSearch());
+	await expect(view.getByRole('status')).toHaveText('0 packages.');
+});
+
 test('Marketplace ignores a failed browse request after switching to installed packages', async ({ page }) => {
 	await page.goto('/marketplace.html');
 	const view = page.locator('.ash-marketplace');

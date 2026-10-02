@@ -11,6 +11,7 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				testing: resolve(import.meta.dirname, "testing.html"),
 				table: resolve(import.meta.dirname, 'table.html'),
 				tokenization: resolve(import.meta.dirname, 'tokenization.html'),
 				diff: resolve(import.meta.dirname, 'diff.html'),

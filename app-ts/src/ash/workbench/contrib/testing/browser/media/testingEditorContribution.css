@@ -1,0 +1,14 @@
+.ash-testing-gutter {
+  color: var(--ash-success-foreground);
+  cursor: pointer;
+}
+
+.ash-testing-gutter::before {
+  display: block;
+  width: 0.8em;
+  height: 0.8em;
+  margin: 0.1em auto;
+  background: currentColor;
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%);
+  content: '';
+}

@@ -3,6 +3,7 @@ use crate::AppServer;
 use crate::model_catalog::ModelCatalog;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 use ash_app_server_protocol::protocol::registry::SerializationAccess;
+use ash_async_utils::CancellationSource;
 use ash_core::InMemoryThreadStore;
 use ash_core::ThreadController;
 use ash_protocol::ModelAccess;
@@ -16,6 +17,83 @@ use std::io::BufReader;
 use std::io::Write;
 use std::net::Shutdown;
 use std::time::Duration;
+
+#[test]
+fn stalled_marketplace_queries_leave_state_changes_available() {
+    let server = Arc::new(server());
+    let mut connection = server.connection();
+    let initialized = server.handle_json(
+        &mut connection,
+        &json!({"jsonrpc":"2.0", "id":1, "method":"initialize", "params":{
+            "clientInfo":{"name":"marketplace-dispatch-test", "version":"1"}, "capabilities":{},
+        }})
+        .to_string(),
+    );
+    assert!(serde_json::from_str::<Value>(&initialized).unwrap()["result"].is_object());
+    thread::scope(|scope| {
+        let requests = RequestDispatcher::start(scope).unwrap();
+        let release = Arc::new((Mutex::new(false), Condvar::new()));
+        let unblock = ReleaseCatalog(Arc::clone(&release));
+        let (started, entered) = mpsc::channel();
+        let cancellation = CancellationSource::new();
+        for (index, (method, params)) in [
+            ("marketplace/search", json!({"query":"held"})),
+            ("marketplace/get", json!({"packageId":"example/tools"})),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let lane = RequestLane::for_message(method, &params);
+            let prepared = server
+                .prepare_request(
+                    &connection,
+                    &json!({"jsonrpc":"2.0", "id":index + 2, "method":method, "params":params})
+                        .to_string(),
+                )
+                .unwrap();
+            let handle = requests.handle();
+            let ticket = handle.reserve(lane).unwrap();
+            let release = Arc::clone(&release);
+            let started = started.clone();
+            handle.enqueue(
+                ticket,
+                &server.request_scheduler,
+                connection.connection_id,
+                prepared.scope,
+                cancellation.token(),
+                lane,
+                Box::new(move |_| {
+                    started.send(()).unwrap();
+                    let mut released = release.0.lock().unwrap();
+                    while !*released {
+                        released = release.1.wait(released).unwrap();
+                    }
+                    Ok(())
+                }),
+            );
+        }
+        entered.recv_timeout(Duration::from_secs(3)).unwrap();
+        let (completed, received) = mpsc::channel();
+        requests
+            .dispatch(
+                Arc::clone(&server),
+                &connection,
+                json!({"jsonrpc":"2.0", "id":4, "method":"session/create", "params":{
+                    "commandId":"catalog-independent-session", "title":"ready", "executionTarget":null,
+                }}).to_string(),
+                move |response| {
+                    completed.send(response).unwrap();
+                    Ok(())
+                },
+            )
+            .unwrap();
+        let response = received.recv_timeout(Duration::from_secs(3));
+        drop(unblock);
+        requests.finish().unwrap();
+        assert!(serde_json::from_str::<Value>(&response.unwrap()).unwrap()["result"].is_object());
+    });
+    server.close_connection(connection);
+}
 
 #[test]
 fn check_ignore_dispatch_queries_authorized_paths_and_rejects_directory_escape() {
