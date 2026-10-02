@@ -88,14 +88,14 @@ export class DesignPropertiesView extends ViewPane {
 			const properties = editor.propertiesDomNode;
 			this.contentElement.append(properties);
 			store.add(toDisposable(() => properties.remove()));
-			const refresh = (): void => { empty.hidden = editor.hasEditableProperties; };
+			const refresh = (): void => { empty.hidden = editor.hasProperties; };
 			store.add(editor.onDidChangeView(refresh));
 			refresh();
 		}));
 	}
 	public focus(): void {
 		const editor = this.editors.activeEditor.get();
-		if (editor?.hasEditableProperties && !editor.documentController.isBusy) editor.focusProperties();
+		if (editor?.hasProperties && !editor.documentController.isBusy) editor.focusProperties();
 		else this.contentElement.focus();
 	}
 }

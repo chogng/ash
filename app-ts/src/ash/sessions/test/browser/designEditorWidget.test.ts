@@ -622,6 +622,40 @@ test('Design property sections follow the selected object and path stroke edits 
 	assert.equal(view.propertiesDomNode.querySelector<HTMLElement>('.ash-design-frame-properties')!.hidden, false);
 });
 
+test('Design properties switch between Page, object and multiple selection while reusing export and fill history', async () => {
+	using view = createView();
+	const root = view.propertiesDomNode.querySelector<HTMLElement>('.ash-sessions-design-properties')!;
+	const editor = DesignEditorWidget.getFocused(view.domNode)!;
+	const heading = (): string => root.querySelector('h2')!.textContent!;
+	const visibleSections = (): string[] => [...root.querySelectorAll<HTMLDetailsElement>('details')].filter(section => !section.hidden).map(section => section.querySelector('summary')!.textContent!);
+	const exportButton = [...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Export design')!;
+	assert.deepEqual({ heading: heading(), sections: visibleSections(), visible: root.classList.contains('visible'), exportDisabled: exportButton.disabled }, { heading: 'Page', sections: [], visible: true, exportDisabled: true });
+	pressCanvas(view, 'r');
+	const rectangle = editor.documentController.model.value.shapes[0];
+	const opacity = root.querySelector<HTMLInputElement>('input[aria-label="Fill opacity (%)"]')!;
+	opacity.value = '50'; opacity.dispatchEvent(new browser.window.Event('change'));
+	assert.equal(editor.documentController.model.value.shapes[0].fill, '#80808080');
+	editor.undo();
+	assert.equal(editor.documentController.model.value.shapes[0].fill, rectangle.fill);
+	pressCanvas(view, 'e');
+	editor.selectShapes(editor.documentController.model.value.shapes.map(shape => shape.id));
+	assert.deepEqual({ heading: heading(), sections: visibleSections(), exportDisabled: exportButton.disabled }, { heading: '2 objects selected.', sections: [], exportDisabled: false });
+	editor.selectShapes([]);
+	assert.equal(heading(), 'Page');
+	const exportFormat = root.querySelector<HTMLSelectElement>('select[aria-label="Export format"]')!;
+	const beforeExport = editor.documentController.model.value;
+	for (const format of ['svg', 'html']) {
+		exportFormat.value = format;
+		const completed = new Promise<void>(resolve => {
+			const listener = editor.documentController.onDidChange(() => { if (!editor.documentController.isBusy) { listener.dispose(); resolve(); } });
+		});
+		exportButton.click();
+		await completed;
+		assert.match(writes.at(-1)!.content, format === 'svg' ? /^<svg/u : /^<!doctype html>/iu);
+		assert.equal(editor.documentController.model.value, beforeExport);
+	}
+});
+
 test('Chinese Design actions and new property labels are localized', async () => {
 	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
@@ -836,7 +870,8 @@ test('Design panels share the editor selection and detach when the pane hides', 
 	const ellipse = [...view.layersDomNode.querySelectorAll<HTMLElement>('[role="treeitem"]')].find(element => element.textContent?.includes('Ellipse'))!;
 	ellipse.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true, shiftKey: true }));
 	assert.equal(view.designEditors.activeEditor.get()!.selection.ids.size, 2);
-	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), false);
+	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
+	assert.equal(view.propertiesDomNode.querySelector('.ash-design-properties-heading')!.textContent, '2 objects selected.');
 	rectangle.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
 	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
 	view.pane.setVisible(EditorPaneVisibility.Hidden);
@@ -889,7 +924,10 @@ test('Design panel labels and empty states follow Chinese localization', async (
 		using view = createView();
 		assert.equal(view.layersDomNode.querySelector('[role="tree"]')!.getAttribute('aria-label'), '图层');
 		assert.match(view.layersDomNode.textContent!, /绘制对象后会显示对应图层。/u);
-		assert.match(view.propertiesDomNode.textContent!, /选择一个对象以编辑属性。/u);
+		assert.equal(view.propertiesDomNode.querySelector('.ash-design-properties-heading')!.textContent, '页面');
+		assert.equal(view.propertiesDomNode.querySelector('.ash-design-page-summary')!.textContent, '0 个对象');
+		assert.ok(view.propertiesDomNode.querySelector('select[aria-label="导出格式"]'));
+		assert.match(view.propertiesDomNode.textContent!, /网格 · 12 像素/u);
 	} finally { resetNlsResolver(); }
 });
 

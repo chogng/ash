@@ -238,10 +238,14 @@ test('Sessions Design canvas keeps grid and cursor readable across themes', asyn
 		const field = properties.getByRole('spinbutton', { name: 'X', exact: true });
 		const fieldColors = await field.evaluate(input => {
 			const style = getComputedStyle(input);
-			return { foreground: style.color, background: style.backgroundColor, border: style.borderColor };
+			const container = getComputedStyle(input.parentElement!);
+			return { foreground: style.color, background: container.backgroundColor, border: container.borderColor, borderWidth: container.borderWidth, radius: container.borderRadius, fontSize: style.fontSize };
 		});
 		expect(fieldColors.foreground).not.toBe(fieldColors.background);
 		expect(fieldColors.border).not.toBe(fieldColors.background);
+		expect(fieldColors).toMatchObject({ radius: '6px', fontSize: '12px' });
+		expect(Number.parseFloat(fieldColors.borderWidth)).toBeGreaterThan(0);
+		expect(Number.parseFloat(fieldColors.borderWidth)).toBeLessThanOrEqual(1);
 		await properties.locator('summary').filter({ hasText: /^Position$/u }).focus();
 		await expect(properties.locator('summary').filter({ hasText: /^Position$/u })).toHaveCSS('outline-style', 'solid');
 		const fill = properties.getByRole('button', { name: 'Fill', exact: true });
@@ -876,9 +880,19 @@ test('Sessions Design property pane groups fields, collapses with the keyboard a
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const pane = page.locator('[data-part="auxiliarybar"]');
+	await expect(pane.getByRole('heading', { name: 'Page', exact: true })).toBeVisible();
+	await expect(pane.locator('details:visible')).toHaveCount(0);
+	await expect(pane.getByRole('region', { name: 'Layout guide', exact: true })).toContainText('Grid · 12 px');
+	await expect(pane.getByRole('button', { name: 'Export design', exact: true })).toBeDisabled();
 	await canvas.press('r');
 	await expect(pane.getByRole('heading', { name: 'Rectangle', exact: true })).toBeVisible();
 	await expect(pane.locator('details:visible > summary')).toHaveText(['Position', 'Layout', 'Appearance']);
+	await expect(pane.getByRole('button', { name: 'Export design', exact: true })).toBeEnabled();
+	const opacity = pane.getByRole('spinbutton', { name: 'Fill opacity (%)', exact: true });
+	await opacity.fill('50'); await opacity.press('Tab');
+	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('fill', '#80808080');
+	await canvas.press('ControlOrMeta+z');
+	await expect(opacity).toHaveValue('100');
 	const position = pane.locator('summary').filter({ hasText: /^Position$/u });
 	await position.focus();
 	await page.keyboard.press('Enter');
@@ -911,18 +925,26 @@ test('Sessions Design property pane groups fields, collapses with the keyboard a
 	await expect(canvas.locator('svg[data-shape-id] > text')).toContainText('A long text value');
 	// Resize the actual retained Part, so the field geometry follows its layout constraints.
 	const sash = pane.locator('xpath=../../..').locator(':scope > .ash-sash').nth(1);
+	await sash.hover();
 	const sashBounds = await sash.boundingBox();
 	expect(sashBounds).not.toBeNull();
 	const paneWidth = (await pane.boundingBox())!.width;
-	await page.mouse.move(sashBounds!.x + sashBounds!.width / 2, sashBounds!.y + sashBounds!.height / 2);
 	await page.mouse.down();
-	await page.mouse.move(sashBounds!.x + sashBounds!.width / 2 + paneWidth - 200, sashBounds!.y + sashBounds!.height / 2, { steps: 4 });
+	await expect(sash).toHaveClass(/ash-sash-active/u);
+	await page.mouse.move(sashBounds!.x + sashBounds!.width / 2 + paneWidth - 192, sashBounds!.y + sashBounds!.height / 2, { steps: 4 });
 	await page.mouse.up();
 	await expect.poll(async () => (await pane.boundingBox())!.width).toBeLessThanOrEqual(200);
 	const properties = pane.locator('.ash-sessions-design-properties');
 	const overflow = await properties.evaluate(root => ({ width: root.clientWidth, scrollWidth: root.scrollWidth, fieldsFit: [...root.querySelectorAll('input, textarea, select')].filter(field => (field as HTMLElement).offsetParent).every(field => field.getBoundingClientRect().right <= root.getBoundingClientRect().right) }));
 	expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.width);
 	expect(overflow.fieldsFit).toBe(true);
+	await canvas.press('ControlOrMeta+a');
+	await expect(pane.getByRole('heading', { name: '3 objects selected.', exact: true })).toBeVisible();
+	await expect(pane.locator('details:visible')).toHaveCount(0);
+	await canvas.press('Escape');
+	await expect(pane.getByRole('heading', { name: 'Page', exact: true })).toBeVisible();
+	await expect(pane.locator('.ash-design-page-summary')).toHaveText('3 objects');
+	await expect(pane.getByRole('combobox', { name: 'Export format', exact: true }).locator('option')).toHaveText(['SVG', 'HTML']);
 });
 
 test('Sessions Design frames keep child geometry, nested selection and whole-gesture undo', async ({ application, target, workbench }) => {

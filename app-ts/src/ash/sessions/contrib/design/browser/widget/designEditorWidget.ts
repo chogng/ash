@@ -138,7 +138,7 @@ export class DesignEditorWidget extends Disposable {
 	public layout(dimension: IDimension): void { this.dimension = dimension; }
 	public focusProperties(): void { this.properties.focus(); }
 	public get propertiesDomNode(): HTMLElement { return this.properties.domNode; }
-	public get hasEditableProperties(): boolean { return this.selectedShape !== undefined && (this.mode === DesignMode.Design || this.mode === DesignMode.Draw); }
+	public get hasProperties(): boolean { return this.mode === DesignMode.Design || this.mode === DesignMode.Draw; }
 	public selectShape(id: string): void {
 		this.selectShapes([id]);
 	}

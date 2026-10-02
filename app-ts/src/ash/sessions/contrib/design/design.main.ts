@@ -12,14 +12,15 @@ import type { IInstantiationService } from '../../../platform/instantiation/comm
 export function createDesignEditorContributions(context: DesignEditorContributionContext, instantiationService: IInstantiationService): IDesignEditorContributions {
 	const resources = new DisposableStore();
 	const { ownerDocument, documentController, commands, selection } = context;
-	const drawing = resources.add(new DesignDrawingController(context, commands));
-	const properties = resources.add(instantiationService.createInstance(DesignPropertiesWidget, ownerDocument, documentController, commands, selection, () => context.renderCanvas()));
-	const motion = resources.add(new DesignMotionWidget(ownerDocument, documentController.model, commands));
-	const code = resources.add(new DesignCodeWidget(ownerDocument, documentController, () => context.runFileOperation(() => documentController.exportDocument({
+	const exportDesign = (format: 'svg' | 'html'): Promise<void> => context.runFileOperation(() => format === 'svg' ? documentController.exportDocument() : documentController.exportDocument({
 		title: localize('sessions.design.exportCode', 'Export code'),
 		filename: 'design.html',
 		extension: 'html',
 		content: generateDesignCode(documentController.model.value, documentController.getEmbeddedImageSources()),
-	}))));
+	}));
+	const drawing = resources.add(new DesignDrawingController(context, commands));
+	const properties = resources.add(instantiationService.createInstance(DesignPropertiesWidget, ownerDocument, documentController, commands, selection, () => context.renderCanvas(), exportDesign));
+	const motion = resources.add(new DesignMotionWidget(ownerDocument, documentController.model, commands));
+	const code = resources.add(new DesignCodeWidget(ownerDocument, documentController, () => exportDesign('html')));
 	return Object.assign(resources, { drawing, properties, motion, code });
 }

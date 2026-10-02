@@ -104,7 +104,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.DesignCanvas,
 			{ type: AccessibleViewType.Help },
-			() => localize('sessions.design.propertiesHelp', 'Shape properties are grouped into collapsible sections. Use Tab to move between section headings and fields; press Enter or Space on a section heading to collapse or expand it. Position edits X, Y and rotation; Layout edits width, height and frame clipping. Appearance opens the color picker with Hex, RGB, CSS, HSL, HSB and opacity controls. Press Alt+F1 inside the color picker for keyboard help. Typography, Bézier path and Image crop show controls for the selected object type. Stroke width changes the selected path. Each committed change uses the design document undo history.'),
+			() => localize('sessions.design.propertiesHelp', 'With no selection, Page shows the design name and object count. Layout guide describes the canvas grid; Export saves the whole design as SVG or HTML. With one object selected, properties are grouped into collapsible sections. Use Tab to move between section headings and fields; press Enter or Space on a section heading to collapse or expand it. Position edits X, Y and rotation; Layout edits width, height and frame clipping. Appearance edits fill opacity and opens the color picker with Hex, RGB, CSS, HSL, HSB and opacity controls. Press Alt+F1 inside the color picker for keyboard help. Typography, Bézier path and Image crop show controls for the selected object type. Stroke width changes the selected path. Each committed change uses the design document undo history.'),
 			() => focused.focus(),
 			AccessibilityVerbositySettingId.DesignCanvas,
 		);
