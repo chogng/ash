@@ -27,13 +27,13 @@ export class DesignToolsWidget extends Disposable {
 		this.tools = this._register(new ActionBar(tools, { ariaLabel: localize('sessions.design.tools', 'Design tools'), highlightToggledItems: true, actionViewItemProvider: action => new DesignToolViewItem(action) }));
 		this.modes = this._register(new ActionBar(modes, { ariaLabel: localize('sessions.design.modes', 'Editor modes'), highlightToggledItems: true }));
 		for (const [tool, label, icon] of [
-			[DesignTool.Select, localize('sessions.design.selectTool', 'Select (V)'), Lxicon.cursor],
+			[DesignTool.Select, localize('sessions.design.selectTool', 'Select (V)'), Lxicon.cursor2],
 			[DesignTool.Hand, localize('sessions.design.handTool', 'Move canvas (H)'), Lxicon.hand],
 			[DesignTool.Zoom, localize('sessions.design.zoomTool', 'Zoom canvas (Z)'), Lxicon.zoomIn],
-			[DesignTool.Rectangle, localize('sessions.design.rectangle', 'Rectangle'), Lxicon.primitiveSquare],
-			[DesignTool.Ellipse, localize('sessions.design.ellipse', 'Ellipse'), Lxicon.ellipse],
+			[DesignTool.Rectangle, localize('sessions.design.rectangle', 'Rectangle'), Lxicon.square],
+			[DesignTool.Ellipse, localize('sessions.design.ellipse', 'Ellipse'), Lxicon.circleLarge],
 			[DesignTool.Pen, localize('sessions.design.penTool', 'Pen (P)'), Lxicon.pen],
-			[DesignTool.Text, localize('sessions.design.textTool', 'Text (T)'), Lxicon.text],
+			[DesignTool.Text, localize('sessions.design.textTool', 'Text (T)'), Lxicon.text2],
 		] as const) {
 			this.toolActions.set(tool, { id: `sessions.design.tool.${tool}`, label, tooltip: label, icon, enabled: true, checked: false, run: () => selectTool(tool) });
 		}

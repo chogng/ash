@@ -1,6 +1,7 @@
 # Windows 沙箱验收手册
 
 本手册分别验证 MXC PSEC 路径和独立 Windows 账户实现，保留各轮实机证据。2026-10-02 的 Windows 11 23H2 x64 管理员验收已通过当前服务安装、更新、账户执行和清理；随后完成 WSL2 回归与 DNS/IPv6 网络矩阵。PSEC 在 Windows 11 25H2 ARM64 CI 上取得成功路径证据，本机 23H2 仍缺少能力。WSLC SDK 部分通过，一次性容器清理仍报错；Ash 尚未接入它。具体范围见 [补充验收](#2026-10-02-psecwslc-与网络补充验收)。
+账户 CI 的 ACL 标记差异已修复，本机与 ARM64/Server CI 复测通过；公网 IPv6 的临时出口矩阵在 Windows 与 WSL 两种模式均通过，见 [ACL 与 IPv6 复测](#2026-10-02-acl-恢复与公网-ipv6-复测)。
 实现契约见 [mxc-sandbox](../ash-rs/mxc-sandbox/README.md) 与 [windows-sandbox](../ash-rs/windows-sandbox/README.md)。历史账户原型的结果不能作为当前候选的通过证据。
 
 ## 当前入口
@@ -142,6 +143,42 @@ WSL、发行版和构建工具保留在本机用于复测。上述早轮结果�
 WSLC 状态为**部分通过**。SDK 的 cooperative 外部代理只设置代理环境，不保证任意客户端流量均经代理，不能据此满足 Ash Managed；Ash 仍没有 WSLC 执行链。PTY、输入、完整取消/崩溃矩阵未验证。上游 executor 构建另有硬编码 PowerShell 7 安装路径的测试前置 warning；本机使用另一位置的 pwsh，该 warning 不影响已执行的 Alpine 用例，但不计为该上游全部 E2E 测试通过。
 
 `network-windows.log`、`network-nat-host.log`、`network-mirrored-host.log` 保存最终网络结果；原始测试配置错误、共享接收端并发造成的无效轮次和运行器源文件被重建导致的身份拒绝另存日志，不计为通过。本轮把执行 helper 复制到独立验收目录后安装，避免 Cargo 重建改变已批准摘要。`.wslconfig` 已恢复为原来的不存在状态，实际网络模式再次为 NAT；服务、账户、WFP 与临时接收端已清理。WSL 发行版和隔离于证据目录内的 SDK、镜像缓存保留以便复测。
+
+## 2026-10-02 ACL 恢复与公网 IPv6 复测
+
+证据目录为 `.build/acceptance/sandbox-acl-fix/run-20261002-095459/`，包含原始失败、最终日志、构建检查及清理结果。此前 CI 因撤销权限后多出 DACL `AI` 标记失败；本轮保存传播前旧格式对象的路径，在授权、撤销与日志恢复时保留原始控制标记。受保护根还可能保留启用保护前的继承权限项，直接传播写回会清掉这些项的继承标记；现改为单独写根，再由未保护子项重新取得父目录授权并向下传播。恢复操作使用当前 DACL，保留其他执行的 SID 权限项。完整 SDDL 比较继续保留，账户文件用例在每台验收主机显式运行有无 `AI` 两种基线。
+
+| 本机复测 | 结果 |
+| --- | --- |
+| SDK ACL | 最终源码的 37 项全部通过，包含旧格式恢复、混合继承、保留历史继承项的受保护根、受保护子树、子项及孙级授权、重叠授权和传播中断后的日志恢复 |
+| Windows 11 23H2 x64 账户 | 36 项库测试、10 项完整执行用例通过；文件权限、元数据、退出码与完整 ACL 恢复均通过 |
+| Windows 公网 IPv6 | 网络矩阵 1 项通过，包含 Denied / Managed / Allowed、HTTP/CONNECT/SOCKS 目标拒绝、直接 TCP、TCP/UDP DNS 的 A/AAAA 与后代继承 |
+| WSL2 Ubuntu 24.04.5 x64 | NAT 与 mirrored 各 1 项公网 IPv6 矩阵和 1 项既有受管网络回归通过；实测前普通进程先完成目标往返 |
+| 构建 | SDK、账户与代理 warning 门禁通过；Windows helper/服务与两平台探针正常构建通过；账户 ARM64 测试目标编译通过，固定上游 vendor 复核通过 |
+
+公网目标为 `[2606:4700:4700::1111]:80` 与 `:53`。测试通过独立 TUN 网卡和现有代理中支持 IPv6 的节点提供临时出口，增加两个公网地址的 `/128` 路由；沙箱外另验证了证书校验成功的 HTTPS 响应及 TCP/UDP A/AAAA 解析。初始节点无法进行 IPv6 数据往返的轮次保留为失败，TCP 握手单独成功不计为通过。实际覆盖范围是这个隧道出口；物理网络仍没有公网 IPv6 地址与默认路由。
+
+NAT 用临时 IPv6 地址及接口转发连接 Linux 与测试出口，完成后删除地址、路由并恢复转发状态。mirrored 自动取得测试接口的 IPv6 路由，完成后恢复为 NAT 和原先不存在的 `.wslconfig`。测试网卡、进程、账户、服务与临时凭据配置均已清理；用户现有代理选择和配置未改动。镜像模式的 Windows IPv6 回环限制仍按上一轮范围记录。
+
+Windows 的两个旧网络用例还暴露出 TCP 临时端口落入 Hyper-V UDP 保留范围的测试配置错误；UDP 改为独立分配端口，探针与 Linux 调用方同步更新。共享 DNS fixture 同样分别分配 TCP/UDP 端口，保持所有事务与接收计数断言。
+
+复跑时显式提供可达出口，例如 `./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -NetworkDnsServer '[2606:4700:4700::1111]:53' -NetworkPublicIpv6Http '[2606:4700:4700::1111]:80'`。Linux 使用 `ASH_PUBLIC_IPV6_HTTP_ENDPOINT` 与包含公网 IPv6 的 `ASH_DNS_SERVER`。公开目标必须完成 HTTP 或 DNS 数据往返的正向对照；缺少出口即失败。脚本不自动配置隧道或修改用户的网络设置。
+
+新源码已提交到 `codex/psec-acl-recovery-20261002-111128`。提交 `9cbe51cf47049f1f92bc3d5b82bf766aa56279fe` 的 [首轮 CI](https://github.com/chogng/ash/actions/runs/36959078405) 为 5/6 通过；三种系统的 ACL 用例都通过，Server 2025 在运行器更新后的代理用例收到上游 `502`。本机通过分片请求复现：测试接收端在请求头尚未完整到达时回复并关闭连接。已将接收后的 HTTP/DNS 测试连接显式设为阻塞模式，并增加完整请求头回归；代理原用例和共享 DNS/IPv6 矩阵复测通过。Windows 的接收连接继承监听端属性，见 [Microsoft accept 说明](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept)。
+
+提交 `22915fa12cbfd04ea37972e8e6a32ddcdefbaa29` 的 [第二轮 CI](https://github.com/chogng/ash/actions/runs/36961919347) 最终 6/6 通过。其第一次尝试中 ARM64 账户与三项 PSEC 通过，两项 Server 账户任务均在受限 PowerShell 初始化的 10 秒测试期限处失败，标准输出和错误输出为空，退出后的清理通过。同一用例在上一轮通过；本次只重跑这两个失败任务，保留原有期限、退出码与输出断言，两项均通过。这个结果包含一次重跑，不表示首次尝试全部通过。
+
+| 系统 | build | 账户执行与清理 | PSEC |
+| --- | --- | --- | --- |
+| Windows 11 Enterprise 25H2 ARM64 | `26200.9457` | 通过 | 7 项指定成功路径通过 |
+| Windows Server 2022 x64 | `20348.5622` | 通过 | 能力不足时的启动前拒绝通过 |
+| Windows Server 2025 x64 | `26100.33438` | 通过 | 能力不足时的启动前拒绝通过 |
+
+每种系统均有 9 项服务测试、36 项账户库测试，运行器更新前后各通过 10 项完整账户执行用例与 1 项分片 HTTP 接收端回归，全部未忽略。服务程序更新后，文件授权、完整 SDDL 恢复、元数据与退出码用例再次通过；两种程序更新均保留账户及 WFP 对象身份，最后移除账户运行时与服务。托管系统 build 仅限定这些机器的结果，不能扩大为同版本全部环境。
+
+首轮原始日志、安装更新计划和接收端修复的本机证据保存在 `.build/acceptance/sandbox-ci/run-20261002-111128/`；第二轮及重跑证据保存在 `.build/acceptance/sandbox-ci/run-20261002-115023/`，其中 `attempt-1/` 保留首次尝试失败，`verification.json` 核对提交、用例数量、程序摘要、账户/WFP 身份及清理计划。下载的 GitHub 原始任务日志包含测试输出；账户 artifact 的 `account.log` 仅包含 PowerShell 宿主信息，不能单独证明测试通过。原始 artifact ZIP 摘要均与 GitHub 返回的 SHA-256 一致。
+
+本次 CI 未执行公网 DNS/IPv6 矩阵、WSL、PSEC ConPTY 或 App Server 产品链路；公网与 WSL 结果仍引用上述本机证据。WSLC 一次性清理失败不属于本轮修复范围。
 
 ## 已退出账户原型的受管网络记录
 

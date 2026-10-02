@@ -74,6 +74,7 @@ fn namespace_proxy_allows_authorized_traffic_and_blocks_direct_host_access() {
             target.to_string(),
             forbidden_port.to_string(),
             forbidden_port.to_string(),
+            forbidden_port.to_string(),
         ],
         dir.canonical_path(),
     )

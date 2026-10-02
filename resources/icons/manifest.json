@@ -317,6 +317,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "cursor-2",
+      "file": "cursor-2.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "cursor-filled",
       "file": "cursor-filled.svg",
       "rendering": "symbolic"
@@ -339,6 +344,11 @@
     {
       "id": "debug-alt",
       "file": "debug-alt.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "design",
+      "file": "design.svg",
       "rendering": "symbolic"
     },
     {
@@ -419,11 +429,6 @@
     {
       "id": "edit-write",
       "file": "edit-write.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "ellipse",
-      "file": "ellipse.svg",
       "rendering": "symbolic"
     },
     {
@@ -579,6 +584,11 @@
     {
       "id": "home",
       "file": "home.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "home-filled",
+      "file": "home-filled.svg",
       "rendering": "symbolic"
     },
     {
@@ -749,6 +759,11 @@
     {
       "id": "model-filled",
       "file": "model-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "motion",
+      "file": "motion.svg",
       "rendering": "symbolic"
     },
     {
@@ -957,6 +972,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "square",
+      "file": "square.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "star",
       "file": "star.svg",
       "rendering": "symbolic"
@@ -1027,6 +1047,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "text-2",
+      "file": "text-2.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "translate",
       "file": "translate.svg",
       "rendering": "symbolic"
@@ -1084,6 +1109,11 @@
     {
       "id": "warning",
       "file": "warning.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "website",
+      "file": "website.svg",
       "rendering": "symbolic"
     },
     {

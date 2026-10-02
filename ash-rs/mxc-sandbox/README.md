@@ -101,13 +101,15 @@ mkdir -p .build/acceptance/wsl/fixtures
 TMPDIR="$PWD/.build/acceptance/wsl/fixtures" just test ash-mxc-sandbox --test wsl --locked -- --ignored --test-threads=1
 ```
 
-Bubblewrap 当前拒绝 Ash `Allowed` 所要求的全部入站权限；不能把该请求的拒绝当作允许网络的执行验收。`tests/network_matrix.rs` 另通过 CommandExecutor 验证 Denied/Managed：IPv4/IPv6 HTTP、CONNECT、SOCKS 的地址和域名授权、未获批目标拒绝、直接 TCP 与 TCP/UDP DNS 的 A/AAAA、实际接收计数和后代继承。NAT/mirrored 实机均通过；NAT 还覆盖可达的 Windows IPv6 链路本地端口 53，mirrored 覆盖 Windows IPv4 回环。公网 IPv6 和 mirrored 的 Windows IPv6 宿主目标没有可达性对照，不计为通过。Linux PTY 未验证；独立 WSLC SDK 已实测但一次性清理报错，Ash 未接入它。
+Bubblewrap 当前拒绝 Ash `Allowed` 所要求的全部入站权限；不能把该请求的拒绝当作允许网络的执行验收。`tests/network_matrix.rs` 另通过 CommandExecutor 验证 Denied/Managed：IPv4/IPv6 HTTP、CONNECT、SOCKS 的地址和域名授权、未获批目标拒绝、直接 TCP 与 TCP/UDP DNS 的 A/AAAA、实际接收计数和后代继承。NAT/mirrored 实机均通过；两种模式还通过临时隧道出口的公网 IPv6 HTTP 与 TCP/UDP DNS 验证。NAT 覆盖可达的 Windows IPv6 链路本地端口 53，mirrored 覆盖 Windows IPv4 回环；mirrored 的 Windows IPv6 宿主目标仍没有可达性对照。具体出口与清理证据见 [ACL 与 IPv6 复测](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-acl-恢复与公网-ipv6-复测)。Linux PTY 未验证；独立 WSLC SDK 已实测但一次性清理报错，Ash 未接入它。
 
 ```sh
 python3 -B scripts/cargo.py build -p ash-network-proxy --example matrix
 export ASH_NETWORK_MATRIX_PROBE="$PWD/.build/cargo/debug/examples/matrix"
 # 使用宿主实际可达、支持 TCP/UDP DNS 的端点；可逗号分隔，IPv6 写为 [address]:53。
 export ASH_DNS_SERVER="10.255.255.254:53"
+# 有可达公网 IPv6 出口时，增加真实 HTTP 往返与沙箱拒绝检查。
+export ASH_PUBLIC_IPV6_HTTP_ENDPOINT="[2606:4700:4700::1111]:80"
 just test ash-mxc-sandbox --test network_matrix --locked -- --ignored --nocapture
 ```
 

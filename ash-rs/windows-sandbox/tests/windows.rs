@@ -55,6 +55,17 @@ fn literal(path: &Path) -> String {
 #[test]
 #[ignore = "requires explicitly provisioned Windows sandbox"]
 fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
+    for inheritance in [InheritanceControl::Automatic, InheritanceControl::Legacy] {
+        scoped_execution_fixture(inheritance);
+    }
+}
+
+enum InheritanceControl {
+    Automatic,
+    Legacy,
+}
+
+fn scoped_execution_fixture(inheritance: InheritanceControl) {
     let temp = tempfile::tempdir().unwrap();
     for name in ["work", "reference", "other-agent"] {
         std::fs::create_dir(temp.path().join(name)).unwrap();
@@ -72,6 +83,14 @@ fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
         reference.canonical_path(),
         secret.as_path(),
     ];
+    if matches!(inheritance, InheritanceControl::Legacy) {
+        // Server and ARM CI can create the same inherited ACEs without AI.
+        // Exercise that baseline explicitly on every acceptance host.
+        for path in protected {
+            legacy_inheritance(path);
+            assert!(!sddl(path).contains("D:AI"));
+        }
+    }
     let before = protected.map(sddl);
     let scope = SandboxScope::new(
         work.clone(),
@@ -122,6 +141,45 @@ fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
     }
 }
 
+fn legacy_inheritance(path: &Path) {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys_061::Win32::Foundation::LocalFree;
+    use windows_sys_061::Win32::Security::Authorization::GetNamedSecurityInfoW;
+    use windows_sys_061::Win32::Security::Authorization::SE_FILE_OBJECT;
+    use windows_sys_061::Win32::Security::DACL_SECURITY_INFORMATION;
+    use windows_sys_061::Win32::Security::SetFileSecurityW;
+    use windows_sys_061::Win32::Security::SetSecurityDescriptorControl;
+    let path = path
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let mut descriptor = std::ptr::null_mut();
+    assert_eq!(
+        unsafe {
+            GetNamedSecurityInfoW(
+                path.as_ptr(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut descriptor,
+            )
+        },
+        0
+    );
+    let result = unsafe {
+        SetSecurityDescriptorControl(descriptor, 0x0500, 0) != 0
+            && SetFileSecurityW(path.as_ptr(), DACL_SECURITY_INFORMATION, descriptor) != 0
+    };
+    unsafe {
+        LocalFree(descriptor);
+    }
+    assert!(result);
+}
+
 #[test]
 fn strict_isolation_is_rejected_before_installation_or_process_creation() {
     let temp = tempfile::tempdir().unwrap();
@@ -149,7 +207,10 @@ fn denied_network_blocks_ipv6_connections_datagrams_and_listeners() {
     let tcp = TcpListener::bind((std::net::Ipv6Addr::LOCALHOST, 0)).unwrap();
     tcp.set_nonblocking(true).unwrap();
     let port = tcp.local_addr().unwrap().port();
-    let udp = std::net::UdpSocket::bind((std::net::Ipv6Addr::LOCALHOST, port)).unwrap();
+    // TCP's selected port can be reserved for UDP by Hyper-V. Allocate from
+    // each transport's own available range instead of assuming they match.
+    let udp = std::net::UdpSocket::bind((std::net::Ipv6Addr::LOCALHOST, 0)).unwrap();
+    let udp_port = udp.local_addr().unwrap().port();
     udp.set_nonblocking(true).unwrap();
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
@@ -157,7 +218,7 @@ fn denied_network_blocks_ipv6_connections_datagrams_and_listeners() {
         "$ErrorActionPreference='Stop'; function MustDeny([scriptblock]$a) {{ try {{ & $a }} catch {{ return }}; throw 'network restriction missing' }}; \
          MustDeny {{ $c=[Net.Sockets.TcpClient]::new([Net.Sockets.AddressFamily]::InterNetworkV6); try {{ $c.Connect('::1',{port}) }} finally {{ $c.Dispose() }} }}; \
          MustDeny {{ $l=[Net.Sockets.TcpListener]::new([Net.IPAddress]::IPv6Any,0); try {{ $l.Start() }} finally {{ $l.Stop() }} }}; \
-         $u=[Net.Sockets.UdpClient]::new([Net.Sockets.AddressFamily]::InterNetworkV6); try {{ $null=$u.Send([byte[]](1,2,3),3,[Net.IPEndPoint]::new([Net.IPAddress]::IPv6Loopback,{port})) }} catch {{ }} finally {{ $u.Dispose() }}; Write-Output 'ipv6-denied'"
+         $u=[Net.Sockets.UdpClient]::new([Net.Sockets.AddressFamily]::InterNetworkV6); try {{ $null=$u.Send([byte[]](1,2,3),3,[Net.IPEndPoint]::new([Net.IPAddress]::IPv6Loopback,{udp_port})) }} catch {{ }} finally {{ $u.Dispose() }}; Write-Output 'ipv6-denied'"
     );
     let result = executor(&dir, Duration::from_secs(15))
         .execute(
@@ -356,6 +417,9 @@ impl Origin {
             while !stopped.load(Ordering::Acquire) {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // Winsock accepts inherit the listener's nonblocking
+                        // mode; the request reader below needs blocking I/O.
+                        stream.set_nonblocking(false).unwrap();
                         stream
                             .set_read_timeout(Some(Duration::from_secs(5)))
                             .unwrap();
@@ -389,6 +453,36 @@ impl Drop for Origin {
 }
 
 #[test]
+fn origin_waits_for_complete_request_headers() {
+    let origin = Origin::start();
+    let mut stream =
+        std::net::TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, origin.port)).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_millis(250)))
+        .unwrap();
+    stream.write_all(b"GET / HTTP/1.1\r\n").unwrap();
+    // Split the request across writes: an origin must wait for the remaining
+    // headers instead of replying and closing over unread request bytes.
+    let error = stream
+        .read(&mut [0])
+        .expect_err("origin replied before complete HTTP headers");
+    assert!(matches!(
+        error.kind(),
+        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+    ));
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    stream
+        .write_all(b"Host: localhost\r\nConnection: close\r\n\r\n")
+        .unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).unwrap();
+    assert!(response.starts_with("HTTP/1.1 200 OK\r\n"), "{response}");
+    assert!(response.ends_with("approved"), "{response}");
+}
+
+#[test]
 #[ignore = "requires explicitly provisioned Windows sandbox and ASH_NETWORK_PROBE"]
 fn managed_execution_allows_the_proxy_and_blocks_direct_traffic_and_listeners() {
     let origin = Origin::start();
@@ -399,7 +493,8 @@ fn managed_execution_allows_the_proxy_and_blocks_direct_traffic_and_listeners() 
     let foreign = TcpListener::bind("127.0.0.1:0").unwrap();
     foreign.set_nonblocking(true).unwrap();
     let foreign_port = foreign.local_addr().unwrap().port();
-    let udp = std::net::UdpSocket::bind((std::net::Ipv4Addr::LOCALHOST, forbidden_port)).unwrap();
+    let udp = std::net::UdpSocket::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+    let udp_port = udp.local_addr().unwrap().port();
     udp.set_nonblocking(true).unwrap();
     let policy = NetworkPolicyHandle::new(
         move |request: network_proxy::NetworkRequest, _| async move {
@@ -426,6 +521,7 @@ fn managed_execution_allows_the_proxy_and_blocks_direct_traffic_and_listeners() 
                     target.to_string(),
                     forbidden_port.to_string(),
                     foreign_port.to_string(),
+                    udp_port.to_string(),
                 ],
                 working_directory: ".".into(),
                 input: CommandInput::Closed,

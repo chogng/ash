@@ -34,7 +34,8 @@ fn sddl(path: &Path) -> String {
         0
     );
     let _text = win::Local(text.cast());
-    String::from_utf16(unsafe { std::slice::from_raw_parts(text, length as usize - 1) }).unwrap()
+    let text = unsafe { std::slice::from_raw_parts(text, length as usize) };
+    String::from_utf16(text.split(|unit| *unit == 0).next().unwrap()).unwrap()
 }
 
 #[test]
@@ -110,6 +111,74 @@ fn audit_checks_world_writable_files_as_well_as_directories() {
             .contains(&std::fs::canonicalize(&path).unwrap())
     );
     assert!(!report.truncated);
+}
+
+#[test]
+fn object_acl_edits_preserve_legacy_inheritance_control() {
+    let temp = tempfile::tempdir().unwrap();
+    let target = temp.path().join("legacy");
+    std::fs::create_dir(&target).unwrap();
+    let owner = win::current_user().unwrap();
+    let descriptor = win::descriptor(&format!("D:(A;OICIID;FA;;;{owner})")).unwrap();
+    assert_ne!(
+        unsafe {
+            SetFileSecurityW(
+                win::wide(&target).as_ptr(),
+                DACL_SECURITY_INFORMATION,
+                descriptor.0,
+            )
+        },
+        0
+    );
+    let before = sddl(&target);
+    assert!(before.starts_with("D:("), "legacy fixture: {before}");
+    let mut acl =
+        wxc_common::filesystem_dacl::DaclManager::in_directory(&temp.path().join("journal"))
+            .unwrap();
+    acl.grant_directory_traversal("S-1-5-21-531-532-533-534", &target)
+        .unwrap();
+    acl.restore_strict().unwrap();
+    assert_eq!(sddl(&target), before);
+}
+
+#[test]
+fn inheritable_acl_edits_restore_legacy_directory_and_file_control() {
+    let temp = tempfile::tempdir().unwrap();
+    let target = temp.path().join("legacy");
+    std::fs::create_dir(&target).unwrap();
+    let child = target.join("child");
+    std::fs::write(&child, "unchanged").unwrap();
+    for path in [&target, &child] {
+        // CI creates descriptors with the correct inherited ACEs but no AI
+        // control bit. Preserve those ACEs when creating the same baseline.
+        let descriptor = win::descriptor(&sddl(path).replacen("D:AI", "D:", 1)).unwrap();
+        assert_ne!(
+            unsafe {
+                SetFileSecurityW(
+                    win::wide(path).as_ptr(),
+                    DACL_SECURITY_INFORMATION,
+                    descriptor.0,
+                )
+            },
+            0
+        );
+    }
+    let before = [&target, &child].map(|path| sddl(path));
+    assert!(
+        before.iter().all(|acl| acl.starts_with("D:(")),
+        "{before:?}"
+    );
+    let mut acl =
+        wxc_common::filesystem_dacl::DaclManager::in_directory(&temp.path().join("journal"))
+            .unwrap();
+    acl.grant_appcontainer_access(
+        "S-1-5-21-531-532-533-534",
+        std::slice::from_ref(&target),
+        &[],
+    )
+    .unwrap();
+    acl.restore_strict().unwrap();
+    assert_eq!([&target, &child].map(|path| sddl(path)), before);
 }
 
 #[test]

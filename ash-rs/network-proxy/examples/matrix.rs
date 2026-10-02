@@ -138,10 +138,43 @@ fn main() {
     let v6: SocketAddr = arguments[2].parse().unwrap();
     let dns_addresses = arguments[3]
         .split(',')
-        .map(|s| s.parse::<SocketAddr>().unwrap());
+        .flat_map(|target| match target.split_once('@') {
+            Some(("tcp", address)) => {
+                vec![(address.parse::<SocketAddr>().unwrap(), DnsTransport::Tcp)]
+            }
+            Some(("udp", address)) => {
+                vec![(address.parse::<SocketAddr>().unwrap(), DnsTransport::Udp)]
+            }
+            Some((transport, _)) => panic!("invalid DNS transport: {transport}"),
+            None => {
+                let address = target.parse::<SocketAddr>().unwrap();
+                vec![(address, DnsTransport::Udp), (address, DnsTransport::Tcp)]
+            }
+        });
     let targets = arguments[4]
         .split(',')
         .map(|s| s.parse::<SocketAddr>().unwrap());
+    let public_ipv6 = arguments
+        .get(5)
+        .map(|address| address.parse::<SocketAddr>().unwrap());
+    if let Some(address) = public_ipv6 {
+        assert!(address.is_ipv6() && !address.ip().is_loopback());
+        if mode == "allowed" {
+            // A TUN can acknowledge TCP before its upstream connects. Require
+            // an actual HTTP response from the public target as the control.
+            let response = http(connect(address).unwrap(), &address.to_string());
+            assert!(
+                response.starts_with("HTTP/1.") && response.contains("\r\n\r\n"),
+                "public IPv6 control: {response:?}"
+            );
+        } else {
+            assert!(
+                connect(address).is_err(),
+                "public IPv6 TCP escaped: {address}"
+            );
+        }
+        println!("{mode}: public IPv6 HTTP {address} checked");
+    }
     if mode == "managed" {
         let endpoint = |name: &str, prefix: &str| {
             std::env::var(name)
@@ -180,6 +213,18 @@ fn main() {
         assert!(http(connect(proxy).unwrap(), &authority).starts_with("HTTP/1.1 403"));
         tunnel(proxy, &authority, Expected::Denied);
         socks(socks_proxy, "::1", v4.port(), Expected::Denied);
+        if let Some(address) = public_ipv6 {
+            assert!(
+                http(connect(proxy).unwrap(), &address.to_string()).starts_with("HTTP/1.1 403")
+            );
+            tunnel(proxy, &address.to_string(), Expected::Denied);
+            socks(
+                socks_proxy,
+                &address.ip().to_string(),
+                address.port(),
+                Expected::Denied,
+            );
+        }
     }
     for address in targets {
         if mode == "allowed" {
@@ -192,28 +237,26 @@ fn main() {
         }
         println!("{mode}: TCP {address} checked");
     }
-    for address in dns_addresses {
-        for transport in [DnsTransport::Udp, DnsTransport::Tcp] {
-            for record in [1, 28] {
-                let result = dns(address, transport, record);
-                if mode == "allowed" {
-                    let reply = result.unwrap_or_else(|error| {
+    for (address, transport) in dns_addresses {
+        for record in [1, 28] {
+            let result = dns(address, transport, record);
+            if mode == "allowed" {
+                let reply = result.unwrap_or_else(|error| {
                         panic!(
                             "host DNS positive control {address}, transport={transport:?}, type={record}: {error}"
                         )
                     });
-                    assert!(
-                        reply.len() >= 12 && reply[0..2] == [0x41, 0x53] && reply[2] & 0x80 != 0,
-                        "invalid DNS response {reply:?}"
-                    );
-                } else {
-                    assert!(
-                        result.is_err(),
-                        "DNS escaped: {address}, transport={transport:?}, type={record}"
-                    );
-                }
-                println!("{mode}: DNS {address} transport={transport:?} type={record} checked");
+                assert!(
+                    reply.len() >= 12 && reply[0..2] == [0x41, 0x53] && reply[2] & 0x80 != 0,
+                    "invalid DNS response {reply:?}"
+                );
+            } else {
+                assert!(
+                    result.is_err(),
+                    "DNS escaped: {address}, transport={transport:?}, type={record}"
+                );
             }
+            println!("{mode}: DNS {address} transport={transport:?} type={record} checked");
         }
     }
     #[cfg(windows)]

@@ -18,7 +18,7 @@ fn main() {
         );
         return;
     }
-    assert!(arguments.len() >= 3);
+    assert!(arguments.len() >= 4);
     #[cfg(target_os = "linux")]
     for entry in std::fs::read_dir("/proc/self/fd").unwrap() {
         if let Ok(target) = std::fs::read_link(entry.unwrap().path()) {
@@ -31,6 +31,7 @@ fn main() {
     let target: u16 = arguments[0].parse().unwrap();
     let forbidden: u16 = arguments[1].parse().unwrap();
     let foreign: u16 = arguments[2].parse().unwrap();
+    let udp_target: u16 = arguments[3].parse().unwrap();
     let endpoint = |name: &str, scheme: &str| -> SocketAddr {
         let value = std::env::var(name).unwrap();
         value.strip_prefix(scheme).unwrap().parse().unwrap()
@@ -75,7 +76,7 @@ fn main() {
         }
     }
     if let Ok(udp) = std::net::UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)) {
-        let _ = udp.send_to(b"must-not-escape", (Ipv4Addr::LOCALHOST, forbidden));
+        let _ = udp.send_to(b"must-not-escape", (Ipv4Addr::LOCALHOST, udp_target));
     }
     #[cfg(windows)]
     {
@@ -95,7 +96,7 @@ fn main() {
     }
     println!("network-probe-ready");
     std::io::stdout().flush().unwrap();
-    if arguments.get(3).is_some_and(|value| value == "hold") {
+    if arguments.get(4).is_some_and(|value| value == "hold") {
         let _ = std::io::stdin().read(&mut [0]);
     }
 }

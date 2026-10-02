@@ -71,11 +71,13 @@ mod artwork {
     pub(crate) const CSV_LETTER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/csv-letter.svg"));
     pub(crate) const CSV_LETTER_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/csv-letter-filled.svg"));
     pub(crate) const CURSOR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/cursor.svg"));
+    pub(crate) const CURSOR_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/cursor-2.svg"));
     pub(crate) const CURSOR_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/cursor-filled.svg"));
     pub(crate) const DATABASE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database.svg"));
     pub(crate) const DATABASE_FLAT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database-flat.svg"));
     pub(crate) const DEBUG: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/debug.svg"));
     pub(crate) const DEBUG_ALT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/debug-alt.svg"));
+    pub(crate) const DESIGN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/design.svg"));
     pub(crate) const DEVICE_MOBILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/device-mobile.svg"));
     pub(crate) const DIAGNOSTICS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diagnostics.svg"));
     pub(crate) const DIFF: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diff.svg"));
@@ -92,7 +94,6 @@ mod artwork {
     pub(crate) const EDIT_1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/edit-1.svg"));
     pub(crate) const EDIT_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/edit-2.svg"));
     pub(crate) const EDIT_WRITE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/edit-write.svg"));
-    pub(crate) const ELLIPSE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/ellipse.svg"));
     pub(crate) const ELLIPSIS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/ellipsis.svg"));
     pub(crate) const ENTER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/enter.svg"));
     pub(crate) const ERASER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/eraser.svg"));
@@ -124,6 +125,7 @@ mod artwork {
     pub(crate) const HAND: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/hand.svg"));
     pub(crate) const HISTORY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/history.svg"));
     pub(crate) const HOME: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/home.svg"));
+    pub(crate) const HOME_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/home-filled.svg"));
     pub(crate) const IMAGE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/image.svg"));
     pub(crate) const IMAGE_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/image-filled.svg"));
     pub(crate) const INFO: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/info.svg"));
@@ -158,6 +160,7 @@ mod artwork {
     pub(crate) const MIC_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/mic-filled.svg"));
     pub(crate) const MODEL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/model.svg"));
     pub(crate) const MODEL_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/model-filled.svg"));
+    pub(crate) const MOTION: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/motion.svg"));
     pub(crate) const MULTITASK: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/multitask.svg"));
     pub(crate) const NEW_FILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/new-file.svg"));
     pub(crate) const NEW_FOLDER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/new-folder.svg"));
@@ -199,6 +202,7 @@ mod artwork {
     pub(crate) const SPLIT_HORIZONTAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/split-horizontal.svg"));
     pub(crate) const SPLIT_PAGE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/split-page.svg"));
     pub(crate) const SPLIT_VERTICAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/split-vertical.svg"));
+    pub(crate) const SQUARE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/square.svg"));
     pub(crate) const STAR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/star.svg"));
     pub(crate) const STAR_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/star-filled.svg"));
     pub(crate) const START: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/start.svg"));
@@ -213,6 +217,7 @@ mod artwork {
     pub(crate) const TERMINAL_CMD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/terminal-cmd.svg"));
     pub(crate) const TERMINAL_GIT_BASH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/terminal-git-bash.svg"));
     pub(crate) const TEXT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/text.svg"));
+    pub(crate) const TEXT_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/text-2.svg"));
     pub(crate) const TRANSLATE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/translate.svg"));
     pub(crate) const TRASH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/trash.svg"));
     pub(crate) const TRASH_FLAT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/trash-flat.svg"));
@@ -225,6 +230,7 @@ mod artwork {
     pub(crate) const UNPIN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/unpin.svg"));
     pub(crate) const VOICE_MODE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/voice-mode.svg"));
     pub(crate) const WARNING: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/warning.svg"));
+    pub(crate) const WEBSITE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/website.svg"));
     pub(crate) const WORKTREE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/worktree.svg"));
     pub(crate) const WRITE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/write.svg"));
     pub(crate) const XLS_GREEN: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/xls-green.svg"));
@@ -303,11 +309,13 @@ pub mod icons {
     pub const CSV_LETTER: Icon = Icon::new(IconId::new("csv-letter"), artwork::CSV_LETTER);
     pub const CSV_LETTER_FILLED: Icon = Icon::new(IconId::new("csv-letter-filled"), artwork::CSV_LETTER_FILLED);
     pub const CURSOR: Icon = Icon::new(IconId::new("cursor"), artwork::CURSOR);
+    pub const CURSOR_2: Icon = Icon::new(IconId::new("cursor-2"), artwork::CURSOR_2);
     pub const CURSOR_FILLED: Icon = Icon::new(IconId::new("cursor-filled"), artwork::CURSOR_FILLED);
     pub const DATABASE: Icon = Icon::new(IconId::new("database"), artwork::DATABASE);
     pub const DATABASE_FLAT: Icon = Icon::new(IconId::new("database-flat"), artwork::DATABASE_FLAT);
     pub const DEBUG: Icon = Icon::new(IconId::new("debug"), artwork::DEBUG);
     pub const DEBUG_ALT: Icon = Icon::new(IconId::new("debug-alt"), artwork::DEBUG_ALT);
+    pub const DESIGN: Icon = Icon::new(IconId::new("design"), artwork::DESIGN);
     pub const DEVICE_MOBILE: Icon = Icon::new(IconId::new("device-mobile"), artwork::DEVICE_MOBILE);
     pub const DIAGNOSTICS: Icon = Icon::new(IconId::new("diagnostics"), artwork::DIAGNOSTICS);
     pub const DIFF: Icon = Icon::new(IconId::new("diff"), artwork::DIFF);
@@ -324,7 +332,6 @@ pub mod icons {
     pub const EDIT_1: Icon = Icon::new(IconId::new("edit-1"), artwork::EDIT_1);
     pub const EDIT_2: Icon = Icon::new(IconId::new("edit-2"), artwork::EDIT_2);
     pub const EDIT_WRITE: Icon = Icon::new(IconId::new("edit-write"), artwork::EDIT_WRITE);
-    pub const ELLIPSE: Icon = Icon::new(IconId::new("ellipse"), artwork::ELLIPSE);
     pub const ELLIPSIS: Icon = Icon::new(IconId::new("ellipsis"), artwork::ELLIPSIS);
     pub const ENTER: Icon = Icon::new(IconId::new("enter"), artwork::ENTER);
     pub const ERASER: Icon = Icon::new(IconId::new("eraser"), artwork::ERASER);
@@ -356,6 +363,7 @@ pub mod icons {
     pub const HAND: Icon = Icon::new(IconId::new("hand"), artwork::HAND);
     pub const HISTORY: Icon = Icon::new(IconId::new("history"), artwork::HISTORY);
     pub const HOME: Icon = Icon::new(IconId::new("home"), artwork::HOME);
+    pub const HOME_FILLED: Icon = Icon::new(IconId::new("home-filled"), artwork::HOME_FILLED);
     pub const IMAGE: Icon = Icon::new(IconId::new("image"), artwork::IMAGE);
     pub const IMAGE_FILLED: Icon = Icon::new(IconId::new("image-filled"), artwork::IMAGE_FILLED);
     pub const INFO: Icon = Icon::new(IconId::new("info"), artwork::INFO);
@@ -390,6 +398,7 @@ pub mod icons {
     pub const MIC_FILLED: Icon = Icon::new(IconId::new("mic-filled"), artwork::MIC_FILLED);
     pub const MODEL: Icon = Icon::new(IconId::new("model"), artwork::MODEL);
     pub const MODEL_FILLED: Icon = Icon::new(IconId::new("model-filled"), artwork::MODEL_FILLED);
+    pub const MOTION: Icon = Icon::new(IconId::new("motion"), artwork::MOTION);
     pub const MULTITASK: Icon = Icon::new(IconId::new("multitask"), artwork::MULTITASK);
     pub const NEW_FILE: Icon = Icon::new(IconId::new("new-file"), artwork::NEW_FILE);
     pub const NEW_FOLDER: Icon = Icon::new(IconId::new("new-folder"), artwork::NEW_FOLDER);
@@ -431,6 +440,7 @@ pub mod icons {
     pub const SPLIT_HORIZONTAL: Icon = Icon::new(IconId::new("split-horizontal"), artwork::SPLIT_HORIZONTAL);
     pub const SPLIT_PAGE: Icon = Icon::new(IconId::new("split-page"), artwork::SPLIT_PAGE);
     pub const SPLIT_VERTICAL: Icon = Icon::new(IconId::new("split-vertical"), artwork::SPLIT_VERTICAL);
+    pub const SQUARE: Icon = Icon::new(IconId::new("square"), artwork::SQUARE);
     pub const STAR: Icon = Icon::new(IconId::new("star"), artwork::STAR);
     pub const STAR_FILLED: Icon = Icon::new(IconId::new("star-filled"), artwork::STAR_FILLED);
     pub const START: Icon = Icon::new(IconId::new("start"), artwork::START);
@@ -445,6 +455,7 @@ pub mod icons {
     pub const TERMINAL_CMD: Icon = Icon::new(IconId::new("terminal-cmd"), artwork::TERMINAL_CMD);
     pub const TERMINAL_GIT_BASH: Icon = Icon::new(IconId::new("terminal-git-bash"), artwork::TERMINAL_GIT_BASH);
     pub const TEXT: Icon = Icon::new(IconId::new("text"), artwork::TEXT);
+    pub const TEXT_2: Icon = Icon::new(IconId::new("text-2"), artwork::TEXT_2);
     pub const TRANSLATE: Icon = Icon::new(IconId::new("translate"), artwork::TRANSLATE);
     pub const TRASH: Icon = Icon::new(IconId::new("trash"), artwork::TRASH);
     pub const TRASH_FLAT: Icon = Icon::new(IconId::new("trash-flat"), artwork::TRASH_FLAT);
@@ -457,6 +468,7 @@ pub mod icons {
     pub const UNPIN: Icon = Icon::new(IconId::new("unpin"), artwork::UNPIN);
     pub const VOICE_MODE: Icon = Icon::new(IconId::new("voice-mode"), artwork::VOICE_MODE);
     pub const WARNING: Icon = Icon::new(IconId::new("warning"), artwork::WARNING);
+    pub const WEBSITE: Icon = Icon::new(IconId::new("website"), artwork::WEBSITE);
     pub const WORKTREE: Icon = Icon::new(IconId::new("worktree"), artwork::WORKTREE);
     pub const WRITE: Icon = Icon::new(IconId::new("write"), artwork::WRITE);
     pub const XLS_GREEN: Icon = Icon::new(IconId::new("xls-green"), artwork::XLS_GREEN);
@@ -531,11 +543,13 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::CSV_LETTER,
     icons::CSV_LETTER_FILLED,
     icons::CURSOR,
+    icons::CURSOR_2,
     icons::CURSOR_FILLED,
     icons::DATABASE,
     icons::DATABASE_FLAT,
     icons::DEBUG,
     icons::DEBUG_ALT,
+    icons::DESIGN,
     icons::DEVICE_MOBILE,
     icons::DIAGNOSTICS,
     icons::DIFF,
@@ -552,7 +566,6 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::EDIT_1,
     icons::EDIT_2,
     icons::EDIT_WRITE,
-    icons::ELLIPSE,
     icons::ELLIPSIS,
     icons::ENTER,
     icons::ERASER,
@@ -584,6 +597,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::HAND,
     icons::HISTORY,
     icons::HOME,
+    icons::HOME_FILLED,
     icons::IMAGE,
     icons::IMAGE_FILLED,
     icons::INFO,
@@ -618,6 +632,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::MIC_FILLED,
     icons::MODEL,
     icons::MODEL_FILLED,
+    icons::MOTION,
     icons::MULTITASK,
     icons::NEW_FILE,
     icons::NEW_FOLDER,
@@ -659,6 +674,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::SPLIT_HORIZONTAL,
     icons::SPLIT_PAGE,
     icons::SPLIT_VERTICAL,
+    icons::SQUARE,
     icons::STAR,
     icons::STAR_FILLED,
     icons::START,
@@ -673,6 +689,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::TERMINAL_CMD,
     icons::TERMINAL_GIT_BASH,
     icons::TEXT,
+    icons::TEXT_2,
     icons::TRANSLATE,
     icons::TRASH,
     icons::TRASH_FLAT,
@@ -685,6 +702,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::UNPIN,
     icons::VOICE_MODE,
     icons::WARNING,
+    icons::WEBSITE,
     icons::WORKTREE,
     icons::WRITE,
     icons::XLS_GREEN,
@@ -760,11 +778,13 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("csv-letter", artwork::CSV_LETTER),
     ("csv-letter-filled", artwork::CSV_LETTER_FILLED),
     ("cursor", artwork::CURSOR),
+    ("cursor-2", artwork::CURSOR_2),
     ("cursor-filled", artwork::CURSOR_FILLED),
     ("database", artwork::DATABASE),
     ("database-flat", artwork::DATABASE_FLAT),
     ("debug", artwork::DEBUG),
     ("debug-alt", artwork::DEBUG_ALT),
+    ("design", artwork::DESIGN),
     ("device-mobile", artwork::DEVICE_MOBILE),
     ("diagnostics", artwork::DIAGNOSTICS),
     ("diff", artwork::DIFF),
@@ -781,7 +801,6 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("edit-1", artwork::EDIT_1),
     ("edit-2", artwork::EDIT_2),
     ("edit-write", artwork::EDIT_WRITE),
-    ("ellipse", artwork::ELLIPSE),
     ("ellipsis", artwork::ELLIPSIS),
     ("enter", artwork::ENTER),
     ("eraser", artwork::ERASER),
@@ -813,6 +832,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("hand", artwork::HAND),
     ("history", artwork::HISTORY),
     ("home", artwork::HOME),
+    ("home-filled", artwork::HOME_FILLED),
     ("image", artwork::IMAGE),
     ("image-filled", artwork::IMAGE_FILLED),
     ("info", artwork::INFO),
@@ -847,6 +867,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("mic-filled", artwork::MIC_FILLED),
     ("model", artwork::MODEL),
     ("model-filled", artwork::MODEL_FILLED),
+    ("motion", artwork::MOTION),
     ("multitask", artwork::MULTITASK),
     ("new-file", artwork::NEW_FILE),
     ("new-folder", artwork::NEW_FOLDER),
@@ -888,6 +909,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("split-horizontal", artwork::SPLIT_HORIZONTAL),
     ("split-page", artwork::SPLIT_PAGE),
     ("split-vertical", artwork::SPLIT_VERTICAL),
+    ("square", artwork::SQUARE),
     ("star", artwork::STAR),
     ("star-filled", artwork::STAR_FILLED),
     ("start", artwork::START),
@@ -902,6 +924,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("terminal-cmd", artwork::TERMINAL_CMD),
     ("terminal-git-bash", artwork::TERMINAL_GIT_BASH),
     ("text", artwork::TEXT),
+    ("text-2", artwork::TEXT_2),
     ("translate", artwork::TRANSLATE),
     ("trash", artwork::TRASH),
     ("trash-flat", artwork::TRASH_FLAT),
@@ -914,6 +937,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("unpin", artwork::UNPIN),
     ("voice-mode", artwork::VOICE_MODE),
     ("warning", artwork::WARNING),
+    ("website", artwork::WEBSITE),
     ("worktree", artwork::WORKTREE),
     ("write", artwork::WRITE),
     ("xls-green", artwork::XLS_GREEN),
