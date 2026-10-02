@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/psec.yml'
       - 'scripts/test-psec.ps1'
+      - 'scripts/probe-psec-network.py'
       - 'scripts/test-windows-sandbox.ps1'
       - 'ash-rs/windows-sandbox/**'
       - 'ash-rs/windows-sandbox-service/**'
@@ -60,13 +61,10 @@ jobs:
         timeout-minutes: 30
         shell: pwsh
         run: ./scripts/test-psec.ps1 -Capability '${{ (matrix.runner == 'windows-2022' || matrix.runner == 'windows-2025') && 'absent' || 'required' }}'
-      - name: Investigate PSEC 1.1 Managed policy
+      - name: Record PSEC network prerequisites
         if: always() && matrix.runner == 'windows-11-arm'
         shell: pwsh
-        run: |
-          python -m pip install --disable-pip-version-check --target .build/acceptance/psec-network/python-deps flatbuffers==25.12.19
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -B scripts/probe-psec-network.py
+        run: python -B scripts/probe-psec-network.py
       - name: Upload PSEC evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -80,11 +78,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: psec-network-${{ matrix.runner }}-${{ github.run_attempt }}
-          path: |
-            .build/acceptance/psec-network/report.json
-            .build/acceptance/psec-network/*/spec.psec
-            .build/acceptance/psec-network/*/probe.ps1
-            .build/acceptance/psec-network/*/result.json
+          path: .build/acceptance/psec-network/report.json
           if-no-files-found: error
           retention-days: 14
 

@@ -183,8 +183,11 @@ fn restricted_child_uses_private_desktop_pipes_and_preserves_exit_code() {
 #[test]
 fn powershell_initializes_and_runs_a_pipeline_with_the_restricted_token() {
     let system = std::env::var("SystemRoot").unwrap();
+    // Unqualified discovery imports unrelated modules on hosted Server images
+    // before the first output. This test measures CLR/token compatibility using
+    // the system cmdlet; ordinary command discovery is covered by execution tests.
     check_child(format!(
-        "\"{system}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoLogo -NoProfile -NonInteractive -Command \"'child-ready' | ForEach-Object {{ Write-Output $_ }}; exit 125\""
+        "\"{system}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoLogo -NoProfile -NonInteractive -Command \"'child-ready' | ForEach-Object {{ Microsoft.PowerShell.Utility\\Write-Output $_ }}; if ((Get-Command Write-Output).ModuleName -ne 'Microsoft.PowerShell.Utility') {{ exit 126 }}; exit 125\""
     ));
 }
 
