@@ -133,7 +133,21 @@ export class WindowsStateHandler {
 			}
 		}
 
-		return this.defaultState ?? defaultWindowState(this.workbenchState);
+		const state = this.defaultState ?? defaultWindowState(this.workbenchState);
+		const display = this.displayService.getDisplayMatching({ x: state.x ?? 0, y: state.y ?? 0, width: state.width, height: state.height });
+		const area = display.workArea;
+		const width = Math.min(area.width, Math.max(WINDOW_MINIMUM_SIZE.width, state.width));
+		const height = Math.min(area.height, Math.max(WINDOW_MINIMUM_SIZE.height, state.height));
+		this.lastNormalState = {
+			...state,
+			x: Math.round(Math.max(area.x, Math.min(state.x ?? area.x + (area.width - width) / 2, area.x + area.width - width))),
+			y: Math.round(Math.max(area.y, Math.min(state.y ?? area.y + (area.height - height) / 2, area.y + area.height - height))),
+			width,
+			height,
+			displayId: display.id,
+			workArea: { ...area },
+		};
+		return this.lastNormalState;
 	}
 
 	/** Saves immediately on blur and before the BrowserWindow closes. */
@@ -186,8 +200,8 @@ export class WindowsStateHandler {
 			}
 			const state = validateWindowState(this.lastNormalState, [display], this.workbenchState);
 			if (state) {
-				// Resize after the drag ends, keeping its dropped center rather than
-				// moving the window back to its old relative position on the screen.
+				// Only constrain size after the drag ends; the dropped center owns
+				// placement on the destination display.
 				const area = display.workArea;
 				const x = bounds.x + (bounds.width - state.width) / 2;
 				const y = bounds.y + (bounds.height - state.height) / 2;

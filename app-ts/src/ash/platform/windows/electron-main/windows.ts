@@ -203,22 +203,16 @@ export function validateWindowState(
 		const target = usableDisplays.find(({ display }) => display.id === state.displayId) ??
 			usableDisplays.reduce((nearest, entry) => distance(entry.area) < distance(nearest.area) ? entry : nearest);
 		const { display, area } = target;
-		// One scale preserves the window shape across displays with different aspect ratios.
-		// The work area already includes system DPI scaling; applying scaleFactor again would double it.
-		const preferredScale = Math.min(area.width / previousArea.width, area.height / previousArea.height);
-		const minimumScale = Math.max(WINDOW_MINIMUM_SIZE.width / stateWidth, WINDOW_MINIMUM_SIZE.height / stateHeight);
-		const maximumScale = Math.min(area.width / stateWidth, area.height / stateHeight);
-		const scale = Math.min(Math.max(preferredScale, minimumScale), maximumScale);
-		// A very narrow work area can make the aspect ratio and both minimums
-		// mutually exclusive. Match Electron's minimums without exceeding the screen.
-		const width = Math.min(area.width, Math.max(WINDOW_MINIMUM_SIZE.width, Math.round(stateWidth * scale)));
-		const height = Math.min(area.height, Math.max(WINDOW_MINIMUM_SIZE.height, Math.round(stateHeight * scale)));
-		const centerX = area.x + (previousCenterX - previousArea.x) / previousArea.width * area.width;
-		const centerY = area.y + (previousCenterY - previousArea.y) / previousArea.height * area.height;
+		// Electron bounds are already in DIP. A resolution or DPI change must not
+		// multiply the user's saved size by the change in display work area.
+		const width = Math.min(area.width, Math.max(WINDOW_MINIMUM_SIZE.width, stateWidth));
+		const height = Math.min(area.height, Math.max(WINDOW_MINIMUM_SIZE.height, stateHeight));
+		const adjustedX = area.x + x - previousArea.x;
+		const adjustedY = area.y + y - previousArea.y;
 		return {
 			...state,
-			x: Math.round(Math.max(area.x, Math.min(centerX - width / 2, area.x + area.width - width))),
-			y: Math.round(Math.max(area.y, Math.min(centerY - height / 2, area.y + area.height - height))),
+			x: Math.round(Math.max(area.x, Math.min(adjustedX, area.x + area.width - width))),
+			y: Math.round(Math.max(area.y, Math.min(adjustedY, area.y + area.height - height))),
 			width,
 			height,
 			displayId: display.id,
@@ -244,20 +238,11 @@ export function validateWindowState(
 		const { area } = usableDisplays[0];
 		const width = Math.min(stateWidth, area.width);
 		const height = Math.min(stateHeight, area.height);
-		let adjustedX = Math.max(x, area.x);
-		let adjustedY = Math.max(y, area.y);
-
-		if (adjustedX > area.x + area.width - 128) {
-			adjustedX = area.x + area.width - width;
-		}
-		if (adjustedY > area.y + area.height - 128) {
-			adjustedY = area.y + area.height - height;
-		}
 
 		return {
 			...state,
-			x: Math.max(adjustedX, area.x),
-			y: Math.max(adjustedY, area.y),
+			x: Math.max(area.x, Math.min(x, area.x + area.width - width)),
+			y: Math.max(area.y, Math.min(y, area.y + area.height - height)),
 			width,
 			height,
 		};

@@ -10,7 +10,7 @@ test.beforeEach(({}, testInfo) => {
 });
 
 for (const scaleFactor of [1, 1.25, 1.5, 2]) {
-	test(`Desktop restores proportional Workbench and Agents geometry at ${scaleFactor * 100}% display scaling`, async ({}, testInfo) => {
+	test(`Desktop retains logical Workbench and Agents geometry at ${scaleFactor * 100}% display scaling`, async ({}, testInfo) => {
 		test.setTimeout(90_000);
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(userDataDirectory, { recursive: true });
@@ -19,6 +19,14 @@ for (const scaleFactor of [1, 1.25, 1.5, 2]) {
 			application = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
 			const page = await application.firstWindow();
 			await new Workbench(page).waitForReady();
+			const defaults = await application.evaluate(({ screen }) => {
+				const area = screen.getPrimaryDisplay().workArea;
+				const width = Math.min(1200, area.width);
+				const height = Math.min(800, area.height);
+				return { x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2), width, height };
+			});
+			const defaultFrame = await constructorFrame(application, defaults);
+			await expect.poll(() => geometryDelta(application!, defaultFrame, 'current')).toBeLessThanOrEqual(2);
 			const opened = application.waitForEvent('window');
 			await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 			await expect((await opened).locator('.ash-sessions-window')).toBeVisible();
@@ -37,18 +45,7 @@ for (const scaleFactor of [1, 1.25, 1.5, 2]) {
 			const expected = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getBounds());
 			// Measure the frame conversion of a new Electron window independently of
 			// Ash's placement policy, which is checked exactly by the owner tests.
-			const expectedFrame = await application.evaluate(({ BrowserWindow }, bounds) => {
-				const probe = new BrowserWindow({
-					...bounds, show: false, minWidth: 400, minHeight: 270,
-					titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
-					titleBarOverlay: process.platform === 'darwin' ? true : { height: 35, color: '#181818', symbolColor: '#d6d6d6' },
-				});
-				try {
-					return probe.getBounds();
-				} finally {
-					probe.destroy();
-				}
-			}, expected);
+			const expectedFrame = await constructorFrame(application, expected);
 			await application.close();
 			application = undefined;
 
@@ -63,14 +60,10 @@ for (const scaleFactor of [1, 1.25, 1.5, 2]) {
 				}
 				for (const { uiState } of [state.lastActiveWindow, ...state.openedWindows]) {
 					expect(uiState.workArea).toBeDefined();
-					// Represent a previous screen with twice the logical work area. The next
-					// process must convert persisted placement using its actual Electron display.
-					for (const rectangle of [uiState.bounds, uiState.workArea]) {
-						rectangle.x *= 2;
-						rectangle.y *= 2;
-						rectangle.width *= 2;
-						rectangle.height *= 2;
-					}
+					// The saved logical rectangle must survive a resolution change even
+					// when the previous display had twice the available work area.
+					uiState.workArea.width *= 2;
+					uiState.workArea.height *= 2;
 					if (key === 'windowsState') {
 						uiState.mode = 'maximized';
 					}
@@ -104,11 +97,21 @@ test('Desktop adapts open Workbench and Agents windows to display changes withou
 		const opened = application.waitForEvent('window');
 		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		await expect((await opened).locator('.ash-sessions-window')).toBeVisible();
-		const before = await application.evaluate(({ BrowserWindow }) => {
+		const before = await application.evaluate(({ BrowserWindow, screen }) => {
 			for (const window of BrowserWindow.getAllWindows()) {
 				window.setBounds({ x: 120, y: 80, width: 1000, height: 700 });
 			}
-			return { focus: BrowserWindow.getFocusedWindow()?.id, zoom: BrowserWindow.getAllWindows().map(window => window.webContents.getZoomLevel()) };
+			const area = screen.getPrimaryDisplay().workArea;
+			const width = Math.min(1000, Math.floor(area.width / 2));
+			const height = Math.min(700, Math.floor(area.height / 2));
+			return {
+				focus: BrowserWindow.getFocusedWindow()?.id, zoom: BrowserWindow.getAllWindows().map(window => window.webContents.getZoomLevel()),
+				expected: {
+					x: Math.max(area.x, Math.min(120, area.x + Math.floor(area.width / 2) - width)),
+					y: Math.max(area.y, Math.min(80, area.y + Math.floor(area.height / 2) - height)),
+					width, height,
+				},
+			};
 		});
 		await expect.poll(() => geometryDelta(application, { x: 120, y: 80, width: 1000, height: 700 }, 'current')).toBeLessThanOrEqual(2);
 		await application.evaluate(({ screen }) => {
@@ -117,7 +120,7 @@ test('Desktop adapts open Workbench and Agents windows to display changes withou
 			const display = screen.getPrimaryDisplay();
 			const changed = { ...display, workArea: {
 				x: display.workArea.x, y: display.workArea.y,
-				width: display.workArea.width / 2, height: display.workArea.height / 2,
+				width: Math.floor(display.workArea.width / 2), height: Math.floor(display.workArea.height / 2),
 			} };
 			(globalThis as { restoreTestDisplay?: () => void }).restoreTestDisplay = () => {
 				screen.getAllDisplays = originalAll;
@@ -127,10 +130,10 @@ test('Desktop adapts open Workbench and Agents windows to display changes withou
 			screen.getDisplayMatching = () => changed;
 			screen.emit('display-metrics-changed', {}, changed, ['workArea']);
 		});
-		await expect.poll(() => geometryDelta(application, { x: 60, y: 40, width: 500, height: 350 }, 'current')).toBeLessThanOrEqual(2);
+		await expect.poll(() => geometryDelta(application, before.expected, 'current')).toBeLessThanOrEqual(2);
 		expect(await application.evaluate(({ BrowserWindow }) => ({
 			focus: BrowserWindow.getFocusedWindow()?.id, zoom: BrowserWindow.getAllWindows().map(window => window.webContents.getZoomLevel()),
-		}))).toEqual(before);
+		}))).toEqual({ focus: before.focus, zoom: before.zoom });
 	} finally {
 		await application.evaluate(() => {
 			const context = globalThis as { restoreTestDisplay?: () => void };
@@ -248,7 +251,9 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 		await expect(page.locator('.ash-getting-started')).toBeVisible();
 		await page.locator('[data-part="editor"] .ash-tab').hover();
 		await page.locator('[data-part="editor"] .ash-tab-close-action button').click();
+		await expect(page.locator('[data-part="editor"] .ash-tab')).toHaveCount(0);
 		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
+		await expect(page.locator('[data-part="editor"] .ash-tab')).toHaveCount(1);
 		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
 		await expect(page.locator('[data-part="editor"] .ash-tab')).toHaveCount(2);
 		await expect.poll(() => page.evaluate(() => Object.values(localStorage).some(value => value.includes('editorparts.state')))).toBe(true);
@@ -366,6 +371,21 @@ async function launch(userDataDirectory: string, folder?: string, extraArgs?: re
 async function geometryDelta(application: ElectronApplication, expected: { x: number; y: number; width: number; height: number }, kind: 'normal' | 'current'): Promise<number> {
 	const bounds = await application.evaluate(({ BrowserWindow }, kind) => BrowserWindow.getAllWindows().map(window => kind === 'normal' ? window.getNormalBounds() : window.getBounds()), kind);
 	return Math.max(...bounds.flatMap(rectangle => (['x', 'y', 'width', 'height'] as const).map(key => Math.abs(rectangle[key] - expected[key]))));
+}
+
+async function constructorFrame(application: ElectronApplication, bounds: { x: number; y: number; width: number; height: number }): Promise<typeof bounds> {
+	return application.evaluate(({ BrowserWindow }, bounds) => {
+		const probe = new BrowserWindow({
+			...bounds, show: false, minWidth: 400, minHeight: 270,
+			titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+			titleBarOverlay: process.platform === 'darwin' ? true : { height: 35, color: '#181818', symbolColor: '#d6d6d6' },
+		});
+		try {
+			return probe.getBounds();
+		} finally {
+			probe.destroy();
+		}
+	}, bounds);
 }
 
 async function workspaceFolder(page: Page): Promise<string | undefined> {

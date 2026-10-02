@@ -193,7 +193,7 @@ test("window state falls back to defaults when persisted data is invalid", () =>
 
 	assert.deepEqual(
 		createHandler(stateService, folderWorkspace).restoreWindowState(),
-		defaultWindowState(WorkbenchState.FOLDER),
+		{ ...defaultWindowState(WorkbenchState.FOLDER), x: 240, y: 70, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea },
 	);
 });
 
@@ -210,8 +210,53 @@ test("legacy per-kind window state keys are not restored", () => {
 			stateService,
 			UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 		).restoreWindowState(),
-		defaultWindowState(WorkbenchState.EMPTY),
+		{ ...defaultWindowState(WorkbenchState.EMPTY), x: 360, y: 120, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea },
 	);
+});
+
+test('new window defaults are centered and constrained to the current logical work area', () => {
+	for (const [workspace, size] of [
+		[UNKNOWN_EMPTY_WINDOW_WORKSPACE, { width: 1200, height: 800 }],
+		[folderWorkspace, { width: 1440, height: 900 }],
+	] as const) {
+		for (const workArea of [
+			{ x: 100, y: 50, width: 1920, height: 1040 },
+			{ x: -1024, y: 20, width: 1024, height: 700 },
+			{ x: 0, y: 0, width: 300, height: 200 },
+		]) {
+			const display = { id: 1, bounds: workArea, workArea };
+			const handler = new WindowsStateHandler({
+				stateService: new TestStateService(), workspace,
+				displayService: { onDidChangeDisplays: Event.None, getAllDisplays: () => [display], getDisplayMatching: () => display },
+			});
+			const width = Math.min(size.width, workArea.width);
+			const height = Math.min(size.height, workArea.height);
+			assert.deepEqual(handler.restoreWindowState(), {
+				mode: WindowMode.Normal,
+				x: workArea.x + (workArea.width - width) / 2,
+				y: workArea.y + (workArea.height - height) / 2,
+				width, height, displayId: display.id, workArea,
+			});
+		}
+	}
+});
+
+test('resolution changes keep a fitting saved rectangle and bring partially hidden windows fully into view', () => {
+	const display = { id: 1, bounds: { x: 0, y: 0, width: 1600, height: 900 }, workArea: { x: 0, y: 0, width: 1600, height: 860 } };
+	for (const workArea of [undefined, primaryDisplay.workArea]) {
+		assert.deepEqual(validateWindowState({
+			mode: WindowMode.Normal, x: 120, y: 80, width: 1100, height: 760, workArea,
+		}, [display], WorkbenchState.FOLDER), {
+			mode: WindowMode.Normal, x: 120, y: 80, width: 1100, height: 760, workArea: workArea ? display.workArea : undefined,
+			...(workArea ? { displayId: display.id } : {}),
+		});
+		assert.deepEqual(validateWindowState({
+			mode: WindowMode.Normal, x: 1200, y: 700, width: 1100, height: 760, workArea,
+		}, [display], WorkbenchState.FOLDER), {
+			mode: WindowMode.Normal, x: 500, y: 100, width: 1100, height: 760, workArea: workArea ? display.workArea : undefined,
+			...(workArea ? { displayId: display.id } : {}),
+		});
+	}
 });
 
 test("window state restores exact folder and workspace records", () => {
@@ -522,7 +567,9 @@ test("dedicated window state restores without changing the main window state", a
 		},
 	};
 	const dedicated = new WindowsStateHandler(dedicatedOptions);
-	assert.deepEqual(dedicated.restoreWindowState(), dedicatedOptions.defaultState);
+	assert.deepEqual(dedicated.restoreWindowState(), {
+		...dedicatedOptions.defaultState, x: 370, y: 130, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
+	});
 	const mainWindow = new TestWindow();
 	await main.saveWindowState(mainWindow);
 	const mainState = stateService.getItem('windowsState');
@@ -578,7 +625,7 @@ test("tracked windows save on blur and stop after disposal", async () => {
 	assert.equal(stateService.flushCount, 1);
 });
 
-test('window placement scales through persistence and preserves exact geometry on the same logical display', async () => {
+test('window persistence retains logical size and position when display resolution increases', async () => {
 	const stateService = new TestStateService();
 	let display = primaryDisplay;
 	const options = {
@@ -600,7 +647,7 @@ test('window placement scales through persistence and preserves exact geometry o
 	display = { id: 1, bounds: { x: 0, y: 0, width: 3840, height: 2160 }, workArea: { x: 0, y: 0, width: 3840, height: 2080 } };
 	const restored = new WindowsStateHandler(options).restoreWindowState();
 	assert.deepEqual(restored, {
-		mode: WindowMode.Normal, x: 240, y: 160, width: 2200, height: 1520, displayId: 1, workArea: display.workArea,
+		mode: WindowMode.Normal, x: 120, y: 80, width: 1100, height: 760, displayId: 1, workArea: display.workArea,
 	});
 	window.setBounds({ x: restored.x!, y: restored.y!, width: restored.width, height: restored.height });
 	await new WindowsStateHandler(options).saveWindowState(window);
@@ -610,19 +657,19 @@ test('window placement scales through persistence and preserves exact geometry o
 	});
 });
 
-test('restoring onto a different aspect ratio or a removed display keeps the window shape and fits the work area', () => {
+test('restoring onto a removed display retains logical size within the new work area', () => {
 	const target = { id: 2, bounds: { x: -1200, y: 0, width: 1200, height: 900 }, workArea: { x: -1200, y: 0, width: 1200, height: 900 } };
 	const state = validateWindowState({
 		mode: WindowMode.Normal, x: 480, y: 260, width: 960, height: 520, displayId: 1, workArea: primaryDisplay.workArea,
 	}, [target], WorkbenchState.FOLDER);
 	assert.deepEqual(state, {
-		mode: WindowMode.Normal, x: -900, y: 288, width: 600, height: 325, displayId: 2, workArea: target.workArea,
+		mode: WindowMode.Normal, x: -960, y: 260, width: 960, height: 520, displayId: 2, workArea: target.workArea,
 	});
 	const tiny = { ...target, workArea: { x: 0, y: 0, width: 480, height: 360 } };
 	assert.deepEqual(validateWindowState({
 		mode: WindowMode.Normal, x: 480, y: 260, width: 960, height: 520, displayId: 1, workArea: primaryDisplay.workArea,
 	}, [tiny], WorkbenchState.FOLDER), {
-		mode: WindowMode.Normal, x: 0, y: 45, width: 480, height: 270, displayId: 2, workArea: tiny.workArea,
+		mode: WindowMode.Normal, x: 0, y: 0, width: 480, height: 360, displayId: 2, workArea: tiny.workArea,
 	});
 });
 
@@ -649,9 +696,9 @@ test('resolution changes apply once after OS resize events and defer maximized g
 		window.emit('resize');
 		window.emit('blur');
 		changes.fire();
-		assert.deepEqual(window.bounds, { x: 60, y: 40, width: 550, height: 380 });
+		assert.deepEqual(window.bounds, { x: 0, y: 0, width: 960, height: 520 });
 		changes.fire();
-		assert.deepEqual(window.bounds, { x: 60, y: 40, width: 550, height: 380 });
+		assert.deepEqual(window.bounds, { x: 0, y: 0, width: 960, height: 520 });
 
 		window.maximized = true;
 		window.bounds = display.workArea;
@@ -660,11 +707,11 @@ test('resolution changes apply once after OS resize events and defer maximized g
 		assert.deepEqual(window.bounds, { x: 0, y: 0, width: 960, height: 520 });
 		const restored = new WindowsStateHandler(options).restoreWindowState();
 		assert.deepEqual(restored, {
-			mode: WindowMode.Maximized, x: 120, y: 80, width: 1100, height: 760, displayId: 1, workArea: primaryDisplay.workArea,
+			mode: WindowMode.Maximized, x: 0, y: 0, width: 960, height: 520, displayId: 1, workArea: primaryDisplay.workArea,
 		});
 		window.maximized = false;
 		window.emit('unmaximize');
-		assert.deepEqual(window.bounds, { x: 120, y: 80, width: 1100, height: 760 });
+		assert.deepEqual(window.bounds, { x: 0, y: 0, width: 960, height: 520 });
 	} finally {
 		tracking.dispose();
 	}
@@ -674,7 +721,7 @@ test('resolution changes apply once after OS resize events and defer maximized g
 	window.emit('close');
 	await Promise.resolve();
 	assert.deepEqual({ bounds: window.bounds, flushed: stateService.flushCount }, {
-		bounds: { x: 120, y: 80, width: 1100, height: 760 }, flushed,
+		bounds: { x: 0, y: 0, width: 960, height: 520 }, flushed,
 	});
 });
 
@@ -695,7 +742,7 @@ test('display changes preserve fullscreen mode and normal bounds for leaving ful
 	assert.equal(window.fullscreen, true);
 	window.fullscreen = false;
 	window.emit('leave-full-screen');
-	assert.deepEqual(window.bounds, { x: 60, y: 40, width: 550, height: 380 });
+	assert.deepEqual(window.bounds, { x: 0, y: 0, width: 960, height: 520 });
 });
 
 test('invalid persisted work areas are rejected at the storage boundary', () => {
@@ -704,11 +751,13 @@ test('invalid persisted work areas are rejected at the storage boundary', () => 
 		stateService.setItem('windowsState', { version: 1, openedWindows: [{
 			folder: folderWorkspace.uri.toString(), uiState: { mode: WindowMode.Normal, bounds: { x: 120, y: 80, width: 1100, height: 760 }, workArea },
 		}] });
-		assert.deepEqual(createHandler(stateService, folderWorkspace).restoreWindowState(), defaultWindowState(WorkbenchState.FOLDER));
+		assert.deepEqual(createHandler(stateService, folderWorkspace).restoreWindowState(), {
+			...defaultWindowState(WorkbenchState.FOLDER), x: 240, y: 70, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
+		});
 	}
 });
 
-test('dragging between displays resizes after the move ends and preserves the dropped center', () => {
+test('dragging between displays preserves logical size and the dropped position', () => {
 	const secondDisplay = { id: 2, bounds: { x: 1920, y: 0, width: 3840, height: 2160 }, workArea: { x: 1920, y: 0, width: 3840, height: 2080 } };
 	const handler = new WindowsStateHandler({
 		stateService: new TestStateService(), workspace: folderWorkspace,
@@ -725,9 +774,9 @@ test('dragging between displays resizes after the move ends and preserves the dr
 	window.emit('move');
 	assert.deepEqual(window.bounds, { x: 3000, y: 800, width: 1100, height: 760 });
 	window.emit('moved');
-	assert.deepEqual(window.bounds, { x: 2450, y: 420, width: 2200, height: 1520 });
+	assert.deepEqual(window.bounds, { x: 3000, y: 800, width: 1100, height: 760 });
 	window.emit('moved');
-	assert.deepEqual(window.bounds, { x: 2450, y: 420, width: 2200, height: 1520 });
+	assert.deepEqual(window.bounds, { x: 3000, y: 800, width: 1100, height: 760 });
 });
 
 test('work areas smaller than the default minimum remain reachable through Electron sizing limits', () => {
@@ -752,7 +801,7 @@ test('work areas smaller than the default minimum remain reachable through Elect
 	assert.deepEqual({ width: options.minWidth, height: options.minHeight }, window.minimumSize);
 });
 
-test('fullscreen persistence uses the current display and scales the retained normal rectangle when moved', async () => {
+test('fullscreen persistence uses the current display and retains logical normal size when moved', async () => {
 	const stateService = new TestStateService();
 	const secondDisplay = { id: 2, bounds: { x: 1920, y: 0, width: 3840, height: 2160 }, workArea: { x: 1920, y: 0, width: 3840, height: 2080 } };
 	const handler = new WindowsStateHandler({
@@ -770,6 +819,6 @@ test('fullscreen persistence uses the current display and scales the retained no
 	window.bounds = secondDisplay.bounds;
 	await handler.saveWindowState(window);
 	assert.deepEqual(handler.restoreWindowState(), {
-		mode: WindowMode.Fullscreen, x: 2160, y: 160, width: 2200, height: 1520, displayId: 2, workArea: secondDisplay.workArea,
+		mode: WindowMode.Fullscreen, x: 2040, y: 80, width: 1100, height: 760, displayId: 2, workArea: secondDisplay.workArea,
 	});
 });
