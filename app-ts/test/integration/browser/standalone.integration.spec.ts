@@ -5778,3 +5778,80 @@ test('editor scrollbar menu toggles the minimap', async ({ page }) => {
 	await expect(page.getByRole('menuitem', { name: 'Vertical Size' })).toBeDisabled();
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
+
+test('code action filtering removes empty groups and keyboard navigation skips their labels', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCodeActions('grouped'));
+	await page.locator('#caller .stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+.');
+	const root = page.locator('.ash-action-widget');
+	await expect(root.locator('.ash-action-widget-header')).toHaveText(['Quick Fix', 'Refactor']);
+	await expect(root.getByRole('menuitem', { name: 'First action', exact: true })).toBeFocused();
+	await page.keyboard.press('ArrowDown');
+	await expect(root.getByRole('menuitem', { name: 'Last action', exact: true })).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+f');
+	const filter = root.getByRole('searchbox', { name: 'Filter actions' });
+	await expect(filter).toBeFocused();
+	await filter.fill('REFACTOR last');
+	await expect(root.locator('.ash-action-widget-header')).toHaveText(['Refactor']);
+	await expect(root.getByRole('menuitem')).toHaveCount(1);
+	await filter.fill('missing');
+	await expect(root.getByRole('menuitem')).toHaveCount(0);
+	await expect(root.locator('.ash-action-widget-header')).toHaveCount(0);
+	await expect(root.getByRole('status')).toHaveText('No matching actions.');
+	await filter.fill('last');
+	await page.keyboard.press('ArrowDown');
+	await expect(root.getByRole('menuitem', { name: 'Last action', exact: true })).toBeFocused();
+	await page.keyboard.press('Enter');
+	await expect(root).toHaveCount(0);
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('last');
+});
+
+test('code action group labels and filter feedback use the Chinese catalog', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.setActionMenuLanguage('zh-CN');
+		window.ashStandaloneIntegration.enableCodeActions('grouped');
+	});
+	await page.locator('#caller .stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+.');
+	const root = page.locator('.ash-action-widget');
+	await expect(root.locator('.ash-action-widget-header')).toHaveText(['快速修复', '重构']);
+	await root.getByRole('searchbox', { name: '筛选操作' }).fill('重构 last');
+	await expect(root.locator('.ash-action-widget-header')).toHaveText(['重构']);
+	await expect(root.getByRole('status')).toHaveText('找到 1 个操作。');
+	await root.getByRole('searchbox', { name: '筛选操作' }).fill('missing');
+	await expect(root.getByRole('status')).toHaveText('没有匹配的操作。');
+	await page.keyboard.press('Escape');
+	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+});
+
+for (const outcome of ['accept', 'cancel', 'change'] as const) {
+	test(`code action preview ${outcome} uses the bulk edit pane and keeps the document unchanged until approval`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionPreview());
+		await page.locator('#action-preview-editor .stanza-editor-input').focus();
+		await page.keyboard.press('ControlOrMeta+.');
+		const root = page.locator('.ash-action-widget');
+		await expect(root.getByRole('menuitem', { name: 'Replace value with result' })).toBeFocused();
+		await expect(root.getByRole('button', { name: 'Preview', exact: true })).toBeEnabled();
+		if (outcome === 'accept') await root.getByRole('button', { name: 'Preview', exact: true }).click();
+		else await page.keyboard.press('ControlOrMeta+Enter');
+		const pane = page.locator('#action-preview-pane');
+		await expect(pane.getByRole('button', { name: 'Apply selected' })).toBeEnabled();
+		await expect(root).toHaveCount(0);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
+		if (outcome === 'change') await page.evaluate(() => window.ashStandaloneIntegration.changeCodeActionState('text'));
+		else await pane.getByRole('button', { name: outcome === 'accept' ? 'Apply selected' : 'Cancel', exact: true }).click();
+		await expect(pane.getByRole('button', { name: 'Apply selected' })).toBeDisabled();
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(outcome === 'accept' ? 'result' : outcome === 'change' ? 'changed' : 'value');
+		if (outcome === 'accept') {
+			await page.locator('#action-preview-editor .stanza-editor-input').focus();
+			await page.keyboard.press('ControlOrMeta+z');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
+		}
+		expect(errors).toEqual([]);
+	});
+}

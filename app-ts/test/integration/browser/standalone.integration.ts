@@ -40,7 +40,11 @@ import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { FontMeasurements } from '../../../src/ash/editor/browser/config/fontMeasurements.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
-import type { StandaloneEditor } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditor.js';
+import { StandaloneEditor } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditor.js';
+import { IBulkEditService, ResourceEdit } from '../../../src/ash/editor/browser/services/bulkEditService.js';
+import { BrowserBulkEditService, toLanguageWorkspaceEdit } from '../../../src/ash/workbench/contrib/bulkEdit/browser/bulkEditService.js';
+import { BulkEditPreviewPane } from '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEditPreviewPane.js';
+import '../../../src/ash/workbench/contrib/bulkEdit/browser/media/bulkEdit.css';
 
 interface EditorState {
 	readonly value: string | null;
@@ -341,7 +345,8 @@ interface StandaloneHarness {
 	prepareSelectionUndo(): UndoState;
 	applySelectionEdit(): UndoState;
 	readSelectionUndo(): UndoState;
-	enableCodeActions(kind?: 'single' | 'navigation'): void;
+	enableCodeActions(kind?: 'single' | 'navigation' | 'grouped'): void;
+	prepareCodeActionPreview(): void;
 	setActionMenuLanguage(locale: 'en' | 'zh-CN'): void;
 	setActionMenuTheme(theme: string): void;
 	prepareLineIdentity(): LineIdentityState;
@@ -479,6 +484,7 @@ const renameRequests: {
 	finish: (outcome: RenameOutcome) => void;
 }[] = [];
 let codeActionRegistration: ReturnType<typeof stanza.languages.registerCodeActionProvider> | undefined;
+const actionPreviewResources = new DisposableStore();
 const codeActionRequests: {
 	state: Omit<CodeActionRequestState, 'aborted'>;
 	signal: AbortSignal;
@@ -2623,12 +2629,52 @@ window.ashStandaloneIntegration = {
 		codeActionRegistration?.dispose();
 		codeActionRegistration = stanza.languages.registerCodeActionProvider('plaintext', {
 			provideCodeActions: () => kind === 'single' ? [{ title: 'Example code action' }] : [
-				{ title: 'Unavailable first action', disabledReason: 'Read only' },
-				{ title: 'First action', edit: { entries: [{ kind: 'textDocument', resource: callerEditor.getModel()!.uri, edits: [{ range: callerEditor.getModel()!.getFullModelRange(), text: 'first' }] }] } },
-				{ title: 'Unavailable middle action', disabledReason: 'Read only' },
-				{ title: 'Last action', edit: { entries: [{ kind: 'textDocument', resource: callerEditor.getModel()!.uri, edits: [{ range: callerEditor.getModel()!.getFullModelRange(), text: 'last' }] }] } },
+				{ title: 'Unavailable first action', kind: kind === 'grouped' ? 'quickfix' : undefined, disabledReason: 'Read only' },
+				{ title: 'First action', kind: kind === 'grouped' ? 'quickfix' : undefined, edit: { entries: [{ kind: 'textDocument', resource: callerEditor.getModel()!.uri, edits: [{ range: callerEditor.getModel()!.getFullModelRange(), text: 'first' }] }] } },
+				{ title: 'Unavailable middle action', kind: kind === 'grouped' ? 'refactor.extract' : undefined, disabledReason: 'Read only' },
+				{ title: 'Last action', kind: kind === 'grouped' ? 'refactor.rewrite' : undefined, edit: { entries: [{ kind: 'textDocument', resource: callerEditor.getModel()!.uri, edits: [{ range: callerEditor.getModel()!.getFullModelRange(), text: 'last' }] }] } },
 			],
 		});
+	},
+	prepareCodeActionPreview: () => {
+		actionPreviewResources.clear();
+		callerEditor.setValue('value');
+		const parent = StandaloneServices.get(IInstantiationService);
+		const services = actionPreviewResources.add(parent.createChild());
+		const applier = parent.get(IBulkEditService);
+		const bulkEdits = actionPreviewResources.add(new BrowserBulkEditService({ apply: async (edit, signal) => {
+			const result = await applier.apply(edit, { editor: previewEditor, showPreview: false, token: signal });
+			if (!result.isApplied) throw new Error('Previewed edits were not applied');
+			return { resources: edit.entries.map(entry => entry.kind === 'rename' ? entry.target : entry.resource), undo: result.undo };
+		} }));
+		services.registerInstance(IBulkEditService, bulkEdits);
+		const editorHost = h(document, 'div');
+		editorHost.id = 'action-preview-editor';
+		editorHost.style.width = '640px';
+		editorHost.style.height = '100px';
+		const paneHost = h(document, 'div');
+		paneHost.id = 'action-preview-pane';
+		document.body.append(editorHost, paneHost);
+		actionPreviewResources.add(toDisposable(() => { editorHost.remove(); paneHost.remove(); }));
+		const pane = actionPreviewResources.add(new BulkEditPreviewPane(paneHost, { id: 'ash.bulkEditPreview', title: 'Refactor Preview' }));
+		paneHost.append(pane.element);
+		pane.setVisible(true);
+		actionPreviewResources.add(bulkEdits.setPreviewHandler(async (edits, options) => {
+			const edit = toLanguageWorkspaceEdit(edits);
+			const entries = edit.entries.map((entry, index) => {
+				if (entry.kind !== 'textDocument') throw new Error('This fixture only previews text edits');
+				return { index, kind: entry.kind, resource: entry.resource, detail: 'Replace value with result' };
+			});
+			const pending = pane.setInput({ edit, entries, canApply: true }, options!.token!);
+			pane.element.querySelector<HTMLButtonElement>('.ash-bulk-edit-cancel')!.focus();
+			const accepted = await pending;
+			return accepted ? ResourceEdit.convert(accepted) : [];
+		}));
+		const previewEditor = actionPreviewResources.add(services.createInstance(StandaloneEditor, { container: editorHost, model: callerModel, ariaLabel: 'preview.ts', dimension: { width: 640, height: 100 } }, callerModel, false));
+		actionPreviewResources.add(StandaloneServices.get(ILanguageFeaturesService).codeActionProvider.register('plaintext', {
+			provideCodeActions: () => [{ title: 'Replace value with result', kind: 'refactor.rewrite', edit: { entries: [{ kind: 'textDocument', resource: callerModel.uri, version: callerModel.getVersionId(), edits: [{ range: callerModel.getFullModelRange(), text: 'result' }] }] } }],
+		}));
+		previewEditor.focus();
 	},
 	prepareLineIdentity: () => {
 		callerEditor.setValue('a\nlonger');
@@ -2894,6 +2940,7 @@ window.ashStandaloneIntegration = {
 		}
 	},
 	dispose: () => {
+		actionPreviewResources.dispose();
 		emptyResources.dispose();
 		standaloneCommands.dispose();
 		standaloneAction.dispose();

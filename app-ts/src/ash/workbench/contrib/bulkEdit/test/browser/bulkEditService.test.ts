@@ -90,3 +90,21 @@ function textEdit(name: string, text: string): LanguageWorkspaceEdit {
 		}],
 	};
 }
+
+test('approval commits every resource when its first mutation retires the originating request', async () => {
+	const controller = new AbortController();
+	const committed: string[] = [];
+	using service = new BrowserBulkEditService({ apply: async (edit, signal) => {
+		for (const entry of edit.entries) {
+			if (signal?.aborted) throw new Error('Transaction was cancelled by its own mutation');
+			committed.push(entry.kind);
+			controller.abort();
+		}
+		return { resources: [], undo: async () => {} };
+	} });
+	using handler = service.setPreviewHandler(async edits => edits);
+	const first = textEdit('one.ts', 'one');
+	const second = textEdit('two.ts', 'two');
+	await service.apply({ entries: [...first.entries, ...second.entries] }, { showPreview: true, token: controller.signal });
+	assert.deepEqual(committed, ['textDocument', 'textDocument']);
+});

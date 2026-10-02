@@ -9,7 +9,7 @@ import { IContextViewService } from '../../contextview/browser/contextView.js';
 import { InstantiationType, registerSingleton } from '../../instantiation/common/extensions.js';
 import { IInstantiationService, createDecorator } from '../../instantiation/common/instantiation.js';
 import { Registry } from '../../registry/common/platform.js';
-import { ActionList, type IActionListDelegate, type IActionListItem } from './actionList.js';
+import { ActionList, type IActionListDelegate, type IActionListItem, type IActionListOptions } from './actionList.js';
 
 export const IActionWidgetService = createDecorator<IActionWidgetService>('actionWidgetService');
 
@@ -17,7 +17,7 @@ export const IActionWidgetService = createDecorator<IActionWidgetService>('actio
 export interface IActionWidgetService {
 	readonly _serviceBrand: undefined;
 	readonly isVisible: boolean;
-	show<T>(user: string, supportsPreview: false, items: readonly IActionListItem<T>[], delegate: IActionListDelegate<T>, anchor: ContextViewAnchor): void;
+	show<T>(user: string, supportsPreview: boolean, items: readonly IActionListItem<T>[], delegate: IActionListDelegate<T>, anchor: ContextViewAnchor, listOptions?: IActionListOptions): void;
 	hide(didCancel?: boolean): void;
 }
 
@@ -39,14 +39,15 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 		return this.current.value !== undefined;
 	}
 
-	public show<T>(user: string, supportsPreview: false, items: readonly IActionListItem<T>[], delegate: IActionListDelegate<T>, anchor: ContextViewAnchor): void {
+	public show<T>(user: string, supportsPreview: boolean, items: readonly IActionListItem<T>[], delegate: IActionListDelegate<T>, anchor: ContextViewAnchor, listOptions: IActionListOptions = {}): void {
 		this.hide();
 		const lifetime = new DisposableStore();
 		const document = isHTMLElement(anchor) ? anchor.ownerDocument : this.contextViewService.container.ownerDocument;
 		const ariaHint = this.configurationService.getValue<boolean>(AccessibilityVerbositySettingId.ActionWidget)
 			? localize('actionWidget.helpHint', 'Press Alt+F1 for action menu accessibility help.')
 			: undefined;
-		const list = lifetime.add(this.instantiationService.createInstance(ActionList<T>, user, items, delegate, this.contextViewService.container, ariaHint));
+		const list = lifetime.add(this.instantiationService.createInstance(ActionList<T>, user, items, delegate, this.contextViewService.container, ariaHint, supportsPreview, listOptions));
+		lifetime.add(list.onDidRequestLayout(() => this.contextViewService.layout()));
 		const source = getActiveElement(document);
 		let focused = source;
 		lifetime.add(addDisposableListener(document, 'focusin', () => { focused = getActiveElement(document); }));

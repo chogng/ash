@@ -150,12 +150,74 @@ test('accessibility help is available to the workbench only while the action men
 		using provider = services.invokeFunction(accessor => implementation.getProvider(accessor))!;
 		assert.equal(provider.id, AccessibleViewProviderId.ActionWidget);
 		assert.equal(provider.verbositySettingKey, AccessibilityVerbositySettingId.ActionWidget);
-		assert.match(provider.provideContent(), /Unavailable actions are skipped/u);
+		assert.match(provider.provideContent(), /Unavailable actions and group labels are skipped/u);
 		dom.window.document.querySelector<HTMLButtonElement>('#source')!.focus();
 		provider.dispose();
 		assert.equal(dom.window.document.activeElement, focusedAction);
 		service.hide();
 		assert.equal(services.invokeFunction(accessor => implementation.getProvider(accessor)), undefined);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('filtering removes empty groups and keeps the typed action associated with its label', () => {
+	const dom = new JSDOM('<body><button id="source">Open</button></body>');
+	try {
+		using resources = new DisposableStore();
+		const service = createServices(dom.window.document, resources).get(IActionWidgetService);
+		const selected: number[] = [];
+		service.show<number>('groups', false, [
+			{ kind: ActionListItemKind.Header, label: 'Fixes' },
+			{ kind: ActionListItemKind.Action, item: 1, label: 'Fix Alpha', group: { title: 'Fixes' } },
+			{ kind: ActionListItemKind.Header, label: 'Refactors' },
+			{ kind: ActionListItemKind.Action, item: 2, label: 'Extract Beta', group: { title: 'Refactors' } },
+		], { onSelect: item => { selected.push(item); }, onHide: () => {} }, dom.window.document.querySelector<HTMLButtonElement>('#source')!, { showFilter: true });
+		const root = dom.window.document.querySelector('.ash-action-widget')!;
+		const filter = root.querySelector<HTMLInputElement>('input')!;
+		filter.focus();
+		filter.value = 'EXTRACT beta';
+		filter.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		assert.deepEqual([...root.querySelectorAll('.ash-action-widget-header')].map(header => header.textContent), ['Refactors']);
+		assert.equal(dom.window.document.activeElement, filter);
+		root.querySelector<HTMLButtonElement>('[role=menuitem]')!.click();
+		assert.deepEqual(selected, [2]);
+		filter.value = 'missing';
+		filter.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		assert.deepEqual({ rows: root.querySelectorAll('[role=menuitem]').length, headers: root.querySelectorAll('.ash-action-widget-header').length, status: root.querySelector('[role=status]')!.textContent }, {
+			rows: 0, headers: 0, status: 'No matching actions.',
+		});
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('preview requires an eligible focused action and shares the activation gate with apply', async () => {
+	const dom = new JSDOM('<body><button id="source">Open</button></body>');
+	try {
+		using resources = new DisposableStore();
+		const service = createServices(dom.window.document, resources).get(IActionWidgetService);
+		let release!: () => void;
+		const pending = new Promise<void>(resolve => { release = resolve; });
+		const selected: { item: number; preview: boolean | undefined }[] = [];
+		service.show('preview', true, [
+			{ kind: ActionListItemKind.Action, item: 1, label: 'No preview' },
+			{ kind: ActionListItemKind.Action, item: 2, label: 'Preview edit', canPreview: true },
+		], { onSelect: async (item, preview) => { selected.push({ item, preview }); await pending; }, onHide: () => {} }, dom.window.document.querySelector<HTMLButtonElement>('#source')!);
+		const root = dom.window.document.querySelector('.ash-action-widget')!;
+		const preview = root.querySelector<HTMLButtonElement>('.ash-action-widget-preview button')!;
+		assert.equal(preview.disabled, true);
+		const action = root.querySelectorAll<HTMLButtonElement>('[role=menuitem]')[1]!;
+		action.focus();
+		assert.equal(preview.disabled, false);
+		preview.click();
+		action.click();
+		assert.deepEqual(selected, [{ item: 2, preview: true }]);
+		assert.equal(preview.disabled, true);
+		release();
+		await pending;
+		await Promise.resolve();
+		assert.equal(preview.disabled, false);
 	} finally {
 		dom.window.close();
 	}

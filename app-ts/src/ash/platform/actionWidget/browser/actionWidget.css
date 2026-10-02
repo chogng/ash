@@ -4,3 +4,30 @@
   font-size: var(--ash-font-size-body1);
   font-weight: var(--ash-font-weight-regular);
 }
+
+.ash-action-widget-filter,
+.ash-action-widget-preview {
+  padding: var(--ash-spacing-size80);
+}
+
+.ash-action-widget-items {
+  min-width: 0;
+}
+
+.ash-action-widget-header {
+  padding: var(--ash-spacing-size80);
+  color: var(--ash-description-foreground);
+  font-size: var(--ash-font-size-label1);
+  font-weight: var(--ash-font-weight-semi-bold);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.ash-action-widget-status {
+  padding: 0 var(--ash-spacing-size80);
+  color: var(--ash-description-foreground);
+}
+
+.ash-action-widget-status:empty {
+  display: none;
+}

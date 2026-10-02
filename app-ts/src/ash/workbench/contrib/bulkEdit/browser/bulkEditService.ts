@@ -41,7 +41,9 @@ export class BrowserBulkEditService extends Disposable implements IBulkEditServi
 		}
 		const edit = sourceEdit && !previewed ? sourceEdit : toLanguageWorkspaceEdit(edits);
 		if (edit.entries.length === 0) return { ariaSummary: 'No edits were applied', isApplied: false };
-		const result: WorkspaceEditResult = await this.workspaceEdits.apply(edit, signal);
+		// Approval transfers ownership to the transaction. Its own document changes can retire
+		// the originating language request, which must not cancel an approved multi-file commit.
+		const result: WorkspaceEditResult = await this.workspaceEdits.apply(edit, previewed ? undefined : signal);
 		return { ariaSummary: `${result.resources.length} resources changed`, isApplied: true, undo: result.undo };
 	}
 }

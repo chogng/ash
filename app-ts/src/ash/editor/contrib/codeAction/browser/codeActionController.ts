@@ -8,8 +8,9 @@ import { type View } from "../../../browser/view.js";
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
-import { ActionListItemKind } from '../../../../platform/actionWidget/browser/actionList.js';
+import { ActionListItemKind, type IActionListItem } from '../../../../platform/actionWidget/browser/actionList.js';
 import { localize } from '../../../../nls.js';
+import { IBulkEditService } from '../../../browser/services/bulkEditService.js';
 
 interface CodeActionEntry {
 	readonly action: languages.LanguageCodeAction;
@@ -37,6 +38,7 @@ export class CodeActionController extends Disposable {
 		private readonly onError: (error: unknown) => void,
 		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
 		@IActionWidgetService private readonly actionWidgetService: IActionWidgetService,
+		@IBulkEditService private readonly bulkEditService: IBulkEditService,
 	) {
 		super();
 		if (diagnostics.textModel !== viewport.textModel || editor.getModel() !== viewport.textModel) {
@@ -119,28 +121,47 @@ export class CodeActionController extends Disposable {
 		if (!coordinates) return;
 		const bounds = this.viewport.domNode.domNode.getBoundingClientRect();
 		this.menuContext = context;
-		this.actionWidgetService.show(CodeActionController.ID, false, this.actions.map((entry, index) => ({
-			kind: ActionListItemKind.Action,
-			item: index,
-			label: entry.action.disabledReason
-				? localize('codeAction.disabled', '{0} ({1})', entry.action.title, entry.action.disabledReason)
-				: entry.action.title,
-			disabled: entry.action.disabledReason !== undefined,
-		})), {
-			onSelect: index => this.apply(index),
-			onHide: () => {
+		const groups = new Map<string, IActionListItem<number>[]>();
+		this.actions.forEach((entry, index) => {
+			const title = codeActionGroupTitle(entry.action.kind);
+			let items = groups.get(title);
+			if (!items) {
+				items = [];
+				groups.set(title, items);
+			}
+			items.push({
+				kind: ActionListItemKind.Action,
+				item: index,
+				group: { title },
+				label: entry.action.disabledReason
+					? localize('codeAction.disabled', '{0} ({1})', entry.action.title, entry.action.disabledReason)
+					: entry.action.title,
+				disabled: entry.action.disabledReason !== undefined,
+				canPreview: entry.action.edit !== undefined || entry.provider.resolveCodeAction !== undefined,
+			});
+		});
+		const items: IActionListItem<number>[] = [];
+		for (const [title, groupItems] of groups) {
+			if (groups.size > 1) {
+				items.push({ kind: ActionListItemKind.Header, label: title });
+			}
+			items.push(...groupItems);
+		}
+		this.actionWidgetService.show(CodeActionController.ID, this.bulkEditService.hasPreviewHandler(), items, {
+			onSelect: (index, preview) => this.apply(index, preview),
+			onHide: didCancel => {
 				this.menuContext = undefined;
-				if (this.context === context) this.close();
+				if (this.context === context && didCancel !== false) this.close();
 			},
 		}, {
 			left: bounds.left + coordinates.left,
 			top: bounds.top + coordinates.top,
 			width: 0,
 			height: coordinates.height,
-		});
+		}, { showFilter: true });
 	}
 
-	private async apply(index: number): Promise<void> {
+	private async apply(index: number, preview = false): Promise<void> {
 		const entry = this.actions[index];
 		const context = this.context;
 		if (!entry || !context || !languages.isLanguageFeatureRequestCurrent(context) || entry.action.disabledReason !== undefined) return;
@@ -160,7 +181,11 @@ export class CodeActionController extends Disposable {
 				this.close();
 				return;
 			}
-			if (this.applyWorkspaceEdit) {
+			if (preview) {
+				// Dismissing the menu hands focus to the preview without cancelling its version-bound request.
+				this.actionWidgetService.hide(false);
+				await this.bulkEditService.apply(resolved.edit, { editor: this.editor, showPreview: true, token: context.signal, label: resolved.title });
+			} else if (this.applyWorkspaceEdit) {
 				editDispatched = true;
 				await this.applyWorkspaceEdit(resolved.edit);
 			} else {
@@ -179,6 +204,7 @@ export class CodeActionController extends Disposable {
 			if (this.context === context) this.close();
 		} catch (error) {
 			if (editDispatched || languages.isLanguageFeatureRequestCurrent(context)) this.onError(error);
+			if (preview && this.context === context) this.close();
 		}
 	}
 
@@ -191,6 +217,15 @@ export class CodeActionController extends Disposable {
 		this.request = undefined;
 		this.context = undefined;
 		this.actions = [];
+	}
+}
+
+function codeActionGroupTitle(kind: string | undefined): string {
+	switch (kind?.split('.')[0]) {
+		case 'quickfix': return localize('codeAction.group.quickfix', 'Quick Fix');
+		case 'refactor': return localize('codeAction.group.refactor', 'Refactor');
+		case 'source': return localize('codeAction.group.source', 'Source Action');
+		default: return localize('codeAction.group.other', 'Other Actions');
 	}
 }
 

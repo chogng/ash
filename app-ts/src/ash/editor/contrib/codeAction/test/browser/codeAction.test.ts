@@ -7,6 +7,9 @@ import { Range } from '../../../../common/core/range.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
+import { IBulkEditService } from '../../../../browser/services/bulkEditService.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { BrowserBulkEditService } from '../../../../../workbench/contrib/bulkEdit/browser/bulkEditService.js';
 
 await import('../../browser/codeActionContributions.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
@@ -165,4 +168,51 @@ async function flushPromises(): Promise<void> {
 	await Promise.resolve();
 	await Promise.resolve();
 	await Promise.resolve();
+}
+
+for (const outcome of ['accept', 'cancel', 'change', 'dispose'] as const) {
+	test(`code action preview ${outcome} keeps edits behind approval and honours request cancellation`, async () => {
+		const dom = new JSDOM('<body><main></main></body>');
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		try {
+			using model = new TextModel('value', { languageId: 'typescript' });
+			using features = new LanguageFeaturesService();
+			using provider = features.codeActionProvider.register('typescript', {
+				provideCodeActions: () => [{ title: 'Replace value', kind: 'refactor.rewrite', edit: { entries: [{ kind: 'textDocument', resource: model.uri, version: model.getVersionId(), edits: [{ range: model.getFullModelRange(), text: 'result' }] }] } }],
+			});
+			let applied = 0;
+			using bulkEdits = new BrowserBulkEditService({ apply: async () => {
+				applied++;
+				return { resources: [model.uri], undo: async () => {} };
+			} });
+			let finish!: (accepted: boolean) => void;
+			let previewSignal: AbortSignal | undefined;
+			using handler = bulkEdits.setPreviewHandler((edits, options) => {
+				previewSignal = options!.token;
+				return new Promise(resolve => { finish = accepted => resolve(accepted ? edits : []); });
+			});
+			using services = new InstantiationService();
+			services.registerInstance(IBulkEditService, bulkEdits);
+			using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, ariaLabel: 'test.ts', languageFeaturesService: features, instantiationService: services, dimension: { width: 320, height: 80 } });
+			const input = dom.window.document.querySelector<HTMLElement>('.stanza-editor-input')!;
+			input.focus();
+			input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
+			await flushPromises();
+			const action = dom.window.document.querySelector<HTMLButtonElement>('[role=menuitem]')!;
+			action.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', ctrlKey: true }));
+			await flushPromises();
+			assert.equal(applied, 0);
+			assert.equal(previewSignal?.aborted, false);
+			assert.equal(dom.window.document.querySelector('.ash-action-widget'), null);
+			if (outcome === 'change') model.setValue('changed');
+			if (outcome === 'dispose') editor.dispose();
+			finish(outcome !== 'cancel');
+			await flushPromises();
+			await flushPromises();
+			assert.equal(applied, outcome === 'accept' ? 1 : 0);
+			assert.equal(previewSignal!.aborted, true);
+		} finally {
+			dom.window.close();
+		}
+	});
 }
