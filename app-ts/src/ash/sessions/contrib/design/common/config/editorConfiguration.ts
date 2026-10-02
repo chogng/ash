@@ -5,7 +5,6 @@ import { localize } from '../../../../../nls.js';
 export enum DesignTool {
 	Select = 'select',
 	Hand = 'hand',
-	Zoom = 'zoom',
 	Rectangle = 'rectangle',
 	Ellipse = 'ellipse',
 	Pen = 'pen',

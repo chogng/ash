@@ -117,11 +117,7 @@ pub(super) fn prepare(
                 .ok_or_else(|| unavailable("command arguments must be Unicode without NUL"))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let command_line = wxc_common::cmdline::cmdline_from_argv_for_context(
-        &argv,
-        wxc_common::cmdline::CommandLineContext::WindowsCreateProcess,
-    )
-    .map_err(unavailable)?;
+    let command_line = command_line(&argv)?;
     let mode = match policy.network() {
         NetworkAccess::Denied => NetworkMode::Denied,
         NetworkAccess::Allowed => NetworkMode::Allowed,
@@ -188,6 +184,45 @@ pub(super) fn prepare(
             io: command.io(),
         },
     ))
+}
+
+fn command_line(argv: &[String]) -> Result<String, SandboxError> {
+    let context = wxc_common::cmdline::CommandLineContext::WindowsCreateProcess;
+    let render = |arguments: &[String]| {
+        wxc_common::cmdline::cmdline_from_argv_for_context(arguments, context).map_err(unavailable)
+    };
+    let program = PathBuf::from(&argv[0]);
+    let is_cmd = program
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            name.eq_ignore_ascii_case("cmd.exe") || name.eq_ignore_ascii_case("cmd")
+        });
+    let script_switch = is_cmd
+        .then(|| {
+            argv.iter().position(|argument| {
+                argument.eq_ignore_ascii_case("/c") || argument.eq_ignore_ascii_case("/k")
+            })
+        })
+        .flatten();
+    match script_switch {
+        None => render(argv),
+        Some(index) => {
+            if argv.len() != index + 2 {
+                return Err(SandboxError::UnsupportedPolicy(
+                    "cmd.exe requires one command string after /C or /K".into(),
+                ));
+            }
+            // cmd consumes the tail as shell syntax, not CRT argv. Its outer
+            // quotes delimit the complete script; escaping inner quotes with
+            // backslashes corrupts quoted executable paths and script strings.
+            Ok(format!(
+                "{} \"{}\"",
+                render(&argv[..=index])?,
+                argv[index + 1]
+            ))
+        }
+    }
 }
 
 fn unicode_paths(paths: &[PathBuf]) -> Result<Vec<String>, SandboxError> {

@@ -41,7 +41,7 @@ export class DesignDrawingController extends Disposable implements DesignDrawing
 
 	public begin(point: DesignPoint): boolean {
 		const tool = this.host.getTool();
-		if (this.host.getMode() === DesignMode.Code || this.host.getMode() === DesignMode.Motion || [DesignTool.Select, DesignTool.Hand, DesignTool.Zoom].includes(tool)) { return false; }
+		if (this.host.getMode() === DesignMode.Code || this.host.getMode() === DesignMode.Motion || [DesignTool.Select, DesignTool.Hand].includes(tool)) { return false; }
 		if (tool === DesignTool.Text) {
 			const id = this.commands.addShape('text', { x: point.x + 120, y: point.y + 40 }, localize('sessions.design.text', 'Text'));
 			this.host.selectShape(id);

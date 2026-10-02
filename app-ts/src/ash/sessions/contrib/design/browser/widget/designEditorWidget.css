@@ -47,12 +47,12 @@
 }
 
 .ash-sessions-design-zoom {
-	font-size: var(--ash-fontSize-label1);
+	font-size: var(--ash-font-size-label1);
 	color: var(--ash-description-foreground);
 }
 
 .ash-sessions-design-message {
-	font-size: var(--ash-fontSize-label1);
+	font-size: var(--ash-font-size-label1);
 }
 
 .ash-sessions-design-content {

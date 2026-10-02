@@ -20,11 +20,13 @@ use windows_sys::Win32::Foundation::HANDLE;
 use windows_sys::Win32::Foundation::LocalFree;
 use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
 use windows_sys::Win32::Security::Authorization::SDDL_REVISION_1;
+use windows_sys::Win32::Security::DACL_SECURITY_INFORMATION;
 use windows_sys::Win32::Security::GetTokenInformation;
 use windows_sys::Win32::Security::IsTokenRestricted;
 use windows_sys::Win32::Security::RevertToSelf;
 use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
 use windows_sys::Win32::Security::SecurityImpersonation;
+use windows_sys::Win32::Security::SetKernelObjectSecurity;
 use windows_sys::Win32::Security::TOKEN_QUERY;
 use windows_sys::Win32::Security::TokenImpersonationLevel;
 use windows_sys::Win32::System::Pipes::ImpersonateNamedPipeClient;
@@ -44,8 +46,10 @@ use windows_sys::Win32::System::Services::SERVICE_TABLE_ENTRYW;
 use windows_sys::Win32::System::Services::SERVICE_WIN32_OWN_PROCESS;
 use windows_sys::Win32::System::Services::SetServiceStatus;
 use windows_sys::Win32::System::Services::StartServiceCtrlDispatcherW;
+use windows_sys::Win32::System::Threading::GetCurrentProcess;
 use windows_sys::Win32::System::Threading::GetCurrentThread;
 use windows_sys::Win32::System::Threading::OpenThreadToken;
+use windows_sys::Win32::System::Threading::PROCESS_QUERY_LIMITED_INFORMATION;
 
 static STATUS: AtomicUsize = AtomicUsize::new(0);
 static STOP: AtomicBool = AtomicBool::new(false);
@@ -117,11 +121,26 @@ unsafe extern "system" fn service_main(_: u32, _: *mut *mut u16) {
     }
     STATUS.store(handle as usize, Ordering::Release);
     report(SERVICE_START_PENDING, 0);
-    let result = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .map_err(|error| error.to_string())
-        .and_then(|runtime| runtime.block_on(listen(PIPE_NAME)));
+    let result = (|| {
+        // Ordinary clients authenticate the SCM-bound pipe by querying its
+        // process image. LocalSystem's default process ACL can deny this read.
+        // Grant only limited queries; management requests still require the
+        // authenticated caller token and their existing administrator checks.
+        let security = descriptor(&format!(
+            "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x{PROCESS_QUERY_LIMITED_INFORMATION:x};;;BU)"
+        ))?;
+        if unsafe {
+            SetKernelObjectSecurity(GetCurrentProcess(), DACL_SECURITY_INFORMATION, security.0)
+        } == 0
+        {
+            return Err(error("SetKernelObjectSecurity(service process)"));
+        }
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .map_err(|error| error.to_string())
+            .and_then(|runtime| runtime.block_on(listen(PIPE_NAME)))
+    })();
     report(
         SERVICE_STOPPED,
         if result.is_ok() {

@@ -15,6 +15,7 @@ import { DocumentCommands } from '../../common/commands/documentCommands.js';
 import { DesignSelection } from '../../common/selection.js';
 import type { DesignDocumentController } from '../designDocumentController.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { DesignView } from '../view.js';
 import { DesignViewport } from '../../common/viewport.js';
 import { DesignInputController } from '../controller/designInputController.js';
@@ -54,6 +55,7 @@ export class DesignEditorWidget extends Disposable {
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@ICommandService commandService: ICommandService,
 	) {
 		super();
 		this.commands = new DocumentCommands(documentController.model);
@@ -68,7 +70,7 @@ export class DesignEditorWidget extends Disposable {
 		this.canvas = this._register(instantiationService.createInstance(DesignView, ownerDocument));
 		this.canvas.setTool(this.tool);
 		const stage = h(ownerDocument, 'div', { className: 'ash-sessions-design-stage' });
-		this.toolsWidget = this._register(new DesignToolsWidget(ownerDocument, tool => this.setTool(tool), mode => this.setMode(mode)));
+		this.toolsWidget = this._register(instantiationService.createInstance(DesignToolsWidget, ownerDocument, (tool: DesignTool) => commandService.executeCommand(`sessions.design.tool.${tool}`, this), (mode: DesignMode) => commandService.executeCommand(`sessions.design.mode.${mode}`, this)));
 		const contributions = this._register(createContributions({
 			ownerDocument,
 			documentController,
@@ -190,20 +192,22 @@ export class DesignEditorWidget extends Disposable {
 		this.focus();
 	}
 
-	private setTool(tool: DesignTool): void {
+	public setTool(tool: DesignTool): void {
+		if (this.documentController.isBusy || this.mode === DesignMode.Code) { return; }
 		this.cancelGesture();
 		this.tool = tool;
 		this.canvas.setTool(tool);
 		this.render();
 	}
 
-	private setMode(mode: DesignMode): void {
+	public setMode(mode: DesignMode): void {
 		this.cancelGesture();
 		this.mode = mode;
 		this.domNode.classList.toggle('code-mode', mode === DesignMode.Code);
 		this.domNode.classList.toggle('motion-mode', mode === DesignMode.Motion);
 		this.motion.setActive(mode === DesignMode.Motion);
-		this.setTool(mode === DesignMode.Draw ? DesignTool.Pen : DesignTool.Select);
+		this.tool = mode === DesignMode.Draw ? DesignTool.Pen : DesignTool.Select;
+		this.canvas.setTool(this.tool);
 		this.render();
 	}
 
@@ -246,6 +250,7 @@ export class DesignEditorWidget extends Disposable {
 		this.contextMenus.showContextMenu({
 			getAnchor: () => anchor,
 			getActions: () => this.getContextMenuActions(),
+			getMenuClassName: () => 'ash-design-menu',
 			onHide: () => { this.contextMenuVisible = false; },
 		});
 		this.contextMenuVisible = true;
@@ -349,7 +354,6 @@ export class DesignEditorWidget extends Disposable {
 			 switch (event.key.toLowerCase()) {
 				case 'v': this.setTool(DesignTool.Select); break;
 				case 'h': this.setTool(DesignTool.Hand); break;
-				case 'z': this.setTool(DesignTool.Zoom); break;
 				case 'r': this.addShape('rectangle'); break;
 				case 'e': this.addShape('ellipse'); break;
 				case 't': this.addShape('text'); break;

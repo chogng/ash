@@ -60,8 +60,7 @@ export class DesignView extends Disposable {
 
 	public setTool(tool: DesignTool): void {
 		this.domNode.classList.toggle('hand-tool', tool === DesignTool.Hand);
-		this.domNode.classList.toggle('zoom-tool', tool === DesignTool.Zoom);
-		this.domNode.classList.toggle('drawing-tool', ![DesignTool.Select, DesignTool.Hand, DesignTool.Zoom].includes(tool));
+		this.domNode.classList.toggle('drawing-tool', ![DesignTool.Select, DesignTool.Hand].includes(tool));
 	}
 
 	public applyTransform(camera: DesignViewport): void {

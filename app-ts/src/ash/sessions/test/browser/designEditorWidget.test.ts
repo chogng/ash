@@ -25,6 +25,8 @@ import { createTestEditorServices } from '../../../workbench/test/common/testEdi
 import { EditorPanes } from '../../../workbench/browser/editor.js';
 import { EditorPaneVisibility } from '../../../workbench/browser/parts/editor/editorPane.js';
 import { ILifecycleService, LifecyclePhase, StartupKind } from '../../../workbench/services/lifecycle/common/lifecycle.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
@@ -52,6 +54,8 @@ const services = new InstantiationService();
 const contextKeys = new ContextKeyService();
 const configuration = new WorkbenchConfigurationService();
 const theme = new TestThemeService(lightColorTheme);
+const commandService = services.invokeFunction(accessor => new CommandService(accessor));
+services.registerInstance(ICommandService, commandService);
 services.registerInstance(IContextKeyService, contextKeys);
 services.registerSingleton(IWorkingCopyService, () => new BrowserWorkingCopyService());
 services.registerInstance(IConfigurationService, configuration);
@@ -95,6 +99,7 @@ suiteTeardown(() => {
 	contextKeys.dispose();
 	configuration.dispose();
 	theme.dispose();
+	commandService.dispose();
 	browser.window.close();
 });
 
@@ -292,7 +297,7 @@ function pressCanvas(view: { readonly domNode: HTMLElement }, key: string, optio
 }
 
 async function clickAction(view: { readonly domNode: HTMLElement }, name: string): Promise<void> {
-	const button = Array.from(view.domNode.querySelectorAll('button')).find(button => button.textContent === name)!;
+	const button = Array.from(view.domNode.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === name || button.textContent === name)!;
 	button.click();
 	// File-service promises are immediate in this fixture, but the action crosses several async boundaries.
 	for (let index = 0; index < 20; index++) { await Promise.resolve(); }
@@ -555,7 +560,9 @@ test('Design tool contribution draws a shape at document coordinates and hand ge
 	pointer('pointerup', 180, 90);
 	const rectangle = view.domNode.querySelector('[data-shape-id]')!;
 	assert.deepEqual(['x', 'y', 'width', 'height'].map(field => rectangle.getAttribute(field)), ['40', '30', '140', '60']);
-	tools.querySelector<HTMLButtonElement>('button[aria-label="Move canvas (H)"]')!.click();
+	tools.querySelector<HTMLButtonElement>('button[aria-label="Selection tools"]')!.click();
+	await contextMenu!.getActions().find(action => action.label === 'Move canvas (H)')!.run();
+	contextMenu!.onHide!(false);
 	pointer('pointerdown', 100, 60);
 	pointer('pointermove', 120, 70);
 	pointer('pointerup', 120, 70);
@@ -577,6 +584,25 @@ test('Design tool contribution draws a shape at document coordinates and hand ge
 	assert.equal(view.domNode.querySelectorAll('path[data-shape-id]').length, 2);
 	DesignEditorWidget.getFocused(view.domNode)!.undo();
 	assert.equal(view.domNode.querySelectorAll('path[data-shape-id]').length, 1);
+});
+
+test('Registered Design tools and modes act on the originating editor and preserve grouped choices', async () => {
+	using first = createView();
+	using second = createView();
+	const editor = DesignEditorWidget.getFocused(first.domNode)!;
+	await commandService.executeCommand('sessions.design.tool.ellipse', editor);
+	await clickAction(first, 'Pen (P)');
+	await clickAction(first, 'Ellipse');
+	assert.equal(first.domNode.querySelector('button[aria-label="Ellipse"]')!.getAttribute('aria-pressed'), 'true');
+	await commandService.executeCommand('sessions.design.mode.code', editor);
+	assert.deepEqual([first.domNode.classList.contains('code-mode'), second.domNode.classList.contains('code-mode')], [true, false]);
+	assert.ok(first.domNode.querySelector('button[aria-label="Shape tools"]')!.hasAttribute('disabled'));
+	await clickAction(first, 'Design');
+	const trigger = first.domNode.querySelector<HTMLButtonElement>('button[aria-label="Shape tools"]')!;
+	trigger.click();
+	assert.deepEqual(contextMenu!.getActions().map(action => action.label), ['Rectangle', 'Ellipse']);
+	assert.equal(contextMenu!.getMenuClassName!(), 'ash-design-menu');
+	contextMenu!.onHide!(true);
 });
 
 test('Motion keyframes round trip, scrub without editing, undo and export runnable code with design identities', async () => {
@@ -633,7 +659,8 @@ test('Code contribution escapes user text and Chinese tool, mode and timeline na
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
-		assert.ok(view.domNode.querySelector('button[aria-label="移动画布（H）"]'));
+		assert.ok(view.domNode.querySelector('button[aria-label="选择工具"]'));
+		assert.ok(view.domNode.querySelector('button[aria-label="形状工具"]'));
 		pressCanvas(view, 't');
 		const text = view.propertiesDomNode.querySelector<HTMLTextAreaElement>('textarea[aria-label="文字内容"]')!;
 		text.value = '</script><script>alert(1)</script> 中文';

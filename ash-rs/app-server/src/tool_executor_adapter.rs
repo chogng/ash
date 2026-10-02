@@ -16,6 +16,7 @@ use ash_protocol::ToolCallId;
 use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolOutputStream;
 use ash_protocol::TurnId;
+use ash_sandboxing::SandboxScope;
 use ash_tools::DEFAULT_TOOL_OUTPUT_MAX_BYTES;
 use ash_tools::EnvId;
 use ash_tools::ToolBinding;
@@ -58,6 +59,7 @@ pub(crate) struct PreparedToolExecution {
     payload: ToolPayload,
     dir_authorizations: Vec<Authorization>,
     execution_dir: Option<PathBuf>,
+    sandbox_scope: Option<SandboxScope>,
 }
 
 impl PreparedToolExecution {
@@ -67,6 +69,7 @@ impl PreparedToolExecution {
             payload,
             dir_authorizations: Vec::new(),
             execution_dir: None,
+            sandbox_scope: None,
         }
     }
 
@@ -79,6 +82,11 @@ impl PreparedToolExecution {
         self.execution_dir = Some(dir.into());
         self
     }
+
+    pub(crate) fn with_sandbox_scope(mut self, scope: SandboxScope) -> Self {
+        self.sandbox_scope = Some(scope);
+        self
+    }
 }
 
 struct PreparedToolInvocation {
@@ -86,6 +94,7 @@ struct PreparedToolInvocation {
     payload: ToolPayload,
     dir_authorizations: Vec<Authorization>,
     execution_dir: Option<PathBuf>,
+    sandbox_scope: Option<SandboxScope>,
 }
 
 pub(crate) struct ToolExecutorRuntime {
@@ -142,6 +151,7 @@ impl ToolExecutorRuntime {
                     payload: prepared.payload,
                     dir_authorizations: prepared.dir_authorizations,
                     execution_dir: prepared.execution_dir,
+                    sandbox_scope: prepared.sandbox_scope,
                 },
             );
         Ok(prepared.review)
@@ -218,7 +228,7 @@ impl ToolExecutorRuntime {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let operation_id = ToolOperationId::new(format!("{turn_id}:{}", call.id))
             .map_err(|error| CoreError::Execution(error.to_string()))?;
-        let (review, payload, dir_authorizations, execution_dir) = {
+        let (review, payload, dir_authorizations, execution_dir, sandbox_scope) = {
             let prepared = self
                 .prepared
                 .lock()
@@ -234,6 +244,7 @@ impl ToolExecutorRuntime {
                 prepared.payload.clone(),
                 prepared.dir_authorizations.clone(),
                 prepared.execution_dir.clone(),
+                prepared.sandbox_scope.clone(),
             )
         };
         for authorization in &dir_authorizations {
@@ -307,6 +318,9 @@ impl ToolExecutorRuntime {
         }
         if let Some(execution_dir) = execution_dir {
             context = context.with_execution_dir(execution_dir);
+        }
+        if let Some(scope) = sandbox_scope {
+            context = context.with_sandbox_scope(scope);
         }
         let invocation = ash_tools::ToolInvocation::new(
             operation_id,

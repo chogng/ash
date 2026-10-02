@@ -22,6 +22,8 @@
 
 `HostAclChanges::ScopedWithTraversal` 允许范围内的 ACL 调整，以及必要祖先目录的非继承属性查询和遍历。它不授予祖先目录枚举或文件读取权限。设备与命名对象目录授权已退出实现，普通执行不触发安装或提升权限。
 
+直接进程参数按 Windows 参数规则序列化。`cmd.exe /C` 与 `/K` 后须传一个完整命令字符串；这段字符串按 cmd 语法保留内部引号，不能再用普通参数的反斜线转义，否则带引号的程序路径无法启动。
+
 契约、审计限制与实机证据见 [沙箱架构](../../docs/sandboxing.md) 和 [Windows 验收手册](../../docs/windows-sandbox-acceptance-runbook.md)。
 
 ```powershell
@@ -35,6 +37,12 @@ bazel build //ash-rs/windows-sandbox:ash-windows-sandbox
 ```
 
 需要真实账户的测试显式标为忽略，须在获准配置的验收环境执行。`scripts/test-windows-sandbox.ps1` 提供服务与账户安装、全部用例、运行器及服务程序更新后执行，以及 finally 清理入口；调用方须已获得安装与验收授权。
+
+App Server 的 `windows_shell_turn_enforces_account_isolation_through_rpc` 用例从 RPC 创建 Session 和 Shell Turn，要求沙箱执行，检查已登记账户身份、真实 cmd → PowerShell 命令、目录边界、`.env`、Git 配置、退出码、单次执行及 ACL 恢复。它须在 PSEC 不可用、账户后端已明确安装的 Windows 环境中，以未提升权限的调用者运行；`ASH_WINDOWS_SANDBOX_BIN` 指向与该安装摘要相符的 helper。管理员运行会被测试拒绝，默认 CI 不包含这个 App Server 用例。
+
+```powershell
+just test ash-app-server --lib windows_shell_turn_enforces_account_isolation_through_rpc --locked -- --ignored --test-threads=1
+```
 
 可显式提供当前调用者已经能运行的 WSL2 发行版，增加 `wsl.exe --distribution` 与 `--system` 的账户边界回归。也可提供在宿主可达、支持 TCP/UDP DNS 的端点，增加 `tests/network_matrix.rs`；它验证 Denied/Managed/Allowed 的 IPv4/IPv6、HTTP/CONNECT/SOCKS 地址与域名授权、原始 A/AAAA DNS、后代继承和监听限制。`-NetworkPublicIpv6Http` 另验证可达公网 IPv6 的 HTTP 往返及直连和代理拒绝。每个目标先在沙箱外验证可达。本机已通过临时隧道出口的公网 IPv6 矩阵，文件作用域用例同时覆盖有无 `AI` 标记；具体证据见 [ACL 与 IPv6 复测](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-acl-恢复与公网-ipv6-复测)。默认 CI 入口不安装 WSL，也不把缺少 WSL 或 DNS 对照的机器算作这些用例通过。
 

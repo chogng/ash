@@ -1191,6 +1191,213 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     );
 }
 
+#[cfg(windows)]
+#[test]
+#[ignore = "requires explicitly provisioned Windows sandbox and ASH_WINDOWS_SANDBOX_BIN"]
+fn windows_shell_turn_enforces_account_isolation_through_rpc() {
+    use std::time::Instant;
+
+    let powershell = Path::new(&std::env::var_os("SystemRoot").unwrap())
+        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+    let host_script = |script: &str| {
+        let output = Command::new(&powershell)
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                script,
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    };
+    assert_eq!(
+        host_script(
+            "([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)"
+        ),
+        "False",
+        "the product acceptance must run without elevation"
+    );
+    let owner = host_script("[Security.Principal.WindowsIdentity]::GetCurrent().User.Value");
+    let helper = std::env::var_os("ASH_WINDOWS_SANDBOX_BIN").unwrap();
+    let plan = Command::new(helper)
+        .args(["plan", "remove"])
+        .output()
+        .unwrap();
+    assert!(plan.status.success(), "{plan:?}");
+    let plan: serde_json::Value = serde_json::from_slice(&plan.stdout).unwrap();
+    let accounts = plan["changes"]["accounts"].as_array().unwrap();
+
+    let profile = tempfile::tempdir().unwrap();
+    let fixture = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(fixture.path()).unwrap();
+    let work = root.join("work");
+    std::fs::create_dir(&work).unwrap();
+    run_local_git(&work, &["init", "--quiet", "--initial-branch=main"]);
+    let git_config = std::fs::read_to_string(work.join(".git/config")).unwrap();
+    std::fs::write(work.join(".env"), "secret").unwrap();
+    std::fs::write(root.join("outside"), "unchanged").unwrap();
+    let literal = |path: &Path| format!("'{}'", path.to_str().unwrap().replace('\'', "''"));
+    let acl_script = format!(
+        "@({}, {}, {}, {}) | ForEach-Object {{ (Get-Acl -LiteralPath $_).Sddl }}",
+        literal(&work),
+        literal(&work.join(".env")),
+        literal(&work.join(".git/config")),
+        literal(&root.join("outside")),
+    );
+    let before = host_script(&acl_script);
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral)
+            .with_dir_root(&work),
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    let initialized = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"clientInfo":{"name":"windows-sandbox-test","version":"1"},"capabilities":{}}
+        }),
+    );
+    assert!(initialized["result"].is_object(), "{initialized}");
+    // RequireSandbox prevents approval handling from changing the authority or
+    // rerunning a failed command outside the sandbox under the host identity.
+    let rule = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"execPolicy/rule/upsert",
+            "params":{"commandId":"require-sandbox","expectedRevision":0,"rule":{
+                "id":"require-sandbox","selector":{"type":"source","source":"built_in_tool","sourceId":"shell-command"},
+                "effect":{"type":"requireSandbox"}
+            }}
+        }),
+    );
+    assert_eq!(rule["result"]["revision"], 1, "{rule}");
+    let session = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"session/create",
+            "params":{"commandId":"sandbox-session","title":"Sandbox","executionTarget":{"type":"local","root":work}}
+        }),
+    );
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{"commandId":"sandbox-thread","sessionId":session_id,"request":{"type":"createThread","title":"Sandbox"}}
+        }),
+    );
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let script = format!(
+        "$ErrorActionPreference='Stop'; \
+         [Security.Principal.WindowsIdentity]::GetCurrent().User.Value | Set-Content identity; \
+         (Get-Location).Path | Set-Content execution-root; \
+         Add-Content attempts 'once'; \
+         function MustDeny([scriptblock]$action) {{ try {{ & $action }} catch {{ return }}; throw 'restriction was not enforced' }}; \
+         MustDeny {{ Get-Content -LiteralPath .env }}; \
+         MustDeny {{ Set-Content -LiteralPath {} 'bad' }}; \
+         MustDeny {{ Set-Content -LiteralPath .git/config 'bad' }}; \
+         'rpc-sandbox-ok' | ForEach-Object {{ Write-Output $_ }}; exit 125",
+        literal(&root.join("outside")),
+    );
+    let command = format!(
+        "\"{}\" -NoLogo -NoProfile -NonInteractive -Command \"{script}\"",
+        powershell.display()
+    );
+    let started = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"session/request",
+            "params":{"commandId":"sandbox-turn","sessionId":session_id,"request":{
+                "type":"startShellTurn","threadId":thread_id,"expectedSequence":1,
+                "approvalMode":"askPermissions","command":command,"workingDirectory":work
+            }}
+        }),
+    );
+    assert!(
+        started["result"]["value"]["turnId"].is_string(),
+        "{started}"
+    );
+    let thread_id = ash_protocol::ThreadId::new(thread_id).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let completed = loop {
+        let snapshot = server.threads().read_thread(&thread_id).unwrap();
+        let turn = snapshot.turns.last().unwrap();
+        assert!(turn.pending_interaction.is_none(), "{snapshot:#?}");
+        if turn.status == ash_protocol::TurnStatus::Completed {
+            break snapshot;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "shell did not complete: {snapshot:#?}"
+        );
+        thread::sleep(Duration::from_millis(10));
+    };
+    let result = completed
+        .items
+        .iter()
+        .find_map(|item| match item {
+            ash_protocol::ThreadItem::ToolResult { text, .. } => Some(text),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("shell result missing: {completed:#?}"));
+    let result: serde_json::Value = serde_json::from_str(result).unwrap();
+    assert_eq!(result["result"]["exit_code"], 125, "{result}");
+    assert!(
+        result["result"]["stdout"]
+            .as_str()
+            .unwrap()
+            .contains("rpc-sandbox-ok"),
+        "{result}"
+    );
+    let identity = std::fs::read_to_string(work.join("identity")).unwrap();
+    let identity = identity.trim();
+    assert_ne!(identity, owner);
+    assert_eq!(
+        dunce::canonicalize(
+            std::fs::read_to_string(work.join("execution-root"))
+                .unwrap()
+                .trim()
+        )
+        .unwrap(),
+        work,
+        "execution did not use the requested directory"
+    );
+    assert!(
+        accounts.iter().any(|account| account["sid"] == identity),
+        "unexpected identity: {identity}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(work.join("attempts"))
+            .unwrap()
+            .trim(),
+        "once"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("outside")).unwrap(),
+        "unchanged"
+    );
+    assert_eq!(
+        std::fs::read_to_string(work.join(".git/config")).unwrap(),
+        git_config
+    );
+    assert_eq!(
+        host_script(&acl_script),
+        before,
+        "execution left changed host ACLs"
+    );
+}
+
 #[cfg(target_os = "macos")]
 #[test]
 fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {

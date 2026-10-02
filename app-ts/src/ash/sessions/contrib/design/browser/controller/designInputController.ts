@@ -12,7 +12,6 @@ import { DesignMode, DesignTool } from '../../common/config/editorConfiguration.
 import type { DesignDrawingParticipant } from '../designEditorBrowser.js';
 
 const WHEEL_ZOOM_SENSITIVITY = 0.005;
-const KEYBOARD_ZOOM_FACTOR = 1.2;
 type PathHandle = { readonly nodeIndex: number; readonly point: 'anchor' | 'incoming' | 'outgoing' };
 interface PointerGesture {
 	readonly pointerId: number;
@@ -90,10 +89,6 @@ export class DesignInputController extends Disposable {
 			this.host.domNode.focus();
 			event.preventDefault();
 			return;
-		}
-		if (this.host.getTool() === DesignTool.Zoom && event.button === 0) {
-			this.camera.zoomAt(point, event.altKey ? 1 / KEYBOARD_ZOOM_FACTOR : KEYBOARD_ZOOM_FACTOR);
-			this.host.applyTransform(); this.host.domNode.focus(); event.preventDefault(); return;
 		}
 		const target = event.target as Element;
 		const path = this.selectedShape;

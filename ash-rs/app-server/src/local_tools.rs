@@ -91,7 +91,7 @@ mod suite;
 pub(crate) use suite::LocalToolSuite;
 
 const LOCAL_GRANT_SNAPSHOT_REVISION: &str = "local-static-grants-v1";
-const LOCAL_REVIEWER_POLICY_REVISION: &str = "local-network-review-v6";
+const LOCAL_REVIEWER_POLICY_REVISION: &str = "local-execution-review-v7";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_OUTPUT_BYTES: usize = 256 * 1024;
 
@@ -891,21 +891,7 @@ impl LocalExecutorReviewer {
             .ensure_active()
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         if call.name.as_str() == "shell-command" {
-            let (review, request, authorizations) =
-                self.prepare_shell(call, session_id, thread_id)?;
-            let mut prepared = PreparedToolExecution::new(
-                review,
-                ToolPayload::FunctionArguments(json!({
-                    "program": request.program(),
-                    "arguments": request.arguments(),
-                    "working_directory": request.working_directory(),
-                    "dir_root": request.dir_root(),
-                })),
-            );
-            for authorization in authorizations {
-                prepared = prepared.with_dir_authorization(authorization);
-            }
-            return Ok(prepared);
+            return self.prepare_shell(call, session_id, thread_id);
         }
         if call.name.as_str() == "apply_patch" {
             let (review, patch, authorization) =
@@ -936,7 +922,7 @@ impl LocalExecutorReviewer {
         call: &ToolCall,
         session_id: Option<&ash_protocol::SessionId>,
         thread_id: Option<&ash_protocol::ThreadId>,
-    ) -> Result<(ActionReviewRequest, ShellCommandRequest, Vec<Authorization>), CoreError> {
+    ) -> Result<PreparedToolExecution, CoreError> {
         if call.arguments.get("dir_root").is_some() {
             return Err(CoreError::Policy(
                 "shell-command dir_root is host-owned".into(),
@@ -976,10 +962,13 @@ impl LocalExecutorReviewer {
         } else {
             self.shell_policy
         };
+        let scope = local_sandbox_scope(authorization.dir())?;
         let canonical = serde_json::to_vec(&json!({
             "program": request.program(),
             "arguments": request.arguments(),
             "working_directory": working_directory,
+            "sandboxDir": scope.command_dir().id(),
+            "deniedPathPatterns": LOCAL_DENIED_GLOBS,
         }))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let review = ActionReviewRequest::new(
@@ -1002,7 +991,19 @@ impl LocalExecutorReviewer {
             SandboxCompatibility::Supported(sandbox),
             self.action_policy_revision.clone(),
         );
-        Ok((review, request, vec![authorization]))
+        // Keep the reviewed host scope with the frozen payload. Reconstructing
+        // a plain directory scope in the executor drops denied path rules.
+        Ok(PreparedToolExecution::new(
+            review,
+            ToolPayload::FunctionArguments(json!({
+                "program": request.program(),
+                "arguments": request.arguments(),
+                "working_directory": request.working_directory(),
+                "dir_root": request.dir_root(),
+            })),
+        )
+        .with_dir_authorization(authorization)
+        .with_sandbox_scope(scope))
     }
 
     fn resolve_execution_dir(
