@@ -7,6 +7,7 @@ pub(crate) fn apply_command(
     command: &UserConfigCommand,
 ) -> Result<(), ConfigError> {
     match command {
+        UserConfigCommand::SetHttpCompatibilityMode { mode } => document.network.http_mode = *mode,
         UserConfigCommand::ConfigureIssues { config } => document.issues = config.clone(),
         UserConfigCommand::UpdatePreferences(update) => apply_preferences(document, update),
         UserConfigCommand::ConfigureConnection { connection, config }

@@ -1,25 +1,4 @@
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::testing::TestingDiscoverParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::testing::TestingRunParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::testing::TestingOperationParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::testing::TestingTargetKind;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::testing::TestingItem;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::testing::TestingState;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::testing::TestingResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::testing::TestingOperationKind;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::testing::TestingOperationStatus;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::testing::TestingSnapshot;
-use crate::protocol::testing::TestingUpdate;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountCreditBalanceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountDto;
@@ -472,6 +451,8 @@ use crate::protocol::diagnostics::FeedbackPrepareParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::diagnostics::FeedbackUploadParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::HttpCompatibilityModeDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::diagnostics::NetworkCheckDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::diagnostics::NetworkCheckOutcomeDto;
@@ -479,6 +460,8 @@ use crate::protocol::diagnostics::NetworkCheckOutcomeDto;
 use crate::protocol::diagnostics::NetworkDiagnosticsRunResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::diagnostics::NetworkFailureDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::NetworkHttpConfigureParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::diagnostics::NetworkPurposeDto;
 #[cfg(any(test, feature = "export"))]
@@ -1529,6 +1512,27 @@ use crate::protocol::terminal::TerminalResizeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalWriteParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingDiscoverParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingItem;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingOperationKind;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingOperationParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingOperationStatus;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingRunParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingSnapshot;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingState;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingTargetKind;
+use crate::protocol::testing::TestingUpdate;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::transcript::ThreadTranscriptChange;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::transcript::ThreadTranscriptEntry;
@@ -2425,6 +2429,9 @@ client_methods! {
     },
     QueueCancel => "queue/cancel" {
         params: QueueCancelParams, response: QueuedMessage, serialization: None,
+    },
+    NetworkHttpConfigure => "network/http/configure" {
+        params: NetworkHttpConfigureParams, response: ConfigCommandResult, serialization: GlobalExclusive,
     },
     NetworkRead => "network/read" {
         params: EmptyParams, response: NetworkReadResult, serialization: GlobalSharedRead,
@@ -4914,6 +4921,8 @@ typescript_bindings! {
     QueuedMessage,
     QueueStatus,
     NetworkReadResult,
+    NetworkHttpConfigureParams,
+    HttpCompatibilityModeDto,
     NetworkDiagnosticsRunResult,
     NetworkTargetDto,
     NetworkPurposeDto,

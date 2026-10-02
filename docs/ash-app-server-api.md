@@ -278,7 +278,8 @@ Desktop 当前实现和 Playwright 后续边界见
 | `session/thread/subscribe` | Session + Thread + connection | Thread 与正文快照，加上 `afterSequence` 之后的 durable gap |
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
 | `config/read` | config | 读取配置 |
-| `network/read` | configured network dependencies | 列出服务域名、用途、端口和实际代理路线；不发送网络请求 |
+| `network/read` | configured network dependencies | 返回配置 revision、HTTP 兼容模式，以及服务域名、用途、端口和实际代理路线；不发送网络请求 |
+| `network/http/configure` | User Config + shared HTTP transport | 带 revision 保存 HTTP 兼容模式，后续请求使用所选协议 |
 | `network/diagnostics/run` | configured network dependencies + Account | 使用共享 HTTP 客户端检查连通性，并单独查询已就绪账号额度；只返回安全的状态与错误分类 |
 | `connector/list` | Connector authority | 读取不含 secret/reference 的外部账号连接投影 |
 | `connector/connect/apiToken` | Connector authority + secret store | retry-safe 保存 API token 并发布 connected account |
@@ -974,7 +975,9 @@ TOML 编辑共享同一 Config revision/generation 和 `config/changed` 通知�
 
 运行诊断时，通过同一生产 HTTP 客户端向每个端点的 origin 根路径发送一次无认证 GET，保留现有代理、证书、权限和超时规则。任何收到的 HTTP 状态，包括 401、404、5xx，都表示该次请求已到达服务；这不证明账号授权、模型生成或流式响应有效。DNS、代理连接、TLS、系统证书验证器初始化、连接和超时错误分别报告；一个端点失败不抹掉其他端点的结果。随后通过现有 `account/rateLimits/read` 检查已就绪账号，账号结果与连通性结果分开。服务响应正文不返回。连接关闭取消进行中的等待，结果不缓存，也不写入配置。
 
-客户端拥有入口、翻译和界面状态。TUI 在 `/config` 的网络页提供运行、重试和复制域名；协议可供其他客户端使用。诊断动作不需要持久化开关，代理或证书策略仍由共享 HTTP 配置负责。
+`network/read` 和诊断结果中的网络快照也返回 User Config revision 与 `httpMode`。`network/http/configure` 接收 `commandId`、`expectedRevision` 和 `httpMode`，使用同一配置 authority 的 revision 冲突与幂等命令语义。模式存于 `config.toml` 的 `[network].httpMode`；默认 `http2` 通过 TLS ALPN 协商 HTTP/2 或 HTTP/1.1，`http1` 只使用 HTTP/1.1。切换后新的共享应用 HTTP 请求选择对应连接池，已经进行中的请求继续；手工配置更改也通过配置监听应用。WebSocket、外部程序与自行管理传输的 SDK 不受此 HTTP 模式控制。
+
+客户端拥有入口、翻译和界面状态。Workbench 的 Settings → General → Network 提供 HTTP 兼容模式、域名展示/复制/刷新和网络诊断；HTTP 配置保留在后端，不复制到前端 `settings.json`。TUI 在 `/config` 的网络页提供运行、重试和复制域名。诊断动作不需要持久化开关，代理或证书策略仍由共享 HTTP 配置负责。
 
 ### Coding Plan 连接规范
 

@@ -1,0 +1,40 @@
+.ash-network-settings {
+	min-width: 0;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+
+.ash-network-settings-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-network-settings-details p,
+.ash-network-settings-results li {
+	margin: var(--ash-spacing-size80) 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-network-settings-results {
+	padding-inline-start: var(--ash-spacing-size200);
+}
+
+.ash-network-settings-details,
+.ash-network-settings > p {
+	color: var(--ash-description-foreground);
+}
+
+.ash-network-settings-details[hidden] {
+	display: none;
+}
+
+.ash-network-settings > h5 {
+	margin: 0;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-network-settings-description {
+	margin: var(--ash-spacing-size40) 0 var(--ash-spacing-size120);
+	line-height: 1.5;
+}

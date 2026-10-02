@@ -257,7 +257,7 @@ bazel test //ash-rs/http-client:http-client-unit-tests
 
 ## 当前限制与潜在演进
 
-`HttpClient` 使用 synchronous、one-attempt 契约；unary response fully buffered，成功 streaming response 按 chunk 向 caller-owned sink 施加 backpressure。生产 `ReqwestHttpClient` 在异步 I/O runtime 执行，并在取消或网络权限撤销时丢弃进行中的 future；共享 trait 接收 caller cancellation token。`UreqHttpClient` 保留同步 socket 实现，取消不能强制关闭已经进入它的 socket attempt。WebSocket connection backend 已拆到 `ash-websocket-client`。HTTP 连接错误已有阶段分类；诊断不证明模型操作或 SSE framing 成功。config-generation rollover manager 仍未实现。
+`HttpClient` 使用 synchronous、one-attempt 契约；unary response fully buffered，成功 streaming response 按 chunk 向 caller-owned sink 施加 backpressure。生产 `ReqwestHttpClient` 在异步 I/O runtime 执行，并在取消或网络权限撤销时丢弃进行中的 future；共享 trait 接收 caller cancellation token。`UreqHttpClient` 保留同步 socket 实现，取消不能强制关闭已经进入它的 socket attempt。WebSocket connection backend 已拆到 `ash-websocket-client`。HTTP 连接错误已有阶段分类；诊断不证明模型操作或 SSE framing 成功。共享网络快照上的 `HttpCompatibilityMode` 为后续 Reqwest 请求选择独立连接池：`Http2` 通过 ALPN 协商 HTTP/2 或 HTTP/1.1，`Http1` 仅使用 HTTP/1.1。切换不打断已开始的请求。此设置不改变 Ureq、WebSocket 或 SDK 自有传输；其他 config-generation rollover manager 仍未实现。
 
 这些能力可以演进，但顺序应保持：先定义 provider-neutral typed contract 与 failure/redaction
 invariant，再实现 private backend；不要先暴露 backend-specific future/stream/socket types。Retry、

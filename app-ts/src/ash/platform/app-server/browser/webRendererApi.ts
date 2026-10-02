@@ -1,3 +1,4 @@
+import { createAppServerNetworkDiagnosticsApi } from '../../networkDiagnostics/browser/networkDiagnosticsApi.js';
 import { createAppServerHooksApi } from '../../hooks/browser/hooksApi.js';
 import { AppServerTestExecutionService } from '../../testing/browser/appServerTestExecutionService.js';
 import { createAppServerLanguageServerService } from "../../language/browser/languageServerService.js";
@@ -122,6 +123,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		marketplace: createAppServerMarketplaceApi(connection),
 		toolSearch: createAppServerToolSearchApi(connection),
 		dirPermissions: createAppServerDirPermissionsApi(connection),
+		networkDiagnostics: createAppServerNetworkDiagnosticsApi(connection),
 		agentCapabilities: createAppServerAgentCapabilitiesApi(connection),
 		hooks: createAppServerHooksApi(connection),
 	};

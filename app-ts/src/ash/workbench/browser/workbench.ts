@@ -1,3 +1,4 @@
+import { INetworkDiagnosticsService } from '../../platform/networkDiagnostics/common/networkDiagnosticsService.js';
 import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
 import { ILanguageModelsService, LanguageModelsService } from '../contrib/chat/common/languageModels.js';
@@ -459,6 +460,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IDictationService, api.dictation);
 		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
+		services.registerInstance(INetworkDiagnosticsService, api.networkDiagnostics);
 		services.registerInstance(IHooksService, api.hooks);
 		services.registerInstance(IExtensionHostApi, api.extensionHost);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);

@@ -239,6 +239,13 @@
             }
           ]
         },
+        "modelAliases": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelId"
+          },
+          "description": "Local model IDs map directly to wire IDs; values are not resolved recursively.",
+          "type": "object"
+        },
         "name": {
           "type": "string"
         },
@@ -718,12 +725,61 @@
     },
     "HookEvent": {
       "description": "Safe-point event that may request a Hook execution.",
-      "enum": [
-        "beforeTool",
-        "afterTool",
-        "turnCompleted"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "preToolUse",
+            "postToolUse",
+            "postToolUseFailure",
+            "postToolBatch",
+            "permissionDenied",
+            "notification",
+            "userPromptSubmit",
+            "userPromptExpansion",
+            "sessionStart",
+            "stop",
+            "stopFailure",
+            "subagentStart",
+            "subagentStop",
+            "preCompact",
+            "postCompact",
+            "preModelSwitch",
+            "postModelSwitch",
+            "sessionEnd",
+            "permissionRequest",
+            "setup",
+            "teammateIdle",
+            "taskCreated",
+            "taskCompleted",
+            "elicitation",
+            "elicitationResult",
+            "configChange",
+            "instructionsLoaded",
+            "worktreeCreate",
+            "worktreeRemove",
+            "cwdChanged",
+            "fileChanged",
+            "directoryAdded",
+            "messageDisplay"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "beforeTool",
+          "description": "Retained for declarations written before the expanded event catalog.",
+          "type": "string"
+        },
+        {
+          "const": "afterTool",
+          "description": "Retained for declarations written before the expanded event catalog.",
+          "type": "string"
+        },
+        {
+          "const": "turnCompleted",
+          "description": "Retained for declarations written before the expanded event catalog.",
+          "type": "string"
+        }
+      ]
     },
     "HookId": {
       "description": "Stable namespaced identity for one declarative Hook.",
@@ -794,6 +850,14 @@
           "type": "object"
         }
       ]
+    },
+    "HttpCompatibilityMode": {
+      "description": "HTTP/2 negotiates the best supported HTTP version; HTTP/1.1 restricts ALPN for proxies.",
+      "enum": [
+        "http2",
+        "http1"
+      ],
+      "type": "string"
     },
     "IssueConfig": {
       "additionalProperties": false,
@@ -985,7 +1049,7 @@
       "type": "string"
     },
     "ModelContextConfig": {
-      "description": "Model-specific context limits supplied by user or host configuration.\n\nThis metadata is deliberately separate from transport normalization: Core\nconsumes it to decide whether it can enforce a context budget itself.",
+      "description": "Model-specific context limits supplied by user or host configuration.\n\nThis metadata is deliberately separate from transport normalization: Core\nconsumes it to decide whether it can enforce a context budget itself. For custom\nproviders, its keys also declare the user-enrolled models in the product catalog.",
       "properties": {
         "autoCompactTokenLimit": {
           "format": "uint32",
@@ -1029,6 +1093,14 @@
               "type": "null"
             }
           ]
+        },
+        "fastModels": {
+          "description": "Models whose subsequent invocations use the connection's accelerated inference option.",
+          "items": {
+            "$ref": "#/$defs/ModelId"
+          },
+          "type": "array",
+          "uniqueItems": true
         },
         "maxOutputTokens": {
           "format": "uint32",
@@ -1081,6 +1153,10 @@
             "array",
             "null"
           ]
+        },
+        "httpMode": {
+          "$ref": "#/$defs/HttpCompatibilityMode",
+          "default": "http2"
         }
       },
       "type": "object"
@@ -1476,7 +1552,9 @@
     },
     "network": {
       "$ref": "#/$defs/NetworkConfig",
-      "default": {}
+      "default": {
+        "httpMode": "http2"
+      }
     },
     "plugins": {
       "$ref": "#/$defs/PluginsConfig",

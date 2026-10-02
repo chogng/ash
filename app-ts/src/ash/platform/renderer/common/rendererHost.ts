@@ -1,3 +1,4 @@
+import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common/networkDiagnosticsService.js';
 import type { ICallService } from '../../call/common/callService.js';
 import type { IDictationService } from '../../dictation/common/dictationService.js';
 import type { ILocalTranscriptionService } from '../../localTranscription/common/localTranscription.js';
@@ -101,6 +102,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly toolSearch: IToolSearchApi;
 	readonly dirPermissions: IDirPermissionsApi;
 	readonly agentCapabilities: IAgentCapabilitiesService;
+	readonly networkDiagnostics: INetworkDiagnosticsService;
 	readonly hooks: IHooksService;
 }
 

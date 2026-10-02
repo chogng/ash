@@ -323,6 +323,7 @@ import type { ModelListParams } from './types/ModelListParams.js';
 import type { ModelListResult } from './types/ModelListResult.js';
 import type { ModelPreferencesUpdateParams } from './types/ModelPreferencesUpdateParams.js';
 import type { NetworkDiagnosticsRunResult } from './types/NetworkDiagnosticsRunResult.js';
+import type { NetworkHttpConfigureParams } from './types/NetworkHttpConfigureParams.js';
 import type { NetworkReadResult } from './types/NetworkReadResult.js';
 import type { PluginCommandResultDto } from './types/PluginCommandResultDto.js';
 import type { PluginListResult } from './types/PluginListResult.js';
@@ -463,6 +464,7 @@ export interface AppServerRequestMap {
   "queue/enqueue": { params: QueueEnqueueParams; response: QueuedMessage };
   "queue/list": { params: QueueListParams; response: QueueListResult };
   "queue/cancel": { params: QueueCancelParams; response: QueuedMessage };
+  "network/http/configure": { params: NetworkHttpConfigureParams; response: ConfigCommandResult };
   "network/read": { params: Record<string, never>; response: NetworkReadResult };
   "network/diagnostics/run": { params: Record<string, never>; response: NetworkDiagnosticsRunResult };
   "diagnostics/read": { params: Record<string, never>; response: DiagnosticSnapshot };
@@ -800,6 +802,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "queue/enqueue": { method: "queue/enqueue" },
   "queue/list": { method: "queue/list" },
   "queue/cancel": { method: "queue/cancel" },
+  "network/http/configure": { method: "network/http/configure" },
   "network/read": { method: "network/read" },
   "network/diagnostics/run": { method: "network/diagnostics/run" },
   "diagnostics/read": { method: "diagnostics/read" },

@@ -88,6 +88,14 @@ export const SettingsNavigation = [
 					},
 				],
 			},
+			{
+				id: 'network',
+				label: 'Network',
+				description: 'Configure application HTTP compatibility and check service connectivity.',
+				keywords: ['proxy', 'VPN', 'HTTP', 'domains', 'connectivity'],
+				presentation: 'general',
+				groups: [],
+			},
 		],
 	},
 	{

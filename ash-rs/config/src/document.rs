@@ -125,8 +125,20 @@ pub struct GrepConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NetworkConfig {
+    #[serde(default)]
+    pub http_mode: HttpCompatibilityMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allowed_hosts: Option<Vec<String>>,
+}
+
+/// HTTP/2 negotiates the best supported HTTP version; HTTP/1.1 restricts ALPN for proxies.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum HttpCompatibilityMode {
+    #[default]
+    Http2,
+    Http1,
 }
 
 impl NetworkConfig {

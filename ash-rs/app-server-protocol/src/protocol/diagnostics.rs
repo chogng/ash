@@ -52,6 +52,9 @@ pub enum NetworkRouteDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NetworkReadResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub http_mode: HttpCompatibilityModeDto,
     pub targets: Vec<NetworkTargetDto>,
 }
 
@@ -100,4 +103,20 @@ pub struct NetworkCheckDto {
 pub struct NetworkDiagnosticsRunResult {
     pub network: NetworkReadResult,
     pub checks: Vec<NetworkCheckDto>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum HttpCompatibilityModeDto {
+    Http2,
+    Http1,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NetworkHttpConfigureParams {
+    pub command_id: ash_protocol::CommandId,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub http_mode: HttpCompatibilityModeDto,
 }

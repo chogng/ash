@@ -15,8 +15,8 @@ mod ureq_client;
 
 pub use config::{
     CertificateBundle, ClientIdentity, ClientIdentityPolicy, ConnectionPoolPolicy,
-    HttpClientConfig, NetworkTargetPolicy, ProxyBypass, ProxyPolicy, RedirectPolicy,
-    ResponseBodyLimit, Timeout, TlsPolicy, TransportTimeouts,
+    HttpClientConfig, HttpCompatibilityMode, NetworkTargetPolicy, ProxyBypass, ProxyPolicy,
+    RedirectPolicy, ResponseBodyLimit, Timeout, TlsPolicy, TransportTimeouts,
 };
 pub use error::HttpClientError;
 pub use error::HttpConnectionFailure;

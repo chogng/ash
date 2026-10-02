@@ -1,3 +1,4 @@
+import { NetworkSettingsContent } from './networkSettingsContent.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { CLOSE_EDITOR_COMMAND_ID } from '../../../browser/parts/editor/editorCommands.js';
 import './media/settingsEditor.css';
@@ -202,6 +203,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		if (!initialCategory) throw new Error('Settings requires at least one category');
 		this.activeCategory = initialCategory;
 		this.contents.push(
+			this._register(this.instantiationService.createInstance(NetworkSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(AdvisorSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(SkillsSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(ModelSettingsContent, settingsContent)),

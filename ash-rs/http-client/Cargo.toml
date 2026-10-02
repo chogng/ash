@@ -14,7 +14,7 @@ path = "src/lib.rs"
 ash-async-utils = { workspace = true }
 futures = { workspace = true }
 httpdate = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["http2"] }
 rustls = { workspace = true }
 rustls-platform-verifier = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "sync", "macros", "rt-multi-thread"] }

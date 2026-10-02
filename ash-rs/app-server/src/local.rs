@@ -1173,6 +1173,10 @@ pub fn open_app_server_with_codebase_providers(
         network_policy.clone(),
     )
     .map_err(open_error)?;
+    network.set_http_compatibility_mode(
+        crate::server::http_transport_mode(user_config.values.network.http_mode),
+        user_config.revision.get(),
+    );
     let application_http: Arc<dyn ash_http_client::HttpClient> = Arc::new(
         ash_http_client::ReqwestHttpClient::with_network(network.clone()).map_err(open_error)?,
     );
@@ -1583,7 +1587,7 @@ pub fn open_app_server_with_codebase_providers(
         None => AppServer::new(threads, agent_model),
     }
     .with_home(home)
-    .with_network_diagnostics(network, application_http.clone(), network_services)
+    .with_network_diagnostics(network.clone(), application_http.clone(), network_services)
     .with_telemetry(diagnostics, telemetry, analytics)
     .with_model_catalog(direct_catalog)
     .with_provider_credentials(Arc::new(
@@ -1793,6 +1797,7 @@ pub fn open_app_server_with_codebase_providers(
     server = server.with_tool_config_watcher(ToolConfigWatcher::start(ToolConfigWatcherInputs {
         config,
         network_policy,
+        network,
         dir_config,
         env_tools,
         env_runtime,
@@ -1843,6 +1848,7 @@ pub(crate) struct ToolConfigWatcher {
 
 struct ToolConfigWatcherInputs {
     config: Arc<ConfigStore>,
+    network: ash_http_client::OutboundNetworkSnapshot,
     network_policy: OutboundNetworkPolicy,
     dir_config: Option<Arc<DirConfigTracker>>,
     env_tools: Arc<EnvToolPorts>,
@@ -1859,6 +1865,7 @@ impl ToolConfigWatcher {
         let ToolConfigWatcherInputs {
             config,
             network_policy,
+            network,
             dir_config,
             env_tools,
             env_runtime,
@@ -1871,6 +1878,10 @@ impl ToolConfigWatcher {
         let changes = config.subscribe_changes();
         if let Ok(snapshot) = config.read_snapshot() {
             network_policy.update(network_access(&snapshot.values.network));
+            network.set_http_compatibility_mode(
+                crate::server::http_transport_mode(snapshot.values.network.http_mode),
+                snapshot.revision.get(),
+            );
         }
         let mut semantic_binding = config
             .read_snapshot()
@@ -1972,6 +1983,10 @@ impl ToolConfigWatcher {
                     };
                     if config_dirty {
                         network_policy.update(network_access(&snapshot.values.network));
+                        network.set_http_compatibility_mode(
+                            crate::server::http_transport_mode(snapshot.values.network.http_mode),
+                            snapshot.revision.get(),
+                        );
                         if let Err(error) =
                             env_runtime.reconcile_user_dir_permissions(&snapshot.values)
                         {

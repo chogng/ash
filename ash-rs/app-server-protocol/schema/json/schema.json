@@ -4130,6 +4130,22 @@
         {
           "properties": {
             "method": {
+              "const": "network/http/configure",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/NetworkHttpConfigureParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "network/read",
               "type": "string"
             },
@@ -9323,6 +9339,22 @@
             },
             "result": {
               "$ref": "#/$defs/QueuedMessage"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "network/http/configure",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
             }
           },
           "required": [
@@ -23186,6 +23218,13 @@
         }
       ]
     },
+    "HttpCompatibilityModeDto": {
+      "enum": [
+        "http2",
+        "http1"
+      ],
+      "type": "string"
+    },
     "ImageAttachmentRef": {
       "description": "Durable, provider-neutral reference to one immutable validated image representation.\n\nThe digest identifies the exact encoded bytes. Stores must verify every other field when the\nbytes are admitted and again when an untrusted reference is resolved.",
       "properties": {
@@ -30623,6 +30662,28 @@
       ],
       "type": "string"
     },
+    "NetworkHttpConfigureParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "httpMode": {
+          "$ref": "#/$defs/HttpCompatibilityModeDto"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "httpMode"
+      ],
+      "type": "object"
+    },
     "NetworkPurposeDto": {
       "enum": [
         "model",
@@ -30635,6 +30696,14 @@
     "NetworkReadResult": {
       "additionalProperties": false,
       "properties": {
+        "httpMode": {
+          "$ref": "#/$defs/HttpCompatibilityModeDto"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
         "targets": {
           "items": {
             "$ref": "#/$defs/NetworkTargetDto"
@@ -30643,6 +30712,8 @@
         }
       },
       "required": [
+        "revision",
+        "httpMode",
         "targets"
       ],
       "type": "object"

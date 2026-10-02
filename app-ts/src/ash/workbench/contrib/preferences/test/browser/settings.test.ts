@@ -102,6 +102,7 @@ const { ScmConfiguration } = await import('../../../scm/common/scmConfiguration.
 const { IGitService: GitServiceId } = await import('../../../git/common/gitService.js');
 const { IChatService: ChatServiceId } = await import('../../../../services/chat/common/chatService.js');
 await import('../../../../services/chat/common/modelCatalog.js');
+const { INetworkDiagnosticsService } = await import('../../../../../platform/networkDiagnostics/common/networkDiagnosticsService.js');
 const { IAgentCapabilitiesService } = await import('../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js');
 const { IRemoteAgentService: RemoteAgentServiceId } = await import('../../../../services/remote/common/remoteAgentService.js');
 const { IDirPermissionsService: DirPermissionsServiceId } = await import('../../../../../platform/dirPermissions/common/dirPermissionsService.js');
@@ -222,6 +223,7 @@ test('settingsLayout is the single projection from registered settings to catego
 
 	assert.deepEqual(SettingsCategories.map(category => category.id), [
 		'general',
+		'network',
 		'appearance',
 		'layout',
 		'startup',
@@ -601,6 +603,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		onDidChangePermissions: Event.None,
 		list: async () => ({ revision: 1, entries: [{ dir: 'dir-1', path: '/workspace', permissions: ['readFiles'] }] }),
 	} as unknown as IDirPermissionsService);
+	services.registerInstance(INetworkDiagnosticsService, {
+		read: async () => ({ revision: 0, httpMode: 'http2', targets: [] }),
+		configureHttp: async () => {},
+		run: async () => ({ network: { revision: 0, httpMode: 'http2', targets: [] }, checks: [] }),
+	});
 	let hookReads = 0;
 	let hooksFailure = false;
 	let openUserToml = 0;
@@ -652,7 +659,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('.ash-modal-editor')?.getAttribute('role'), 'dialog');
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'editor'],
+		['general', 'network', 'editor'],
 	);
 	const workbenchGroup = root.querySelector<HTMLElement>('[data-settings-group-id="workbench"]');
 	assert.ok(workbenchGroup);
@@ -660,7 +667,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'appearance', 'layout', 'startup', 'editor'],
+		['general', 'network', 'appearance', 'layout', 'startup', 'editor'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);

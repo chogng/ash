@@ -1,12 +1,17 @@
 use super::AppServer;
 use super::RpcError;
+use super::config_operations::config_command_result;
+use super::config_operations::config_operation_error;
+use super::decode;
 use super::result;
 use ash_app_server_protocol::protocol::account::AccountReadResult;
 use ash_app_server_protocol::protocol::account::AccountStatusDto;
+use ash_app_server_protocol::protocol::diagnostics::HttpCompatibilityModeDto;
 use ash_app_server_protocol::protocol::diagnostics::NetworkCheckDto;
 use ash_app_server_protocol::protocol::diagnostics::NetworkCheckOutcomeDto;
 use ash_app_server_protocol::protocol::diagnostics::NetworkDiagnosticsRunResult;
 use ash_app_server_protocol::protocol::diagnostics::NetworkFailureDto;
+use ash_app_server_protocol::protocol::diagnostics::NetworkHttpConfigureParams;
 use ash_app_server_protocol::protocol::diagnostics::NetworkPurposeDto;
 use ash_app_server_protocol::protocol::diagnostics::NetworkReadResult;
 use ash_app_server_protocol::protocol::diagnostics::NetworkRouteDto;
@@ -14,6 +19,10 @@ use ash_app_server_protocol::protocol::diagnostics::NetworkTargetDto;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::provider::ProviderListResult;
 use ash_async_utils::CancellationToken;
+use ash_config::ConfigCommandRequest;
+use ash_config::ConfigRevision;
+use ash_config::ResolvedConfigSnapshot;
+use ash_config::UserConfigCommand;
 use ash_http_client::HttpClient;
 use ash_http_client::HttpClientError;
 use ash_http_client::HttpConnectionFailure;
@@ -52,14 +61,8 @@ impl AppServer {
         self
     }
 
-    fn network_targets(&self) -> Result<Vec<Target>, RpcError> {
+    fn network_targets(&self, config: &ResolvedConfigSnapshot) -> Result<Vec<Target>, RpcError> {
         let diagnostics = self.network_diagnostics.as_ref().ok_or_else(unavailable)?;
-        let config = self
-            .config
-            .as_ref()
-            .ok_or_else(unavailable)?
-            .read_snapshot()
-            .map_err(|_| unavailable())?;
         let providers: ProviderListResult =
             serde_json::from_value(self.provider_list()?).map_err(|_| unavailable())?;
         let runtime = self.provider_runtime.as_ref().ok_or_else(unavailable)?;
@@ -139,10 +142,42 @@ impl AppServer {
         Ok(targets)
     }
 
+    pub(super) fn network_http_configure(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: NetworkHttpConfigureParams = decode(value)?;
+        let diagnostics = self.network_diagnostics.as_ref().ok_or_else(unavailable)?;
+        let mode = match params.http_mode {
+            HttpCompatibilityModeDto::Http2 => ash_config::HttpCompatibilityMode::Http2,
+            HttpCompatibilityModeDto::Http1 => ash_config::HttpCompatibilityMode::Http1,
+        };
+        let store = self.config.as_ref().ok_or_else(unavailable)?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::SetHttpCompatibilityMode { mode },
+            })
+            .map_err(config_operation_error)?;
+        // Read the authority after persistence: an idempotent replay must not reapply an older mode.
+        let current = store.read_snapshot().map_err(|_| unavailable())?;
+        diagnostics.network.set_http_compatibility_mode(
+            http_transport_mode(current.values.network.http_mode),
+            current.revision.get(),
+        );
+        result(&config_command_result(outcome))
+    }
+
     pub(super) fn network_read(&self) -> Result<Value, RpcError> {
+        let config = self
+            .config
+            .as_ref()
+            .ok_or_else(unavailable)?
+            .read_snapshot()
+            .map_err(|_| unavailable())?;
         result(&NetworkReadResult {
+            revision: config.revision.get(),
+            http_mode: http_mode_dto(config.values.network.http_mode),
             targets: self
-                .network_targets()?
+                .network_targets(&config)?
                 .into_iter()
                 .map(|target| target.dto)
                 .collect(),
@@ -154,7 +189,13 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let diagnostics = self.network_diagnostics.as_ref().ok_or_else(unavailable)?;
-        let targets = self.network_targets()?;
+        let config = self
+            .config
+            .as_ref()
+            .ok_or_else(unavailable)?
+            .read_snapshot()
+            .map_err(|_| unavailable())?;
+        let targets = self.network_targets(&config)?;
         let mut checks = Vec::new();
         for target in &targets {
             check_cancelled(cancellation)?;
@@ -210,6 +251,8 @@ impl AppServer {
         check_cancelled(cancellation)?;
         result(&NetworkDiagnosticsRunResult {
             network: NetworkReadResult {
+                revision: config.revision.get(),
+                http_mode: http_mode_dto(config.values.network.http_mode),
                 targets: targets.into_iter().map(|target| target.dto).collect(),
             },
             checks,
@@ -290,5 +333,21 @@ fn check_cancelled(token: &CancellationToken) -> Result<(), RpcError> {
         Err(RpcError::new(-32800, AppServerErrorName::RequestCancelled))
     } else {
         Ok(())
+    }
+}
+
+fn http_mode_dto(mode: ash_config::HttpCompatibilityMode) -> HttpCompatibilityModeDto {
+    match mode {
+        ash_config::HttpCompatibilityMode::Http2 => HttpCompatibilityModeDto::Http2,
+        ash_config::HttpCompatibilityMode::Http1 => HttpCompatibilityModeDto::Http1,
+    }
+}
+
+pub(crate) fn http_transport_mode(
+    mode: ash_config::HttpCompatibilityMode,
+) -> ash_http_client::HttpCompatibilityMode {
+    match mode {
+        ash_config::HttpCompatibilityMode::Http2 => ash_http_client::HttpCompatibilityMode::Http2,
+        ash_config::HttpCompatibilityMode::Http1 => ash_http_client::HttpCompatibilityMode::Http1,
     }
 }

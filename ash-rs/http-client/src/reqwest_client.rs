@@ -1,6 +1,7 @@
 use crate::HttpBodySink;
 use crate::HttpClient;
 use crate::HttpClientError;
+use crate::HttpCompatibilityMode;
 use crate::HttpConnectionFailure;
 use crate::HttpHeader;
 use crate::HttpMethod;
@@ -36,6 +37,11 @@ pub struct ReqwestHttpClient {
 
 struct ClientState {
     network: OutboundNetworkSnapshot,
+    pools: [ClientPool; 2],
+}
+
+#[derive(Default)]
+struct ClientPool {
     http_direct: OnceLock<Result<reqwest::Client, HttpClientError>>,
     http_proxy: OnceLock<Result<reqwest::Client, HttpClientError>>,
     https_direct: OnceLock<Result<reqwest::Client, HttpClientError>>,
@@ -78,38 +84,38 @@ impl ReqwestHttpClient {
         Ok(Self {
             inner: Arc::new(ClientState {
                 network,
-                http_direct: OnceLock::new(),
-                http_proxy: OnceLock::new(),
-                https_direct: OnceLock::new(),
-                https_proxy: OnceLock::new(),
+                pools: std::array::from_fn(|_| ClientPool::default()),
             }),
         })
     }
 
     fn client_for(&self, url: &str) -> Result<reqwest::Client, HttpClientError> {
+        let mode = self.inner.network.http_compatibility_mode();
+        let pool = &self.inner.pools[match mode {
+            HttpCompatibilityMode::Http2 => 0,
+            HttpCompatibilityMode::Http1 => 1,
+        }];
         match self.inner.network.proxy_route(url)? {
-            OutboundProxyRoute::Direct if url.starts_with("https://") => self
-                .inner
+            OutboundProxyRoute::Direct if url.starts_with("https://") => pool
                 .https_direct
-                .get_or_init(|| self.build_client(None, TlsRoots::System))
+                .get_or_init(|| self.build_client(None, TlsRoots::System, mode))
                 .clone(),
-            OutboundProxyRoute::Direct => self
-                .inner
+            OutboundProxyRoute::Direct => pool
                 .http_direct
-                .get_or_init(|| self.build_client(None, TlsRoots::ConfiguredOnly))
+                .get_or_init(|| self.build_client(None, TlsRoots::ConfiguredOnly, mode))
                 .clone(),
             OutboundProxyRoute::Proxy(proxy)
                 if url.starts_with("https://") || proxy.url().starts_with("https://") =>
             {
-                self.inner
-                    .https_proxy
-                    .get_or_init(|| self.build_client(Some(proxy.url()), TlsRoots::System))
+                pool.https_proxy
+                    .get_or_init(|| self.build_client(Some(proxy.url()), TlsRoots::System, mode))
                     .clone()
             }
-            OutboundProxyRoute::Proxy(proxy) => self
-                .inner
+            OutboundProxyRoute::Proxy(proxy) => pool
                 .http_proxy
-                .get_or_init(|| self.build_client(Some(proxy.url()), TlsRoots::ConfiguredOnly))
+                .get_or_init(|| {
+                    self.build_client(Some(proxy.url()), TlsRoots::ConfiguredOnly, mode)
+                })
                 .clone(),
         }
     }
@@ -118,22 +124,32 @@ impl ReqwestHttpClient {
         &self,
         proxy: Option<&str>,
         roots: TlsRoots,
+        mode: HttpCompatibilityMode,
     ) -> Result<reqwest::Client, HttpClientError> {
         let config = self.inner.network.config();
         let tls = match roots {
             TlsRoots::System => self.inner.network.rustls_client_config()?,
             TlsRoots::ConfiguredOnly => self.inner.network.tls_config_without_system_roots()?,
         };
+        // Reqwest preserves preconfigured TLS, so the selected HTTP mode must own ALPN too.
+        let mut tls = tls.as_ref().clone();
+        tls.alpn_protocols = match mode {
+            HttpCompatibilityMode::Http2 => vec![b"h2".to_vec(), b"http/1.1".to_vec()],
+            HttpCompatibilityMode::Http1 => vec![b"http/1.1".to_vec()],
+        };
         let mut builder = reqwest::Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
-            .use_preconfigured_tls(tls.as_ref().clone())
+            .use_preconfigured_tls(tls)
             .pool_max_idle_per_host(
                 config
                     .connection_pool()
                     .max_idle_connections_per_host()
                     .min(config.connection_pool().max_idle_connections()),
             );
+        if mode == HttpCompatibilityMode::Http1 {
+            builder = builder.http1_only();
+        }
         if let Some(proxy) = proxy {
             builder = builder.proxy(reqwest::Proxy::all(proxy).map_err(|_| {
                 HttpClientError::InvalidConfiguration("proxy URL is invalid".into())

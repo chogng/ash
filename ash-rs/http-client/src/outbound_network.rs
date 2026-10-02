@@ -1,6 +1,7 @@
 use crate::ClientIdentityPolicy;
 use crate::HttpClientConfig;
 use crate::HttpClientError;
+use crate::HttpCompatibilityMode;
 use crate::NetworkTargetPolicy;
 use crate::OutboundNetworkPolicy;
 use crate::ProxyBypass;
@@ -16,6 +17,7 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::task::Context;
 use std::task::Poll;
@@ -45,6 +47,7 @@ pub struct OutboundNetworkSnapshot {
 
 struct OutboundNetworkSnapshotInner {
     config: HttpClientConfig,
+    http_mode: Mutex<(u64, HttpCompatibilityMode)>,
     policy: OutboundNetworkPolicy,
     proxy_url: Option<String>,
     proxy_bypass: ProxyBypass,
@@ -88,6 +91,7 @@ impl OutboundNetworkSnapshot {
         Ok(Self {
             inner: Arc::new(OutboundNetworkSnapshotInner {
                 config,
+                http_mode: Mutex::new((0, HttpCompatibilityMode::Http2)),
                 policy,
                 proxy_url,
                 proxy_bypass,
@@ -95,6 +99,27 @@ impl OutboundNetworkSnapshot {
                 secure_tls_config: OnceLock::new(),
             }),
         })
+    }
+
+    /// Applies to subsequent HTTP requests. An older asynchronous config observation cannot
+    /// overwrite a mode saved by a newer revision; in-flight requests keep their selected client.
+    pub fn set_http_compatibility_mode(&self, mode: HttpCompatibilityMode, revision: u64) {
+        let mut current = self
+            .inner
+            .http_mode
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if revision >= current.0 {
+            *current = (revision, mode);
+        }
+    }
+
+    pub fn http_compatibility_mode(&self) -> HttpCompatibilityMode {
+        self.inner
+            .http_mode
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .1
     }
 
     /// Selects the already-snapshotted direct or proxy route for one URL.

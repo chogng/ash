@@ -45,6 +45,7 @@ use core_api::AgentRuntime;
 use core_api::CoreError;
 use core_api::ModelService;
 use core_api::ThreadUpdateSink;
+pub(crate) use network_operations::http_transport_mode;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -2309,6 +2310,9 @@ impl AppServer {
             Some(ClientMethod::QueueList) => self.queue_list(&request.params),
             Some(ClientMethod::QueueCancel) => self.queue_cancel(&request.params),
             Some(ClientMethod::NetworkRead) => self.network_read(),
+            Some(ClientMethod::NetworkHttpConfigure) => {
+                self.network_http_configure(&request.params)
+            }
             Some(ClientMethod::NetworkDiagnosticsRun) => self.network_diagnostics_run(cancellation),
             Some(ClientMethod::DiagnosticsRead) => self.diagnostics_read(),
             Some(ClientMethod::FeedbackPrepare) => {
@@ -2781,7 +2785,9 @@ impl AppServer {
             Some(ClientMethod::DebugAdapterStart) => {
                 self.debug_adapter_start(connection, &request.params)
             }
-            Some(ClientMethod::TestingDiscover) => self.testing_discover(connection, &request.params),
+            Some(ClientMethod::TestingDiscover) => {
+                self.testing_discover(connection, &request.params)
+            }
             Some(ClientMethod::TestingRun) => self.testing_run(connection, &request.params),
             Some(ClientMethod::TestingRead) => self.testing_read(connection, &request.params),
             Some(ClientMethod::TestingCancel) => self.testing_cancel(connection, &request.params),

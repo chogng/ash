@@ -491,3 +491,11 @@ impl Default for HttpClientConfig {
         }
     }
 }
+
+/// Negotiated HTTP/2 or a strict HTTP/1.1 transport for incompatible proxies.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum HttpCompatibilityMode {
+    #[default]
+    Http2,
+    Http1,
+}

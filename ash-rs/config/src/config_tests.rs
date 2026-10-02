@@ -2642,3 +2642,57 @@ fn imported_directory_model_migrates_without_rewriting_or_selecting_a_connection
     assert_eq!(std::fs::read_to_string(&path).unwrap(), source);
     std::fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn http_compatibility_mode_persists_preserves_host_policy_and_rejects_stale_writes() {
+    let path = config_path("http-compatibility");
+    let config_file = path.with_extension("toml");
+    std::fs::write(
+        &config_file,
+        "[network]\nallowedHosts = ['gateway.example']\n",
+    )
+    .unwrap();
+    let store = ConfigStore::open(&path).unwrap();
+    let initial = store.read_snapshot().unwrap();
+    assert_eq!(
+        initial.values.network.http_mode,
+        HttpCompatibilityMode::Http2
+    );
+    let request = ConfigCommandRequest {
+        command_id: CommandId::new("http1").unwrap(),
+        expected_revision: initial.revision,
+        command: UserConfigCommand::SetHttpCompatibilityMode {
+            mode: HttpCompatibilityMode::Http1,
+        },
+    };
+    let outcome = store.apply(request.clone()).unwrap();
+    assert_eq!(
+        store.apply(request).unwrap().disposition,
+        ConfigCommandDisposition::Replayed
+    );
+    assert!(matches!(
+        store.apply(ConfigCommandRequest {
+            command_id: CommandId::new("stale-http2").unwrap(),
+            expected_revision: initial.revision,
+            command: UserConfigCommand::SetHttpCompatibilityMode {
+                mode: HttpCompatibilityMode::Http2
+            },
+        }),
+        Err(ConfigCommandError::RevisionConflict { .. })
+    ));
+    let expected = NetworkConfig {
+        http_mode: HttpCompatibilityMode::Http1,
+        allowed_hosts: Some(vec!["gateway.example".into()]),
+    };
+    assert_eq!(store.read_snapshot().unwrap().values.network, expected);
+    drop(store);
+    let reopened = ConfigStore::open(&path).unwrap();
+    assert_eq!(reopened.read_snapshot().unwrap().values.network, expected);
+    assert_eq!(reopened.read_snapshot().unwrap().revision, outcome.revision);
+    for value in ["http3", "HTTP/1.1", ""] {
+        assert!(
+            toml::from_str::<UserConfigDocument>(&format!("[network]\nhttpMode = '{value}'\n"))
+                .is_err()
+        );
+    }
+}

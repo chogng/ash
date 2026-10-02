@@ -259,3 +259,74 @@ fn network_diagnostics_keeps_http_evidence_when_a_ready_accounts_usage_cannot_be
     assert!(!run.to_string().contains("private-account"));
     assert!(!run.to_string().contains("private-email"));
 }
+
+#[test]
+fn http_compatibility_configuration_updates_the_live_transport_and_preserves_newer_mode_on_replay()
+{
+    let network = OutboundNetworkSnapshot::new(
+        HttpClientConfig::new().with_proxy_policy(ProxyPolicy::Direct),
+    )
+    .unwrap();
+    let (_root, server) = fixture(
+        Arc::new(ScriptedHttp(Mutex::new(Vec::new()))),
+        network.clone(),
+        Vec::new(),
+    );
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let read = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":2,"method":"network/read","params":{}}),
+    );
+    assert_eq!(read["result"]["httpMode"], "http2");
+    let first = json!({"jsonrpc":"2.0","id":3,"method":"network/http/configure","params":{
+        "commandId":"http1","expectedRevision":read["result"]["revision"],"httpMode":"http1"
+    }});
+    let saved = call(&server, &mut connection, first.clone());
+    assert!(saved.get("error").is_none(), "{saved}");
+    assert_eq!(
+        network.http_compatibility_mode(),
+        ash_http_client::HttpCompatibilityMode::Http1
+    );
+    let stale = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":4,"method":"network/http/configure","params":{
+            "commandId":"stale","expectedRevision":read["result"]["revision"],"httpMode":"http2"
+        }}),
+    );
+    assert_eq!(stale["error"]["message"], "ConfigRevisionConflict");
+    let next = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":5,"method":"network/http/configure","params":{
+            "commandId":"http2","expectedRevision":saved["result"]["revision"],"httpMode":"http2"
+        }}),
+    );
+    assert!(next.get("error").is_none(), "{next}");
+    let mut replay_request = first;
+    replay_request["id"] = json!(6);
+    let replay = call(&server, &mut connection, replay_request);
+    assert!(replay.get("error").is_none(), "{replay}");
+    assert_eq!(replay["result"]["disposition"], "replayed");
+    assert_eq!(
+        network.http_compatibility_mode(),
+        ash_http_client::HttpCompatibilityMode::Http2
+    );
+    let invalid = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":7,"method":"network/http/configure","params":{
+            "commandId":"invalid","expectedRevision":next["result"]["revision"],"httpMode":"http3"
+        }}),
+    );
+    assert!(invalid.get("error").is_some());
+    let final_read = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":8,"method":"network/read","params":{}}),
+    );
+    assert_eq!(final_read["result"]["httpMode"], "http2");
+    assert_eq!(final_read["result"]["revision"], next["result"]["revision"]);
+}

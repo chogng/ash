@@ -56,6 +56,9 @@ pub struct PreferencesUpdate {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum UserConfigCommand {
+    SetHttpCompatibilityMode {
+        mode: crate::HttpCompatibilityMode,
+    },
     ConfigureIssues {
         config: crate::IssueConfig,
     },
