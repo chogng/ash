@@ -93,7 +93,7 @@ test.describe('built-in Rust testing', () => {
 		await debug.locator('.ash-debug-breakpoint-remove').click();
 		await expect(editor.element.locator('.ash-debug-breakpoint-gutter')).toHaveCount(0);
 		await debug.getByRole('button', { name: 'Continue', exact: true }).click();
-		await expect(debug.getByRole('status')).toHaveText('0 debug configurations.');
+		await expect(debug.getByRole('status')).toHaveText('Add a debug configuration in .vscode/launch.json to get started.');
 		await page.getByRole('tab', { name: 'Testing', exact: true }).first().click();
 		await expect(pane.getByRole('button', { name: 'Run All Tests', exact: true })).toBeEnabled();
 	});
@@ -113,5 +113,76 @@ test.describe('testing without a backend', () => {
 		await expect(pane.getByRole('button', { name: 'Refresh Tests', exact: true })).toBeVisible();
 		await expect(pane.getByRole('button', { name: 'Run All Tests', exact: true })).toBeDisabled();
 		await expect(pane.getByRole('button', { name: 'Refresh Tests', exact: true })).toBeEnabled();
+	});
+});
+
+
+test.describe('Run and Debug sidebar layout', () => {
+	test.use({ openWorkspace: false });
+
+	test('debug sidebar has a compact launch row, keyboard collapsible sections and readable themes', async ({ target, workbench }) => {
+		test.skip(target.workbenchMode !== 'code', 'Requires the Code workbench.');
+		const page = workbench.page;
+		const tab = page.getByRole('tab', { name: 'Run and Debug', exact: true }).first();
+		await tab.click();
+		await expect(tab.locator('[data-ash-icon-id="debug-alt"]')).toBeVisible();
+		const pane = page.locator('[data-view-id="workbench.view.debug"]');
+		const start = pane.getByRole('button', { name: 'Start Debugging', exact: true });
+		const configuration = pane.getByRole('combobox', { name: 'Debug configuration', exact: true });
+		await expect(start).toBeDisabled();
+		await expect(configuration).toBeDisabled();
+		await expect(configuration).toHaveText('No debug configurations');
+		await expect(pane.getByRole('toolbar', { name: 'Debug controls' })).toBeHidden();
+		const summary = pane.locator('summary', { hasText: 'Watch' });
+		const input = pane.getByRole('textbox', { name: 'Add watch expression' });
+		await input.fill('myValue');
+		await summary.focus();
+		await summary.press('Enter');
+		await expect(input).toBeHidden();
+		await summary.press('Space');
+		await expect(input).toHaveValue('myValue');
+		await expect(summary).toBeFocused();
+		await expect(summary).toHaveCSS('outline-style', 'solid');
+
+		for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+			const picker = page.locator('.ash-quick-pick');
+			await picker.getByRole('combobox').fill(theme);
+			await picker.getByRole('combobox').press('Enter');
+			await expect(picker).toHaveCount(0);
+			await summary.focus();
+			await expect(summary).toHaveCSS('outline-style', 'solid');
+			expect(await summary.evaluate(element => getComputedStyle(element).outlineColor === getComputedStyle(element).backgroundColor)).toBe(false);
+		}
+
+		// Exercise the view at the sidebar's supported narrow size without touching its inner styles.
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const sidebarBounds = await sidebar.boundingBox();
+		expect(sidebarBounds).not.toBeNull();
+		const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
+		const bounds = await sash.boundingBox();
+		expect(bounds).not.toBeNull();
+		await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(sidebarBounds!.x + 220, bounds!.y + bounds!.height / 2);
+		await page.mouse.up();
+		const geometry = await pane.locator('.ash-debug-launch').evaluate(element => {
+			const row = element.getBoundingClientRect();
+			return { width: row.width, fits: [...element.children].every(child => { const rect = child.getBoundingClientRect(); return rect.left >= row.left && rect.right <= row.right + 1; }) };
+		});
+		expect(geometry.width).toBeGreaterThan(0);
+		expect(geometry.width).toBeLessThan(240);
+		expect(geometry.fits).toBe(true);
+		expect(await pane.locator('.ash-debug').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+
+		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+		const languagePicker = page.getByRole('dialog', { name: 'Select Display Language' });
+		await languagePicker.getByRole('combobox').fill('简体中文');
+		await languagePicker.getByRole('combobox').press('Enter');
+		await expect(languagePicker).toHaveCount(0);
+		await expect(pane.getByRole('combobox', { name: '调试配置', exact: true })).toHaveText('没有调试配置');
+		await expect(pane.getByRole('button', { name: '启动调试', exact: true })).toBeDisabled();
+		await expect(pane.getByRole('textbox', { name: '添加监视表达式' })).toHaveValue('myValue');
+		await expect(pane.locator('summary', { hasText: '监视' })).toBeVisible();
 	});
 });

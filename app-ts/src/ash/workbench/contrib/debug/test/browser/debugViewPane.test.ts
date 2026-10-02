@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { Emitter } from "../../../../../base/common/event.js";
+import { Emitter, Event as CommonEvent } from "../../../../../base/common/event.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
+import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
+import { formatNlsMessage, resetNlsResolver, setNlsResolver } from "../../../../../nls.js";
+import { builtinLanguagePackCatalogs } from "../../../../services/localization/common/localizationCatalogs.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { type EditorInput, type IEditorService } from "../../../../services/editor/common/editorService.js";
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
@@ -17,7 +20,7 @@ test("Debug view switches sessions and renders threads, recursive variables, wat
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new FakeDebugService();
 		debug.activate(debug.sessions[0]!);
-		using view = new DebugViewPane(browser.window.document.body, { id: "ash.debug.test", title: "Debug" }, debug, editor);
+		using view = new DebugViewPane(browser.window.document.body, { id: "ash.debug.test", title: "Debug" }, debug, editor, contextMenus);
 		browser.window.document.body.append(view.element);
 		await waitFor(() => view.element.querySelectorAll(".ash-debug-frame").length === 1);
 
@@ -54,7 +57,7 @@ test("Debug view opens an authority-qualified Remote stack source", async () => 
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new FakeDebugService({ name: "main.ts", path: "/srv/project/src/main.ts", resource });
-		using view = new DebugViewPane(browser.window.document.body, { id: "ash.debug.remote.test", title: "Debug" }, debug, editor);
+		using view = new DebugViewPane(browser.window.document.body, { id: "ash.debug.remote.test", title: "Debug" }, debug, editor, contextMenus);
 		browser.window.document.body.append(view.element);
 		debug.activate(debug.sessions[0]!);
 		await waitFor(() => view.element.querySelectorAll(".ash-debug-frame").length === 1);
@@ -70,13 +73,83 @@ test("Debug view opens an authority-qualified Remote stack source", async () => 
 	}
 });
 
+test("Debug controls follow session state, dispatch actions, and retain collapsed sections across refreshes", async () => {
+	const browser = new JSDOM("<!doctype html><body></body>");
+	const installedGlobals = installDomGlobals(browser);
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => {}, focusActiveEditor() {} };
+	try {
+		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
+		using debug = new FakeDebugService();
+		using view = new DebugViewPane(browser.window.document.body, { id: "ash.debug.controls.test", title: "Debug" }, debug, editor, contextMenus);
+		const action = (label: string) => view.element.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+		const toolbar = view.element.querySelector<HTMLElement>(".ash-toolbar")!;
+		assert.equal(toolbar.hidden, true);
+		action("Start Debugging").click();
+		assert.deepEqual(debug.operations, ["start"]);
+
+		const session = debug.sessions[0] as FakeDebugSession;
+		debug.activate(session);
+		await waitFor(() => view.element.querySelectorAll(".ash-debug-frame").length === 1);
+		assert.deepEqual([toolbar.hidden, action("Continue").disabled, action("Step Over").disabled], [false, false, false]);
+		action("Step Over").click();
+		assert.deepEqual(session.operations, ["stepOver"]);
+
+		const variables = view.element.querySelector<HTMLDetailsElement>(".ash-debug-variables")!.parentElement as HTMLDetailsElement;
+		variables.open = false;
+		session.state = "running";
+		debug.activate(session);
+		assert.deepEqual([action("Pause").disabled, action("Step Over").disabled, variables.open], [false, true, false]);
+		action("Pause").click();
+		assert.deepEqual(session.operations, ["stepOver", "pause"]);
+
+		action("Stop").click();
+		assert.deepEqual(debug.operations, ["start", "stop"]);
+		debug.activate(undefined);
+		assert.equal(toolbar.hidden, true);
+		debug.configurations = [];
+		await debug.refresh();
+		assert.equal(action("Start Debugging").disabled, true);
+		assert.equal(view.element.querySelector<HTMLSelectElement>("select[aria-label='Debug configuration']")!.disabled, true);
+	} finally {
+		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+		browser.window.close();
+	}
+});
+
+test("Debug view updates Chinese labels and keeps the entered watch expression and collapsed section", async () => {
+	const browser = new JSDOM("<!doctype html><body></body>");
+	const installedGlobals = installDomGlobals(browser);
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => {}, focusActiveEditor() {} };
+	try {
+		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
+		using debug = new FakeDebugService();
+		using view = new DebugViewPane(browser.window.document.body, { id: "ash.debug.locale.test", title: "Debug" }, debug, editor, contextMenus);
+		const watch = view.element.querySelector<HTMLDetailsElement>(".ash-debug-watch")!.parentElement as HTMLDetailsElement;
+		const input = view.element.querySelector<HTMLInputElement>(".ash-debug-input-form input")!;
+		input.value = "myValue";
+		watch.open = false;
+		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === "zh-CN")!;
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
+		assert.deepEqual([...view.element.querySelectorAll("summary")].map(summary => summary.textContent), ["变量", "监视", "调用堆栈", "断点", "异常断点"]);
+		assert.deepEqual([input.value, watch.open, input.getAttribute("aria-label")], ["myValue", false, "添加监视表达式"]);
+		assert.equal(view.element.querySelector("button[aria-label='启动调试']")?.textContent, "启动调试");
+	} finally {
+		resetNlsResolver();
+		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+		browser.window.close();
+	}
+});
+
+const contextMenus: IContextMenuService = { onDidShowContextMenu: CommonEvent.None, onDidHideContextMenu: CommonEvent.None, showContextMenu() {}, hideContextMenu() {} };
+
 class FakeDebugService extends Disposable implements IDebugService {
 	private readonly configurationEmitter = this._register(new Emitter<readonly IDebugConfiguration[]>());
 	private readonly breakpointEmitter = this._register(new Emitter<readonly IDebugBreakpoint[]>());
 	private readonly watchEmitter = this._register(new Emitter<readonly string[]>());
 	private readonly exceptionEmitter = this._register(new Emitter<readonly string[]>());
 	private readonly sessionEmitter = this._register(new Emitter<IDebugSession | undefined>());
-	readonly configurations = Object.freeze([configuration("One")]);
+	configurations: readonly IDebugConfiguration[] = Object.freeze([configuration("One")]);
+	readonly operations: string[] = [];
 	readonly compounds: readonly IDebugCompound[] = Object.freeze([]);
 	readonly breakpoints: readonly IDebugBreakpoint[] = Object.freeze([]);
 	readonly watchExpressions = Object.freeze(["answer"]);
@@ -89,20 +162,20 @@ class FakeDebugService extends Disposable implements IDebugService {
 	readonly onDidChangeExceptionBreakpoints = this.exceptionEmitter.event;
 	readonly onDidChangeSession = this.sessionEmitter.event;
 	constructor(source: IDebugSource = { name: "generated.ts", sourceReference: 33 }) { super(); this.sessions = Object.freeze([this._register(new FakeDebugSession("session-one", "One", source)), this._register(new FakeDebugSession("session-two", "Two", source))]); }
-	async refresh() { return this.configurations; }
-	async start() { return this.sessions[0]!; }
+	async refresh() { this.configurationEmitter.fire(this.configurations); return this.configurations; }
+	async start() { this.operations.push("start"); return this.sessions[0]!; }
 	async startDebugging() { return this.sessions[0]!; }
 	async startCompound() { return this.sessions; }
 	setActiveSession(session: IDebugSession): void { this.activate(session); }
 	async restart(session = this.session) { return session!; }
-	async stop() {}
+	async stop() { this.operations.push("stop"); }
 	async stopAll() {}
 	toggleBreakpoint() {}
 	removeBreakpoint() {}
 	addWatchExpression() {}
 	removeWatchExpression() {}
 	async setExceptionBreakpoints(filters: readonly string[]) { this.exceptionBreakpoints = Object.freeze([...filters]); this.exceptionEmitter.fire(this.exceptionBreakpoints); }
-	activate(session: IDebugSession): void { this.session = session; this.sessionEmitter.fire(session); }
+	activate(session: IDebugSession | undefined): void { this.session = session; this.sessionEmitter.fire(session); }
 }
 
 class FakeDebugSession extends Disposable implements IDebugSession {
@@ -111,7 +184,8 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	private selectedThread = 1;
 	readonly configuration: IDebugConfiguration;
 	readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, exceptionBreakpointFilters: Object.freeze([{ filter: "uncaught", label: "Uncaught", default: true }, { filter: "caught", label: "Caught", default: false }]) });
-	readonly state: DebugSessionState = "stopped";
+	state: DebugSessionState = "stopped";
+	readonly operations: string[] = [];
 	readonly reason = "breakpoint";
 	readonly onDidChangeState = this.stateEmitter.event;
 	readonly onDidOutput = this.outputEmitter.event;
@@ -119,8 +193,8 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	constructor(readonly id: string, name: string, private readonly stackSource: IDebugSource) { super(); this.configuration = configuration(name); }
 	get threadId() { return this.selectedThread; }
 	async continue() {}
-	async pause() {}
-	async stepOver() {}
+	async pause() { this.operations.push("pause"); }
+	async stepOver() { this.operations.push("stepOver"); }
 	async stepInto() {}
 	async stepOut() {}
 	async restart() {}

@@ -1,6 +1,13 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { getHoverDelegate } from "../../../../base/browser/ui/hover/hoverDelegate.js";
+import { Button } from "../../../../base/browser/ui/button/button.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
+import type { IAction } from "../../../../base/common/actions.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
+import { localize, onDidChangeNls } from "../../../../nls.js";
+import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
+import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { basename } from "../../../../base/common/resources.js";
 import { URI } from "../../../../base/common/uri.js";
 import { Position } from "../../../../editor/common/core/position.js";
@@ -25,8 +32,23 @@ interface DebugWatchResult {
 	readonly error?: string;
 }
 
+type DebugOperation = "start" | "continue" | "pause" | "restart" | "stepOver" | "stepInto" | "stepOut" | "stop" | "stopAll";
+
+interface DebugSection {
+	readonly domNode: HTMLDetailsElement;
+	readonly summary: HTMLElement;
+	readonly list: HTMLUListElement;
+	readonly label: () => string;
+}
+
 /** Code Debug sidebar with multi-session inspection, recursive variables, watches, and exceptions. */
 export class DebugViewPane extends ViewPane {
+	private readonly startButton: Button;
+	private readonly sessionToolbar: WorkbenchToolBar;
+	private readonly sections: readonly DebugSection[];
+	private readonly exceptionSection: DebugSection;
+	private readonly rowControls = this._register(new DisposableStore());
+	private readonly addWatchButton: Button;
 	private readonly configurationsElement: HTMLSelectElement;
 	private readonly sessionsElement: HTMLSelectElement;
 	private readonly threadsElement: HTMLSelectElement;
@@ -49,27 +71,59 @@ export class DebugViewPane extends ViewPane {
 	private refreshGeneration = 0;
 	private error: string | undefined;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @IDebugService private readonly debug: IDebugService, @IEditorService private readonly editor: IEditorService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IDebugService private readonly debug: IDebugService, @IEditorService private readonly editor: IEditorService, @IContextMenuService contextMenus: IContextMenuService) {
 		super(container, options);
+		const document = container.ownerDocument;
+		this.setHeaderVisible(false);
 		this.contentElement.classList.add("ash-debug");
-		const controls = h(container.ownerDocument, "div");
+		const controls = h(document, "div");
 		controls.className = "ash-debug-controls";
-		this.configurationsElement = select(container.ownerDocument, "Debug configuration");
-		this.sessionsElement = select(container.ownerDocument, "Active debug session");
-		controls.append(this.configurationsElement, this.sessionsElement, ...[button(container.ownerDocument, "Start", "start"), button(container.ownerDocument, "Continue", "continue"), button(container.ownerDocument, "Pause", "pause"), button(container.ownerDocument, "Restart", "restart"), button(container.ownerDocument, "Over", "stepOver"), button(container.ownerDocument, "Into", "stepInto"), button(container.ownerDocument, "Out", "stepOut"), button(container.ownerDocument, "Stop", "stop"), button(container.ownerDocument, "Stop All", "stopAll")]);
-		this.statusElement = h(container.ownerDocument, "div");
+		const launch = h(document, "div");
+		launch.className = "ash-debug-launch";
+		this.startButton = this._register(new Button(launch, {
+			label: localize("debug.start", "Start Debugging"),
+			icon: Lxicon.start,
+			iconOnly: true,
+			title: localize("debug.start", "Start Debugging"),
+			onClick: () => this.control("start"),
+		}));
+		this.configurationsElement = select(document, localize("debug.configuration", "Debug configuration"));
+		launch.append(this.configurationsElement);
+		this.sessionsElement = select(document, localize("debug.session", "Active debug session"));
+		this.sessionToolbar = this._register(new WorkbenchToolBar(controls, contextMenus, { ariaLabel: localize("debug.controls", "Debug controls") }));
+		controls.prepend(launch, this.sessionsElement);
+		this.statusElement = h(document, "div");
 		this.statusElement.className = "ash-debug-status";
 		this.statusElement.setAttribute("role", "status");
-		this.threadsElement = select(container.ownerDocument, "Debug thread");
+		this.statusElement.setAttribute("aria-live", "polite");
+		this.threadsElement = select(document, localize("debug.thread", "Debug thread"));
 		this.threadsElement.classList.add("ash-debug-thread-select");
-		this.stackElement = section(container.ownerDocument, "Call Stack", "ash-debug-stack");
-		this.variablesElement = section(container.ownerDocument, "Variables", "ash-debug-variables");
-		this.watchElement = section(container.ownerDocument, "Watch", "ash-debug-watch");
-		[this.watchForm, this.watchInput] = inputForm(container.ownerDocument, "Add watch expression", "Add");
-		this.exceptionsElement = section(container.ownerDocument, "Exception Breakpoints", "ash-debug-exceptions");
-		this.breakpointsElement = section(container.ownerDocument, "Breakpoints", "ash-debug-breakpoints");
-		this.contentElement.append(controls, this.statusElement, this.threadsElement, this.stackElement, this.variablesElement, this.watchElement, this.watchForm, this.exceptionsElement, this.breakpointsElement);
-		this._register(addDisposableListener(controls, "click", event => this.control(event)));
+		const stack = section(document, () => localize("debug.callStack", "Call Stack"), "ash-debug-stack");
+		const variables = section(document, () => localize("debug.variables", "Variables"), "ash-debug-variables");
+		const watch = section(document, () => localize("debug.watch", "Watch"), "ash-debug-watch");
+		this.exceptionSection = section(document, () => localize("debug.exceptions", "Exception Breakpoints"), "ash-debug-exceptions");
+		const breakpoints = section(document, () => localize("debug.breakpoints", "Breakpoints"), "ash-debug-breakpoints");
+		this.sections = [variables, watch, stack, breakpoints, this.exceptionSection];
+		this.stackElement = stack.list;
+		this.variablesElement = variables.list;
+		this.watchElement = watch.list;
+		this.exceptionsElement = this.exceptionSection.list;
+		this.breakpointsElement = breakpoints.list;
+		this.watchForm = h(document, "form");
+		this.watchForm.className = "ash-debug-input-form";
+		this.watchInput = h(document, "input");
+		this.watchInput.type = "text";
+		this.watchForm.append(this.watchInput);
+		this.addWatchButton = this._register(new Button(this.watchForm, {
+			label: localize("debug.addWatch", "Add watch expression"),
+			icon: Lxicon.add,
+			iconOnly: true,
+			type: "submit",
+			title: localize("debug.addWatch", "Add watch expression"),
+		}));
+		watch.domNode.append(this.watchForm);
+		stack.domNode.insertBefore(this.threadsElement, stack.list);
+		this.contentElement.append(controls, this.statusElement, ...this.sections.map(section => section.domNode));
 		this._register(addDisposableListener(this.sessionsElement, "change", () => this.selectSession()));
 		this._register(addDisposableListener(this.threadsElement, "change", () => { void this.selectThread(); }));
 		this._register(addDisposableListener(this.stackElement, "click", event => this.activateFrame(event)));
@@ -78,6 +132,7 @@ export class DebugViewPane extends ViewPane {
 		this._register(addDisposableListener(this.watchForm, "submit", event => this.addWatch(event)));
 		this._register(addDisposableListener(this.exceptionsElement, "change", () => { void this.changeExceptionBreakpoints(); }));
 		this._register(addDisposableListener(this.breakpointsElement, "click", event => this.activateBreakpoint(event)));
+		this._register(onDidChangeNls(() => this.render()));
 		this._register(debug.onDidChangeConfigurations(() => this.render()));
 		this._register(debug.onDidChangeBreakpoints(() => this.render()));
 		this._register(debug.onDidChangeWatchExpressions(() => { void this.refreshWatches(); this.render(); }));
@@ -88,25 +143,28 @@ export class DebugViewPane extends ViewPane {
 		void debug.refresh().catch(error => { this.error = message(error); this.render(); });
 	}
 
-	private control(event: Event): void {
-		const target = event.target instanceof this.element.ownerDocument.defaultView!.Element ? event.target.closest<HTMLButtonElement>("button[data-operation]") : null;
-		const operation = target?.dataset.operation;
-		if (!operation) return;
+	private control(operation: DebugOperation): void {
 		this.error = undefined;
 		const session = this.debug.session;
-		const action = operation === "start" ? this.startSelected()
-			: operation === "restart" ? this.debug.restart()
-			: operation === "stop" ? this.debug.stop()
-			: operation === "stopAll" ? this.debug.stopAll()
-			: session && operation in session ? (session[operation as "continue" | "pause" | "restart" | "stepOver" | "stepInto" | "stepOut"] as () => Promise<void>).call(session)
-			: Promise.resolve();
+		let action: Promise<unknown>;
+		switch (operation) {
+			case "start": action = this.startSelected(); break;
+			case "restart": action = this.debug.restart(); break;
+			case "stop": action = this.debug.stop(); break;
+			case "stopAll": action = this.debug.stopAll(); break;
+			default: action = session![operation](); break;
+		}
 		void action.catch(error => { this.error = message(error); this.render(); });
+	}
+
+	private debugAction(operation: DebugOperation, label: string, icon: IAction["icon"], enabled = true): IAction {
+		return { id: `ash.debug.${operation}`, label, tooltip: label, icon, enabled, run: () => this.control(operation) };
 	}
 
 	private async startSelected(): Promise<void> {
 		const configuration = this.debug.configurations.find(candidate => candidate.id === this.configurationsElement.value);
 		const compound = this.debug.compounds.find(candidate => candidate.id === this.configurationsElement.value);
-		if (!configuration && !compound) throw new Error("No debug configuration found in .vscode/launch.json");
+		if (!configuration && !compound) throw new Error(localize("debug.noConfiguration", "No debug configuration found in .vscode/launch.json"));
 		if (configuration) await this.debug.start(configuration);
 		else await this.debug.startCompound(compound!);
 	}
@@ -145,7 +203,7 @@ export class DebugViewPane extends ViewPane {
 		try {
 			const threads = await session.threads();
 			const selectedThread = threads.find(thread => thread.id === session.threadId) ?? threads[0];
-			if (!selectedThread) throw new Error("The Debug Adapter did not report any stopped threads");
+			if (!selectedThread) throw new Error(localize("debug.noThreads", "The Debug Adapter did not report any stopped threads"));
 			session.selectThread(selectedThread.id);
 			const frames = await session.stackTrace(selectedThread.id);
 			if (generation !== this.refreshGeneration || this.debug.session !== session) return;
@@ -256,42 +314,161 @@ export class DebugViewPane extends ViewPane {
 	private render(): void {
 		if (this.exceptionControls.isDisposed) return;
 		const selectedConfiguration = this.configurationsElement.value;
-		this.configurationsElement.replaceChildren(...this.debug.configurations.map(configuration => option(this.element.ownerDocument, configuration.id, configuration.workspaceFolderName ? `${configuration.name} — ${configuration.workspaceFolderName}` : configuration.name)), ...this.debug.compounds.map(compound => option(this.element.ownerDocument, compound.id, `${compound.name}${compound.workspaceFolderName ? ` — ${compound.workspaceFolderName}` : ""} (compound)`)));
+		this.configurationsElement.setAttribute("aria-label", localize("debug.configuration", "Debug configuration"));
+		this.sessionsElement.setAttribute("aria-label", localize("debug.session", "Active debug session"));
+		this.threadsElement.setAttribute("aria-label", localize("debug.thread", "Debug thread"));
+		this.watchInput.setAttribute("aria-label", localize("debug.addWatch", "Add watch expression"));
+		this.watchInput.placeholder = localize("debug.watchPlaceholder", "Expression to watch");
+		this.addWatchButton.label = localize("debug.addWatch", "Add watch expression");
+		this.addWatchButton.setTitle(this.addWatchButton.label);
+		this.startButton.label = localize("debug.start", "Start Debugging");
+		this.startButton.setTitle(this.startButton.label);
+		for (const section of this.sections) {
+			section.summary.textContent = section.label();
+			section.list.setAttribute("aria-label", section.label());
+		}
+		this.configurationsElement.replaceChildren(...this.debug.configurations.map(configuration => option(this.element.ownerDocument, configuration.id, configuration.workspaceFolderName ? `${configuration.name} — ${configuration.workspaceFolderName}` : configuration.name)), ...this.debug.compounds.map(compound => option(this.element.ownerDocument, compound.id, localize("debug.compound", "{0} (compound)", `${compound.name}${compound.workspaceFolderName ? ` — ${compound.workspaceFolderName}` : ""}`))));
 		if ([...this.debug.configurations, ...this.debug.compounds].some(candidate => candidate.id === selectedConfiguration)) this.configurationsElement.value = selectedConfiguration;
+		const hasConfigurations = this.debug.configurations.length + this.debug.compounds.length > 0;
+		if (!hasConfigurations) {
+			this.configurationsElement.append(option(this.element.ownerDocument, "", localize("debug.noConfigurations", "No debug configurations")));
+		}
+		this.configurationsElement.disabled = !hasConfigurations;
+		this.startButton.enabled = hasConfigurations && this.debug.session?.state !== "starting";
 		const session = this.debug.session;
-		this.sessionsElement.replaceChildren(...this.debug.sessions.map(candidate => option(this.element.ownerDocument, candidate.id, `${candidate.configuration.name} — ${candidate.state}`)));
+		const active = session !== undefined && session.state !== "terminated" && session.state !== "error";
+		const stopped = session?.state === "stopped";
+		this.sessionToolbar.element.hidden = !active;
+		this.sessionToolbar.element.classList.toggle("empty", !active);
+		this.sessionToolbar.element.setAttribute("aria-label", localize("debug.controls", "Debug controls"));
+		this.sessionToolbar.setActions(active ? [
+			stopped ? this.debugAction("continue", localize("debug.continue", "Continue"), Lxicon.start) : this.debugAction("pause", localize("debug.pause", "Pause"), Lxicon.pause, session.state === "running"),
+			this.debugAction("stepOver", localize("debug.stepOver", "Step Over"), Lxicon.arrowRight, stopped),
+			this.debugAction("stepInto", localize("debug.stepInto", "Step Into"), Lxicon.arrowDown, stopped),
+			this.debugAction("stepOut", localize("debug.stepOut", "Step Out"), Lxicon.arrowUp, stopped),
+			this.debugAction("restart", localize("debug.restart", "Restart"), Lxicon.refresh, session.state !== "starting"),
+			this.debugAction("stop", localize("debug.stop", "Stop"), Lxicon.square),
+		] : [], this.debug.sessions.length > 1 ? [this.debugAction("stopAll", localize("debug.stopAll", "Stop All"), Lxicon.square)] : []);
+		this.sessionsElement.replaceChildren(...this.debug.sessions.map(candidate => option(this.element.ownerDocument, candidate.id, `${candidate.configuration.name} — ${sessionStateLabel(candidate.state)}`)));
 		if (session) this.sessionsElement.value = session.id;
 		this.sessionsElement.hidden = this.debug.sessions.length < 2;
-		this.statusElement.textContent = this.error ?? (!session ? `${this.debug.configurations.length} debug configuration${this.debug.configurations.length === 1 ? "" : "s"}.` : `${session.configuration.name}: ${session.state}${session.reason ? ` (${session.reason})` : ""}`);
+		this.statusElement.classList.toggle("error", this.error !== undefined);
+		let status = hasConfigurations ? localize("debug.ready", "Select a configuration to start debugging.") : localize("debug.configureLaunch", "Add a debug configuration in .vscode/launch.json to get started.");
+		if (session) {
+			status = `${session.configuration.name}: ${sessionStateLabel(session.state)}${session.reason ? ` (${session.reason})` : ""}`;
+		}
+		this.statusElement.textContent = this.error ?? status;
 		this.threadsElement.replaceChildren(...this.threads.map(thread => option(this.element.ownerDocument, String(thread.id), thread.name)));
 		if (session?.threadId) this.threadsElement.value = String(session.threadId);
 		this.threadsElement.hidden = this.threads.length < 2;
-		this.stackElement.replaceChildren(heading(this.element.ownerDocument, "Call Stack"), ...this.frames.map((frame, index) => itemButton(this.element.ownerDocument, `${frame.name}  ${frame.source?.name ?? frame.source?.path ?? ""}${frame.lineNumber > 0 ? `:${frame.lineNumber}` : ""}`, "ash-debug-frame", "frameIndex", index, frame.id === this.selectedFrameId)));
-		this.variablesElement.replaceChildren(heading(this.element.ownerDocument, "Variables"), ...this.variableRows.map((row, index) => variableItem(this.element.ownerDocument, row, index)));
-		this.watchElement.replaceChildren(heading(this.element.ownerDocument, "Watch"), ...this.debug.watchExpressions.map((expression, index) => watchItem(this.element.ownerDocument, expression, this.watchResults.find(result => result.expression === expression), index)));
+		this.rowControls.clear();
+		this.stackElement.replaceChildren(...this.frames.map((frame, index) => itemButton(this.rowControls, this.element.ownerDocument, `${frame.name}  ${frame.source?.name ?? frame.source?.path ?? ""}${frame.lineNumber > 0 ? `:${frame.lineNumber}` : ""}`, "ash-debug-frame", "frameIndex", index, frame.id === this.selectedFrameId)));
+		this.variablesElement.replaceChildren(...this.variableRows.map((row, index) => variableItem(this.rowControls, this.element.ownerDocument, row, index)));
+		this.watchElement.replaceChildren(...this.debug.watchExpressions.map((expression, index) => watchItem(this.rowControls, this.element.ownerDocument, expression, this.watchResults.find(result => result.expression === expression), index)));
 		const selectedExceptions = this.debug.exceptionBreakpoints;
 		this.exceptionControls.clear();
-		this.exceptionsElement.replaceChildren(heading(this.element.ownerDocument, "Exception Breakpoints"), ...(session?.capabilities.exceptionBreakpointFilters ?? []).map(filter => exceptionItem(this.exceptionControls, this.element.ownerDocument, filter.filter, filter.label, filter.description, selectedExceptions.length > 0 ? selectedExceptions.includes(filter.filter) : filter.default)));
-		this.exceptionsElement.hidden = !session || session.capabilities.exceptionBreakpointFilters.length === 0;
-		this.breakpointsElement.replaceChildren(heading(this.element.ownerDocument, "Breakpoints"), ...this.debug.breakpoints.map((breakpoint, index) => breakpointItem(this.element.ownerDocument, breakpoint, index)));
+		this.exceptionsElement.replaceChildren(...(session?.capabilities.exceptionBreakpointFilters ?? []).map(filter => exceptionItem(this.exceptionControls, this.element.ownerDocument, filter.filter, filter.label, filter.description, selectedExceptions.length > 0 ? selectedExceptions.includes(filter.filter) : filter.default)));
+		const noExceptions = !session || session.capabilities.exceptionBreakpointFilters.length === 0;
+		this.exceptionSection.domNode.hidden = noExceptions;
+		this.exceptionSection.domNode.classList.toggle("empty", noExceptions);
+		this.breakpointsElement.replaceChildren(...this.debug.breakpoints.map((breakpoint, index) => breakpointItem(this.rowControls, this.element.ownerDocument, breakpoint, index)));
+		for (const [list, label] of [
+			[this.variablesElement, localize("debug.emptyVariables", "Variables appear when execution pauses.")],
+			[this.watchElement, localize("debug.emptyWatch", "Add an expression to watch its value.")],
+			[this.stackElement, localize("debug.emptyStack", "The call stack appears when execution pauses.")],
+			[this.breakpointsElement, localize("debug.emptyBreakpoints", "Click the editor gutter to add a breakpoint.")],
+		] as const) {
+			if (list.childElementCount === 0) {
+				const empty = h(this.element.ownerDocument, "li");
+				empty.className = "ash-debug-empty";
+				empty.textContent = label;
+				list.append(empty);
+			}
+		}
 	}
 
 	private scopeRow(scope: IDebugScope): DebugVariableRow { return Object.freeze({ key: ++this.variableKey, name: scope.name, variablesReference: scope.variablesReference, depth: 0, expanded: true }); }
 	private variableRow(variable: IDebugVariable, depth: number): DebugVariableRow { return Object.freeze({ key: ++this.variableKey, name: variable.name, value: variable.value, variablesReference: variable.variablesReference, depth, expanded: false, ...(variable.type ? { type: variable.type } : {}) }); }
 }
 
-function button(document: Document, label: string, operation: string): HTMLButtonElement { const element = h(document, "button"); element.type = "button"; element.textContent = label; element.dataset.operation = operation; return element; }
 function select(document: Document, label: string): HTMLSelectElement { const element = h(document, "select"); element.setAttribute("aria-label", label); return element; }
 function option(document: Document, value: string, label: string): HTMLOptionElement { const element = h(document, "option"); element.value = value; element.textContent = label; return element; }
-function section(document: Document, label: string, className: string): HTMLUListElement { const element = h(document, "ul"); element.className = `ash-debug-section ${className}`; element.setAttribute("aria-label", label); return element; }
-function heading(document: Document, label: string): HTMLLIElement { const element = h(document, "li"); element.className = "ash-debug-section-heading"; element.textContent = label; return element; }
-function itemButton(document: Document, label: string, className: string, dataName: string, index: number, selected = false): HTMLLIElement { const item = h(document, "li"); const action = h(document, "button"); action.type = "button"; action.className = className; action.classList.toggle("selected", selected); action.textContent = label; action.dataset[dataName] = String(index); item.append(action); return item; }
-function variableItem(document: Document, row: DebugVariableRow, index: number): HTMLLIElement { const indicator = row.variablesReference > 0 ? row.expanded ? "▾ " : "▸ " : "  "; const label = `${indicator}${row.name}${row.value === undefined ? "" : ` = ${row.value}`}${row.type ? ` : ${row.type}` : ""}`; const item = itemButton(document, label, "ash-debug-variable", "variableIndex", index); const action = item.firstElementChild as HTMLButtonElement; action.style.paddingInlineStart = `${6 + row.depth * 14}px`; action.disabled = row.variablesReference <= 0 && row.value === undefined; return item; }
-function watchItem(document: Document, expression: string, result: DebugWatchResult | undefined, index: number): HTMLLIElement { const item = h(document, "li"); const value = h(document, "span"); value.className = "ash-debug-watch-value"; value.textContent = `${expression}${result?.result ? ` = ${result.result.result}` : result?.error ? ` — ${result.error}` : ""}`; const remove = button(document, "Remove", "removeWatch"); remove.className = "ash-debug-watch-remove"; remove.dataset.watchIndex = String(index); item.append(value, remove); return item; }
+function section(document: Document, label: () => string, className: string): DebugSection {
+	const domNode = h(document, "details");
+	domNode.className = "ash-debug-section";
+	domNode.open = true;
+	const summary = h(document, "summary");
+	summary.textContent = label();
+	const list = h(document, "ul");
+	list.className = `ash-debug-list ${className}`;
+	list.setAttribute("aria-label", label());
+	domNode.append(summary, list);
+	return { domNode, summary, list, label };
+}
+function itemButton(owner: DisposableStore, document: Document, label: string, className: string, dataName: string, index: number, selected = false): HTMLLIElement {
+	const item = h(document, "li");
+	const action = h(document, "button");
+	action.type = "button";
+	action.className = className;
+	action.classList.toggle("selected", selected);
+	action.textContent = label;
+	action.dataset[dataName] = String(index);
+	owner.add(getHoverDelegate().setupHover({ target: action, content: label }));
+	item.append(action);
+	return item;
+}
+function variableItem(owner: DisposableStore, document: Document, row: DebugVariableRow, index: number): HTMLLIElement {
+	const indicator = row.variablesReference > 0 ? row.expanded ? "▾ " : "▸ " : "  ";
+	const label = `${indicator}${row.name}${row.value === undefined ? "" : ` = ${row.value}`}${row.type ? ` : ${row.type}` : ""}`;
+	const item = itemButton(owner, document, label, "ash-debug-variable", "variableIndex", index);
+	const action = item.firstElementChild as HTMLButtonElement;
+	action.style.paddingInlineStart = `${6 + row.depth * 14}px`;
+	action.disabled = row.variablesReference <= 0 && row.value === undefined;
+	return item;
+}
+function watchItem(owner: DisposableStore, document: Document, expression: string, result: DebugWatchResult | undefined, index: number): HTMLLIElement {
+	const item = h(document, "li");
+	const value = h(document, "span");
+	value.className = "ash-debug-watch-value";
+	value.textContent = `${expression}${result?.result ? ` = ${result.result.result}` : result?.error ? ` — ${result.error}` : ""}`;
+	owner.add(getHoverDelegate().setupHover({ target: value, content: value.textContent }));
+	item.append(value);
+	const remove = owner.add(new Button(item, {
+		label: localize("debug.removeWatch", "Remove watch expression"),
+		icon: Lxicon.close,
+		iconOnly: true,
+		size: "small",
+		title: localize("debug.removeWatch", "Remove watch expression"),
+	})).domNode;
+	remove.classList.add("ash-debug-watch-remove");
+	remove.dataset.watchIndex = String(index);
+	return item;
+}
 function exceptionItem(owner: DisposableStore, document: Document, filter: string, label: string, description: string | undefined, checked: boolean): HTMLLIElement { const item = h(document, "li"); const control = owner.add(new Checkbox(item, { label, checked })); control.element.classList.add("ash-debug-exception-toggle"); control.input.dataset.exceptionFilter = filter; if (description) control.element.title = description; return item; }
-function breakpointItem(document: Document, breakpoint: IDebugBreakpoint, index: number): HTMLLIElement { const item = itemButton(document, `${basename(breakpoint.resource)}:${breakpoint.lineNumber}`, "ash-debug-breakpoint", "breakpointIndex", index); const remove = button(document, "Remove", "removeBreakpoint"); remove.className = "ash-debug-breakpoint-remove"; remove.dataset.breakpointIndex = String(index); item.append(remove); return item; }
-function inputForm(document: Document, label: string, action: string): [HTMLFormElement, HTMLInputElement] { const form = h(document, "form"); form.className = "ash-debug-input-form"; const input = h(document, "input"); input.type = "text"; input.setAttribute("aria-label", label); const submit = h(document, "button"); submit.type = "submit"; submit.textContent = action; form.append(input, submit); return [form, input]; }
+function breakpointItem(owner: DisposableStore, document: Document, breakpoint: IDebugBreakpoint, index: number): HTMLLIElement {
+	const item = itemButton(owner, document, `${basename(breakpoint.resource)}:${breakpoint.lineNumber}`, "ash-debug-breakpoint", "breakpointIndex", index);
+	const remove = owner.add(new Button(item, {
+		label: localize("debug.removeBreakpoint", "Remove breakpoint"),
+		icon: Lxicon.close,
+		iconOnly: true,
+		size: "small",
+		title: localize("debug.removeBreakpoint", "Remove breakpoint"),
+	})).domNode;
+	remove.classList.add("ash-debug-breakpoint-remove");
+	remove.dataset.breakpointIndex = String(index);
+	return item;
+}
 function indexFromEvent(event: Event, selector: string, dataName: string, document: Document): number | undefined { const target = event.target instanceof document.defaultView!.Element ? event.target.closest<HTMLElement>(selector) : null; const raw = target?.dataset[dataName]; if (raw === undefined) return undefined; const index = Number(raw); return Number.isSafeInteger(index) && index >= 0 ? index : undefined; }
 function descendantEnd(rows: readonly DebugVariableRow[], index: number, depth: number): number { let end = index + 1; while (end < rows.length && rows[end]!.depth > depth) end += 1; return end; }
 function lineSelection(lineNumber: number): Range { return Range.fromPositions(new Position(lineNumber, 1)); }
 function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
+
+function sessionStateLabel(state: IDebugSession["state"]): string {
+	switch (state) {
+		case "starting": return localize("debug.state.starting", "starting");
+		case "running": return localize("debug.state.running", "running");
+		case "stopped": return localize("debug.state.stopped", "stopped");
+		case "terminated": return localize("debug.state.terminated", "terminated");
+		case "error": return localize("debug.state.error", "error");
+	}
+}

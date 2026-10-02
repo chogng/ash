@@ -10,7 +10,7 @@ import "./debugActions.js";
 import "./media/debug.css";
 
 export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Debug, title: "Run and Debug", localizationKey: { bundle: "ash.views", key: "runAndDebug" }, location: ViewContainerLocation.Sidebar, icon: Lxicon.start, order: 3 });
+	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Debug, title: "Run and Debug", localizationKey: { bundle: "ash.views", key: "runAndDebug" }, location: ViewContainerLocation.Sidebar, icon: Lxicon.debugAlt, order: 3 });
 	registry.registerStaticViews(WorkbenchViewContainerId.Debug, [{ id: DEBUG_VIEW_ID, title: "Run and Debug", localizationKey: { bundle: "ash.views", key: "runAndDebug" }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(DebugViewPane) }]);
 	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.DebugConsole, title: "Debug Console", localizationKey: { bundle: "ash.views", key: "debugConsole" }, location: ViewContainerLocation.Panel, order: 2.75 });
 	registry.registerStaticViews(WorkbenchViewContainerId.DebugConsole, [{ id: DEBUG_CONSOLE_VIEW_ID, title: "Debug Console", localizationKey: { bundle: "ash.views", key: "debugConsole" }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(DebugConsoleViewPane) }]);
