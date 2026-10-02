@@ -20,6 +20,7 @@ pub struct Matrix {
     dns_hits: Arc<AtomicUsize>,
     threads: Vec<std::thread::JoinHandle<()>>,
     host_counter: Option<HostCounter>,
+    public_ipv6: Option<SocketAddr>,
 }
 
 struct HostCounter {
@@ -67,9 +68,11 @@ impl Matrix {
             }
             let tcp = TcpListener::bind(&address).unwrap();
             let endpoint = tcp.local_addr().unwrap();
-            resolvers.push(endpoint);
+            resolvers.push(format!("tcp@{endpoint}"));
             tcp.set_nonblocking(true).unwrap();
-            let udp = UdpSocket::bind(endpoint).unwrap();
+            // Each transport has its own excluded port ranges on Windows.
+            let udp = UdpSocket::bind(&address).unwrap();
+            resolvers.push(format!("udp@{}", udp.local_addr().unwrap()));
             udp.set_nonblocking(true).unwrap();
             let stopped = Arc::clone(&stop);
             let received = Arc::clone(&hits);
@@ -102,10 +105,7 @@ impl Matrix {
         }
         let v4 = origins[0];
         let v6 = origins[1];
-        let mut dns = resolvers
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
+        let mut dns = resolvers;
         // The host's real port-53 resolver complements the counted local wire fixtures.
         dns.push(
             std::env::var("ASH_DNS_SERVER")
@@ -131,17 +131,24 @@ impl Matrix {
                 path: path.into(),
                 expected: AtomicUsize::new(0),
             }),
+            public_ipv6: std::env::var("ASH_PUBLIC_IPV6_HTTP_ENDPOINT")
+                .ok()
+                .map(|value| value.parse().unwrap()),
         }
     }
 
     pub fn arguments(&self, mode: &str) -> Vec<String> {
-        vec![
+        let mut arguments = vec![
             mode.into(),
             self.v4.to_string(),
             self.v6.to_string(),
             self.dns.clone(),
             self.targets.clone(),
-        ]
+        ];
+        if let Some(address) = self.public_ipv6 {
+            arguments.push(address.to_string());
+        }
+        arguments
     }
 
     pub fn positive_control(&self, probe: &std::path::Path) {

@@ -75,6 +75,6 @@ just test ash-app-server managed_network_approval_resumes_the_same_shell_process
 ```
 
 后两项需要真实 macOS。平台不可用不计为强制执行验收通过。
-Linux/Windows 场景分别位于 `mxc-sandbox/tests/linux.rs`、`mxc-sandbox/tests/windows.rs`，已加入 Platform checks。
-Windows 场景分别验证 SDK 文件/断网执行及严格受管网络的明确拒绝。
-当前开发主机仅完成交叉编译与跨平台单测；真实 Linux/Windows 内核验收结果仍待 CI 或测试机回填。
+Linux 的受管网络场景位于 `mxc-sandbox/tests/linux.rs`，Windows 账户场景位于 `windows-sandbox/tests/windows.rs`；两者另用 `tests/network_matrix.rs` 验证 IPv4/IPv6、域名授权、TCP/UDP A/AAAA DNS、后代与监听边界。
+`ASH_PUBLIC_IPV6_HTTP_ENDPOINT` 可添加公网 IPv6 目标，普通进程必须先收到实际 HTTP 响应，再验证受限执行的直连与代理拒绝。DNS fixture 为 TCP 与 UDP 独立分配端口，避免 Windows 的运输协议保留范围影响对照。
+Windows 11 23H2 x64 与 WSL2 NAT/mirrored 已通过临时隧道出口的公网 IPv6 矩阵，出口和清理范围见 [验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-acl-恢复与公网-ipv6-复测)。Windows 严格受管网络仍按 SDK 能力明确拒绝，账户模型的通过范围另行记录。

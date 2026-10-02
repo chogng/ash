@@ -1,6 +1,7 @@
 # Windows 沙箱验收手册
 
 本手册分别验证 MXC PSEC 路径和独立 Windows 账户实现，保留各轮实机证据。2026-10-02 的 Windows 11 23H2 x64 管理员验收已通过当前服务安装、更新、账户执行和清理；随后完成 WSL2 回归与 DNS/IPv6 网络矩阵。PSEC 在 Windows 11 25H2 ARM64 CI 上取得成功路径证据，本机 23H2 仍缺少能力。WSLC SDK 部分通过，一次性容器清理仍报错；Ash 尚未接入它。具体范围见 [补充验收](#2026-10-02-psecwslc-与网络补充验收)。
+账户 CI 的 ACL 标记差异已修复并完成本机回归，公网 IPv6 的临时出口矩阵在 Windows 与 WSL 两种模式均通过，见 [ACL 与 IPv6 复测](#2026-10-02-acl-恢复与公网-ipv6-复测)。
 实现契约见 [mxc-sandbox](../ash-rs/mxc-sandbox/README.md) 与 [windows-sandbox](../ash-rs/windows-sandbox/README.md)。历史账户原型的结果不能作为当前候选的通过证据。
 
 ## 当前入口
@@ -142,6 +143,28 @@ WSL、发行版和构建工具保留在本机用于复测。上述早轮结果�
 WSLC 状态为**部分通过**。SDK 的 cooperative 外部代理只设置代理环境，不保证任意客户端流量均经代理，不能据此满足 Ash Managed；Ash 仍没有 WSLC 执行链。PTY、输入、完整取消/崩溃矩阵未验证。上游 executor 构建另有硬编码 PowerShell 7 安装路径的测试前置 warning；本机使用另一位置的 pwsh，该 warning 不影响已执行的 Alpine 用例，但不计为该上游全部 E2E 测试通过。
 
 `network-windows.log`、`network-nat-host.log`、`network-mirrored-host.log` 保存最终网络结果；原始测试配置错误、共享接收端并发造成的无效轮次和运行器源文件被重建导致的身份拒绝另存日志，不计为通过。本轮把执行 helper 复制到独立验收目录后安装，避免 Cargo 重建改变已批准摘要。`.wslconfig` 已恢复为原来的不存在状态，实际网络模式再次为 NAT；服务、账户、WFP 与临时接收端已清理。WSL 发行版和隔离于证据目录内的 SDK、镜像缓存保留以便复测。
+
+## 2026-10-02 ACL 恢复与公网 IPv6 复测
+
+证据目录为 `.build/acceptance/sandbox-acl-fix/run-20261002-095459/`，包含原始失败、最终日志、构建检查及清理结果。此前 CI 因撤销权限后多出 DACL `AI` 标记失败；本轮保存传播前旧格式对象的路径，在授权、撤销与日志恢复时保留原始控制标记。受保护根还可能保留启用保护前的继承权限项，直接传播写回会清掉这些项的继承标记；现改为单独写根，再由未保护子项重新取得父目录授权并向下传播。恢复操作使用当前 DACL，保留其他执行的 SID 权限项。完整 SDDL 比较继续保留，账户文件用例在每台验收主机显式运行有无 `AI` 两种基线。
+
+| 本机复测 | 结果 |
+| --- | --- |
+| SDK ACL | 最终源码的 37 项全部通过，包含旧格式恢复、混合继承、保留历史继承项的受保护根、受保护子树、子项及孙级授权、重叠授权和传播中断后的日志恢复 |
+| Windows 11 23H2 x64 账户 | 36 项库测试、10 项完整执行用例通过；文件权限、元数据、退出码与完整 ACL 恢复均通过 |
+| Windows 公网 IPv6 | 网络矩阵 1 项通过，包含 Denied / Managed / Allowed、HTTP/CONNECT/SOCKS 目标拒绝、直接 TCP、TCP/UDP DNS 的 A/AAAA 与后代继承 |
+| WSL2 Ubuntu 24.04.5 x64 | NAT 与 mirrored 各 1 项公网 IPv6 矩阵和 1 项既有受管网络回归通过；实测前普通进程先完成目标往返 |
+| 构建 | SDK、账户与代理 warning 门禁通过；Windows helper/服务与两平台探针正常构建通过；账户 ARM64 测试目标编译通过，固定上游 vendor 复核通过 |
+
+公网目标为 `[2606:4700:4700::1111]:80` 与 `:53`。测试通过独立 TUN 网卡和现有代理中支持 IPv6 的节点提供临时出口，增加两个公网地址的 `/128` 路由；沙箱外另验证了证书校验成功的 HTTPS 响应及 TCP/UDP A/AAAA 解析。初始节点无法进行 IPv6 数据往返的轮次保留为失败，TCP 握手单独成功不计为通过。实际覆盖范围是这个隧道出口；物理网络仍没有公网 IPv6 地址与默认路由。
+
+NAT 用临时 IPv6 地址及接口转发连接 Linux 与测试出口，完成后删除地址、路由并恢复转发状态。mirrored 自动取得测试接口的 IPv6 路由，完成后恢复为 NAT 和原先不存在的 `.wslconfig`。测试网卡、进程、账户、服务与临时凭据配置均已清理；用户现有代理选择和配置未改动。镜像模式的 Windows IPv6 回环限制仍按上一轮范围记录。
+
+Windows 的两个旧网络用例还暴露出 TCP 临时端口落入 Hyper-V UDP 保留范围的测试配置错误；UDP 改为独立分配端口，探针与 Linux 调用方同步更新。共享 DNS fixture 同样分别分配 TCP/UDP 端口，保持所有事务与接收计数断言。
+
+复跑时显式提供可达出口，例如 `./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -NetworkDnsServer '[2606:4700:4700::1111]:53' -NetworkPublicIpv6Http '[2606:4700:4700::1111]:80'`。Linux 使用 `ASH_PUBLIC_IPV6_HTTP_ENDPOINT` 与包含公网 IPv6 的 `ASH_DNS_SERVER`。公开目标必须完成 HTTP 或 DNS 数据往返的正向对照；缺少出口即失败。脚本不自动配置隧道或修改用户的网络设置。
+
+ARM64 与 Server 2022/2025 的新源码 CI 尚未重跑；此前失败的 run 保持原状态，本机通过和 ARM 编译结果不能声明整条 CI 已绿。WSLC 一次性清理失败不属于本轮修复范围。
 
 ## 已退出账户原型的受管网络记录
 

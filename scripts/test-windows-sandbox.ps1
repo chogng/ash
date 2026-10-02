@@ -1,9 +1,12 @@
 param(
     [Parameter(Mandatory)][ValidateSet('x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc')][string]$Target,
     [ValidateNotNullOrEmpty()][string]$WslDistribution,
-    [ValidateNotNullOrEmpty()][string]$NetworkDnsServer
+    [ValidateNotNullOrEmpty()][string]$NetworkDnsServer,
+    [ValidateNotNullOrEmpty()][string]$NetworkPublicIpv6Http
 )
 $ErrorActionPreference = 'Stop'
+if ($NetworkPublicIpv6Http -and !$NetworkDnsServer) { throw 'Public IPv6 acceptance requires the DNS matrix.' }
+if ($NetworkPublicIpv6Http) { $env:ASH_PUBLIC_IPV6_HTTP_ENDPOINT = $NetworkPublicIpv6Http }
 $workspace = Split-Path -Parent $PSScriptRoot
 $output = Join-Path $workspace ".build/acceptance/windows-sandbox-$Target"
 New-Item -ItemType Directory -Force -Path $output | Out-Null

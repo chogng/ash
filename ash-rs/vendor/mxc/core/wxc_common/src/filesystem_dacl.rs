@@ -10,7 +10,9 @@
 //!
 //! - **Inheritable ACEs**: on directories we apply `OBJECT_INHERIT_ACE |
 //!   CONTAINER_INHERIT_ACE`. We rely on `SetNamedSecurityInfoW` automatic
-//!   propagation for both add AND remove — no manual descendant walk.
+//!   propagation for both add AND remove. Protected roots use an object-only
+//!   write followed by propagation from their unprotected children, preserving
+//!   inherited ACE flags retained when the root was protected.
 //! - **Crash safety**: every applied ACE is appended to a per-process state
 //!   file under `%LOCALAPPDATA%\Microsoft\MXC\dacl-restore\<run-id>.json`
 //!   *before* the Win32 apply call. On startup, [`recover_orphaned_state`]
@@ -272,6 +274,12 @@ pub struct AppliedAce {
     /// introduction of this field.
     #[serde(default)]
     pub prior_state: Vec<PriorAce>,
+    /// Existing objects whose DACL did not use automatic-inheritance control
+    /// before this mutation. Windows propagation converts these descriptors;
+    /// retain the paths in the crash journal before allowing that conversion.
+    /// Earlier journals did not record this metadata.
+    #[serde(default)]
+    pub legacy_inheritance: Vec<PathBuf>,
 }
 
 /// Persistent state file written before each ACE is applied.
@@ -546,6 +554,11 @@ impl DaclManager {
         // re-add each prior entry verbatim, leaving the host exactly
         // as it was found.
         let prior_state = scan_explicit_aces_for_sid(&canonical, sid_str)?;
+        let legacy_inheritance = if inheritable {
+            legacy_inheritance_paths(&canonical)?
+        } else {
+            Vec::new()
+        };
 
         let entry = AppliedAce {
             canonical_path: canonical.clone(),
@@ -554,6 +567,7 @@ impl DaclManager {
             ace_type,
             inheritable,
             prior_state,
+            legacy_inheritance,
         };
 
         // 1. Persist before apply. If `apply_ace` succeeds we have
@@ -1164,7 +1178,112 @@ fn apply_ace(entry: &AppliedAce) -> Result<(), DaclError> {
         entry.access_mask,
         entry.ace_type,
         entry.inheritable,
-    )
+    )?;
+    restore_legacy_inheritance(&entry.legacy_inheritance)
+}
+
+// Capture existing descendants before the propagating write, including mixed
+// old/new inheritance trees. A protected directory and its subtree do not
+// participate in Windows propagation; reparse points are not traversed.
+fn legacy_inheritance_paths(root: &Path) -> Result<Vec<PathBuf>, DaclError> {
+    let mut pending = vec![root.to_owned()];
+    let mut legacy = Vec::new();
+    while let Some(path) = pending.pop() {
+        let metadata = fs::symlink_metadata(&path)?;
+        if std::os::windows::fs::MetadataExt::file_attributes(&metadata) & 0x400 != 0 {
+            continue;
+        }
+        let descriptor = read_dacl_descriptor(&path)?;
+        let mut control = 0u16;
+        let mut revision = 0;
+        unsafe {
+            windows::Win32::Security::GetSecurityDescriptorControl(
+                descriptor.0,
+                &mut control,
+                &mut revision,
+            )
+        }
+        .map_err(|error| win32_err_str(&path, &format!("GetSecurityDescriptorControl: {error}")))?;
+        if path != root && control & 0x1000 != 0 {
+            continue;
+        }
+        if control & 0x0400 == 0 {
+            legacy.push(path.clone());
+        }
+        if metadata.is_dir() {
+            for child in fs::read_dir(&path)? {
+                pending.push(child?.path());
+            }
+        }
+    }
+    Ok(legacy)
+}
+
+// Normalize after each propagating write, while the path mutex is still held,
+// so overlapping managers observe the same baseline control. Never replay a
+// whole saved DACL: other executions' SID entries must survive this operation.
+fn restore_legacy_inheritance(paths: &[PathBuf]) -> Result<(), DaclError> {
+    for path in paths {
+        if !path.try_exists()? {
+            continue;
+        }
+        let _guard = PathMutexGuard::acquire(path)?;
+        let descriptor = read_dacl_descriptor(path)?;
+        unsafe {
+            windows::Win32::Security::SetSecurityDescriptorControl(
+                descriptor.0,
+                windows::Win32::Security::SECURITY_DESCRIPTOR_CONTROL(0x0500),
+                windows::Win32::Security::SECURITY_DESCRIPTOR_CONTROL(0),
+            )
+        }
+        .map_err(|error| win32_err_str(path, &format!("SetSecurityDescriptorControl: {error}")))?;
+        if !unsafe {
+            windows::Win32::Security::SetFileSecurityW(
+                PCWSTR(wide(path).as_ptr()),
+                DACL_SECURITY_INFORMATION,
+                descriptor.0,
+            )
+        }
+        .as_bool()
+        {
+            return Err(win32_err(
+                path,
+                "SetFileSecurityW(inheritance control)",
+                unsafe { GetLastError() },
+            ));
+        }
+    }
+    Ok(())
+}
+
+struct OwnedDaclDescriptor(PSECURITY_DESCRIPTOR);
+
+impl Drop for OwnedDaclDescriptor {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = LocalFree(Some(HLOCAL(self.0 .0)));
+        }
+    }
+}
+
+fn read_dacl_descriptor(path: &Path) -> Result<OwnedDaclDescriptor, DaclError> {
+    let mut descriptor = PSECURITY_DESCRIPTOR(ptr::null_mut());
+    let result = unsafe {
+        GetNamedSecurityInfoW(
+            PCWSTR(wide(path).as_ptr()),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            None,
+            None,
+            None,
+            None,
+            &mut descriptor,
+        )
+    };
+    if result != ERROR_SUCCESS {
+        return Err(win32_err(path, "GetNamedSecurityInfoW", result));
+    }
+    Ok(OwnedDaclDescriptor(descriptor))
 }
 
 /// Apply a single explicit ACE to `path`'s DACL without any restore
@@ -1237,7 +1356,7 @@ pub fn apply_explicit_ace(
         return Err(win32_err(path, "SetEntriesInAclW", rc));
     }
 
-    let rc = write_acl(
+    let result = write_acl(
         path,
         new_dacl,
         if inheritable {
@@ -1254,85 +1373,40 @@ pub fn apply_explicit_ace(
         let _ = LocalFree(Some(HLOCAL(sd.0)));
     }
 
-    if rc != ERROR_SUCCESS {
-        if rc.0 == 5 {
-            return Err(DaclError::WriteDacDenied {
-                path: path.to_path_buf(),
-                reason: format!("SetNamedSecurityInfoW: {rc:?}"),
-            });
-        }
-        return Err(win32_err(path, "SetNamedSecurityInfoW", rc));
-    }
-
-    Ok(())
+    result
 }
 
 // SetNamedSecurityInfoW reapplies inheritance to descendants even when the
 // newly added ACE is non-inheritable. Use the object-only API for ancestor
 // metadata grants and their restoration so unrelated subtrees are untouched.
-fn write_acl(
-    path: &Path,
-    acl: *const ACL,
-    propagation: AcePropagation,
-) -> windows::Win32::Foundation::WIN32_ERROR {
+fn write_acl(path: &Path, acl: *const ACL, propagation: AcePropagation) -> Result<(), DaclError> {
     use windows::Win32::Security::InitializeSecurityDescriptor;
     use windows::Win32::Security::SetFileSecurityW;
     use windows::Win32::Security::SetSecurityDescriptorDacl;
     use windows::Win32::Security::SECURITY_DESCRIPTOR;
     let path_w = wide(path);
-    if matches!(propagation, AcePropagation::Children) {
-        return unsafe {
-            SetNamedSecurityInfoW(
-                PCWSTR(path_w.as_ptr()),
-                SE_FILE_OBJECT,
-                DACL_SECURITY_INFORMATION,
-                None,
-                None,
-                Some(acl),
-                None,
-            )
-        };
-    }
-    let mut old_descriptor = PSECURITY_DESCRIPTOR(ptr::null_mut());
-    let rc = unsafe {
-        GetNamedSecurityInfoW(
-            PCWSTR(path_w.as_ptr()),
-            SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION,
-            None,
-            None,
-            None,
-            None,
-            &mut old_descriptor,
-        )
-    };
-    if rc != ERROR_SUCCESS {
-        return rc;
-    }
+    let old_descriptor = read_dacl_descriptor(path)?;
     let mut control = 0u16;
     let mut revision = 0;
-    let read_control = unsafe {
+    unsafe {
         windows::Win32::Security::GetSecurityDescriptorControl(
-            old_descriptor,
+            old_descriptor.0,
             &mut control,
             &mut revision,
         )
-    };
-    let read_error = unsafe { GetLastError() };
-    unsafe {
-        let _ = LocalFree(Some(HLOCAL(old_descriptor.0)));
     }
-    if read_control.is_err() {
-        return read_error;
+    .map_err(|error| win32_err_str(path, &format!("GetSecurityDescriptorControl: {error}")))?;
+    if matches!(propagation, AcePropagation::Children) && control & 0x1000 == 0 {
+        return propagate_acl(path, acl);
     }
     let mut descriptor = SECURITY_DESCRIPTOR::default();
     let descriptor = PSECURITY_DESCRIPTOR((&mut descriptor as *mut SECURITY_DESCRIPTOR).cast());
     unsafe {
-        if InitializeSecurityDescriptor(descriptor, 1).is_err()
-            || SetSecurityDescriptorDacl(descriptor, true, Some(acl), false).is_err()
-        {
-            return GetLastError();
-        }
+        InitializeSecurityDescriptor(descriptor, 1).map_err(|error| {
+            win32_err_str(path, &format!("InitializeSecurityDescriptor: {error}"))
+        })?;
+        SetSecurityDescriptorDacl(descriptor, true, Some(acl), false)
+            .map_err(|error| win32_err_str(path, &format!("SetSecurityDescriptorDacl: {error}")))?;
         // The object API preserves AUTO_INHERITED only when AUTO_INHERIT_REQ
         // accompanies it. Preserve that bookkeeping and the protection bit
         // while replacing the DACL; do not request a descendant tree walk.
@@ -1340,26 +1414,97 @@ fn write_acl(
         if bits & 0x0400 != 0 {
             bits |= 0x0100;
         }
-        if windows::Win32::Security::SetSecurityDescriptorControl(
+        windows::Win32::Security::SetSecurityDescriptorControl(
             descriptor,
             windows::Win32::Security::SECURITY_DESCRIPTOR_CONTROL(0x1500),
             windows::Win32::Security::SECURITY_DESCRIPTOR_CONTROL(bits),
         )
-        .is_err()
-        {
-            return GetLastError();
-        }
-        if SetFileSecurityW(
+        .map_err(|error| win32_err_str(path, &format!("SetSecurityDescriptorControl: {error}")))?;
+        if !SetFileSecurityW(
             PCWSTR(path_w.as_ptr()),
             DACL_SECURITY_INFORMATION,
             descriptor,
         )
         .as_bool()
         {
-            ERROR_SUCCESS
-        } else {
-            GetLastError()
+            return Err(acl_write_error(path, "SetFileSecurityW", GetLastError()));
         }
+    }
+    if matches!(propagation, AcePropagation::Children) && path.is_dir() {
+        // SetNamedSecurityInfoW turns historical inherited ACEs into explicit
+        // ACEs on a protected root. Protection blocks incoming inheritance,
+        // not outgoing grants. Refresh unprotected children from the updated
+        // parent instead; Windows performs the remaining descendant walk.
+        for child in fs::read_dir(path)? {
+            let child = child?.path();
+            let metadata = fs::symlink_metadata(&child)?;
+            if std::os::windows::fs::MetadataExt::file_attributes(&metadata) & 0x400 != 0 {
+                continue;
+            }
+            let _guard = PathMutexGuard::acquire(&child)?;
+            let descriptor = read_dacl_descriptor(&child)?;
+            let mut control = 0;
+            let mut revision = 0;
+            unsafe {
+                windows::Win32::Security::GetSecurityDescriptorControl(
+                    descriptor.0,
+                    &mut control,
+                    &mut revision,
+                )
+            }
+            .map_err(|error| {
+                win32_err_str(&child, &format!("GetSecurityDescriptorControl: {error}"))
+            })?;
+            if control & 0x1000 != 0 {
+                continue;
+            }
+            let mut present = windows::core::BOOL::default();
+            let mut defaulted = windows::core::BOOL::default();
+            let mut acl = ptr::null_mut();
+            unsafe {
+                windows::Win32::Security::GetSecurityDescriptorDacl(
+                    descriptor.0,
+                    &mut present,
+                    &mut acl,
+                    &mut defaulted,
+                )
+            }
+            .map_err(|error| {
+                win32_err_str(&child, &format!("GetSecurityDescriptorDacl: {error}"))
+            })?;
+            propagate_acl(&child, acl)?;
+        }
+    }
+    Ok(())
+}
+
+fn propagate_acl(path: &Path, acl: *const ACL) -> Result<(), DaclError> {
+    let result = unsafe {
+        SetNamedSecurityInfoW(
+            PCWSTR(wide(path).as_ptr()),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            None,
+            None,
+            Some(acl),
+            None,
+        )
+    };
+    if result == ERROR_SUCCESS {
+        Ok(())
+    } else {
+        Err(acl_write_error(path, "SetNamedSecurityInfoW", result))
+    }
+}
+
+fn acl_write_error(path: &Path, operation: &str, error: WIN32_ERROR) -> DaclError {
+    if error.0 == 5 {
+        DaclError::WriteDacDenied {
+            path: path.to_path_buf(),
+            reason: format!("{operation}: {error:?}"),
+        }
+    } else {
+        win32_err(path, operation, error)
     }
 }
 
@@ -1688,6 +1833,7 @@ fn restore_one(entry: &AppliedAce) -> Result<Option<String>, DaclError> {
             AcePropagation::Object
         },
     )?;
+    restore_legacy_inheritance(&entry.legacy_inheritance)?;
     Ok(None)
 }
 
@@ -2097,20 +2243,10 @@ fn replace_explicit_aces_for_sid(
     }
     result.and_then(|new_acl_dwords| {
         // `new_acl_dwords` is the freshly-built ACL buffer; we apply
-        // it via `SetNamedSecurityInfoW` outside the inner helper so
+        // it outside the inner helper so
         // the SD cleanup above can still run on the early-return path.
         let new_acl_ptr = new_acl_dwords.as_ptr() as *const ACL;
-        let rc = write_acl(path, new_acl_ptr, propagation);
-        if rc != ERROR_SUCCESS {
-            if rc.0 == 5 {
-                return Err(DaclError::WriteDacDenied {
-                    path: path.to_path_buf(),
-                    reason: format!("SetNamedSecurityInfoW: {rc:?}"),
-                });
-            }
-            return Err(win32_err(path, "SetNamedSecurityInfoW", rc));
-        }
-        Ok(())
+        write_acl(path, new_acl_ptr, propagation)
     })
 }
 
@@ -2434,6 +2570,10 @@ fn process_creation_filetime() -> Result<u64, DaclError> {
 // -------------------------------------------------------------------------
 
 #[cfg(test)]
+#[path = "filesystem_dacl_tests.rs"]
+mod inheritance_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -2497,6 +2637,7 @@ mod tests {
                     access_mask: 0x01FF,
                     inherit_flags: (OBJECT_INHERIT_ACE.0 | CONTAINER_INHERIT_ACE.0) as u8,
                 }],
+                legacy_inheritance: Vec::new(),
             }],
         };
         let bytes = serde_json::to_vec(&s).unwrap();
@@ -3180,6 +3321,7 @@ mod tests {
                 ace_type: AceType::Allow,
                 inheritable: false,
                 prior_state: Vec::new(),
+                legacy_inheritance: Vec::new(),
             }],
         };
         write_state_file(&synthetic, &s).unwrap();

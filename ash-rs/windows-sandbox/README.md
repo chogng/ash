@@ -36,11 +36,12 @@ bazel build //ash-rs/windows-sandbox:ash-windows-sandbox
 
 需要真实账户的测试显式标为忽略，须在获准配置的验收环境执行。`scripts/test-windows-sandbox.ps1` 提供服务与账户安装、全部用例、运行器及服务程序更新后执行，以及 finally 清理入口；调用方须已获得安装与验收授权。
 
-可显式提供当前调用者已经能运行的 WSL2 发行版，增加 `wsl.exe --distribution` 与 `--system` 的账户边界回归。也可提供在宿主可达、支持 TCP/UDP DNS 的端点，增加 `tests/network_matrix.rs`；它验证 Denied/Managed/Allowed 的 IPv4/IPv6、HTTP/CONNECT/SOCKS 地址与域名授权、原始 A/AAAA DNS、后代继承和监听限制。每个目标先在沙箱外验证可达。本机矩阵已通过，具体证据和公网 IPv6 限制见 [补充验收](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-psecwslc-与网络补充验收)。默认 CI 入口不安装 WSL，也不把缺少 WSL 或 DNS 对照的机器算作这些用例通过。
+可显式提供当前调用者已经能运行的 WSL2 发行版，增加 `wsl.exe --distribution` 与 `--system` 的账户边界回归。也可提供在宿主可达、支持 TCP/UDP DNS 的端点，增加 `tests/network_matrix.rs`；它验证 Denied/Managed/Allowed 的 IPv4/IPv6、HTTP/CONNECT/SOCKS 地址与域名授权、原始 A/AAAA DNS、后代继承和监听限制。`-NetworkPublicIpv6Http` 另验证可达公网 IPv6 的 HTTP 往返及直连和代理拒绝。每个目标先在沙箱外验证可达。本机已通过临时隧道出口的公网 IPv6 矩阵，文件作用域用例同时覆盖有无 `AI` 标记；具体证据见 [ACL 与 IPv6 复测](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-acl-恢复与公网-ipv6-复测)。默认 CI 入口不安装 WSL，也不把缺少 WSL 或 DNS 对照的机器算作这些用例通过。
 
 ```powershell
 ./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -WslDistribution AshAcceptance
 ./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -NetworkDnsServer '<resolver-ip>:53'
+./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -NetworkDnsServer '[2606:4700:4700::1111]:53' -NetworkPublicIpv6Http '[2606:4700:4700::1111]:80'
 ```
 
 网络连接进程归属实现参考 Codex `da20788df913189878ebca7f4963d8a363ee6bf2`；对应许可与归属保存在 `LICENSE-APACHE` 和 `NOTICE`。文件 ACL 日志复用固定版本的 `wxc_common`，不引入 Codex 的协议或产品配置。
