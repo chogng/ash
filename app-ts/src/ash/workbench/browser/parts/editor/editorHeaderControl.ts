@@ -26,6 +26,7 @@ import { EditorBreadcrumbsControl } from "./breadcrumbsControl.js";
 import { BreadcrumbsModel, type FileElement, type SymbolElement } from "./breadcrumbsModel.js";
 import type { EditorInput } from "./editorInput.js";
 import type { IEditorPane } from "./editorPane.js";
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from '../../../services/editor/common/editorConfiguration.js';
 
 export interface EditorHeaderActions {
@@ -51,13 +52,14 @@ export class EditorHeaderControl extends Disposable {
 	constructor(
 		private readonly titleContainer: HTMLElement,
 		tabsRow: HTMLElement,
-		actions?: EditorHeaderActions,
-		configurationService?: IConfigurationService,
-		onSelectBreadcrumb?: (element: FileElement) => void,
-		group?: EditorGroupId,
-		breadcrumbsService?: IBreadcrumbsService,
-		private readonly languageFeatures?: ILanguageFeaturesService,
-		private readonly showSymbolPicker?: (symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void,
+		actions: EditorHeaderActions | undefined,
+		configurationService: IConfigurationService | undefined,
+		onSelectBreadcrumb: ((element: FileElement) => void) | undefined,
+		group: EditorGroupId | undefined,
+		breadcrumbsService: IBreadcrumbsService | undefined,
+		private readonly languageFeatures: ILanguageFeaturesService | undefined,
+		private readonly showSymbolPicker: ((symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void) | undefined,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
 		const actionsContainer = h(titleContainer.ownerDocument, "div");
@@ -85,7 +87,7 @@ export class EditorHeaderControl extends Disposable {
 				},
 			));
 		this._register(toDisposable(() => actionsContainer.remove()));
-		this.breadcrumbs = this._register(new EditorBreadcrumbsControl(titleContainer, onSelectBreadcrumb, element => this.selectSymbol(element)));
+		this.breadcrumbs = this._register(instantiationService.createInstance(EditorBreadcrumbsControl, titleContainer, onSelectBreadcrumb, (element: SymbolElement) => this.selectSymbol(element)));
 		if (group !== undefined && breadcrumbsService) this._register(breadcrumbsService.register(group, this.breadcrumbs));
 		const configuration = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			.getConfiguration(BreadcrumbsEnabledConfiguration) as IRegisteredConfiguration<boolean> | undefined;

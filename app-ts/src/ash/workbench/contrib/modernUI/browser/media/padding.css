@@ -1,6 +1,11 @@
-.ash-workbench.modern-ui .ash-sidebar-part > .ash-composite-content {
-	box-sizing: border-box;
-	padding: 0 var(--ash-spacing-size80);
+.ash-workbench.modern-ui .ash-sidebar-part .ash-pane-view-header {
+	margin: 0 var(--ash-spacing-size80);
+}
+
+/* Inset row hit areas without shrinking the viewport that positions the scrollbar. */
+.ash-workbench.modern-ui .ash-sidebar-part .ash-list-row {
+	margin: 0 var(--ash-spacing-size80);
+	width: calc(100% - 2 * var(--ash-spacing-size80));
 }
 
 .ash-workbench.modern-ui :is(.ash-sidebar-composite-bar-top, .ash-sidebar-composite-bar-bottom) {

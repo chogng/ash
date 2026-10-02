@@ -5,6 +5,57 @@ import { fileURLToPath } from 'node:url';
 
 const pageErrors = new WeakMap<object, string[]>();
 
+test('symbol highlights stay on the symbol when the gutter, minimap and horizontal scroll change', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.getModel()!.setLanguage('plaintext');
+		editor.updateOptions({ wordWrap: 'off', smoothScrolling: false, occurrencesHighlight: 'singleFile', occurrencesHighlightDelay: 0, selectionHighlight: false });
+		editor.setValue('use crate::UserAllowlist;\n    user_allowlist: UserAllowlist,\n' + 'long line '.repeat(100));
+		editor.setPosition({ lineNumber: 2, column: 24 });
+		editor.focus();
+	});
+	const editor = page.locator('.stanza-editor');
+	await expect(editor.locator('.cdr.word-highlight-text')).toHaveCount(2);
+	for (const side of ['disabled', 'left', 'right'] as const) {
+		for (const gutter of [true, false]) {
+			for (const scrollLeft of [0, 80]) {
+				await page.evaluate(({ side, gutter, scrollLeft }) => {
+					const control = window.ashTextModelIntegration.getControl();
+					control.updateOptions({ lineNumbers: gutter ? 'on' : 'off', glyphMargin: gutter, fontSize: gutter ? 20 : 16, minimap: { enabled: side !== 'disabled', side: side === 'left' ? 'left' : 'right' } });
+					control.layout({ width: gutter ? 700 : 420, height: 200 });
+					control.setScrollPosition({ scrollLeft, scrollTop: 0 });
+				}, { side, gutter, scrollLeft });
+				await expect.poll(() => editor.evaluate(root => {
+					return [...root.querySelectorAll<HTMLElement>('.cdr.word-highlight-text')].map(highlight => {
+						const lineIndex = highlight.parentElement!.dataset.lineIndex;
+						const text = root.querySelector(`.view-lines > .view-line[data-line-index="${lineIndex}"] > .stanza-editor-line-text`)!;
+						const start = text.textContent!.indexOf('UserAllowlist');
+						const end = start + 'UserAllowlist'.length;
+						const range = document.createRange();
+						const walker = document.createTreeWalker(text, NodeFilter.SHOW_TEXT);
+						let offset = 0;
+						for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+							const length = node.textContent!.length;
+							if (start >= offset && start < offset + length) range.setStart(node, start - offset);
+							if (end > offset && end <= offset + length) range.setEnd(node, end - offset);
+							offset += length;
+						}
+						const symbol = range.getBoundingClientRect();
+						const background = highlight.getBoundingClientRect();
+						const leftDelta = background.left - symbol.left;
+						const rightDelta = background.right - symbol.right;
+						return { lineIndex, leftDelta: Math.abs(leftDelta) < 1 ? 0 : leftDelta, rightDelta: Math.abs(rightDelta) < 1 ? 0 : rightDelta };
+					});
+				}), { message: `symbol geometry with minimap=${side}, gutter=${gutter}, scrollLeft=${scrollLeft}` }).toEqual([
+					{ lineIndex: '0', leftDelta: 0, rightDelta: 0 },
+					{ lineIndex: '1', leftDelta: 0, rightDelta: 0 },
+				]);
+			}
+		}
+	}
+});
+
 test('line numbers and glyph markers share text coordinates after vertical and horizontal scrolling', async ({ page }) => {
 	await openEditor(page);
 	await page.evaluate(() => {
@@ -948,16 +999,12 @@ test("cursor layer retains nodes, animates stable moves, and resolves multi-curs
 	await expect(retainedCaret).toHaveAttribute("data-retained-identity", "true");
 });
 
-test("text-model editor projects revision-bound Rust syntax, diagnostics, folding, and symbols", async ({ page }) => {
+test("text-model editor supports Rust syntax and symbol navigation without gutter symbol icons", async ({ page }) => {
 	await openEditor(page);
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSyntaxAnalysisCount())).toBeGreaterThan(0);
 	await expect(page.locator(".stanza-editor-token.token-keyword")).toHaveText("fn");
 	await expect(page.locator(".cdr.squiggly-error")).toHaveCount(1);
-	const symbolIcon = page.locator(".stanza-editor-symbol-icon");
-	await expect(symbolIcon).toHaveCount(1);
-	await expect(symbolIcon).toHaveAttribute("title", "main");
-	await expect(symbolIcon).toHaveClass(/\bcldr\b/u);
-	await expect(symbolIcon).toHaveClass(/\bstanza-editor-line-decoration\b/u);
+	await expect(page.locator(".stanza-editor-symbol-icon")).toHaveCount(0);
 
 	const input = page.locator(".stanza-editor-input");
 	await input.focus();
@@ -1073,6 +1120,41 @@ test('editor auto scrollbars reveal on hover, focus and scrolling and remain dra
 	expect(remainingTracks).toBe(0);
 });
 
+test('editor vertical scrollbar has an opaque overview background with and without the minimap', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.setValue(Array.from({ length: 100 }, () => 'long text '.repeat(100)).join('\n'));
+		editor.updateOptions({ overviewRulerBorder: false, hideCursorInOverviewRuler: true });
+	});
+	const overview = page.locator('.decorationsOverviewRuler');
+	for (const theme of ['dark', 'light', 'contrast', 'contrastLight'] as const) {
+		await page.evaluate(theme => window.ashTextModelIntegration.setTheme(theme), theme);
+		for (const side of ['disabled', 'left', 'right'] as const) {
+			await page.evaluate(side => window.ashTextModelIntegration.getControl().updateOptions({
+				minimap: { enabled: side !== 'disabled', side: side === 'left' ? 'left' : 'right' },
+			}), side);
+			await expect.poll(() => overview.evaluate((canvas: HTMLCanvasElement) => {
+				const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+				const probe = document.createElement('canvas').getContext('2d')!;
+				probe.fillStyle = getComputedStyle(canvas.closest('.stanza-editor')!).backgroundColor;
+				probe.fillRect(0, 0, 1, 1);
+				const background = probe.getImageData(0, 0, 1, 1).data;
+				const sample = canvas.getContext('2d')!.getImageData(2, Math.floor(canvas.height / 2), 1, 1).data;
+				return {
+					matchesEditor: sample.every((value, index) => value === background[index]),
+					opaque: pixels.length > 0 && pixels.every((value, index) => index % 4 !== 3 || value === 255),
+				};
+			}), { message: `opaque scrollbar background for ${theme}, minimap=${side}` }).toEqual({
+				matchesEditor: true,
+				opaque: true,
+			});
+		}
+	}
+	await page.evaluate(() => window.ashTextModelIntegration.setSelectionColors({ 'editorOverviewRuler.background': '#123456' }));
+	await expect.poll(() => overview.evaluate((canvas: HTMLCanvasElement) => Array.from(canvas.getContext('2d')!.getImageData(2, 2, 1, 1).data))).toEqual([18, 52, 86, 255]);
+});
+
 test('editor scrollbar track colors follow theme overrides in all color schemes', async ({ page }) => {
 	await openEditor(page);
 	await page.evaluate(() => {
@@ -1177,6 +1259,7 @@ test('editor scrollbar uses wheel policy, slider dimensions and page clicks from
 });
 
 test('smooth scrolling keeps continuous and subpixel wheel input immediate', async ({ page }) => {
+	await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
 	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
@@ -1184,8 +1267,7 @@ test('smooth scrolling keeps continuous and subpixel wheel input immediate', asy
 	});
 	const editor = page.locator('.stanza-editor');
 	await expect(editor.getByRole('scrollbar', { name: 'Vertical scrollbar' })).toBeVisible();
-	await page.clock.install();
-	await page.clock.pauseAt(new Date());
+	await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
 	for (const [deltaY, expected] of [[12, 12], [0.2, 13], [-0.2, 12]]) {
 		await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
 		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(expected);
@@ -1265,14 +1347,14 @@ test('editor scrollbar arrows support click, hold, keyboard and runtime removal'
 });
 
 test('editor inertial scrolling decays and stops on reversal, direct input and configuration changes', async ({ page }) => {
+	await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
 	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
 		window.ashTextModelIntegration.updateOptions({ inertialScroll: true, smoothScrolling: false });
 	});
 	const editor = page.locator('.stanza-editor');
-	await page.clock.install();
-	await page.clock.pauseAt(new Date());
+	await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
 	await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 	await page.clock.runFor(160);
 	const forward = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
@@ -1321,13 +1403,13 @@ test('editor inertial scrolling decays and stops on reversal, direct input and c
 });
 
 test('editor distinguishes accelerating pixel input from fixed wheel steps before applying sensitivity', async ({ page }) => {
+	await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
 	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 1000 }, () => 'x'.repeat(200)).join('\n'));
 		window.ashTextModelIntegration.updateOptions({ inertialScroll: true, smoothScrolling: false, mouseWheelScrollSensitivity: 2 });
 	});
-	await page.clock.install();
-	await page.clock.pauseAt(new Date());
+	await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
 	const editor = page.locator('.stanza-editor');
 	// At the top edge the same unconsumed event reaches both wheel listeners.
 	await editor.dispatchEvent('wheel', { deltaY: -60, deltaMode: 0 });

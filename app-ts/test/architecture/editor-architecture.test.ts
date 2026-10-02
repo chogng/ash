@@ -233,8 +233,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewParts/whitespace/whitespace.css",
 		"contrib/folding/browser/foldingDecorations.ts",
 		"contrib/folding/browser/folding.css",
-		"contrib/symbolIcons/browser/symbolIcons.ts",
-		"contrib/symbolIcons/browser/symbolIcons.css",
 		"browser/viewParts/margin/margin.ts",
 		"browser/viewParts/glyphMargin/glyphMargin.ts",
 		"browser/viewParts/marginDecorations/marginDecorations.ts",
@@ -554,10 +552,6 @@ test("ViewLine owns text rows while overlays own their row DOM", () => {
 	assert.doesNotMatch(viewCursors, /new ViewPartRows/u);
 	const glyphMargin = readFileSync(join(editorRoot, 'browser/viewParts/glyphMargin/glyphMargin.ts'), 'utf8');
 	assert.match(glyphMargin, /class DedupOverlay extends DynamicViewOverlay/u);
-	const symbolIcons = readFileSync(join(editorRoot, "contrib/symbolIcons/browser/symbolIcons.ts"), "utf8");
-	assert.match(symbolIcons, /linesDecorationsClassName/u);
-	assert.doesNotMatch(symbolIcons, /DecorationPresentation|DecorationSource/u);
-	assert.doesNotMatch(symbolIcons, /querySelector|\bh\(/u);
 });
 
 test("Stanza owns its public protocol and DOM vocabulary without renaming the editor domain", () => {

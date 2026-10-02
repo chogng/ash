@@ -218,12 +218,8 @@ class OverviewRulerSettings {
 		this.lanes = options.get(EditorOption.overviewRulerLanes);
 		this.renderBorder = options.get(EditorOption.overviewRulerBorder);
 		this.borderColor = context.theme.getColor(editorOverviewRulerBorder)?.toString() ?? null;
-		const configuredBackground = context.theme.getColor(editorOverviewRulerBackground);
-		this.backgroundColor = configuredBackground && !configuredBackground.isTransparent()
-			? configuredBackground.toString()
-			: (options.get(EditorOption.minimap).enabled && options.get(EditorOption.minimap).side === 'right'
-				? TokenizationRegistry.getDefaultBackground()?.toString() ?? null
-				: null);
+		// The overview layer masks text beneath the track while leaving markers visible through the scrollbar.
+		this.backgroundColor = context.theme.getColor(editorOverviewRulerBackground)?.toString() ?? null;
 		this.hideCursor = options.get(EditorOption.hideCursorInOverviewRuler);
 		this.cursorColorSingle = context.theme.getColor(editorCursorForeground)?.transparent(0.7).toString() ?? null;
 		this.cursorColorPrimary = context.theme.getColor(editorMultiCursorPrimaryForeground)?.transparent(0.7).toString() ?? null;

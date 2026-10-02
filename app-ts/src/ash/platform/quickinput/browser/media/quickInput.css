@@ -106,6 +106,53 @@
   max-width: 100%;
 }
 
+.ash-quick-pick-list-compact-menu .ash-quick-pick-row-content {
+  min-height: var(--ash-spacing-size280);
+  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+}
+
+.ash-quick-pick-list-compact-menu {
+  padding: var(--ash-spacing-size40);
+}
+
+.ash-quick-pick-list-compact-menu .ash-quick-pick-list-items {
+  padding-right: 0;
+}
+
+/* Reserve room for the scrollbar inside the row, keeping menu backgrounds aligned. */
+.ash-quick-pick-list-compact-menu.scrolling .ash-quick-pick-row-content {
+  padding-right: calc(var(--ash-spacing-size80) + var(--ash-scrollbar-size));
+}
+
+.ash-quick-pick-list-compact-menu .ash-quick-pick-row-text {
+  flex-direction: row;
+  align-items: center;
+}
+
+/* Keep searchable metadata in the option's accessible name without adding another line. */
+.ash-quick-pick-list-compact-menu .ash-quick-pick-row-detail {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ash-quick-pick-row-check {
+  display: inline-flex;
+  width: var(--ash-spacing-size160);
+  height: var(--ash-spacing-size160);
+  flex: 0 0 var(--ash-spacing-size160);
+  align-items: center;
+  justify-content: center;
+  visibility: hidden;
+}
+
+.ash-quick-pick-row-content.picked > .ash-quick-pick-row-check {
+  visibility: visible;
+}
+
 .ash-quick-pick-row-label {
   overflow: hidden;
   flex: 0 1 auto;

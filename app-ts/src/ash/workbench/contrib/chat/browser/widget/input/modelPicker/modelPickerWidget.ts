@@ -1,5 +1,6 @@
 import './modelPicker.css';
 import { Button } from '../../../../../../../base/browser/ui/button/button.js';
+import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
 import { Switch } from '../../../../../../../base/browser/ui/toggle/toggle.js';
 import { addDisposableListener, h, stopEvent } from '../../../../../../../base/browser/dom.js';
 import { AnchorPosition, ContextView, ContextViewFocusRestore } from '../../../../../../../base/browser/ui/contextview/contextview.js';
@@ -11,7 +12,7 @@ import { AccessibleViewRegistry } from '../../../../../../../platform/accessibil
 import { QuickInputList } from '../../../../../../../platform/quickinput/browser/quickInputList.js';
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
-import { modelPickerEffortLabel } from './modelPickerModelConfig.js';
+import { ILanguageModelsService } from '../../../../common/languageModels.js';
 import { ModelPickerDetailsMenu } from './modelPickerHover.js';
 import { buildModelPickerItems, type ModelPickerItem } from './modelPickerItems.js';
 
@@ -22,7 +23,7 @@ export class ModelPickerWidget extends Disposable {
 	private readonly popup = this._register(new MutableDisposable<DisposableStore>());
 	private readonly contextView: ContextView;
 
-	constructor(private readonly delegate: IModelPickerDelegate, @IContextViewService contextViewService: IContextViewService, @IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService) {
+	constructor(private readonly delegate: IModelPickerDelegate, @IContextViewService contextViewService: IContextViewService, @IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService) {
 		super();
 		this.contextView = this._register(new ContextView(contextViewService.container));
 	}
@@ -58,15 +59,10 @@ export class ModelPickerWidget extends Disposable {
 						{ type },
 						() => {
 							if (type === AccessibleViewType.Help) {
-								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow opens details. For the current model, use Up and Down Arrow to change thinking level. Alt+Left Arrow returns to search. Escape closes the menu.');
+								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow opens model settings. Space toggles Fast or 1M context when supported. Use the thinking effort menu beside the model button to change thinking level. Alt+Left Arrow returns to search. Escape closes the menu.');
 							}
-							const selected = this.delegate.getSelectedModel();
-							const entry = this.delegate.getModels().find(model => model.model.provider === selected?.provider && model.model.model === selected?.model);
-							const currentEffort = !this.delegate.isAutomaticModel() && entry?.supportedReasoningEfforts?.length
-								? localize('chat.modelPicker.effortAriaLabel', 'Thinking Effort: {0}', modelPickerEffortLabel(this.delegate.getSelectedReasoningEffort() ?? entry.modelReasoningEffort))
-								: '';
-							return [content.innerText, currentEffort].filter(Boolean).join('\n');
-							},
+							return content.innerText;
+						},
 						() => { if (active.isConnected) { active.focus(); } },
 						AccessibilityVerbositySettingId.ChatModelConfiguration,
 					);
@@ -131,10 +127,18 @@ export class ModelPickerWidget extends Disposable {
 		listContainer.className = 'ash-chat-model-picker-list';
 		const footer = h(ownerDocument, 'div');
 		footer.className = 'ash-chat-model-picker-footer';
-		const addModels = h(ownerDocument, 'button');
-		addModels.type = 'button';
-		addModels.textContent = localize('chat.modelPicker.addModels', 'Add Models');
-		footer.append(addModels);
+		session.add(new Menu(footer, {
+			actions: [{
+				id: 'ash.chat.input.addModels',
+				label: localize('chat.modelPicker.addModels', 'Add Models'),
+				tooltip: '',
+				enabled: true,
+				run: () => {
+					this.contextView.hide();
+					return this.delegate.openSettings();
+				},
+			}],
+		}));
 		const error = h(ownerDocument, 'div');
 		error.className = 'ash-chat-model-picker-error';
 		error.setAttribute('role', 'status');
@@ -145,16 +149,14 @@ export class ModelPickerWidget extends Disposable {
 		footer.hidden = autoSwitch.checked;
 
 		if (!this.showContextView(anchor, content, session)) return;
-		const list = session.add(new QuickInputList<ModelPickerItem>(listContainer, 'menu'));
+		const list = session.add(new QuickInputList<ModelPickerItem>(listContainer, 'compactMenu'));
 		const detailsMenu = session.add(new ModelPickerDetailsMenu(content));
 		let hasNavigated = false;
+		let updatingModels = false;
 		const showDetails = (item: ModelPickerItem, row: HTMLElement): void => {
-			const selected = this.delegate.getSelectedModel();
-			const isCurrent = !this.delegate.isAutomaticModel() && selected?.provider === item.entry.model.provider && selected.model === item.entry.model.model;
 			detailsMenu.show({
 				entry: item.entry,
-				selectedEffort: isCurrent ? this.delegate.getSelectedReasoningEffort() : undefined,
-				selectReasoningEffort: isCurrent ? effort => this.delegate.selectReasoningEffort(effort) : undefined,
+				setPreferences: update => this.languageModels.setModelPreferences(item.entry.model, update),
 			}, row);
 		};
 		const showActiveDetails = (): void => {
@@ -166,6 +168,7 @@ export class ModelPickerWidget extends Disposable {
 		session.add(list.onDidChangeActive(({ item, rowId }) => {
 			if (rowId) search.setAttribute('aria-activedescendant', rowId);
 			else search.removeAttribute('aria-activedescendant');
+			if (updatingModels) { return; }
 			if (hasNavigated && item && rowId) {
 				const row = ownerDocument.getElementById(rowId);
 				if (row) showDetails(item, row);
@@ -192,8 +195,8 @@ export class ModelPickerWidget extends Disposable {
 			}
 			if (modeChanged || modelsChanged || selectionChanged) {
 				const activeModel = list.activeItem?.entry.model;
-				const detailsHadFocus = detailsMenu.domNode.contains(ownerDocument.activeElement);
-				// Configuration changes retain the list and card DOM, so the focused radio stays focused.
+				// Restoring the active row must not replace the card through intermediate list selections.
+				updatingModels = true;
 				list.items = isAutomatic ? [] : buildModelPickerItems(models, selected);
 				const activeIndex = list.visibleItems.findIndex(item => item.entry.model.provider === activeModel?.provider && item.entry.model.model === activeModel?.model);
 				const currentIndex = list.activeItem ? list.visibleItems.indexOf(list.activeItem) : -1;
@@ -201,7 +204,7 @@ export class ModelPickerWidget extends Disposable {
 					for (let index = currentIndex; index < activeIndex; index++) { list.focusNext(); }
 					for (let index = currentIndex; index > activeIndex; index--) { list.focusPrevious(); }
 				}
-				if (detailsHadFocus && !isAutomatic) { detailsMenu.focus(); }
+				updatingModels = false;
 			}
 			renderedModels = models;
 			renderedSelection = selected;
@@ -239,10 +242,6 @@ export class ModelPickerWidget extends Disposable {
 					if (hadFocus) autoSwitch.focus();
 				}
 			}
-		}));
-		session.add(addDisposableListener(addModels, 'click', () => {
-			this.contextView.hide();
-			void this.delegate.openSettings();
 		}));
 		session.add(addDisposableListener(search, 'input', () => {
 			hasNavigated = false;

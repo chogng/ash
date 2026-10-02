@@ -7,6 +7,9 @@ export interface ModelCatalogEntry {
 	readonly displayName: string;
 	readonly discovered?: boolean;
 	readonly contextWindow?: number | null;
+	readonly maximumContextWindow?: number | null;
+	readonly supportsFast?: boolean;
+	readonly fast?: boolean;
 	readonly supportedReasoningEfforts?: readonly ModelReasoningEffort[];
 	readonly modelReasoningEffort?: ModelReasoningEffort;
 }

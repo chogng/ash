@@ -1,5 +1,19 @@
 # Editor API 对齐状态
 
+## Token 清理与滚动测试（2026-10-01）
+
+移除行 token provider 后，模型释放了行 tokenizer，但异步 token 结果仓库没有结果，`clear()` 不会发事件。渲染缓存因此保留旧着色。`TokenizationTextModelPart` 现在统一清理 provider、语言支持和语法 provider 变更产生的词法状态：清理异步结果时暂时保留行后端，随后释放后端并发布一次变更，沿既有模型事件刷新渲染缓存。三个回归场景在修改前均观察到模型 token 已为空、渲染 token 未清除且没有通知；修改后全部通过。
+
+滚动测试在编辑器启动后替换时钟，导致既有动画帧队列混用真实时间和模拟时间，且 `pauseAt(new Date())` 的目标时间可能已过去。三项滚动测试改为导航前安装固定起点的时钟，页面启动后暂停到同一模拟时间；滚动实现没有改动。
+
+25 项 token 单测通过，token 清理和三项滚动场景各复跑 10 次，40 次 Chromium 验证通过。单测定向编译继承 `tsconfig.test.json` 的全部编译选项，编译 token 测试和原 runner 所需的主题依赖；没有跳过类型检查。完整单测编译当时被聊天测试缺少 `setModelPreferences` 挡住，桌面构建被聊天测试旧 `selectedEffort` 参数挡住。Stanza 构建与类型检查、结构/CSS/台账及 diff 检查通过。首次全量浏览器运行期间，构建输出目录被清理，页面文件丢失并导致测试服务器退出，该次运行已停止。随后使用同一 Vite 配置、输出规则和 Playwright 配置，仅将构建产物放到独立临时目录；完整浏览器 736 项全部通过（3.0 分钟）。
+
+## 编辑器边栏符号与活动引导线（2026-10-01）
+
+按用户确认移除 Ash 的边栏文档符号功能：删除 `SymbolIconsController`、贡献入口、字符样式、`showSymbolIcons` 选项与对应旧测试。文档符号仍由既有 Outline 和 Quick Access 使用，不再生成边栏装饰。该功能虽占用了上游 `contrib/symbolIcons/browser/symbolIcons.ts` 和 CSS 的同路径，职责并不相同；上游文件负责大纲、面包屑和补全的符号图标主题，不是边栏图标控制器，后续若接入该主题职责应在原路径独立实现。
+
+缩进、括号竖线和括号横线在活动状态保持标准 1px 线宽，仅切换现有主题颜色。更新 Chromium 的四种主题、指针编辑、折叠和符号导航验证，并加入生产 Web、Electron UI、连接 App Server 的 Electron 共用的活动引导线场景。生产构建、Stanza 构建及类型检查、结构/CSS/台账检查通过；54 项定向单测、8 项定向 Chromium 场景及生产 Web、Electron UI、连接 App Server 的 Electron 各 1 项场景通过。全量浏览器为 732 通过、3 失败；失败项复跑为 1 通过、2 失败，后两项 token provider 移除与滚动计时错误在恢复本批修改前的代码时同样复现；后续修复见上节。
+
 ## 完整浏览器检查失败修复（2026-09-30）
 
 查找栏焦点、缩放、括号配置和文件剪贴板的失败已修复。以下变更均落在双方已有的同路径文件，保留原状态和 DOM owner，没有新增接口或模块。
@@ -795,7 +809,7 @@ Workbench 准入：`services/language/browser/appServerLanguageProviders.ts` 与
 | `contrib/rename/common/languageRename.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
 | `contrib/rename/test/browser/renameController.test.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
 | `contrib/smartSelect/common/selectionRanges.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
-| `contrib/symbolIcons/browser/symbolIcons.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/symbolIcons/browser/symbolIcons.ts` | 已移除本地边栏实现 | 2026-10-01 按用户确认删除边栏控制器；上游同路径的符号主题职责尚未接入，不能视为已对齐。 |
 | `editor.api.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
 | `standalone/browser/standaloneLanguages.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
 | `app-ts/src/ash/workbench/api/browser/extensionHostLanguageBridge.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
@@ -1905,8 +1919,6 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/suggest/browser/suggestController.ts` | 2 / 3 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `contrib/suggest/browser/suggestModel.ts` | 3 / 4 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `contrib/suggest/browser/suggestWidget.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
-| `contrib/symbolIcons/browser/symbolIcons.contribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
-| `contrib/symbolIcons/browser/symbolIcons.ts` | 1 / 0 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
 | `contrib/textEditorCapabilities.ts` | 7 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
 | `contrib/toggleTabFocusMode/browser/toggleTabFocusMode.ts` | 1 / 0 | 人工检查：正式 action/keybinding 切换 TabFocus 并发布无障碍提示。 |
 | `contrib/tokenization/browser/tokenization.contribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |

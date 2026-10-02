@@ -5,6 +5,8 @@ import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IQuickPickItem, IQuickPickItemButton } from "../common/quickInput.js";
 import { h, stopEvent } from "../../../base/browser/dom.js";
 import { localize } from '../../../nls.js';
+import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
 
 export interface QuickInputListActiveChangeEvent<TItem> {
 	readonly item: TItem | undefined;
@@ -32,12 +34,13 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			this._onDidChangeActive.event;
 	readonly onDidTriggerItemButton = this.buttonEmitter.event;
 
-	constructor(container: HTMLElement, presentation: 'quickPick' | 'menu' = 'quickPick') {
+	constructor(container: HTMLElement, presentation: 'quickPick' | 'menu' | 'compactMenu' = 'quickPick') {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = 'ash-quick-pick-list';
-		if (presentation === 'menu') this.element.classList.add('ash-quick-pick-list-menu');
+		if (presentation !== 'quickPick') this.element.classList.add('ash-quick-pick-list-menu');
+		if (presentation === 'compactMenu') this.element.classList.add('ash-quick-pick-list-compact-menu');
 		this._register(toDisposable(() => this.element.remove()));
 		container.append(this.element);
 
@@ -107,6 +110,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this.maxHeight = maxHeight;
 		if (this.list.domNode.hidden) return;
 		const contentHeight = this.list.element.scrollHeight;
+		this.element.classList.toggle('scrolling', contentHeight > maxHeight);
 		let height = Math.min(contentHeight, maxHeight);
 		if (height < contentHeight) {
 			let fullRowsHeight = 0;
@@ -156,6 +160,14 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			ownerDocument,
 		);
 		content.append(text);
+		if (item.picked !== undefined) {
+			content.classList.toggle('picked', item.picked);
+			const check = h(ownerDocument, 'span');
+			check.className = 'ash-quick-pick-row-check';
+			check.setAttribute('aria-hidden', 'true');
+			appendIcon(Lxicon.check, check);
+			content.append(check);
+		}
 		if (item.keybinding) {
 			const keybinding = h(ownerDocument, "kbd");
 			keybinding.className = "ash-quick-pick-row-keybinding";

@@ -31,7 +31,7 @@ export class ModelPickerDetailsMenu extends Disposable {
 		const detailsBounds = this.domNode.getBoundingClientRect();
 		const viewport = this.picker.ownerDocument.defaultView!;
 		const rightSpace = viewport.innerWidth - pickerBounds.right;
-		this.domNode.classList.toggle('is-left', pickerBounds.left >= detailsBounds.width + 8 || pickerBounds.left > rightSpace);
+		this.domNode.classList.toggle('is-left', pickerBounds.left >= detailsBounds.width + 4 || pickerBounds.left > rightSpace);
 		const bottom = viewport.innerHeight - pickerBounds.top - detailsBounds.height - 8;
 		this.domNode.style.top = `${Math.max(-pickerBounds.top + 8, Math.min(rowBounds.top - pickerBounds.top, bottom))}px`;
 	}

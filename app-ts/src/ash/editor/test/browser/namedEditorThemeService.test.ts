@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
@@ -37,7 +38,6 @@ function createThemeService(): { readonly mediaQuery: TestMediaQueryList; readon
 	return { mediaQuery, service: new StandaloneThemeService(ownerWindow) };
 }
 
-const colorsBeforeEditor = lightColorTheme.colors;
 const {
 	editorCursorForeground,
 	editorMultiCursorSecondaryBackground,
@@ -72,8 +72,18 @@ test('all bracket nesting colors remain readable in light, dark and high contras
 });
 
 test('themes created before the editor loads include its color contributions', () => {
-	assert.deepEqual({ before: colorsBeforeEditor[editorCursorForeground], after: lightColorTheme.getColorCss(editorCursorForeground) }, {
-		before: undefined, after: '#000000',
+	// The unit runner preloads bundled themes, so module-load ordering needs a fresh process.
+	const result = execFileSync(process.execPath, ['--input-type=module', '--eval', `
+		const { lightColorTheme } = await import(${JSON.stringify(new URL('../../../platform/theme/common/colorTheme.js', import.meta.url).href)});
+		const before = lightColorTheme.colors;
+		const { editorCursorForeground } = await import(${JSON.stringify(new URL('../../common/core/editorColorRegistry.js', import.meta.url).href)});
+		process.stdout.write(JSON.stringify({
+			registeredBefore: Object.hasOwn(before, editorCursorForeground),
+			after: lightColorTheme.getColorCss(editorCursorForeground),
+		}));
+	`], { encoding: 'utf8', windowsHide: true, timeout: 10_000 });
+	assert.deepEqual(JSON.parse(result), {
+		registeredBefore: false, after: '#000000',
 	});
 });
 
@@ -234,7 +244,7 @@ test('editor ruler colors preserve the editor theme contract', () => {
 	});
 });
 
-test('overview ruler colors preserve transparent normal borders and solid high-contrast borders', () => {
+test('overview ruler colors use solid backgrounds and retain theme-specific borders', () => {
 	assert.deepEqual({
 		darkBorder: darkColorTheme.colors[editorOverviewRulerBorder],
 		lightBorder: lightColorTheme.colors[editorOverviewRulerBorder],
@@ -242,12 +252,16 @@ test('overview ruler colors preserve transparent normal borders and solid high-c
 		highContrastLightBorder: highContrastLightColorTheme.colors[editorOverviewRulerBorder],
 		darkBackground: darkColorTheme.colors[editorOverviewRulerBackground],
 		lightBackground: lightColorTheme.colors[editorOverviewRulerBackground],
+		highContrastDarkBackground: highContrastDarkColorTheme.colors[editorOverviewRulerBackground],
+		highContrastLightBackground: highContrastLightColorTheme.colors[editorOverviewRulerBackground],
 	}, {
 		darkBorder: '#7f7f7f4d',
 		lightBorder: '#7f7f7f4d',
 		highContrastDarkBorder: '#ffffff',
 		highContrastLightBorder: '#000000',
-		darkBackground: '#1e1e1e00',
-		lightBackground: '#ffffff00',
+		darkBackground: '#1e1e1e',
+		lightBackground: '#ffffff',
+		highContrastDarkBackground: '#000000',
+		highContrastLightBackground: '#ffffff',
 	});
 });

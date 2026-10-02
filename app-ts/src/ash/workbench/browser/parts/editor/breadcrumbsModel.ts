@@ -2,6 +2,7 @@ import type { URI } from "../../../../base/common/uri.js";
 import { FileKind } from "../../../../platform/files/common/files.js";
 import type { Position } from "../../../../editor/common/core/position.js";
 import type { LanguageDocumentSymbol } from "../../../../editor/common/languages.js";
+import type { IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 
 /** One location in the resource path shown by the editor breadcrumbs. */
 export class FileElement {
@@ -19,12 +20,16 @@ export class SymbolElement {
 
 /** Builds the resource path displayed for one editor input. */
 export class BreadcrumbsModel {
-	constructor(readonly resource: URI, private readonly fallbackLabel?: string) {}
+	constructor(readonly resource: URI, private readonly workspaceFolder: IWorkspaceFolder | null, private readonly fallbackLabel?: string) {}
 
 	getElements(): readonly FileElement[] {
 		const segments = this.resource.toEncodedComponents().path.split("/").filter(Boolean);
 		const elements: FileElement[] = [];
-		if (this.resource.authority) {
+		const rootDepth = this.workspaceFolder?.uri.toEncodedComponents().path.split('/').filter(Boolean).length ?? 0;
+		if (this.workspaceFolder && rootDepth === 0) {
+			elements.push(new FileElement(this.workspaceFolder.uri, FileKind.Directory, this.workspaceFolder.name));
+		}
+		if (this.resource.authority && !this.workspaceFolder) {
 			elements.push(new FileElement(
 				this.resource.with({ path: '/' }),
 				FileKind.Directory,
@@ -34,10 +39,15 @@ export class BreadcrumbsModel {
 		let currentPath = "";
 		for (const [index, segment] of segments.entries()) {
 			currentPath += `/${segment}`;
+			// Trim display ancestors only; picker navigation still needs the complete URI.
+			if (index < rootDepth - 1) {
+				continue;
+			}
+			const isWorkspaceRoot = this.workspaceFolder !== null && index === rootDepth - 1;
 			elements.push(new FileElement(
 				this.resource.withEncodedPath(currentPath),
-				index === segments.length - 1 ? FileKind.File : FileKind.Directory,
-				decodeURIComponent(segment),
+				index === segments.length - 1 && !isWorkspaceRoot ? FileKind.File : FileKind.Directory,
+				isWorkspaceRoot ? this.workspaceFolder!.name : decodeURIComponent(segment),
 			));
 		}
 		if (elements.length === 0) {

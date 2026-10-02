@@ -1,5 +1,5 @@
 import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 
@@ -404,7 +404,7 @@ test("Editor breadcrumbs open sibling and nested files", async ({ target, testWo
 	const group = workbench.editors.groupAt(0);
 	const breadcrumbs = group.title.getByRole("navigation", { name: "Editor breadcrumbs" });
 	const pathItems = breadcrumbs.getByRole("button");
-	await expect(pathItems.last()).toHaveText("main.ts");
+	await expect(pathItems).toHaveText([basename(testWorkspace.directory), 'main.ts']);
 	await breadcrumbs.evaluate(element => { (element as HTMLElement).style.width = '180px'; });
 	await pathItems.last().focus();
 	await page.keyboard.press("ArrowLeft");
@@ -450,6 +450,7 @@ test("Editor breadcrumbs open sibling and nested files", async ({ target, testWo
 	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "nested.ts" })).toBeVisible();
 	await page.keyboard.press("Enter");
 	await expect(group.tabs.filter({ hasText: "nested.ts" })).toHaveCount(1);
+	await expect(breadcrumbs.getByRole('button')).toHaveText([basename(testWorkspace.directory), 'breadcrumb-folder', 'nested.ts']);
 });
 
 test("Sticky and ordinary editors occupy separate tab rows", async ({ target, workbench }) => {

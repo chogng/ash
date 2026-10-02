@@ -370,6 +370,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 		onDidChangeModels: changed.event,
 		listModelCatalog: async () => catalog,
 		listModelProviders: () => providers,
+		setModelPreferences: async () => {},
 		listCustomModelProviders: async () => [],
 		isModelVisible: () => true,
 	} as unknown as IChatService;
@@ -528,6 +529,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			advisorWrites.push(next);
 		},
 		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }],
+		setModelPreferences: async () => {},
 		listCustomModelProviders: async () => [],
 		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
 		isModelVisible: (entry: typeof model) => entry.model === model.model ? modelVisible : !hiddenAdvisors.has(entry.model),
@@ -1087,6 +1089,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 			{ model: { provider: 'anthropic', model: 'opus' }, displayName: 'Opus' },
 		],
 		listModelProviders: async () => ['openai', 'qwen', 'openai-compatible', 'huggingface'].map(connection => ({ connection, provider: connection, displayName: connection, apiKeyPolicy: 'required', apiKeyConfigured: true })),
+		setModelPreferences: async () => {},
 		listCustomModelProviders: async () => [],
 		isModelVisible: () => true,
 		saveCustomModelProvider: async (provider: typeof saved[number]) => { saved.push(provider); },

@@ -66,6 +66,31 @@ test('editor preserves space and tab indentation and places input at the rendere
 	await expect(editor.input).toBeFocused();
 });
 
+test('active indent guides keep a thin stroke without gutter symbol icons', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	const lines = ['root', '    child', '        grandchild', '    sibling', 'root'];
+	await page.keyboard.insertText(lines.join('\n'));
+	await expect(editor.lines).toHaveText(lines);
+	await editor.input.press('ControlOrMeta+Home');
+	await editor.input.press('ArrowDown');
+	await editor.input.press('ArrowDown');
+	await editor.input.press('End');
+	const active = editor.element.locator('.stanza-editor-indent-guide.active');
+	await expect(active.first()).toBeAttached();
+	const inactive = editor.element.locator('.stanza-editor-indent-guide:not(.active)');
+	await expect(inactive.first()).toBeAttached();
+	await expect(active.first()).toHaveCSS('border-left-width', '1px');
+	await expect(inactive.first()).toHaveCSS('border-left-width', '1px');
+	const inactiveColor = await inactive.first().evaluate(element => getComputedStyle(element).borderLeftColor);
+	await expect(active.first()).not.toHaveCSS('border-left-color', inactiveColor);
+	await expect(editor.element.locator('.stanza-editor-symbol-icon')).toHaveCount(0);
+	await expect(editor.input).toBeFocused();
+});
+
 test('line numbers stay aligned while scrolling and gutter clicks edit the visible line', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
@@ -260,6 +285,13 @@ test('built-in themes apply scrollbar and minimap colors through hover and dragg
 		await expect(thumb).toHaveCSS('background-color', background);
 		await expect(slider).toHaveCSS('background-color', background);
 		await expect(vertical).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect.poll(() => editor.element.locator('canvas.decorationsOverviewRuler').evaluate((element: HTMLCanvasElement) => {
+			const pixels = element.getContext('2d')!.getImageData(2, Math.floor(element.height / 2), 1, 1).data;
+			const probe = document.createElement('canvas').getContext('2d')!;
+			probe.fillStyle = getComputedStyle(element.closest('.stanza-editor')!).backgroundColor;
+			probe.fillRect(0, 0, 1, 1);
+			return Array.from(pixels).join(',') === Array.from(probe.getImageData(0, 0, 1, 1).data).join(',');
+		})).toBe(true);
 		await expect.poll(() => minimap.evaluate(element => getComputedStyle(element, '::after').boxShadow)).toBe(shadow);
 		await minimap.hover();
 		await expect(slider).toHaveCSS('background-color', hover);

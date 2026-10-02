@@ -11,7 +11,7 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 	private _typicalHalfwidthCharacterWidth: number;
 	private _renderResult: string[] | null = null;
 
-	constructor(private readonly _context: ViewContext) {
+	constructor(private readonly _context: ViewContext, private readonly readTextLeft: () => number) {
 		super();
 		this._typicalHalfwidthCharacterWidth = this._context.configuration.options.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth;
 		this._context.addEventHandler(this);
@@ -94,6 +94,8 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 	private renderNormalDecoration(context: RenderingContext, range: Range, className: string, shouldFillLineOnLineBreak: boolean, showIfCollapsed: boolean, output: string[]): void {
 		const linesVisibleRanges = context.linesVisibleRangesForRange(range, className === 'findMatch');
 		if (!linesVisibleRanges) return;
+		// Measured ranges start at the text row; this overlay shares the content origin with selections.
+		const textLeft = this.readTextLeft();
 		for (const lineVisibleRanges of linesVisibleRanges) {
 			if (lineVisibleRanges.outsideRenderedLine) continue;
 			if (showIfCollapsed && lineVisibleRanges.ranges.length === 1 && lineVisibleRanges.ranges[0]!.width < this._typicalHalfwidthCharacterWidth) {
@@ -104,7 +106,7 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 			for (let index = 0; index < lineVisibleRanges.ranges.length; index += 1) {
 				const visibleRange = lineVisibleRanges.ranges[index]!;
 				const fillToLineEnd = shouldFillLineOnLineBreak && lineVisibleRanges.continuesOnNextLine && lineVisibleRanges.ranges.length === 1;
-				output[lineVisibleRanges.lineNumber - context.visibleRange.startLineNumber] += `<div class="cdr ${escapeAttribute(className)}" style="left:${visibleRange.left}px;width:${fillToLineEnd ? '100%' : `${visibleRange.width}px`};"></div>`;
+				output[lineVisibleRanges.lineNumber - context.visibleRange.startLineNumber] += `<div class="cdr ${escapeAttribute(className)}" style="left:${textLeft + visibleRange.left}px;width:${fillToLineEnd ? '100%' : `${visibleRange.width}px`};"></div>`;
 			}
 		}
 	}

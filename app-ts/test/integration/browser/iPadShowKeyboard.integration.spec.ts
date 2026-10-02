@@ -8,7 +8,7 @@ test.use({
 });
 
 test('iPad keyboard control follows editability and returns touch focus to the editor', async ({ page }) => {
-	await page.goto('/standalone.html?symbolIconsOff');
+	await page.goto('/standalone.html');
 	const control = page.locator('#caller .stanza-editor-show-keyboard textarea');
 	const widget = page.locator('#caller .stanza-editor-show-keyboard');
 	await expect(control).toBeVisible();

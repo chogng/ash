@@ -4,19 +4,17 @@ import type { IAction } from '../../../../../../../base/common/actions.js';
 import type { Event } from '../../../../../../../base/common/event.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
-import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
+import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
 import { ModelPickerWidget } from './modelPickerWidget.js';
 
 export interface IModelPickerDelegate {
 	readonly onDidChangePresentation: Event<void>;
 	getModels(): readonly ModelCatalogEntry[];
 	getSelectedModel(): ModelRef | undefined;
-	getSelectedReasoningEffort(): ModelReasoningEffort | undefined;
 	isAutomaticModel(): boolean;
 	getModelsError(): string | undefined;
 	selectModel(model: ModelRef): Promise<void>;
 	selectAutomaticModel(): Promise<void>;
-	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	openSettings(): Promise<void>;
 }
 

@@ -505,12 +505,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				onDidChangePresentation: this.modelPickerPresentationChanged.event,
 				getModels: () => this.state.models,
 				getSelectedModel: () => this.state.selectedModel,
-				getSelectedReasoningEffort: () => this.state.selectedReasoningEffort,
 				isAutomaticModel: () => this.state.isAutomaticModel,
 				getModelsError: () => this.state.modelsError,
 				selectModel: (model: ModelRef) => this.delegate.selectModel(model),
 				selectAutomaticModel: () => this.delegate.selectAutomaticModel(),
-				selectReasoningEffort: (effort: ModelReasoningEffort | undefined) => this.delegate.selectReasoningEffort(effort),
 				openSettings: () => this.delegate.openModelSettings(),
 			});
 		}

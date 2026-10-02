@@ -401,6 +401,8 @@ pub(crate) fn model_choices(
     let mut actions = BTreeMap::new();
     let mut pinned_items = Vec::new();
     let mut other_items = Vec::new();
+    // Pins change the display group, never the catalog order. Iterating the catalog
+    // also restores an unpinned model's place independently of pin activation order.
     for entry in &catalog.models {
         let model = ModelRefDto {
             provider: entry.model.provider.to_string(),

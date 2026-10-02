@@ -319,9 +319,10 @@ test("Decoration overlays use browser range rectangles for RTL text", async () =
 	});
 	viewport.render(true, false);
 
+	const textLeft = viewport.getLayoutInfo().contentLeft + 12;
 	assert.deepEqual(decorationElements(viewport.domNode.domNode).map(element => ({ left: element.style.left, width: element.style.width })), [
-		{ left: "20px", width: "15px" },
-		{ left: "50px", width: "20px" },
+		{ left: `${textLeft + 20}px`, width: "15px" },
+		{ left: `${textLeft + 50}px`, width: "20px" },
 	]);
 	viewport.dispose();
 	dom.window.close();
@@ -349,21 +350,22 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
 	});
 	viewport.layout({ width: 70, height: 60 });
 	viewport.render(true, false);
+	const textLeft = viewport.getLayoutInfo().contentLeft + 12;
 	assert.deepEqual(decorationElements(viewport.domNode.domNode).map(element => ({
 		lineIndex: element.parentElement?.dataset.lineIndex,
 		left: element.style.left,
 		width: element.style.width,
 	})), [{
 		lineIndex: "0",
-		left: "8px",
+		left: `${textLeft + 8}px`,
 		width: "8px",
 	}, {
 		lineIndex: "1",
-		left: "0px",
+		left: `${textLeft}px`,
 		width: "16px",
 	}, {
 		lineIndex: "2",
-		left: "0px",
+		left: `${textLeft}px`,
 		width: "8px",
 	}]);
 

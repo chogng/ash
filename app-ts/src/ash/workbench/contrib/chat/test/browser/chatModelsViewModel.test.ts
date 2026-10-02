@@ -24,6 +24,7 @@ function fixture(provider: CustomModelProvider) {
 	let failSave = false;
 	let pendingProbe: Promise<{ type: 'passed' }> | undefined;
 	const models: ILanguageModelsService = {
+		setModelPreferences: async () => {},
 		onDidChangeModels: Event.None,
 		listModels: async () => [],
 		getDefaultNewChatModel: () => undefined,

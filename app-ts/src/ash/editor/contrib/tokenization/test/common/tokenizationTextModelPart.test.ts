@@ -321,6 +321,40 @@ test('registered line tokenizers refresh existing models without clearing diagno
 	await waitFor(() => model.diagnostics.results.result?.modelVersion === model.version);
 });
 
+for (const reason of ['provider removal', 'language support change', 'syntax provider change'] as const) {
+	test(`line tokenizer clears rendered tokens and notifies its model on ${reason}`, () => {
+		using supportChanges = new Emitter<void>();
+		using providers = new SyntaxProviderRegistry();
+		const state: IState = { clone() { return this; }, equals(other) { return other === this; } };
+		using registration = TokenizationRegistry.register('token-reset-test', {
+			getInitialState: () => state,
+			tokenize: () => ({ tokens: [{ offset: 0, type: 'comment', language: 'token-reset-test' }], endState: state }),
+		});
+		using model = new TextModel('alpha', {
+			languageId: 'token-reset-test',
+			tokenization: { syntaxProviderRegistry: providers, onDidChangeLanguageSupport: supportChanges.event },
+		});
+		model.tokenization.forceTokenization(1);
+		assert.equal(model.tokenization.renderedTokens.getLineTokens(0).length, 1);
+		let notifications = 0;
+		using listener = model.onDidChangeTokens(() => notifications++);
+		using provider = reason === 'syntax provider change' ? providers.register({
+			id: 'token-reset-diagnostic', languageIds: ['token-reset-test'], provideDiagnostics: () => ({ diagnostics: [] }),
+		}) : undefined;
+		if (reason === 'provider removal') {
+			registration.dispose();
+		}
+		if (reason === 'language support change') {
+			supportChanges.fire();
+		}
+		assert.deepEqual({
+			tokens: model.tokenization.languageTokens.getLineTokens(0),
+			rendered: model.tokenization.renderedTokens.getLineTokens(0),
+			notifications,
+		}, { tokens: [], rendered: [], notifications: 1 });
+	});
+}
+
 test('line tokenization reuses unchanged lines after a model edit', async () => {
 	let scanned = 0;
 	const state: IState = { clone() { return this; }, equals(other) { return other === this; } };

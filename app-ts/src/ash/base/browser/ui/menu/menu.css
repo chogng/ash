@@ -15,7 +15,7 @@
 .ash-menu .ash-action-view-item { display: block; }
 .ash-menu .ash-button {
   width: 100%;
-  min-height: 24px;
+  min-height: var(--ash-spacing-size280);
   padding: 4px 8px;
   border: 0;
   border-radius: var(--ash-corner-radius-small);

@@ -111,17 +111,13 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		}));
 		this._register(this.syntaxProviderRegistry.onDidChange(() => {
 			this.coordinator.restartWorker();
-			this.lineBackendListeners.clear();
-			this.lineBackend.clear();
-			this.tokenStore.clear();
+			this.clearLexicalTokens();
 			this.scheduleAnalysis();
 		}));
 		if (options.onDidChangeLanguageSupport) this._register(options.onDidChangeLanguageSupport(() => {
 			// The worker synchronizes its grammar catalog and theme before each request.
 			// Retaining it keeps the loaded grammars and document mirror available.
-			this.lineBackendListeners.clear();
-			this.lineBackend.clear();
-			this.tokenStore.clear();
+			this.clearLexicalTokens();
 			this.scheduleAnalysis();
 		}));
 		this._register(TokenizationRegistry.onDidChange(event => {
@@ -171,9 +167,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 
 	resetTokenization(): void {
 		this.coordinator.restartWorker();
-		this.lineBackendListeners.clear();
-		this.lineBackend.clear();
-		this.tokenStore.clear();
+		this.clearLexicalTokens();
 		this.scheduleAnalysis();
 	}
 
@@ -302,6 +296,18 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number }[]): void {
 		this.visibleLines = ranges;
 		for (const range of ranges) this.lineBackend.value?.refreshRange(range.startLineNumber, range.endLineNumber);
+	}
+
+	private clearLexicalTokens(): void {
+		const hadLineBackend = this.lineBackend.value !== undefined;
+		this.lineBackendListeners.clear();
+		// Keep the line backend installed while clearing worker results so only one
+		// change is published. Its tokens live outside the worker's result store.
+		this.tokenStore.clear();
+		this.lineBackend.clear();
+		if (hadLineBackend) {
+			this.changeEmitter.fire(undefined);
+		}
 	}
 
 	private hasTokenProvider(): boolean {

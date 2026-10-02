@@ -10,6 +10,7 @@ import type { BreadcrumbsPathMode } from "./breadcrumbs.js";
 import type { EditorInput } from "./editorInput.js";
 import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
 import type { EditorTitleScrollbarSizing, EditorTitleScrollbarVisibility } from '../../../services/editor/common/editorConfiguration.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 
 /** Renders the active editor's resource path in one group title. */
 export class EditorBreadcrumbsControl extends Disposable {
@@ -20,7 +21,12 @@ export class EditorBreadcrumbsControl extends Disposable {
 	private filePath: BreadcrumbsPathMode = "on";
 	private symbolPath: BreadcrumbsPathMode = "on";
 
-	constructor(container: HTMLElement, private readonly onSelect?: (element: FileElement) => void, private readonly onSelectSymbol?: (element: SymbolElement) => void) {
+	constructor(
+		container: HTMLElement,
+		private readonly onSelect: ((element: FileElement) => void) | undefined,
+		private readonly onSelectSymbol: ((element: SymbolElement) => void) | undefined,
+		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
+	) {
 		super();
 		this.domNode = h(container.ownerDocument, "nav");
 		this.domNode.className = "ash-editor-breadcrumbs empty";
@@ -48,6 +54,7 @@ export class EditorBreadcrumbsControl extends Disposable {
 		this._register(onDidChangeNls(() => {
 			this.domNode.setAttribute("aria-label", localize('breadcrumbs.editorLabel', "Editor breadcrumbs"));
 		}));
+		this._register(this.workspaceContextService.onDidChangeWorkspace(() => this.render()));
 	}
 
 	focus(): boolean {
@@ -88,7 +95,8 @@ export class EditorBreadcrumbsControl extends Disposable {
 			this.domNode.hidden = true;
 			return;
 		}
-		const files = this.filePath === "off" ? [] : new BreadcrumbsModel(this.input.resource, this.input.label).getElements();
+		const workspaceFolder = this.workspaceContextService.getWorkspaceFolder(this.input.resource);
+		const files = this.filePath === "off" ? [] : new BreadcrumbsModel(this.input.resource, workspaceFolder, this.input.label).getElements();
 		const visibleFiles = this.filePath === "last" ? files.slice(-1) : files;
 		const visibleSymbols = this.symbolPath === "off" ? [] : this.symbolPath === "last" ? this.symbols.slice(-1) : this.symbols;
 		const elements = [...visibleFiles, ...visibleSymbols];

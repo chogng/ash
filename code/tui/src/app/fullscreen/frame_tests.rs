@@ -2929,6 +2929,148 @@ fn model_list_pins_without_changing_the_selected_model() {
 }
 
 #[test]
+fn model_pins_preserve_catalog_order_and_focus_in_both_screen_modes() {
+    use crate::terminal::ScreenMode;
+    use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
+    use ash_app_server_protocol::protocol::model::ModelListResult;
+
+    let catalog = ModelListResult {
+        models: ["first", "second", "third", "fourth"]
+            .into_iter()
+            .map(|id| {
+                let model = ash_protocol::ModelRef::new(
+                    ash_protocol::ProviderId::new("openai").unwrap(),
+                    ash_protocol::ModelId::new(id).unwrap(),
+                );
+                ModelCatalogEntry::from_info(
+                    model.clone(),
+                    &ash_protocol::ModelInfo::new(model.model, format!("{id} model")),
+                )
+            })
+            .collect(),
+    };
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        let mut config = crate::test_support::empty_config_snapshot();
+        config.model = Some(ModelRefDto {
+            provider: "openai".into(),
+            model: "first".into(),
+        });
+        app.update(ModelEvent::PickerOpened(
+            crate::models::model_choices(&catalog, &config).unwrap(),
+        ));
+        let mut pins: Vec<ModelRefDto> = Vec::new();
+        let mut snapshots = Vec::new();
+        // Pin in reverse catalog order, then remove pins in catalog order.
+        for (id, pinned, key, steps, expected) in [
+            (
+                "fourth",
+                true,
+                KeyCode::Down,
+                3,
+                vec![
+                    "Pinned",
+                    "fourth model",
+                    "Other models",
+                    "first model",
+                    "second model",
+                    "third model",
+                ],
+            ),
+            (
+                "third",
+                true,
+                KeyCode::Down,
+                3,
+                vec![
+                    "Pinned",
+                    "third model",
+                    "fourth model",
+                    "Other models",
+                    "first model",
+                    "second model",
+                ],
+            ),
+            (
+                "third",
+                false,
+                KeyCode::Down,
+                0,
+                vec![
+                    "Pinned",
+                    "fourth model",
+                    "Other models",
+                    "first model",
+                    "second model",
+                    "third model",
+                ],
+            ),
+            (
+                "fourth",
+                false,
+                KeyCode::Up,
+                3,
+                vec!["first model", "second model", "third model", "fourth model"],
+            ),
+        ] {
+            for _ in 0..steps {
+                app.handle_key(KeyEvent::new(key, KeyModifiers::NONE));
+            }
+            assert_eq!(
+                app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)),
+                Some(AppCommand::Models(crate::models::Command::Pin {
+                    preference: format!("openai/{id}"),
+                    pinned,
+                }))
+            );
+            if pinned {
+                pins.push(ModelRefDto {
+                    provider: "openai".into(),
+                    model: id.into(),
+                });
+            } else {
+                pins.retain(|model| model.model != id);
+            }
+            config
+                .tui
+                .0
+                .insert("pinnedModels".into(), serde_json::to_value(&pins).unwrap());
+            app.update(ModelEvent::PickerUpdated(
+                crate::models::model_choices(&catalog, &config).unwrap(),
+            ));
+            let selection = app.list_selection().unwrap();
+            assert_eq!(
+                selection
+                    .visible_items()
+                    .iter()
+                    .map(|item| item.label())
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            assert!(selection.items_focused());
+            assert_eq!(
+                selection.selected_item().unwrap().label(),
+                format!("{id} model")
+            );
+            snapshots.push(format!("{id} pinned={pinned}\n{}", render(&app, 100, 18)));
+        }
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.command_panel().is_none());
+        assert!(app.chat_input_focused());
+        crate::tui_assert_snapshot!(
+            match mode {
+                ScreenMode::Fullscreen => "model_pin_catalog_order_fullscreen",
+                ScreenMode::Inline => "model_pin_catalog_order_inline",
+            },
+            snapshots.join("\n\n")
+        );
+    }
+}
+
+#[test]
 fn model_list_reopens_with_saved_pins_and_unpin_action() {
     let mut app = App::new();
     app.update(ModelEvent::PickerOpened(custom_model_choices(vec![

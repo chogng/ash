@@ -2589,6 +2589,8 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		model: {
+			listFastModels: async () => [],
+			setModelPreferences: async () => {},
 			listModels: async () => {
 				modelListRequests.push(undefined);
 				return { models: [...(options.models ?? [])] };

@@ -1,6 +1,105 @@
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
+test('Model picker keeps search quiet and aligns menu rows and the chosen icon', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires the model catalog.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const selector = page.locator("[data-action-id='ash.chat.input.model'] button");
+	await selector.focus();
+	await selector.press('Enter');
+	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
+	const auto = picker.getByRole('switch', { name: 'Auto' });
+	if (await auto.isChecked()) {
+		await auto.press('Space');
+		await expect(auto).not.toHaveAttribute('aria-busy', 'true');
+	}
+	const search = picker.getByRole('combobox');
+	await search.click();
+	await expect(search).toBeFocused();
+	await expect(search).toHaveCSS('border-top-width', '0px');
+	await expect(search).toHaveCSS('outline-style', 'none');
+	await expect(search).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	const rows = picker.getByRole('option');
+	await expect(rows.first()).toBeVisible();
+	const heights = await picker.evaluate(element => [
+		element.querySelector('.ash-chat-model-picker-auto > .ash-switch')!,
+		...element.querySelectorAll('.ash-list-row'),
+		element.querySelector('.ash-chat-model-picker-footer .ash-button')!,
+	].map(row => row.getBoundingClientRect().height));
+	expect(heights.every(height => height === 28), JSON.stringify(heights)).toBe(true);
+	const edges = await picker.evaluate(element => {
+		const model = element.querySelector('.ash-list-row')!.getBoundingClientRect();
+		const footer = element.querySelector('.ash-chat-model-picker-footer .ash-button')!.getBoundingClientRect();
+		return [model.x, model.right, footer.x, footer.right];
+	});
+	expect(edges[0]).toBe(edges[2]);
+	expect(edges[1]).toBe(edges[3]);
+	const chosen = picker.locator('.ash-quick-pick-row-content.picked');
+	await expect(chosen).toHaveCount(1);
+	const check = chosen.locator('.ash-quick-pick-row-check svg');
+	await expect(check).toHaveAttribute('data-ash-icon-id', 'check');
+	await expect(check).toBeVisible();
+	const chosenBounds = await chosen.boundingBox();
+	const checkBounds = await check.boundingBox();
+	expect(checkBounds!.width).toBe(16);
+	expect(checkBounds!.height).toBe(16);
+	expect(Math.abs(checkBounds!.y + 8 - chosenBounds!.y - chosenBounds!.height / 2)).toBeLessThan(1);
+	const labels = await picker.locator('.ash-quick-pick-row-label').allTextContents();
+	await search.press('ArrowDown');
+	await expect(chosen.locator('.ash-quick-pick-row-check')).toBeVisible();
+	await search.fill(labels.at(-1)!);
+	await expect(rows).toHaveCount(1);
+	await search.press('Enter');
+	await expect(picker).toBeHidden();
+	await expect(selector).toHaveText(labels.at(-1)!);
+	await expect(selector).toBeFocused();
+	await selector.click();
+	await expect(chosen.locator('.ash-quick-pick-row-label')).toHaveText(labels.at(-1)!);
+	await picker.getByRole('combobox').press('Escape');
+	await expect(selector).toBeFocused();
+	for (const [theme, id] of [['Ash Dark', 'ash-dark'], ['Ash High Contrast Dark', 'ash-high-contrast-dark'], ['Ash High Contrast Light', 'ash-high-contrast-light']]) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		const themeSearch = page.locator('.ash-quick-pick').getByRole('combobox');
+		await themeSearch.fill(theme);
+		await themeSearch.press('Enter');
+		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', id);
+		await selector.click();
+		await expect(check).toBeVisible();
+		await expect(picker.getByRole('combobox')).toHaveCSS('outline-style', 'none');
+		await expect(picker.getByRole('combobox')).toHaveCSS('border-top-width', '0px');
+		await picker.getByRole('combobox').press('Escape');
+	}
+	await selector.click();
+	const addModels = picker.getByRole('menuitem', { name: 'Add Models' });
+	await addModels.focus();
+	await addModels.press('Enter');
+	await expect(picker).toBeHidden();
+	await expect(page.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'models');
+	const settings = page.locator('.ash-settings-editor');
+	for (const name of ['Gemini 3.8 Flash', 'Qwen 3.8 Max', 'Kimi K3', 'DeepSeek V4.1 Flash', 'GLM-5.3']) {
+		const show = settings.getByRole('switch', { name: `Show ${name} in model picker`, exact: true });
+		await show.focus();
+		await show.press('Space');
+		await expect(show).not.toHaveAttribute('aria-busy', 'true');
+		await expect(show).toBeChecked();
+	}
+	await page.locator('.ash-modal-editor-close').click();
+	await selector.focus();
+	await selector.press('Enter');
+	await expect(picker.locator('.ash-quick-pick-list-compact-menu')).toHaveClass(/scrolling/);
+	const scrollingEdges = await picker.evaluate(element => {
+		const row = element.querySelector('.ash-list-row')!.getBoundingClientRect();
+		const footer = element.querySelector('.ash-chat-model-picker-footer .ash-button')!.getBoundingClientRect();
+		return [row.x, row.right, footer.x, footer.right];
+	});
+	expect(scrollingEdges[0]).toBe(scrollingEdges[2]);
+	expect(scrollingEdges[1]).toBe(scrollingEdges[3]);
+	await picker.getByRole('combobox').press('Escape');
+});
+
 test('Disconnected model picker explains the empty catalog and opens settings', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This state requires a disconnected backend.');
 	const page = workbench.page;
@@ -37,16 +136,17 @@ test('Disconnected model picker explains the empty catalog and opens settings', 
 	await expect(page.locator('.ash-settings-editor')).toBeVisible();
 });
 
-test('Desktop model picker searches fixed models before account setup', async ({ target, workbench }) => {
+test('Model picker saves Fast and context settings separately from thinking effort', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'The model catalog requires the product backend.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	await expect(page.locator('.ash-chat-status')).not.toHaveText('Loading chat...');
+	// Close the startup editor before checking focus across asynchronous saves.
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	const selector = page.locator("[data-action-id='ash.chat.input.model'] button");
-	await expect(selector).toBeEnabled();
-	await selector.click();
+	await selector.focus();
+	await selector.press('Enter');
 	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
 	await expectModelPickerAnchored(picker, selector);
 	const auto = picker.getByRole('switch', { name: 'Auto' });
@@ -54,155 +154,93 @@ test('Desktop model picker searches fixed models before account setup', async ({
 		await auto.press('Space');
 		await expect(auto).not.toHaveAttribute('aria-busy', 'true');
 	}
-	await expect(picker.getByText('GPT-5.6 Sol', { exact: true })).toBeVisible();
-	await expect(picker.getByText('GPT-6 Astra', { exact: true })).toBeVisible();
-	await expect(picker.getByText('GPT-5.4', { exact: true })).toBeVisible();
-	const activeRow = picker.locator('.ash-quick-pick-list-menu .ash-list-row.is-active');
-	await expect(activeRow).toBeVisible();
-	const activeColors = await activeRow.evaluate(row => {
-		const probe = row.ownerDocument.createElement('span');
-		probe.style.backgroundColor = 'var(--ash-menu-selection-background)';
-		row.append(probe);
-		const colors = {
-			foreground: getComputedStyle(row).color,
-			label: getComputedStyle(row.querySelector('.ash-quick-pick-row-label')!).color,
-			background: getComputedStyle(row).backgroundColor,
-			menuBackground: getComputedStyle(probe).backgroundColor,
-		};
-		probe.remove();
-		return colors;
-	});
-	expect(activeColors.label).toBe(activeColors.foreground);
-	expect(activeColors.background).toBe(activeColors.menuBackground);
-	await picker.getByRole('option', { name: /GPT-6 Astra/ }).hover();
-	const detailsMenu = picker.getByRole('region', { name: 'GPT-6 Astra' });
-	await expect(detailsMenu).toBeVisible();
-	await expect(detailsMenu).toContainText('GPT-6 Astra');
-
-	const menuStyles = await detailsMenu.evaluate(element => {
-		const menu = element.closest('.ash-context-view-menu')!;
-		const detailsStyle = getComputedStyle(element.closest('.ash-chat-model-picker-details-menu')!);
-		const menuStyle = getComputedStyle(menu);
-		return {
-			background: detailsStyle.backgroundColor === menuStyle.backgroundColor,
-			foreground: detailsStyle.color === menuStyle.color,
-			borderWidth: detailsStyle.borderTopWidth,
-			pointerEvents: detailsStyle.pointerEvents,
-		};
-	});
-	expect(menuStyles).toEqual({ background: true, foreground: true, borderWidth: '1px', pointerEvents: 'auto' });
-	const detailsBounds = await detailsMenu.boundingBox();
-	const pickerBounds = await picker.boundingBox();
-	expect(detailsBounds).not.toBeNull();
-	expect(pickerBounds).not.toBeNull();
-	expect(detailsBounds!.x + detailsBounds!.width <= pickerBounds!.x || detailsBounds!.x >= pickerBounds!.x + pickerBounds!.width).toBe(true);
-	await detailsMenu.hover();
-	await expect(detailsMenu).toBeVisible();
-	await expect(picker.getByRole('switch', { name: 'Auto' })).toBeVisible();
-	await picker.getByRole('combobox', { name: 'Choose a chat model' }).fill('GPT-6 Astra');
-	await expect(picker.getByRole('option', { name: /GPT-6 Astra/ })).toBeVisible();
-	await picker.getByRole('option', { name: /GPT-6 Astra/ }).click();
+	await expect(picker.getByText('GPT-6.1 Sol', { exact: true })).toBeVisible();
+	await expect(picker.getByText('GPT-6 Luna', { exact: true })).toBeVisible();
+	const search = picker.getByRole('combobox');
+	await search.fill('GPT-6 Astra');
+	await search.press('Enter');
 	await expect(selector).toHaveText('GPT-6 Astra');
 	await selector.click();
-	await picker.getByRole('option', { name: /GPT-5.6 Sol/ }).hover();
-	await expect(picker.getByRole('region', { name: 'GPT-5.6 Sol' }).getByRole('radio')).toHaveCount(0);
-	await picker.getByRole('combobox').press('Escape');
-	await expect(page.locator('.ash-chat-input-model-access-badge')).toHaveCount(0);
+	await search.fill('GPT-6 Astra');
+	await search.press('ArrowRight');
+	const card = picker.getByRole('region', { name: 'GPT-6 Astra' });
+	const fast = card.getByRole('switch', { name: 'Fast', exact: true });
+	const context = card.getByRole('switch', { name: '1M context', exact: true });
+	await expect(fast).toBeFocused();
+	await expect(card.getByRole('switch')).toHaveCount(2);
+	await expect(card.getByRole('radio')).toHaveCount(0);
+	await expect(card).toHaveText('Fast272k');
+	const surfaces = await picker.evaluate(element => {
+		const main = element.getBoundingClientRect();
+		const side = element.querySelector('.ash-chat-model-picker-details-menu')!.getBoundingClientRect();
+		return { gap: side.x >= main.right ? side.x - main.right : main.x - side.right };
+	});
+	expect(surfaces.gap).toBeGreaterThanOrEqual(0);
+	expect(surfaces.gap).toBeLessThanOrEqual(5);
+	await fast.press('Space');
+	await expect(fast).not.toHaveAttribute('aria-busy', 'true');
+	await expect(fast).toBeChecked();
+	await expect(fast).toBeFocused();
+	await context.focus();
+	await context.press('Space');
+	await expect(context).not.toHaveAttribute('aria-busy', 'true');
+	await expect(context).toBeChecked();
+	await expect(context).toBeFocused();
+	await expect(card).toHaveText('Fast1M');
+	await expect(search).toHaveValue('GPT-6 Astra');
+	await context.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: 'Accessibility Help' });
+	await expect(help.getByRole('textbox')).toHaveValue(/Right Arrow opens model settings/);
+	await help.getByRole('button', { name: 'Close', exact: true }).click();
+	await expect(context).toBeFocused();
+	await context.press('Alt+F2');
+	const view = page.getByRole('dialog', { name: 'Accessible View', exact: true });
+	await expect(view.getByRole('textbox')).toHaveValue(/Fast[\s\S]*1M/);
+	await expect(view.getByRole('textbox')).not.toHaveValue(/Thinking Level/);
+	await view.getByRole('textbox').press('Escape');
+	await expect(context).toBeFocused();
+	await context.press('Alt+ArrowLeft');
+	await expect(search).toBeFocused();
+	await search.press('Escape');
+	await expect(selector).toBeFocused();
+	// Recreate the popup, then save from the full list to exercise active-row restoration.
+	await selector.click();
+	await search.fill('');
+	await picker.getByRole('option', { name: /GPT-6 Astra/ }).hover();
+	await search.press('ArrowRight');
+	await expect(fast).toBeChecked();
+	await expect(context).toBeChecked();
+	await context.press('Space');
+	await expect(context).not.toHaveAttribute('aria-busy', 'true');
+	await expect(context).not.toBeChecked();
+	await expect(context).toBeFocused();
+	await expect(card).toHaveText('Fast272k');
+	await fast.press('Space');
+	await expect(fast).not.toHaveAttribute('aria-busy', 'true');
+	await expect(fast).not.toBeChecked();
+	await fast.press('Escape');
+	await selector.click();
+	await search.fill('Grok 4.7');
+	await search.press('ArrowRight');
+	const grokCard = picker.getByRole('region', { name: 'Grok 4.7' });
+	await expect(grokCard.getByRole('switch')).toHaveCount(1);
+	await expect(grokCard.locator('.ash-chat-model-card-context')).toBeHidden();
+	await expect(grokCard).toHaveText('Fast');
+	await grokCard.getByRole('switch', { name: 'Fast', exact: true }).press('Escape');
 	const effort = page.locator("[data-action-id='ash.chat.input.effort'] button");
 	await expect(effort).toHaveText('Default');
-	await expect(effort).toHaveAttribute('aria-label', 'Thinking Effort: Default');
 	await effort.press('ArrowDown');
 	const effortMenu = page.locator('.ash-chat-model-configuration-menu');
-	await expect(effortMenu).toBeVisible();
 	await expectModelPickerAnchored(effortMenu, effort);
 	await expect(effortMenu.locator('.ash-chat-model-configuration-heading')).toHaveText('Thinking Level');
 	await expect(effortMenu.getByRole('menuitemradio')).toHaveText(['Default', 'Low', 'Medium', 'High', 'Extra High', 'Max']);
-	await expect(effortMenu.getByRole('menuitemradio', { name: 'Default' })).toHaveAttribute('aria-checked', 'true');
-	await effortMenu.getByRole('menuitemradio', { name: 'High', exact: true }).click();
-	await expect(effortMenu).toBeHidden();
-	await expect(effort).toHaveText('High');
-	await expect(effort).toBeFocused();
-	await effort.click();
-	await expect(effortMenu.getByRole('menuitemradio', { name: 'High', exact: true })).toHaveAttribute('aria-checked', 'true');
-	await effortMenu.getByRole('menuitemradio', { name: 'High', exact: true }).press('Escape');
-	await expect(effort).toBeFocused();
-	await effort.press('Alt+F1');
-	const effortHelp = page.getByRole('dialog', { name: 'Accessibility Help' });
-	await expect(effortHelp.getByRole('textbox', { name: 'Accessibility Help' })).toHaveValue(/Thinking level menu/);
-	await effortHelp.getByRole('button', { name: 'Close' }).click();
-	await expect(effort).toBeFocused();
-	await selector.click();
-	const search = page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('combobox', { name: 'Choose a chat model' });
-	await expect(page.getByRole('button', { name: 'GPT-6 Astra Details' })).toHaveCount(0);
-	await expect(page.getByRole('combobox', { name: 'Thinking Effort' })).toHaveCount(0);
-	await search.fill('GPT-6 Astra');
-	const filteredModels = await picker.getByRole('option').allTextContents();
-	await search.press('ArrowRight');
-	const currentCard = picker.getByRole('region', { name: 'GPT-6 Astra' });
-	const cardHigh = currentCard.getByRole('radio', { name: 'High', exact: true });
-	await expect(cardHigh).toBeFocused();
-	await cardHigh.press('ArrowUp');
-	const cardMedium = currentCard.getByRole('radio', { name: 'Medium', exact: true });
-	await expect(cardMedium).toBeChecked();
-	await expect(cardMedium).toBeFocused();
-	await expect(effort).toHaveText('Medium');
-	await expect(search).toHaveValue('GPT-6 Astra');
-	expect(await picker.getByRole('option').allTextContents()).toEqual(filteredModels);
-	await cardMedium.press('Alt+F1');
-	const modelHelp = page.getByRole('dialog', { name: 'Accessibility Help' });
-	await expect(modelHelp.getByRole('textbox')).toHaveValue(/Right Arrow opens details/);
-	await modelHelp.getByRole('button', { name: 'Close', exact: true }).click();
-	await expect(cardMedium).toBeFocused();
-	await cardMedium.press('Alt+F2');
-	const modelView = page.getByRole('dialog', { name: 'Accessible View', exact: true });
-	await expect(modelView.getByRole('textbox')).toHaveValue(/GPT-6 Astra[\s\S]*Thinking Level/);
-	await modelView.getByRole('textbox').press('Escape');
-	await expect(cardMedium).toBeFocused();
-	await cardMedium.press('Alt+ArrowLeft');
-	await expect(search).toBeFocused();
-	await search.fill('GPT-5.6 Sol');
-	await search.press('Enter');
-	await expect(selector).toHaveText('GPT-5.6 Sol');
-	await expect(effort).toHaveText('Medium');
-	await effort.click();
-	const solEffortCount = await effortMenu.getByRole('menuitemradio').count();
-	const defaultLevel = effortMenu.getByRole('menuitemradio', { name: 'Medium', exact: true });
-	await expect(defaultLevel).toHaveAttribute('aria-checked', 'true');
-	await expect(defaultLevel).toHaveAttribute('aria-description', 'Default');
-	await expect(defaultLevel).toContainText('Default');
 	await effortMenu.getByRole('menuitemradio', { name: 'High', exact: true }).click();
 	await expect(effort).toHaveText('High');
-	await effort.click();
-	await defaultLevel.click();
-	await expect(effort).toHaveText('Medium');
-	await selector.click();
-	await search.fill('GPT-5.6 Sol');
-	await search.press('ArrowRight');
-	const solCard = picker.getByRole('region', { name: 'GPT-5.6 Sol' });
-	await expect(solCard.getByRole('radio')).toHaveCount(solEffortCount);
-	await expect(solCard.getByRole('radio', { name: 'Default', exact: true })).toHaveCount(0);
-	const cardDefault = solCard.getByRole('radio', { name: 'Medium Default', exact: true });
-	await expect(cardDefault).toBeChecked();
-	await cardDefault.press('ArrowDown');
-	await expect(effort).toHaveText('High');
-	await solCard.getByRole('radio', { name: 'High', exact: true }).press('ArrowUp');
-	await expect(cardDefault).toBeChecked();
-	await expect(effort).toHaveText('Medium');
-	await cardDefault.press('Escape');
-	await effort.click();
-	await expect(defaultLevel).toHaveAttribute('aria-checked', 'true');
-	await defaultLevel.press('Escape');
-	await selector.click();
-	await search.fill('GPT-5.4');
-	await search.press('Enter');
-	await expect(selector).toHaveText('GPT-5.4');
-	await selector.click();
-	await page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('combobox', { name: 'Choose a chat model' }).press('Escape');
-	await expect(selector).toHaveAttribute('aria-expanded', 'false');
+	await expect(effort).toBeFocused();
 	await selector.click();
 	const finalPicker = page.getByRole('dialog', { name: 'Choose a chat model' });
 	await expect(finalPicker.getByRole('switch', { name: 'Auto' })).not.toBeChecked();
-	await expect(finalPicker.locator('.ash-chat-model-picker-current')).toHaveCount(1);
+	await expect(finalPicker.locator('.ash-quick-pick-row-content.picked')).toHaveCount(1);
 	const autoSwitch = finalPicker.getByRole('switch', { name: 'Auto' });
 	await autoSwitch.press('Space');
 	await expect(selector).toHaveText('Auto');
@@ -211,7 +249,7 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	await expect(autoSwitch).toBeFocused();
 	await expect(finalPicker.getByRole('combobox')).toHaveCount(0);
 	await expect(finalPicker.getByRole('option')).toHaveCount(0);
-	await expect(finalPicker.getByRole('button', { name: 'Add Models' })).toHaveCount(0);
+	await expect(finalPicker.getByRole('menuitem', { name: 'Add Models' })).toHaveCount(0);
 	await expect(finalPicker.locator('.ash-switch-track')).toBeVisible();
 	await autoSwitch.press('Escape');
 	await expect(selector).toBeFocused();
@@ -224,7 +262,7 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	await expect(autoSwitch).toBeFocused();
 	await expect(finalPicker.getByRole('combobox')).toBeVisible();
 	await expect(finalPicker.getByRole('option').first()).toBeVisible();
-	await page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('button', { name: 'Add Models' }).click();
+	await page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('menuitem', { name: 'Add Models' }).click();
 	await expect(page.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'models');
 });
 
@@ -254,16 +292,16 @@ test('Model picker details and keyboard help follow the Chinese display language
 	await search.fill('GPT-6 Astra');
 	await search.press('ArrowRight');
 	const card = picker.getByRole('region', { name: 'GPT-6 Astra' });
-	await expect(card.getByRole('group', { name: '推理强度' })).toBeVisible();
-	const high = card.getByRole('radio', { name: '高', exact: true });
-	await high.click();
-	await expect(page.locator("[data-action-id='ash.chat.input.effort'] button")).toHaveText('高');
-	await high.press('Alt+F1');
+	const fast = card.getByRole('switch', { name: '快速', exact: true });
+	await expect(fast).toBeFocused();
+	await expect(card.getByRole('switch', { name: '1M 上下文', exact: true })).toBeVisible();
+	await expect(card.getByRole('radio')).toHaveCount(0);
+	await fast.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: '无障碍帮助' });
-	await expect(help.getByRole('textbox')).toHaveValue(/右方向键进入详情/);
+	await expect(help.getByRole('textbox')).toHaveValue(/右方向键进入模型设置/);
 	await help.getByRole('button', { name: '关闭', exact: true }).click();
-	await expect(high).toBeFocused();
-	await high.press('Escape');
+	await expect(fast).toBeFocused();
+	await fast.press('Escape');
 	await expect(selector).toBeFocused();
 });
 

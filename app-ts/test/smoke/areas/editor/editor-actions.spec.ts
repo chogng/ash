@@ -69,9 +69,7 @@ test('editor breadcrumbs use the base widget for keyboard focus and activation',
 		['Ash High Contrast Dark', 'rgb(255, 255, 255)'],
 		['Ash High Contrast Light', 'rgb(0, 0, 0)'],
 	] as const) {
-		await page.getByRole('button', { name: 'Manage', exact: true }).click();
-		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Themes', exact: true }).hover();
-		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Color Theme', exact: true }).click();
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const search = page.locator('.ash-quick-pick').getByRole('combobox');
 		await search.fill(theme);
 		await search.press('Enter');
@@ -83,6 +81,42 @@ test('editor breadcrumbs use the base widget for keyboard focus and activation',
 	}
 	await page.keyboard.press('ControlOrMeta+W');
 	await expect(breadcrumbs).toBeHidden();
+});
+
+test('browser editor breadcrumbs start at the opened workspace and navigate its directories', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled' || target.workbenchMode !== 'code', 'Requires the browser filesystem');
+	const page = workbench.page;
+	const folderName = await page.evaluate(async () => {
+		const storage = await navigator.storage.getDirectory();
+		const folder = await storage.getDirectoryHandle(`breadcrumbs-${crypto.randomUUID()}`, { create: true });
+		const source = await folder.getDirectoryHandle('src', { create: true });
+		for (const [directory, name] of [[folder, 'main.ts'], [source, 'sibling.ts']] as const) {
+			const file = await directory.getFileHandle(name, { create: true });
+			const writer = await file.createWritable();
+			await writer.write('const value = 1;');
+			await writer.close();
+		}
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		return folder.name;
+	});
+	await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
+	const explorer = page.locator('.ash-explorer');
+	await explorer.getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+	const group = workbench.editors.groupAt(0);
+	const breadcrumbs = group.title.getByRole('navigation', { name: 'Editor breadcrumbs' });
+	await expect(breadcrumbs.getByRole('button')).toHaveText([folderName, 'main.ts']);
+	await breadcrumbs.getByRole('button').last().focus();
+	await page.keyboard.press('Home');
+	await expect(breadcrumbs.getByRole('button').first()).toBeFocused();
+	await page.keyboard.press('Enter');
+	const picker = page.locator('.ash-quick-pick');
+	await expect(picker.getByRole('combobox')).toBeFocused();
+	await picker.getByRole('combobox').fill('src');
+	await picker.getByRole('combobox').press('Enter');
+	await picker.getByRole('combobox').fill('sibling.ts');
+	await page.keyboard.press('Enter');
+	await expect(picker).toHaveCount(0);
+	await expect(breadcrumbs.getByRole('button')).toHaveText([folderName, 'src', 'sibling.ts']);
 });
 
 test('Code exposes editor view actions in the command palette', async ({ target, workbench }) => {

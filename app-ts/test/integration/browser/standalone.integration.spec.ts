@@ -63,7 +63,7 @@ test('standalone editor shows the themed outline while its input is focused', as
 test('standalone token themes recolor text and retain matching colors when copied', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
-	await page.goto('/standalone.html?symbolIconsOff');
+	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('plain'));
 	const alpha = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'alpha' });
 	await expect(alpha).toHaveCSS('color', 'rgb(18, 52, 86)');
@@ -156,7 +156,7 @@ test('standalone token inspector shows Monarch and embedded scopes', async ({ pa
 });
 
 test('standalone encoded tokens use the supplied palette and font metadata', async ({ page }) => {
-	await page.goto('/standalone.html?symbolIconsOff');
+	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('encoded'));
 	const alpha = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'alpha' });
 	await expect(alpha).toHaveCSS('color', 'rgb(18, 52, 86)');
@@ -171,7 +171,7 @@ test('standalone encoded tokens use the supplied palette and font metadata', asy
 test('standalone language activation registers a tokenizer once when the model changes language', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
-	await page.goto('/standalone.html?symbolIconsOff');
+	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('activation'));
 	const alpha = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'alpha' });
 	await expect(alpha).toHaveCSS('color', 'rgb(18, 52, 86)');
@@ -185,7 +185,7 @@ test('standalone language activation registers a tokenizer once when the model c
 test('standalone Monarch updates following lines after editing a comment boundary', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
-	await page.goto('/standalone.html?symbolIconsOff');
+	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('monarch'));
 	const alpha = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'alpha' });
 	const beta = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'beta' });
@@ -204,7 +204,7 @@ test('standalone Monarch updates following lines after editing a comment boundar
 test('standalone Monarch activates embedded token providers and returns to the host language', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
-	await page.goto('/standalone.html?symbolIconsOff');
+	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('monarch-embedded'));
 	const alpha = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'alpha' });
 	const beta = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'beta' });
@@ -220,7 +220,7 @@ test('standalone Monarch activates embedded token providers and returns to the h
 test('standalone colorizer renders escaped themed HTML without creating an editor model', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
-	await page.goto('/standalone.html?symbolIconsOff');
+	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('monarch'));
 	const models = await page.evaluate(() => window.ashStandaloneIntegration.colorizePreview());
 	expect(models.modelsAfter).toBe(models.modelsBefore);
@@ -237,7 +237,7 @@ test('standalone colorizer renders escaped themed HTML without creating an edito
 
 for (const removed of [false, true]) {
 	test(`standalone lazy token provider resolves once and respects removal=${removed}`, async ({ page }) => {
-		await page.goto('/standalone.html?symbolIconsOff');
+		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('lazy'));
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readTokenTheme().factoryCalls)).toBe(1);
 		if (removed) {
@@ -342,7 +342,7 @@ test('standalone Quick Access help filters navigation actions and runs the selec
 });
 
 test('standalone Quick Access switches command and symbol prefixes without losing the query', async ({ page }) => {
-	await page.goto('/standalone.html?symbolIconsOff');
+	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareLanguageRequest('symbols'));
 	const input = page.locator('#caller .stanza-editor-input');
 	await input.focus();
@@ -366,7 +366,7 @@ test('standalone Quick Access switches command and symbol prefixes without losin
 });
 
 test('standalone symbol search returns to help and commands and cancels its request', async ({ page }) => {
-	await page.goto('/standalone.html?symbolIconsOff');
+	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareLanguageRequest('symbols'));
 	const input = page.locator('#caller .stanza-editor-input');
 	await input.focus();
@@ -673,7 +673,7 @@ test.describe('contribution lifecycle', () => {
 	});
 
 	test('sticky scroll uses declaration lines, live line height and horizontal scroll options', async ({ page }) => {
-		await page.goto('/standalone.html?symbolIconsOff');
+		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareStickySymbols());
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
@@ -700,7 +700,7 @@ test.describe('contribution lifecycle', () => {
 
 	for (const reason of ['text', 'language', 'provider', 'model', 'dispose'] as const) {
 		test(`sticky scroll cancels stale outline requests on ${reason}`, async ({ page }) => {
-			await page.goto('/standalone.html?symbolIconsOff');
+			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareStickySymbols());
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
 			await page.evaluate(reason => window.ashStandaloneIntegration.changeLanguageRequest(reason), reason);
@@ -711,7 +711,7 @@ test.describe('contribution lifecycle', () => {
 	}
 
 	test('sticky scroll selects the widest outline and preserves its source until removal', async ({ page }) => {
-		await page.goto('/standalone.html?symbolIconsOff');
+		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.changeStickySources('initial'));
 		const headers = page.locator('#caller .stanza-editor-sticky-scroll-text');
 		await expect(headers).toHaveText(['  function inner() {', '    item 0']);
@@ -722,7 +722,7 @@ test.describe('contribution lifecycle', () => {
 	});
 
 	test('sticky scroll uses indentation when every outline is empty and folding is disabled', async ({ page }) => {
-		await page.goto('/standalone.html?symbolIconsOff');
+		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.changeStickySources('initial'));
 		await page.evaluate(() => {
 			window.ashStandaloneIntegration.updateContributionOptions({ folding: false });
@@ -798,7 +798,7 @@ test.describe('contribution lifecycle', () => {
 	});
 
 	test('sticky scroll keeps line numbers fixed and updates numbering with the cursor and options', async ({ page }) => {
-		await page.goto('/standalone.html?symbolIconsOff');
+		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareStickySymbols());
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
@@ -1913,7 +1913,7 @@ test('indent guides show blank-line depth, theme strokes and preserve pointer ed
 		await expect(guides.first()).toHaveCSS('border-left-color', inactive);
 		await expect(guides.last()).toHaveCSS('border-left-color', active);
 		await expect(guides.first()).toHaveCSS('border-left-width', '1px');
-		await expect(guides.last()).toHaveCSS('border-left-width', '2px');
+		await expect(guides.last()).toHaveCSS('border-left-width', '1px');
 	}
 	await page.evaluate(() => window.ashStandaloneIntegration.setGuideTheme('Dark', {
 		'editorIndentGuide.background1': '#123456', 'editorIndentGuide.activeBackground1': '#abcdef',
@@ -1946,12 +1946,12 @@ test('bracket guides use nesting themes, active strokes and half-line endpoints'
 	await expect(page.locator('#caller .view-overlay-line[data-line-index="2"] .stanza-editor-indent-guide')).toHaveCount(0);
 	await expect(levelTwo.first()).toHaveClass(/active/);
 	await expect(levelOne.first()).toHaveCSS('border-left-width', '1px');
-	await expect(levelTwo.first()).toHaveCSS('border-left-width', '2px');
+	await expect(levelTwo.first()).toHaveCSS('border-left-width', '1px');
 	expect(await levelOne.evaluateAll(elements => elements.map(element => ({ height: element.getBoundingClientRect().height, top: (element as HTMLElement).style.top })))).toEqual([
 		{ height: 10, top: '10px' }, ...Array(4).fill({ height: 20, top: '0px' }), { height: 10, top: '0px' },
 	]);
 	const horizontal = page.locator('#caller .stanza-editor-bracket-guide-horizontal.stanza-editor-guide-level-2');
-	await expect(horizontal).toHaveCSS('border-top-width', '2px');
+	await expect(horizontal).toHaveCSS('border-top-width', '1px');
 	expect((await horizontal.boundingBox())!.width).toBeGreaterThan(0);
 	for (const [scheme, color] of [
 		['Dark', 'rgb(198, 120, 221)'], ['Light', 'rgb(136, 65, 160)'],
@@ -1960,6 +1960,9 @@ test('bracket guides use nesting themes, active strokes and half-line endpoints'
 		await page.evaluate(scheme => window.ashStandaloneIntegration.setGuideTheme(scheme), scheme);
 		await expect(levelTwo.first()).toHaveCSS('border-left-color', color);
 		await expect(horizontal).toHaveCSS('border-top-color', color);
+		await expect(levelOne.first()).toHaveCSS('border-left-width', '1px');
+		await expect(levelTwo.first()).toHaveCSS('border-left-width', '1px');
+		await expect(horizontal).toHaveCSS('border-top-width', '1px');
 	}
 	await page.evaluate(() => window.ashStandaloneIntegration.setGuideTheme('Dark', {
 		'editorBracketPairGuide.background1': '#123456', 'editorBracketPairGuide.activeBackground2': '#abcdef',
@@ -5515,7 +5518,7 @@ for (const kind of ['definition', 'call', 'type', 'symbols'] as const) {
 	const shortcut = { definition: 'F12', call: 'Alt+Shift+h', type: 'Alt+Shift+t', symbols: 'ControlOrMeta+Shift+o' }[kind];
 	for (const reason of ['text', 'selection', 'language', 'provider', 'model', 'dispose', 'blur'] as const) {
 		test(`${kind} provider cancels on ${reason} without applying late results`, async ({ page }) => {
-			await page.goto('/standalone.html?symbolIconsOff');
+			await page.goto('/standalone.html');
 			await page.evaluate(kind => window.ashStandaloneIntegration.prepareLanguageRequest(kind), kind);
 			await page.keyboard.press(shortcut);
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().slice(0, 1))).toEqual([{ languageId: 'plaintext', aborted: false }]);
@@ -5532,7 +5535,7 @@ for (const kind of ['definition', 'call', 'type', 'symbols'] as const) {
 		});
 	}
 	test(`${kind} provider queries the current language and applies the current response`, async ({ page }) => {
-		await page.goto('/standalone.html?symbolIconsOff');
+		await page.goto('/standalone.html');
 		await page.evaluate(kind => window.ashStandaloneIntegration.prepareLanguageRequest(kind), kind);
 		await page.evaluate(() => window.ashStandaloneIntegration.changeLanguageRequest('language'));
 		await page.keyboard.press(shortcut);
@@ -5556,7 +5559,7 @@ for (const kind of ['definition', 'call', 'type', 'symbols'] as const) {
 }
 
 test('symbol picker filters, navigates, restores focus and labels its input', async ({ page }) => {
-	await page.goto('/standalone.html?symbolIconsOff');
+	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareLanguageRequest('symbols'));
 	const input = page.locator('#caller .stanza-editor-input');
 	await input.focus();
@@ -5575,7 +5578,7 @@ test('symbol picker filters, navigates, restores focus and labels its input', as
 });
 
 test('symbol picker combines registered providers in document order', async ({ page }) => {
-	await page.goto('/standalone.html?symbolIconsOff');
+	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareMultipleDocumentSymbols());
 	await page.locator('#caller .stanza-editor-input').focus();
 	await page.keyboard.press('ControlOrMeta+Shift+o');
@@ -5588,7 +5591,7 @@ test('symbol picker combines registered providers in document order', async ({ p
 });
 
 test('document symbol command resolves a resource without changing the active editor', async ({ page }) => {
-	await page.goto('/standalone.html?symbolIconsOff');
+	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareMultipleDocumentSymbols());
 	const input = page.locator('#caller .stanza-editor-input');
 	await input.focus();

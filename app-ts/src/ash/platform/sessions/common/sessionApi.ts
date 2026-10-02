@@ -83,7 +83,14 @@ export interface CustomModelProvider {
 
 export type ModelProviderTestResult = { readonly type: 'passed' } | { readonly type: 'failed'; readonly message: string };
 
+export interface ModelPreferencesUpdate {
+	readonly fast?: boolean;
+	readonly contextWindow?: number;
+}
+
 export interface IModelApi {
+	listFastModels(): Promise<readonly ModelRef[]>;
+	setModelPreferences(model: ModelRef, update: ModelPreferencesUpdate): Promise<void>;
 	readAdvisorDefault(): Promise<AdvisorConfig | null>;
 	readConfiguredProviderIds(): Promise<readonly string[]>;
 	setAdvisorDefault(params: { readonly commandId: string; readonly advisor: AdvisorConfig | null }): Promise<void>;

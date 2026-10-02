@@ -13,7 +13,6 @@
 }
 
 .stanza-editor .stanza-editor-indent-guide.active {
-	border-left-width: calc(2 * var(--ash-stroke-thickness));
 	border-left-color: var(--ash-editor-indent-guide-active-background1);
 }
 
@@ -21,16 +20,8 @@
 	border-left: var(--ash-stroke-thickness) solid currentColor;
 }
 
-.stanza-editor .stanza-editor-bracket-guide.active {
-	border-left-width: calc(2 * var(--ash-stroke-thickness));
-}
-
 .stanza-editor .stanza-editor-bracket-guide-horizontal {
 	border-top: var(--ash-stroke-thickness) solid currentColor;
-}
-
-.stanza-editor .stanza-editor-bracket-guide-horizontal.active {
-	border-top-width: calc(2 * var(--ash-stroke-thickness));
 }
 
 .stanza-editor .stanza-editor-guide-level-1 {

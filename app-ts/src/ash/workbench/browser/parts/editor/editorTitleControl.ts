@@ -74,7 +74,7 @@ export class EditorTitleControl extends Disposable {
 		this.domNode.append(this.tabsAndActionsDomNode);
 		this.tabsSlot.value = this.createTabsControl(this.tabsMode);
 		this.updateTabsLayoutStyle();
-		this.header = this._register(new EditorHeaderControl(
+		this.header = this._register(this.instantiationService.createInstance(EditorHeaderControl,
 			this.domNode,
 			this.tabsAndActionsDomNode,
 			titleActions,

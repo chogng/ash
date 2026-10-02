@@ -83,7 +83,6 @@ export interface CodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly lineWrapping?: EditorLineWrapping;
 	readonly presentation?: EditorViewportPresentation;
 	readonly textDirection?: EditorTextDirection;
-	readonly showSymbolIcons?: boolean;
 	readonly occurrencesHighlightDelay?: number;
 	readonly selectionHighlightMaxLength?: number;
 	readonly selectionHighlightMultiline?: boolean;

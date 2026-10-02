@@ -416,7 +416,6 @@ const openedLinks: string[] = [];
 const callerEditor = stanza.editor.create(callerContainer, {
 	model: callerModel,
 	placeholder: 'Caller model',
-	showSymbolIcons: !new URL(location.href).searchParams.has('symbolIconsOff'),
 	onOpenLink: target => { openedLinks.push(target); },
 	folding: !new URL(location.href).searchParams.has('contributionsOff'),
 	colorDecorators: !new URL(location.href).searchParams.has('contributionsOff'),
@@ -427,7 +426,6 @@ const callerEditor = stanza.editor.create(callerContainer, {
 });
 const ownedEditor = stanza.editor.create(ownedContainer, {
 	value: 'owned', language: 'plaintext', resource: ownedResource, placeholder: 'Owned model',
-	showSymbolIcons: !new URL(location.href).searchParams.has('symbolIconsOff'),
 });
 callerEditor.layout({ width: callerContainer.clientWidth, height: callerContainer.clientHeight });
 ownedEditor.layout({ width: ownedContainer.clientWidth, height: ownedContainer.clientHeight });

@@ -9,6 +9,8 @@ export interface IQuickPickItem {
 	readonly label: string;
 	readonly description?: string;
 	readonly detail?: string;
+	/** Marks the chosen item independently of the row being browsed. */
+	readonly picked?: boolean;
 	readonly keybinding?: string;
 	readonly className?: string;
 	readonly buttons?: readonly IQuickPickItemButton[];

@@ -43,12 +43,12 @@ export const editorOverviewRulerBorder = registerColor(
 export const editorOverviewRulerBackground = registerColor(
 	'editorOverviewRuler.background',
 	{
-		dark: transparent(editorBackground, 0),
-		light: transparent(editorBackground, 0),
-		highContrastDark: null,
-		highContrastLight: null,
+		dark: editorBackground,
+		light: editorBackground,
+		highContrastDark: editorBackground,
+		highContrastLight: editorBackground,
 	},
-	{ description: 'Background color of the editor overview ruler.', owner, needsTransparency: true },
+	{ description: 'Background color of the editor overview ruler.', owner },
 );
 export const editorLineHighlight = registerColor(
 	'editor.lineHighlightBackground',

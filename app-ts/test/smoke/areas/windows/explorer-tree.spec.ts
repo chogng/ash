@@ -53,6 +53,77 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 	await writeFile(join(testWorkspace.directory, 'tree-other', 'other.txt'), 'other');
 });
 
+test('Explorer scrollbar stays at the pane edge while rows remain inset', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires the Code Explorer');
+	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
+	const names = Array.from({ length: 100 }, (_, index) => `scroll-${String(index).padStart(3, '0')}.txt`);
+	if (target.kind === 'electron') {
+		await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
+	}
+	const page = workbench.page;
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	if (target.kind === 'browser') {
+		await page.evaluate(async names => {
+			const root = await navigator.storage.getDirectory();
+			const workspace = await root.getDirectoryHandle(`scroll-edge-${crypto.randomUUID()}`, { create: true });
+			for (const name of names) await workspace.getFileHandle(name, { create: true });
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
+		}, names);
+		await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+	}
+	const explorer = page.locator('.ash-explorer');
+	const tree = explorer.getByRole('tree');
+	const first = tree.getByRole('treeitem', { name: names[0], exact: true });
+	await expect(first).toBeVisible();
+	const track = explorer.locator('.ash-scrollbar-track-vertical');
+	const viewport = explorer.locator('.ash-scrollbar-viewport');
+	const sidebar = page.locator('.ash-workbench-sidebar');
+	const geometry = () => sidebar.evaluate(sidebar => {
+		const bounds = sidebar.getBoundingClientRect();
+		const edge = bounds.right - parseFloat(getComputedStyle(sidebar).borderRightWidth);
+		const track = sidebar.querySelector('.ash-explorer .ash-scrollbar-track-vertical')!.getBoundingClientRect();
+		const tree = sidebar.querySelector('.ash-explorer [role="tree"]')!.getBoundingClientRect();
+		const row = sidebar.querySelector('.ash-explorer [role="treeitem"]')!.getBoundingClientRect();
+		const header = sidebar.querySelector('.ash-explorer-view-pane > .ash-pane-view-header')!.getBoundingClientRect();
+		return {
+			trackGap: edge - track.right,
+			treeGap: edge - tree.right,
+			rowInset: row.left - tree.left,
+			rowRightInset: tree.right - row.right,
+			headerInset: header.left - bounds.left,
+			outerScroll: sidebar.querySelector('.ash-composite-content')!.scrollTop,
+		};
+	});
+	await expect.poll(geometry).toEqual({ trackGap: 0, treeGap: 0, rowInset: 8, rowRightInset: 8, headerInset: 8, outerScroll: 0 });
+	await expect(track).toHaveAttribute('aria-valuemax', /[1-9]\d*/u);
+	await first.hover();
+	await page.mouse.wheel(0, 400);
+	await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+	await tree.focus();
+	await tree.press('End');
+	await expect(tree.getByRole('treeitem', { name: names.at(-1), exact: true })).toBeVisible();
+	await tree.press('Home');
+	await expect(first).toBeVisible();
+	for (const theme of ['Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		await workbench.quickaccess.select(theme);
+		await expect.poll(geometry).toEqual({ trackGap: 0, treeGap: 0, rowInset: 8, rowRightInset: 8, headerInset: 8, outerScroll: 0 });
+	}
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-group-id="workbench"]').click();
+	await settings.locator('[data-settings-category-id="layout"]').click();
+	const style = settings.locator('[data-configuration-key="workbench.layoutStyle"]').getByRole('combobox');
+	for (const label of ['Flat', 'Modern']) {
+		await style.click();
+		await page.getByRole('option', { name: label, exact: true }).click();
+		const inset = label === 'Modern' ? 8 : 0;
+		await expect.poll(geometry).toEqual({ trackGap: 0, treeGap: 0, rowInset: inset, rowRightInset: inset, headerInset: inset, outerScroll: 0 });
+	}
+	await settings.locator('.ash-modal-editor-close').click();
+});
+
 test('Explorer tree guides align with ancestor arrows and settings update without replacing rows', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code Explorer');
 	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');

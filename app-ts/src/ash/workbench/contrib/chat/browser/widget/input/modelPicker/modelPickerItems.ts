@@ -19,7 +19,7 @@ export function buildModelPickerItems(models: readonly ModelCatalogEntry[], sele
 		return {
 			label: entry.displayName,
 			detail: details.join(' · '),
-			className: isSelected ? 'ash-chat-model-picker-current' : undefined,
+			picked: isSelected,
 			entry,
 		};
 	});

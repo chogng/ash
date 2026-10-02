@@ -1,3 +1,4 @@
+import '../../../editor/test/browser/testEditorDom.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
@@ -28,11 +29,16 @@ import { EditorBreadcrumbsControl } from '../../browser/parts/editor/breadcrumbs
 import { setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import { builtinLanguagePackCatalogs } from '../../services/localization/common/localizationCatalogs.js';
 import { EditorGroupModel } from '../../common/editor/editorGroupModel.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
+import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
+import { FileKind } from '../../../platform/files/common/files.js';
+import type { FileElement } from '../../browser/parts/editor/breadcrumbsModel.js';
 
 test('Editor breadcrumbs localize their navigation label when the language changes', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		using control = new EditorBreadcrumbsControl(dom.window.document.body);
+		using services = createTestEditorServices();
+		using control = services.createInstance(EditorBreadcrumbsControl, dom.window.document.body, undefined, undefined);
 		control.setInput(input('folder/file.ts'));
 		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
@@ -42,6 +48,69 @@ test('Editor breadcrumbs localize their navigation label when the language chang
 		assert.equal(control.domNode.querySelector('.ash-breadcrumbs-widget') !== null, true);
 	} finally {
 		resetNlsResolver();
+		dom.window.close();
+	}
+});
+
+test('EditorTitleControl starts breadcrumbs at the owning workspace and refreshes open files when roots change', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using configuration = new InMemoryConfigurationService();
+		using services = createTestEditorServices(configuration);
+		const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+		workspace.updateWorkspace({ id: 'ash', uri: URI.file('/Users/lx/Desktop/ash') });
+		const group = new EditorGroupModel();
+		let selected: FileElement | undefined;
+		using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration,
+			(element: FileElement) => { selected = element; }, undefined, undefined, undefined, undefined);
+		const file = { ...input('engine #1.ts'), resource: URI.file('/Users/lx/Desktop/ash/源 码/engine #1.ts') };
+		group.openEditor(file);
+		control.setEditors([descriptor(file)], file);
+		const labels = (): (string | null)[] => [...control.domNode.querySelectorAll('.ash-editor-breadcrumbs button')].map(button => button.textContent);
+		assert.deepEqual(labels(), ['ash', '源 码', 'engine #1.ts']);
+		control.domNode.querySelectorAll<HTMLButtonElement>('.ash-editor-breadcrumbs button')[1]!.click();
+		assert.deepEqual([selected?.uri.toString(), selected?.kind], [URI.file('/Users/lx/Desktop/ash/源 码').toString(), FileKind.Directory]);
+
+		workspace.updateWorkspace({ id: 'multi', configuration: URI.file('/workspace.ash-workspace'), folders: [
+			{ id: 'ash', uri: URI.file('/Users/lx/Desktop/ash'), name: 'Ash', index: 0 },
+			{ id: 'source', uri: URI.file('/Users/lx/Desktop/ash/源 码/'), name: 'Source', index: 1 },
+		] });
+		assert.deepEqual(labels(), ['Source', 'engine #1.ts']);
+		control.domNode.querySelector<HTMLButtonElement>('.ash-editor-breadcrumbs button')!.click();
+		assert.deepEqual([selected?.uri.toString(), selected?.kind], [URI.file('/Users/lx/Desktop/ash/源 码').toString(), FileKind.Directory]);
+		await configuration.updateValue(BreadcrumbsFilePathConfiguration, 'last');
+		assert.deepEqual(labels(), ['engine #1.ts']);
+		await configuration.updateValue(BreadcrumbsFilePathConfiguration, 'on');
+		workspace.updateWorkspace({ id: 'other', uri: URI.file('/Users/lx/Desktop/ash-other') });
+		assert.deepEqual(labels(), ['Users', 'lx', 'Desktop', 'ash', '源 码', 'engine #1.ts']);
+		workspace.updateWorkspace({ id: 'empty', folders: [] });
+		assert.deepEqual(labels(), ['Users', 'lx', 'Desktop', 'ash', '源 码', 'engine #1.ts']);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Editor breadcrumbs respect URI segment boundaries for remote, Windows and filesystem roots', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using services = createTestEditorServices();
+		const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+		using control = services.createInstance(EditorBreadcrumbsControl, dom.window.document.body, undefined, undefined);
+		const cases = [
+			{ root: 'vscode-remote://ssh-remote+host/home/lx/ash', file: 'vscode-remote://ssh-remote+host/home/lx/ash/src/main.ts', labels: ['ash', 'src', 'main.ts'] },
+			{ root: 'vscode-remote://ssh-remote+host/home/lx/ash', file: 'vscode-remote://ssh-remote+other/home/lx/ash/main.ts', labels: ['ssh-remote+other', 'home', 'lx', 'ash', 'main.ts'] },
+			{ root: 'file:///C:/Users/lx/ash', file: 'file:///C:/Users/lx/ash/src/main.ts', labels: ['ash', 'src', 'main.ts'] },
+			{ root: 'file://server/share/ash', file: 'file://server/share/ash/main.ts', labels: ['ash', 'main.ts'] },
+			{ root: 'file:///work/ash', file: 'file:///work/ash%2Fother/main.ts', labels: ['work', 'ash/other', 'main.ts'] },
+			{ root: 'file:///work/ash', file: 'file:///work/ash/src%2Fpart/main.ts', labels: ['ash', 'src/part', 'main.ts'] },
+			{ root: 'file:///', file: 'file:///main.ts', labels: ['ash', 'main.ts'] },
+		];
+		for (const scenario of cases) {
+			workspace.updateWorkspace({ id: 'test', folders: [{ id: 'root', uri: URI.parse(scenario.root), name: 'ash', index: 0 }] });
+			control.setInput({ ...input('main.ts'), resource: URI.parse(scenario.file) });
+			assert.deepEqual([...control.domNode.querySelectorAll('button')].map(button => button.textContent), scenario.labels, scenario.file);
+		}
+	} finally {
 		dom.window.close();
 	}
 });

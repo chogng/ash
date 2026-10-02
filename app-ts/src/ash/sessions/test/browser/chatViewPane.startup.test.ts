@@ -167,6 +167,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		rememberSelectedModel: () => {},
 		listModelCatalog: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		listModelProviders: () => pending,
+		setModelPreferences: async () => {},
 		listCustomModelProviders: async () => [],
 		saveCustomModelProvider: async () => {},
 		testProviderModel: async () => ({ type: 'passed' }),

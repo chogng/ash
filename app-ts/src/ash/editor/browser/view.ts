@@ -273,6 +273,9 @@ export class View extends ViewEventHandler {
 		this.viewport = viewport;
 		this.onDidChangeLayout = viewport.onDidChange;
 		this.viewContext = new ViewContext(this.editorConfiguration, options.theme, this.viewModel);
+		// Update the shared theme before Parts handle the same theme event.
+		this.viewModel.addViewEventHandler(this);
+		this._register(toDisposable(() => this.viewModel.removeViewEventHandler(this)));
 		this.scrollbar = this.registerViewPart(new EditorScrollbar(this.viewContext, this.contentNode, this.domNode, this.domNode));
 		this.domNode.domNode.prepend(this.scrollbar.getDomNode().domNode);
 		this.viewGpuContext = this.editorConfiguration.options.get(EditorOption.experimentalGpuAcceleration) === 'on'
@@ -341,7 +344,7 @@ export class View extends ViewEventHandler {
 			? this.registerViewPart(new ViewLinesGpu(this.viewContext, this.viewGpuContext, () => this.scheduleProjection()))
 			: undefined;
 		this.contentViewOverlays = this.registerViewPart(new ContentViewOverlays(this.viewContext, this.contentElement));
-		this.decorations = new DecorationsOverlay(this.viewContext);
+		this.decorations = new DecorationsOverlay(this.viewContext, () => this.textLeft);
 		this.contentViewOverlays.addDynamicOverlay(new CurrentLineHighlightOverlay(this.viewContext));
 		this.contentViewOverlays.addDynamicOverlay(new SelectionsOverlay(this.viewContext, this.viewModel, this.model, this.contentElement, () => this.visualProjection, () => this.textLeft, this.textMeasurer));
 		this.contentViewOverlays.addDynamicOverlay(new IndentGuidesOverlay(this.viewContext, {
@@ -485,8 +488,6 @@ export class View extends ViewEventHandler {
 			}
 		}));
 		this._register(this.pixelRatio.onDidChange(() => this.render(false, true)));
-		this.viewModel.addViewEventHandler(this);
-		this._register(toDisposable(() => this.viewModel.removeViewEventHandler(this)));
 		this.layout(options.dimension ?? getClientArea(this.domNode.domNode));
 		this.render(true, false);
 	}
@@ -960,6 +961,8 @@ export class View extends ViewEventHandler {
 			owner: this,
 			renderText: () => {
 				const contentOffsetLeft = this.contentOffsetLeft;
+				// Content rows exclude the left minimap from their gutter; the fixed margin uses editor coordinates.
+				this.contentElement.style.setProperty('--stanza-editor-gutter-width', `${this.gutterWidth}px`);
 				// Text layers retain their editor-relative geometry inside the body viewport.
 				const bodyOffsetLeft = contentOffsetLeft - this.getLayoutInfo().contentLeft;
 				this.contentNode.setTransform(`translate3d(${bodyOffsetLeft}px, 0, 0)`);

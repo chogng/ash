@@ -27,6 +27,8 @@ export function createDisconnectedSessionApi(unavailable: UnavailableOperation):
 
 export function createDisconnectedModelApi(unavailable: UnavailableOperation): IModelApi {
 	return {
+		listFastModels: () => unavailable('model.listFastModels'),
+		setModelPreferences: () => unavailable('model.setModelPreferences'),
 		listCustomProviders: () => unavailable('model.listCustomProviders'),
 		saveCustomProvider: () => unavailable('model.saveCustomProvider'),
 		testProviderModel: () => unavailable('model.testProviderModel'),
@@ -88,6 +90,27 @@ export function createAppServerSessionApi(connection: AppServerProtocolClient): 
 
 export function createAppServerModelApi(connection: AppServerProtocolClient): IModelApi {
 	return {
+		listFastModels: async () => {
+			const snapshot = await appServerRequest(connection, 'config/read', {});
+			return Object.entries(snapshot.providers).flatMap(([provider, config]) => (config.fastModels ?? []).map(model => ({ provider, model })));
+		},
+		setModelPreferences: async (model, update) => {
+			const snapshot = await appServerRequest(connection, 'config/read', {});
+			// Unconfigured built-in providers use their API connection; configured providers use the active connection.
+			const config: ProviderConfigDto = snapshot.providers[model.provider] ?? { connection: model.provider, provider: model.provider };
+			const fastModels = new Set(config.fastModels);
+			if (update.fast === true) { fastModels.add(model.model); }
+			if (update.fast === false) { fastModels.delete(model.model); }
+			const modelContext = { ...config.modelContext };
+			if (update.contextWindow !== undefined) {
+				modelContext[model.model] = { ...modelContext[model.model], contextWindow: update.contextWindow };
+			}
+			await appServerRequest(connection, 'provider/configure', {
+				commandId: createUuid(),
+				expectedRevision: snapshot.revision,
+				config: { ...config, fastModels: [...fastModels], modelContext },
+			});
+		},
 		listCustomProviders: async () => {
 			const snapshot = await appServerRequest(connection, 'config/read', {});
 			return Object.values(snapshot.connections).filter(config => config.custom && config.connection.startsWith('custom-')).map(config => ({

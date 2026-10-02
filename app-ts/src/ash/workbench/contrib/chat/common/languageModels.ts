@@ -2,6 +2,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IModelApi, type CustomModelProvider, type ModelProviderTestResult } from '../../../../platform/sessions/common/sessionApi.js';
+import type { ModelPreferencesUpdate } from '../../../../platform/sessions/common/sessionApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../../platform/app-server/common/appServerApi.js';
 import { ILanguageModelsConfigurationService } from './languageModelsConfiguration.js';
 import type { ModelRef, ModelProviderCredentialStatus } from '../../../services/chat/common/chatService.js';
@@ -9,6 +10,7 @@ import { modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat
 
 /** Model catalog, provider credentials and picker preferences shared by both windows. */
 export interface ILanguageModelsService {
+	setModelPreferences(model: ModelRef, update: ModelPreferencesUpdate): Promise<void>;
 	readonly onDidChangeModels: Event<void>;
 	listModels(): Promise<readonly ModelCatalogEntry[]>;
 	getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined;
@@ -78,6 +80,13 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		await this.modelApi.saveCustomProvider(provider);
 	}
 
+	public async setModelPreferences(model: ModelRef, update: ModelPreferencesUpdate): Promise<void> {
+		await this.modelApi.setModelPreferences(model, update);
+		// A catalog request started before the save cannot report the new preferences.
+		if (this.modelCatalogLoad) { await this.modelCatalogLoad; }
+		await this.refreshModels();
+	}
+
 	public async testProviderModel(provider: CustomModelProvider, model: string): Promise<ModelProviderTestResult> {
 		return this.modelApi.testProviderModel(provider, model);
 	}
@@ -120,13 +129,13 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	}
 
 	private async loadModelCatalog(): Promise<readonly ModelCatalogEntry[]> {
-		const [catalog, providers] = await Promise.all([this.modelApi.listModels(), this.modelApi.listProviders()]);
+		const [catalog, providers, fastModels] = await Promise.all([this.modelApi.listModels(), this.modelApi.listProviders(), this.modelApi.listFastModels()]);
 		const models: Parameters<typeof this.acceptModelCatalog>[0][number][] = [...catalog.models];
 		for (const connection of ['kimi-desktop', 'kimi-cli']) {
 			if (!providers.providers.some(provider => provider.connection === connection && provider.ready)) { continue; }
 			models.push(...await this.modelApi.listProviderModels(connection));
 		}
-		return this.acceptModelCatalog(models);
+		return this.acceptModelCatalog(models, new Set(fastModels.map(modelRefIdentity)));
 	}
 
 	private acceptModelCatalog(entries: readonly {
@@ -134,9 +143,11 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		readonly displayName: string;
 		readonly discovered?: boolean | null;
 		readonly contextWindow?: number | null;
+		readonly maximumContextWindow?: number | null;
+		readonly capabilities?: { readonly fastMode: string };
 		readonly supportedReasoningEfforts?: ModelCatalogEntry['supportedReasoningEfforts'];
 		readonly modelReasoningEffort?: ModelCatalogEntry['modelReasoningEffort'] | null;
-	}[]): readonly ModelCatalogEntry[] {
+	}[], fastModels: ReadonlySet<string>): readonly ModelCatalogEntry[] {
 		const identities = new Set<string>();
 		const catalog = entries.map(entry => {
 			const identity = modelRefIdentity(entry.model);
@@ -145,6 +156,9 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 			return Object.freeze({
 				model: Object.freeze({ ...entry.model }),
 				displayName: entry.displayName,
+				maximumContextWindow: entry.maximumContextWindow,
+				supportsFast: entry.capabilities?.fastMode === 'supported',
+				fast: fastModels.has(identity),
 				...(entry.discovered === true ? { discovered: true } : {}),
 				...(entry.contextWindow !== undefined ? { contextWindow: entry.contextWindow } : {}),
 				...(entry.supportedReasoningEfforts !== undefined ? { supportedReasoningEfforts: Object.freeze([...entry.supportedReasoningEfforts]) } : {}),
@@ -167,6 +181,9 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 			&& entry.discovered === candidate.discovered
 			&& modelRefIdentity(entry.model) === modelRefIdentity(candidate.model)
 			&& entry.contextWindow === candidate.contextWindow
+			&& entry.maximumContextWindow === candidate.maximumContextWindow
+			&& entry.supportsFast === candidate.supportsFast
+			&& entry.fast === candidate.fast
 			&& entry.modelReasoningEffort === candidate.modelReasoningEffort
 			&& entry.supportedReasoningEfforts?.join('\0') === candidate.supportedReasoningEfforts?.join('\0');
 	});

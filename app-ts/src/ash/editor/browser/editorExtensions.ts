@@ -533,7 +533,6 @@ export interface TextEditorContributionConfigurationContext extends SharedTextCo
 		| 'guides'
 		| 'indentation'
 		| 'languageDiagnosticsService'
-		| 'showSymbolIcons'
 	>;
 	readonly renderDiagnosticDecorations: boolean;
 	readonly viewModel: IViewModel;
