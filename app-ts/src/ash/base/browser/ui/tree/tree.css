@@ -50,6 +50,7 @@
   align-items: center;
   overflow: hidden;
   border: 0;
+  border-radius: var(--ash-corner-radius-small);
   background: transparent;
   color: inherit;
   cursor: default;
@@ -110,6 +111,7 @@
 }
 
 .ash-tree-selection-active:focus .ash-tree-row.selected {
+  --ash-description-foreground: var(--ash-list-active-selection-foreground);
   color: var(--ash-list-active-selection-foreground);
   background: var(--ash-list-active-selection-background);
 }

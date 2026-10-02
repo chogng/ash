@@ -1,0 +1,20 @@
+.ash-count-badge {
+  display: inline-flex;
+  box-sizing: border-box;
+  min-width: var(--ash-spacing-size200);
+  height: var(--ash-spacing-size200);
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ash-corner-radius-circle);
+  padding: 0 var(--ash-spacing-size60);
+  color: var(--ash-badge-foreground);
+  background: var(--ash-badge-background);
+  font-size: var(--ash-font-size-label2);
+  font-weight: var(--ash-font-weight-regular);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+  outline-offset: -1px;
+}

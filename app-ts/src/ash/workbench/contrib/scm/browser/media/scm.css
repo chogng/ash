@@ -204,15 +204,10 @@
   white-space: nowrap;
 }
 
-.ash-scm-graph-label > .ash-icon {
-  width: var(--ash-lxicon-font-size);
-  height: var(--ash-lxicon-font-size);
-  flex: 0 0 var(--ash-lxicon-font-size);
-}
 
-.ash-scm-graph-label-description {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.ash-scm-graph-label > .ash-icon-label,
+.ash-scm-graph-remote > .ash-icon-label {
+  flex: 1 1 auto;
 }
 
 .ash-scm-graph-label.head {
@@ -239,6 +234,9 @@
 }
 
 .ash-scm-graph-remote {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
   border: var(--ash-stroke-thickness) solid color-mix(in srgb, currentColor 28%, transparent);
   border-radius: var(--ash-corner-radius-small);
   padding: 2px 6px;
@@ -285,15 +283,6 @@
 .ash-scm-graph-change > .ash-icon-label {
   min-width: 0;
   flex: 1 1 auto;
-}
-
-.ash-scm-graph-change-description {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ash-muted-foreground);
-  font-size: var(--ash-font-size-label2);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .ash-scm-graph-change:hover,
@@ -498,16 +487,6 @@
   white-space: nowrap;
 }
 
-.ash-scm-section-count {
-  flex: 0 0 auto;
-  min-width: var(--ash-spacing-size200);
-  color: color-mix(in srgb, currentColor 70%, transparent);
-  font-size: var(--ash-font-size-label2);
-  font-weight: var(--ash-font-weight-regular);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
 .ash-scm-action-toolbar {
   flex: 0 0 auto;
 }
@@ -567,16 +546,6 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  white-space: nowrap;
-}
-
-.ash-scm-change-description {
-  min-width: 0;
-  flex: 1 10 auto;
-  overflow: hidden;
-  margin-left: var(--ash-spacing-size60);
-  color: color-mix(in srgb, currentColor 70%, transparent);
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

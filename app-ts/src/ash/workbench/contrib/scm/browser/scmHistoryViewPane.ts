@@ -1,7 +1,6 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { observeElementSize } from "../../../../base/browser/observer.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
-import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { localize } from '../../../../nls.js';
@@ -13,7 +12,7 @@ import { IContextKeyService } from "../../../../platform/contextkey/browser/cont
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { registerOpenEditorListeners, type IOpenEditorOptions } from "../../../../platform/editor/browser/editor.js";
 import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
-import { IResourceIconRenderer } from "../../../browser/labels.js";
+import { IResourceLabelService, type ResourceLabels } from "../../../browser/labels.js";
 import { SCMHistoryUnavailableError, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryProvider, type SCMHistoryItemChangeViewModelTreeElement, type SCMHistoryItemViewModelTreeElement } from '../common/history.js';
 import { ISCMViewService } from '../common/scm.js';
 import { IEditorService } from "../../../services/editor/common/editorService.js";
@@ -45,6 +44,9 @@ export class SCMHistoryViewPane extends ViewPane {
 	private readonly providerIdContext: IContextKey<string>;
 	private readonly graphElement: HTMLDivElement;
 	private readonly hovers = this._register(new DisposableStore());
+	// Repository labels outlive virtual commit rows and are released with the graph.
+	private readonly remoteLabels = this._register(new DisposableStore());
+	private readonly resourceLabels: ResourceLabels;
 	private readonly more = this._register(new DisposableStore());
 	private readonly providerListener = this._register(new MutableDisposable());
 	private provider: ISCMHistoryProvider | undefined;
@@ -59,8 +61,9 @@ export class SCMHistoryViewPane extends ViewPane {
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceIconRenderer private readonly resourceIconRenderer: IResourceIconRenderer) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService) {
 		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
+		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.scmViewService = scmViewService;
 		this.graphLabel = options.title;
 		this.contentElement.classList.add("ash-scm-secondary-pane");
@@ -72,7 +75,6 @@ export class SCMHistoryViewPane extends ViewPane {
 		}));
 		this.contentElement.append(this.graphElement);
 		this._register(observeElementSize(this.graphElement, () => this.renderRows()));
-		this._register(resourceIconRenderer.onDidChangeResourceIcons(() => this.renderRows()));
 		this.busyContext = SCMHistoryBusyContext.bindTo(contextKeyService);
 		this._register(toDisposable(() => this.busyContext.reset()));
 		this.providerIdContext = SCMHistoryProviderIdContext.bindTo(contextKeyService);
@@ -116,6 +118,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.list = undefined;
 		this.expanded.clear();
 		this.hovers.clear();
+		this.remoteLabels.clear();
 		this.more.clear();
 		this.graphElement.textContent = "Loading commit graph…";
 		this.graphElement.setAttribute('role', 'status');
@@ -161,6 +164,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.graphElement.removeAttribute('role');
 		this.graphElement.removeAttribute('aria-live');
 		this.hovers.clear();
+		this.remoteLabels.clear();
 		this.more.clear();
 		this.rows = toISCMHistoryItemViewModelArray(page.items, new Map(), this.head);
 		const remotes = this.renderRemotes(remoteLabels);
@@ -387,12 +391,11 @@ export class SCMHistoryViewPane extends ViewPane {
 			const icon = reference.category === 'tag' ? Lxicon.tag : isRemote ? Lxicon.cloud : Lxicon.gitBranch;
 			label.className = `ash-scm-graph-label ${isCurrent ? "head" : isRemote ? "remote" : "local"}`;
 			label.dataset.icon = icon.id;
-			appendIcon(icon, label);
-			const text = h(this.graphElement.ownerDocument, "span");
-			text.className = "ash-scm-graph-label-description";
-			text.textContent = reference.name;
-			label.append(text);
-			label.title = reference.description ?? reference.name;
+			this.hovers.add(new IconLabel(label, {
+				label: reference.name,
+				icon,
+				title: reference.description ?? reference.name,
+			}));
 			container.append(label);
 		}
 		return container;
@@ -406,8 +409,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		for (const remote of remoteLabels) {
 			const label = h(this.graphElement.ownerDocument, "span");
 			label.className = "ash-scm-graph-remote";
-			label.textContent = remote;
-			label.title = remote;
+			this.remoteLabels.add(new IconLabel(label, { label: remote, title: remote }));
 			container.append(label);
 		}
 		return container;
@@ -433,15 +435,12 @@ export class SCMHistoryViewPane extends ViewPane {
 			button.title = `Open ${change.path} from ${historyItem.displayId ?? historyItem.id}`;
 			const name = change.path.split("/").at(-1) ?? change.path;
 			const parentPath = change.path.includes("/") ? change.path.slice(0, change.path.lastIndexOf("/")) : "";
-			const fileLabel = this.hovers.add(new IconLabel(button, {
-				label: name,
-				description: parentPath || undefined,
+			const fileLabel = this.hovers.add(this.resourceLabels.create(button));
+			fileLabel.setResource({ resource: change.uri, name, description: parentPath || undefined }, {
 				reserveIconSpace: true,
-				renderIcon: (container) => this.resourceIconRenderer.renderFileIcon(change.uri, container),
 				title: change.path,
-			}));
-			fileLabel.element.classList.add("ash-scm-graph-change-label");
-			fileLabel.element.querySelector(".ash-icon-label-description")?.classList.add("ash-scm-graph-change-description");
+				extraClasses: ["ash-scm-graph-change-label"],
+			});
 			const status = h(document, "span");
 			status.className = `ash-scm-graph-change-status ${change.status}`;
 			status.textContent = changeStatusLabel(change.status);

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
@@ -18,6 +18,7 @@ test('SCM history shows Git commits and opens a changed file', async ({ target, 
 	await history.locator('.ash-pane-view-header').click();
 	const commit = history.getByRole('treeitem', { name: /Initial/ });
 	await expect(commit).toBeVisible();
+	await expect(commit.locator('.ash-scm-graph-label > .ash-icon-label')).not.toHaveCount(0);
 	await expect(commit.locator('.ash-scm-graph-label .ash-icon').first()).toHaveCSS('width', '16px');
 	await expect(commit.locator('.ash-scm-graph-label .ash-icon').first()).toHaveAttribute('aria-hidden', 'true');
 	await expect(commit).toHaveAttribute('aria-current', 'true');
@@ -48,11 +49,14 @@ test.describe('SCM folding', () => {
 		if (target.appServerMode !== 'required') { return; }
 		test.skip(target.kind === 'browser' && process.env.ASH_PLAYWRIGHT_GIT_REPOSITORY !== '1', 'Requires Web Git setup before server startup (ASH_PLAYWRIGHT_GIT_REPOSITORY=1).');
 		const cwd = testWorkspace.directory;
+		await mkdir(join(cwd, 'src'));
+		await writeFile(join(cwd, 'src', 'details.ts'), 'export const details = 1;\n');
 		await run('git', ['init', '-b', 'main'], { cwd });
-		await run('git', ['add', 'main.ts'], { cwd });
+		await run('git', ['add', 'main.ts', 'src/details.ts'], { cwd });
 		await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Initial'], { cwd });
 		await writeFile(join(cwd, 'main.ts'), 'const value = 2;\n');
-		await run('git', ['add', 'main.ts'], { cwd });
+		await writeFile(join(cwd, 'src', 'details.ts'), 'export const details = 2;\n');
+		await run('git', ['add', 'main.ts', 'src/details.ts'], { cwd });
 		await writeFile(join(cwd, 'main.ts'), 'const value = 3;\n');
 	});
 
@@ -76,6 +80,9 @@ test.describe('SCM folding', () => {
 		});
 		expect(rowGeometry).toEqual({ height: 24, rightInset: 8 });
 		await expect(working).toHaveCSS('height', '28px');
+		await expect(working).toHaveCSS('border-radius', '4px');
+		await expect(working.locator('.ash-count-badge')).toHaveCSS('border-radius', '9999px');
+		await expect(working.locator('.ash-count-badge')).toHaveAttribute('aria-label', /changes$/);
 		await expect(working.locator('.ash-tree-twistie .ash-icon')).toHaveCSS('width', '16px');
 		await expect(working.locator('.ash-tree-twistie .ash-icon')).toHaveAttribute('aria-hidden', 'true');
 		const actions = workingRow.locator('.ash-scm-change-actions');
@@ -109,6 +116,7 @@ test.describe('SCM folding', () => {
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 		const fileRow = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open changes for main.ts', exact: true }) });
 		await expect(fileRow).toHaveAttribute('aria-selected', 'true');
+		await expect(fileRow).toHaveCSS('border-radius', '4px');
 		const selectedBackground = await fileRow.evaluate(element => getComputedStyle(element).backgroundColor);
 		await fileRow.hover();
 		await expect(fileRow).toHaveCSS('background-color', selectedBackground);
@@ -130,6 +138,19 @@ test.describe('SCM folding', () => {
 			await expect(staged).toHaveAttribute('aria-expanded', 'true');
 			await expect(stagedFile).toBeVisible();
 			await expect(tree).toBeFocused();
+			await expect(staged).toHaveCSS('border-radius', '4px');
+			const badgeStyle = await staged.locator('.ash-count-badge').evaluate(element => {
+				const style = getComputedStyle(element);
+				const probe = document.createElement('span');
+				probe.style.backgroundColor = style.getPropertyValue('--ash-badge-background');
+				probe.style.color = style.getPropertyValue('--ash-badge-foreground');
+				element.append(probe);
+				const result = { themed: style.backgroundColor === getComputedStyle(probe).backgroundColor && style.color === getComputedStyle(probe).color, outline: style.outlineStyle };
+				probe.remove();
+				return result;
+			});
+			expect(badgeStyle.themed).toBe(true);
+			if (theme.includes('High Contrast')) { expect(badgeStyle.outline).toBe('solid'); }
 			await page.keyboard.press('ArrowLeft');
 			await page.keyboard.press('ArrowRight');
 			await expect(staged).toHaveCSS('outline-style', 'solid');
@@ -152,6 +173,13 @@ test.describe('SCM folding', () => {
 			await expect(selected.locator('.ash-scm-change-actions button').first()).toHaveCSS('color', foreground);
 			const bounds = await stagedFile.boundingBox();
 			expect(bounds?.width).toBeGreaterThan(0);
+			const nestedFile = tree.getByRole('button', { name: 'Open staged changes for src/details.ts', exact: true });
+			await nestedFile.click();
+			const nestedRow = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open staged changes for src/details.ts', exact: true }) });
+			await expect(nestedRow).toHaveAttribute('aria-selected', 'true');
+			const nestedForeground = await nestedRow.evaluate(element => getComputedStyle(element).color);
+			await expect(nestedFile.locator('.ash-icon-label-description')).toHaveText('src');
+			await expect(nestedFile.locator('.ash-icon-label-description')).toHaveCSS('color', nestedForeground);
 			await staged.locator('.ash-tree-twistie').click();
 			await expect(staged).toHaveAttribute('aria-expanded', 'false');
 		}

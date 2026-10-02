@@ -1,7 +1,7 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
+import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -13,7 +13,7 @@ import { WorkbenchObjectTree } from '../../../../platform/list/browser/listServi
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
-import { IResourceIconRenderer } from '../../../browser/labels.js';
+import { IResourceLabelService, type ResourceLabels } from '../../../browser/labels.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ISCMService, ISCMViewService, type ISCMProvider, type ISCMResource, type ISCMResourceGroup } from '../common/scm.js';
 
@@ -31,6 +31,7 @@ export class ScmViewPane extends ViewPane {
 	private readonly commitButton: Button;
 	private readonly statusElement: HTMLDivElement;
 	private readonly tree: WorkbenchObjectTree<TreeElement>;
+	private readonly resourceLabels: ResourceLabels;
 	private readonly renderedRows = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 	private readonly providerListener = this._register(new MutableDisposable());
 	private readonly actionViewItems = new Set<ScmActionViewItem>();
@@ -44,12 +45,13 @@ export class ScmViewPane extends ViewPane {
 		options: IViewPaneOptions,
 		@ISCMService private readonly scmService: ISCMService,
 		@ISCMViewService private readonly scmViewService: ISCMViewService,
-		@IResourceIconRenderer private readonly resourceIconRenderer: IResourceIconRenderer,
+		@IResourceLabelService resourceLabelService: IResourceLabelService,
 		@IContextMenuService private readonly contextMenuProvider: IContextMenuProvider,
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 		@IConfigurationService configurationService: IConfigurationService,
 	) {
 		super(container, options);
+		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.contentElement.classList.add('ash-scm');
 		const document = container.ownerDocument;
 		this.repositorySelectorContainer = h(document, 'label');
@@ -122,7 +124,6 @@ export class ScmViewPane extends ViewPane {
 		this._register(scmService.onDidAddRepository(() => this.render()));
 		this._register(scmService.onDidRemoveRepository(() => this.render()));
 		this._register(scmViewService.onDidChangeActiveRepository(() => this.bindProvider()));
-		this._register(resourceIconRenderer.onDidChangeResourceIcons(() => this.render(true)));
 		this._register(workspaceContext.onDidChangeWorkspace(() => this.render()));
 		this.bindProvider();
 	}
@@ -167,7 +168,7 @@ export class ScmViewPane extends ViewPane {
 		}
 	}
 
-	private render(forceResources = false): void {
+	private render(): void {
 		if (this.isDisposed) return;
 		const repositories = [...this.scmService.repositories];
 		const active = this.scmViewService.activeRepository;
@@ -196,7 +197,7 @@ export class ScmViewPane extends ViewPane {
 			? 'Open a folder to use source control.'
 			: 'No source control repository found in the open folder.');
 		const groups = provider?.groups;
-		if (forceResources || provider !== this.renderedProvider || groups !== this.renderedGroups) {
+		if (provider !== this.renderedProvider || groups !== this.renderedGroups) {
 			this.renderedProvider = provider;
 			this.renderedGroups = groups;
 			// Provider snapshots replace group objects; repository/group identities keep tree state stable.
@@ -221,10 +222,9 @@ export class ScmViewPane extends ViewPane {
 		label.title = group.label;
 		heading.append(label);
 		this.renderActionToolbar(heading, group.actions, `${group.label} actions`, resources).classList.add('ash-scm-section-actions');
-		const count = h(document, 'span');
-		count.className = 'ash-scm-section-count';
-		count.textContent = String(group.resources.length);
-		heading.append(count);
+		const count = resources.add(new CountBadge(heading, { titleFormat: localize('scm.resourceCount', '{0} changes') }));
+		count.domNode.classList.add('ash-scm-section-count');
+		count.setCount(group.resources.length);
 		return heading;
 	}
 
@@ -239,15 +239,12 @@ export class ScmViewPane extends ViewPane {
 		open.className = 'ash-scm-change-open';
 		const name = basename(resource.path);
 		const parentPath = dirname(resource.path);
-		const fileLabel = resources.add(new IconLabel(open, {
-			label: name,
-			description: parentPath || undefined,
+		const fileLabel = resources.add(this.resourceLabels.create(open));
+		fileLabel.setResource({ resource: resource.sourceUri, name, description: parentPath || undefined }, {
 			reserveIconSpace: true,
-			renderIcon: container => this.resourceIconRenderer.renderFileIcon(resource.sourceUri, container),
 			title: resource.originalPath ? `${resource.originalPath} → ${resource.path}` : resource.path,
-		}));
-		fileLabel.element.classList.add('ash-scm-change-label');
-		fileLabel.element.querySelector('.ash-icon-label-description')?.classList.add('ash-scm-change-description');
+			extraClasses: ['ash-scm-change-label'],
+		});
 		open.setAttribute('aria-label', resource.openLabel);
 		open.append(fileLabel.element);
 		resources.add(addDisposableListener(open, 'mousedown', event => event.stopPropagation()));

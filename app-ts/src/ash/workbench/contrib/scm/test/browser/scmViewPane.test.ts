@@ -20,7 +20,7 @@ import { InstantiationService } from "../../../../../platform/instantiation/comm
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
-import { IResourceIconRenderer } from "../../../../browser/labels.js";
+import { IResourceLabelService, ResourceLabels, DEFAULT_LABELS_CONTAINER, type IResourceIconRenderer } from "../../../../browser/labels.js";
 import { GitWorkspaceError, IGitService, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
 import { IEditorService, type EditorInput, type EditorOpenOptions, type EditorOpenTarget } from "../../../../../workbench/services/editor/common/editorService.js";
 import type { IViewsService } from '../../../../../workbench/services/views/browser/viewsService.js';
@@ -241,7 +241,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 	try {
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService());
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelectorAll(".ash-scm-graph-commit").length === 2);
 		assert.equal(pane.element.querySelector('[role="tree"]')?.getAttribute('aria-label'), 'Graph');
@@ -271,7 +271,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		assert.ok(pane.element.querySelector(".ash-scm-graph-label.head .ash-icon"));
 		assert.equal(pane.element.querySelector(".ash-scm-graph-label.remote")?.textContent, "origin/main");
 		assert.equal(pane.element.querySelector<HTMLElement>(".ash-scm-graph-label.remote")?.dataset.icon, "cloud");
-		assert.equal(pane.element.querySelector<HTMLElement>('.ash-scm-graph-label[title="reviewed"]')?.dataset.icon, 'tag');
+		assert.equal(pane.element.querySelector<HTMLElement>('.ash-scm-graph-label:has([aria-label="reviewed"])')?.dataset.icon, 'tag');
 		assert.match(pane.element.querySelector(".ash-scm-graph-remote")?.textContent ?? "", /^GitHub · chogng\/ash · origin$/);
 		assert.equal(hoverOptions.length, 4);
 		assert.ok(hoverOptions.every((options) => options.target.classList.contains("ash-scm-graph-commit")));
@@ -366,7 +366,7 @@ test("SCMHistoryViewPane loads the complete history across graph pages", async (
 	try {
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.pagination.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.pagination.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService());
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-graph-list") !== null);
 		const list = pane.element.querySelector(".ash-scm-graph-list");
@@ -437,7 +437,7 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 	try {
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.virtualized.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.virtualized.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService());
 		const graph = pane.element.querySelector<HTMLElement>(".ash-scm-graph");
 		assert.ok(graph);
 		Object.defineProperty(graph, "clientHeight", { configurable: true, value: 100 });
@@ -531,7 +531,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 	try {
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.changes.test", title: "Graph" }, history.viewService, menuService, contextMenuService, contextKeyService, hoverService, editorService, testFileIconThemeService());
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.changes.test", title: "Graph" }, history.viewService, menuService, contextMenuService, contextKeyService, hoverService, editorService, testResourceLabelService());
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-graph-commit") !== null);
 
@@ -546,7 +546,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		assert.equal(fileRequests, 0);
 		assert.equal(pane.element.querySelector(".ash-scm-graph-commit")?.getAttribute("aria-expanded"), "true");
 		assert.equal(pane.element.querySelector(".ash-scm-graph-change-label .ash-icon-label-text")?.textContent, "editor.ts");
-		assert.equal(pane.element.querySelector(".ash-scm-graph-change-description")?.textContent, "src");
+		assert.equal(pane.element.querySelector(".ash-icon-label-description")?.textContent, "src");
 		assert.equal(pane.element.querySelector(".ash-scm-graph-change-label .ash-icon-label-icon")?.getAttribute("data-file-icon"), "editor.ts");
 		assert.ok([...pane.element.querySelectorAll<SVGPathElement>(".ash-scm-graph-path")].some((path) => path.getAttribute("d")?.endsWith("V 44")));
 		assert.equal(commit.style.getPropertyValue("--scm-graph-node-x"), "11px");
@@ -612,6 +612,13 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(browser);
 	using changes = new Emitter<void>();
+	using iconChanges = new Emitter<void>();
+	let iconTheme = "first";
+	const icons: IResourceIconRenderer = {
+		...testFileIconThemeService(),
+		onDidChangeResourceIcons: iconChanges.event,
+		renderFileIcon: (_resource, container) => { container.dataset.fileIcon = iconTheme; },
+	};
 	const opened: Array<{ path: string; pinned: boolean }> = [];
 	const openIntents: Array<{ options: IEditorOptions; sideBySide: boolean }> = [];
 	let groupActions = 0;
@@ -648,7 +655,7 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		using repository = scm.registerSCMProvider(provider);
 		services.registerInstance(ISCMService, scm);
 		services.registerInstance(ISCMViewService, views);
-		services.registerInstance(IResourceIconRenderer, testFileIconThemeService());
+		services.registerInstance(IResourceLabelService, testResourceLabelService(icons));
 		services.registerInstance(IContextMenuService, testContextMenuProvider);
 		services.registerInstance(IWorkspaceContextService, testWorkspaceContext());
 		services.registerInstance(IConfigurationService, configuration);
@@ -659,13 +666,20 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		assert.equal(tree.getAttribute('aria-label'), '源代码管理更改');
 		assert.ok(tree.getAttribute('aria-description')?.includes('左方向键折叠分组'));
 		assert.ok(tree.getAttribute('aria-description')?.includes('侧边分组'));
+		const retainedFile = tree.querySelector<HTMLButtonElement>('[aria-label="Open first.ts"]')!;
+		assert.equal(retainedFile.querySelector<HTMLElement>('[data-file-icon]')?.dataset.fileIcon, 'first');
+		iconTheme = 'second';
+		iconChanges.fire();
+		assert.equal(tree.querySelector('[aria-label="Open first.ts"]'), retainedFile, 'Icon theme changes update shared labels without rebuilding tree rows');
+		assert.equal(retainedFile.querySelector<HTMLElement>('[data-file-icon]')?.dataset.fileIcon, 'second');
 		assert.equal(group().getAttribute('aria-expanded'), 'true');
 		group().querySelector<HTMLElement>('.ash-scm-section-label')!.click();
 		assert.equal(group().getAttribute('aria-expanded'), 'false');
 		assert.equal(tree.querySelectorAll('.ash-scm-change').length, 0);
 		await pane.refresh();
 		assert.equal(group().getAttribute('aria-expanded'), 'false');
-		assert.equal(group().querySelector('.ash-scm-section-count')?.textContent, '2');
+		assert.equal(group().querySelector('.ash-count-badge')?.textContent, '2');
+		assert.equal(group().querySelector('.ash-count-badge')?.getAttribute('aria-label'), '2 个更改');
 		key('ArrowRight');
 		assert.equal(group().getAttribute('aria-expanded'), 'true');
 		assert.equal(tree.querySelectorAll('.ash-scm-change').length, 2);
@@ -838,7 +852,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git",
 			title: "Changes",
-		}, scmService, viewService, testFileIconThemeService(), testContextMenuProvider, testWorkspaceContext(), configuration);
+		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, testWorkspaceContext(), configuration);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "4 changed files");
 
@@ -857,7 +871,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		const workingLabel = [...pane.element.querySelectorAll<HTMLElement>(".ash-scm-change-label")]
 			.find((element) => element.querySelector(".ash-icon-label-text")?.textContent === "working.ts");
 		assert.ok(workingLabel);
-		assert.equal(workingLabel.querySelector(".ash-scm-change-description")?.textContent, "src");
+		assert.equal(workingLabel.querySelector(".ash-icon-label-description")?.textContent, "src");
 		assert.equal(workingLabel.querySelector(".ash-icon-label-icon")?.getAttribute("data-file-icon"), "working.ts");
 		assert.equal(pane.element.querySelector<HTMLButtonElement>('button[aria-label="Open merge conflict in conflict.ts"]')?.disabled, false);
 
@@ -1061,7 +1075,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git.restart",
 			title: "Changes",
-		}, scmService, viewService, testFileIconThemeService(), testContextMenuProvider, testWorkspaceContext(), configuration);
+		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, testWorkspaceContext(), configuration);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);
 		assert.equal(pane.element.querySelector(".ash-scm-branch"), null);
@@ -1115,6 +1129,10 @@ function testEditorService(opened: Array<{ readonly input: EditorInput; readonly
 		openEditor: async (input, options, target) => { opened.push({ input, options, target }); },
 		focusActiveEditor() {},
 	};
+}
+
+function testResourceLabelService(resourceIconRenderer = testFileIconThemeService()): IResourceLabelService {
+	return { createGroup: () => new ResourceLabels(DEFAULT_LABELS_CONTAINER, { workspaceContextService: testWorkspaceContext(), resourceIconRenderer }) };
 }
 
 function testFileIconThemeService(): IResourceIconRenderer {

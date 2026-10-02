@@ -26,3 +26,6 @@ export const scrollbarSliderActiveBackground = registerColor('scrollbarSlider.ac
 	dark: transparent('#bfbfbf', 0.4), light: transparent('#000000', 0.6),
 	highContrastDark: '#ffff00', highContrastLight: '#0000ee',
 }, { description: 'Active scrollbar slider background.', owner });
+
+export const badgeBackground = color('badge.background', '#37373d', '#e4e6f2', '#000000', '#ffffff', 'Background for count badges.');
+export const badgeForeground = color('badge.foreground', '#ffffff', '#333333', '#ffffff', '#000000', 'Foreground for count badges.');
