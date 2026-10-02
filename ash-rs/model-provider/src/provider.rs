@@ -775,6 +775,18 @@ pub struct ModelProviderRuntime {
 }
 
 impl ModelProviderRuntime {
+    /// Resolves a connection through the same registry used by model requests.
+    pub fn connection_endpoint(
+        &self,
+        config: &ModelProviderConfig,
+    ) -> Result<String, ModelProviderError> {
+        Ok(self
+            .with_configs([config])?
+            .configs
+            .normalize(config)?
+            .base_url)
+    }
+
     /// Chooses one ready connection per model vendor before an invocation is bound.
     /// Credential changes affect later bindings; a running invocation keeps its own connection.
     /// Readiness proves local credentials only; upstream plan eligibility is checked by the call.

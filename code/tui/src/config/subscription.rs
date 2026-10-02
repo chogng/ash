@@ -427,7 +427,11 @@ impl Subscription {
         if self.sign_out_availability() == SignOutAvailability::Available {
             model = model.with_key_hint_action(crate::keymap::bindings::SUBSCRIPTION_SIGN_OUT);
         }
-        ConfigChoices { model, actions }
+        ConfigChoices {
+            model,
+            actions,
+            language: crate::nls::Language::English,
+        }
     }
 
     pub(crate) fn sign_out_availability(&self) -> SignOutAvailability {

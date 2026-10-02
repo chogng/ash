@@ -7724,3 +7724,6 @@ fn account_read_never_activates_an_existing_chatgpt_login() {
         assert!(snapshot.values.model.is_none());
     }
 }
+
+#[path = "server/network_operations_tests.rs"]
+mod network_tests;

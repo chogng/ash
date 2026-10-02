@@ -85,6 +85,7 @@ mod connector_operations;
 mod connector_runtime;
 mod debug_operations;
 mod diagnostics_operations;
+mod network_operations;
 mod dictation_operations;
 mod diff_operations;
 mod dir_contributions;
@@ -252,6 +253,7 @@ pub struct AppServer {
     pty_helper: Option<std::path::PathBuf>,
     codebase_models: Option<CodebaseModels>,
     provider_runtime: Option<Arc<ash_model_provider::ModelProviderRuntime>>,
+    network_diagnostics: Option<network_operations::NetworkDiagnostics>,
     semantic_model_provider: Option<Arc<dyn ash_model_provider::SemanticModelProvider>>,
     cloud_codebase_storage_root: Option<std::path::PathBuf>,
     cloud_codebase_providers: ash_cloud_codebase::CloudCodebaseProviderRegistry,
@@ -571,6 +573,7 @@ impl AppServer {
             pty_helper: None,
             codebase_models: None,
             provider_runtime: None,
+            network_diagnostics: None,
             semantic_model_provider: None,
             cloud_codebase_storage_root: None,
             cloud_codebase_providers: ash_cloud_codebase::CloudCodebaseProviderRegistry::default(),
@@ -2299,6 +2302,8 @@ impl AppServer {
             Some(ClientMethod::QueueEnqueue) => self.queue_enqueue(&request.params),
             Some(ClientMethod::QueueList) => self.queue_list(&request.params),
             Some(ClientMethod::QueueCancel) => self.queue_cancel(&request.params),
+            Some(ClientMethod::NetworkRead) => self.network_read(),
+            Some(ClientMethod::NetworkDiagnosticsRun) => self.network_diagnostics_run(cancellation),
             Some(ClientMethod::DiagnosticsRead) => self.diagnostics_read(),
             Some(ClientMethod::FeedbackPrepare) => {
                 self.feedback_prepare(connection, &request.params)

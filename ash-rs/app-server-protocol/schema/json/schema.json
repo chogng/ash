@@ -4127,6 +4127,38 @@
         {
           "properties": {
             "method": {
+              "const": "network/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "network/diagnostics/run",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "diagnostics/read",
               "type": "string"
             },
@@ -9208,6 +9240,38 @@
             },
             "result": {
               "$ref": "#/$defs/QueuedMessage"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "network/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/NetworkReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "network/diagnostics/run",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/NetworkDiagnosticsRunResult"
             }
           },
           "required": [
@@ -30280,6 +30344,237 @@
       "required": [
         "reported",
         "complete"
+      ],
+      "type": "object"
+    },
+    "NetworkCheckDto": {
+      "additionalProperties": false,
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/NetworkCheckOutcomeDto"
+        },
+        "targetId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "connection",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "NetworkCheckOutcomeDto": {
+      "description": "HTTP reachability and authenticated account results are separate evidence.\nAn HTTP response (including 401/404) proves reachability, not account eligibility.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "httpStatus": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "reachable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "httpStatus"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "accountAvailable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "failure": {
+              "$ref": "#/$defs/NetworkFailureDto"
+            },
+            "type": {
+              "const": "failed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "failure"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "NetworkDiagnosticsRunResult": {
+      "additionalProperties": false,
+      "properties": {
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/NetworkCheckDto"
+          },
+          "type": "array"
+        },
+        "network": {
+          "$ref": "#/$defs/NetworkReadResult"
+        }
+      },
+      "required": [
+        "network",
+        "checks"
+      ],
+      "type": "object"
+    },
+    "NetworkFailureDto": {
+      "enum": [
+        "dns",
+        "proxy",
+        "tls",
+        "certificateConfiguration",
+        "connect",
+        "timeout",
+        "policy",
+        "configuration",
+        "request",
+        "authentication",
+        "accountChanged",
+        "accountOperation"
+      ],
+      "type": "string"
+    },
+    "NetworkPurposeDto": {
+      "enum": [
+        "model",
+        "signIn",
+        "usage",
+        "service"
+      ],
+      "type": "string"
+    },
+    "NetworkReadResult": {
+      "additionalProperties": false,
+      "properties": {
+        "targets": {
+          "items": {
+            "$ref": "#/$defs/NetworkTargetDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "targets"
+      ],
+      "type": "object"
+    },
+    "NetworkRouteDto": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "direct",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "proxy",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "host",
+            "port"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "blocked",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "NetworkTargetDto": {
+      "additionalProperties": false,
+      "description": "A configured service dependency. Paths, query strings and credentials never leave the server.",
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "port": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "purpose": {
+          "$ref": "#/$defs/NetworkPurposeDto"
+        },
+        "route": {
+          "$ref": "#/$defs/NetworkRouteDto"
+        }
+      },
+      "required": [
+        "id",
+        "connection",
+        "displayName",
+        "host",
+        "port",
+        "purpose",
+        "route"
       ],
       "type": "object"
     },

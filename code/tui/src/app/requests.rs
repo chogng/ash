@@ -24,6 +24,7 @@ pub(super) enum RequestKey {
     Interaction,
     Thread,
     Config,
+    NetworkDiagnostics,
     Keymap,
     StatusLine,
     Connectors,
@@ -164,10 +165,12 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             Some(RequestKey::Dictation)
         }
         AppCommand::SetDictationShortcutSettings(_) => Some(RequestKey::Config),
+        AppCommand::Config(ConfigCommand::Network(_)) => Some(RequestKey::NetworkDiagnostics),
         AppCommand::Thread(ThreadCommand::Interrupt) => Some(RequestKey::Interrupt),
         AppCommand::Thread(ThreadCommand::ResolveRequest(_)) => Some(RequestKey::Interaction),
         AppCommand::Host(
             HostCommand::CopyLastResponse
+            | HostCommand::CopyText(_)
             | HostCommand::ReadClipboardImage { .. }
             | HostCommand::RefreshClipboardImageAvailability,
         ) => Some(RequestKey::Clipboard),

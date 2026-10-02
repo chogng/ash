@@ -278,6 +278,8 @@ Desktop 当前实现和 Playwright 后续边界见
 | `session/thread/subscribe` | Session + Thread + connection | Thread 与正文快照，加上 `afterSequence` 之后的 durable gap |
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
 | `config/read` | config | 读取配置 |
+| `network/read` | configured network dependencies | 列出服务域名、用途、端口和实际代理路线；不发送网络请求 |
+| `network/diagnostics/run` | configured network dependencies + Account | 使用共享 HTTP 客户端检查连通性，并单独查询已就绪账号额度；只返回安全的状态与错误分类 |
 | `connector/list` | Connector authority | 读取不含 secret/reference 的外部账号连接投影 |
 | `connector/connect/apiToken` | Connector authority + secret store | retry-safe 保存 API token 并发布 connected account |
 | `connector/connect/oauth/start` / `complete` / `cancel` | Connector OAuth owner | 启动 exact PKCE flow，一次性消费 callback state/code，或显式结束 abandoned flow |
@@ -963,6 +965,14 @@ connection 会接收这些 child Thread 的实时 update。产品宿主应先应
 `gui` 与 `tui` patch 分别原子替换完整的前端键值表；App Server 不解释其中字段。客户端修改已知键前
 必须读取当前表并保留未知键，`null` 清除整张表，缺失字段的默认值由对应前端决定。Settings 与手工
 TOML 编辑共享同一 Config revision/generation 和 `config/changed` 通知链。
+
+### 网络诊断
+
+`network/read` 与 `network/diagnostics/run` 参数均为 `{}`。前者返回当前配置的模型连接、已就绪订阅的模型/登录/额度端点，以及后端接入的 Marketplace、图片和账号代理服务。端点归所属服务维护，诊断不维护另一份固定域名清单；外部 Kimi 程序、浏览器和插件自行发出的请求不在此列表中。每项含稳定目标 ID、连接身份、域名、端口、用途，以及共享网络快照选择的直连、代理主机/端口或权限阻止状态。路径、查询参数、代理认证信息和凭据不返回。
+
+运行诊断时，通过同一生产 HTTP 客户端向每个端点的 origin 根路径发送一次无认证 GET，保留现有代理、证书、权限和超时规则。任何收到的 HTTP 状态，包括 401、404、5xx，都表示该次请求已到达服务；这不证明账号授权、模型生成或流式响应有效。DNS、代理连接、TLS、系统证书验证器初始化、连接和超时错误分别报告；一个端点失败不抹掉其他端点的结果。随后通过现有 `account/rateLimits/read` 检查已就绪账号，账号结果与连通性结果分开。服务响应正文不返回。连接关闭取消进行中的等待，结果不缓存，也不写入配置。
+
+客户端拥有入口、翻译和界面状态。TUI 在 `/config` 的网络页提供运行、重试和复制域名；协议可供其他客户端使用。诊断动作不需要持久化开关，代理或证书策略仍由共享 HTTP 配置负责。
 
 ### Coding Plan 连接规范
 

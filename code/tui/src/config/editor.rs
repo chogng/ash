@@ -14,7 +14,6 @@ use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionOutcome;
-use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::text_prompt::TextPrompt;
 use crate::widgets::text_prompt::TextPromptOutcome;
@@ -48,6 +47,8 @@ pub(crate) enum ConfigSelectionAction {
     ToggleDictationShortcut(DictationShortcutSettings),
     EditDictationShortcut(DictationShortcutSettings),
     OpenAdvisor,
+    Network(super::network::Operation),
+    CopyRequiredDomains(String),
     OpenAdvisorModel,
     SetAdvisor(Option<AdvisorConfig>),
     SetMemories(ConfigEdit),
@@ -102,7 +103,19 @@ impl fmt::Debug for ProviderApiKeyEdit {
     }
 }
 
-pub(crate) type ConfigChoices = ListSelectionSpec<ConfigSelectionAction>;
+#[derive(Debug)]
+pub(crate) struct ConfigChoices {
+    pub(crate) model: ListSelectionModel,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
+    pub(crate) language: Language,
+}
+
+impl ConfigChoices {
+    pub(crate) fn localize(&mut self, language: Language) {
+        self.language = language;
+        self.model.localize(language);
+    }
+}
 
 pub(crate) struct AdvisorChoices {
     pub(crate) settings: ConfigChoices,
@@ -117,8 +130,10 @@ pub(crate) struct ProviderApiKeyPrompt {
 #[derive(Debug)]
 pub(crate) struct ConfigEditor {
     revision: u64,
+    language: Language,
     selection: ListSelection<ConfigSelectionAction>,
     provider_panel: Option<super::provider::Panel>,
+    network_panel: Option<super::network::Panel>,
     subscription: Option<ListSelection<ConfigSelectionAction>>,
     subscription_sign_out: super::SignOutAvailability,
     dialog: Option<crate::widgets::dialog::Dialog>,
@@ -187,6 +202,7 @@ impl AdvisorEditor {
 #[derive(Debug)]
 pub(crate) enum ConfigEditorOutcome {
     Action(ConfigSelectionAction),
+    Network(super::network::Request),
     SaveApiKey(ProviderApiKeyEdit),
     SaveDictationShortcut(DictationShortcutSettings),
     InvalidDictationShortcut(String),
@@ -206,8 +222,10 @@ impl ConfigEditor {
     pub(crate) fn new(spec: ConfigChoices) -> Self {
         Self {
             revision: config_revision(&spec),
+            language: spec.language,
             selection: ListSelection::new(spec.model, spec.actions),
             provider_panel: None,
+            network_panel: None,
             subscription: None,
             subscription_sign_out: super::SignOutAvailability::Unavailable,
             dialog: None,
@@ -234,7 +252,8 @@ impl ConfigEditor {
                 return Some(subscription.state().title());
             }
         }
-        (self.provider_panel.is_some()
+        (self.network_panel.is_some()
+            || self.provider_panel.is_some()
             || self.prompt.is_some()
             || self.subscription.is_some()
             || self.advisor.is_some())
@@ -256,6 +275,7 @@ impl ConfigEditor {
             return;
         }
         self.provider_panel = None;
+        self.network_panel = None;
         self.subscription = None;
         if let Some(advisor) = self.advisor.as_mut() {
             if advisor.models.take().is_some() {
@@ -263,6 +283,12 @@ impl ConfigEditor {
             }
         }
         self.advisor = None;
+    }
+
+    pub(crate) fn complete_network(&mut self, reply: super::network::Reply, language: Language) {
+        if let Some(panel) = &mut self.network_panel {
+            panel.complete(reply, language);
+        }
     }
 
     pub(crate) fn provider_mut(&mut self) -> Option<&mut super::provider::Panel> {
@@ -275,6 +301,7 @@ impl ConfigEditor {
             return;
         }
         self.revision = revision;
+        self.language = spec.language;
         if let Some(provider_panel) = &mut self.provider_panel {
             if let Some(ConfigSelectionAction::OpenProvider(settings)) = spec
                 .actions
@@ -293,6 +320,14 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> ConfigEditorOutcome {
+        if let Some(panel) = &mut self.network_panel {
+            let outcome = panel.handle_key(key);
+            if matches!(outcome, ConfigEditorOutcome::Dismiss) {
+                self.network_panel = None;
+                return ConfigEditorOutcome::Consumed;
+            }
+            return outcome;
+        }
         if self.dialog.is_some() {
             if key.kind == crossterm::event::KeyEventKind::Press
                 && matches!(
@@ -554,10 +589,17 @@ impl ConfigEditor {
                 self.open_dictation_shortcut_prompt(settings);
                 ConfigEditorOutcome::Consumed
             }
+            ListSelectionOutcome::Activate(ConfigSelectionAction::Network(operation)) => {
+                let (panel, request) = super::network::Panel::new(operation, self.language);
+                self.network_panel = Some(panel);
+                ConfigEditorOutcome::Network(request)
+            }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
             ListSelectionOutcome::Adjust(action, adjustment) => match action {
                 ConfigSelectionAction::OpenAdvisor
                 | ConfigSelectionAction::OpenAdvisorModel
+                | ConfigSelectionAction::Network(_)
+                | ConfigSelectionAction::CopyRequiredDomains(_)
                 | ConfigSelectionAction::OpenProviderApiKey { .. }
                 | ConfigSelectionAction::EditDictationShortcut(_)
                 | ConfigSelectionAction::OpenProvider(_)
@@ -592,7 +634,9 @@ impl ConfigEditor {
         if self.dialog.is_some() {
             return;
         }
-        if let Some(advisor) = self.advisor.as_mut() {
+        if let Some(panel) = self.network_panel.as_mut() {
+            panel.selection.handle_paste(pasted);
+        } else if let Some(advisor) = self.advisor.as_mut() {
             advisor.selection_mut().handle_paste(pasted);
         } else if let Some(prompt) = self.prompt.as_mut() {
             prompt.prompt.handle_paste(pasted);
@@ -606,6 +650,9 @@ impl ConfigEditor {
     }
 
     pub(crate) fn page(&self) -> ConfigEditorPage<'_> {
+        if let Some(panel) = &self.network_panel {
+            return ConfigEditorPage::Selection(panel.selection.state());
+        }
         if let Some(dialog) = &self.dialog {
             return ConfigEditorPage::Dialog(dialog);
         }
@@ -655,6 +702,9 @@ impl ConfigEditor {
                 .with_compact_action("/", "search")
                 .with_compact_action("Esc", "close")
         });
+        if let Some(panel) = &self.network_panel {
+            return panel.selection.key_hints();
+        }
         if let Some(dialog) = &self.dialog {
             return dialog.key_hints();
         }
@@ -692,6 +742,9 @@ impl ConfigEditor {
     }
 
     pub(crate) fn selection(&self) -> Option<&crate::widgets::list_selection::ListSelectionState> {
+        if let Some(panel) = &self.network_panel {
+            return Some(panel.selection.state());
+        }
         if self.prompt.is_some() || self.dialog.is_some() {
             return None;
         }
@@ -707,6 +760,9 @@ impl ConfigEditor {
     pub(crate) fn selection_mut(
         &mut self,
     ) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
+        if let Some(panel) = &mut self.network_panel {
+            return Some(panel.selection.state_mut());
+        }
         if self.prompt.is_some() || self.dialog.is_some() {
             return None;
         }
@@ -1272,8 +1328,27 @@ pub(crate) fn config_choices(
                 ),
             ),
     );
+    let mut network_items = Vec::new();
+    for (id, label, operation) in [
+        (
+            "network-diagnostics",
+            "Run network diagnostics",
+            super::network::Operation::Diagnose,
+        ),
+        (
+            "network-domains",
+            "Required domains",
+            super::network::Operation::Domains,
+        ),
+    ] {
+        let id = ListSelectionItemId::new(id);
+        actions.insert(id.clone(), ConfigSelectionAction::Network(operation));
+        network_items
+            .push(ListSelectionItem::new(nls::localize_owned(language, label)).with_id(id));
+    }
     let provider_items = provider_items(config, providers, language, &mut actions);
     let mut choices = ConfigChoices {
+        language,
         model: ListSelectionModel::new(
             nls::text(language, Message::ConfigTitle),
             vec![
@@ -1283,6 +1358,7 @@ pub(crate) fn config_choices(
                     provider_items,
                 ),
                 issue_tab,
+                ListSelectionGroup::new(nls::localize_owned(language, "Network"), network_items),
             ],
         )
         .with_expandable_descriptions()
@@ -1334,6 +1410,7 @@ pub(crate) fn advisor_choices(
     );
     settings_actions.insert(model_id.clone(), ConfigSelectionAction::OpenAdvisorModel);
     let settings = ConfigChoices {
+        language,
         model: ListSelectionModel::new(
             nls::text(language, Message::ConfigAdvisor),
             vec![ListSelectionGroup::new(
@@ -1406,6 +1483,7 @@ pub(crate) fn advisor_choices(
         items.push(ListSelectionItem::new(&entry.display_name).with_id(id));
     }
     let models = ConfigChoices {
+        language,
         model: ListSelectionModel::new(
             nls::text(language, Message::ConfigAdvisorModel),
             vec![ListSelectionGroup::new(

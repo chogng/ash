@@ -430,6 +430,10 @@ impl AppDriver {
                 path,
                 language: self.app.language(),
             },
+            HostCommand::CopyText(text) => HostOperation::CopyText {
+                text,
+                language: self.app.language(),
+            },
             HostCommand::CopyLastResponse => HostOperation::CopyLastResponse(
                 self.app
                     .latest_agent_response()

@@ -42,7 +42,8 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 | Symbol | 职责 |
 | --- | --- |
 | `HttpClient` | `execute` 或 `execute_streaming` 一次；implementation 不得 retry |
-| `UreqHttpClient` | fallible、reusable synchronous production client；没有 panic-based `Default` |
+| `ReqwestHttpClient` | 生产 HTTP 客户端，在异步 I/O runtime 执行并支持取消；同步 trait 的调用者等待结果 |
+| `UreqHttpClient` | reusable synchronous client；没有 panic-based `Default` |
 | `HttpMethod::{Get,Post}` | 当前支持的 method |
 | `HttpRequest` | validated HTTP(S) URL、headers 与 raw body |
 | `HttpResponse` | status、headers 与 bounded raw body |
@@ -111,7 +112,7 @@ URL、header、certificate、request/response body 和 provider identity 不在 
 | `proxy_url_from_environment` | private | 固定优先级读取 proxy env | 只在 client 构造时调用 |
 | `build_agent` | private | 应用 proxy、redirect、timeouts、pool、TLS | 每个 request 不重新 build agent |
 | `build_tls_config` | private | trust roots + optional client auth | 保持 hostname/chain validation |
-| `system_certificate_verifier` | private | 系统信任验证器与额外 CA | 桌面端委托 OS 校验，构造失败是 configuration error |
+| `system_certificate_verifier` | private | 系统信任验证器与额外 CA | 桌面端委托 OS 校验，构造失败是 `Connection(CertificateConfiguration)` |
 | `add_certificate_bundle` | private | 将 DER roots 加入 rustls store | 不记录 certificate bytes |
 | `rule_matches` / `split_authority` | private | `NO_PROXY`-style match | port rule 必须 exact |
 | `is_http_url` | private | request construction 的 scheme/authority guard | 非 HTTP(S) 在 backend 前拒绝 |
@@ -197,17 +198,17 @@ PEM/file loading、secret lookup 与 credential rotation 不属于本 crate；ca
 
 ## 错误与安全语义
 
-`HttpClientError` 只有：
+`HttpClientError` 提供：
 
 - `InvalidRequest`：例如非 HTTP(S) URL；
 - `InvalidConfiguration`：proxy/TLS/identity/limit 无效；
-- `Transport`：backend send/read/body-limit failure。
+- `Connection(HttpConnectionFailure)`：DNS、proxy、TLS、system certificate verifier 初始化、connect 或 timeout 阶段；
+- `Transport`：其他 backend send/read/body-limit failure。
 
 Client construction 同样只返回这些 typed errors；本 crate 不提供会在系统证书或 proxy 初始化失败
 时 panic 的 `Default` 实现。
 
-当前 error taxonomy 不区分 DNS、connect、proxy、TLS 或 timeout phase。Backend error 被替换成
-sanitized crate-owned message，避免 URL、proxy credential、certificate 或 payload 泄漏。
+`ReqwestHttpClient` 从 resolver、rustls 和 reqwest 的错误类型识别连接阶段，不匹配平台错误文本；整体截止时间也返回 typed timeout。`UreqHttpClient` 的传输失败仍使用 `Transport`，系统证书验证器构造失败由共享快照返回 `Connection(CertificateConfiguration)`。Backend error 被替换成固定的 crate-owned message，避免 URL、proxy credential、certificate 或 payload 泄漏。App Server 网络诊断使用生产 `ReqwestHttpClient` 的这些分类。
 
 Redirect follow 直接使用 backend 的 bounded redirect policy。当前尚未实现 crate-owned 的
 cross-origin sensitive-header stripping、scheme-downgrade rule 或 body replay classifier；不能在
@@ -247,7 +248,8 @@ bazel test //ash-rs/http-client:http-client-unit-tests
 - 系统信任接受额外 CA，同时拒绝证书域名不匹配；
 - custom trust/mTLS invalid material；
 - response body hard limit 与 `limit + 1` headroom；
-- telemetry 只发出 safe facts。
+- telemetry 只发出 safe facts；
+- reqwest 的 DNS、直连、proxy、TLS 和整体超时分类不含地址或凭据。
 
 `tests/fixtures/system-trust-*.der` 是独立的 P-256/SHA-256 测试 CA 与服务端证书，不含私钥。
 服务端证书覆盖 `localhost`，有效期为 2026-01-01 至 2027-01-01；系统信任测试固定在
@@ -255,12 +257,7 @@ bazel test //ash-rs/http-client:http-client-unit-tests
 
 ## 当前限制与潜在演进
 
-当前实现是 synchronous、one-attempt HTTP；unary response fully buffered，成功 streaming response
-按 chunk 向 caller-owned sink 施加 backpressure。它使用 bounded transport timeout，但不直接接收
-caller cancellation token；上层 `ash-client` 可以在取消后停止等待并丢弃
-迟到 response，不能强制关闭已经进入 `ureq` 的 socket attempt。WebSocket connection backend 已拆到
-`ash-websocket-client`；async HTTP port、per-phase diagnostics、custom redirect security policy 和
-config-generation rollover manager 仍未实现。
+`HttpClient` 使用 synchronous、one-attempt 契约；unary response fully buffered，成功 streaming response 按 chunk 向 caller-owned sink 施加 backpressure。生产 `ReqwestHttpClient` 在异步 I/O runtime 执行，并在取消或网络权限撤销时丢弃进行中的 future；共享 trait 接收 caller cancellation token。`UreqHttpClient` 保留同步 socket 实现，取消不能强制关闭已经进入它的 socket attempt。WebSocket connection backend 已拆到 `ash-websocket-client`。HTTP 连接错误已有阶段分类；诊断不证明模型操作或 SSE framing 成功。config-generation rollover manager 仍未实现。
 
 这些能力可以演进，但顺序应保持：先定义 provider-neutral typed contract 与 failure/redaction
 invariant，再实现 private backend；不要先暴露 backend-specific future/stream/socket types。Retry、

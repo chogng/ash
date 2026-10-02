@@ -160,3 +160,8 @@ fn check_cancelled(cancellation: &CancellationToken) -> Result<(), ChatGptUsageE
 #[cfg(test)]
 #[path = "account_tests.rs"]
 mod tests;
+
+/// Account API service used by usage queries and network diagnostics.
+pub fn usage_endpoint() -> &'static str {
+    BASE_URL
+}

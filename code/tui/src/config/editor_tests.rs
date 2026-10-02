@@ -569,7 +569,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        vec!["General", "Providers", "Issues"]
+        vec!["General", "Providers", "Issues", "Network"]
     );
     assert!(state.visible_items().iter().all(|item| !matches!(
         item.label(),
@@ -905,7 +905,7 @@ fn config_root_uses_the_selected_language_through_nls() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        vec!["通用", "提供商", "议题"]
+        vec!["通用", "提供商", "议题", "网络"]
     );
     assert_eq!(state.visible_items()[0].label(), "Vim 模式");
     assert_eq!(state.visible_items()[1].label(), "显示使用技巧");
@@ -1331,7 +1331,9 @@ fn tab_enters_the_first_item_of_each_config_page() {
     for (code, expected_tab, expected_item) in [
         (KeyCode::Tab, "Providers", "chatgpt-subscription-details"),
         (KeyCode::Tab, "Issues", "issue-refresh"),
+        (KeyCode::Tab, "Network", "network-diagnostics"),
         (KeyCode::Tab, "General", "terminal-vim-mode"),
+        (KeyCode::BackTab, "Network", "network-diagnostics"),
         (KeyCode::BackTab, "Issues", "issue-refresh"),
     ] {
         assert!(matches!(

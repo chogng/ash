@@ -22,6 +22,7 @@ pub(crate) enum Command {
         path: std::path::PathBuf,
     },
     CopyLastResponse,
+    CopyText(String),
     ExportTranscript {
         requested_path: Option<std::path::PathBuf>,
     },
@@ -37,6 +38,10 @@ pub(crate) enum Operation {
         language: crate::nls::Language,
     },
     CopyLastResponse(Result<String, String>),
+    CopyText {
+        text: String,
+        language: crate::nls::Language,
+    },
     ExportTranscript {
         root: std::path::PathBuf,
         requested_path: Option<std::path::PathBuf>,
@@ -52,6 +57,7 @@ impl Operation {
     pub(crate) const fn name(&self) -> &'static str {
         match self {
             Self::OpenTextFile { .. } => "ash-tui-open-text-file",
+            Self::CopyText { .. } => "ash-tui-copy-text",
             Self::CopyLastResponse(_) => "ash-tui-copy-last-response",
             Self::ExportTranscript { .. } => "ash-tui-export-transcript",
             Self::ReadClipboardImage { .. } => "ash-tui-read-clipboard-image",
@@ -66,6 +72,16 @@ impl Operation {
             Self::OpenTextFile { path, language } => {
                 Event::OperationCompleted(text_editor::open(&path, language))
             }
+            Self::CopyText { text, language } => match clipboard::write_text(&text) {
+                Ok(()) => Event::TopTipNoticeShown(crate::nls::localize_owned(
+                    language,
+                    "Required domains copied",
+                )),
+                Err(_) => Event::OperationCompleted(Err(crate::nls::localize_owned(
+                    language,
+                    "Could not copy required domains",
+                ))),
+            },
             Self::CopyLastResponse(response) => copy_last_response(response),
             Self::ExportTranscript {
                 root,

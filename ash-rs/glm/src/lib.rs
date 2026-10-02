@@ -643,3 +643,16 @@ fn login_failure() -> LoginFailure {
 #[cfg(test)]
 #[path = "glm_tests.rs"]
 mod tests;
+
+/// Sign-in service used by this provider, for connection diagnostics and domain lists.
+pub fn sign_in_endpoint() -> &'static str {
+    OAUTH_BASE_URL
+}
+
+/// Usage service selected by the Coding Plan account owner.
+pub fn usage_endpoint(provider: GlmProvider) -> &'static str {
+    match provider {
+        GlmProvider::BigModel => backend_client::bigmodel::BUSINESS_URL,
+        GlmProvider::Zai => backend_client::zai::BUSINESS_URL,
+    }
+}

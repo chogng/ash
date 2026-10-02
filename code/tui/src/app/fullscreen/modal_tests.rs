@@ -2109,3 +2109,71 @@ fn config_drag_and_keyboard_input_cancel_pending_double_click() {
         matches!(click(&mut app), MouseAction::Command(Some(crate::app::AppCommand::Config(crate::config::Command::Edit(edit)))) if edit.terminal.memory_diagnostics())
     );
 }
+
+#[test]
+fn network_config_mouse_actions_use_the_keyboard_path_and_results_have_no_hit_targets() {
+    use crate::app::AppCommand;
+    use crate::app::command_panel::CommandPanelPointerTarget;
+    use crate::config::Command as ConfigCommand;
+    use crate::config::Event as ConfigEvent;
+    use crate::widgets::list_selection::ListSelectionClick;
+    use crate::widgets::list_selection::ListSelectionItemId;
+    use crate::widgets::list_selection::ListSelectionPointerTarget;
+    use ratatui::layout::Position;
+    let mut app = crate::app::App::new();
+    app.update(ConfigEvent::EditorOpened(config_choices()));
+    for _ in 0..3 {
+        app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    }
+    let area = Rect::new(0, 0, 100, 30);
+    let target = super::Target::Panel(CommandPanelPointerTarget::List(
+        ListSelectionPointerTarget::Item(ListSelectionItemId::new("network-diagnostics")),
+    ));
+    let Some(AppCommand::Config(ConfigCommand::Network(request))) =
+        super::activate(&mut app, area, target, ListSelectionClick::Single)
+    else {
+        panic!("click must activate the same diagnostics request as Enter")
+    };
+    assert_eq!(
+        request.operation,
+        crate::config::network::Operation::Diagnose
+    );
+    app.update(ConfigEvent::Network(crate::config::network::Reply {
+        id: request.id,
+        result: Ok(serde_json::from_value::<
+            ash_app_server_protocol::protocol::diagnostics::NetworkDiagnosticsRunResult,
+        >(crate::app::network_tests::report())
+        .unwrap()
+        .into()),
+    }));
+    let screen = frame_text(&app);
+    assert!(screen.contains("Proxy: proxy.example.test:8080"));
+    let mut copy_target = None;
+    for y in 0..area.height {
+        for x in 0..area.width {
+            if let Some(super::Target::Panel(CommandPanelPointerTarget::List(
+                ListSelectionPointerTarget::Item(id),
+            ))) = super::target_at(&app, area, Position::new(x, y))
+            {
+                assert!(
+                    id == ListSelectionItemId::new("network-refresh") || id == ListSelectionItemId::new("network-copy-domains"),
+                    "read-only results must not be clickable: {id:?}"
+                );
+                if id == ListSelectionItemId::new("network-copy-domains") {
+                    copy_target = super::target_at(&app, area, Position::new(x, y));
+                }
+            }
+        }
+    }
+    assert_eq!(
+        super::activate(
+            &mut app,
+            area,
+            copy_target.expect("copy row must have a rendered hit target"),
+            ListSelectionClick::Single
+        ),
+        Some(AppCommand::Host(crate::host::Command::CopyText(
+            "api.example.test\nusage.example.test".into()
+        )))
+    );
+}

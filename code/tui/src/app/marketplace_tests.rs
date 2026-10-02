@@ -820,7 +820,7 @@ fn skills_and_config_chinese_panels_keep_distinct_responsibilities() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        ["通用", "提供商", "议题"]
+        ["通用", "提供商", "议题", "网络"]
     );
     crate::tui_assert_snapshot!("config_chinese_without_lsp_tab", screen(&app));
 }

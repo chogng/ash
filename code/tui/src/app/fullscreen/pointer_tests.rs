@@ -870,7 +870,6 @@ fn mouse_wheel_scrolls_modal_list_by_rows_without_moving_keyboard_focus() {
 #[test]
 fn mouse_wheel_scrolls_config_providers_without_switching_tabs() {
     use crate::widgets::list_selection::ListSelectionItemId;
-    use crate::widgets::list_selection::ListSelectionSpec;
 
     let mut app = App::new();
     let mut providers = vec![ListSelectionItem::new("Subscriptions").as_section_divider()];
@@ -878,17 +877,20 @@ fn mouse_wheel_scrolls_config_providers_without_switching_tabs() {
         ListSelectionItem::new(format!("Provider {index}"))
             .with_id(ListSelectionItemId::new(index.to_string()))
     }));
-    app.update(crate::config::Event::EditorOpened(ListSelectionSpec {
-        model: ListSelectionModel::new(
-            "Config",
-            vec![
-                ListSelectionGroup::new("General", vec![ListSelectionItem::new("Settings")]),
-                ListSelectionGroup::new("Providers", providers),
-            ],
-        )
-        .with_search(SearchBoxModel::new("Search settings")),
-        actions: Default::default(),
-    }));
+    app.update(crate::config::Event::EditorOpened(
+        crate::config::ConfigChoices {
+            language: crate::nls::Language::English,
+            model: ListSelectionModel::new(
+                "Config",
+                vec![
+                    ListSelectionGroup::new("General", vec![ListSelectionItem::new("Settings")]),
+                    ListSelectionGroup::new("Providers", providers),
+                ],
+            )
+            .with_search(SearchBoxModel::new("Search settings")),
+            actions: Default::default(),
+        },
+    ));
     let area = Rect::new(0, 0, 80, 24);
     app.handle_key_in_area(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), area);
     app.handle_key_in_area(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE), area);

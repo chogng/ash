@@ -584,3 +584,8 @@ fn login_failure(error: ChatGptError) -> LoginCompletionOutcome {
         },
     }
 }
+
+/// Sign-in service used by this provider, for connection diagnostics and domain lists.
+pub fn sign_in_endpoint() -> &'static str {
+    AUTH_BASE_URL
+}

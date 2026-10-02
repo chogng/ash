@@ -29,6 +29,7 @@ pub(crate) struct ProviderApiKeyUpdate {
 impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
+            Self::Network(_) => "ash-tui-network-diagnostics",
             Self::OpenAdvisor => "ash-tui-read-advisor-config",
             Self::SelectAdvisor(_) => "ash-tui-select-advisor-config",
             Self::SetAdvisor(_) => "ash-tui-set-advisor-config",
@@ -49,6 +50,24 @@ where
     T: JsonRpcTransport,
 {
     match command {
+        Command::Network(request) => {
+            let result = match request.operation {
+                super::network::Operation::Domains => {
+                    client.read_network().map(|network| super::network::Report {
+                        network,
+                        checks: Vec::new(),
+                    })
+                }
+                super::network::Operation::Diagnose => {
+                    client.run_network_diagnostics().map(Into::into)
+                }
+            }
+            .map_err(|_| "Could not run network diagnostics. Retry from this page.".into());
+            return Ok(Event::Network(super::network::Reply {
+                id: request.id,
+                result,
+            }));
+        }
         Command::OpenAdvisor => (|| -> Result<Event, ConfigCommandError> {
             let config = client.read_config().map_err(ConfigCommandError::from)?;
             let models = client.list_models().map_err(ConfigCommandError::from)?;

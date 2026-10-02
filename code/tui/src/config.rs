@@ -1,5 +1,6 @@
 mod dictation;
 mod editor;
+pub(crate) mod network;
 pub(crate) mod provider;
 pub(crate) mod request;
 mod settings;
@@ -53,6 +54,7 @@ pub(crate) enum Event {
     },
     AdvisorSaved(ConfigEditResult, AdvisorChoices),
     Connection(provider::Reply),
+    Network(network::Reply),
     Subscription(SubscriptionEvent),
     SubscriptionReply(SubscriptionProvider, SubscriptionEvent),
     SettingsReceived(TerminalSettings),
@@ -74,6 +76,7 @@ pub(crate) enum Command {
     SetIssues(IssueConfigEdit),
     SetGit(ConfigEdit),
     Connection(provider::Request),
+    Network(network::Request),
     Subscription(SubscriptionProvider, SubscriptionCommand),
     OpenEditor,
     Edit(ConfigEdit),

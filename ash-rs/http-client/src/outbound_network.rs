@@ -460,7 +460,7 @@ fn system_certificate_verifier(
     )
     .map(|verifier| Arc::new(verifier) as Arc<dyn rustls::client::danger::ServerCertVerifier>)
     .map_err(|_| {
-        HttpClientError::InvalidConfiguration("failed to create system certificate verifier".into())
+        HttpClientError::Connection(crate::HttpConnectionFailure::CertificateConfiguration)
     })
 }
 

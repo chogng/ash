@@ -1173,8 +1173,9 @@ pub fn open_app_server_with_codebase_providers(
         network_policy.clone(),
     )
     .map_err(open_error)?;
-    let application_http: Arc<dyn ash_http_client::HttpClient> =
-        Arc::new(ash_http_client::ReqwestHttpClient::with_network(network).map_err(open_error)?);
+    let application_http: Arc<dyn ash_http_client::HttpClient> = Arc::new(
+        ash_http_client::ReqwestHttpClient::with_network(network.clone()).map_err(open_error)?,
+    );
     if options.dir_config.is_none()
         && let Some(dir_root) = &options.dir_root
     {
@@ -1285,6 +1286,35 @@ pub fn open_app_server_with_codebase_providers(
                 ));
             }
             options.git_attribution = Some(Arc::new(policy.policy()));
+        }
+    }
+    let mut network_services = Vec::new();
+    if let Some(services) = &product_services {
+        for (name, marketplace) in &services.marketplaces {
+            network_services.push((
+                format!("marketplace:{name}"),
+                marketplace.metadata_base_url().to_string(),
+            ));
+            network_services.push((
+                format!("marketplace:{name}"),
+                marketplace.targets_base_url().to_string(),
+            ));
+        }
+        if let Some(image) = &services.image_generation {
+            network_services.push((image.service_name.clone(), image.endpoint.clone()));
+        }
+        if let Some(github) = &services.github_account {
+            network_services.push(("github-account".into(), github.broker_base_url.to_string()));
+        }
+        for oauth in &services.connector_oauth {
+            if let crate::product_services::ProductConnectorOAuthConfig::GitHubBrokered {
+                connector_id,
+                config,
+            } = oauth
+            {
+                network_services
+                    .push((connector_id.to_string(), config.broker_base_url.to_string()));
+            }
         }
     }
     if let (Some(runtime), Some(services)) = (&mut connector_runtime, product_services) {
@@ -1553,6 +1583,7 @@ pub fn open_app_server_with_codebase_providers(
         None => AppServer::new(threads, agent_model),
     }
     .with_home(home)
+    .with_network_diagnostics(network, application_http.clone(), network_services)
     .with_telemetry(diagnostics, telemetry, analytics)
     .with_model_catalog(direct_catalog)
     .with_provider_credentials(Arc::new(

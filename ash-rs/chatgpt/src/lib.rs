@@ -12,6 +12,7 @@ pub use maintenance::ChatGptAuthManagement;
 pub use storage::codex_home;
 
 pub use account::ChatGptAccount;
+pub use account::usage_endpoint;
 pub use account::ChatGptUsageError;
 pub use backend_client::chatgpt::CreditBalance;
 pub use backend_client::chatgpt::RateLimit;
@@ -22,6 +23,7 @@ pub use oauth::CHATGPT_SUBSCRIPTION_PROVIDER_ID;
 pub use oauth::ChatGptApiTarget;
 pub use oauth::ChatGptError;
 pub use oauth::ChatGptOAuth;
+pub use oauth::sign_in_endpoint;
 
 #[cfg(test)]
 #[path = "chatgpt_tests.rs"]

@@ -1134,6 +1134,24 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::ProviderConfigure, params)
     }
 
+    /// Lists configured service dependencies and their selected routes without HTTP probes.
+    pub fn read_network(
+        &mut self,
+    ) -> Result<ash_app_server_protocol::protocol::diagnostics::NetworkReadResult, ClientError>
+    {
+        self.call(ClientMethod::NetworkRead, &EmptyParams {})
+    }
+
+    /// Checks HTTP reachability and account usage through the server's production clients.
+    pub fn run_network_diagnostics(
+        &mut self,
+    ) -> Result<
+        ash_app_server_protocol::protocol::diagnostics::NetworkDiagnosticsRunResult,
+        ClientError,
+    > {
+        self.call(ClientMethod::NetworkDiagnosticsRun, &EmptyParams {})
+    }
+
     /// Probes the current form without saving it. Secret serialization is outbound-only.
     pub fn probe_provider(
         &mut self,

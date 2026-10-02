@@ -1249,3 +1249,8 @@ fn login_lock_error<T>(_: std::sync::PoisonError<T>) -> LoginError {
 #[cfg(test)]
 #[path = "supergrok_tests.rs"]
 mod tests;
+
+/// Sign-in service used by this provider, for connection diagnostics and domain lists.
+pub fn sign_in_endpoint() -> &'static str {
+    TOKEN_URL
+}

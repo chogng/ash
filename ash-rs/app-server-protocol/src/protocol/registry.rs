@@ -451,6 +451,22 @@ use crate::protocol::diagnostics::FeedbackPrepareParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::diagnostics::FeedbackUploadParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::NetworkCheckDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::NetworkCheckOutcomeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::NetworkDiagnosticsRunResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::NetworkFailureDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::NetworkPurposeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::NetworkReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::NetworkRouteDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::NetworkTargetDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationBackend;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationCloudProvider;
@@ -2388,6 +2404,12 @@ client_methods! {
     },
     QueueCancel => "queue/cancel" {
         params: QueueCancelParams, response: QueuedMessage, serialization: None,
+    },
+    NetworkRead => "network/read" {
+        params: EmptyParams, response: NetworkReadResult, serialization: GlobalSharedRead,
+    },
+    NetworkDiagnosticsRun => "network/diagnostics/run" {
+        params: EmptyParams, response: NetworkDiagnosticsRunResult, serialization: None,
     },
     DiagnosticsRead => "diagnostics/read" {
         params: EmptyParams, response: DiagnosticSnapshot, serialization: None,
@@ -4841,6 +4863,14 @@ typescript_bindings! {
     UserInput,
     QueuedMessage,
     QueueStatus,
+    NetworkReadResult,
+    NetworkDiagnosticsRunResult,
+    NetworkTargetDto,
+    NetworkPurposeDto,
+    NetworkRouteDto,
+    NetworkCheckDto,
+    NetworkCheckOutcomeDto,
+    NetworkFailureDto,
     FeedbackPrepareParams,
     FeedbackUploadParams,
     DiagnosticSnapshot,

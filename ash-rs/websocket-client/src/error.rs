@@ -45,6 +45,7 @@ impl From<ash_http_client::HttpClientError> for WebSocketClientError {
                 Self::InvalidConfiguration(message)
             }
             ash_http_client::HttpClientError::Transport(_) => Self::ConnectionFailed,
+            ash_http_client::HttpClientError::Connection(_) => Self::ConnectionFailed,
         }
     }
 }

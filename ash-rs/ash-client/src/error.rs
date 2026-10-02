@@ -36,6 +36,9 @@ impl From<ash_http_client::HttpClientError> for ClientError {
                 Self::Transport(message)
             }
             ash_http_client::HttpClientError::Transport(message) => Self::Transport(message),
+            ash_http_client::HttpClientError::Connection(failure) => {
+                Self::Transport(failure.to_string())
+            }
         }
     }
 }

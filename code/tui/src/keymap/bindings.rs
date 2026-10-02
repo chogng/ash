@@ -644,6 +644,8 @@ pub(crate) const INLINE_DASHBOARD_RETURN: Keybinding =
     Keybinding::new(&[(NONE, KeyCode::Right), (NONE, KeyCode::Esc)], "return");
 pub(crate) const HOOK_REFRESH: Keybinding =
     Keybinding::new(&[(NONE, KeyCode::Char('r'))], "refresh");
+pub(crate) const NETWORK_REFRESH: Keybinding =
+    Keybinding::new(&[(NONE, KeyCode::Char('r'))], "refresh");
 // Enhanced terminal input can retain Shift when a keyboard layout produces '/'.
 pub(crate) const SEARCH: Keybinding = Keybinding::new(
     &[(NONE, KeyCode::Char('/')), (SHIFT, KeyCode::Char('/'))],

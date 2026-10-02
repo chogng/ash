@@ -1,6 +1,7 @@
 use crate::HttpBodySink;
 use crate::HttpClient;
 use crate::HttpClientError;
+use crate::HttpConnectionFailure;
 use crate::HttpHeader;
 use crate::HttpMethod;
 use crate::HttpRequest;
@@ -138,9 +139,7 @@ impl ReqwestHttpClient {
                 HttpClientError::InvalidConfiguration("proxy URL is invalid".into())
             })?);
         }
-        if config.network_targets() == NetworkTargetPolicy::PublicInternetOnly {
-            builder = builder.dns_resolver(Arc::new(PublicResolver));
-        }
+        builder = builder.dns_resolver(Arc::new(ProductResolver(config.network_targets())));
         let timeouts = config.timeouts();
         if let Timeout::After(timeout) = timeouts.connect() {
             builder = builder.connect_timeout(timeout);
@@ -206,7 +205,7 @@ impl ReqwestHttpClient {
                 Timeout::Disabled => work.await,
                 Timeout::After(limit) => tokio::time::timeout(limit, work)
                     .await
-                    .map_err(|_| HttpClientError::Transport("request timed out".into()))?,
+                    .map_err(|_| HttpClientError::Connection(HttpConnectionFailure::Timeout))?,
             }
         };
         match cancellation {
@@ -256,12 +255,13 @@ impl ReqwestHttpClient {
                 }
             }
             builder = builder.body(std::mem::take(&mut body));
+            let route = self.inner.network.proxy_route(url.as_str())?;
             let response = tokio::select! {
                 biased;
                 () = initial.revoked() => return Err(revoked()),
                 () = permit.revoked() => return Err(revoked()),
                 () = sender.closed() => return Err(HttpClientError::Transport("HTTP consumer disconnected".into())),
-                response = builder.send() => response.map_err(|_| HttpClientError::Transport("request failed".into()))?,
+                response = builder.send() => response.map_err(|error| connection_error(&error, &route))?,
             };
             initial.check()?;
             permit.check()?;
@@ -335,7 +335,7 @@ impl ReqwestHttpClient {
                     () = initial.revoked() => return Err(revoked()),
                     () = permit.revoked() => return Err(revoked()),
                     () = sender.closed() => return Err(HttpClientError::Transport("HTTP consumer disconnected".into())),
-                    chunk = response.chunk() => chunk.map_err(|_| HttpClientError::Transport("failed to read response body".into()))?,
+                    chunk = response.chunk() => chunk.map_err(|error| connection_error(&error, &route))?,
                 };
                 let Some(chunk) = chunk else { break };
                 total = total.saturating_add(chunk.len());
@@ -421,17 +421,22 @@ impl HttpBodySink for NoBodySink {
     }
 }
 
-struct PublicResolver;
+struct ProductResolver(NetworkTargetPolicy);
 
-impl Resolve for PublicResolver {
+impl Resolve for ProductResolver {
     fn resolve(&self, name: Name) -> Resolving {
         let host = name.as_str().to_owned();
+        let policy = self.0;
         Box::pin(async move {
             let addresses = tokio::net::lookup_host((host.as_str(), 0))
-                .await?
+                .await
+                .map_err(|_| Box::new(DnsFailure) as Box<dyn std::error::Error + Send + Sync>)?
                 .collect::<Vec<_>>();
-            if addresses.is_empty()
-                || addresses
+            if addresses.is_empty() {
+                return Err(Box::new(DnsFailure) as Box<dyn std::error::Error + Send + Sync>);
+            }
+            if policy == NetworkTargetPolicy::PublicInternetOnly
+                && addresses
                     .iter()
                     .any(|address| !is_public_internet_ip(address.ip()))
             {
@@ -444,6 +449,48 @@ impl Resolve for PublicResolver {
             Ok(Box::new(addresses.into_iter()) as Addrs)
         })
     }
+}
+
+// Keep the DNS stage in the error chain; matching backend error text would depend
+// on the OS and could expose hostnames or proxy credentials in a diagnostic.
+#[derive(Debug)]
+struct DnsFailure;
+
+impl std::fmt::Display for DnsFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("DNS lookup failed")
+    }
+}
+
+impl std::error::Error for DnsFailure {}
+
+fn connection_error(error: &reqwest::Error, route: &OutboundProxyRoute) -> HttpClientError {
+    let mut cause: Option<&(dyn std::error::Error + 'static)> = Some(error);
+    while let Some(source) = cause {
+        if source.is::<DnsFailure>() {
+            return HttpClientError::Connection(HttpConnectionFailure::Dns);
+        }
+        if source.is::<rustls::Error>() {
+            return HttpClientError::Connection(HttpConnectionFailure::Tls);
+        }
+        // std::io::Error::source skips the wrapped error itself. Inspect that
+        // boundary explicitly so rustls and resolver stages retain their type.
+        cause = if let Some(error) = source.downcast_ref::<io::Error>() {
+            error.get_ref().map(|inner| inner as &dyn std::error::Error)
+        } else {
+            source.source()
+        };
+    }
+    if error.is_timeout() {
+        return HttpClientError::Connection(HttpConnectionFailure::Timeout);
+    }
+    if error.is_connect() {
+        return HttpClientError::Connection(match route {
+            OutboundProxyRoute::Direct => HttpConnectionFailure::Connect,
+            OutboundProxyRoute::Proxy(_) => HttpConnectionFailure::Proxy,
+        });
+    }
+    HttpClientError::Transport("request failed".into())
 }
 
 fn runtime() -> Result<&'static tokio::runtime::Runtime, HttpClientError> {
@@ -492,3 +539,7 @@ fn check_cancellation(cancellation: Option<&CancellationToken>) -> Result<(), Ht
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "reqwest_client_tests.rs"]
+mod tests;

@@ -135,6 +135,7 @@ impl RequestLane {
                 | ClientMethod::GitPush
                 | ClientMethod::GitWorktreeCreate
                 | ClientMethod::GitWorktreeDelete
+                | ClientMethod::NetworkDiagnosticsRun
                 | ClientMethod::ProviderProbe
                 | ClientMethod::ProviderModelsList
                 | ClientMethod::FsCopy

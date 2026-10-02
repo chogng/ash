@@ -334,3 +334,51 @@ impl HttpBodySink for RecordingSink {
         Ok(())
     }
 }
+
+#[test]
+fn cancellable_transport_reports_a_direct_connection_failure_without_peer_details() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!(
+        "http://{}/private?key=secret",
+        listener.local_addr().unwrap()
+    );
+    drop(listener);
+    let network = OutboundNetworkSnapshot::new(
+        HttpClientConfig::new().with_proxy_policy(ProxyPolicy::Direct),
+    )
+    .unwrap();
+    let client = ReqwestHttpClient::with_network(network).unwrap();
+    let request = HttpRequest::new(HttpMethod::Get, url, Vec::new(), Vec::new()).unwrap();
+    let error = client.execute(&request).unwrap_err();
+    assert_eq!(
+        error,
+        crate::HttpClientError::Connection(crate::HttpConnectionFailure::Connect)
+    );
+    assert!(!error.to_string().contains("secret"));
+    assert!(!error.to_string().contains("127.0.0.1"));
+}
+
+#[test]
+fn cancellable_transport_reports_an_unreachable_selected_proxy() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let proxy = format!("http://user:private-key@{}", listener.local_addr().unwrap());
+    drop(listener);
+    let network = OutboundNetworkSnapshot::new(
+        HttpClientConfig::new().with_proxy_policy(ProxyPolicy::Explicit(proxy)),
+    )
+    .unwrap();
+    let client = ReqwestHttpClient::with_network(network).unwrap();
+    let request = HttpRequest::new(
+        HttpMethod::Get,
+        "http://example.test/",
+        Vec::new(),
+        Vec::new(),
+    )
+    .unwrap();
+    let error = client.execute(&request).unwrap_err();
+    assert_eq!(
+        error,
+        crate::HttpClientError::Connection(crate::HttpConnectionFailure::Proxy)
+    );
+    assert!(!error.to_string().contains("private-key"));
+}

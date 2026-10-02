@@ -850,6 +850,13 @@ impl App {
         outcome: crate::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
         match outcome {
+            crate::config::ConfigEditorOutcome::Network(request) => {
+                Some(ConfigCommand::Network(request).into())
+            }
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::Network(_)) => None,
+            crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::CopyRequiredDomains(text),
+            ) => Some(HostCommand::CopyText(text).into()),
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenAdvisor) => {
                 Some(ConfigCommand::OpenAdvisor.into())
             }
@@ -887,7 +894,7 @@ impl App {
             ) => {
                 self.selected_subscription = provider;
                 let mut choices = self.subscriptions[self.selected_subscription.index()].choices();
-                self.localize_selection(&mut choices);
+                choices.localize(self.language());
                 let sign_out =
                     self.subscriptions[self.selected_subscription.index()].sign_out_availability();
                 self.panels_mut().open_subscription(choices, sign_out);
@@ -943,7 +950,7 @@ impl App {
             return None;
         }
         let mut choices = self.subscriptions[self.selected_subscription.index()].choices();
-        self.localize_selection(&mut choices);
+        choices.localize(self.language());
         let sign_out =
             self.subscriptions[self.selected_subscription.index()].sign_out_availability();
         self.panels_mut().update_subscription(choices, sign_out);
@@ -2963,7 +2970,8 @@ impl App {
                 ConfigEvent::EditorOpened(_)
                 | ConfigEvent::AdvisorOpened { .. }
                 | ConfigEvent::ApiKeySaved { .. }
-                | ConfigEvent::Connection(_),
+                | ConfigEvent::Connection(_)
+                | ConfigEvent::Network(_),
             )
             | AppEvent::Models(ModelEvent::PickerOpened(_) | ModelEvent::PickerUpdated(_))
             | AppEvent::Status(StatusEvent::PanelOpened(_))
@@ -3256,6 +3264,13 @@ impl App {
     fn apply_config_event(&mut self, event: ConfigEvent) {
         self.fullscreen.pointer.cancel_click();
         match event {
+            ConfigEvent::Network(reply) => {
+                let language = self.language();
+                if let Some(CommandPanel::Config(editor)) = self.panels_mut().command_mut() {
+                    editor.complete_network(reply, language);
+                }
+                self.set_status(Status::Ready);
+            }
             ConfigEvent::AdvisorOpened { mut root, advisor } => {
                 if !matches!(self.panels().command(), Some(CommandPanel::Config(_))) {
                     self.decorate_config(&mut root);
@@ -3287,7 +3302,7 @@ impl App {
                     subscription.update(event.clone());
                 }
                 let mut choices = self.subscriptions[self.selected_subscription.index()].choices();
-                self.localize_selection(&mut choices);
+                choices.localize(self.language());
                 let sign_out =
                     self.subscriptions[self.selected_subscription.index()].sign_out_availability();
                 self.panels_mut().update_subscription(choices, sign_out);
@@ -3303,7 +3318,7 @@ impl App {
                 self.subscriptions[provider.index()].update(event);
                 if provider == self.selected_subscription {
                     let mut choices = self.subscriptions[provider.index()].choices();
-                    self.localize_selection(&mut choices);
+                    choices.localize(self.language());
                     let sign_out = self.subscriptions[provider.index()].sign_out_availability();
                     self.panels_mut().update_subscription(choices, sign_out);
                     if let Some((title, message)) = error {
@@ -3342,7 +3357,7 @@ impl App {
                 models,
             } => {
                 self.decorate_config(&mut choices);
-                self.localize_selection(&mut choices);
+                choices.localize(self.language());
                 self.panels_mut().finish_config_prompt(choices);
                 if let Some(models) = models {
                     let mut notice = match models {

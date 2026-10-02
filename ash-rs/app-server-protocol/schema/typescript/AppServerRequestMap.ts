@@ -322,6 +322,8 @@ import type { MessageCheckpointsResult } from './types/MessageCheckpointsResult.
 import type { ModelListParams } from './types/ModelListParams.js';
 import type { ModelListResult } from './types/ModelListResult.js';
 import type { ModelPreferencesUpdateParams } from './types/ModelPreferencesUpdateParams.js';
+import type { NetworkDiagnosticsRunResult } from './types/NetworkDiagnosticsRunResult.js';
+import type { NetworkReadResult } from './types/NetworkReadResult.js';
 import type { PluginCommandResultDto } from './types/PluginCommandResultDto.js';
 import type { PluginListResult } from './types/PluginListResult.js';
 import type { PluginPackageCommandParams } from './types/PluginPackageCommandParams.js';
@@ -457,6 +459,8 @@ export interface AppServerRequestMap {
   "queue/enqueue": { params: QueueEnqueueParams; response: QueuedMessage };
   "queue/list": { params: QueueListParams; response: QueueListResult };
   "queue/cancel": { params: QueueCancelParams; response: QueuedMessage };
+  "network/read": { params: Record<string, never>; response: NetworkReadResult };
+  "network/diagnostics/run": { params: Record<string, never>; response: NetworkDiagnosticsRunResult };
   "diagnostics/read": { params: Record<string, never>; response: DiagnosticSnapshot };
   "feedback/prepare": { params: FeedbackPrepareParams; response: PreparedFeedback };
   "feedback/upload": { params: FeedbackUploadParams; response: null };
@@ -787,6 +791,8 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "queue/enqueue": { method: "queue/enqueue" },
   "queue/list": { method: "queue/list" },
   "queue/cancel": { method: "queue/cancel" },
+  "network/read": { method: "network/read" },
+  "network/diagnostics/run": { method: "network/diagnostics/run" },
   "diagnostics/read": { method: "diagnostics/read" },
   "feedback/prepare": { method: "feedback/prepare" },
   "feedback/upload": { method: "feedback/upload" },

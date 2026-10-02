@@ -19,6 +19,7 @@ pub use config::{
     ResponseBodyLimit, Timeout, TlsPolicy, TransportTimeouts,
 };
 pub use error::HttpClientError;
+pub use error::HttpConnectionFailure;
 pub use header::HttpHeader;
 pub use network_policy::{NetworkAccess, NetworkPermit, OutboundNetworkPolicy};
 pub use outbound_network::{
