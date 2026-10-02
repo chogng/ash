@@ -36,14 +36,23 @@ where
     pub fn sashes(&self) -> &[GridSashLayout<SplitId>] {
         self.grid.sashes()
     }
-
-    /// Finds one visible group leaf by its host identity.
-    pub fn leaf(&self, id: LeafId) -> Option<GridLeafLayout<LeafId>> {
-        self.grid.leaf(id)
-    }
 }
 
 impl PaneGroupLayout<PaneGroupId, PaneSplitId> {
+    /// Keeps the split topology intact when the window can show only the active group.
+    pub fn for_part(bounds: Rect, part: &crate::PanePart) -> Self {
+        let layout = Self::for_tree(bounds, part.tree());
+        if layout
+            .leaves()
+            .iter()
+            .any(|leaf| leaf.bounds().size.width < 480.0 || leaf.bounds().size.height < 160.0)
+        {
+            Self::for_tree(bounds, &PaneNode::Leaf(part.active_group()))
+        } else {
+            layout
+        }
+    }
+
     /// Resolves one Workbench-owned recursive pane geometry tree.
     pub fn for_tree(bounds: Rect, root: &PaneNode) -> Self {
         Self {

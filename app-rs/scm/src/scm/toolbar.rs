@@ -224,6 +224,7 @@ enum OpenMenu {
 }
 
 pub struct ChangesToolbarState {
+    identity: crate::ScmPaneIdentity,
     scope: ChangesScope,
     branch_actions: BranchActions,
     open: Option<OpenMenu>,
@@ -234,6 +235,7 @@ pub struct ChangesToolbarState {
 impl Default for ChangesToolbarState {
     fn default() -> Self {
         Self {
+            identity: crate::ScmPaneIdentity::default(),
             scope: ChangesScope::default(),
             branch_actions: BranchActions::Unavailable,
             open: None,
@@ -244,6 +246,26 @@ impl Default for ChangesToolbarState {
 }
 
 impl ChangesToolbarState {
+    pub fn new(identity: crate::ScmPaneIdentity) -> Self {
+        Self {
+            identity,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn duplicate(&self, identity: crate::ScmPaneIdentity) -> Self {
+        let mut commit_message = self.commit_message.clone();
+        commit_message.cancel_composition();
+        Self {
+            identity,
+            scope: self.scope,
+            branch_actions: self.branch_actions,
+            open: None,
+            commit_message,
+            include_unstaged: self.include_unstaged,
+        }
+    }
+
     pub const fn scope(&self) -> ChangesScope {
         self.scope
     }
@@ -254,6 +276,10 @@ impl ChangesToolbarState {
             Some(_) => BranchActions::Topic,
             None => BranchActions::Unavailable,
         };
+    }
+
+    pub fn selected_commit_message(&self) -> Option<&str> {
+        self.commit_message.selected_text()
     }
 
     pub fn apply_commit_message(&mut self, command: CodeEditorCommand) {
@@ -302,7 +328,7 @@ impl ChangesToolbarState {
                 match (self.branch_actions, index) {
                     (BranchActions::Primary, 0 | 1) => {
                         self.open = Some(OpenMenu::Commit);
-                        ChangesActivation::Focus(COMMIT_MESSAGE_EDITOR)
+                        ChangesActivation::Focus(self.identity.element(COMMIT_MESSAGE_EDITOR))
                     }
                     (BranchActions::Primary, 2) => ChangesActivation::Push,
                     (BranchActions::Topic, 0) => {
@@ -344,7 +370,7 @@ impl ChangesToolbarState {
     fn commit(&mut self, push: bool) -> ChangesActivation {
         let message = self.commit_message.text().trim().to_owned();
         if message.is_empty() {
-            return ChangesActivation::Focus(COMMIT_MESSAGE_EDITOR);
+            return ChangesActivation::Focus(self.identity.element(COMMIT_MESSAGE_EDITOR));
         }
         self.open = None;
         ChangesActivation::Commit {
@@ -409,11 +435,11 @@ impl<'a> ChangesToolbar<'a> {
     fn button_state(&self, id: ElementId, enabled: bool) -> ButtonState {
         if !enabled {
             ButtonState::Disabled
-        } else if self.dispatch.is_pressed(id) {
+        } else if self.dispatch.is_pressed(self.state.identity.element(id)) {
             ButtonState::Pressed
-        } else if self.dispatch.is_focused(id) {
+        } else if self.dispatch.is_focused(self.state.identity.element(id)) {
             ButtonState::Focused
-        } else if self.dispatch.is_hovered(id) {
+        } else if self.dispatch.is_hovered(self.state.identity.element(id)) {
             ButtonState::Hovered
         } else {
             ButtonState::Resting
@@ -521,12 +547,15 @@ impl<'a> ChangesToolbar<'a> {
                 .map(|(index, label)| {
                     let id = ids(index);
                     MenuItem::action(
-                        id,
+                        self.state.identity.element(id),
                         ActionViewItem::label(*label, self.button_state(id, true)),
                     )
                 })
                 .collect(),
-            MenuIds::new(CHANGES_TOOLBAR, root),
+            MenuIds::new(
+                self.state.identity.element(CHANGES_TOOLBAR),
+                self.state.identity.element(root),
+            ),
             self.menu_style(width),
         )
         .with_selection(MenuSelection::None);
@@ -553,7 +582,7 @@ impl<'a> ChangesToolbar<'a> {
         context.draw_component(
             &InteractionRegion::new(
                 "CommitMessageEditorInput",
-                COMMIT_MESSAGE_EDITOR,
+                self.state.identity.element(COMMIT_MESSAGE_EDITOR),
                 editor_bounds,
                 AccessibilityRole::TextInput,
                 "Commit message",
@@ -572,7 +601,10 @@ impl<'a> ChangesToolbar<'a> {
             )
             .with_presentation(CodeEditorPresentation::Compact)
             .with_caret_visibility(
-                if self.dispatch.is_focused(COMMIT_MESSAGE_EDITOR) {
+                if self
+                    .dispatch
+                    .is_focused(self.state.identity.element(COMMIT_MESSAGE_EDITOR))
+                {
                     CaretVisibility::Visible
                 } else {
                     CaretVisibility::Hidden
@@ -642,7 +674,7 @@ impl<'a> ChangesToolbar<'a> {
                 context.draw_component(
                     &InteractionRegion::new(
                         "CommitComposerAction",
-                        id,
+                        self.state.identity.element(id),
                         bounds,
                         AccessibilityRole::Button,
                         label,
@@ -660,13 +692,13 @@ impl Component for ChangesToolbar<'_> {
     fn element(&self) -> ComponentElement {
         Element::leaf("ChangesToolbar")
             .in_bounds(self.bounds)
-            .with_identity(CHANGES_TOOLBAR)
+            .with_identity(self.state.identity.element(CHANGES_TOOLBAR))
     }
 
     fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
         Some(
             UiNode::new(
-                CHANGES_TOOLBAR,
+                self.state.identity.element(CHANGES_TOOLBAR),
                 element.bounds(),
                 AccessibilityRole::Toolbar,
                 "Changes toolbar",
@@ -687,7 +719,7 @@ impl Component for ChangesToolbar<'_> {
         let (left, right) = self.bars();
         context.draw_component(&left);
         context.draw_component(&right);
-        let navigation = NavigationGroupId::new(CHANGES_TOOLBAR);
+        let navigation = NavigationGroupId::new(self.state.identity.element(CHANGES_TOOLBAR));
         let ids = [
             (SCOPE_MAIN, &left, 0, "Selected changes scope"),
             (SCOPE_MORE, &left, 1, "Choose changes scope"),
@@ -701,12 +733,12 @@ impl Component for ChangesToolbar<'_> {
                 context.draw_component(
                     &InteractionRegion::new(
                         "ChangesToolbarAction",
-                        id,
+                        self.state.identity.element(id),
                         bounds,
                         AccessibilityRole::Button,
                         label,
                     )
-                    .with_parent(CHANGES_TOOLBAR)
+                    .with_parent(self.state.identity.element(CHANGES_TOOLBAR))
                     .with_cursor(CursorFeedback::Pointer)
                     .with_focus(FocusBehavior::TabStop)
                     .with_action(NodeAction::Activate)

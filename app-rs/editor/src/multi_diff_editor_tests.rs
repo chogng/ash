@@ -597,3 +597,28 @@ fn measured_layout_splices_changed_file_sections_without_mutating_retained_clone
     assert_eq!(retained_clone.section_count(), 3);
     assert_eq!(retained_clone.section_extent(1), Some(60.0));
 }
+
+#[test]
+fn the_same_file_slot_in_two_mounted_editors_has_distinct_decodable_targets() {
+    let first = MultiDiffEditorItemIdentity::in_owner(1, 17);
+    let second = MultiDiffEditorItemIdentity::in_owner(2, 17);
+    for identity in [first, second] {
+        assert_eq!(
+            MultiDiffEditorItemIdentity::from_header_id(identity.header_id()),
+            Some(identity)
+        );
+        assert_eq!(
+            MultiDiffEditorItemIdentity::from_header_action_id(
+                identity.header_action_id(2).unwrap()
+            ),
+            Some((identity, 2))
+        );
+        assert_eq!(
+            MultiDiffEditorItemIdentity::from_fold_id(identity.fold_id(3).unwrap()),
+            Some((identity, 3))
+        );
+    }
+    assert_ne!(first.header_action_id(2), second.header_action_id(2));
+    assert_ne!(first.fold_id(3), second.fold_id(3));
+    assert_ne!(first.fold_animation_key(), second.fold_animation_key());
+}

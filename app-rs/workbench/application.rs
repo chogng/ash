@@ -38,7 +38,6 @@ use ash_editor_host::FileEditorLanguageService;
 use ash_editor_host::FileEditorSearchState;
 use ash_files::{FilesAction, FilesState};
 use ash_protocol::SessionId;
-use ash_scm::{ScmDiff, ScmState};
 use ash_session::SessionPaneState;
 use ash_session::interaction::COMPOSER;
 use ash_settings::RemoteConnectionManagerState;

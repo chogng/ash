@@ -16,7 +16,6 @@ use crate::directory_picker::DIRECTORY_SEARCH_INPUT;
 use crate::git_branch_picker::GIT_BRANCH_SEARCH_INPUT;
 use ash_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
 use ash_files::FILE_SEARCH_INPUT;
-use ash_scm::COMMIT_MESSAGE_EDITOR;
 use ash_session::interaction::COMPOSER;
 use ash_settings::KEYBOARD_SHORTCUTS_SEARCH;
 use ash_settings::SETTINGS_SEARCH_INPUT;
@@ -197,7 +196,9 @@ impl WorkbenchApplication {
                     return;
                 };
                 self.caret_blink.activity(Instant::now());
-                self.scm.toolbar_mut().apply_commit_composition(composition);
+                if let Some(scm) = self.active_scm_mut() {
+                    scm.toolbar_mut().apply_commit_composition(composition);
+                }
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -364,7 +365,11 @@ impl WorkbenchApplication {
             self.files.cancel_search_composition();
         }
         if target != InputMethodTarget::CommitMessage {
-            self.scm.toolbar_mut().cancel_commit_composition();
+            for (_, binding) in self.workbench.bindings_mut() {
+                if let Some(scm) = binding.scm_mut() {
+                    scm.toolbar_mut().cancel_commit_composition();
+                }
+            }
         }
         if target != InputMethodTarget::GitBranchSearch {
             self.git_branch_picker.cancel_search_composition();
@@ -442,7 +447,7 @@ impl WorkbenchApplication {
             session_search_focused: self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT),
             tab_rename_focused: self.ui_dispatch.is_focused(TAB_RENAME_INPUT),
             file_search_focused: self.ui_dispatch.is_focused(FILE_SEARCH_INPUT),
-            commit_message_focused: self.ui_dispatch.is_focused(COMMIT_MESSAGE_EDITOR),
+            commit_message_focused: self.commit_message_focused(),
             git_branch_search_focused: self.ui_dispatch.is_focused(GIT_BRANCH_SEARCH_INPUT),
             path_search_focused: self.ui_dispatch.is_focused(DIRECTORY_SEARCH_INPUT),
             remote_connection_search_focused: self

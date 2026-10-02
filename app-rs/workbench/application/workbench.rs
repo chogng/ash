@@ -119,6 +119,7 @@ impl WorkbenchApplication {
             return false;
         };
         for binding in bindings {
+            self.release_changes_binding(&binding);
             if let Some(terminal_key) = binding.terminal_key() {
                 let _ = self.terminal_runtime.remove_key(terminal_key);
             }
@@ -152,32 +153,63 @@ impl WorkbenchApplication {
     }
 
     pub(super) fn ensure_terminal_for_session(&mut self, session_id: &SessionId) -> bool {
-        match self
+        let tab = TabInputKey::session(session_id.clone());
+        let Some(part) = self.workbench.workbench().pane_part(&tab) else {
+            return false;
+        };
+        let input = PaneInput::terminal(session_id.clone());
+        let pane = part
+            .group_ids()
+            .into_iter()
+            .find(|pane| {
+                part.group(*pane)
+                    .expect("split leaf group")
+                    .inputs()
+                    .any(|candidate| candidate == &input)
+            })
+            .unwrap_or(part.active_group());
+        let existing = self.workbench.bindings().any(|(key, binding)| {
+            key.tab() == &tab
+                && key.pane() == pane
+                && binding.terminal_key().is_some()
+                && self
+                    .workbench
+                    .workbench()
+                    .pane_part(&tab)
+                    .expect("session container")
+                    .group(pane)
+                    .expect("terminal group")
+                    .input(key.input())
+                    == Some(&input)
+        });
+        if existing {
+            return true;
+        }
+        if let Err(error) = self
             .terminal_runtime
             .ensure_for_session(session_id, self.terminal_size())
         {
-            Ok(()) => {
-                let tab_key = TabInputKey::session(session_id.clone());
-                if let Some(terminal_key) = self.terminal_runtime.key_for_session(session_id) {
-                    let input = PaneInput::terminal(session_id.clone());
-                    let Some((_, binding)) = self.workbench.ensure_root_binding_with(
-                        tab_key,
-                        input.clone(),
-                        PaneBinding::new,
-                    ) else {
-                        return false;
-                    };
-                    if !binding.bind_terminal(&input, session_id, terminal_key) {
-                        return false;
-                    }
-                }
-                true
-            }
-            Err(error) => {
-                eprintln!("could not start terminal for session: {error}");
-                false
-            }
+            eprintln!("could not start terminal for session: {error}");
+            return false;
         }
+        let terminal_key = self
+            .terminal_runtime
+            .key_for_session(session_id)
+            .expect("ensured session terminal");
+        let key = self
+            .workbench
+            .ensure_input_with(&tab, pane, input.clone(), || {
+                PaneBinding::terminal(terminal_key)
+            })
+            .expect("session owns pane group");
+        let binding = self
+            .workbench
+            .binding_mut(&key)
+            .expect("ensured terminal binding");
+        if binding.terminal_key().is_none() {
+            binding.bind_terminal(&input, session_id, terminal_key);
+        }
+        true
     }
 
     pub(super) fn activate_terminal_for_session(&mut self, session_id: &SessionId) -> bool {
@@ -190,25 +222,37 @@ impl WorkbenchApplication {
         else {
             return false;
         };
-        let Some(terminal_key) = self.terminal_runtime.key_for_session(session_id) else {
-            return false;
-        };
-        let Some(activation) = self.workbench.open_or_activate_input_with(
-            &tab_key,
-            pane,
-            PaneInput::terminal(session_id.clone()),
-            || PaneBinding::terminal(terminal_key),
-        ) else {
-            return false;
-        };
-        if self
+        let input = PaneInput::terminal(session_id.clone());
+        let group = self
             .workbench
-            .binding(activation.current())
-            .and_then(PaneBinding::terminal_key)
-            != Some(terminal_key)
-        {
-            return false;
-        }
+            .workbench()
+            .pane_part(&tab_key)
+            .expect("session container")
+            .group(pane)
+            .expect("active group");
+        let existing = group.inputs().any(|candidate| candidate == &input);
+        let terminal_key = if existing {
+            None
+        } else {
+            // Each group owns its terminal runtime. Reusing another group's primary runtime
+            // would make selection, PTY teardown, and close affect both visible panes.
+            match self.terminal_runtime.spawn_pane(self.terminal_size()) {
+                Ok(key) => {
+                    self.terminal_runtime
+                        .bind_key_to_session(key, session_id.clone());
+                    Some(key)
+                }
+                Err(error) => {
+                    eprintln!("could not start terminal for pane: {error}");
+                    return false;
+                }
+            }
+        };
+        self.workbench
+            .open_or_activate_input_with(&tab_key, pane, input, || {
+                PaneBinding::terminal(terminal_key.expect("new group terminal runtime"))
+            })
+            .expect("active terminal group");
         if !self.activate_pane_context(tab_key, pane) {
             return false;
         }
@@ -227,9 +271,17 @@ impl WorkbenchApplication {
         let Some(mount) = self.workbench.mount(&tab_key, pane) else {
             return false;
         };
+        let kind = mount.kind();
         let binding = mount.key().clone();
         let terminal_key = mount.binding().terminal_key();
         self.terminal_pane_views.activate(binding);
+        match kind {
+            PaneInputKind::Terminal => self.main_surface.show_terminal(),
+            PaneInputKind::Agent | PaneInputKind::Files | PaneInputKind::Diff => {
+                self.main_surface.show_agent()
+            }
+            PaneInputKind::Settings => {}
+        }
         let Some(terminal_key) = terminal_key else {
             return true;
         };
@@ -237,11 +289,40 @@ impl WorkbenchApplication {
             || self.terminal_runtime.active_key() == Some(terminal_key)
     }
 
+    pub(super) fn focus_active_pane(&mut self) {
+        if let Some(mount) = self.workbench.active_mount() {
+            self.pending_focus = Some(if mount.kind() == PaneInputKind::Agent {
+                ash_session::interaction::COMPOSER
+            } else {
+                crate::pane_group_element_id(mount.pane_id())
+            });
+        }
+    }
+
+    pub(super) fn activate_pane_for_element(&mut self, id: ElementId) {
+        let Some(tab) = self.active_session_tab_key() else {
+            return;
+        };
+        let Some(part) = self.workbench.workbench().pane_part(&tab) else {
+            return;
+        };
+        let Some(presentation) = self.presentation.as_ref() else {
+            return;
+        };
+        let pane = presentation.pane_for_element(part, id);
+        if let Some(pane) = pane {
+            let _ = self.activate_pane_context(tab, pane);
+        }
+    }
+
     pub(super) fn active_pane_terminal_key(&self) -> Option<TerminalSessionKey> {
-        self.workbench
-            .active_mount()
-            .and_then(|mount| mount.binding().terminal_key())
-            .or_else(|| self.terminal_runtime.active_key())
+        match self.workbench.active_mount() {
+            Some(mount) if mount.kind() == PaneInputKind::Terminal => {
+                mount.binding().terminal_key()
+            }
+            Some(_) => None,
+            None => self.terminal_runtime.active_key(),
+        }
     }
 
     pub(super) fn active_terminal(&self) -> Option<&TerminalSession> {
@@ -264,18 +345,32 @@ impl WorkbenchApplication {
     }
 
     pub(super) fn split_active_pane(&mut self, direction: PaneSplitDirection) {
-        if !self.main_surface.is_terminal() {
-            return;
-        }
         let Some(tab_key) = self.active_session_tab_key() else {
             return;
         };
+        if self.active_main_pane_kind() == Some(PaneInputKind::Diff) {
+            let input = self
+                .workbench
+                .active_mount()
+                .expect("active Changes view")
+                .input()
+                .clone();
+            let binding = self.duplicate_changes_binding();
+            if let Ok(Some(key)) = self.workbench.try_split_active_with(input, direction, || {
+                Ok::<_, std::convert::Infallible>(binding)
+            }) {
+                let _ = self.activate_pane_context(tab_key, key.pane());
+                self.focus_active_pane();
+                self.rebuild_presentation_on_next_redraw();
+            }
+            return;
+        }
+        if self.active_main_pane_kind() != Some(PaneInputKind::Terminal) {
+            return;
+        }
         let Some(session_id) = tab_key.session_id().cloned() else {
             return;
         };
-        if !self.ensure_terminal_for_session(&session_id) {
-            return;
-        }
         let terminal_size = self.terminal_size();
         let (workbench, terminal_runtime) = (&mut self.workbench, &mut self.terminal_runtime);
         let key = match workbench.try_split_active_with(
@@ -295,13 +390,11 @@ impl WorkbenchApplication {
             }
         };
         let _ = self.activate_pane_context(tab_key, key.pane());
+        self.focus_active_pane();
         self.rebuild_presentation_on_next_redraw();
     }
 
     pub(super) fn close_active_pane(&mut self) {
-        if !self.main_surface.is_terminal() {
-            return;
-        }
         let Some(tab_key) = self.active_session_tab_key() else {
             return;
         };
@@ -314,11 +407,13 @@ impl WorkbenchApplication {
         }
         let replacement_pane = closed.active_pane();
         for binding in closed.into_bindings() {
+            self.release_changes_binding(&binding);
             if let Some(key) = binding.terminal_key() {
                 let _ = self.terminal_runtime.remove_key(key);
             }
         }
         let _ = self.activate_pane_context(tab_key, replacement_pane);
+        self.focus_active_pane();
         self.rebuild_presentation_on_next_redraw();
     }
 
@@ -331,9 +426,6 @@ impl WorkbenchApplication {
     }
 
     pub(super) fn focus_adjacent_pane(&mut self, next: bool) {
-        if !self.main_surface.is_terminal() {
-            return;
-        }
         let Some(tab_key) = self.active_session_tab_key() else {
             return;
         };
@@ -345,6 +437,7 @@ impl WorkbenchApplication {
             return;
         };
         let _ = self.activate_pane_context(tab_key, pane);
+        self.focus_active_pane();
         self.rebuild_presentation_on_next_redraw();
     }
 
@@ -357,9 +450,6 @@ impl WorkbenchApplication {
         SplitViewOrientation,
         SplitViewResizeSnapshot,
     )> {
-        if !self.main_surface.is_terminal() {
-            return None;
-        }
         let tab_key = self.active_session_tab_key()?;
         let layout = self.workbench.workbench().pane_part(&tab_key)?;
         terminal_pane_sash_for_viewport(
@@ -469,26 +559,13 @@ impl WorkbenchApplication {
 
     /// Returns to the last selected session without fabricating a session for Settings.
     pub(super) fn activate_session_workbench_tab(&mut self) {
-        let was_terminal = self.main_surface.is_terminal();
         let _ = self.workbench.activate_last_session();
-        if let Some(session_id) = self
-            .workbench
-            .workbench()
-            .sidebar_part()
-            .selected_session()
-            .cloned()
-        {
-            let _ = self.activate_terminal_for_session(&session_id);
-            if !was_terminal {
-                let _ = self.bind_agent_pane();
-            }
-        }
         self.settings.close();
-        self.pending_focus = Some(if self.main_surface.is_editor() {
-            ash_editor_host::FILE_EDITOR_DOCUMENT
-        } else {
-            ash_session::interaction::COMPOSER
-        });
+        if let Some(mount) = self.workbench.active_mount() {
+            let key = mount.key().clone();
+            let _ = self.activate_pane_context(key.tab().clone(), key.pane());
+            self.focus_active_pane();
+        }
     }
 
     pub(super) fn close_settings_tab(&mut self) {

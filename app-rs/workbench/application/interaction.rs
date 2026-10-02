@@ -94,6 +94,9 @@ impl WorkbenchApplication {
     }
 
     pub(super) fn apply_dispatch_outcome(&mut self, outcome: DispatchOutcome) {
+        if let Some(focused) = self.ui_dispatch.focused() {
+            self.activate_pane_for_element(focused);
+        }
         let sash_changed = self.sync_sash_pointer_presence(Instant::now());
         let activation = matches!(outcome.intent, Some(UiIntent::Activate(_)));
         if let Some(intent) = outcome.intent {
@@ -129,6 +132,7 @@ impl WorkbenchApplication {
     }
 
     pub(super) fn activate_shell_element(&mut self, id: zui::ui::ElementId) {
+        self.activate_pane_for_element(id);
         if self.activate_quick_access_element(id) {
             return;
         }
@@ -157,9 +161,6 @@ impl WorkbenchApplication {
                 }
                 FilesAction::Handled | FilesAction::StateChanged | FilesAction::Focus(_) => {}
             }
-            return;
-        }
-        if self.scm.editor_mut().toggle_fold_for_element(id) {
             return;
         }
         if self.activate_scm_element(id) {
@@ -359,7 +360,14 @@ impl WorkbenchApplication {
         self.cursor_position = None;
         self.file_editor_input.cancel_pointer();
         let pane_resize_cancelled = self.cancel_terminal_pane_resize();
-        if self.scm.editor_mut().scrollbar_pointer_left(Instant::now()) {
+        if self
+            .workbench
+            .bindings_mut()
+            .filter_map(|(_, binding)| binding.scm_mut())
+            .fold(false, |changed, scm| {
+                scm.editor_mut().scrollbar_pointer_left(Instant::now()) || changed
+            })
+        {
             self.rebuild_presentation();
             self.request_redraw();
         }
@@ -464,6 +472,12 @@ impl WorkbenchApplication {
         if button == MouseButton::Left && self.route_terminal_pane_resize_button(state) {
             return;
         }
+        if button == MouseButton::Left
+            && state == ElementState::Pressed
+            && let Some(point) = self.cursor_position
+        {
+            let _ = self.activate_pane_at(point);
+        }
         if button == MouseButton::Left && self.route_multi_diff_scrollbar_button(state) {
             return;
         }
@@ -474,7 +488,7 @@ impl WorkbenchApplication {
             && state == ElementState::Pressed
             && let Some(point) = self.cursor_position
         {
-            let _ = self.activate_terminal_pane_at(point);
+            let _ = self.activate_pane_at(point);
         }
         let position = self
             .cursor_position
@@ -492,9 +506,11 @@ impl WorkbenchApplication {
     }
 
     pub(super) fn multi_diff_bounds(&self) -> Option<zui::ui::Rect> {
-        self.presentation
-            .as_ref()?
-            .element_bounds(ash_scm::MULTI_DIFF_EDITOR)
+        self.presentation.as_ref()?.element_bounds(
+            self.active_scm()?
+                .identity()
+                .element(ash_scm::MULTI_DIFF_EDITOR),
+        )
     }
 
     pub(super) fn settings_keybindings_viewport(
@@ -606,17 +622,30 @@ impl WorkbenchApplication {
     }
 
     pub(super) fn route_multi_diff_scrollbar_move(&mut self, point: Point) -> bool {
-        let Some(bounds) = self.multi_diff_bounds() else {
+        let Some(presentation) = self.presentation.as_ref() else {
             return false;
         };
-        let outcome = self
-            .scm
-            .editor_mut()
-            .scrollbar_pointer_moved(point, bounds, Instant::now());
-        if outcome.presentation_changed {
+        let mut handled = false;
+        let mut changed = false;
+        for (_, binding) in self.workbench.bindings_mut() {
+            let Some(scm) = binding.scm_mut() else {
+                continue;
+            };
+            let Some(bounds) =
+                presentation.element_bounds(scm.identity().element(ash_scm::MULTI_DIFF_EDITOR))
+            else {
+                continue;
+            };
+            let outcome = scm
+                .editor_mut()
+                .scrollbar_pointer_moved(point, bounds, Instant::now());
+            handled |= outcome.handled;
+            changed |= outcome.presentation_changed;
+        }
+        if changed {
             self.rebuild_presentation_on_next_redraw();
         }
-        outcome.handled
+        handled
     }
 
     pub(super) fn route_multi_diff_scrollbar_button(&mut self, state: ElementState) -> bool {
@@ -626,8 +655,16 @@ impl WorkbenchApplication {
         let point = self.cursor_position.unwrap_or(Point::new(-1.0, -1.0));
         let now = Instant::now();
         let outcome = match state {
-            ElementState::Pressed => self.scm.editor_mut().press_scrollbar(point, bounds, now),
-            ElementState::Released => self.scm.editor_mut().release_scrollbar(point, bounds, now),
+            ElementState::Pressed => self
+                .active_scm_mut()
+                .expect("mounted Changes editor")
+                .editor_mut()
+                .press_scrollbar(point, bounds, now),
+            ElementState::Released => self
+                .active_scm_mut()
+                .expect("mounted Changes editor")
+                .editor_mut()
+                .release_scrollbar(point, bounds, now),
         };
         if outcome.presentation_changed {
             self.rebuild_presentation_on_next_redraw();

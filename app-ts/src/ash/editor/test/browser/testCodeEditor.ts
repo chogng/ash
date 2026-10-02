@@ -1,3 +1,4 @@
+import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../common/services/languageFeatureDebounce.js';
 import '../../browser/services/contribution.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
@@ -105,6 +106,9 @@ export function registerCodeEditorServices(services: InstantiationService): void
 	if (!services.has(IContextViewService)) {
 		services.registerSingleton(IContextViewService, () => services.createInstance(BrowserContextViewService, document.body));
 	}
+	if (!services.has(IActionWidgetService)) {
+		services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
+	}
 	if (!services.has(IContextMenuService)) {
 		services.registerSingleton(IContextMenuService, () => services.createInstance(new SyncDescriptor(BrowserContextMenuService)));
 	}
@@ -144,6 +148,9 @@ export function createTestCodeEditor(options: TestCodeEditorOptions): CodeEditor
 		const { instantiationService, languageConfigurationService, languageFeaturesService, accessibilityService, ...widgetOptions } = options;
 		setIconResolver(widgetOptions.container.ownerDocument, icon => getIconDefinition(icon));
 		const overrides = resources.add(instantiationService ? instantiationService.createChild() : new InstantiationService());
+		if (!overrides.has(IContextViewService)) {
+			overrides.registerSingleton(IContextViewService, () => overrides.createInstance(BrowserContextViewService, widgetOptions.container.ownerDocument.body));
+		}
 		if (!overrides.has(IQuickInputService)) {
 			overrides.registerSingleton(IQuickInputService, () => new QuickInputController(widgetOptions.container.ownerDocument.body));
 		}

@@ -1,3 +1,5 @@
+import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { setNlsResolver, formatNlsMessage } from '../../../src/ash/nls.js';
 import { ILanguageFeatureDebounceService } from '../../../src/ash/editor/common/services/languageFeatureDebounce.js';
 import { IInstantiationService } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { IInlineCompletionsService } from '../../../src/ash/editor/browser/services/inlineCompletionsService.js';
@@ -339,7 +341,9 @@ interface StandaloneHarness {
 	prepareSelectionUndo(): UndoState;
 	applySelectionEdit(): UndoState;
 	readSelectionUndo(): UndoState;
-	enableCodeActions(): void;
+	enableCodeActions(kind?: 'single' | 'navigation'): void;
+	setActionMenuLanguage(locale: 'en' | 'zh-CN'): void;
+	setActionMenuTheme(theme: string): void;
 	prepareLineIdentity(): LineIdentityState;
 	splitLineIdentity(): LineIdentityState;
 	readLineIdentity(): LineIdentityState;
@@ -2610,10 +2614,20 @@ window.ashStandaloneIntegration = {
 		return readSelectionUndo();
 	},
 	readSelectionUndo,
-	enableCodeActions: () => {
+	setActionMenuTheme: theme => stanza.editor.setTheme(theme),
+	setActionMenuLanguage: locale => {
+		const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
+		setNlsResolver((bundle, key, message, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? message, parameters));
+	},
+	enableCodeActions: (kind = 'single') => {
 		codeActionRegistration?.dispose();
 		codeActionRegistration = stanza.languages.registerCodeActionProvider('plaintext', {
-			provideCodeActions: () => [{ title: 'Example code action' }],
+			provideCodeActions: () => kind === 'single' ? [{ title: 'Example code action' }] : [
+				{ title: 'Unavailable first action', disabledReason: 'Read only' },
+				{ title: 'First action', edit: { entries: [{ kind: 'textDocument', resource: callerEditor.getModel()!.uri, edits: [{ range: callerEditor.getModel()!.getFullModelRange(), text: 'first' }] }] } },
+				{ title: 'Unavailable middle action', disabledReason: 'Read only' },
+				{ title: 'Last action', edit: { entries: [{ kind: 'textDocument', resource: callerEditor.getModel()!.uri, edits: [{ range: callerEditor.getModel()!.getFullModelRange(), text: 'last' }] }] } },
+			],
 		});
 	},
 	prepareLineIdentity: () => {

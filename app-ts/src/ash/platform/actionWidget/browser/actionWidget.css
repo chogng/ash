@@ -1,0 +1,6 @@
+.ash-action-widget {
+  min-width: 240px;
+  max-width: min(520px, calc(100vw - 16px));
+  font-size: var(--ash-font-size-body1);
+  font-weight: var(--ash-font-weight-regular);
+}

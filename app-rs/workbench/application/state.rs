@@ -9,8 +9,7 @@ pub(crate) struct WorkbenchApplication {
     pub(super) frame_scheduler: FrameScheduler,
     pub(super) retained_runtime: RetainedRuntime,
     pub(super) files: FilesState,
-    pub(super) scm: ScmState,
-    pub(super) files_pane_expanded: bool,
+    pub(super) next_changes_owner: u32,
     pub(super) file_editor_host: FileEditorHost,
     pub(super) file_editor_input: FileEditorInputState,
     pub(super) file_editor_search: FileEditorSearchState,
@@ -77,11 +76,6 @@ impl WorkbenchApplication {
         };
         let mut files = FilesState::default();
         files.set_dir_root(env.working_directory().to_path_buf());
-        let mut scm = ScmState::default();
-        scm.set_branch(Some(env.git_branch_label()).filter(|branch| *branch != "No Git"));
-        scm.replace_diffs(env.diffs().iter().map(|diff| {
-            ScmDiff::new(diff.path(), diff.document().clone()).with_staging(diff.staging())
-        }));
         let keybindings = keybindings::WorkbenchKeybindings::default();
         let mut session_pane = SessionPaneState::for_working_directory(env.working_directory());
         let history_proxy = event_proxy.clone();
@@ -120,8 +114,7 @@ impl WorkbenchApplication {
             frame_scheduler: FrameScheduler::default(),
             retained_runtime: RetainedRuntime::default(),
             files,
-            scm,
-            files_pane_expanded: false,
+            next_changes_owner: 1,
             file_editor_input: FileEditorInputState::default(),
             file_editor_search: FileEditorSearchState::default(),
             language_service,

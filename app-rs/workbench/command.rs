@@ -92,13 +92,11 @@ fn execute_toggle_terminal_surface(app: &mut WorkbenchApplication) {
     } else if was_terminal {
         app.restore_main_pane_after_terminal();
     }
-    app.pending_focus = if app.main_surface.is_editor() {
-        Some(ash_editor_host::FILE_EDITOR_DOCUMENT)
-    } else if app.main_surface.is_terminal() {
-        None
+    if app.main_surface.is_editor() {
+        app.pending_focus = Some(ash_editor_host::FILE_EDITOR_DOCUMENT);
     } else {
-        Some(ash_session::interaction::COMPOSER)
-    };
+        app.focus_active_pane();
+    }
     app.terminal_view_mut().selection.clear();
     app.terminal_view_mut().scroll.reset();
     app.keybindings.cancel_chord();
@@ -136,14 +134,7 @@ fn execute_toggle_files_pane(app: &mut WorkbenchApplication) {
         return;
     }
     match app.active_main_pane_kind() {
-        Some(crate::PaneInputKind::Files) => app.show_agent_pane(),
-        Some(crate::PaneInputKind::Diff) => {
-            if app.files_pane_expanded {
-                app.files_pane_expanded = false;
-            } else {
-                app.show_files_pane();
-            }
-        }
+        Some(crate::PaneInputKind::Files) => app.close_active_pane(),
         _ => app.show_files_pane(),
     }
 }

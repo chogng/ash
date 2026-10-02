@@ -1,3 +1,4 @@
+import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../common/services/languageFeatureDebounce.js';
 import { StandaloneCodeEditorService } from './standaloneCodeEditorService.js';
 import { StandaloneLayoutService } from './standaloneLayoutService.js';
@@ -162,6 +163,7 @@ export class StandaloneServiceCollection extends InstantiationService {
 		this.registerSingleton(IKeybindingService, () => this.createInstance(StandaloneKeybindingService));
 		this.registerSingleton(IMenuService, () => this.createInstance(new SyncDescriptor(MenuService)));
 		this.registerSingleton(IContextViewService, () => this.createInstance(StandaloneContextViewService));
+		this.registerSingleton(IActionWidgetService, () => this.createInstance(ActionWidgetService));
 		this.registerSingleton(IContextMenuService, () => this.createInstance(new SyncDescriptor(BrowserContextMenuService)));
 		this.registerSingleton(IHoverService, accessor => new HoverService(
 			accessor.get(IConfigurationService),

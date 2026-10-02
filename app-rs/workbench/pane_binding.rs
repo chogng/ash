@@ -2,39 +2,60 @@ use crate::PaneInput;
 use crate::PaneInputKind;
 use crate::terminal_session::TerminalSessionKey;
 
-/// Terminal runtime currently attached to a Workbench-owned pane.
+/// Feature state currently attached to a Workbench-owned pane.
 ///
 /// This mapping is deliberately application-local. The workbench description stays free of PTY and
 /// terminal-session handles while app resolves a Session into its runtime key here.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum PaneRuntime {
+    Unbound,
     Terminal(TerminalSessionKey),
+    Changes(Box<ash_scm::ScmState>),
 }
 
 /// Binding between one workbench group and its feature runtime, if one has been mounted.
 ///
-/// Workbench owns the logical [`PaneInput`] and this application-local runtime handle. The terminal
-/// capability remains unaware of application pane identities.
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// Workbench owns the logical [`PaneInput`]; this binding owns that mounted view’s state or runtime
+/// handle. Domain capabilities remain unaware of the split topology.
 pub struct PaneBinding {
-    runtime: Option<PaneRuntime>,
+    runtime: PaneRuntime,
 }
 
 impl PaneBinding {
     pub const fn new() -> Self {
-        Self { runtime: None }
+        Self {
+            runtime: PaneRuntime::Unbound,
+        }
     }
 
     pub const fn terminal(key: TerminalSessionKey) -> Self {
         Self {
-            runtime: Some(PaneRuntime::Terminal(key)),
+            runtime: PaneRuntime::Terminal(key),
+        }
+    }
+
+    pub fn changes(state: ash_scm::ScmState) -> Self {
+        Self {
+            runtime: PaneRuntime::Changes(Box::new(state)),
+        }
+    }
+
+    pub fn scm(&self) -> Option<&ash_scm::ScmState> {
+        match &self.runtime {
+            PaneRuntime::Changes(state) => Some(state),
+            PaneRuntime::Unbound | PaneRuntime::Terminal(_) => None,
+        }
+    }
+    pub fn scm_mut(&mut self) -> Option<&mut ash_scm::ScmState> {
+        match &mut self.runtime {
+            PaneRuntime::Changes(state) => Some(state),
+            PaneRuntime::Unbound | PaneRuntime::Terminal(_) => None,
         }
     }
 
     pub fn terminal_key(&self) -> Option<TerminalSessionKey> {
-        match self.runtime {
-            Some(PaneRuntime::Terminal(key)) => Some(key),
-            None => None,
+        match &self.runtime {
+            PaneRuntime::Terminal(key) => Some(*key),
+            PaneRuntime::Unbound | PaneRuntime::Changes(_) => None,
         }
     }
 
@@ -50,7 +71,7 @@ impl PaneBinding {
         {
             return false;
         }
-        self.runtime = Some(PaneRuntime::Terminal(key));
+        self.runtime = PaneRuntime::Terminal(key);
         true
     }
 }

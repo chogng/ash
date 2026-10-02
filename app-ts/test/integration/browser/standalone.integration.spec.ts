@@ -2967,7 +2967,7 @@ test.describe('code action requests', () => {
 				expect((await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests()))[0]!.aborted).toBe(true);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
 				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(reason === 'text' ? 'changed' : 'value');
-				await expect(page.locator('#caller .stanza-editor-code-action')).toBeHidden();
+				await expect(page.locator('.ash-action-widget')).toBeHidden();
 				expect(errors).toEqual([]);
 			});
 		}
@@ -2994,10 +2994,10 @@ test.describe('code action requests', () => {
 				sameContext: true,
 				aborted: false,
 			}]);
-			await expect(page.locator('#caller .stanza-editor-code-action')).toHaveAttribute('aria-busy', 'true');
+			await expect(page.locator('.ash-action-widget')).toHaveAttribute('aria-busy', 'true');
 			await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('result');
-			await expect(page.locator('#caller .stanza-editor-code-action')).toBeHidden();
+			await expect(page.locator('.ash-action-widget')).toBeHidden();
 			await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 			await page.keyboard.press('ControlOrMeta+z');
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
@@ -3012,7 +3012,7 @@ test.describe('code action requests', () => {
 		await page.keyboard.press('Escape');
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests()))[0]!.aborted).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
-		await expect(page.locator('#caller .stanza-editor-code-action')).toBeHidden();
+		await expect(page.locator('.ash-action-widget')).toBeHidden();
 		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 	});
 
@@ -3046,9 +3046,9 @@ test.describe('code action requests', () => {
 			await page.getByRole('menuitem', { name: 'Replace value' }).click();
 			await page.evaluate(outcome => window.ashStandaloneIntegration.finishCodeActionRequest(0, outcome), outcome);
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
-			await expect(page.locator('#caller .stanza-editor-code-action')).not.toHaveAttribute('aria-busy');
+			await expect(page.locator('.ash-action-widget[aria-busy="true"]')).toHaveCount(0);
 			if (outcome === 'disabled') {
-				await expect(page.locator('#caller .stanza-editor-code-action')).toBeHidden();
+				await expect(page.locator('.ash-action-widget')).toBeHidden();
 				expect(errors).toEqual([]);
 			} else {
 				await expect(page.getByRole('menuitem', { name: 'Replace value' })).toBeVisible();
@@ -3077,7 +3077,7 @@ test('code action dismissal restores focus only when its menu owns focus', async
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.enableCodeActions());
 	const input = page.locator('#caller .stanza-editor-input');
-	const menu = page.locator('#caller .stanza-editor-code-action');
+	const menu = page.locator('.ash-action-widget');
 	const action = menu.getByRole('menuitem', { name: 'Example code action' });
 	await input.focus();
 	await page.keyboard.press('ControlOrMeta+.');
@@ -3093,6 +3093,105 @@ test('code action dismissal restores focus only when its menu owns focus', async
 	await expect(input).toBeFocused();
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
+});
+
+test('code action keyboard navigation skips disabled actions and applies the focused edit', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCodeActions('navigation'));
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('ControlOrMeta+.');
+	const menu = page.locator('.ash-action-widget');
+	const first = menu.getByRole('menuitem', { name: 'First action', exact: true });
+	const last = menu.getByRole('menuitem', { name: 'Last action', exact: true });
+	await expect(menu.getByRole('menuitem', { name: 'Unavailable first action (Read only)' })).toBeDisabled();
+	await expect(first).toBeFocused();
+	await page.keyboard.press('ArrowDown');
+	await expect(last).toBeFocused();
+	await page.keyboard.press('ArrowDown');
+	await expect(first).toBeFocused();
+	await page.keyboard.press('ArrowUp');
+	await expect(last).toBeFocused();
+	await page.keyboard.press('Home');
+	await expect(first).toBeFocused();
+	await page.keyboard.press('End');
+	await expect(last).toBeFocused();
+	await page.keyboard.press('Enter');
+	await expect(menu).toHaveCount(0);
+	await expect(input).toBeFocused();
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('last');
+	await page.keyboard.press('ControlOrMeta+z');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).not.toBe('last');
+});
+
+test('code action accessibility help returns to the menu and uses the Chinese catalog', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.setActionMenuLanguage('zh-CN');
+		window.ashStandaloneIntegration.enableCodeActions('navigation');
+	});
+	await page.locator('#caller .stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+.');
+	const menu = page.getByRole('menu', { name: '操作', exact: true });
+	await expect(menu).toHaveAttribute('aria-description', '按 Alt+F1 打开操作菜单的无障碍帮助。');
+	await expect(menu.getByRole('menuitem', { name: 'Unavailable first action（Read only）' })).toBeDisabled();
+	await page.keyboard.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: '操作菜单无障碍帮助' });
+	await expect(help).toBeVisible();
+	await expect(help).toContainText('用上下方向键切换可用操作');
+	await page.keyboard.press('Escape');
+	await expect(help).toHaveCount(0);
+	await expect(menu.getByRole('menuitem', { name: 'First action', exact: true })).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(menu).toHaveCount(0);
+	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+});
+
+test('code action menu stays inside a narrow viewport and follows light and high contrast themes', async ({ page }) => {
+	await page.setViewportSize({ width: 350, height: 220 });
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCodeActions('navigation'));
+	const input = page.locator('#caller .stanza-editor-input');
+	for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
+		await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), theme);
+		await input.focus();
+		await page.keyboard.press('ControlOrMeta+.');
+		const action = page.getByRole('menuitem', { name: 'First action', exact: true });
+		await expect(action).toBeFocused();
+		const style = await action.evaluate(button => {
+			const shell = button.closest('.ash-context-view')!;
+			const bounds = shell.getBoundingClientRect();
+			return {
+				left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom,
+				background: getComputedStyle(shell).backgroundColor,
+				border: getComputedStyle(shell).borderTopStyle,
+				outline: getComputedStyle(button).outlineStyle,
+				outlineColor: getComputedStyle(button).outlineColor,
+			};
+		});
+		expect(style.left).toBeGreaterThanOrEqual(0);
+		expect(style.top).toBeGreaterThanOrEqual(0);
+		expect(style.right).toBeLessThanOrEqual(350);
+		expect(style.bottom).toBeLessThanOrEqual(220);
+		expect(style.background).not.toBe('rgba(0, 0, 0, 0)');
+		expect(style.border).toBe('solid');
+		expect(style.outline).toBe('solid');
+		expect(style.outlineColor).not.toBe('rgba(0, 0, 0, 0)');
+		await page.keyboard.press('Escape');
+	}
+});
+
+test('code action outside dismissal leaves focus with the clicked editor', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCodeActions());
+	const source = page.locator('#caller .stanza-editor-input');
+	await source.focus();
+	await page.keyboard.press('ControlOrMeta+.');
+	await expect(page.locator('.ash-action-widget')).toBeVisible();
+	const outside = page.locator('#owned .stanza-editor-input');
+	await page.locator('#owned .view-line').first().click();
+	await expect(page.locator('.ash-action-widget')).toHaveCount(0);
+	await expect(outside).toBeFocused();
 });
 
 test('shared editors retain line identities through split, undo, and redo', async ({ page }) => {
@@ -5649,7 +5748,7 @@ for (const kind of ['rename', 'quickFix'] as const) {
 			await expect(page.locator('#caller .stanza-editor-rename')).toBeHidden();
 		} else {
 			await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
-			await expect(page.locator('#caller .stanza-editor-code-action')).toBeVisible();
+			await expect(page.locator('.ash-action-widget')).toBeVisible();
 		}
 		await page.evaluate(kind => {
 			if (kind === 'rename') window.ashStandaloneIntegration.changeRenameState('readonly');

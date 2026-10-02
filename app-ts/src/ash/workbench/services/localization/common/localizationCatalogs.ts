@@ -9,6 +9,15 @@ const english: LanguagePackCatalog = {
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
 	 ash: {
+			"actionWidget.label": "Actions",
+			"actionWidget.helpHint": "Press Alt+F1 for action menu accessibility help.",
+			"actionWidget.helpTitle": "Action menu accessibility help",
+			"actionWidget.help": "Use Up and Down Arrow to move between available actions. Home and End move to the first and last action. Enter or Space runs the focused action. Escape closes the menu and returns focus to its source. Unavailable actions are skipped.",
+			"actionWidget.verbosityTitle": "Action menu accessibility help",
+			"actionWidget.verbosityDescription": "Announce how to open accessibility help when an action menu opens.",
+			"codeAction.empty": "No code actions available.",
+			"codeAction.disabled": "{0} ({1})",
+			"codeAction.noEdit": "{0} has no text edit.",
 			"taskbar.newWindow": "New Window",
 			"shell.recentProjects": "Recent Folders & Workspaces",
 			"shell.noRecentProjects": "No Recent Projects",
@@ -1933,6 +1942,15 @@ const chinese: LanguagePackCatalog = {
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
 		ash: {
+			"actionWidget.label": "操作",
+			"actionWidget.helpHint": "按 Alt+F1 打开操作菜单的无障碍帮助。",
+			"actionWidget.helpTitle": "操作菜单无障碍帮助",
+			"actionWidget.help": "用上下方向键切换可用操作。Home 和 End 跳到第一个和最后一个操作。回车或空格键执行当前操作。Escape 关闭菜单并返回原来的位置。不可用操作会被跳过。",
+			"actionWidget.verbosityTitle": "操作菜单无障碍帮助",
+			"actionWidget.verbosityDescription": "打开操作菜单时提示如何查看无障碍帮助。",
+			"codeAction.empty": "没有可用的代码操作。",
+			"codeAction.disabled": "{0}（{1}）",
+			"codeAction.noEdit": "{0} 没有文本修改。",
 			"taskbar.newWindow": "新建窗口",
 			"shell.recentProjects": "最近的文件夹和工作区",
 			"shell.noRecentProjects": "没有最近打开的项目",

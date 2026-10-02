@@ -56,6 +56,10 @@ impl PaneKey {
         &self.tab
     }
 
+    pub const fn input(&self) -> PaneInputId {
+        self.input
+    }
+
     /// Returns the owning pane group.
     pub const fn pane(&self) -> PaneGroupId {
         self.pane
@@ -89,24 +93,6 @@ impl<B> PaneHost<B> {
         previous
     }
 
-    fn ensure_with(&mut self, key: PaneKey, create: impl FnOnce() -> B) -> &mut B {
-        if !self.bindings.contains_key(&key) {
-            let id = self.allocate_binding_id();
-            self.bindings.insert(
-                key.clone(),
-                BindingEntry {
-                    id,
-                    binding: create(),
-                },
-            );
-        }
-        &mut self
-            .bindings
-            .get_mut(&key)
-            .expect("ensured pane input binding must be present")
-            .binding
-    }
-
     fn remove(&mut self, key: &PaneKey) -> Option<B> {
         self.bindings.remove(key).map(|entry| entry.binding)
     }
@@ -132,6 +118,7 @@ impl<B> PaneHost<B> {
         removed.into_iter().map(|entry| entry.binding).collect()
     }
 
+    #[cfg(test)]
     fn binding(&self, key: &PaneKey) -> Option<&B> {
         self.bindings.get(key).map(|entry| &entry.binding)
     }
@@ -187,6 +174,10 @@ impl<'a, B> PaneMount<'a, B> {
     /// Returns the stable pane group identity.
     pub const fn pane_id(&self) -> PaneGroupId {
         self.key.pane()
+    }
+
+    pub const fn input(&self) -> &'a PaneInput {
+        self.input
     }
 
     /// Returns the selected content kind.
@@ -694,9 +685,32 @@ impl<B> WorkbenchHost<B> {
         resize.cancel()
     }
 
+    #[cfg(test)]
     /// Returns the binding for one exact pane input.
     pub fn binding(&self, key: &PaneKey) -> Option<&B> {
         self.pane_host.binding(key)
+    }
+
+    /// Mutates feature state without changing the owning input or layout topology.
+    pub fn binding_mut(&mut self, key: &PaneKey) -> Option<&mut B> {
+        self.pane_host
+            .bindings
+            .get_mut(key)
+            .map(|entry| &mut entry.binding)
+    }
+
+    pub fn bindings(&self) -> impl Iterator<Item = (&PaneKey, &B)> {
+        self.pane_host
+            .bindings
+            .iter()
+            .map(|(key, entry)| (key, &entry.binding))
+    }
+
+    pub fn bindings_mut(&mut self) -> impl Iterator<Item = (&PaneKey, &mut B)> {
+        self.pane_host
+            .bindings
+            .iter_mut()
+            .map(|(key, entry)| (key, &mut entry.binding))
     }
 
     /// Resolves the selected input and binding for one pane group.
@@ -763,21 +777,11 @@ impl<B> WorkbenchHost<B> {
         );
     }
 
-    /// Ensures the root pane and returns its binding for capability-specific attachment.
-    pub fn ensure_root_binding_with(
-        &mut self,
-        tab: TabInputKey,
-        input: PaneInput,
-        create_binding: impl FnOnce() -> B,
-    ) -> Option<(PaneKey, &mut B)> {
-        if self.workbench.pane_container(&tab).is_none() {
-            return None;
-        }
-        let pane = self.workbench.ensure_root_pane(tab.clone(), input);
-        let input = self.workbench.pane_part(&tab)?.active_input_id(pane)?;
-        let key = PaneKey::new(tab, pane, input);
-        let binding = self.pane_host.ensure_with(key.clone(), create_binding);
-        Some((key, binding))
+    /// Updates a view's resource descriptor without replacing its mounted identity or focus.
+    pub fn retarget_input(&mut self, key: &PaneKey, input: PaneInput) -> Option<PaneInput> {
+        self.workbench
+            .pane_part_mut(key.tab())?
+            .replace_input(key.pane(), key.input(), input)
     }
 
     /// Opens an input once or selects its existing group-local identity.
@@ -817,6 +821,17 @@ impl<B> WorkbenchHost<B> {
         assert!(activated, "resolved pane must activate");
         let current = PaneKey::new(tab.clone(), pane, input_id);
         Some(PaneActivation { current })
+    }
+
+    /// Restores the previous input within the active group without reallocating its binding.
+    pub fn activate_previous_input(&mut self) -> Option<PaneKey> {
+        let tab = self.workbench.sidebar_part().active_tab_key()?.clone();
+        let part = self.workbench.pane_part(&tab)?;
+        let pane = part.active_group();
+        let input = part.group(pane)?.previous_input_id()?;
+        let activated = self.workbench.activate_input(&tab, pane, input);
+        assert!(activated, "retained previous input belongs to its group");
+        Some(PaneKey::new(tab, pane, input))
     }
 
     /// Adds an input to a pane group without changing the group's active input.

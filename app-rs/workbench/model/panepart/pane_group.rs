@@ -35,6 +35,7 @@ struct PaneInputEntry {
 pub struct PaneGroup {
     inputs: Vec<PaneInputEntry>,
     active: Option<PaneInputId>,
+    previous: Option<PaneInputId>,
     next_input_id: u64,
 }
 
@@ -44,6 +45,7 @@ impl PaneGroup {
         Self {
             inputs: Vec::new(),
             active: None,
+            previous: None,
             next_input_id: PaneInputId::FIRST,
         }
     }
@@ -71,6 +73,11 @@ impl PaneGroup {
         self.active
     }
 
+    /// Returns the input to restore after a group-local content switch.
+    pub const fn previous_input_id(&self) -> Option<PaneInputId> {
+        self.previous
+    }
+
     /// Returns the active input description.
     pub fn active_input(&self) -> Option<&PaneInput> {
         self.active.and_then(|id| self.input(id))
@@ -89,7 +96,10 @@ impl PaneGroup {
         if self.input(id).is_none() {
             return false;
         }
-        self.active = Some(id);
+        if self.active != Some(id) {
+            self.previous = self.active;
+            self.active = Some(id);
+        }
         true
     }
 
@@ -97,7 +107,7 @@ impl PaneGroup {
     pub fn open_input(&mut self, input: PaneInput) -> PaneInputId {
         let id = self.allocate_input_id();
         self.inputs.push(PaneInputEntry { id, input });
-        self.active = Some(id);
+        self.activate_input(id);
         id
     }
 
@@ -130,6 +140,9 @@ impl PaneGroup {
     pub fn close_input(&mut self, id: PaneInputId) -> Option<PaneInput> {
         let index = self.inputs.iter().position(|entry| entry.id == id)?;
         let removed = self.inputs.remove(index).input;
+        if self.previous == Some(id) {
+            self.previous = None;
+        }
         if self.active == Some(id) {
             self.active = self
                 .inputs

@@ -160,7 +160,6 @@ fn presentation_with_dispatch(
     scroll_offset: usize,
 ) -> (WorkbenchPresentation, UiDispatch) {
     let files = FilesState::default();
-    let scm = ScmState::default();
     let mut dispatch = UiDispatch::default();
     let presentation = presentation_with_capabilities(
         terminal,
@@ -169,7 +168,6 @@ fn presentation_with_dispatch(
         InspectorPartState::default(),
         TabContextMenuState::default(),
         &files,
-        &scm,
         &mut dispatch,
     );
     (presentation, dispatch)
@@ -220,7 +218,6 @@ fn presentation_with_parts_and_menu(
     tab_context_menu: TabContextMenuState,
 ) -> WorkbenchPresentation {
     let files = FilesState::default();
-    let scm = ScmState::default();
     let mut dispatch = UiDispatch::default();
     presentation_with_capabilities(
         terminal,
@@ -229,7 +226,6 @@ fn presentation_with_parts_and_menu(
         inspector_part,
         tab_context_menu,
         &files,
-        &scm,
         &mut dispatch,
     )
 }
@@ -241,7 +237,6 @@ fn presentation_with_capabilities(
     inspector_part: InspectorPartState,
     tab_context_menu: TabContextMenuState,
     files: &FilesState,
-    scm: &ScmState,
     dispatch: &mut UiDispatch,
 ) -> WorkbenchPresentation {
     presentation_with_active_tab_input(
@@ -251,7 +246,6 @@ fn presentation_with_capabilities(
         inspector_part,
         tab_context_menu,
         files,
-        scm,
         dispatch,
         None,
     )
@@ -264,7 +258,6 @@ fn presentation_with_active_tab_input(
     inspector_part: InspectorPartState,
     tab_context_menu: TabContextMenuState,
     files: &FilesState,
-    scm: &ScmState,
     dispatch: &mut UiDispatch,
     active_tab_input: Option<TabInputKey>,
 ) -> WorkbenchPresentation {
@@ -318,7 +311,7 @@ fn presentation_with_active_tab_input(
             terminal,
             terminal_panes: &[],
             pane_group,
-            active_pane: files_mount,
+            pane_mounts: files_mount.as_slice(),
             terminal_pane_resize_split: None,
             terminal_scroll_offset: scroll_offset,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -348,8 +341,6 @@ fn presentation_with_active_tab_input(
             tab_container,
             inspector_part,
             files,
-            scm,
-            files_pane_expanded: false,
             tab_context_menu: tab_context_menu.clone(),
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),
@@ -378,7 +369,7 @@ fn presentation_with_active_tab_input(
             terminal,
             terminal_panes: &[],
             pane_group,
-            active_pane: files_mount,
+            pane_mounts: files_mount.as_slice(),
             terminal_pane_resize_split: None,
             terminal_scroll_offset: scroll_offset,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -408,8 +399,6 @@ fn presentation_with_active_tab_input(
             tab_container,
             inspector_part,
             files,
-            scm,
-            files_pane_expanded: false,
             tab_context_menu,
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),
@@ -433,7 +422,6 @@ fn presentation_with_active_tab_input(
 #[test]
 fn settings_tab_input_renders_a_dialog_and_selects_the_tab_container_entry() {
     let files = FilesState::default();
-    let scm = ScmState::default();
     let mut dispatch = UiDispatch::default();
     let presentation = presentation_with_active_tab_input(
         None,
@@ -442,7 +430,6 @@ fn settings_tab_input_renders_a_dialog_and_selects_the_tab_container_entry() {
         InspectorPartState::default(),
         TabContextMenuState::default(),
         &files,
-        &scm,
         &mut dispatch,
         Some(TabInputKey::Settings),
     );
@@ -507,7 +494,6 @@ fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
         DirectoryEntry::file("alpha.txt"),
         DirectoryEntry::file("beta.txt"),
     ]);
-    let scm = ScmState::default();
     let mut dispatch = UiDispatch::default();
     let initial = presentation_with_capabilities(
         None,
@@ -516,7 +502,6 @@ fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
         InspectorPartState::expanded(),
         TabContextMenuState::default(),
         &files,
-        &scm,
         &mut dispatch,
     );
     let accessibility_nodes = accessibility_nodes(&initial, &dispatch);
@@ -544,7 +529,6 @@ fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
         InspectorPartState::expanded(),
         TabContextMenuState::default(),
         &files,
-        &scm,
         &mut dispatch,
     );
 
@@ -583,7 +567,6 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     let environment_context =
         TestEnvironmentContext::fixture("~/Desktop/ash", Some("main"), Some(0));
     let files = FilesState::default();
-    let scm = ScmState::default();
     let mut file_editor_host = FileEditorHost::default();
     file_editor_host.open(TextFileSnapshot::new(
         "src/main.rs".into(),
@@ -607,7 +590,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
-            active_pane: None,
+            pane_mounts: &[],
             terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -631,8 +614,6 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             tab_container: TabContainerState::collapsed(),
             inspector_part: InspectorPartState::expanded(),
             files: &files,
-            scm: &scm,
-            files_pane_expanded: false,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),
@@ -887,7 +868,6 @@ fn session_search_filters_tabs_by_session_name() {
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let files = FilesState::default();
-    let scm = ScmState::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
 
@@ -900,7 +880,7 @@ fn session_search_filters_tabs_by_session_name() {
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
-            active_pane: None,
+            pane_mounts: &[],
             terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -924,8 +904,6 @@ fn session_search_filters_tabs_by_session_name() {
             tab_container: TabContainerState::expanded(),
             inspector_part: InspectorPartState::default(),
             files: &files,
-            scm: &scm,
-            files_pane_expanded: false,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),
@@ -1082,7 +1060,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
                 .with_dirs([environment_context.working_directory().to_path_buf()]),
         ),
         PaneInput::diff(environment_context.working_directory().to_path_buf()),
-        PaneBinding::new,
+        || PaneBinding::changes(scm),
     );
     let main_pane_group = workbench
         .workbench()
@@ -1102,7 +1080,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
             terminal: None,
             terminal_panes: &[],
             pane_group: Some(main_pane_group),
-            active_pane: main_pane,
+            pane_mounts: main_pane.as_slice(),
             terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -1126,8 +1104,6 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
             tab_container: TabContainerState::collapsed(),
             inspector_part: InspectorPartState::default(),
             files: &files,
-            scm: &scm,
-            files_pane_expanded: false,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),
@@ -1192,7 +1168,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
 }
 
 #[test]
-fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
+fn changes_and_files_use_sibling_groups_in_the_same_split_tree() {
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
     let sidebar_part = SidebarPart::default();
@@ -1221,26 +1197,31 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
                 .with_dirs([environment_context.working_directory().to_path_buf()]),
         ),
         PaneInput::diff(environment_context.working_directory().to_path_buf()),
-        PaneBinding::new,
+        || PaneBinding::changes(scm),
     );
     let pane = workbench
         .workbench()
         .pane_part(&tab_key)
         .expect("main pane part")
         .root_group();
-    workbench
-        .ensure_input_with(
-            &tab_key,
-            pane,
+    let files_key = workbench
+        .try_split_active_with(
             PaneInput::files(environment_context.working_directory().to_path_buf()),
-            PaneBinding::new,
+            PaneSplitDirection::Horizontal,
+            || Ok::<_, std::convert::Infallible>(PaneBinding::new()),
         )
-        .expect("Files input should be attached to the Changes group");
+        .unwrap()
+        .unwrap();
+    workbench.activate_pane(&tab_key, pane);
     let pane_group = workbench
         .workbench()
         .pane_part(&tab_key)
         .expect("main pane part");
     let active_pane = workbench.mount(&tab_key, pane);
+    let mounts = vec![
+        active_pane.unwrap(),
+        workbench.mount(&tab_key, files_key.pane()).unwrap(),
+    ];
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let file_editor_host = FileEditorHost::default();
@@ -1254,7 +1235,7 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
             terminal: None,
             terminal_panes: &[],
             pane_group: Some(pane_group),
-            active_pane,
+            pane_mounts: &mounts,
             terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -1278,8 +1259,6 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
             tab_container: TabContainerState::collapsed(),
             inspector_part: InspectorPartState::default(),
             files: &files,
-            scm: &scm,
-            files_pane_expanded: true,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),
@@ -1308,7 +1287,7 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
 
     assert_eq!(
         node(CHANGES_TOOLBAR).bounds,
-        Rect::from_xywh(0.0, 32.0, 1000.0, 40.0)
+        Rect::from_xywh(0.0, 32.0, 500.0, 40.0)
     );
     assert_eq!(
         node(MULTI_DIFF_EDITOR).bounds,
@@ -1316,17 +1295,23 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
     );
     assert_eq!(
         node(FILES_TOOLBAR).bounds,
-        Rect::from_xywh(500.0, 72.0, 500.0, 36.0)
+        Rect::from_xywh(500.0, 32.0, 500.0, 36.0)
     );
     assert_eq!(
         node(FILES_PANE).bounds,
-        Rect::from_xywh(500.0, 108.0, 500.0, 592.0)
+        Rect::from_xywh(500.0, 68.0, 500.0, 632.0)
     );
-    assert_eq!(node(FILES_PANE).parent, Some(CHANGES_PANE));
-    assert_eq!(node(FILES_TOOLBAR).parent, Some(CHANGES_PANE));
+    assert_eq!(
+        node(FILES_PANE).parent,
+        Some(pane_group_element_id(files_key.pane()))
+    );
+    assert_eq!(
+        node(FILES_TOOLBAR).parent,
+        Some(pane_group_element_id(files_key.pane()))
+    );
     assert_eq!(node(CHANGES_TOOLBAR).parent, Some(CHANGES_PANE));
     assert_eq!(active_pane.unwrap().kind(), crate::PaneInputKind::Diff);
-    assert_eq!(pane_group.group(pane).unwrap().inputs().count(), 2);
+    assert_eq!(pane_group.group(pane).unwrap().inputs().count(), 1);
 }
 
 #[test]
@@ -1520,7 +1505,6 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let environment_context =
         TestEnvironmentContext::fixture("~/Desktop/ash", Some("main"), Some(0));
     let files = FilesState::default();
-    let scm = ScmState::default();
     let git_branch_picker = GitBranchPickerState::default();
     let directory_picker = DirectoryPickerState::default();
     let remote_connection_picker = RemoteConnectionPickerState::default();
@@ -1539,7 +1523,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         terminal: None,
         terminal_panes: &[],
         pane_group: None,
-        active_pane: None,
+        pane_mounts: &[],
         terminal_pane_resize_split: None,
         terminal_scroll_offset: 0,
         terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -1563,8 +1547,6 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         tab_container: TabContainerState::collapsed(),
         inspector_part: InspectorPartState::default(),
         files: &files,
-        scm: &scm,
-        files_pane_expanded: false,
         tab_context_menu: TabContextMenuState::default(),
         git_branch_picker: &git_branch_picker,
         directory_picker: &directory_picker,
@@ -1708,7 +1690,6 @@ fn compact_viewport_uses_bounded_fallback_scene() {
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let files = FilesState::default();
-    let scm = ScmState::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
     let presentation = build_workbench_presentation(
@@ -1723,7 +1704,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
-            active_pane: None,
+            pane_mounts: &[],
             terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -1747,8 +1728,6 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             tab_container: TabContainerState::collapsed(),
             inspector_part: InspectorPartState::default(),
             files: &files,
-            scm: &scm,
-            files_pane_expanded: false,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),

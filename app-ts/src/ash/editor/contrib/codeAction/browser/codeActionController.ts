@@ -1,6 +1,5 @@
-import "./media/codeAction.css";
-import { addDisposableListener, getActiveElement, stopEvent, h } from "../../../../base/browser/dom.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
+import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { Range } from "../../../common/core/range.js";
 import * as languages from '../../../common/languages.js';
@@ -8,6 +7,9 @@ import { TextDecorationCollection } from "../../../common/model/decorationCollec
 import { type View } from "../../../browser/view.js";
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
+import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
+import { ActionListItemKind } from '../../../../platform/actionWidget/browser/actionList.js';
+import { localize } from '../../../../nls.js';
 
 interface CodeActionEntry {
 	readonly action: languages.LanguageCodeAction;
@@ -15,18 +17,16 @@ interface CodeActionEntry {
 	readonly provider: languages.LanguageCodeActionProvider;
 }
 
-/** Owns the editor-local code-action picker and routes selected edits through cursor commands. */
+/** Owns code-action requests and routes selected edits through cursor commands. */
 export class CodeActionController extends Disposable {
 	static readonly ID = 'editor.contrib.codeActionController';
 	static get(editor: ICodeEditor): CodeActionController | null {
 		return editor.getContribution<CodeActionController>(CodeActionController.ID);
 	}
-	private readonly element: HTMLDivElement;
-	private readonly actionListeners = this._register(new DisposableStore());
+	private menuContext: languages.LanguageCodeActionRequest | undefined;
 	private request: AbortController | undefined;
 	private context: languages.LanguageCodeActionRequest | undefined;
 	private actions: readonly CodeActionEntry[] = [];
-	private applying = false;
 
 	constructor(
 		private readonly input: HTMLElement,
@@ -36,23 +36,13 @@ export class CodeActionController extends Disposable {
 		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit) => void | Promise<void>) | undefined,
 		private readonly onError: (error: unknown) => void,
 		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
+		@IActionWidgetService private readonly actionWidgetService: IActionWidgetService,
 	) {
 		super();
 		if (diagnostics.textModel !== viewport.textModel || editor.getModel() !== viewport.textModel) {
 			throw new TypeError("Code action dependencies must share one text model");
 		}
-		const ownerDocument = viewport.domNode.domNode.ownerDocument;
-		this.element = h(ownerDocument, "div");
-		this.element.className = "stanza-editor-code-action";
-		this.element.hidden = true;
-		this.element.setAttribute("role", "menu");
-		viewport.domNode.domNode.append(this.element);
-		this._register(toDisposable(() => {
-			this.close();
-			this.element.remove();
-		}));
-		this._register(addDisposableListener(this.element, 'pointerdown', event => event.stopPropagation()));
-		this._register(addDisposableListener(this.element, 'mousedown', event => event.stopPropagation()));
+		this._register(toDisposable(() => this.close()));
 		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing) return;
 			if (event.key === "Escape" && this.request) {
@@ -65,15 +55,12 @@ export class CodeActionController extends Disposable {
 			stopEvent(event);
 			editor.trigger('keyboard', 'editor.action.quickFix', {});
 		}));
-		this._register(addDisposableListener(this.element, "keydown", event => {
-			if (event.key !== "Escape") return;
-			stopEvent(event);
-			this.close();
-		}));
 		this._register(viewport.textModel.onDidChangeContent(() => this.close()));
 		this._register(viewport.textModel.onDidChangeLanguage(() => this.close()));
 		this._register(viewport.textModel.onWillDispose(() => this.dispose()));
 		this._register(editor.onDidChangeCursorSelection(() => this.close()));
+		this._register(editor.onDidScrollChange(() => this.close()));
+		this._register(editor.onDidLayoutChange(() => this.close()));
 		this._register(languageFeaturesService.codeActionProvider.onDidChange(() => this.close()));
 		this._register(editor.onDidChangeConfiguration(event => {
 			if (event.hasChanged(EditorOption.readOnly)) this.close();
@@ -110,7 +97,7 @@ export class CodeActionController extends Disposable {
 			}
 			if (!languages.isLanguageFeatureRequestCurrent(context)) return;
 			if (actions.length === 0) {
-				this.viewport.announceAccessibilityStatus("No code actions available.");
+				this.viewport.announceAccessibilityStatus(localize('codeAction.empty', 'No code actions available.'));
 				this.close();
 				return;
 			}
@@ -125,31 +112,38 @@ export class CodeActionController extends Disposable {
 	}
 
 	private render(): void {
-		this.actionListeners.clear();
-		this.element.replaceChildren(...this.actions.map(({ action }, index) => {
-			const button = h(this.element.ownerDocument, "button");
-			button.type = "button";
-			button.setAttribute("role", "menuitem");
-			button.textContent = action.disabledReason ? `${action.title} (${action.disabledReason})` : action.title;
-			button.disabled = action.disabledReason !== undefined;
-			this.actionListeners.add(addDisposableListener(button, "click", () => void this.apply(index)));
-			return button;
-		}));
 		const position = this.editor.getSelection()?.getStartPosition();
-		if (!position) return;
-		const coordinates = this.viewport.getPositionContentCoordinates(position);
-		this.element.style.left = `${Math.max(8, coordinates.left - this.viewport.viewportLayout.scrollPosition.left)}px`;
-		this.element.style.top = `${Math.max(8, coordinates.top - this.viewport.viewportLayout.scrollPosition.top + coordinates.height + 4)}px`;
-		this.element.hidden = false;
-		(this.element.querySelector("button:not(:disabled)") as HTMLButtonElement | null)?.focus({ preventScroll: true });
+		const context = this.context;
+		if (!position || !context) return;
+		const coordinates = this.editor.getScrolledVisiblePosition(position);
+		if (!coordinates) return;
+		const bounds = this.viewport.domNode.domNode.getBoundingClientRect();
+		this.menuContext = context;
+		this.actionWidgetService.show(CodeActionController.ID, false, this.actions.map((entry, index) => ({
+			kind: ActionListItemKind.Action,
+			item: index,
+			label: entry.action.disabledReason
+				? localize('codeAction.disabled', '{0} ({1})', entry.action.title, entry.action.disabledReason)
+				: entry.action.title,
+			disabled: entry.action.disabledReason !== undefined,
+		})), {
+			onSelect: index => this.apply(index),
+			onHide: () => {
+				this.menuContext = undefined;
+				if (this.context === context) this.close();
+			},
+		}, {
+			left: bounds.left + coordinates.left,
+			top: bounds.top + coordinates.top,
+			width: 0,
+			height: coordinates.height,
+		});
 	}
 
 	private async apply(index: number): Promise<void> {
 		const entry = this.actions[index];
 		const context = this.context;
-		if (this.applying || !entry || !context || !languages.isLanguageFeatureRequestCurrent(context) || entry.action.disabledReason !== undefined) return;
-		this.applying = true;
-		this.element.setAttribute('aria-busy', 'true');
+		if (!entry || !context || !languages.isLanguageFeatureRequestCurrent(context) || entry.action.disabledReason !== undefined) return;
 		let editDispatched = false;
 		try {
 			const resolved = !entry.action.edit && entry.provider.resolveCodeAction
@@ -162,7 +156,7 @@ export class CodeActionController extends Disposable {
 				return;
 			}
 			if (!resolved.edit) {
-				this.viewport.announceAccessibilityStatus(`${resolved.title} has no text edit.`);
+				this.viewport.announceAccessibilityStatus(localize('codeAction.noEdit', '{0} has no text edit.', resolved.title));
 				this.close();
 				return;
 			}
@@ -185,26 +179,18 @@ export class CodeActionController extends Disposable {
 			if (this.context === context) this.close();
 		} catch (error) {
 			if (editDispatched || languages.isLanguageFeatureRequestCurrent(context)) this.onError(error);
-		} finally {
-			if (this.context === context) {
-				this.applying = false;
-				this.element.removeAttribute('aria-busy');
-			}
 		}
 	}
 
 	private close(): void {
-		const restoreFocus = this.element.contains(getActiveElement(this.element.ownerDocument));
+		if (this.menuContext) {
+			this.menuContext = undefined;
+			this.actionWidgetService.hide();
+		}
 		this.request?.abort();
 		this.request = undefined;
 		this.context = undefined;
 		this.actions = [];
-		this.applying = false;
-		this.element.removeAttribute('aria-busy');
-		this.element.hidden = true;
-		this.actionListeners.clear();
-		this.element.replaceChildren();
-		if (!this.isDisposed && restoreFocus) this.input.focus({ preventScroll: true });
 	}
 }
 

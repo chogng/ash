@@ -90,12 +90,15 @@ Codex、Claude Code、Gemini CLI 等外部 AI 不增加新的 Agent 类型，也
 
 ## 当前差距
 
-完成布局模型需要满足：
+Changes、Files、Agent 和 Terminal 已按当前 PanePart 的活动输入逐组绘制，
+焦点、鼠标和分隔线共用拆分几何。Changes 状态按组保存，Files 按钮打开同树中的 Files 组；
+宽屏显示多组，窄屏保留拓扑并显示活动组，终端切换保留同组返回关系。
 
-1. 让 `Changes` 视图完整拥有变更导航、选择和 Diff 内容。
-2. 让所有内容通过当前 PanePart 的 PaneGroup 和活动 PaneInput 挂载、绘制和路由输入。
-3. 由同一 PanePart 拆分树负责宽屏多 Pane 和窄屏活动 Pane 接管，并保存返回关系。
-4. 让 Terminal session identity 脱离 App Server `SessionId`，通过独立 adapter 启动外部 AI CLI。
+仍需完成：
+
+1. Files 的文件内容与编辑器组合；当前文件编辑器仍在 Inspector。
+2. Agent 与 Files 的视图状态进一步按组归属；当前各自保留一个窗口级状态。
+3. Terminal session identity 脱离 App Server `SessionId`，通过独立 adapter 启动外部 AI CLI。
 
 ## 长期边界
 

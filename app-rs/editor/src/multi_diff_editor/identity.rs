@@ -17,6 +17,7 @@ const HEADER_ACTION_SCOPE: u32 = 13;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct MultiDiffEditorItemIdentity {
     slot: u32,
+    owner: u32,
 }
 
 impl MultiDiffEditorItemIdentity {
@@ -26,7 +27,24 @@ impl MultiDiffEditorItemIdentity {
     /// a stable file key and must not derive it from the file's current array index.
     pub fn from_slot(slot: u32) -> Self {
         assert!(slot != 0, "multi-diff item identity slots must be non-zero");
-        Self { slot }
+        Self { slot, owner: 0 }
+    }
+
+    /// Allocates the same file slot in a distinct mounted editor's identity space.
+    /// The owner stays stable for the mounted view, including while it is hidden.
+    pub fn in_owner(owner: u32, slot: u32) -> Self {
+        assert!(
+            owner < (1 << 26),
+            "multi-diff owner identity space exhausted"
+        );
+        Self {
+            owner,
+            ..Self::from_slot(slot)
+        }
+    }
+
+    const fn scope(self, local_scope: u32) -> u32 {
+        (self.owner << 6) | local_scope
     }
 
     /// Returns the host-owned slot for diagnostics and deterministic tests.
@@ -36,23 +54,23 @@ impl MultiDiffEditorItemIdentity {
 
     /// Returns the identity of the file card that contains the diff.
     pub const fn section_id(self) -> ElementId {
-        ElementId::scoped(SECTION_SCOPE, self.slot)
+        ElementId::scoped(self.scope(SECTION_SCOPE), self.slot)
     }
 
     /// Returns the identity of the file header inside the card.
     pub const fn header_id(self) -> ElementId {
-        ElementId::scoped(HEADER_SCOPE, self.slot)
+        ElementId::scoped(self.scope(HEADER_SCOPE), self.slot)
     }
 
     /// Decodes a file identity from a header interaction target.
     pub fn from_header_id(id: ElementId) -> Option<Self> {
         let (scope, local) = split_element_id(id);
-        (scope == HEADER_SCOPE && local != 0).then(|| Self::from_slot(local))
+        (scope & 63 == HEADER_SCOPE && local != 0).then(|| Self::in_owner(scope >> 6, local))
     }
 
     /// Returns the identity of the file's nested diff body.
     pub const fn diff_id(self) -> ElementId {
-        ElementId::scoped(DIFF_SCOPE, self.slot)
+        ElementId::scoped(self.scope(DIFF_SCOPE), self.slot)
     }
 
     /// Returns one stable identity for a host-owned action in the file header.
@@ -60,18 +78,18 @@ impl MultiDiffEditorItemIdentity {
         let slot = u16::try_from(self.slot).ok()?;
         let action = u16::try_from(action).ok()?;
         let local = ((u32::from(slot) << 16) | u32::from(action)).checked_add(1)?;
-        Some(ElementId::scoped(HEADER_ACTION_SCOPE, local))
+        Some(ElementId::scoped(self.scope(HEADER_ACTION_SCOPE), local))
     }
 
     /// Decodes the file identity and action index from a header action target.
     pub fn from_header_action_id(id: ElementId) -> Option<(Self, usize)> {
         let (scope, local) = split_element_id(id);
-        if scope != HEADER_ACTION_SCOPE {
+        if scope & 63 != HEADER_ACTION_SCOPE {
             return None;
         }
         let packed = local.checked_sub(1)?;
         let slot = packed >> 16;
-        (slot != 0).then(|| (Self::from_slot(slot), packed as u16 as usize))
+        (slot != 0).then(|| (Self::in_owner(scope >> 6, slot), packed as u16 as usize))
     }
 
     /// Returns the identity of an unchanged-region fold control.
@@ -82,18 +100,18 @@ impl MultiDiffEditorItemIdentity {
         let slot = u16::try_from(self.slot).ok()?;
         let region_index = u16::try_from(region_index).ok()?;
         let local = ((u32::from(slot) << 16) | u32::from(region_index)).checked_add(1)?;
-        Some(ElementId::scoped(FOLD_SCOPE, local))
+        Some(ElementId::scoped(self.scope(FOLD_SCOPE), local))
     }
 
     /// Decodes the file identity and unchanged-region index from a fold target.
     pub fn from_fold_id(id: ElementId) -> Option<(Self, usize)> {
         let (scope, local) = split_element_id(id);
-        if scope != FOLD_SCOPE {
+        if scope & 63 != FOLD_SCOPE {
             return None;
         }
         let packed = local.checked_sub(1)?;
         let slot = packed >> 16;
-        (slot != 0).then(|| (Self::from_slot(slot), packed as u16 as usize))
+        (slot != 0).then(|| (Self::in_owner(scope >> 6, slot), packed as u16 as usize))
     }
 
     /// Returns the stable animation key for this file card's fold-driven height.

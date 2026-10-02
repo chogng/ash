@@ -2,6 +2,7 @@ import { AbstractDisposable, type IDisposable } from '../../../base/common/lifec
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export const enum AccessibleViewProviderId {
+	ActionWidget = 'actionWidget',
 	InspectEditorTokens = 'inspectEditorTokens',
 	Explorer = 'explorer',
 	GettingStarted = 'gettingStarted',
@@ -33,6 +34,7 @@ export const enum AccessibleViewType {
 }
 
 export const enum AccessibilityVerbositySettingId {
+	ActionWidget = 'accessibility.verbosity.actionWidget',
 	InspectEditorTokens = 'accessibility.verbosity.inspectEditorTokens',
 	Explorer = 'accessibility.verbosity.explorer',
 	GettingStarted = 'accessibility.verbosity.gettingStarted',

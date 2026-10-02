@@ -18,6 +18,9 @@ use ash_ui_components::{
     Dialog, DialogIds, DialogStyle, InteractionRegion, Sash, SashOrientation, SashState, SashStyle,
     ScrollMetrics, ScrollView, ScrollbarPresentation,
 };
+use zui::ui::FocusBehavior;
+use zui::ui::NodeAction;
+use zui::ui::Point;
 use zui::ui::{
     Border, BoxShadow, CaretVisibility, Color, CornerRadii, FontWeight, PaintRect, Rect,
     SceneCheckpoint, Size, SplitViewOrientation, SplitViewResizeSnapshot, TextBlock,
@@ -281,6 +284,19 @@ impl WorkbenchPresentation {
         self.frame.interaction_mut()
     }
 
+    /// Resolves feature descendants through the owning group, including keyboard focus and
+    /// floating menus whose geometry extends outside the group's rectangle.
+    pub fn pane_for_element(&self, part: &PanePart, id: ElementId) -> Option<PaneId> {
+        let ancestry = self.interaction_frame().ancestry(id);
+        part.group_ids()
+            .into_iter()
+            .find(|pane| ancestry.contains(&pane_group_element_id(*pane)))
+    }
+
+    pub fn pane_at(&self, part: &PanePart, point: Point) -> Option<PaneId> {
+        self.pane_for_element(part, self.interaction_frame().target_at(point)?)
+    }
+
     pub fn element_bounds(&self, id: ElementId) -> Option<Rect> {
         self.interaction_frame().node(id).map(|node| node.bounds())
     }
@@ -308,7 +324,6 @@ struct WorkbenchOverlayPresentation {
 #[derive(Clone, Copy)]
 pub struct PaneView<'a> {
     pub pane_id: Option<PaneId>,
-    pub kind: PaneInputKind,
     pub core: Option<&'a TerminalCore>,
     pub scroll_offset: usize,
     pub scrollbar_presentation: ScrollbarPresentation,
@@ -323,7 +338,7 @@ pub struct WorkbenchPresentationModel<'a> {
     pub terminal: Option<&'a TerminalCore>,
     pub terminal_panes: &'a [PaneView<'a>],
     pub pane_group: Option<&'a PanePart>,
-    pub active_pane: Option<PaneViewMount<'a>>,
+    pub pane_mounts: &'a [PaneViewMount<'a>],
     pub terminal_pane_resize_split: Option<PaneSplitId>,
     pub terminal_scroll_offset: usize,
     pub terminal_scrollbar_presentation: ScrollbarPresentation,
@@ -347,8 +362,6 @@ pub struct WorkbenchPresentationModel<'a> {
     pub tab_container: TabContainerState,
     pub inspector_part: InspectorPartState,
     pub files: &'a FilesState,
-    pub scm: &'a ScmState,
-    pub files_pane_expanded: bool,
     pub tab_context_menu: TabContextMenuState,
     pub git_branch_picker: &'a GitBranchPickerState,
     pub directory_picker: &'a DirectoryPickerState,
@@ -398,15 +411,13 @@ struct MainPresentationView<'a> {
     terminal: PaneView<'a>,
     terminal_panes: &'a [PaneView<'a>],
     pane_group: Option<&'a PanePart>,
-    active_pane: Option<PaneViewMount<'a>>,
+    pane_mounts: &'a [PaneViewMount<'a>],
     terminal_pane_resize_split: Option<PaneSplitId>,
     main_surface: MainSurfaceKind,
     session_title: &'a str,
     session_pane: &'a SessionPaneState,
     session_pane_context: &'a SessionPaneContext,
     files: &'a FilesState,
-    scm: &'a ScmState,
-    files_pane_expanded: bool,
     environment_context: EnvironmentContextView<'a>,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
@@ -594,7 +605,6 @@ fn build_workbench_presentation_with_bindings(
             MainPresentationView {
                 terminal: PaneView {
                     pane_id: None,
-                    kind: PaneInputKind::Terminal,
                     core: model.terminal,
                     scroll_offset: model.terminal_scroll_offset,
                     scrollbar_presentation: model.terminal_scrollbar_presentation,
@@ -602,15 +612,13 @@ fn build_workbench_presentation_with_bindings(
                 },
                 terminal_panes: model.terminal_panes,
                 pane_group: model.pane_group,
-                active_pane: model.active_pane,
+                pane_mounts: model.pane_mounts,
                 terminal_pane_resize_split: model.terminal_pane_resize_split,
                 main_surface: model.main_surface,
                 session_title,
                 session_pane: model.session_pane,
                 session_pane_context: &session_pane_context,
                 files: model.files,
-                scm: model.scm,
-                files_pane_expanded: model.files_pane_expanded,
                 environment_context: model.environment_context.clone(),
                 caret_visibility: model.caret_visibility,
                 dispatch: model.dispatch,
@@ -934,7 +942,7 @@ pub fn terminal_grid_size_for_bounds(bounds: Rect) -> GridSize {
 
 pub fn terminal_pane_bounds_for_viewport(
     viewport: LogicalViewport,
-    active_screen: ScreenBuffer,
+    _active_screen: ScreenBuffer,
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
     group: &PanePart,
@@ -943,8 +951,8 @@ pub fn terminal_pane_bounds_for_viewport(
     else {
         return Vec::new();
     };
-    let bounds = terminal_content_bounds(layout, active_screen);
-    PaneGroupLayout::for_tree(bounds, group.tree())
+    let bounds = layout.main();
+    PaneGroupLayout::for_part(bounds, group)
         .leaves()
         .iter()
         .map(|leaf| (leaf.id(), leaf.bounds()))
@@ -968,7 +976,7 @@ pub fn terminal_mouse_position_for_viewport(
 
 pub fn terminal_pane_mouse_position_for_viewport(
     viewport: LogicalViewport,
-    active_screen: ScreenBuffer,
+    _active_screen: ScreenBuffer,
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
     group: &PanePart,
@@ -978,8 +986,7 @@ pub fn terminal_pane_mouse_position_for_viewport(
     else {
         return None;
     };
-    let content_bounds = terminal_content_bounds(layout, active_screen);
-    let pane_geometry = PaneGroupLayout::for_tree(content_bounds, group.tree());
+    let pane_geometry = PaneGroupLayout::for_part(layout.main(), group);
     let leaf = pane_geometry
         .leaves()
         .iter()
@@ -1030,35 +1037,10 @@ fn draw_changes_pane(
     context: &mut ComponentContext<'_, '_>,
     bounds: Rect,
     scm: &ScmState,
-    files_pane_expanded: bool,
-    files: &FilesState,
-    environment_context: &EnvironmentContextView<'_>,
     parent: ElementId,
-    caret_visibility: CaretVisibility,
     palette: UiTheme,
     dispatch: &UiDispatch,
-    text_layout: &mut TextInputLayoutEngine,
 ) -> Option<Rect> {
-    let content_bounds = EditorPane::content_bounds_for(bounds);
-    let (editor_bounds, files_bounds) = if files_pane_expanded {
-        let editor_width = content_bounds.size.width * 0.5;
-        (
-            Rect::from_xywh(
-                content_bounds.origin.x,
-                content_bounds.origin.y,
-                editor_width,
-                content_bounds.size.height,
-            ),
-            Some(Rect::from_xywh(
-                content_bounds.origin.x + editor_width,
-                content_bounds.origin.y,
-                content_bounds.size.width - editor_width,
-                content_bounds.size.height,
-            )),
-        )
-    } else {
-        (content_bounds, None)
-    };
     context.draw_component(
         &EditorPane::new(
             bounds,
@@ -1066,22 +1048,9 @@ fn draw_changes_pane(
             ash_scm::ScmPaneStyle::from_theme(palette),
             parent,
         )
-        .with_content_bounds(editor_bounds)
         .with_toolbar(scm.toolbar(), dispatch),
     );
-    files_bounds.and_then(|bounds| {
-        draw_files_pane(
-            context,
-            bounds,
-            files,
-            environment_context,
-            ash_scm::CHANGES_PANE,
-            caret_visibility,
-            dispatch,
-            text_layout,
-            palette,
-        )
-    })
+    None
 }
 
 fn draw_file_editor_inspector(
@@ -1252,118 +1221,152 @@ fn draw_main(
             .draw_rect(PaintRect::new(layout.main(), palette.workbench_background));
         context.with_clip(layout.main(), |context| {
             let mut ime_cursor_area = None;
-            let active_file_input = view.active_pane.filter(|pane| {
-                !matches!(view.main_surface, MainSurfaceKind::Editor)
-                    && matches!(pane.kind(), PaneInputKind::Files | PaneInputKind::Diff)
-            });
-            if let Some(pane) = active_file_input {
-                let pane_group_id = pane_group_element_id(pane.pane_id());
-                let pane_group = InteractionRegion::new(
-                    "PaneGroup",
-                    pane_group_id,
-                    layout.main(),
-                    AccessibilityRole::Group,
-                    match pane.kind() {
-                        PaneInputKind::Files => "Files pane group",
-                        PaneInputKind::Diff => "Changes pane group",
-                        _ => unreachable!("file input kind was checked above"),
-                    },
-                )
-                .with_parent(MAIN_SURFACE);
-                ime_cursor_area =
-                    context.with_component(&pane_group, |context, _| match pane.kind() {
-                        PaneInputKind::Files => draw_files_pane(
-                            context,
-                            layout.main(),
-                            view.files,
-                            &view.environment_context,
-                            pane_group_id,
-                            view.caret_visibility,
-                            view.dispatch,
-                            text_layout,
-                            palette,
-                        ),
-                        PaneInputKind::Diff => draw_changes_pane(
-                            context,
-                            layout.main(),
-                            view.scm,
-                            view.files_pane_expanded,
-                            view.files,
-                            &view.environment_context,
-                            pane_group_id,
-                            view.caret_visibility,
-                            palette,
-                            view.dispatch,
-                            text_layout,
-                        ),
-                        _ => unreachable!("file input kind was checked above"),
-                    });
-            } else {
-                match view.main_surface {
-                    MainSurfaceKind::Terminal => {
-                        let terminal_bounds = terminal_content_bounds(layout, active_screen);
-                        if view.terminal_panes.is_empty() {
-                            let terminal_region = InteractionRegion::new(
-                                "TerminalOutput",
-                                TERMINAL_OUTPUT,
-                                terminal_bounds,
-                                AccessibilityRole::Terminal,
-                                "Interactive terminal",
-                            )
-                            .with_parent(MAIN_SURFACE)
-                            .with_cursor(CursorFeedback::Text);
-                            context.with_component(&terminal_region, |context, _| {
-                                draw_terminal(
-                                    context.scene_mut(),
-                                    layout,
-                                    view.terminal,
-                                    active_screen,
-                                    palette,
-                                );
-                            });
-                        } else if let Some(group) = view.pane_group {
-                            let pane_geometry =
-                                PaneGroupLayout::for_tree(terminal_bounds, group.tree());
-                            for pane in view.terminal_panes {
-                                if pane.kind != PaneInputKind::Terminal {
-                                    continue;
-                                }
-                                let Some(pane_id) = pane.pane_id else {
-                                    continue;
-                                };
-                                let Some(bounds) =
-                                    pane_geometry.leaf(pane_id).map(|leaf| leaf.bounds())
-                                else {
-                                    continue;
-                                };
-                                let terminal_region = InteractionRegion::new(
-                                    "TerminalPane",
-                                    pane_group_element_id(pane_id),
+            if let Some(part) = view.pane_group {
+                let geometry = PaneGroupLayout::for_part(layout.main(), part);
+                for leaf in geometry.leaves() {
+                    let Some(mount) = view
+                        .pane_mounts
+                        .iter()
+                        .find(|mount| mount.pane_id() == leaf.id())
+                    else {
+                        continue;
+                    };
+                    let bounds = leaf.bounds();
+                    let parent = pane_group_element_id(leaf.id());
+                    let active = leaf.id() == part.active_group();
+                    let region = InteractionRegion::new(
+                        "PaneGroup",
+                        parent,
+                        bounds,
+                        AccessibilityRole::Group,
+                        match mount.kind() {
+                            PaneInputKind::Files => "Files pane group",
+                            PaneInputKind::Diff => "Changes pane group",
+                            PaneInputKind::Agent => "Agent",
+                            PaneInputKind::Terminal => "Interactive terminal Pane",
+                            PaneInputKind::Settings => "Settings",
+                        },
+                    )
+                    .with_parent(MAIN_SURFACE)
+                    .with_focus(FocusBehavior::TabStop)
+                    .with_action(NodeAction::Activate);
+                    let caret = context.with_component(&region, |context, _| {
+                        context.with_clip(bounds, |context| match mount.kind() {
+                            PaneInputKind::Diff => draw_changes_pane(
+                                context,
+                                bounds,
+                                mount
+                                    .binding()
+                                    .scm()
+                                    .expect("Changes input owns its view state"),
+                                parent,
+                                palette,
+                                view.dispatch,
+                            ),
+                            PaneInputKind::Files => draw_files_pane(
+                                context,
+                                bounds,
+                                view.files,
+                                &view.environment_context,
+                                parent,
+                                view.caret_visibility,
+                                view.dispatch,
+                                text_layout,
+                                palette,
+                            ),
+                            PaneInputKind::Agent => draw_session_pane(
+                                context,
+                                SessionPaneLayout::for_bounds(
                                     bounds,
-                                    AccessibilityRole::Terminal,
-                                    "Interactive terminal Pane",
-                                )
-                                .with_parent(MAIN_SURFACE)
-                                .with_cursor(CursorFeedback::Text);
-                                context.with_component(&terminal_region, |context, _| {
+                                    view.session_pane
+                                        .composer_preferred_height()
+                                        .max(COMPOSER_HEIGHT),
+                                    view.session_pane
+                                        .composer_interaction_view()
+                                        .map(|view| {
+                                            ash_session::interaction_preferred_height(
+                                                view.items().len(),
+                                            )
+                                        })
+                                        .unwrap_or(0.0),
+                                ),
+                                SessionPaneView {
+                                    title: view.session_title,
+                                    state: view.session_pane,
+                                    context: view.session_pane_context,
+                                    caret_visibility: view.caret_visibility,
+                                    dispatch: view.dispatch,
+                                    parent,
+                                },
+                                text_layout,
+                                ash_session::SessionPaneStyle::from_theme(palette),
+                            ),
+                            PaneInputKind::Terminal => {
+                                if let Some(pane) = view
+                                    .terminal_panes
+                                    .iter()
+                                    .find(|pane| pane.pane_id == Some(leaf.id()))
+                                {
                                     draw_terminal_in_bounds(
                                         context.scene_mut(),
                                         bounds,
                                         *pane,
-                                        active_screen,
+                                        ScreenBuffer::Alternate,
                                         palette,
                                     );
-                                });
+                                    pane.core.and_then(|core| {
+                                        terminal_cursor_area_for_bounds(
+                                            bounds,
+                                            core,
+                                            pane.scroll_offset,
+                                        )
+                                    })
+                                } else {
+                                    None
+                                }
                             }
-                            context.draw_component(&PanePartSashes::new(
-                                &pane_geometry,
-                                MAIN_SURFACE,
-                                palette.border,
-                                palette.accent,
-                                view.dispatch,
-                                view.terminal_pane_resize_split,
-                            ));
-                        }
+                            PaneInputKind::Settings => {
+                                unreachable!("Settings has its own container")
+                            }
+                        })
+                    });
+                    if active {
+                        ime_cursor_area = caret;
+                    }
+                }
+                context.draw_component(&PanePartSashes::new(
+                    &geometry,
+                    MAIN_SURFACE,
+                    palette.border,
+                    palette.accent,
+                    view.dispatch,
+                    view.terminal_pane_resize_split,
+                ));
+            } else {
+                match view.main_surface {
+                    MainSurfaceKind::Terminal => {
+                        let bounds = terminal_content_bounds(layout, active_screen);
+                        let region = InteractionRegion::new(
+                            "TerminalOutput",
+                            TERMINAL_OUTPUT,
+                            bounds,
+                            AccessibilityRole::Terminal,
+                            "Interactive terminal",
+                        )
+                        .with_parent(MAIN_SURFACE)
+                        .with_cursor(CursorFeedback::Text);
+                        context.with_component(&region, |context, _| {
+                            draw_terminal(
+                                context.scene_mut(),
+                                layout,
+                                view.terminal,
+                                active_screen,
+                                palette,
+                            )
+                        });
+                        ime_cursor_area = view.terminal.core.and_then(|core| {
+                            terminal_cursor_area(layout, core, view.terminal.scroll_offset)
+                        });
                     }
                     MainSurfaceKind::Agent | MainSurfaceKind::Editor => {
                         ime_cursor_area = draw_session_pane(
@@ -1383,32 +1386,6 @@ fn draw_main(
                     }
                 }
             }
-            let ime_cursor_area = match view.main_surface {
-                MainSurfaceKind::Terminal if !view.terminal_panes.is_empty() => {
-                    let active_pane = view.pane_group.map(PanePart::active_pane);
-                    let terminal_bounds = terminal_content_bounds(layout, active_screen);
-                    view.terminal_panes
-                        .iter()
-                        .find(|pane| pane.pane_id == active_pane)
-                        .and_then(|pane| {
-                            pane.core.and_then(|terminal| {
-                                terminal_cursor_area_for_bounds(
-                                    terminal_bounds_for_pane(
-                                        view.pane_group,
-                                        terminal_bounds,
-                                        pane.pane_id,
-                                    )?,
-                                    terminal,
-                                    pane.scroll_offset,
-                                )
-                            })
-                        })
-                }
-                MainSurfaceKind::Terminal => view.terminal.core.and_then(|terminal| {
-                    terminal_cursor_area(layout, terminal, view.terminal.scroll_offset)
-                }),
-                MainSurfaceKind::Agent | MainSurfaceKind::Editor => ime_cursor_area,
-            };
             MainDrawResult { ime_cursor_area }
         })
     })
@@ -1516,28 +1493,16 @@ fn terminal_cursor_area_for_bounds(
     ash_terminal_runtime::cursor_area(bounds, terminal, scroll_offset)
 }
 
-fn terminal_bounds_for_pane(
-    group: Option<&PanePart>,
-    bounds: Rect,
-    pane_id: Option<PaneId>,
-) -> Option<Rect> {
-    let pane_id = pane_id?;
-    PaneGroupLayout::for_tree(bounds, group?.tree())
-        .leaf(pane_id)
-        .map(|leaf| leaf.bounds())
-}
-
 pub fn terminal_pane_sash_for_viewport(
     viewport: LogicalViewport,
-    active_screen: ScreenBuffer,
+    _active_screen: ScreenBuffer,
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
     group: &PanePart,
     point: zui::ui::Point,
 ) -> Option<(PaneSplitId, SplitViewOrientation, SplitViewResizeSnapshot)> {
     let layout = WorkbenchSceneLayout::for_viewport(viewport, tab_container, inspector_part)?;
-    let pane_geometry =
-        PaneGroupLayout::for_tree(terminal_content_bounds(layout, active_screen), group.tree());
+    let pane_geometry = PaneGroupLayout::for_part(layout.main(), group);
     pane_geometry.sashes().iter().find_map(|sash| {
         let orientation = match sash.orientation() {
             SplitViewOrientation::Horizontal => SashOrientation::Vertical,

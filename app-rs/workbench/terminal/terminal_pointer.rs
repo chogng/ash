@@ -87,8 +87,11 @@ impl WorkbenchApplication {
         )
     }
 
-    pub(crate) fn activate_terminal_pane_at(&mut self, point: zui::ui::Point) -> bool {
-        let Some((pane, _position)) = self.terminal_pane_hit(point) else {
+    pub(crate) fn activate_pane_at(&mut self, point: zui::ui::Point) -> bool {
+        let Some(pane) = self.presentation.as_ref().and_then(|presentation| {
+            let tab = self.active_session_tab_key()?;
+            presentation.pane_at(self.workbench.workbench().pane_part(&tab)?, point)
+        }) else {
             return false;
         };
         let Some(tab_key) = self

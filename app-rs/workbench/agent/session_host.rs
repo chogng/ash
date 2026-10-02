@@ -107,7 +107,6 @@ impl WorkbenchApplication {
         let Some(session_id) = tab.session_id().cloned() else {
             return;
         };
-        let was_terminal = self.main_surface.is_terminal();
         if !self.ensure_terminal_for_session(&session_id) {
             return;
         }
@@ -118,10 +117,11 @@ impl WorkbenchApplication {
             eprintln!("could not subscribe to Session: {error}");
             return;
         }
-        self.activate_session_workbench_tab();
-        let _ = self.activate_terminal_for_session(&session_id);
-        if !was_terminal {
-            let _ = self.bind_agent_pane();
+        self.settings.close();
+        if let Some(part) = self.workbench.workbench().pane_part(key) {
+            let pane = part.active_group();
+            let _ = self.activate_pane_context(key.clone(), pane);
+            self.focus_active_pane();
         }
         self.rebuild_presentation_on_next_redraw();
     }
@@ -209,9 +209,22 @@ impl WorkbenchApplication {
                 thread,
                 transcript,
             } => {
+                let tab = TabInputKey::session(session.session_id.clone());
+                let initial_agent = self
+                    .workbench
+                    .workbench()
+                    .pane_part(&tab)
+                    .is_none_or(|part| {
+                        part.group_ids().len() == 1
+                            && part.group(part.root_group()).is_some()
+                            && part
+                                .group(part.active_group())
+                                .expect("active group")
+                                .inputs()
+                                .all(|input| input.kind() == crate::PaneInputKind::Terminal)
+                    });
                 self.upsert_session_tab(&session);
                 self.ensure_terminal_for_session(&session.session_id);
-                self.activate_terminal_for_session(&session.session_id);
                 let scroll_limit = self.thread_timeline_scroll_limit();
                 self.session_pane
                     .replace_thread(thread, transcript, scroll_limit);
@@ -219,7 +232,11 @@ impl WorkbenchApplication {
                     .active_session_tab_key()
                     .and_then(|key| key.session_id().cloned());
                 if active_session.as_ref() == Some(&session.session_id)
-                    && !self.main_surface.is_terminal()
+                    && (initial_agent
+                        || matches!(
+                            self.active_main_pane_kind(),
+                            Some(crate::PaneInputKind::Agent)
+                        ))
                 {
                     let _ = self.bind_agent_pane();
                 }
@@ -412,16 +429,47 @@ fn shell_completion_sources_changed(changed: &FsChanged) -> bool {
 
 impl WorkbenchApplication {
     pub(crate) fn refresh_dir_capabilities(&mut self) {
-        let pane_kind = self.active_main_pane_kind();
-        self.files
-            .set_dir_root(self.env.working_directory().to_path_buf());
-        let mut removed = self.scm.replace_diffs([]);
-        removed.extend(self.sync_repository_state());
-        match pane_kind {
-            Some(crate::PaneInputKind::Diff) => self.show_changes_pane(),
-            Some(crate::PaneInputKind::Files) => self.show_files_pane(),
-            _ => {}
+        let root = self.env.working_directory().to_path_buf();
+        self.files.set_dir_root(root.clone());
+        // The app-server connection selects one working directory for the window. Retarget
+        // every repository view in place so an old diff cannot send actions to the new directory.
+        let targets = self
+            .workbench
+            .bindings()
+            .filter_map(|(key, _)| {
+                let input = self
+                    .workbench
+                    .workbench()
+                    .pane_part(key.tab())?
+                    .group(key.pane())?
+                    .input(key.input())?;
+                match input {
+                    PaneInput::Diff { dir_root } if dir_root != &root => {
+                        Some((key.clone(), PaneInput::diff(root.clone())))
+                    }
+                    PaneInput::Files { dir_root } if dir_root != &root => {
+                        Some((key.clone(), PaneInput::files(root.clone())))
+                    }
+                    _ => None,
+                }
+            })
+            .collect::<Vec<_>>();
+        for (key, input) in targets {
+            if input.kind() == crate::PaneInputKind::Diff {
+                let next = self.create_changes_binding();
+                let old = std::mem::replace(
+                    self.workbench
+                        .binding_mut(&key)
+                        .expect("repository binding"),
+                    next,
+                );
+                self.release_changes_binding(&old);
+            }
+            self.workbench
+                .retarget_input(&key, input)
+                .expect("repository view input");
         }
+        let removed = self.sync_repository_state();
         self.remove_scm_animation_tracks(removed);
     }
 
@@ -431,11 +479,30 @@ impl WorkbenchApplication {
     }
 
     fn sync_repository_state(&mut self) -> Vec<ash_editor::MultiDiffEditorItemIdentity> {
-        self.scm
-            .set_branch(Some(self.env.git_branch_label()).filter(|branch| *branch != "No Git"));
-        self.scm.replace_diffs(self.env.diffs().iter().map(|diff| {
-            ScmDiff::new(diff.path(), diff.document().clone()).with_staging(diff.staging())
-        }))
+        let root = self.env.working_directory();
+        let diffs = self
+            .env
+            .diffs()
+            .iter()
+            .map(|diff| {
+                ScmDiff::new(diff.path(), diff.document().clone()).with_staging(diff.staging())
+            })
+            .collect::<Vec<_>>();
+        let mut removed = Vec::new();
+        let model = self.workbench.workbench();
+        let keys = self.workbench.bindings().filter_map(|(key, binding)| {
+            (binding.scm().is_some() && model.pane_part(key.tab())
+                .and_then(|part| part.group(key.pane()))
+                .and_then(|group| group.input(key.input()))
+                .is_some_and(|input| matches!(input, PaneInput::Diff { dir_root } if dir_root == root)))
+                .then(|| key.clone())
+        }).collect::<Vec<_>>();
+        for key in keys {
+            let scm = self.workbench.binding_mut(&key).unwrap().scm_mut().unwrap();
+            scm.set_branch(Some(self.env.git_branch_label()).filter(|branch| *branch != "No Git"));
+            removed.extend(scm.replace_diffs(diffs.iter().cloned()));
+        }
+        removed
     }
 
     fn remove_scm_animation_tracks(

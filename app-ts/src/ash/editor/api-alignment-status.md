@@ -1,5 +1,16 @@
 # Editor API 对齐状态
 
+## Code Action 共享动作菜单（2026-10-02）
+
+Quick Fix 的生产调用已经接入 `platform/actionWidget/browser/actionWidget.ts` 与 `actionList.ts`。`ActionWidgetService` 管理当前菜单，复用现有 `ContextView` 的定位、视口裁剪与外部点击关闭；`ActionList` 管理类型化动作及异步执行的忙碌状态，复用 `Menu` 的按钮、禁用态和键盘导航。Code Action 控制器继续管理提供者、原始 action、快照、取消与编辑提交，滚动或布局变化会关闭菜单。
+
+本批完成不带预览的动作菜单核心：打开、替换、关闭、焦点恢复，以及方向键、Home/End、Enter/Space 和 Alt+F1 帮助。帮助提示由 `accessibility.verbosity.actionWidget` 控制，文案接入英文和简体中文语言包。`ActionWidgetDropdown`、标签页、过滤、分组、预览和完整上游服务/列表契约尚未接入；本批没有将这些能力计为已对齐。
+
+用户确认删除旧的 `contrib/codeAction/browser/media/codeAction.css`，生产调用与主题测试均已迁到共享菜单样式。帮助内容同时注册到 `AccessibleViewRegistry`，Workbench 帮助命令与独立编辑器使用相同的内容和焦点恢复规则。
+
+定向单测 11 项、Chromium 场景 32 项，以及 Web / Electron 各 1 项编辑器冒烟测试通过；Renderer 类型检查、Renderer / Host 构建和结构对齐检查通过。完整 Editor 检查的单测结果为 237/249 个文件通过，后续完整浏览器阶段未执行；12 个失败文件在将本批涉及的已有模块换回修改前版本后仍失败，涉及括号、颜色选择器、补全、语义着色、视图测试及 App Server 语言服务，未计为全量通过。
+
+
 ## Token 清理与滚动测试（2026-10-01）
 
 移除行 token provider 后，模型释放了行 tokenizer，但异步 token 结果仓库没有结果，`clear()` 不会发事件。渲染缓存因此保留旧着色。`TokenizationTextModelPart` 现在统一清理 provider、语言支持和语法 provider 变更产生的词法状态：清理异步结果时暂时保留行后端，随后释放后端并发布一次变更，沿既有模型事件刷新渲染缓存。三个回归场景在修改前均观察到模型 token 已为空、渲染 token 未清除且没有通知；修改后全部通过。
@@ -2205,7 +2216,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `common/cursor/cursorTypeEditOperations.ts` | `AutoClosingOvertypeOperation` | 只根据自动闭合来源和当前位置构造覆盖命令；多光标、完整字素和物理行边界由本地行为测试直接验证，不要求复刻上游私有执行阶段 |
 | `contrib/colorPicker/browser/colorPickerWidget.ts` | `ColorPickerWidget` | 已回到对应路径并拥有挂载、控件事件和释放；保留 Ash 的颜色模型与展示，构造器和其余上游公开接口仍未全量对齐 |
 | `contrib/peekView/browser/peekView.ts` | `PeekViewWidget` | 已回到对应路径并拥有标题、Escape 和关闭事件，导航 / 层级 / Quick Diff 接通释放；Ash 的内容容器与布局接口继续保留，未实现上游全部标题栏能力 |
-| `contrib/codeAction/browser/codeActionController.ts` | `CodeActionController` | 同路径贡献负责本地 Code Action 菜单；内容变化只在菜单拥有焦点时恢复所属输入节点，避免共享模型的另一编辑器抢焦点。菜单的其余公开契约仍待 Code Action 分部验收 |
+| `contrib/codeAction/browser/codeActionController.ts` | `CodeActionController` | 同路径贡献负责 Code Action 请求和编辑提交；动作列表、忙碌状态和菜单释放已迁入 platform/actionWidget，焦点只在菜单拥有焦点时恢复。搜索、分组、预览及完整上游公开契约仍待对应消费链验收 |
 | `contrib/codelens/browser/codelensWidget.ts` | `CodeLensWidget` | 当前已使用 `CodeLensWidget` 名称；其余公开契约仍待按生产调用方逐项验收 |
 | `contrib/colorPicker/browser/colorDetector.ts` | `ColorDetector` | 已恢复上游公开名；颜色 provider 结果写入标准 before decoration，动态 class ref 先于 CSS owner 释放，注入 marker 由标准鼠标目标读取 |
 | `contrib/find/browser/findController.ts` | `FindController` | 标准查找 / 替换动作及快捷键接通原控件；其余公开契约仍待分部验收 |

@@ -46,6 +46,12 @@ impl MainSurface {
         self.terminal_return = MainSurfaceKind::Editor;
     }
 
+    pub fn show_terminal(&mut self) {
+        if !self.is_terminal() {
+            self.toggle_terminal();
+        }
+    }
+
     pub fn toggle_terminal(&mut self) {
         if self.is_terminal() {
             self.active = self.terminal_return;

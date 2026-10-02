@@ -8,7 +8,6 @@ use crate::terminal_history::scroll_limit;
 use crate::terminal_pointer::TerminalPointerRouting;
 use ash_files::FILE_LIST_ROW_HEIGHT;
 use ash_files::FILES_PANE;
-use ash_scm::MULTI_DIFF_EDITOR;
 
 const LINES_PER_WHEEL_STEP: f32 = 3.0;
 const TAB_CONTAINER_PIXELS_PER_LINE: f32 = 18.0;
@@ -101,7 +100,7 @@ impl WorkbenchApplication {
             return;
         }
         if let Some(point) = self.cursor_position {
-            let _ = self.activate_terminal_pane_at(point);
+            let _ = self.activate_pane_at(point);
         }
         let position = self
             .cursor_position
@@ -237,24 +236,48 @@ impl WorkbenchApplication {
         let Some(target) = presentation.interaction_frame().target_at(point) else {
             return false;
         };
+        let Some(tab) = self.active_session_tab_key() else {
+            return false;
+        };
+        let Some(part) = self.workbench.workbench().pane_part(&tab) else {
+            return false;
+        };
+        let Some(pane) = presentation.pane_at(part, point) else {
+            return false;
+        };
+        let Some(mount) = self.workbench.mount(&tab, pane) else {
+            return false;
+        };
+        let Some(scm) = mount.binding().scm() else {
+            return false;
+        };
+        let key = mount.key().clone();
+        let editor_id = scm.identity().element(ash_scm::MULTI_DIFF_EDITOR);
         if !presentation
             .interaction_frame()
             .ancestry(target)
-            .contains(&MULTI_DIFF_EDITOR)
+            .contains(&editor_id)
         {
             return false;
         }
         let Some(viewport) = presentation
-            .element_bounds(MULTI_DIFF_EDITOR)
+            .element_bounds(editor_id)
             .map(|bounds| bounds.size)
         else {
             return false;
         };
-        let changed = self.scm.editor_mut().scroll(
-            multi_diff_scroll_pixels(delta),
-            viewport,
-            std::time::Instant::now(),
-        );
+        let changed = self
+            .workbench
+            .binding_mut(&key)
+            .expect("mounted Changes editor")
+            .scm_mut()
+            .expect("Changes view")
+            .editor_mut()
+            .scroll(
+                multi_diff_scroll_pixels(delta),
+                viewport,
+                std::time::Instant::now(),
+            );
         if changed {
             self.rebuild_presentation_on_next_redraw();
         }

@@ -27,3 +27,19 @@ Session catalog 和 active Session snapshot 通过
 Ash Code 与 Workbench 的 icon、label、颜色和测试，禁止在任一客户端增加本地兜底状态。
 
 验证：`just test ash-workbench`。
+
+## SCM 与 PaneGroup
+
+Changes 按组挂载，`PaneBinding` 保存该视图的 `ScmState`，不再使用窗口级 SCM 状态。
+同一仓库可以拆为多个 Changes；每组独立保留滚动、文件折叠、查看范围和提交草稿。
+拆分时复制当前视图状态，之后各组独立编辑；关闭组只释放该组的状态与动画。
+
+绘制、焦点、鼠标、滚轮和分隔线均使用 `PanePart` 的同一棵拆分树。
+SCM 的 Files 按钮打开或选中同树中的 Files 组。终端临时替换当前组内容后，返回同组先前的输入。
+Session 快照与终端挂载不改变既有活动组或活动输入。窗口变窄时只显示活动组，放宽后恢复原拆分。
+
+按 VS Code 的 EditorGroup 与 MultiDiffEditor 边界实现：组管理布局和活动输入，
+每个 Changes 视图保存自己的多文件 Diff 状态。当前使用已有的左右、上下分屏快捷键
+（macOS 为 `⌘\`、`⌘⇧\`），也支持组间切换与关闭。
+
+覆盖：`just test ash-workbench --lib scm_panes_tests`、`just test ash-workbench --lib presentation_tests`。

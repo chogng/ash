@@ -107,6 +107,7 @@ impl EditorDiff {
 
 /// Product-owned changed-file collection and retained MultiDiffEditor viewport.
 pub struct EditorPaneState {
+    identity: crate::ScmPaneIdentity,
     diffs: Vec<EditorDiff>,
     scroll_state: ScrollState,
     scrollbar: ScrollbarController,
@@ -120,6 +121,7 @@ pub struct EditorPaneState {
 impl Default for EditorPaneState {
     fn default() -> Self {
         Self {
+            identity: crate::ScmPaneIdentity::default(),
             diffs: Vec::new(),
             scroll_state: ScrollState::default(),
             scrollbar: ScrollbarController::default(),
@@ -135,6 +137,43 @@ impl Default for EditorPaneState {
 pub type ScrollbarPointerOutcome = ScrollbarInteractionOutcome;
 
 impl EditorPaneState {
+    pub fn new(identity: crate::ScmPaneIdentity) -> Self {
+        Self {
+            identity,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn duplicate(&self, identity: crate::ScmPaneIdentity) -> Self {
+        let mut state = Self::new(identity);
+        state.style = self.style.clone();
+        state.replace_diffs(
+            &self
+                .diffs
+                .iter()
+                .map(|diff| {
+                    ScmDiff::new(&diff.file_name, diff.document.clone()).with_staging(diff.staging)
+                })
+                .collect::<Vec<_>>(),
+        );
+        for (copy, original) in state.diffs.iter_mut().zip(&self.diffs) {
+            copy.editor_state = original.editor_state.clone();
+            copy.expanded = original.expanded;
+        }
+        state.scroll_state = self.scroll_state;
+        state.remeasure();
+        state
+    }
+
+    /// Includes hidden scopes so view teardown releases every retained animation track.
+    pub fn section_identities(&self) -> impl Iterator<Item = MultiDiffEditorItemIdentity> + '_ {
+        self.diff_identities.values().copied()
+    }
+
+    pub const fn identity(&self) -> crate::ScmPaneIdentity {
+        self.identity
+    }
+
     pub fn set_style(&mut self, style: MultiDiffEditorStyle) {
         let preserves_layout = self.style.same_layout_as(&style);
         self.style = style;
@@ -233,7 +272,7 @@ impl EditorPaneState {
             .next_identity_slot
             .checked_add(1)
             .expect("changed-file identity space exhausted");
-        let identity = MultiDiffEditorItemIdentity::from_slot(slot);
+        let identity = MultiDiffEditorItemIdentity::in_owner(self.identity.owner(), slot);
         self.diff_identities.insert(path.to_owned(), identity);
         identity
     }
@@ -668,7 +707,7 @@ impl<'a> EditorPane<'a> {
 
     fn interaction_node_for_bounds(&self, bounds: Rect) -> UiNode {
         UiNode::new(
-            CHANGES_PANE,
+            self.state.identity.element(CHANGES_PANE),
             bounds,
             AccessibilityRole::Group,
             "Changed files editor",
@@ -717,7 +756,7 @@ impl Component for EditorPane<'_> {
     fn element(&self) -> ComponentElement {
         Element::leaf("EditorPane")
             .in_bounds(self.bounds)
-            .with_identity(CHANGES_PANE)
+            .with_identity(self.state.identity.element(CHANGES_PANE))
     }
 
     fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
@@ -743,8 +782,8 @@ impl Component for EditorPane<'_> {
             .with_diff_presentation(DiffEditorPresentation::Unified)
             .with_measured_layout(&self.state.measured_layout)
             .with_scrollbar_presentation(self.state.scrollbar_presentation())
-            .with_identity(MULTI_DIFF_EDITOR)
-            .with_scrollbar_identity(MULTI_DIFF_SCROLLBAR);
+            .with_identity(self.state.identity.element(MULTI_DIFF_EDITOR))
+            .with_scrollbar_identity(self.state.identity.element(MULTI_DIFF_SCROLLBAR));
             context.draw_component(&editor);
         }
         if let (Some(toolbar), Some(dispatch)) = (self.toolbar, self.dispatch) {
@@ -758,7 +797,7 @@ impl Component for EditorPane<'_> {
                 bounds,
                 toolbar,
                 self.style,
-                CHANGES_PANE,
+                self.state.identity.element(CHANGES_PANE),
                 dispatch,
             ));
         }
@@ -791,7 +830,7 @@ impl Component for EditorPane<'_> {
                 self.bounds,
                 toolbar,
                 self.style,
-                CHANGES_PANE,
+                self.state.identity.element(CHANGES_PANE),
                 dispatch,
             ));
         }

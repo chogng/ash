@@ -92,3 +92,6 @@ mod interaction_tests;
 #[cfg(test)]
 #[path = "presentation_tests.rs"]
 mod presentation_tests;
+
+#[cfg(test)]
+mod scm_panes_tests;

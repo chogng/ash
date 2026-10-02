@@ -143,7 +143,11 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
                 if self.cancel_terminal_pane_resize() {
                     self.update_cursor();
                 }
-                self.scm.editor_mut().cancel_scrollbar_interaction();
+                for (_, binding) in self.workbench.bindings_mut() {
+                    if let Some(scm) = binding.scm_mut() {
+                        scm.editor_mut().cancel_scrollbar_interaction();
+                    }
+                }
                 self.terminal_view_mut().scroll.cancel_scrollbar();
                 self.workbench.cancel_tab_container_scrollbar();
                 self.workbench.dismiss_tab_context_menu();
@@ -335,7 +339,12 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
             self.caret_blink.advance(now),
             CaretBlinkAdvance::VisibilityChanged(_)
         );
-        let scrollbar_changed = self.scm.editor_mut().advance_scrollbar(now);
+        let mut scrollbar_changed = false;
+        for (_, binding) in self.workbench.bindings_mut() {
+            if let Some(scm) = binding.scm_mut() {
+                scrollbar_changed |= scm.editor_mut().advance_scrollbar(now);
+            }
+        }
         let settings_scrollbar_changed = self.settings.advance_keybindings_scrollbar(now);
         let terminal_scrollbar_changed = self.terminal_view_mut().scroll.advance_scrollbar(now);
         let tab_container_scrollbar_changed = self.workbench.advance_tab_container_scrollbar(now);
@@ -365,9 +374,16 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
         {
             deadlines.include(deadline);
         }
+        for (_, binding) in self.workbench.bindings() {
+            if let Some(deadline) = binding
+                .scm()
+                .and_then(|scm| scm.editor().scrollbar_deadline())
+            {
+                deadlines.include(deadline);
+            }
+        }
         for deadline in [
             self.caret_blink.next_deadline(),
-            self.scm.editor().scrollbar_deadline(),
             self.settings.keybindings_scrollbar_deadline(),
             self.terminal_view().scroll.scrollbar_deadline(),
             self.workbench.tab_container_scrollbar_deadline(),

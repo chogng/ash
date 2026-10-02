@@ -121,12 +121,15 @@ impl WorkbenchApplication {
         self.theme_follows_system = loaded.follows_system;
         self.session_pane.set_composer_style(editor_style.clone());
         self.code_editor_style = editor_style.clone();
-        self.scm
-            .editor_mut()
-            .set_style(ash_editor::MultiDiffEditorStyle::from_theme(
-                palette,
-                editor_style,
-            ));
+        for (_, binding) in self.workbench.bindings_mut() {
+            if let Some(scm) = binding.scm_mut() {
+                scm.editor_mut()
+                    .set_style(ash_editor::MultiDiffEditorStyle::from_theme(
+                        palette,
+                        self.code_editor_style.clone(),
+                    ));
+            }
+        }
     }
 
     pub(super) fn apply_gui_config(&mut self, section: FrontendConfigDto) {
@@ -174,71 +177,77 @@ impl WorkbenchApplication {
     }
 
     pub(super) fn show_files_pane(&mut self) {
-        if self.active_main_pane_kind() == Some(PaneInputKind::Diff) {
-            let Some(tab_key) = self.active_session_tab_key() else {
-                return;
-            };
-            let Some(pane) = self
-                .workbench
-                .workbench()
-                .pane_part(&tab_key)
-                .map(|pane_part| pane_part.active_group())
-            else {
-                return;
-            };
-            if self
-                .workbench
-                .ensure_input_with(
-                    &tab_key,
-                    pane,
-                    PaneInput::files(self.env.working_directory().to_path_buf()),
-                    PaneBinding::new,
-                )
-                .is_none()
-            {
-                return;
-            }
-            self.files_pane_expanded = true;
-            self.main_surface.show_agent();
-            self.workbench.collapse_inspector();
-            let _ = self.activate_pane_context(tab_key, pane);
+        let input = PaneInput::files(self.env.working_directory().to_path_buf());
+        let Some(tab) = self.active_session_tab_key() else {
             return;
+        };
+        let part = self
+            .workbench
+            .workbench()
+            .pane_part(&tab)
+            .expect("active session container");
+        let existing = part.group_ids().into_iter().find(|pane| {
+            part.group(*pane)
+                .expect("split leaf group")
+                .inputs()
+                .any(|candidate| candidate == &input)
+        });
+        if let Some(pane) = existing {
+            self.workbench
+                .open_or_activate_input_with(&tab, pane, input, PaneBinding::new);
+            let _ = self.activate_pane_context(tab, pane);
+        } else {
+            self.open_main_input(input);
         }
-        self.open_main_input(PaneInput::files(self.env.working_directory().to_path_buf()));
+        self.focus_active_pane();
     }
 
     pub(super) fn show_changes_pane(&mut self) {
         self.open_main_input(PaneInput::diff(self.env.working_directory().to_path_buf()));
+        self.focus_active_pane();
     }
 
-    /// Mounts one application capability as the active input of the current PaneGroup.
+    /// Opens a capability beside the current view. Group-local reopening restores the same
+    /// binding; splitting is a PanePart operation rather than a second layout inside Changes.
     fn open_main_input(&mut self, input: PaneInput) {
         let Some(tab_key) = self.active_session_tab_key() else {
             return;
         };
-        let Some(pane) = self
-            .workbench
-            .workbench()
-            .pane_part(&tab_key)
-            .map(|pane_part| pane_part.active_group())
-        else {
+        let Some(part) = self.workbench.workbench().pane_part(&tab_key) else {
             return;
         };
-        if self
-            .workbench
-            .open_or_activate_input_with(&tab_key, pane, input, PaneBinding::new)
-            .is_none()
-        {
-            return;
-        }
-        self.main_surface.show_agent();
+        let pane = part.active_group();
+        let existing = part
+            .group(pane)
+            .expect("active group")
+            .inputs()
+            .any(|candidate| candidate == &input);
+        let binding = if input.kind() == PaneInputKind::Diff && !existing {
+            self.create_changes_binding()
+        } else {
+            PaneBinding::new()
+        };
+        let pane = if existing {
+            self.workbench
+                .open_or_activate_input_with(&tab_key, pane, input, || binding)
+                .expect("active input group")
+                .current()
+                .pane()
+        } else {
+            self.workbench
+                .try_split_active_with(input, PaneSplitDirection::Horizontal, || {
+                    Ok::<_, std::convert::Infallible>(binding)
+                })
+                .expect("infallible view binding")
+                .expect("active session container")
+                .pane()
+        };
         self.workbench.collapse_inspector();
         let _ = self.activate_pane_context(tab_key, pane);
     }
 
     /// Restores the active Session's Agent pane after a file feature pane is dismissed.
     pub(super) fn show_agent_pane(&mut self) {
-        self.files_pane_expanded = false;
         let _ = self.bind_agent_pane();
         self.main_surface.show_agent();
     }
@@ -261,14 +270,19 @@ impl WorkbenchApplication {
         let Some(session_id) = tab_key.session_id().cloned() else {
             return false;
         };
-        let Some(pane) = self
-            .workbench
-            .workbench()
-            .pane_part(&tab_key)
-            .map(|pane_part| pane_part.root_pane())
-        else {
+        let Some(part) = self.workbench.workbench().pane_part(&tab_key) else {
             return false;
         };
+        let pane = part
+            .group_ids()
+            .into_iter()
+            .find(|pane| {
+                part.group(*pane)
+                    .expect("split leaf group")
+                    .inputs()
+                    .any(|input| input.kind() == PaneInputKind::Agent)
+            })
+            .unwrap_or(part.active_group());
         if self
             .workbench
             .open_or_activate_input_with(
@@ -298,47 +312,12 @@ impl WorkbenchApplication {
             .map(PaneInput::kind)
     }
 
-    /// Restores the input selected before the Terminal surface was opened.
+    /// Returns to the previous input in the same group, preserving its exact view binding.
     pub(super) fn restore_main_pane_after_terminal(&mut self) {
-        let Some(tab_key) = self.active_session_tab_key() else {
-            self.show_agent_pane();
-            return;
-        };
-        if !self.main_surface.is_editor() {
-            let _ = self.bind_agent_pane();
-            return;
+        if let Some(key) = self.workbench.activate_previous_input() {
+            let _ = self.activate_pane_context(key.tab().clone(), key.pane());
+            self.focus_active_pane();
         }
-        let Some(pane) = self
-            .workbench
-            .workbench()
-            .pane_part(&tab_key)
-            .map(|pane_part| pane_part.root_pane())
-        else {
-            return;
-        };
-        let input = self
-            .workbench
-            .workbench()
-            .pane_part(&tab_key)
-            .and_then(|part| part.group(pane))
-            .and_then(|group| {
-                group.inputs().find(|input| {
-                    matches!(input.kind(), PaneInputKind::Files | PaneInputKind::Diff)
-                })
-            })
-            .cloned();
-        let Some(input) = input else {
-            let _ = self.bind_agent_pane();
-            return;
-        };
-        if self
-            .workbench
-            .open_or_activate_input_with(&tab_key, pane, input, PaneBinding::new)
-            .is_none()
-        {
-            return;
-        }
-        let _ = self.activate_pane_context(tab_key, pane);
     }
 
     pub(super) fn fail(&mut self, message: impl std::fmt::Display) {

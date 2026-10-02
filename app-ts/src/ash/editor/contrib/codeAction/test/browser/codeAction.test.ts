@@ -42,7 +42,7 @@ test('CodeActionController resolves an action with its original provider before 
 
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 	await flushPromises();
-	const action = container.querySelector<HTMLButtonElement>('.stanza-editor-code-action button');
+	const action = dom.window.document.querySelector<HTMLButtonElement>('.ash-action-widget button');
 	assert.ok(action);
 	action.click();
 	await flushPromises();
@@ -74,12 +74,12 @@ test('Code actions without a resolver never use another provider resolver', asyn
 	const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 	await flushPromises();
-	const action = container.querySelector<HTMLButtonElement>('.stanza-editor-code-action button');
+	const action = dom.window.document.querySelector<HTMLButtonElement>('.ash-action-widget button');
 	assert.ok(action);
 	action.click();
 	await flushPromises();
 	assert.equal(model.getText(), 'value');
-	assert.equal(container.querySelector<HTMLElement>('.stanza-editor-code-action')!.hidden, true);
+	assert.equal(dom.window.document.querySelector('.ash-action-widget'), null);
 	assert.deepEqual(errors, []);
 	dom.window.close();
 });
@@ -114,7 +114,7 @@ for (const outcome of ['complete', 'error'] as const) {
 		try {
 			input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 			await flushPromises();
-			const menu = container.querySelector<HTMLElement>('.stanza-editor-code-action')!;
+			const menu = dom.window.document.querySelector<HTMLElement>('.ash-action-widget')!;
 			const action = menu.querySelector<HTMLButtonElement>('button')!;
 			action.click();
 			action.click();
@@ -122,10 +122,12 @@ for (const outcome of ['complete', 'error'] as const) {
 			menu.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 			input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 			await flushPromises();
-			assert.equal(menu.hidden, false);
+			const replacement = dom.window.document.querySelector('.ash-action-widget');
+			assert.ok(replacement);
+			assert.notEqual(replacement, menu);
 			release();
 			await flushPromises();
-			assert.equal(menu.hidden, false);
+			assert.equal(dom.window.document.querySelector('.ash-action-widget'), replacement);
 			assert.deepEqual(errors.map(error => (error as Error).message), outcome === 'error' ? ['Workspace edit failed after dispatch'] : []);
 		} finally {
 			release();
@@ -154,7 +156,7 @@ test('a failing code action provider does not prevent another provider from retu
 	const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 	await flushPromises();
-	assert.equal(container.querySelector('.stanza-editor-code-action button')?.textContent, 'Healthy action');
+	assert.equal(dom.window.document.querySelector('.ash-action-widget button')?.textContent, 'Healthy action');
 	assert.deepEqual(errors.map(error => (error as Error).message), ['Provider failed']);
 	dom.window.close();
 });

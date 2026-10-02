@@ -8,7 +8,7 @@ fn session(value: &str) -> SessionId {
 }
 
 #[test]
-fn pane_binding_keeps_only_the_optional_runtime() {
+fn pane_binding_attaches_the_selected_feature_runtime() {
     let binding = PaneBinding::new();
 
     assert_eq!(binding.terminal_key(), None);

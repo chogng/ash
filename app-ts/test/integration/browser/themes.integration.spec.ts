@@ -119,7 +119,7 @@ test('keyboard focus remains visible across themed controls', async ({ page }) =
 			<div class="ash-select-box-list"><div class="ash-select-box-option ash-select-box-option-active" id="focus-select" tabindex="-1">Option</div></div>
 			<div class="ash-scrollbar" id="focus-scrollbar" tabindex="0">Scrollable</div>
 			<div class="ash-tree" id="focus-tree" tabindex="0">Empty tree</div>
-			<div class="stanza-editor-code-action"><button id="focus-code-action">Code action</button></div>
+			<div class="ash-menu ash-action-widget"><div class="ash-action-view-item focused"><button class="ash-button" id="focus-code-action">Code action</button></div></div>
 			<button class="stanza-document-outline-entry" id="focus-outline">Outline</button>
 			<button class="ash-scm-graph-change" id="focus-scm">Change</button>
 			<section class="ash-modal-editor" id="focus-modal" tabindex="-1">Modal</section>`;

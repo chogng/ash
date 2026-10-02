@@ -26,8 +26,6 @@ pub(super) fn with_shell_presentation_model<R>(
         ui_dispatch,
         terminal_runtime,
         files,
-        scm,
-        files_pane_expanded,
         file_editor_host,
         file_editor_input,
         file_editor_search,
@@ -72,6 +70,15 @@ pub(super) fn with_shell_presentation_model<R>(
         let layout = workbench_model.pane_part(tab_key)?;
         workbench.mount(tab_key, layout.active_group())
     });
+    let pane_mounts = content_tab_input
+        .zip(pane_group)
+        .map(|(tab, part)| {
+            part.group_ids()
+                .into_iter()
+                .filter_map(|group| workbench.mount(tab, group))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     let active_pane_id = active_pane.map(|mount| mount.pane_id());
     let terminal_panes = pane_group
         .map(|layout| {
@@ -85,9 +92,10 @@ pub(super) fn with_shell_presentation_model<R>(
                     let mount = workbench.mount(tab_key, pane_id)?;
                     let pane_id = mount.pane_id();
                     let kind = mount.kind();
-                    let terminal_key = (kind == PaneInputKind::Terminal)
-                        .then(|| mount.binding().terminal_key())
-                        .flatten();
+                    if kind != PaneInputKind::Terminal {
+                        return None;
+                    }
+                    let terminal_key = mount.binding().terminal_key();
                     let (scroll_offset, scrollbar_presentation, selection) =
                         if active_pane_id == Some(pane_id) {
                             (
@@ -106,7 +114,6 @@ pub(super) fn with_shell_presentation_model<R>(
                         };
                     Some(crate::PaneView {
                         pane_id: Some(pane_id),
-                        kind,
                         core: terminal_key.and_then(|key| {
                             terminal_runtime.terminal(key).map(TerminalSession::core)
                         }),
@@ -131,7 +138,7 @@ pub(super) fn with_shell_presentation_model<R>(
                 .map(TerminalSession::core),
             terminal_panes: &terminal_panes,
             pane_group,
-            active_pane,
+            pane_mounts: &pane_mounts,
             terminal_pane_resize_split: pane_resize_split,
             terminal_scroll_offset: terminal_view.scroll.offset(),
             terminal_scrollbar_presentation: terminal_view.scroll.scrollbar_presentation(),
@@ -161,8 +168,6 @@ pub(super) fn with_shell_presentation_model<R>(
             tab_container,
             inspector_part,
             files,
-            scm,
-            files_pane_expanded: *files_pane_expanded,
             tab_context_menu: workbench.tab_context_menu().clone(),
             git_branch_picker,
             directory_picker,

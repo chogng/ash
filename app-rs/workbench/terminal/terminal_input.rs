@@ -106,8 +106,8 @@ impl WorkbenchApplication {
         if self.route_tab_context_menu_keyboard(&event) {
             return;
         }
-        if self.route_scm_keyboard(&event) {
-            return;
+        if let Some(focused) = self.ui_dispatch.focused() {
+            self.activate_pane_for_element(focused);
         }
         let direct_terminal = self.is_direct_terminal_input();
         let context = WorkbenchKeybindingContext::from_facts(WorkbenchKeybindingFacts {
@@ -131,6 +131,9 @@ impl WorkbenchApplication {
             }
             WorkbenchKeybindingResolution::Consumed => return,
             WorkbenchKeybindingResolution::NoMatch => {}
+        }
+        if self.route_scm_keyboard(&event) {
+            return;
         }
         if direct_terminal {
             self.direct_terminal_keyboard_input(&event);
@@ -211,6 +214,9 @@ impl WorkbenchApplication {
     }
 
     fn composer_keyboard_input(&mut self, event: &KeyEvent) {
+        if !self.ui_dispatch.is_focused(COMPOSER) {
+            return;
+        }
         if cfg!(target_os = "windows")
             && self.modifiers.control_key()
             && self.modifiers.shift_key()
@@ -620,6 +626,18 @@ impl WorkbenchApplication {
     }
 
     pub(super) fn copy_keybinding_target(&mut self) {
+        if self.commit_message_focused() {
+            if let Some(text) = self
+                .active_scm()
+                .expect("focused Changes view")
+                .toolbar()
+                .selected_commit_message()
+                && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
+            {
+                eprintln!("could not copy commit message: {error}");
+            }
+            return;
+        }
         if self.ui_dispatch.is_focused(KEYBOARD_SHORTCUTS_SEARCH) {
             if let Some(text) = self.quick_access.selected_query_text()
                 && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
@@ -671,13 +689,26 @@ impl WorkbenchApplication {
         if self.copy_file_editor_selection() {
             return;
         }
-        if !self.is_direct_terminal_input() && self.copy_composer_selection() {
+        if self.ui_dispatch.is_focused(COMPOSER) && self.copy_composer_selection() {
             return;
         }
         self.copy_terminal_selection();
     }
 
     pub(super) fn paste_keybinding_target(&mut self) {
+        if self.commit_message_focused() {
+            if let Some(text) = clipboard_text(&self.clipboard, "could not paste commit message") {
+                self.active_scm_mut()
+                    .expect("focused Changes view")
+                    .toolbar_mut()
+                    .apply_commit_message(CodeEditorCommand::Insert(text));
+                self.caret_blink.activity(Instant::now());
+                self.rebuild_presentation();
+                self.update_ime_cursor_area();
+                self.request_redraw();
+            }
+            return;
+        }
         if self.ui_dispatch.is_focused(KEYBOARD_SHORTCUTS_SEARCH) {
             let Some(text) = clipboard_text(
                 &self.clipboard,

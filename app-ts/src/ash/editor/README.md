@@ -14,7 +14,7 @@ Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有编辑器公
 | 程序化调用 | `editor.api.ts` | `editor.create/createModel`、`editor.addCommand/addEditorAction/addKeybindingRule/addKeybindingRules`、`languages.register/registerLanguages/registerProviderBatch/registerLanguage*Provider`、命名主题、standalone model registry、`TextModel`、schema、transaction 和坐标值对象；不注册 pane |
 | 完整 standalone 入口 | `editor.main.ts` | 先加载 `editor.all.ts` 的完整行式 contribution，再导出 `editor.api.ts` |
 
-Code Action、Hover、Sticky Scroll 分别通过 `codeActionContributions.ts`、`hoverContribution.ts`、`stickyScrollContribution.ts` 注册。注册入口负责装配；控制器继续拥有请求、界面状态和释放逻辑。独立注册文件是否保留取决于对应职责，不统一套用 `.contribution.ts` 后缀。
+Code Action、Hover、Sticky Scroll 分别通过 `codeActionContributions.ts`、`hoverContribution.ts`、`stickyScrollContribution.ts` 注册。注册入口负责装配；Code Action 控制器拥有请求取消、解析和编辑提交，动作菜单的 DOM、键盘导航与关闭生命周期由 `platform/actionWidget` 统一管理。Hover 与 Sticky Scroll 控制器继续拥有各自的界面状态和释放逻辑。独立注册文件是否保留取决于对应职责，不统一套用 `.contribution.ts` 后缀。
 
 Standalone 宿主用 `editor.addEditorAction` 注册全局编辑器动作，可提供快捷键、执行条件和右键菜单位置；动作会出现在 `getAction()` 与 F1 命令列表中。`editor.addKeybindingRule(s)` 可以单独注册带条件的快捷键，`command: null` 表示拦截该按键。两个入口都返回注销句柄。括号、注释等语言行为由宿主通过 `languages.registerLanguages` 和 `languages.setLanguageConfiguration` 注册。
 

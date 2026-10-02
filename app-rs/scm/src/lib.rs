@@ -5,6 +5,8 @@ use ash_ui_theme::UiTheme;
 use zui::ui::Color;
 
 mod branch_picker;
+mod identity;
+pub use identity::ScmPaneIdentity;
 #[path = "scm/pane.rs"]
 mod pane;
 #[path = "scm/toolbar.rs"]
@@ -126,6 +128,28 @@ impl ScmState {
         self.refresh_editor_scope()
     }
 
+    /// Creates one mounted Changes view with an identity distinct from every other view.
+    pub fn new(identity: ScmPaneIdentity) -> Self {
+        Self {
+            editor: EditorPaneState::new(identity),
+            toolbar: ChangesToolbarState::new(identity),
+            ..Self::default()
+        }
+    }
+
+    /// Splits a view at the same position without sharing focus, menus, or pointer capture.
+    pub fn duplicate(&self, identity: ScmPaneIdentity) -> Self {
+        Self {
+            diffs: self.diffs.clone(),
+            editor: self.editor.duplicate(identity),
+            toolbar: self.toolbar.duplicate(identity),
+        }
+    }
+
+    pub const fn identity(&self) -> ScmPaneIdentity {
+        self.editor.identity()
+    }
+
     pub const fn editor(&self) -> &EditorPaneState {
         &self.editor
     }
@@ -149,7 +173,10 @@ impl ScmState {
         if let Some(activation) = self.editor.activate(id) {
             return activation;
         }
-        match ChangesToolbarAction::from_element_id(id) {
+        let Some(local_id) = self.identity().local(id) else {
+            return ChangesActivation::Ignored;
+        };
+        match ChangesToolbarAction::from_element_id(local_id) {
             Some(ChangesToolbarAction::CollapseAll) => {
                 self.toolbar.dismiss_menus();
                 self.editor.set_all_expanded(false);

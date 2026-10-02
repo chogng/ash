@@ -95,3 +95,41 @@ fn toolbar_and_open_menu_are_in_the_component_interaction_tree() {
     assert!(labels.iter().any(|(id, _)| *id == scope_item_id(0)));
     assert!(labels.iter().any(|(_, label)| label == "Current turn"));
 }
+
+#[test]
+fn split_copies_the_commit_draft_without_sharing_edits_or_the_open_menu() {
+    let first_identity = crate::ScmPaneIdentity::new(1);
+    let second_identity = crate::ScmPaneIdentity::new(2);
+    let mut first = ChangesToolbarState::new(first_identity);
+    first.set_branch(Some("main"));
+    first.apply_commit_message(CodeEditorCommand::Insert("initial draft".into()));
+    assert_eq!(
+        first.activate(Some(ChangesToolbarAction::PrimaryMenu(0))),
+        ChangesActivation::Focus(first_identity.element(COMMIT_MESSAGE_EDITOR))
+    );
+    let mut second = first.duplicate(second_identity);
+    assert!(second.open.is_none());
+    second.apply_commit_message(CodeEditorCommand::SelectAll);
+    assert_eq!(second.selected_commit_message(), Some("initial draft"));
+    second.apply_commit_message(CodeEditorCommand::Insert("second draft".into()));
+    assert_eq!(
+        second.activate(Some(ChangesToolbarAction::SubmitCommit)),
+        ChangesActivation::Commit {
+            message: "second draft".into(),
+            include_unstaged: false,
+            push: false
+        }
+    );
+    assert_eq!(
+        first.activate(Some(ChangesToolbarAction::SubmitCommit)),
+        ChangesActivation::Commit {
+            message: "initial draft".into(),
+            include_unstaged: false,
+            push: false
+        }
+    );
+    assert_eq!(
+        first_identity.local(second_identity.element(PRIMARY_MAIN)),
+        None
+    );
+}

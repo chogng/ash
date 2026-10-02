@@ -150,6 +150,7 @@ impl PanePart {
         PaneGroupId::ROOT
     }
 
+    #[cfg(test)]
     /// Returns the identity of the root visible pane region.
     pub const fn root_pane(&self) -> PaneGroupId {
         PaneGroupId::ROOT
@@ -227,7 +228,6 @@ impl PanePart {
         self.group_mut(group_id).map(|group| group.add_input(input))
     }
 
-    #[cfg(test)]
     /// Replaces a particular input in an existing group.
     pub fn replace_input(
         &mut self,

@@ -120,20 +120,6 @@ impl Workbench {
             .map(PaneContainer::pane_part_mut)
     }
 
-    /// Ensures a tab has an input in its root group without replacing existing content.
-    pub fn ensure_root_pane(&mut self, tab_key: TabInputKey, input: PaneInput) -> PaneGroupId {
-        let pane_part = self
-            .pane_containers
-            .get_mut(&tab_key)
-            .expect("every TabInput must own a PaneContainer")
-            .pane_part_mut();
-        let root_group = pane_part.root_group();
-        if pane_part.active_input(root_group).is_none() {
-            pane_part.mount_input(root_group, input);
-        }
-        root_group
-    }
-
     #[cfg(test)]
     /// Returns all tab keys that have a pane container.
     pub fn pane_container_keys(&self) -> impl Iterator<Item = &TabInputKey> {

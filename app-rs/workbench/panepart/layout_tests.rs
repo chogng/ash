@@ -13,8 +13,20 @@ fn pane_tree_projects_one_leaf_and_sash_per_logical_node() {
 
     assert_eq!(layout.leaves().len(), 2);
     assert_eq!(layout.sashes().len(), 1);
-    assert!(layout.leaf(PaneGroupId::ROOT).is_some());
-    assert!(layout.leaf(second).is_some());
+    assert!(
+        layout
+            .leaves()
+            .iter()
+            .find(|leaf| leaf.id() == PaneGroupId::ROOT)
+            .is_some()
+    );
+    assert!(
+        layout
+            .leaves()
+            .iter()
+            .find(|leaf| leaf.id() == second)
+            .is_some()
+    );
 }
 
 #[test]
@@ -30,7 +42,9 @@ fn pane_tree_projection_uses_the_model_ratio() {
     let layout =
         PaneGroupLayout::for_tree(Rect::from_xywh(0.0, 0.0, 800.0, 600.0), pane_part.tree());
     let root_width = layout
-        .leaf(PaneGroupId::ROOT)
+        .leaves()
+        .iter()
+        .find(|leaf| leaf.id() == PaneGroupId::ROOT)
         .expect("root leaf")
         .bounds()
         .size

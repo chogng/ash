@@ -22,16 +22,81 @@ use zui::input::NamedKey;
 use zui::ui::ElementId;
 
 use super::WorkbenchEvent;
+use crate::PaneBinding;
 use crate::WorkbenchApplication;
 use crate::app_server::AppServerRequestHandle;
+use ash_scm::ScmDiff;
 
 impl WorkbenchApplication {
+    pub(super) fn active_scm(&self) -> Option<&ash_scm::ScmState> {
+        self.workbench.active_mount()?.binding().scm()
+    }
+
+    pub(super) fn active_scm_mut(&mut self) -> Option<&mut ash_scm::ScmState> {
+        let key = self.workbench.active_mount()?.key().clone();
+        self.workbench.binding_mut(&key)?.scm_mut()
+    }
+
+    pub(super) fn create_changes_binding(&mut self) -> PaneBinding {
+        let owner = self.next_changes_owner;
+        self.next_changes_owner = self
+            .next_changes_owner
+            .checked_add(1)
+            .expect("Changes view identity space exhausted");
+        let identity = ash_scm::ScmPaneIdentity::new(owner);
+        let mut state = ash_scm::ScmState::new(identity);
+        state.set_branch(Some(self.env.git_branch_label()).filter(|branch| *branch != "No Git"));
+        state.replace_diffs(self.env.diffs().iter().map(|diff| {
+            ScmDiff::new(diff.path(), diff.document().clone()).with_staging(diff.staging())
+        }));
+        state
+            .editor_mut()
+            .set_style(ash_editor::MultiDiffEditorStyle::from_theme(
+                self.palette,
+                self.code_editor_style.clone(),
+            ));
+        PaneBinding::changes(state)
+    }
+
+    pub(super) fn duplicate_changes_binding(&mut self) -> PaneBinding {
+        let owner = self.next_changes_owner;
+        self.next_changes_owner = self
+            .next_changes_owner
+            .checked_add(1)
+            .expect("Changes view identity space exhausted");
+        PaneBinding::changes(
+            self.active_scm()
+                .expect("split Changes view")
+                .duplicate(ash_scm::ScmPaneIdentity::new(owner)),
+        )
+    }
+
+    pub(super) fn release_changes_binding(&mut self, binding: &PaneBinding) {
+        if let Some(scm) = binding.scm() {
+            for identity in scm.editor().section_identities() {
+                self.retained_runtime
+                    .animation_registry_mut()
+                    .remove_element(identity.section_id());
+            }
+        }
+    }
+
+    pub(super) fn commit_message_focused(&self) -> bool {
+        self.active_scm().is_some_and(|scm| {
+            self.ui_dispatch
+                .is_focused(scm.identity().element(ash_scm::COMMIT_MESSAGE_EDITOR))
+        })
+    }
+
     pub(super) fn route_scm_keyboard(&mut self, event: &KeyEvent) -> bool {
-        if !self.ui_dispatch.is_focused(ash_scm::COMMIT_MESSAGE_EDITOR) {
+        if !self.commit_message_focused() {
             return false;
         }
         if event.logical_key == Key::Named(NamedKey::Escape) {
-            self.scm.toolbar_mut().dismiss_menus();
+            self.active_scm_mut()
+                .expect("focused Changes view")
+                .toolbar_mut()
+                .dismiss_menus();
         } else {
             let command = if event.logical_key == Key::Named(NamedKey::Enter) {
                 Some(ash_editor::CodeEditorCommand::Newline)
@@ -41,7 +106,10 @@ impl WorkbenchApplication {
             let Some(command) = command else {
                 return true;
             };
-            self.scm.toolbar_mut().apply_commit_message(command);
+            self.active_scm_mut()
+                .expect("focused Changes view")
+                .toolbar_mut()
+                .apply_commit_message(command);
             self.caret_blink.activity(std::time::Instant::now());
         }
         self.rebuild_presentation();
@@ -50,7 +118,13 @@ impl WorkbenchApplication {
     }
 
     pub(super) fn activate_scm_element(&mut self, id: ElementId) -> bool {
-        let activation = self.scm.activate(id);
+        let Some(scm) = self.active_scm_mut() else {
+            return false;
+        };
+        if scm.editor_mut().toggle_fold_for_element(id) {
+            return true;
+        }
+        let activation = scm.activate(id);
         if activation == ChangesActivation::Ignored {
             return false;
         }
