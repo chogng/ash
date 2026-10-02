@@ -1,6 +1,6 @@
 ---
 source: code/tui/src/app/mode_tests.rs
-expression: output
+expression: terminal.backend().to_string()
 ---
 "                                                                                                                        "
 "    ▄  ▄     Ash Code v0.1.0                                                                                            "
@@ -17,8 +17,8 @@ expression: output
 "─ Model ────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
 "                                                                                                                        "
 "  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-"  │ Search models                                                                                                    │  "
+"  │ astra                                                                                                            │  "
 "  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  "
-"> GPT-6 Astra      ██ ██ ██   Medium  [Fast off]  [272k]                                                                "
+"  GPT-6 Astra      ██ ██ ██   Medium  [Fast off]  [272k]                                                                "
 "                                                                                                                        "
-"  ↑↓ select · Tab setting · ←→ adjust · / search · p pin · Enter apply · Esc cancel                                     "
+"  Enter/Esc/Ctrl+C to return                                                                                            "

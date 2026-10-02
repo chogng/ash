@@ -596,9 +596,13 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
     ];
     info.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::Medium);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
-        models: vec![
-            ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(model, &info),
-        ],
+        models: vec![{
+            let mut entry = ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                model, &info,
+            );
+            entry.context_window = Some(272_000);
+            entry
+        }],
     };
     for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
         let mut app = App::new();
@@ -609,7 +613,7 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
         app.update(ModelEvent::PickerOpened(
             crate::models::model_choices(&catalog, &config).unwrap(),
         ));
-        for option in [ModelOption::FastOn, ModelOption::Context272k] {
+        for option in [ModelOption::FastOn, ModelOption::Context1m] {
             assert_eq!(
                 app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
                 None
@@ -630,8 +634,55 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
             .unwrap();
         let output = terminal.backend().to_string();
         assert!(output.contains("[Fast off]"));
-        assert!(output.contains("[1m]"));
+        assert!(output.contains("[272k]"));
         crate::tui_assert_snapshot!(format!("model_options_{mode:?}"), output);
+        for modifiers in [KeyModifiers::NONE, KeyModifiers::SHIFT] {
+            app.handle_key(KeyEvent::new(KeyCode::Char('/'), modifiers));
+            assert!(
+                app.list_selection()
+                    .unwrap()
+                    .search()
+                    .unwrap()
+                    .input_active()
+            );
+            assert_eq!(app.list_selection().unwrap().query(), "");
+            terminal
+                .draw(|frame| super::frame::draw(frame, &app))
+                .unwrap();
+            let cursor = terminal.get_cursor_position().unwrap();
+            let buffer = terminal.backend().buffer();
+            assert_eq!(
+                buffer[(cursor.x, cursor.y - 1)].fg,
+                app.render_context().focus()
+            );
+            assert_eq!(buffer[(cursor.x, cursor.y)].symbol(), "S");
+            app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+            assert!(
+                !app.list_selection()
+                    .unwrap()
+                    .search()
+                    .unwrap()
+                    .input_active()
+            );
+            assert!(app.command_panel().is_some());
+        }
+        app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        for character in "astra".chars() {
+            app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        assert_eq!(app.list_selection().unwrap().query(), "astra");
+        assert_eq!(app.list_selection().unwrap().visible_items().len(), 1);
+        terminal
+            .draw(|frame| super::frame::draw(frame, &app))
+            .unwrap();
+        crate::tui_assert_snapshot!(
+            format!("model_search_{mode:?}"),
+            terminal.backend().to_string()
+        );
+        app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::SHIFT));
+        assert_eq!(app.list_selection().unwrap().query(), "astra/");
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.command_panel().is_some());
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert!(app.command_panel().is_none());
         assert_eq!(app.input(), "preserved draft");

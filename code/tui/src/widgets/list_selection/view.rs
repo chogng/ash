@@ -329,7 +329,7 @@ pub(crate) fn draw_body_with_pointer(
 struct RowControls {
     columns: ItemColumnLayout,
     value_width: u16,
-    widths: std::collections::BTreeMap<String, u16>,
+    slots: Vec<(String, u16)>,
     compact: bool,
 }
 
@@ -363,18 +363,22 @@ impl RowControls {
             .map(|value| columns.segmented_prefix_width as u16 + value.label.width() as u16)
             .max()
             .unwrap_or(0);
-        let mut widths = std::collections::BTreeMap::<String, u16>::new();
-        for control in items.iter().flat_map(|item| item.controls()) {
+        let mut slots = Vec::<(String, u16)>::new();
+        // Rows declaring several settings establish the order for rows with fewer capabilities.
+        let mut control_rows = items.iter().collect::<Vec<_>>();
+        control_rows.sort_by_key(|item| std::cmp::Reverse(item.controls().len()));
+        for control in control_rows.iter().flat_map(|item| item.controls()) {
             let width = control.label.width() as u16 + 2;
-            widths
-                .entry(control.id.clone())
-                .and_modify(|current| *current = (*current).max(width))
-                .or_insert(width);
+            if let Some((_, current)) = slots.iter_mut().find(|(id, _)| *id == control.id) {
+                *current = (*current).max(width);
+            } else {
+                slots.push((control.id.clone(), width));
+            }
         }
         Self {
             columns,
             value_width,
-            widths,
+            slots,
             compact,
         }
     }
@@ -393,17 +397,12 @@ impl RowControls {
                 controls: Vec::new(),
             };
         }
-        let has_value = item
-            .columns()
-            .is_some_and(|columns| columns.segmented.is_some());
-        let required = item
-            .controls()
-            .iter()
-            .map(|control| self.widths[&control.id] + 2)
-            .sum::<u16>();
+        // A missing capability leaves its column empty; it must not shift later settings.
+        // Slot order follows the feature's declaration order, shared by drawing and hit testing.
+        let required = self.slots.iter().map(|(_, width)| width + 2).sum::<u16>();
         let mut content_width = ITEM_STATE_COLUMN_WIDTH
             + columns.leading_width
-            + if has_value {
+            + if self.value_width > 0 {
                 ITEM_COLUMN_GAP + self.value_width
             } else {
                 0
@@ -425,15 +424,19 @@ impl RowControls {
         };
         let mut x = area.x + content_width;
         let controls = if show_controls {
+            let slots = self
+                .slots
+                .iter()
+                .map(|(id, width)| {
+                    x += 2;
+                    let rect = Rect::new(x, area.y, *width, 1).intersection(area);
+                    x += width;
+                    (id, rect)
+                })
+                .collect::<Vec<_>>();
             item.controls()
                 .iter()
-                .map(|control| {
-                    x += 2;
-                    let width = self.widths[&control.id];
-                    let rect = Rect::new(x, area.y, width, 1);
-                    x += width;
-                    rect.intersection(area)
-                })
+                .map(|control| slots.iter().find(|(id, _)| **id == control.id).unwrap().1)
                 .collect()
         } else {
             Vec::new()

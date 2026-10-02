@@ -1,15 +1,15 @@
 ---
 source: code/tui/src/app/mode_tests.rs
-expression: output
+expression: terminal.backend().to_string()
 ---
 "  .                                                                                                [— / —] [Dashboard]  "
 "                                                                                                                        "
 "               ┌── Model ───────────────────────────────────────────────────────────────────────────[✗]─┐               "
 "               │                                                                                        │               "
 "               │  ╭───────────────────────────────────────────────────────────────────────────────────╮ │               "
-"               │  │ Search models                                                                     │ │               "
+"               │  │ astra                                                                             │ │               "
 "               │  ╰───────────────────────────────────────────────────────────────────────────────────╯ │               "
-"               │> GPT-6 Astra      ██ ██ ██   Medium  [Fast off]  [272k]                                │               "
+"               │  GPT-6 Astra      ██ ██ ██   Medium  [Fast off]  [272k]                                │               "
 "               │                                                                                        │               "
 "               │                                                                                        │               "
 "               │                                                                                        │               "
@@ -18,7 +18,7 @@ expression: output
 "               │                                                                                        │               "
 "               │                                                                                        │               "
 "  ─────────────│                                                                                        │─────────────  "
-"  > preserved d│  ↑↓ select · Tab setting · ←→ adjust · / search · p pin · Enter apply · Esc cancel     │               "
+"  > preserved d│  Enter/Esc/Ctrl+C to return                                                            │               "
 "  ─────────────└────────────────────────────────────────────────────────────────────────────────────────┘omatic model   "
 "                                                                                                                        "
 "                                                                                                                        "

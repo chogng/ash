@@ -82,6 +82,13 @@ impl ModelCatalogEntry {
                 ContextWindow::Unknown => context.context_window,
             });
             info.auto_compact_token_limit = context.auto_compact_token_limit;
+        } else if info.id.as_str().starts_with("gpt-")
+            && let ContextWindow::Known(limit) = info.context_window
+        {
+            // The catalog keeps the model ceiling; GPT execution starts at 272k unless
+            // the user explicitly selects a different budget. Every client consumes this value.
+            info.context_window = ContextWindow::Known(limit.min(272_000));
+            info.auto_compact_token_limit = None;
         }
         if let ContextWindow::Known(window) = info.context_window {
             // Ash's automatic compaction recommendation reserves ten percent of the context.

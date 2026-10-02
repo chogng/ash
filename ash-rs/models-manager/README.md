@@ -154,7 +154,7 @@ App Server DTO/schema fixture。
 ## 有效模型信息与职责
 
 - `entry.info()` 返回原始目录信息；`entry.model_info(&provider_config)` 返回配置生效后的独立副本。
-- 先校验 provider 身份和配置。自定义连接的窗口优先，否则按准确 ModelId 读取 `model_context`。
+- 先校验 provider 身份和配置。自定义连接的窗口优先，否则按准确 ModelId 读取 `model_context`。没有显式窗口设置时，`gpt-` 型号的执行预算默认为 272,000 token，并受目录声明的最大窗口限制；目录证据仍保留原最大容量。
 - 配置窗口不能超过目录已知窗口。未配置压缩阈值时建议使用有效窗口的 90%；显式阈值同样受此上限限制。
 - 未知窗口保持未知，除非配置明确提供。配置不推断工具能力、不改变 availability，也不改写 snapshot、provenance 或 generation。
 - App Server 的模型列表使用当前条目计算有效信息；调用预算使用共享 manager 的静态解析结果。输出预留、安全余量和真正执行压缩由 App Server/Core 负责。

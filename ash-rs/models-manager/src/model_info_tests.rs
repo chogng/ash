@@ -256,3 +256,45 @@ fn effective_fast_mode_support_follows_the_connection_without_mutating_static_ev
         );
     }
 }
+
+#[test]
+fn every_builtin_gpt_uses_272k_by_default_and_preserves_explicit_budgets() {
+    let manager = ModelsManager::new(ProviderConfigRegistry::builtin());
+    let mut count = 0;
+    for spec in ash_model_provider_config::STATIC_MODEL_CATALOG
+        .iter()
+        .filter(|spec| spec.model_id.starts_with("gpt-"))
+    {
+        count += 1;
+        let model = spec.model_ref();
+        let resolved = manager
+            .resolve_static(&model, &ModelRequirements::agent())
+            .unwrap();
+        let mut config = ModelProviderConfig::new(model.provider.clone());
+        let ContextWindow::Known(ceiling) = spec.context_window else {
+            panic!("GPT ceiling must be declared")
+        };
+        let default = resolved.entry().model_info(&config).unwrap();
+        let window = ceiling.min(272_000);
+        assert_eq!(
+            default.context_window,
+            ContextWindow::Known(window),
+            "{}",
+            spec.model_id
+        );
+        assert_eq!(default.auto_compact_token_limit, Some(window * 9 / 10));
+        assert_eq!(resolved.entry().info().context_window, spec.context_window);
+        config.model_context.insert(
+            model.model,
+            ModelContextConfig {
+                context_window: 1_000_000,
+                auto_compact_token_limit: None,
+            },
+        );
+        assert_eq!(
+            resolved.entry().model_info(&config).unwrap().context_window,
+            ContextWindow::Known(ceiling.min(1_000_000))
+        );
+    }
+    assert!(count > 0);
+}

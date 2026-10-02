@@ -9,11 +9,11 @@ expression: terminal.backend().to_string()
 "  Gemini 3.8 Flash  [加速 开]  [1m]                                                                 " Hidden by multi-width symbols: [(22, " "), (24, " "), (27, " ")]
 "  Grok 4.7          [加速 关]                                                                       " Hidden by multi-width symbols: [(22, " "), (24, " "), (27, " ")]
 "  MiniMax M2.7      [加速 关]                                                                       " Hidden by multi-width symbols: [(22, " "), (24, " "), (27, " ")]
-"  Qwen 3.8 Max      [272k]                                                                          "
-"  Kimi K3           [1m]                                                                            "
-"  DeepSeek V4 Pro   [1m]                                                                            "
-"  MiMo V2.6 Pro     [1m]                                                                            "
-"  GLM-5.3           [1m]                                                                            "
+"  Qwen 3.8 Max                 [272k]                                                               "
+"  Kimi K3                      [1m]                                                                 "
+"  DeepSeek V4 Pro              [1m]                                                                 "
+"  MiMo V2.6 Pro                [1m]                                                                 "
+"  GLM-5.3                      [1m]                                                                 "
 "                                                                                                    "
 "                                                                                                    "
 "                                                                                                    "

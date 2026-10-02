@@ -2349,20 +2349,20 @@ impl ModelCatalog for ConfigBackedModelService {
             .with_configs(config.providers.values())
             .map_err(|error| CoreError::Model(error.to_string()))?;
         let manager = self.models_manager.with_registry(registry.clone());
-        // Product identities and order stay fixed; configured rows expose the same
-        // effective context budget that subsequent invocations will use.
+        let product_manager = self
+            .models_manager
+            .with_registry(ProviderConfigRegistry::builtin());
+        // Product identities and order stay fixed. Unconfigured rows still use the product's
+        // effective defaults; connection definitions only affect their configured provider.
         let mut models: Vec<_> = ash_model_provider_config::STATIC_MODEL_CATALOG
             .iter()
             .map(|spec| {
                 let model = spec.model_ref();
-                if !config.providers.contains_key(&model.provider) {
-                    return Ok(
-                        ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
-                            model,
-                            &spec.model(),
-                        ),
-                    );
-                }
+                let manager = if config.providers.contains_key(&model.provider) {
+                    &manager
+                } else {
+                    &product_manager
+                };
                 let resolved = manager
                     .resolve_static(&model, &ModelRequirements::agent())
                     .map_err(|error| CoreError::Model(error.to_string()))?;

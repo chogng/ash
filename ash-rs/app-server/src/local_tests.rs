@@ -2847,7 +2847,8 @@ fn built_in_catalog_excludes_configured_custom_models() {
             entry.model.provider.as_str() == "openai" && entry.model.model.as_str() == "gpt-5.6"
         })
         .unwrap();
-    assert_eq!(openai.context_window, Some(1_050_000));
+    assert_eq!(openai.context_window, Some(272_000));
+    assert_eq!(openai.maximum_context_window, Some(1_050_000));
     assert_eq!(
         openai.capabilities.image_detail_original,
         ash_protocol::CapabilitySupport::Supported

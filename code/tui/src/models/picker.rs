@@ -435,22 +435,7 @@ pub(crate) fn model_choices(
         let context = entry
             .maximum_context_window
             .filter(|window| *window >= 1_000_000)
-            .map(|_| {
-                provider
-                    .and_then(|config| {
-                        config
-                            .custom
-                            .as_ref()
-                            .map(|custom| custom.context_window)
-                            .or_else(|| {
-                                config
-                                    .model_context
-                                    .get(&model.model)
-                                    .map(|context| context.context_window)
-                            })
-                    })
-                    .unwrap_or(1_000_000)
-            });
+            .and(entry.context_window);
         actions.insert(
             id.clone(),
             ModelSelectionAction::Select {
@@ -480,7 +465,7 @@ pub(crate) fn model_choices(
                 "context",
                 match window {
                     272_000 => "272k".into(),
-                    1_000_000 => "1m".into(),
+                    1_000_000.. => "1m".into(),
                     window => format!("{}k", window / 1000),
                 },
             ),

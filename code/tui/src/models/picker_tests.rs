@@ -412,6 +412,7 @@ fn model_controls_share_keyboard_and_pointer_actions_without_consuming_search_in
     let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
     entry.maximum_context_window = Some(1_050_000);
+    entry.context_window = Some(272_000);
     let catalog = ModelListResult {
         models: vec![entry, catalog_entry("openai", "gpt-4o", "GPT-4o")],
     };
@@ -422,7 +423,7 @@ fn model_controls_share_keyboard_and_pointer_actions_without_consuming_search_in
     let id = crate::widgets::list_selection::ListSelectionItemId::new("openai/gpt-6-astra");
     for (index, control, option) in [
         (0, "fast", super::ModelOption::FastOn),
-        (1, "context", super::ModelOption::Context272k),
+        (1, "context", super::ModelOption::Context1m),
     ] {
         if index > 0 {
             picker.handle_model_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -485,6 +486,7 @@ fn assert_model_controls(width: u16, language: crate::nls::Language) {
     let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
     entry.maximum_context_window = Some(1_050_000);
+    entry.context_window = Some(272_000);
     let catalog = ModelListResult {
         models: vec![entry, catalog_entry("openai", "gpt-4o", "GPT-4o")],
     };
@@ -607,6 +609,11 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
                     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
                 }
                 entry.maximum_context_window = *window;
+                entry.context_window = if *provider == "qwen" {
+                    Some(272_000)
+                } else {
+                    *window
+                };
                 entry
             })
             .collect(),
@@ -732,6 +739,7 @@ fn model_tab_cycles_only_editable_settings_resets_on_movement_and_removes_none()
         }
         if bits & 4 != 0 {
             entry.maximum_context_window = Some(1_000_000);
+            entry.context_window = Some(1_000_000);
         }
         models.push(entry);
     }
@@ -857,6 +865,7 @@ fn model_settings_refresh_keeps_field_focus_and_unconfirmed_effort() {
     entry.supported_reasoning_efforts = vec![ReasoningEffort::Low, ReasoningEffort::High];
     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
     entry.maximum_context_window = Some(1_050_000);
+    entry.context_window = Some(272_000);
     let mut catalog = ModelListResult {
         models: vec![entry],
     };
@@ -920,6 +929,7 @@ fn model_tab_focus_is_visible_for_each_setting_in_chinese_and_on_narrow_terminal
     entry.model_reasoning_effort = Some(ReasoningEffort::Medium);
     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
     entry.maximum_context_window = Some(1_050_000);
+    entry.context_window = Some(272_000);
     let catalog = ModelListResult {
         models: vec![entry],
     };
@@ -971,4 +981,124 @@ fn model_tab_focus_is_visible_for_each_setting_in_chinese_and_on_narrow_terminal
         }
     }
     crate::tui_assert_snapshot!("model_tab_focus_chinese", frames.join("\n"));
+}
+
+#[test]
+fn missing_model_capabilities_leave_empty_aligned_columns() {
+    use crate::widgets::list_selection::ListSelectionPointerTarget;
+    use crate::widgets::list_selection::pointer_target_at;
+    use ash_protocol::ReasoningEffort;
+    use ratatui::layout::Position;
+    use ratatui::layout::Rect;
+    let catalog = ModelListResult {
+        models: [4, 2, 7, 6, 5, 3, 1, 0]
+            .into_iter()
+            .map(|bits| {
+                let mut entry = catalog_entry(
+                    "anthropic",
+                    &format!("model-{bits}"),
+                    &format!("Model {bits}"),
+                );
+                if bits & 1 != 0 {
+                    entry.supported_reasoning_efforts = vec![
+                        ReasoningEffort::Low,
+                        ReasoningEffort::Medium,
+                        ReasoningEffort::High,
+                    ];
+                    entry.model_reasoning_effort = Some(ReasoningEffort::Medium);
+                }
+                if bits & 2 != 0 {
+                    entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+                }
+                if bits & 4 != 0 {
+                    entry.maximum_context_window = Some(1_000_000);
+                    entry.context_window = Some(1_000_000);
+                }
+                entry
+            })
+            .collect(),
+    };
+    let choices = model_choices(&catalog, &crate::test_support::empty_config_snapshot()).unwrap();
+    let view = ListSelectionState::new(choices.model);
+    let mut terminal = Terminal::new(TestBackend::new(100, 14)).unwrap();
+    terminal
+        .draw(|frame| {
+            draw_body_with_pointer(
+                frame,
+                frame.area(),
+                &view,
+                None,
+                None,
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let lines = buffer
+        .content
+        .chunks(100)
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+        .collect::<Vec<_>>();
+    let complete = lines.iter().find(|line| line.contains("Model 7")).unwrap();
+    let effort_x = complete[..complete.find("Medium").unwrap()].chars().count();
+    let fast_x = complete[..complete.find("[Fast off]").unwrap()]
+        .chars()
+        .count();
+    let context_x = complete[..complete.find("[1m]").unwrap()].chars().count();
+    for bits in 0..8 {
+        let y = lines
+            .iter()
+            .position(|line| line.contains(&format!("Model {bits}")))
+            .unwrap();
+        for (mask, text, x, control) in [
+            (1, "Medium", effort_x, None),
+            (2, "[Fast off]", fast_x, Some("fast")),
+            (4, "[1m]", context_x, Some("context")),
+        ] {
+            if bits & mask != 0 {
+                assert_eq!(
+                    lines[y][..lines[y].find(text).unwrap()].chars().count(),
+                    x,
+                    "Model {bits}: {text}"
+                );
+            } else {
+                assert!(lines[y].chars().skip(x).take(text.len()).all(|c| c == ' '));
+            }
+            if let Some(control) = control {
+                let target = pointer_target_at(
+                    &view,
+                    Rect::default(),
+                    Rect::new(0, 0, 100, 14),
+                    Position::new(x as u16, y as u16),
+                );
+                assert_eq!(
+                    matches!(target, Some(ListSelectionPointerTarget::ItemControl { control: ref id, .. }) if id == control),
+                    bits & mask != 0
+                );
+            }
+        }
+    }
+    // The filled segments communicate the default Medium effort even on unselected rows.
+    let y = lines
+        .iter()
+        .position(|line| line.contains("Model 5"))
+        .unwrap() as u16;
+    let blocks = (0..100)
+        .filter(|x| buffer[(*x, y)].symbol() == "█")
+        .collect::<Vec<_>>();
+    assert_eq!(blocks.len(), 6);
+    for (index, x) in blocks.iter().enumerate() {
+        assert_eq!(
+            buffer[(*x, y)].fg,
+            if index < 4 {
+                crate::render::test_context().segmented_active()
+            } else {
+                crate::render::test_context().segmented_inactive()
+            }
+        );
+    }
+    crate::tui_assert_snapshot!(
+        "missing_model_capabilities_aligned",
+        terminal.backend().to_string()
+    );
 }
