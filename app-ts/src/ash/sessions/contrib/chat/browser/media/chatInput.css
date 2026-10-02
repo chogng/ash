@@ -14,6 +14,7 @@
   --ash-chat-input-padding: var(--ash-spacing-size160);
   --ash-chat-input-border: var(--ash-border);
   --ash-chat-input-focus-border: var(--ash-border);
+  --ash-chat-input-shadow: var(--ash-sessions-input-shadow);
   --ash-chat-input-radius: var(--ash-corner-radius-x-large);
   --ash-chat-input-toolbar-gap: var(--ash-spacing-size80);
   --ash-toolbar-action-size: 28px;
@@ -55,6 +56,7 @@
   --ash-chat-input-padding: var(--ash-spacing-size160);
   --ash-chat-input-border: var(--ash-border);
   --ash-chat-input-focus-border: var(--ash-border);
+  --ash-chat-input-shadow: var(--ash-sessions-input-shadow);
   --ash-chat-input-radius: var(--ash-corner-radius-x-large);
   --ash-chat-input-toolbar-gap: var(--ash-spacing-size80);
   --ash-toolbar-action-size: 28px;

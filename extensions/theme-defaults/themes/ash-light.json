@@ -8,7 +8,6 @@
 		"editor.background": "#ffffff",
 		"editor.foreground": "#333333",
 		"scrollbar.shadow": "#00000000",
-		"widget.shadow": "#00000000",
 		"scrollbarSlider.background": "#646464c0",
 		"scrollbarSlider.hoverBackground": "#646464d0",
 		"scrollbarSlider.activeBackground": "#646464e0",

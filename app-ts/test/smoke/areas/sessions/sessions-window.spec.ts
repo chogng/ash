@@ -129,6 +129,26 @@ async function expectComposerFocusWithoutOutline(card: Locator, input: Locator, 
 	await expect(card).toHaveCSS('outline-style', 'none');
 }
 
+async function readComposerShadow(card: Locator): Promise<{ shadow: string; themeOpacity: number; layerOpacities: number[] }> {
+	return card.evaluate(element => {
+		const style = getComputedStyle(element);
+		const canvas = document.createElement('canvas');
+		canvas.width = canvas.height = 1;
+		const context = canvas.getContext('2d')!;
+		const opacity = (color: string): number => {
+			context.clearRect(0, 0, 1, 1);
+			context.fillStyle = color;
+			context.fillRect(0, 0, 1, 1);
+			return context.getImageData(0, 0, 1, 1).data[3] / 255;
+		};
+		return {
+			shadow: style.boxShadow,
+			themeOpacity: opacity(style.getPropertyValue('--ash-sessions-input-shadow')),
+			layerOpacities: [...style.boxShadow.matchAll(/(?:rgba?|color)\([^)]*\)/gu)].map(match => opacity(match[0])),
+		};
+	});
+}
+
 async function expectFloatingComposerHover(card: Locator, input: Locator, blurTarget: Locator): Promise<void> {
 	await blurTarget.hover();
 	await blurTarget.focus();
@@ -147,13 +167,27 @@ async function expectFloatingComposerHover(card: Locator, input: Locator, blurTa
 	await expect(card).toHaveCSS('transition-property', 'border-color, box-shadow');
 	await expect(card).toHaveCSS('transition-duration', '0.2s, 0.2s');
 	await expect.poll(() => card.evaluate(element => element.getAnimations().length)).toBe(0);
-	const restingShadow = await card.evaluate(element => getComputedStyle(element).boxShadow);
+	const resting = await readComposerShadow(card);
+	const restingShadow = resting.shadow;
+	// Preserve the original two-layer effect, and reject shadows whose theme color is fully transparent.
+	expect(resting.themeOpacity).toBeGreaterThan(0.05);
+	expect(resting.layerOpacities).toHaveLength(2);
+	for (const [index, opacity] of resting.layerOpacities.entries()) {
+		expect(opacity).toBeGreaterThan(0);
+		expect(opacity).toBeCloseTo(resting.themeOpacity * [0.2, 0.12][index], 2);
+	}
 	const bounds = await card.boundingBox();
 	await card.hover();
 	await expect(card).toHaveCSS('border-top-color', colors.hovered);
 	await expect.poll(() => card.evaluate(element => element.getAnimations().length)).toBe(0);
 	await expect(card).not.toHaveCSS('box-shadow', restingShadow);
-	const raisedShadow = await card.evaluate(element => getComputedStyle(element).boxShadow);
+	const raised = await readComposerShadow(card);
+	const raisedShadow = raised.shadow;
+	expect(raised.layerOpacities).toHaveLength(2);
+	for (const [index, opacity] of raised.layerOpacities.entries()) {
+		expect(opacity).toBeGreaterThan(resting.layerOpacities[index]);
+		expect(opacity).toBeCloseTo(raised.themeOpacity * [0.28, 0.18][index], 2);
+	}
 	expect(colors.hovered).not.toBe(colors.resting);
 	await input.focus();
 	await expect(input).toBeFocused();
@@ -1523,6 +1557,55 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 	await expect(parent.locator('.ash-sessions-chat-input')).toHaveCount(0);
 });
 
+test('Sessions input shadow has its own theme color when general widget shadows are transparent', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	const parent = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	const settings = parent.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-group-id="workbench"]').click();
+	await settings.locator('[data-settings-category-id="appearance"]').click();
+	const colors = settings.locator('[data-configuration-key="workbench.colorCustomizations"]');
+	for (const [id, color] of [['widget.shadow', '#00000000'], ['sessions.inputShadow', '#12345666']]) {
+		await colors.getByRole('button', { name: 'Add Color', exact: true }).click();
+		const row = colors.locator('.ash-string-map-row').last();
+		await row.locator('[data-pattern-part="key"]').fill(id);
+		await row.locator('[data-pattern-part="value"]').fill(color);
+		await row.locator('[data-pattern-part="value"]').press('Tab');
+	}
+	await settings.locator('.ash-modal-editor-close').click();
+	let page = parent;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	const navigation = page.locator('.ash-sessions-activity-content');
+	for (const presentation of ['Chat', 'Code'] as const) {
+		await navigation.getByRole('button', { name: new RegExp(`^${presentation}(?:\\.|$)`, 'u') }).click();
+		const card = page.locator(`.${presentation.toLowerCase()}-composer .ash-chat-input-container`).first();
+		await expect.poll(() => card.evaluate(element => {
+			const style = getComputedStyle(element);
+			return [style.getPropertyValue('--ash-widget-shadow').trim(), style.getPropertyValue('--ash-sessions-input-shadow').trim()];
+		})).toEqual(['rgba(0, 0, 0, 0)', 'rgba(18, 52, 86, 0.4)']);
+		await expectFloatingComposerHover(card, card.getByRole('textbox', { name: 'Chat message' }), page.getByRole('button', { name: 'Hide sidebar', exact: true }));
+	}
+	const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
+	await returnFromSessions(page);
+	await closed;
+	await workbench.waitForReady();
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	await settings.locator('[data-settings-group-id="workbench"]').click();
+	await settings.locator('[data-settings-category-id="appearance"]').click();
+	for (let count = 2; count > 0; count--) {
+		await colors.locator('.ash-string-map-row').last().getByRole('button').click();
+		await expect(colors.locator('.ash-string-map-row')).toHaveCount(count - 1);
+	}
+	await settings.locator('.ash-modal-editor-close').click();
+});
+
 test('Sessions chat fills its content area without a duplicate session title', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
@@ -1631,7 +1714,8 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	await expect(chat.getByRole('heading', { name: 'What can we work on?' })).toBeVisible();
 	await expect(page.locator('.ash-sessions-chat-slot-header')).toBeHidden();
 	await expect(card).toHaveCSS('border-radius', '12px');
-	await expect(card).toHaveCSS('border-width', '1px');
+	// Windows display scaling can serialize a one-pixel border as a fractional CSS width.
+	expect(await card.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderTopWidth)))).toBe(1);
 	await expect(chat.locator('.ash-chat-textarea-input')).toHaveCount(0);
 	await expect(chat.locator('.ash-chat-input-editor:visible')).toHaveCSS('height', '48px');
 	const bounds = await chat.boundingBox();

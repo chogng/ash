@@ -67,7 +67,7 @@ export const ThemeConfigurationSettings = Object.freeze({
 		setting: {
 			valueType: 'stringMap', structuredValues: true,
 			get title() { return localize('workbench.colorCustomizations.title', 'Color Customizations'); },
-			get description() { return localize('workbench.colorCustomizations.description', 'Override theme colors with hex values or default. For a theme name in brackets, enter its colors as a JSON object.'); },
+			get description() { return localize('workbench.colorCustomizations.description', 'Override theme colors with hex values or default. Type a color name or description, use arrow keys to choose a suggestion, and press Enter to accept. For a theme name in brackets, enter its colors as a JSON object.'); },
 			get keyLabel() { return localize('workbench.colorCustomizations.key', 'Theme Color or [Theme Name]'); },
 			get valueLabel() { return localize('workbench.colorCustomizations.value', 'Color or JSON Colors'); },
 			get addLabel() { return localize('workbench.colorCustomizations.add', 'Add Color'); },

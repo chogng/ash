@@ -132,16 +132,16 @@
 
 .ash-chat-input-part.floating-card > .ash-chat-input-container {
   box-shadow:
-    0 2px 8px color-mix(in srgb, var(--ash-widget-shadow) 20%, transparent),
-    0 8px 24px color-mix(in srgb, var(--ash-widget-shadow) 12%, transparent);
+    0 2px 8px color-mix(in srgb, var(--ash-chat-input-shadow) 20%, transparent),
+    0 8px 24px color-mix(in srgb, var(--ash-chat-input-shadow) 12%, transparent);
   transition: border-color var(--ash-animation-duration-normal) ease, box-shadow var(--ash-animation-duration-normal) ease;
 }
 
 .ash-chat-input-part.floating-card > .ash-chat-input-container:is(:hover, .focused) {
   border-color: var(--ash-widget-border);
   box-shadow:
-    0 4px 12px color-mix(in srgb, var(--ash-widget-shadow) 28%, transparent),
-    0 12px 32px color-mix(in srgb, var(--ash-widget-shadow) 18%, transparent);
+    0 4px 12px color-mix(in srgb, var(--ash-chat-input-shadow) 28%, transparent),
+    0 12px 32px color-mix(in srgb, var(--ash-chat-input-shadow) 18%, transparent);
 }
 
 .ash-workbench[data-color-scheme^="high-contrast-"] .ash-chat-input-part.floating-card > .ash-chat-input-container {

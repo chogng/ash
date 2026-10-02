@@ -4,7 +4,7 @@ import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.
 import { addDisposableListener, getActiveElement, h, stopEvent } from '../../../../base/browser/dom.js';
 import { isAncestorOfActiveElement } from '../../../../base/browser/focus.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
+import { AnchorAlignment, type IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { SelectBox, type SelectOption } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
@@ -16,6 +16,7 @@ import type { IClipboardService } from '../../../../platform/clipboard/common/cl
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
+import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
 import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, IStringMapSetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsSearchMenu } from './settingsSearchMenu.js';
@@ -444,14 +445,149 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 	}
 }
 
+let objectKeySuggestionsId = 0;
+
+/** Suggestions stay in the input's focus path; ContextView owns popup placement and dismissal. */
+class ObjectKeySuggestions extends Disposable {
+	private readonly list: HTMLDivElement;
+	private candidates: readonly [string, JsonSchema][] = [];
+	private activeIndex = -1;
+	private visible = false;
+
+	constructor(
+		private readonly input: HTMLInputElement,
+		private readonly contextView: IContextViewProvider,
+		private readonly getProperties: () => Readonly<Record<string, JsonSchema>>,
+		private readonly accept: (key: string) => void,
+	) {
+		super();
+		this.list = h(input.ownerDocument, 'div');
+		this.list.id = `ash-settings-key-suggestions-${objectKeySuggestionsId++}`;
+		this.list.className = 'ash-settings-key-suggestions';
+		this.list.setAttribute('role', 'listbox');
+		input.setAttribute('role', 'combobox');
+		input.setAttribute('aria-autocomplete', 'list');
+		input.setAttribute('aria-haspopup', 'listbox');
+		input.setAttribute('aria-controls', this.list.id);
+		input.setAttribute('aria-expanded', 'false');
+		input.autocomplete = 'off';
+		input.spellcheck = false;
+		this._register(addDisposableListener(input, 'focus', () => this.show()));
+		this._register(addDisposableListener(input, 'input', () => this.show()));
+		this._register(addDisposableListener(input, 'blur', () => this.hide()));
+		this._register(addDisposableListener(input, 'keydown', event => {
+			if (event.isComposing) { return; }
+			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+				if (!this.visible) { this.show(); }
+				if (!this.visible) { return; }
+				stopEvent(event);
+				let next = this.activeIndex + (event.key === 'ArrowDown' ? 1 : -1);
+				if (this.activeIndex < 0) {
+					next = event.key === 'ArrowDown' ? 0 : this.candidates.length - 1;
+				}
+				this.setActiveIndex((next + this.candidates.length) % this.candidates.length);
+			} else if (event.key === 'Enter' && this.visible && this.activeIndex >= 0) {
+				stopEvent(event);
+				this.commit(this.activeIndex);
+			} else if (event.key === 'Escape' && this.visible) {
+				stopEvent(event);
+				this.hide();
+			}
+		}));
+		this._register(addDisposableListener(this.list, 'pointerdown', event => event.preventDefault()));
+		this._register(addDisposableListener(this.list, 'click', event => {
+			const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
+			if (option) { this.commit(Number(option.dataset.index)); }
+		}));
+		this._register(addDisposableListener(this.list, 'pointermove', event => {
+			const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
+			if (option) { this.setActiveIndex(Number(option.dataset.index)); }
+		}));
+		this._register(toDisposable(() => {
+			this.hide();
+			this.list.remove();
+		}));
+	}
+
+	private show(): void {
+		const inputWidth = this.input.getBoundingClientRect().width;
+		const query = this.input.value.trim().toLocaleLowerCase();
+		this.candidates = Object.entries(this.getProperties())
+			.filter(([key, schema]) => !schema.doNotSuggest && [key, schema.description ?? ''].some(text => text.toLocaleLowerCase().includes(query)))
+			.sort(([left], [right]) => left.localeCompare(right));
+		if (!this.candidates.length) {
+			this.hide();
+			return;
+		}
+		this.list.replaceChildren(...this.candidates.map(([key, schema], index) => {
+			const option = h(this.input.ownerDocument, 'div');
+			option.id = `${this.list.id}-${index}`;
+			option.className = 'ash-settings-key-option';
+			option.dataset.index = String(index);
+			option.setAttribute('role', 'option');
+			option.setAttribute('aria-selected', 'false');
+			const name = h(this.input.ownerDocument, 'span');
+			name.className = 'ash-settings-key-name';
+			name.textContent = key;
+			const description = h(this.input.ownerDocument, 'span');
+			description.className = 'ash-settings-key-description';
+			description.textContent = schema.description ?? '';
+			option.append(name, description);
+			return option;
+		}));
+		this.activeIndex = -1;
+		this.input.removeAttribute('aria-activedescendant');
+		this.list.setAttribute('aria-label', this.input.getAttribute('aria-label')!);
+		this.list.style.minWidth = `${inputWidth}px`;
+		if (this.visible) {
+			this.contextView.layout();
+			return;
+		}
+		this.visible = this.contextView.show({
+			anchor: this.input,
+			anchorAlignment: AnchorAlignment.Left,
+			content: this.list,
+			onHide: () => {
+				this.visible = false;
+				this.input.setAttribute('aria-expanded', 'false');
+				this.input.removeAttribute('aria-activedescendant');
+			},
+		});
+		this.input.setAttribute('aria-expanded', String(this.visible));
+	}
+
+	private setActiveIndex(index: number): void {
+		this.activeIndex = index;
+		for (const [candidate, option] of [...this.list.children].entries()) {
+			option.classList.toggle('focused', candidate === index);
+			option.setAttribute('aria-selected', String(candidate === index));
+		}
+		const active = this.list.children[index];
+		this.input.setAttribute('aria-activedescendant', active.id);
+		active.scrollIntoView({ block: 'nearest' });
+	}
+
+	private commit(index: number): void {
+		const [key] = this.candidates[index];
+		this.hide();
+		this.accept(key);
+	}
+
+	private hide(): void {
+		if (this.visible) { this.contextView.hide(); }
+	}
+}
+
 class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Record<string, unknown>> {
 	private readonly rows: HTMLDivElement;
 	private readonly addButton: Button;
 	private readonly rowDisposables = this._register(new DisposableStore());
 	private renderedValue: Record<string, unknown> | undefined;
+	private readonly contextViewProvider: IContextViewProvider;
 
 	constructor(container: HTMLElement, descriptor: IStringMapSetting, options: SettingWidgetOptions) {
 		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(options.configurationService, descriptor.configuration), options);
+		this.contextViewProvider = options.contextViewProvider;
 		this.domNode.classList.add('ash-string-map-setting');
 		this.domNode.dataset.configurationKey = descriptor.configuration.key;
 		this.rows = h(this.domNode.ownerDocument, 'div');
@@ -520,6 +656,17 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 		valueInput.dataset.patternPart = 'value';
 		row.append(keyInput, valueInput);
 		const rowDisposables = this.rowDisposables.add(new DisposableStore());
+		if (this.descriptor.configuration.schema?.properties) {
+			rowDisposables.add(new ObjectKeySuggestions(keyInput, this.contextViewProvider, () => {
+				const used = [...this.rows.querySelectorAll<HTMLInputElement>('[data-pattern-part="key"]')]
+					.filter(input => input !== keyInput).map(input => input.value.trim());
+				return Object.fromEntries(Object.entries(this.descriptor.configuration.schema!.properties!).filter(([key]) => !used.includes(key)));
+			}, key => {
+				keyInput.value = key;
+				valueInput.focus();
+				if (valueInput.value.trim()) { this.acceptRows(); }
+			}));
+		}
 		rowDisposables.add(addDisposableListener(keyInput, 'change', () => this.acceptRows()));
 		rowDisposables.add(addDisposableListener(valueInput, 'change', () => this.acceptRows()));
 		rowDisposables.add(new Button(row, {

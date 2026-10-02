@@ -214,6 +214,43 @@
 	grid-template-columns: minmax(0, 1fr);
 }
 
+.ash-settings-key-suggestions {
+	width: 480px;
+	max-width: calc(100vw - 24px);
+	max-height: 240px;
+	overflow: auto;
+	padding: var(--ash-spacing-size40);
+}
+
+.ash-settings-key-option {
+	display: flex;
+	flex-direction: column;
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
+	gap: var(--ash-spacing-size20);
+	border-radius: var(--ash-corner-radius-small);
+	cursor: pointer;
+}
+
+.ash-settings-key-name {
+	overflow-wrap: anywhere;
+}
+
+.ash-settings-key-description {
+	font-size: var(--ash-font-size-body2);
+	color: var(--ash-description-foreground);
+}
+
+.ash-settings-key-option.focused {
+	color: var(--ash-foreground);
+	background: var(--ash-list-hover-background);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: calc(-1 * var(--ash-stroke-thickness));
+}
+
+.ash-settings-key-option.focused > .ash-settings-key-description {
+	color: inherit;
+}
+
 .ash-string-map-rows {
 	display: flex;
 	min-width: 0;
