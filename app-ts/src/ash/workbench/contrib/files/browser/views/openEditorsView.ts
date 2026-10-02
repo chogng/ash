@@ -8,11 +8,12 @@ import { localize, onDidChangeNls } from '../../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IResourceIconRenderer } from '../../../../browser/labels.js';
+import { IResourceLabelService, type ResourceLabels } from '../../../../browser/labels.js';
 import { basenameOrAuthority } from '../../../../browser/resourceLabelHelpers.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../browser/parts/views/viewPane.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import type { EditorInstanceState } from '../../../../services/editor/common/editorState.js';
+import { IDecorationsService } from '../../../../services/decorations/common/decorations.js';
 import { OpenEditorsFocusedContext } from '../../common/files.js';
 
 type OpenEditorsRow =
@@ -25,6 +26,7 @@ export class OpenEditorsView extends ViewPane {
 	private readonly rowDisposables = this._register(new DisposableStore());
 	private readonly tree: ObjectTree<OpenEditorsRow>;
 	private readonly emptyDomNode: HTMLDivElement;
+	private readonly labels: ResourceLabels;
 
 	constructor(
 		container: HTMLElement,
@@ -33,10 +35,12 @@ export class OpenEditorsView extends ViewPane {
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
 		@IConfigurationService configuration: IConfigurationService,
-		@IResourceIconRenderer resourceIcons: IResourceIconRenderer,
+		@IResourceLabelService resourceLabels: IResourceLabelService,
+		@IDecorationsService private readonly decorationsService: IDecorationsService,
 	) {
 		super(container, options);
 		this.contentElement.classList.add('ash-open-editors');
+		this.labels = this._register(resourceLabels.createGroup());
 		const document = container.ownerDocument;
 		this.emptyDomNode = h(document, 'div');
 		this.emptyDomNode.className = 'ash-open-editors-empty';
@@ -49,7 +53,7 @@ export class OpenEditorsView extends ViewPane {
 				identityProvider: { getId: row => row.id },
 			},
 			onWillRender: () => this.rowDisposables.clear(),
-			renderElement: row => this.renderRow(row, document, resourceIcons),
+			renderElement: row => this.renderRow(row, document),
 		}));
 		this.tree.element.classList.add('ash-open-editors-tree');
 		this.contentElement.append(this.emptyDomNode);
@@ -67,7 +71,6 @@ export class OpenEditorsView extends ViewPane {
 		}));
 		this._register(onDidChangeNls(updateLabel));
 		this._register(editorPart.onDidChangeEditors(() => this.refresh()));
-		this._register(resourceIcons.onDidChangeResourceIcons(() => this.tree.rerender()));
 		this._register(this.tree.onPointer(({ element, browserEvent }) => {
 			if (browserEvent.button === 0 && element.kind === 'editor') this.activate(element.editor);
 		}));
@@ -101,8 +104,9 @@ export class OpenEditorsView extends ViewPane {
 			if (groups.length > 1) lines.push(localize('files.openEditors.group', 'Group {0}', index + 1));
 			for (const editor of group.editors) {
 				const label = editor.input.label ?? basenameOrAuthority(editor.input.resource);
+				using decoration = this.decorationsService.getDecoration(editor.input.resource, false);
 				const state = editor.isDirty ? localize('files.openEditors.unsaved', 'Unsaved changes') : '';
-				lines.push(state ? `${label}, ${state}` : label);
+				lines.push([label, decoration?.tooltip, state].filter(Boolean).join(', '));
 			}
 		}
 		return lines.join('\n');
@@ -136,7 +140,7 @@ export class OpenEditorsView extends ViewPane {
 		return { kind: 'editor', id: `editor:${groupId}:${editor.instanceId}`, editor, isActive: this.editorPart.activeGroup.id === groupId && editor.isActive };
 	}
 
-	private renderRow(row: OpenEditorsRow, document: Document, resourceIcons: IResourceIconRenderer): HTMLElement {
+	private renderRow(row: OpenEditorsRow, document: Document): HTMLElement {
 		const content = h(document, 'span');
 		content.className = 'ash-open-editors-row';
 		if (row.kind === 'group') {
@@ -146,15 +150,10 @@ export class OpenEditorsView extends ViewPane {
 		}
 		content.classList.toggle('active', row.isActive);
 		content.classList.toggle('preview', row.editor.isPreview);
-		const icon = h(document, 'span');
-		icon.className = 'ash-open-editors-icon';
-		icon.setAttribute('aria-hidden', 'true');
-		resourceIcons.renderFileIcon(row.editor.input.resource, icon);
-		const label = h(document, 'span');
-		label.className = 'ash-open-editors-label';
-		label.textContent = row.editor.input.label ?? basenameOrAuthority(row.editor.input.resource);
-		label.title = row.editor.input.resource.toString();
-		content.append(icon, label);
+		const name = row.editor.input.label ?? basenameOrAuthority(row.editor.input.resource);
+		const label = this.rowDisposables.add(this.labels.create(content));
+		label.element.classList.add('ash-open-editors-label');
+		label.setResource({ resource: row.editor.input.resource, name }, { ariaLabel: name, fileDecorations: { colors: true, badges: true }, reserveIconSpace: true });
 		if (row.editor.isDirty) {
 			const dirty = h(document, 'span');
 			dirty.className = 'ash-open-editors-dirty';
@@ -164,7 +163,7 @@ export class OpenEditorsView extends ViewPane {
 		const close = h(document, 'button');
 		close.type = 'button';
 		close.className = 'ash-open-editors-close';
-		close.setAttribute('aria-label', localize('files.openEditors.close', 'Close {0}', label.textContent));
+		close.setAttribute('aria-label', localize('files.openEditors.close', 'Close {0}', name));
 		close.title = close.getAttribute('aria-label') ?? '';
 		appendIcon(Lxicon.close, close).setAttribute('aria-hidden', 'true');
 		this.rowDisposables.add(addDisposableListener(close, 'click', (event: MouseEvent) => {

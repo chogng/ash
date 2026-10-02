@@ -22,6 +22,7 @@ export interface IDecoration extends IDisposable {
 	readonly labelClassName: string;
 	readonly badgeClassName: string;
 	readonly iconClassName: string;
+	readonly icon?: ThemeIcon;
 	readonly isTextBadge: boolean;
 }
 

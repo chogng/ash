@@ -98,3 +98,18 @@
 .ash-icon-label-inline-icon.default-color { color: inherit; }
 .ash-icon-label-description[hidden],
 .ash-icon-label-suffix[hidden] { display: none; }
+
+.ash-icon-label-suffix-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--ash-icon-label-suffix-icon-color, currentColor);
+}
+
+.ash-icon-label-suffix-icon .ash-icon {
+  width: var(--ash-lxicon-font-size-compact);
+  height: var(--ash-lxicon-font-size-compact);
+}
+
+.ash-icon-label-suffix-icon[hidden] { display: none; }

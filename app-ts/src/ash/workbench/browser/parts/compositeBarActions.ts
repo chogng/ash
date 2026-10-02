@@ -2,6 +2,7 @@ import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import { ActionViewItem, type ActionViewItemOptions } from "../../../base/browser/ui/actionbar/actionViewItems.js";
 import { IconLabel } from "../../../base/browser/ui/iconlabel/iconlabel.js";
+import { CountBadge } from '../../../base/browser/ui/countBadge/countBadge.js';
 import type { IAction } from "../../../base/common/actions.js";
 import type { Icon } from "../../../base/common/icon.js";
 import { assertDefined } from "../../../base/common/types.js";
@@ -97,7 +98,7 @@ export class CompositeActionViewItem extends ActionViewItem {
 		container.setAttribute("aria-selected", String(options.checked));
 		container.setAttribute("aria-label", options.badge ? `${options.label}, ${options.badge.description}` : options.label);
 		if (options.panelId) container.setAttribute("aria-controls", options.panelId);
-		this.setupDelayedHover(container, this.compositeAction.tooltip);
+		this.setupDelayedHover(container, options.badge ? `${this.compositeAction.tooltip}, ${options.badge.description}` : this.compositeAction.tooltip);
 		const action = h(container.ownerDocument, "span");
 		action.className = "ash-composite-bar-action";
 		const label = this._register(new IconLabel(action, {
@@ -106,11 +107,9 @@ export class CompositeActionViewItem extends ActionViewItem {
 		}));
 		container.append(action);
 		if (options.badge) {
-			const badge = h(container.ownerDocument, 'span');
-			badge.className = 'ash-composite-bar-badge';
-			badge.textContent = String(options.badge.count);
-			badge.setAttribute('aria-hidden', 'true');
-			container.append(badge);
+			const badge = this._register(new CountBadge(container, { count: options.badge.count, size: 'small', presentation: 'accent' }));
+			badge.domNode.classList.add('ash-composite-bar-badge');
+			badge.domNode.setAttribute('aria-hidden', 'true');
 		}
 		this._register(addDisposableListener(container, "click", (event) => {
 			event.preventDefault();

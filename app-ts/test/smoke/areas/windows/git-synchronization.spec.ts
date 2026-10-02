@@ -24,7 +24,7 @@ test('External Git init and ref changes update status and history without a manu
 	await expect(branch).toContainText('main');
 	await run('git', ['add', '.'], { cwd });
 	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash@example.invalid', 'commit', '-m', 'External baseline'], { cwd });
-	await page.getByRole('tab', { name: 'Git', exact: true }).click();
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await history.locator('.ash-pane-view-header').click();
 	await expect(history.getByRole('treeitem', { name: /External baseline/ }).first()).toBeVisible();
@@ -47,7 +47,7 @@ test('External Git init and ref changes update status and history without a manu
 test('External nested repository creation and deletion update the repository selector', async ({ testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	const page = workbench.page;
-	await page.getByRole('tab', { name: 'Git', exact: true }).click();
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toHaveCount(0);
 	await run('git', ['init', '-b', 'main'], { cwd });
 	await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toContainText('main');
@@ -90,7 +90,7 @@ test('External Git refs refresh two Workbench windows sharing the backend', asyn
 		await new Workbench(second).waitForReady();
 		const histories = [workbench.page, second].map(page => page.locator('[data-view-id="ash.gitGraph"]'));
 		for (const [index, page] of [workbench.page, second].entries()) {
-			await page.getByRole('tab', { name: 'Git', exact: true }).click();
+			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 			await histories[index]!.locator('.ash-pane-view-header').click();
 			await expect(histories[index]!.getByRole('treeitem', { name: /Shared baseline/ }).first()).toBeVisible();
 		}

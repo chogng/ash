@@ -242,6 +242,7 @@ export class ScmViewPane extends ViewPane {
 		const fileLabel = resources.add(this.resourceLabels.create(open));
 		fileLabel.setResource({ resource: resource.sourceUri, name, description: parentPath || undefined }, {
 			reserveIconSpace: true,
+			strikethrough: resource.decorations.kind === 'deleted',
 			title: resource.originalPath ? `${resource.originalPath} → ${resource.path}` : resource.path,
 			extraClasses: ['ash-scm-change-label'],
 		});

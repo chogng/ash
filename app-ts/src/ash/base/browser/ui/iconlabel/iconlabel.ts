@@ -12,6 +12,7 @@ export interface IconLabelValueOptions {
 	readonly title?: HoverContent;
 	readonly descriptionTitle?: HoverContent;
 	readonly suffix?: string;
+	readonly suffixIcon?: Icon;
 	readonly hideIcon?: boolean;
 	readonly extraClasses?: readonly string[];
 	readonly bold?: boolean;
@@ -53,6 +54,8 @@ export class IconLabel extends Disposable {
 	private appliedClasses: readonly string[] = [];
 	private descriptionElement: HTMLSpanElement | undefined;
 	private suffixElement: HTMLSpanElement | undefined;
+	private suffixIconElement: HTMLSpanElement | undefined;
+	private suffixIconId: string | undefined;
 
 	constructor(container: HTMLElement, options: IconLabelOptions) {
 		super();
@@ -108,6 +111,7 @@ export class IconLabel extends Disposable {
 		this.renderName(escapedName.value ?? '', supportIcons, escapedName.matches, separator, options?.domId);
 		this.renderDescription(typeof escapedDescription.value === 'string' ? escapedDescription.value : undefined, escapedDescription.matches, supportIcons, options?.descriptionTitle);
 		this.renderSuffix(options?.suffix);
+		this.renderSuffixIcon(options?.suffixIcon);
 		this.setHover(this.titleHover, this.element, options?.title);
 	}
 
@@ -205,6 +209,21 @@ export class IconLabel extends Disposable {
 			const element = this.suffixElement ??= this.createSuffixElement();
 			element.textContent = suffix ?? '';
 			element.hidden = !suffix;
+		}
+	}
+
+	private renderSuffixIcon(icon: Icon | undefined): void {
+		if (!icon && !this.suffixIconElement) return;
+		const element = this.suffixIconElement ??= h(this.element.ownerDocument, 'span');
+		element.className = 'ash-icon-label-suffix-icon';
+		element.setAttribute('aria-hidden', 'true');
+		element.hidden = !icon;
+		this.element.append(element);
+		// Retain mounted SVGs so the document's icon resolver can update theme artwork in place.
+		if (this.suffixIconId !== icon?.id) {
+			element.replaceChildren();
+			if (icon) appendIcon(icon, element);
+			this.suffixIconId = icon?.id;
 		}
 	}
 

@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { CompositeBar } from '../../../../browser/parts/compositeBar.js';
+import { HoverPosition } from '../../../../../base/browser/ui/hover/hoverWidget.js';
+import { ViewContainerLocation, ViewsRegistry } from '../../../../common/views.js';
+import { ViewDescriptorService } from '../../../views/common/viewDescriptorService.js';
+import { ActivityService } from '../../browser/activityService.js';
+import { NumberBadge } from '../../common/activity.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
+
+test('ActivityService combines concurrent counts and descriptions and releases only their own activities', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = ViewsRegistry;
+	using container = registry.registerViewContainer({ id: 'test', title: 'Test', location: ViewContainerLocation.Sidebar });
+	using contextKeys = new ContextKeyService();
+	using views = new ViewDescriptorService({ registry, contextKeyService: contextKeys });
+	using bar = new CompositeBar(dom.window.document.body, { activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: views, location: ViewContainerLocation.Sidebar, ariaLabel: 'Views' });
+	using activity = new ActivityService(bar);
+	using first = activity.showViewContainerActivity('test', new NumberBadge(2, '2 unsaved files'));
+	using second = activity.showViewContainerActivity('test', new NumberBadge(3, '3 incoming changes'));
+	const tab = (): HTMLElement => bar.domNode.querySelector('[role="tab"]')!;
+	assert.equal(tab().getAttribute('aria-label'), 'Test, 2 unsaved files, 3 incoming changes');
+	assert.equal(tab().querySelector('.ash-count-badge.small.accent')?.textContent, '5');
+	tab().focus();
+	second.dispose();
+	assert.equal(tab().getAttribute('aria-label'), 'Test, 2 unsaved files');
+	assert.equal(tab().querySelector('.ash-count-badge')?.textContent, '2');
+	assert.equal(dom.window.document.activeElement, tab());
+	first.dispose();
+	assert.equal(tab().getAttribute('aria-label'), 'Test');
+	assert.equal(tab().querySelector('.ash-count-badge'), null);
+	using remaining = activity.showViewContainerActivity('test', new NumberBadge(1, '1 remaining'));
+	activity.dispose();
+	assert.equal(tab().querySelector('.ash-count-badge'), null);
+	remaining.dispose();
+	dom.window.close();
+});

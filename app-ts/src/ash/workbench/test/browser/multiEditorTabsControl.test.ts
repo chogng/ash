@@ -1,3 +1,5 @@
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
+import { IDecorationsService, type IDecorationData } from '../../services/decorations/common/decorations.js';
 import '../../../editor/test/browser/testEditorDom.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
@@ -5,7 +7,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } fr
 import { EditorShowIconsConfiguration } from '../../services/editor/common/editorConfiguration.js';
 import { createTestEditorServices } from '../common/testEditorServices.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
 import { JSDOM } from "jsdom";
 import { DndCssClasses } from "../../../base/browser/ui/dnd/dnd.js";
 import { URI } from "../../../base/common/uri.js";
@@ -402,4 +404,34 @@ test('Editor tabs require the window resource label service before rendering', (
 	} finally {
 		dom.window.close();
 	}
+});
+
+
+suite('Editor resource decorations', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('tabs update file decorations and their accessible names without losing dirty state or focus', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
+		using changes = new Emitter<readonly URI[]>();
+		const file = input('file.ts');
+		let data: IDecorationData | undefined = { letter: 'M', color: 'description.foreground', tooltip: 'Modified' };
+		using provider = services.get(IDecorationsService).registerDecorationsProvider({ label: 'Test', onDidChange: changes.event, provideDecorations: () => data });
+		using control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, inertDelegate);
+		control.setEditors([descriptor(file)], file);
+		const tab = control.domNode.querySelector<HTMLButtonElement>('.ash-tab-label')!;
+		assert.equal(tab.getAttribute('aria-label'), 'file.ts, Modified');
+		tab.focus();
+		control.setEditors([{ ...descriptor(file), isDirty: true }], file);
+		assert.equal(tab.getAttribute('aria-label'), 'file.ts, Modified, unsaved changes');
+		assert.equal(dom.window.document.activeElement, tab);
+		data = { letter: 'D', strikethrough: true, tooltip: 'Deleted' };
+		changes.fire([file.resource]);
+		assert.equal(tab.getAttribute('aria-label'), 'file.ts, Deleted, unsaved changes');
+		assert.equal(control.domNode.querySelector('.ash-tab-label'), tab);
+		assert.equal(dom.window.document.activeElement, tab);
+		provider.dispose();
+		assert.equal(tab.getAttribute('aria-label'), 'file.ts, unsaved changes');
+		dom.window.close();
+	});
 });

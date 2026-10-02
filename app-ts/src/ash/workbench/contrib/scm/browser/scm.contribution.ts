@@ -31,10 +31,14 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import './media/scmMergeEditor.css';
 import './scm.service.contribution.js';
 import { ISCMService, ISCMViewService, SCMHistoryBusyContext } from '../common/scm.js';
+import { SCMActiveRepositoryController } from './activity.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 
 export const GIT_AGENT_REVIEW_VIEW_ID = "ash.gitAgentReview";
 export const GIT_GRAPH_VIEW_ID = 'ash.gitGraph';
 export { GIT_VIEW_ID };
+
+registerWorkbenchContribution('workbench.contrib.scmActivity', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SCMActiveRepositoryController));
 
 registerAction2(class SCMHistoryRefreshAction extends Action2 {
 	constructor() {

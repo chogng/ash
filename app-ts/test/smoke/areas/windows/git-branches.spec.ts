@@ -65,7 +65,7 @@ test.describe('Git branch lifecycle', () => {
 	test('Git branch lifecycle creates at HEAD, updates history references and deletes through confirmation', async ({ application, target, testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const page = workbench.page;
-		await page.getByRole('tab', { name: 'Git', exact: true }).click();
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 		const history = page.locator('[data-view-id="ash.gitGraph"]');
 		await history.locator('.ash-pane-view-header').click();
 		await expect(history.getByRole('treeitem', { name: /Initial/ }).first()).toBeVisible();

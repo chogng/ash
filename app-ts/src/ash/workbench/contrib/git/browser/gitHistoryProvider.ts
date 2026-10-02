@@ -1,6 +1,6 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { observableValue } from '../../../../base/common/observable.js';
+import { observableFromEvent } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { SCMHistoryUnavailableError, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemChangeContents, type ISCMHistoryItemRef, type ISCMHistoryOptions, type ISCMHistoryProvider } from '../../scm/common/history.js';
 import { GitWorkspaceError, type GitCommitSummary, type GitHead, type GitReference, type GitRemote, type GitStatus, type GraphPage, type IGitService } from '../common/gitService.js';
@@ -15,7 +15,9 @@ const MaxChatContextCharacters = 512 * 1024;
 export class GitHistoryProvider extends Disposable implements ISCMHistoryProvider {
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changeEmitter.event;
-	public readonly historyItemRef = observableValue<ISCMHistoryItemRef | undefined>(this, undefined);
+	private readonly historyRefChanged = this._register(new Emitter<ISCMHistoryItemRef | undefined>());
+	private currentHistoryRef: ISCMHistoryItemRef | undefined;
+	public readonly historyItemRef = observableFromEvent(this, this.historyRefChanged.event, () => this.currentHistoryRef);
 	private readonly commits: GitCommitSummary[] = [];
 	private readonly references = new Map<string, ISCMHistoryItemRef[]>();
 	private remoteLabels: readonly string[] = [];
@@ -51,7 +53,7 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 		} catch (error) {
 			throw historyError(error);
 		}
-		this.historyItemRef.set(currentRef(status.head));
+		this.setHistoryItemRef(currentRef(status.head));
 		return this.commits.slice(skip, skip + limit).map(commit => ({
 			id: commit.objectId,
 			parentIds: commit.parentObjectIds,
@@ -162,8 +164,14 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 		this.parents.clear();
 		this.nextCursor = undefined;
 		this.hasMore = true;
-		this.historyItemRef.set(undefined);
+		this.setHistoryItemRef(undefined);
 		if (notify) this.changeEmitter.fire();
+	}
+
+	private setHistoryItemRef(ref: ISCMHistoryItemRef | undefined): void {
+		if (ref === this.currentHistoryRef) return;
+		this.currentHistoryRef = ref;
+		this.historyRefChanged.fire(ref);
 	}
 }
 

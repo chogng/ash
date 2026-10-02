@@ -33,13 +33,6 @@
 	font-weight: var(--ash-fontWeight-semiBold);
 }
 
-.ash-open-editors-icon {
-	display: inline-flex;
-	width: var(--ash-lxiconFontSize);
-	flex: 0 0 var(--ash-lxiconFontSize);
-	align-items: center;
-}
-
 .ash-open-editors-label {
 	min-width: 0;
 	flex: 1 1 auto;

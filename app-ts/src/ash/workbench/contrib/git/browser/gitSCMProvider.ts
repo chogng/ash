@@ -3,6 +3,11 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import { localize, onDidChangeNls } from '../../../../nls.js';
+import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
+import { foreground } from '../../../../platform/theme/common/colors/baseColors.js';
+import { IDecorationsService, type IDecorationData, type IDecorationsProvider } from '../../../services/decorations/common/decorations.js';
 import type { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import type { IEditorOptions } from '../../../../platform/editor/common/editor.js';
@@ -22,6 +27,13 @@ import { GitHistoryProvider } from './gitHistoryProvider.js';
 type ChangeSide = 'index' | 'worktree';
 type PathAction = 'stage' | 'unstage' | 'discard';
 
+const modifiedForeground = registerColor('gitDecoration.modifiedResourceForeground', { dark: '#e2c08d', light: '#895503', highContrastDark: foreground, highContrastLight: foreground }, { description: 'Foreground color for files modified in Git.', owner: 'git.decorations' });
+const addedForeground = registerColor('gitDecoration.addedResourceForeground', { dark: '#81b88b', light: '#587c0c', highContrastDark: foreground, highContrastLight: foreground }, { description: 'Foreground color for files added in Git.', owner: 'git.decorations' });
+const deletedForeground = registerColor('gitDecoration.deletedResourceForeground', { dark: '#c74e39', light: '#ad0707', highContrastDark: foreground, highContrastLight: foreground }, { description: 'Foreground color for files deleted in Git.', owner: 'git.decorations' });
+const renamedForeground = registerColor('gitDecoration.renamedResourceForeground', { dark: '#73c991', light: '#007100', highContrastDark: foreground, highContrastLight: foreground }, { description: 'Foreground color for files renamed in Git.', owner: 'git.decorations' });
+const untrackedForeground = registerColor('gitDecoration.untrackedResourceForeground', { dark: '#73c991', light: '#007100', highContrastDark: foreground, highContrastLight: foreground }, { description: 'Foreground color for untracked files in Git.', owner: 'git.decorations' });
+const conflictingForeground = registerColor('gitDecoration.conflictingResourceForeground', { dark: '#e4676b', light: '#ad0707', highContrastDark: foreground, highContrastLight: foreground }, { description: 'Foreground color for files with Git conflicts.', owner: 'git.decorations' });
+
 export interface GitSCMProviderServices {
 	readonly commandService: ICommandService;
 	readonly dialogService: IDialogService;
@@ -31,9 +43,12 @@ export interface GitSCMProviderServices {
 }
 
 /** Owns Git state and operations exposed through one SCM repository. */
-export class GitSCMProvider extends Disposable implements ISCMProvider {
+export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorationsProvider {
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	public readonly onDidChangeResources = this.changeEmitter.event;
+	private readonly decorationChangeEmitter = this._register(new Emitter<readonly URI[]>());
+	public readonly onDidChange = this.decorationChangeEmitter.event;
+	private readonly decorations = new Map<string, { readonly resource: URI; readonly data: IDecorationData }>();
 	public readonly id: string;
 	public readonly providerId = 'git';
 	public readonly label: string;
@@ -78,6 +93,12 @@ export class GitSCMProvider extends Disposable implements ISCMProvider {
 			if (status.repositoryId === this.id) this.acceptStatus(status);
 		}));
 		this._register(gitService.onDidBecomeReady(() => { void this.refresh(); }));
+		this._register(onDidChangeNls(() => {
+			if (!this.status) return;
+			this.resourceGroups = this.createGroups(this.status);
+			this.updateDecorations();
+			this.changeEmitter.fire();
+		}));
 		void this.refresh();
 	}
 
@@ -97,6 +118,38 @@ export class GitSCMProvider extends Disposable implements ISCMProvider {
 	}
 
 	public get groups(): readonly ISCMResourceGroup[] { return this.resourceGroups; }
+
+	public provideDecorations(resource: URI): IDecorationData | undefined {
+		return this.decorations.get(extUriBiasedIgnorePathCase.getComparisonKey(resource))?.data;
+	}
+
+	private updateDecorations(): void {
+		const affected = new Map([...this.decorations].map(([key, value]) => [key, value.resource]));
+		this.decorations.clear();
+		// Working-tree entries follow staged entries: a shared file label describes the live file,
+		// while SCM rows keep the independent status for each side of the index.
+		for (const group of this.resourceGroups) {
+			for (const resource of group.resources) {
+				const data = statusDecoration(resource.decorations.kind as GitChangeStatus);
+				const key = extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri);
+				this.decorations.set(key, { resource: resource.sourceUri, data });
+				affected.set(key, resource.sourceUri);
+			}
+		}
+		for (const { resource, data } of [...this.decorations.values()]) {
+			let parent = extUriBiasedIgnorePathCase.dirname(resource);
+			while (extUriBiasedIgnorePathCase.isEqualOrParent(parent, this.rootUri)) {
+				const key = extUriBiasedIgnorePathCase.getComparisonKey(parent);
+				if ((this.decorations.get(key)?.data.weight ?? -1) < data.weight!) {
+					this.decorations.set(key, { resource: parent, data: { color: data.color, weight: data.weight, tooltip: localize('git.containsChanges', 'Contains Git changes') } });
+				}
+				affected.set(key, parent);
+				if (extUriBiasedIgnorePathCase.isEqual(parent, this.rootUri)) break;
+				parent = extUriBiasedIgnorePathCase.dirname(parent);
+			}
+		}
+		this.decorationChangeEmitter.fire([...affected.values()]);
+	}
 
 	private createGroups(status: GitStatus): readonly ISCMResourceGroup[] {
 		const conflicts = status.changes.filter(change => change.conflicted);
@@ -131,6 +184,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider {
 			if (!this.isDisposed && requestRevision === this.requestRevision) {
 				this.status = undefined;
 				this.resourceGroups = [];
+				this.updateDecorations();
 				this.showError(error);
 			}
 		}
@@ -150,6 +204,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider {
 		this.requestRevision += 1;
 		this.status = status;
 		this.resourceGroups = this.createGroups(status);
+		this.updateDecorations();
 		this.message = statusSummary(status);
 		this.changeEmitter.fire();
 	}
@@ -168,7 +223,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider {
 	}
 
 	private resource(status: GitStatus, change: GitRepositoryChange, side: ChangeSide): ISCMResource {
-		const state = side === 'index' ? change.indexStatus : change.worktreeStatus;
+		const state = change.conflicted ? 'unmerged' : side === 'index' ? change.indexStatus : change.worktreeStatus;
 		const actions = side === 'index'
 			? [this.pathAction(`scm.change.unstage.${change.path}`, `Unstage ${change.path}`, 'unstage', changePaths(change))]
 			: [
@@ -277,7 +332,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider {
 export class GitSCMContribution extends Disposable {
 	private readonly providers = this._register(new DisposableMap<string, DisposableStore>());
 
-	constructor(private readonly gitService: IGitService, private readonly scmService: ISCMService, private readonly scmViewService: ISCMViewService, private readonly services: GitSCMProviderServices) {
+	constructor(private readonly gitService: IGitService, private readonly scmService: ISCMService, private readonly scmViewService: ISCMViewService, private readonly services: GitSCMProviderServices, @IDecorationsService private readonly decorationsService: IDecorationsService) {
 		super();
 		this._register(gitService.onDidChangeRepositories(() => this.syncRepositories()));
 		this._register(gitService.onDidChangeActiveRepository(() => this.syncSelection()));
@@ -294,6 +349,7 @@ export class GitSCMContribution extends Disposable {
 			const history = store.add(new GitHistoryProvider(this.gitService, repository.id));
 			const provider = store.add(new GitSCMProvider(this.gitService, repository, history, this.services));
 			store.add(this.scmService.registerSCMProvider(provider));
+			store.add(this.decorationsService.registerDecorationsProvider(provider));
 			this.providers.set(repository.id, store);
 		}
 		this.syncSelection();
@@ -331,7 +387,32 @@ function changePaths(change: GitRepositoryChange): string[] { return change.orig
 function statusSummary(status: GitStatus): string { return status.changes.length === 0 ? 'No changes.' : `${status.changes.length} changed ${status.changes.length === 1 ? 'file' : 'files'}`; }
 function uniquePaths(paths: readonly string[]): string[] { return [...new Set(paths)]; }
 function isDiscardable(change: GitRepositoryChange): boolean { return !change.conflicted && ['modified', 'deleted', 'typeChanged'].includes(change.worktreeStatus); }
-function statusLabel(status: GitChangeStatus): string { return status.replace(/([A-Z])/g, ' $1').toLowerCase(); }
+function statusLabel(status: GitChangeStatus): string {
+	switch (status) {
+		case 'modified': return localize('git.status.modified', 'Modified');
+		case 'added': return localize('git.status.added', 'Added');
+		case 'deleted': return localize('git.status.deleted', 'Deleted');
+		case 'renamed': return localize('git.status.renamed', 'Renamed');
+		case 'copied': return localize('git.status.copied', 'Copied');
+		case 'typeChanged': return localize('git.status.typeChanged', 'Type changed');
+		case 'unmerged': return localize('git.status.unmerged', 'Merge conflict');
+		case 'untracked': return localize('git.status.untracked', 'Untracked');
+		case 'ignored': return localize('git.ignored', 'Ignored by Git');
+		case 'unmodified': return '';
+	}
+}
+
+function statusDecoration(status: GitChangeStatus): IDecorationData {
+	let color = modifiedForeground;
+	switch (status) {
+		case 'added': case 'copied': color = addedForeground; break;
+		case 'deleted': color = deletedForeground; break;
+		case 'renamed': color = renamedForeground; break;
+		case 'untracked': color = untrackedForeground; break;
+		case 'unmerged': color = conflictingForeground; break;
+	}
+	return { color, letter: statusCode(status), tooltip: statusLabel(status), weight: status === 'unmerged' ? 100 : 10, strikethrough: status === 'deleted', bubble: true };
+}
 function statusCode(status: GitChangeStatus): string {
 	switch (status) {
 		case 'modified': return 'M'; case 'added': return 'A'; case 'deleted': return 'D'; case 'renamed': return 'R'; case 'copied': return 'C';

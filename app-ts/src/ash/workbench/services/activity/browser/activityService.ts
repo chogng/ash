@@ -4,7 +4,7 @@ import { NumberBadge, type IActivityService } from '../common/activity.js';
 
 /** Projects View Container activity onto the Workbench's sidebar selectors. */
 export class ActivityService extends Disposable implements IActivityService {
-	private readonly badges = new Map<string, { readonly badge: NumberBadge; readonly token: symbol }>();
+	private readonly badges = new Map<string, Map<symbol, NumberBadge>>();
 
 	constructor(private readonly compositeBar: CompositeBar) {
 		super();
@@ -13,18 +13,32 @@ export class ActivityService extends Disposable implements IActivityService {
 	public showViewContainerActivity(containerId: string, badge: NumberBadge): IDisposable {
 		this.assertNotDisposed();
 		const token = Symbol(containerId);
-		this.badges.set(containerId, { badge, token });
-		this.compositeBar.setBadge(containerId, badge.number, badge.description);
+		let activities = this.badges.get(containerId);
+		if (!activities) {
+			activities = new Map();
+			this.badges.set(containerId, activities);
+		}
+		activities.set(token, badge);
+		this.update(containerId);
 		return toDisposable(() => {
-			if (this.badges.get(containerId)?.token !== token) return;
-			this.badges.delete(containerId);
-			this.compositeBar.setBadge(containerId, undefined);
+			if (!activities.delete(token) || this.isDisposed) return;
+			if (!activities.size) this.badges.delete(containerId);
+			this.update(containerId);
 		});
 	}
 
-	override dispose(): void {
-		for (const containerId of this.badges.keys()) this.compositeBar.setBadge(containerId, undefined);
+	private update(containerId: string): void {
+		const activities = [...(this.badges.get(containerId)?.values() ?? [])];
+		const count = activities.reduce((total, badge) => total + badge.number, 0);
+		this.compositeBar.setBadge(containerId, count || undefined, [...new Set(activities.map(badge => badge.description))].join(', '));
+	}
+
+	protected override disposeCore(): void {
+		for (const [containerId, activities] of this.badges) {
+			activities.clear();
+			this.compositeBar.setBadge(containerId, undefined);
+		}
 		this.badges.clear();
-		super.dispose();
+		super.disposeCore();
 	}
 }

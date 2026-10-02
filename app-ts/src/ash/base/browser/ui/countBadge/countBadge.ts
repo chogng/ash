@@ -8,6 +8,8 @@ export interface ICountBadgeOptions {
 	readonly count?: number;
 	readonly countFormat?: string;
 	readonly titleFormat?: string;
+	readonly presentation?: 'default' | 'accent';
+	readonly size?: 'default' | 'small';
 }
 
 /** A non-interactive count with shared theming and a description that follows its value. */
@@ -19,6 +21,8 @@ export class CountBadge extends Disposable {
 		super();
 		this.domNode = h(container.ownerDocument, 'span');
 		this.domNode.className = 'ash-count-badge';
+		this.domNode.classList.toggle('accent', options.presentation === 'accent');
+		this.domNode.classList.toggle('small', options.size === 'small');
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		if (options.titleFormat) {

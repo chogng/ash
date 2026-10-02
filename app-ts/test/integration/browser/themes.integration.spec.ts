@@ -27,6 +27,51 @@ test('resource decorations resolve asynchronously, follow themes and clear after
 	await expect.poll(() => page.locator('[data-ash-decorations]').textContent()).toBe('');
 });
 
+
+test('decoration icons follow SVG and font product themes while retaining the label and icon', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const label = page.locator('#decorated-label .ash-icon-label');
+	await page.evaluate(() => window.setLabelDecoration({ letter: { id: 'add', color: { id: 'error.foreground' } }, tooltip: 'Added' }));
+	await expect(label).toHaveAttribute('aria-label', 'ignored.log, Added');
+	const icon = label.locator('.ash-icon-label-suffix-icon svg');
+	await expect(icon).toHaveCount(1);
+	const retainedLabel = await label.elementHandle();
+	const retainedIcon = await icon.elementHandle();
+	const original = await icon.innerHTML();
+	await page.locator('#svg-icons').click();
+	await expect.poll(() => icon.innerHTML()).not.toBe(original);
+	const color = await page.locator('#root').evaluate(element => {
+		const probe = document.createElement('span');
+		probe.style.color = 'var(--ash-error-foreground)';
+		element.append(probe);
+		const result = getComputedStyle(probe).color;
+		probe.remove();
+		return result;
+	});
+	await expect(icon).toHaveCSS('color', color);
+	await page.evaluate(() => window.setThemeSetting('workbench.productIconTheme', 'test-font-product'));
+	await expect(icon.locator('text')).toHaveCount(1);
+	await expect(icon.locator('text')).toHaveCSS('font-weight', '700');
+	await expect(icon.locator('text')).toHaveCSS('font-style', 'italic');
+	const font = await icon.locator('text').evaluate(async element => {
+		const query = 'italic 700 16px ' + getComputedStyle(element).fontFamily;
+		return { loaded: (await document.fonts.load(query)).length, ready: document.fonts.check(query) };
+	});
+	expect(font).toEqual({ loaded: 1, ready: true });
+	expect(await retainedLabel!.evaluate(element => element === document.querySelector('#decorated-label .ash-icon-label'))).toBe(true);
+	expect(await retainedIcon!.evaluate(element => element === document.querySelector('#decorated-label .ash-icon-label-suffix-icon svg'))).toBe(true);
+	await page.locator('#default-icons').click();
+	await expect.poll(() => icon.innerHTML()).toBe(original);
+	await page.evaluate(() => window.removeLabelDecorationProvider());
+	await expect(icon).toHaveCount(0);
+	await expect(label.locator('.ash-icon-label-suffix-icon')).toBeHidden();
+	await expect.poll(() => page.locator('[data-ash-decorations]').textContent()).toBe('');
+	expect(errors).toEqual([]);
+});
+
 test('an active workbench theme includes later colors and restores host variables on disposal', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

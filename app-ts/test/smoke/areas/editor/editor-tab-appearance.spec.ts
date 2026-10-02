@@ -78,7 +78,9 @@ test('tab command groups close and split the clicked tabs from mouse and keyboar
 		await expect(source.tabs).toHaveCount(2);
 		await choose(first, 'Pin Editor', true);
 		await expect(first).toHaveAttribute('aria-description', /Pinned tab/u);
+		const previousTabCount = await source.tabs.count();
 		await page.keyboard.press('ControlOrMeta+N');
+		await expect(source.tabs).toHaveCount(previousTabCount + 1);
 		const dirty = source.tabs.last();
 		const dirtyName = (await dirty.getAttribute('aria-label'))!;
 		await source.content.getByRole('textbox', { name: dirtyName, exact: true }).focus();
@@ -202,8 +204,8 @@ test('pinned editor action stays Unpin on hover and returns the editor to the or
 
 	const ordinary = page.locator('.ash-ordinary-editor-tabs-row .ash-tab.checked');
 	await expect(ordinary).toHaveCount(1);
+	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-label', /^Untitled-/u);
 	const untitledName = await ordinary.getByRole('tab').getAttribute('aria-label');
-	expect(untitledName).toMatch(/^Untitled-/u);
 	await expect(ordinary.locator('.ash-tab-close-action')).toHaveCount(1);
 	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-description', /Pin Editor to pin/u);
 	const colors = await ordinary.evaluate(element => {

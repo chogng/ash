@@ -1,6 +1,13 @@
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { ActivityService } from '../../../../services/activity/browser/activityService.js';
+import { IActivityService } from '../../../../services/activity/common/activity.js';
+import type { CompositeBar } from '../../../../browser/parts/compositeBar.js';
+import { SCMActiveRepositoryController } from '../../browser/activity.js';
+import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
+import { IDecorationsService } from '../../../../services/decorations/common/decorations.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import { setNlsResolver, resetNlsResolver } from '../../../../../nls.js';
+import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../../../nls.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { IEditorOptions } from '../../../../../platform/editor/common/editor.js';
 import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
@@ -8,12 +15,12 @@ import assert from "node:assert/strict";
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
-import { test } from "mocha";
+import { suite, test } from "mocha";
 import { JSDOM } from "jsdom";
 import type { IContextMenuProvider } from "../../../../../base/browser/contextmenu.js";
 import { AnchorAxisAlignment, AnchorPosition } from "../../../../../base/common/layout.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
@@ -81,7 +88,10 @@ test('Git history contribution registers repositories and follows active reposit
 		onDidChangeRepositoryStatus: Event.None,
 		onDidBecomeReady: Event.None,
 	} as IGitService;
-	resources.add(new GitSCMContribution(gitService, scmService, viewService, testGitProviderServices()));
+	const decorationDocument = new JSDOM('<!doctype html><head></head><body></body>');
+	resources.add(toDisposable(() => decorationDocument.window.close()));
+	const decorationServices = resources.add(createTestEditorServices(undefined, undefined, decorationDocument.window.document));
+	resources.add(new GitSCMContribution(gitService, scmService, viewService, testGitProviderServices(), decorationServices.get(IDecorationsService)));
 
 	assert.deepEqual([...scmService.repositories].map(repository => repository.id), ['main', 'secondary']);
 	assert.equal(viewService.activeRepository?.id, 'secondary');
@@ -844,10 +854,11 @@ test("ScmViewPane groups App Server Git status", async () => {
 		using actionRegistration = registerAction2(OpenScmMultiDiffEditorAction);
 		using scmService = new SCMService();
 		using viewService = new SCMViewService(scmService);
+		using decorationServices = createTestEditorServices();
 		using contribution = new GitSCMContribution(gitService, scmService, viewService, testGitProviderServices({
 			commandService, editorService, workingCopyService: workingCopies,
 			dialogService: { ...testDialogs, confirm: async () => ({ confirmed: false }) },
-		}));
+		}), decorationServices.get(IDecorationsService));
 		using configuration = new InMemoryConfigurationService();
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git",
@@ -1227,4 +1238,96 @@ test("SCM distinguishes an empty window, a folder without Git, and unavailable a
 		'No Git repository found in the open folder.',
 		'Git is unavailable for this workspace. Check folder access and retry.',
 	]);
+});
+
+
+suite('SCM badge and decorations', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('accepted Git status updates shared decorations and deduplicated activity while retaining each SCM side', async () => {
+		using changes = new Emitter<GitStatus>();
+		using repositoryChanges = new Emitter<readonly GitRepository[]>();
+		const repository: GitRepository = { id: 'repo', label: 'workspace', path: '/workspace', root: URI.file('/workspace') };
+		let repositories = [repository];
+		const status: GitStatus = { repositoryId: 'repo', streamInstanceId: 'stream', revision: 1, workspacePath: '/workspace', head: { type: 'unborn', name: 'main' }, changes: [change('src/both.ts', 'added', 'modified')] };
+		const git = { get repositories() { return repositories; }, activeRepository: repository, onDidChangeRepositories: repositoryChanges.event, onDidChangeActiveRepository: Event.None, onDidBecomeReady: Event.None, onDidChangeRepositoryStatus: changes.event, status: async () => status } as unknown as IGitService;
+		const dom = new JSDOM('<!doctype html><head></head><body></body>');
+		using documentLifetime = toDisposable(() => dom.window.close());
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
+		using scm = new SCMService();
+		using view = new SCMViewService(scm);
+		let activityCount: number | undefined;
+		let activityDescription: string | undefined;
+		using activity = new ActivityService({ setBadge: (_id: string, count: number | undefined, description?: string) => { activityCount = count; activityDescription = description; } } as CompositeBar);
+		services.registerInstance(ISCMViewService, view);
+		services.registerInstance(IActivityService, activity);
+		const decorations = services.get(IDecorationsService);
+		using contribution = services.createInstance(GitSCMContribution, git, scm, view, testGitProviderServices());
+		using controller = services.createInstance(SCMActiveRepositoryController);
+		await waitFor(() => activityCount === 1);
+		assert.deepEqual(scm.getRepository('repo')!.provider.groups.map(group => [group.id, group.resources[0]!.decorations.badge]), [['staged', 'A'], ['changes', 'M']]);
+		const resource = URI.file('/workspace/src/both.ts');
+		using modified = decorations.getDecoration(resource, false)!;
+		assert.equal(modified.tooltip, 'Modified');
+		using folder = decorations.getDecoration(URI.file('/workspace/src'), true)!;
+		assert.match(folder.tooltip, /Contains Git changes/u);
+		assert.equal(activityDescription, '1 changed file');
+		changes.fire({ ...status, revision: 2, changes: [...status.changes, change('src/other.ts', 'unmodified', 'untracked')] });
+		assert.equal(activityCount, 2);
+		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		try {
+			setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+			assert.equal(activityDescription, '2 个已更改文件');
+			using translated = decorations.getDecoration(resource, false)!;
+			assert.equal(translated.tooltip, '已修改');
+		} finally {
+			resetNlsResolver();
+		}
+		changes.fire({ ...status, revision: 3, changes: [change('src/both.ts', 'added', 'unmodified')] });
+		using staged = decorations.getDecoration(resource, false)!;
+		assert.equal(staged.tooltip, 'Added');
+		changes.fire(status);
+		using accepted = decorations.getDecoration(resource, false)!;
+		assert.equal(accepted.tooltip, 'Added');
+		view.selectRepository(undefined);
+		assert.equal(activityCount, undefined);
+		view.selectRepository('repo');
+		assert.equal(activityCount, 1);
+		const states = [
+			['modified', 'M', 'Modified', 'modifiedResourceForeground'],
+			['added', 'A', 'Added', 'addedResourceForeground'],
+			['deleted', 'D', 'Deleted', 'deletedResourceForeground'],
+			['renamed', 'R', 'Renamed', 'renamedResourceForeground'],
+			['copied', 'C', 'Copied', 'addedResourceForeground'],
+			['typeChanged', 'T', 'Type changed', 'modifiedResourceForeground'],
+			['untracked', 'U', 'Untracked', 'untrackedResourceForeground'],
+		] as const;
+		changes.fire({ ...status, revision: 4, changes: [
+			...states.map(([state]) => change(`src/${state}.ts`, 'unmodified', state)),
+			{ ...change('src/conflict.ts', 'added', 'modified'), conflicted: true },
+		] });
+		assert.equal(activityCount, 8);
+		for (const [state, badge, tooltip, color] of states) {
+			const uri = URI.file(`/workspace/src/${state}.ts`);
+			using decoration = decorations.getDecoration(uri, false)!;
+			assert.equal(decoration.tooltip, tooltip);
+			assert.equal(decoration.isTextBadge, true);
+			assert.equal(decoration.strikethrough, state === 'deleted');
+			const data = (scm.getRepository('repo')!.provider as GitSCMProvider).provideDecorations(uri)!;
+			assert.equal(data.letter, badge);
+			assert.equal(data.color, `gitDecoration.${color}`);
+		}
+		const conflicting = (scm.getRepository('repo')!.provider as GitSCMProvider).provideDecorations(URI.file('/workspace/src/conflict.ts'))!;
+		assert.equal(conflicting.tooltip, 'Merge conflict');
+		assert.equal(conflicting.color, 'gitDecoration.conflictingResourceForeground');
+		assert.equal(scm.getRepository('repo')!.provider.groups[0]!.resources[0]!.decorations.kind, 'unmerged');
+		assert.equal((scm.getRepository('repo')!.provider as GitSCMProvider).provideDecorations(URI.file('/workspace/src'))!.color, conflicting.color);
+		changes.fire({ ...status, revision: 5, changes: [] });
+		assert.equal(activityCount, undefined);
+		assert.equal(decorations.getDecoration(resource, false), undefined);
+		assert.equal(decorations.getDecoration(URI.file('/workspace/src'), true), undefined);
+		repositories = [];
+		repositoryChanges.fire(repositories);
+		assert.equal(scm.getRepository('repo'), undefined);
+	});
 });

@@ -4,9 +4,9 @@ import { isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
+import { ThemeIcon } from '../../../../base/common/themables.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
-import { resolveIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
 import type { IDecoration, IDecorationData, IDecorationsProvider, IDecorationsService, IResourceDecorationChangeEvent } from '../common/decorations.js';
 
 interface CachedDecoration {
@@ -23,7 +23,7 @@ interface ProviderState {
 
 interface DecorationStyle {
 	readonly className: string;
-	readonly css: string;
+	readonly data: IDecorationData;
 	references: number;
 }
 
@@ -94,22 +94,12 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 			return undefined;
 		}
 		candidates.sort((left, right) => (right.weight ?? 0) - (left.weight ?? 0));
-		const data = candidates[0]!;
+		const data: IDecorationData = { color: candidates.find(candidate => candidate.color)?.color, letter: candidates.find(candidate => candidate.letter !== undefined)?.letter };
 		const signature = JSON.stringify([data.color, data.letter]);
 		let style = this.styles.get(signature);
 		if (!style) {
 			const className = `ash-decoration-${++this.nextStyleId}`;
-			const rules: string[] = [];
-			if (data.color) {
-				rules.push(`.ash-icon-label.${className}-color > .ash-icon-label-container { color: var(${colorCssVariable(data.color)}); }`);
-			}
-			if (typeof data.letter === 'string') {
-				rules.push(`.ash-icon-label.${className}-badge::after { content: ${cssString(data.letter)}; flex: 0 0 auto; font-size: var(--ash-font-size-label2); color: ${data.color ? `var(${colorCssVariable(data.color)})` : 'inherit'}; }`);
-			} else if (data.letter) {
-				const artwork = encodeURIComponent(resolveIconDefinition(data.letter)());
-				rules.push(`.ash-icon-label.${className}-icon::after { content: ''; flex: 0 0 auto; width: var(--ash-lxicon-font-size-compact); height: var(--ash-lxicon-font-size-compact); background-color: ${data.color ? `var(${colorCssVariable(data.color)})` : 'currentColor'}; mask: url("data:image/svg+xml,${artwork}") center / contain no-repeat; }`);
-			}
-			style = { className, css: rules.join('\n'), references: 0 };
+			style = { className, data, references: 0 };
 			this.styles.set(signature, style);
 			this.updateStyles();
 		}
@@ -127,6 +117,7 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 			badgeClassName: typeof data.letter === 'string' ? `${style.className}-badge` : '',
 			iconClassName: data.letter && typeof data.letter !== 'string' ? `${style.className}-icon` : '',
 			isTextBadge: typeof data.letter === 'string',
+			icon: data.letter && typeof data.letter !== 'string' ? ThemeIcon.modify(data.letter, undefined) : undefined,
 		});
 	}
 
@@ -172,7 +163,19 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 	}
 
 	private updateStyles(): void {
-		this.style.textContent = [...this.styles.values()].map(style => style.css).join('\n');
+		this.style.textContent = [...this.styles.values()].map(({ className, data }) => {
+			const rules: string[] = [];
+			if (data.color) {
+				rules.push(`.ash-icon-label.${className}-color > .ash-icon-label-container { color: var(${colorCssVariable(data.color)}); }`);
+			}
+			if (typeof data.letter === 'string') {
+				rules.push(`.ash-icon-label.${className}-badge::after { content: ${cssString(data.letter)}; flex: 0 0 auto; font-size: var(--ash-font-size-label2); color: ${data.color ? `var(${colorCssVariable(data.color)})` : 'inherit'}; }`);
+			} else if (data.letter) {
+				const color = data.letter.color?.id ?? data.color;
+				rules.push(`.ash-icon-label.${className}-icon { --ash-icon-label-suffix-icon-color: ${color ? `var(${colorCssVariable(color)})` : 'currentColor'}; }`);
+			}
+			return rules.join('\n');
+		}).join('\n');
 	}
 
 	protected override disposeCore(): void {

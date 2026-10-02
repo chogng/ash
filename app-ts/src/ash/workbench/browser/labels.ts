@@ -420,6 +420,7 @@ class ResourceLabelWidget extends Disposable {
 			renderIcon,
 			reserveIconSpace: !hideIcon && (options.reserveIconSpace ?? (options.icon !== undefined || resource !== undefined && hasFileIcons && fileKind !== FileKind.Directory)),
 			suffix: this.currentSuffix,
+			suffixIcon: options.fileDecorations?.badges && decoration?.icon ? decoration.icon : options.suffixIcon,
 			supportIcons: options.supportIcons ?? this.supportIcons,
 		};
 		this.label.setLabel(displayName ?? '', displayDescription, iconOptions);

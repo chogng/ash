@@ -12,7 +12,7 @@ test('SCM history shows Git commits and opens a changed file', async ({ target, 
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
 
 	const page = workbench.page;
-	await page.getByRole('tab', { name: 'Git', exact: true }).click();
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await expect(history).toBeVisible();
 	await history.locator('.ash-pane-view-header').click();
@@ -33,7 +33,7 @@ test('SCM history pane opens without a connected repository', async ({ target, w
 	test.skip(target.kind === 'electron' && target.appServerMode === 'required', 'Checks disconnected Workbench hosts.');
 
 	const page = workbench.page;
-	await page.getByRole('tab', { name: 'Git', exact: true }).click();
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	const changes = page.locator('[data-view-id="ash.gitView"]');
 	await expect(changes.locator('.ash-scm-status')).toContainText('source control');
 	await expect(changes.getByRole('tree', { name: 'Source control changes' })).toHaveCount(1);
@@ -64,7 +64,7 @@ test.describe('SCM folding', () => {
 		test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 		const page = workbench.page;
 		const cwd = testWorkspace.directory;
-		await page.getByRole('tab', { name: 'Git', exact: true }).click();
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: 'Source control changes' });
 		const working = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label', { hasText: /^Changes$/ }) });
 		const staged = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label', { hasText: /^Staged Changes$/ }) });

@@ -1,3 +1,5 @@
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { test } from 'mocha';
@@ -9,6 +11,8 @@ import { ILogService, NullLoggerService } from '../../../../../platform/log/comm
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { DecorationsService } from '../../browser/decorationsService.js';
 import type { IDecorationData } from '../../common/decorations.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 test('DecorationsService caches provider queries and removes styles when labels and providers release them', () => {
 	const dom = new JSDOM('<!doctype html><head></head><body></body>');
@@ -102,5 +106,22 @@ test('DecorationsService cancels outstanding requests and removes its stylesheet
 	await pending.complete({ tooltip: 'Late result' });
 	await Promise.resolve();
 	assert.equal(dom.window.document.querySelector('[data-ash-decorations]'), null);
+	dom.window.close();
+});
+
+
+test('DecorationsService retains independent provider colors and badges and semantic icon colors', () => {
+	const dom = new JSDOM('<!doctype html><head></head><body></body>');
+	using decorations = new DecorationsService(dom.window.document, new NullLoggerService());
+	using status = decorations.registerDecorationsProvider({ label: 'Status', onDidChange: Event.None, provideDecorations: () => ({ color: 'description.foreground', tooltip: 'Modified' }) });
+	using marker = decorations.registerDecorationsProvider({ label: 'Marker', onDidChange: Event.None, provideDecorations: () => ({ weight: 10, letter: { ...Lxicon.add, color: { id: 'error.foreground' } }, tooltip: 'Problem' }) });
+	using handle = decorations.getDecoration(URI.file('/workspace/file'), false)!;
+	assert.equal(handle.tooltip, 'Problem • Modified');
+	assert.match(dom.window.document.head.textContent!, /--ash-description-foreground/u);
+	assert.match(dom.window.document.head.textContent!, /--ash-error-foreground/u);
+	assert.deepEqual(handle.icon, { ...Lxicon.add, color: { id: 'error.foreground' } });
+	assert.match(dom.window.document.head.textContent!, /--ash-icon-label-suffix-icon-color/u);
+	handle.dispose();
+	assert.equal(dom.window.document.head.textContent, '');
 	dom.window.close();
 });

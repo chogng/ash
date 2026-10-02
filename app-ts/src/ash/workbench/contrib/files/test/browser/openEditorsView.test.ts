@@ -1,14 +1,16 @@
-import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
+import '../../../../../editor/test/browser/testEditorDom.js';
+import { getWindowById, getWindowId } from '../../../../../base/browser/window.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { IDecorationsService, type IDecorationData } from '../../../../services/decorations/common/decorations.js';
+import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
+import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import type { IResourceIconRenderer } from '../../../../browser/labels.js';
-import type { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import type { IEditorGroup } from '../../../../services/editor/common/editorGroupsService.js';
 import type { EditorInstanceState, EditorPartChangeEvent } from '../../../../services/editor/common/editorState.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -16,12 +18,16 @@ import { NumberBadge, type IActivityService } from '../../../../services/activit
 import type { IWorkingCopy } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { DirtyFilesIndicator } from '../../common/dirtyFilesIndicator.js';
+import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../../../nls.js';
+import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 test('Open Editors follows editor groups, dirty state, activation, and close', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(browser);
+	using windowLifetime = getWindowById(getWindowId(browser.window as unknown as Window)!)!.disposables;
 	using changes = new Emitter<EditorPartChangeEvent>();
-	using contextKeys = new ContextKeyService();
 	using configuration = new InMemoryConfigurationService();
 	const first = editor('group-a', 'first', 'first.ts', false);
 	const second = editor('group-b', 'second', 'second.ts', false);
@@ -46,13 +52,26 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 		dispose() {},
 		[Symbol.dispose]() {},
 	};
-	const icons: IResourceIconRenderer = { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() {} };
+	using services = createTestEditorServices(configuration);
+	services.registerInstance(IEditorPart, editorPart);
+	services.registerInstance(IAccessibleViewService, accessibility);
+	using decorationChanges = new Emitter<readonly URI[]>();
+	let decoration: IDecorationData | undefined;
+	using decorationProvider = services.get(IDecorationsService).registerDecorationsProvider({ label: 'Test', onDidChange: decorationChanges.event, provideDecorations: resource => resource.toString() === first.input.resource.toString() ? decoration : undefined });
 
 	try {
 		const { OpenEditorsView } = await import('../../browser/views/openEditorsView.js');
-		using view = new OpenEditorsView(browser.window.document.body, { id: OpenEditorsView.ID, title: 'Open Editors' }, editorPart, contextKeys, accessibility, configuration, icons);
+		using view = services.createInstance(OpenEditorsView, browser.window.document.body, { id: OpenEditorsView.ID, title: 'Open Editors' });
 		browser.window.document.body.append(view.element);
 		assert.match(view.getAccessibleContent(), /first\.ts/);
+		const label = view.element.querySelector('.ash-open-editors-label')!;
+		decoration = { letter: 'M', color: 'description.foreground', tooltip: 'Modified' };
+		decorationChanges.fire([first.input.resource]);
+		assert.equal(label.getAttribute('aria-label'), 'first.ts, Modified');
+		assert.match(view.getAccessibleContent(), /first\.ts, Modified/u);
+		assert.equal(view.element.querySelector('.ash-open-editors-label'), label);
+		decorationProvider.dispose();
+		assert.equal(label.getAttribute('aria-label'), 'first.ts');
 		const dirtyFirst = { ...first, isDirty: true };
 		groups = [group('group-a', [dirtyFirst]), group('group-b', [second])];
 		changes.fire({ kind: 'groupAdded', group: { id: 'group-b', editors: [second], activeEditorInstanceId: second.instanceId } });
@@ -118,6 +137,14 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	secondIsDirty = true;
 	secondDirtyChanges.fire();
 	assert.equal(activeBadge?.number, 2);
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		assert.equal(activeBadge?.description, '2 个未保存的文件');
+	} finally {
+		resetNlsResolver();
+	}
+	assert.equal(activeBadge?.description, '2 unsaved files');
 	isDirty = false;
 	dirtyChanges.fire();
 	assert.equal(activeBadge?.number, 1);

@@ -199,6 +199,10 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				renderLabel: container => {
 					const store = new DisposableStore();
 					const resourceLabel = store.add(this.labels.create(container));
+					store.add(resourceLabel.onDidRender(() => {
+						const current = this.editors.find(candidate => candidate.instanceId === editor.instanceId)!;
+						this.updateTabAriaLabel(current, resourceLabel);
+					}));
 					const context = store.add(this.tabContext.createScoped(container));
 					EditorTabsFocusContext.bindTo(context).set(true);
 					this.renderedLabels.set(editor.instanceId, { label: resourceLabel, context, signature: undefined });
@@ -229,13 +233,23 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			// Resource labels recreate their text when updated; selection must retain the click target.
 			if (rendered.signature !== signature) {
 				rendered.signature = signature;
-				rendered.label.setResource({ resource: editor.input.resource, name: label.name, description: label.description }, { forceLabel: true, icon });
+				rendered.label.setResource({ resource: editor.input.resource, name: label.name, description: label.description }, { ariaLabel: label.name, forceLabel: true, icon, fileDecorations: { colors: true, badges: true } });
 			}
+			this.updateTabAriaLabel(editor, rendered.label);
 		}
 		clearConnectedTabClipping(this.connectedTab, this.tabList.element);
 		this.connectedTab = this.tabList.element.querySelector<HTMLElement>(".ash-tab.checked") ?? undefined;
 		this.updateConnectedTab();
 		this.tabList.element.hidden = editors.length === 0;
+	}
+
+	private updateTabAriaLabel(editor: EditorTabDescriptor, label: IResourceLabel): void {
+		const tabLabel = this.domNode.ownerDocument.getElementById(editor.tabId);
+		// A newly created label renders before TabList attaches its tab to the document.
+		if (!tabLabel) return;
+		const state = editor.hasExternalChange ? localize('workbench.editor.externalChange', 'conflict with changes on disk') : editor.isDirty ? localize('workbench.editor.unsavedChanges', 'unsaved changes') : undefined;
+		const name = label.element.getAttribute('aria-label') ?? editorInputLabel(editor.input).name;
+		tabLabel.setAttribute('aria-label', state ? `${name}, ${state}` : name);
 	}
 
 	setPresentation(presentation: TabListPresentation): void {

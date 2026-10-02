@@ -25,19 +25,27 @@ test.describe('Git ignore decorations', () => {
 		const ignored = explorer.locator('.ash-icon-label').filter({ has: page.getByText('ignored.log', { exact: true }) });
 		const folder = explorer.getByRole('treeitem').filter({ has: page.getByText('ignored-dir', { exact: true }) });
 		await expect(ignored).toHaveAttribute('aria-label', 'ignored.log, Ignored by Git');
-		await expect(ignored.locator('.ash-icon-label-text')).toHaveCSS('color', 'rgb(140, 140, 140)');
+		const ignoredColor = await ignored.evaluate(element => {
+			const reference = document.createElement('span');
+			reference.style.color = 'var(--ash-git-decoration-ignored-resource-foreground)';
+			element.append(reference);
+			const color = getComputedStyle(reference).color;
+			reference.remove();
+			return color;
+		});
+		await expect(ignored.locator('.ash-icon-label-text')).toHaveCSS('color', ignoredColor);
 		await expect(folder.locator('.ash-icon-label')).toHaveAttribute('aria-label', 'ignored-dir, Ignored by Git');
 		await folder.locator('.ash-tree-twistie').click();
 		const child = explorer.locator('.ash-icon-label').filter({ has: page.getByText('child.txt', { exact: true }) });
 		await expect(child).toHaveAttribute('aria-label', 'child.txt, Ignored by Git');
-		await expect(child.locator('.ash-icon-label-text')).toHaveCSS('color', 'rgb(140, 140, 140)');
+		await expect(child.locator('.ash-icon-label-text')).toHaveCSS('color', ignoredColor);
 		for (const name of ['main.ts', 'keep.tmp']) {
 			await expect(explorer.locator('.ash-icon-label').filter({ has: page.getByText(name, { exact: true }) })).not.toHaveAttribute('aria-label', /Ignored by Git/u);
 		}
 		await writeFile(join(testWorkspace.directory, '.gitignore'), '*.tmp\n!keep.tmp\nmain.ts\n');
 		await expect(ignored).not.toHaveAttribute('aria-label', /Ignored by Git/u);
 		await expect(child).not.toHaveAttribute('aria-label', /Ignored by Git/u);
-		await expect(ignored.locator('.ash-icon-label-text')).not.toHaveCSS('color', 'rgb(140, 140, 140)');
+		await expect(ignored.locator('.ash-icon-label-text')).not.toHaveCSS('color', ignoredColor);
 		const run = promisify(execFile);
 		const status = await run('git', ['status', '--porcelain'], { cwd: testWorkspace.directory });
 		expect(status.stdout).toContain('keep.tmp');

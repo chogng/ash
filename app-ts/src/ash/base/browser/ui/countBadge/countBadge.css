@@ -18,3 +18,14 @@
   outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
   outline-offset: -1px;
 }
+
+.ash-count-badge.small {
+  min-width: var(--ash-spacing-size160);
+  height: var(--ash-spacing-size160);
+  padding: 0 var(--ash-spacing-size40);
+  font-size: var(--ash-font-size-label3);
+}
+
+.ash-count-badge.accent {
+  background: var(--ash-accent-background);
+}

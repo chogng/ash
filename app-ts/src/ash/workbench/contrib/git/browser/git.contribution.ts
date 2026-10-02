@@ -110,7 +110,7 @@ class GitIgnoreDecorationProvider extends Disposable implements IDecorationsProv
 
 registerWorkbenchContribution('workbench.contrib.gitIgnoreDecorations', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(GitIgnoreDecorationProvider));
 
-registerWorkbenchContribution('workbench.contrib.gitSCMProvider', WorkbenchPhase.BlockRestore, accessor => new GitSCMContribution(
+registerWorkbenchContribution('workbench.contrib.gitSCMProvider', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(GitSCMContribution,
 	accessor.get(IGitService),
 	accessor.get(ISCMService),
 	accessor.get(ISCMViewService),

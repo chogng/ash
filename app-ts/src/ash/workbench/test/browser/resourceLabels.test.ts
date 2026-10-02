@@ -24,7 +24,7 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 	let decorationData: IDecorationData | undefined;
 	using provider = decorations.registerDecorationsProvider({ label: 'Test', onDidChange: decorationUpdates.event, provideDecorations: () => decorationData });
 	using labelService = new LabelService(workspace, OperatingSystem.Linux);
-	const iconThemeChange = new Emitter<void>();
+	using iconThemeChange = new Emitter<void>();
 	const resourceIconRenderer: IResourceIconRenderer = {
 		onDidChangeResourceIcons: iconThemeChange.event,
 		getFileIconTheme: () => ({ ...noFileIconTheme, hasFileIcons: true }),
@@ -57,6 +57,14 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 	assert.equal(label.element.classList.contains('strikethrough'), true);
 	assert.equal(decorationChanges, 1);
 	assert.equal(label.element.getAttribute('aria-label'), 'main.ts, Ignored');
+
+	decorationData = { letter: Lxicon.add, tooltip: 'Added' };
+	decorationUpdates.fire([resource]);
+	assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon svg')?.getAttribute('data-ash-icon-id'), 'add');
+	label.setFile(resource, { fileDecorations: { colors: true, badges: false } });
+	assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon svg'), null);
+	assert.equal(label.element.getAttribute('aria-label'), 'main.ts, Added');
+
 
 	using formatter = labelService.registerFormatter({
 		scheme: 'file',

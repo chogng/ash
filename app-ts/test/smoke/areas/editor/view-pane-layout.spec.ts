@@ -5,7 +5,7 @@ test.use({ openWorkspace: false });
 test('multiple view panes resize independently and restore their layout after reload', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code workbench.');
 	const page = workbench.page;
-	await page.getByRole('tab', { name: 'Git', exact: true }).click();
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	const container = page.locator('[data-view-container-id="ash.git"]');
 	const changes = container.locator('[data-view-id="ash.gitView"]');
 	const review = container.locator('[data-view-id="ash.gitAgentReview"]');
@@ -56,7 +56,7 @@ test('multiple view panes resize independently and restore their layout after re
 	await header(review).press('Home');
 	await expect(header(changes)).toBeFocused();
 	await page.getByRole('tab', { name: 'Search', exact: true }).first().click();
-	await page.getByRole('tab', { name: 'Git', exact: true }).click();
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	await expect(header(graph)).toHaveAttribute('aria-expanded', 'false');
 	await header(graph).press('ArrowRight');
 	await expect.poll(() => height(graph)).toBeCloseTo(resizedHeight, 0);

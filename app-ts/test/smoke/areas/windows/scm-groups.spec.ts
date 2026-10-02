@@ -17,13 +17,43 @@ test.describe('SCM editor groups', () => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
 	});
 
+	test('Git badges and file decorations update together across Explorer, tabs, Open Editors and SCM', async ({ testWorkspace, workbench }) => {
+		const page = workbench.page;
+		const gitTab = page.locator('.ash-composite-bar-item[data-action-id="ash.git"]');
+		const activity = gitTab.locator('.ash-count-badge');
+		await expect(activity).toHaveText('1');
+		await expect(gitTab).toHaveAttribute('aria-label', 'Git, 1 changed file');
+		const explorerLabel = page.locator('.ash-explorer .ash-icon-label').filter({ has: page.getByText('main.ts', { exact: true }) });
+		await expect(explorerLabel).toHaveAttribute('aria-label', 'main.ts, Modified');
+		await explorerLabel.dblclick();
+		const editorLabel = workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.ts' }).locator('.ash-icon-label');
+		await expect(editorLabel).toHaveAttribute('aria-label', 'main.ts, Modified');
+		await workbench.quickaccess.runCommand('workbench.files.action.focusOpenEditorsView');
+		const openEditorLabel = page.locator('.ash-open-editors-label').filter({ hasText: 'main.ts' });
+		await expect(openEditorLabel).toHaveAttribute('aria-label', 'main.ts, Modified');
+		await gitTab.click();
+		await run('git', ['add', 'main.ts'], { cwd: testWorkspace.directory });
+		await writeFile(testWorkspace.file, 'const value = 3;\n');
+		const sections = page.locator('.ash-scm-section-count');
+		await expect(sections).toHaveCount(2);
+		await expect(sections).toHaveText(['1', '1']);
+		await expect(activity).toHaveText('1');
+		await run('git', ['restore', '--staged', '--worktree', 'main.ts'], { cwd: testWorkspace.directory });
+		await expect(activity).toHaveCount(0);
+		await expect(gitTab).toHaveAttribute('aria-label', 'Git');
+		await expect(editorLabel).toHaveAttribute('aria-label', 'main.ts');
+		await page.locator('.ash-composite-bar-item[data-action-id="ash.sidebar"]').click();
+		await expect(openEditorLabel).toHaveAttribute('aria-label', 'main.ts');
+		await expect(explorerLabel).not.toHaveAttribute('aria-label', /Modified/u);
+	});
+
 	test('SCM side previews retain focus and reuse the side group for keyboard opens', async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
 		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
 		const original = workbench.editors.groupAt(0);
 		await expect(original.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 		await original.editor.waitForEditorFocus();
-		await page.getByRole('tab', { name: 'Git', exact: true }).click();
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 		const open = page.getByRole('button', { name: 'Open changes for main.ts', exact: true });
 		await expect(open).toBeEnabled();
 		await open.click({ modifiers: ['Alt'] });
@@ -50,7 +80,7 @@ test.describe('SCM editor groups', () => {
 
 	test('SCM Multi Diff splits keep collapse state and closing independent', async ({ workbench }) => {
 		const page = workbench.page;
-		await page.getByRole('tab', { name: 'Git', exact: true }).click();
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 		await page.getByRole('button', { name: 'View All Changes', exact: true }).click();
 		const original = workbench.editors.groupAt(0);
 		await expect(original.content.locator('.stanza-multi-diff-editor-section')).toHaveCount(1);
@@ -77,7 +107,7 @@ test.describe('SCM merge editor groups', () => {
 		const original = workbench.editors.groupAt(0);
 		await expect(original.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 		await original.editor.waitForEditorFocus();
-		await page.getByRole('tab', { name: 'Git', exact: true }).click();
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 		const open = page.getByRole('button', { name: 'Open merge conflict in main.ts', exact: true });
 		await expect(open).toBeEnabled();
 		await open.focus();

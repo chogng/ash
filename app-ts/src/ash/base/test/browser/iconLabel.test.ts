@@ -1,6 +1,8 @@
 import { URI } from '../../common/uri.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
+import { setIconResolver } from '../../browser/ui/lxicons/lxicon.js';
 import { JSDOM } from 'jsdom';
 import { IconLabel } from '../../browser/ui/iconlabel/iconlabel.js';
 import { SimpleIconLabel } from '../../browser/ui/iconlabel/simpleIconLabel.js';
@@ -113,4 +115,28 @@ test('IconLabel switches between file renderers, image icons and hidden icons wi
 		assert.equal(node.childElementCount, 0);
 		assert.equal(node.getAttribute('aria-hidden'), 'true');
 	} finally { dom.window.close(); }
+});
+
+
+suite('IconLabel suffix icons', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('keeps text suffixes and literal filenames while mounted icon themes update in place', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			const icon = registerLxicon('test-suffix-icon', () => '<svg viewBox="0 0 16 16"><path d="M0 0"/></svg>');
+			using label = new IconLabel(dom.window.document.body, { label: '$(add).ts', suffix: ':3', suffixIcon: icon });
+			const mounted = label.element.querySelector('.ash-icon-label-suffix-icon svg');
+			assert.equal(label.labelElement.textContent, '$(add).ts');
+			assert.equal(label.element.querySelector('.ash-icon-label-suffix')?.textContent, ':3');
+			assert.equal(mounted?.getAttribute('aria-hidden'), 'true');
+			assert.equal(mounted?.getAttribute('focusable'), 'false');
+			label.setLabel('renamed.ts', undefined, { suffix: ':5', suffixIcon: icon });
+			setIconResolver(dom.window.document, () => () => '<svg viewBox="0 0 16 16"><circle r="4"/></svg>');
+			assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon svg'), mounted);
+			assert.equal(mounted?.querySelector('circle')?.getAttribute('r'), '4');
+			label.clear();
+			assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon svg'), null);
+			assert.equal(label.element.querySelector<HTMLElement>('.ash-icon-label-suffix-icon')?.hidden, true);
+		} finally { dom.window.close(); }
+	});
 });

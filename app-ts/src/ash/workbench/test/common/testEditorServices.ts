@@ -21,7 +21,7 @@ import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } fr
 import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
 
 /** Assembles the real label owner for editor tests without an extension icon theme. */
-export function createTestEditorServices(configuration?: IConfigurationService, parent?: InstantiationService): InstantiationService {
+export function createTestEditorServices(configuration?: IConfigurationService, parent?: InstantiationService, document: Document = globalThis.document): InstantiationService {
 	const services = parent ? parent.createChild() : new InstantiationService();
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	if (configuration) {
@@ -35,7 +35,7 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => new BrowserWorkingCopyService());
 	if (!services.has(IUntitledTextEditorService)) services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(BrowserUntitledTextEditorService));
 	if (!services.has(ILogService)) services.registerInstance(ILogService, new NullLoggerService());
-	if (!services.has(IDecorationsService)) services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, globalThis.document));
+	if (!services.has(IDecorationsService)) services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));
 	if (!services.has(ILanguageService)) services.registerSingleton(ILanguageService, () => new LanguageService());
 	if (!services.has(IFileTextModelService)) services.registerSingleton(IFileTextModelService, () => new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }), save: async () => ({ revision: undefined }) }));
 	services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));

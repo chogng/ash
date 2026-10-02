@@ -160,7 +160,7 @@ test.describe('startup layout defaults', () => {
 
 	test('Git explains that an empty window needs a folder', async ({ workbench }) => {
 		const page = workbench.page;
-		await page.getByRole('tab', { name: 'Git', exact: true }).click();
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 		await expect(page.locator('[data-view-container-id="ash.git"]')).toHaveClass(/ash-scm-viewlet/u);
 		await expect(page.locator('.ash-scm-status')).toHaveText('Open a folder to use source control.');
 		await expect(page.locator('.ash-scm-change')).toHaveCount(0);
@@ -206,7 +206,7 @@ test('new desktop workspace shows Explorer and Chat with Panel hidden', async ({
 test('Git explains when the open folder has no repository', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
 	const page = workbench.page;
-	await page.getByRole('tab', { name: 'Git', exact: true }).click();
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	await expect(page.locator('.ash-scm-status')).toHaveText('No Git repository found in the open folder.');
 	await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 });
