@@ -188,11 +188,19 @@ Windows 的两个旧网络用例还暴露出 TCP 临时端口落入 Hyper-V UDP 
 
 Server 2022 的 `child-3560.dmp` 在终止前成功取得，配套 CPU 时间为 kernel 343 ms、user 1515 ms。微软调试器符号解析显示，主线程等待异步管道，执行线程位于 `ForEachObjectCommand.ProcessRecord` → `CommandDiscovery.TryModuleAutoDiscovery` → `AutoloadSpecifiedModule` → `ImportModuleCommand` → `ModuleIntrinsics.ExportModuleMembers`；已加载 `PSWindowsUpdate` 和 Visual Studio Setup 模块。由此定位为第一条输出命令的模块发现/导入，进程已越过 CLR 与受限令牌初始化。这份转储没有建立死锁或某个网络请求的因果证明。
 
-兼容性用例现在明确调用 `Microsoft.PowerShell.Utility\Write-Output`，并检查 `Write-Output` 的实际模块归属。10 秒期限、真实管道、私有桌面、受限令牌、输出与退出码断言保留。完整账户执行用例继续使用常规 PowerShell 命令，覆盖用户执行时的模块发现。本机修改后的用例耗时 247 ms，warning 门禁和正常 helper 构建通过；提交 `8465278af22b61c91a18b04fc3bd1e85a27d705c` 的 [修复 CI](https://github.com/chogng/ash/actions/runs/36975190704) 正在验收。
+兼容性用例现在明确调用 `Microsoft.PowerShell.Utility\Write-Output`，并检查 `Write-Output` 的实际模块归属。10 秒期限、真实管道、私有桌面、受限令牌、输出与退出码断言保留。完整账户执行用例继续使用常规 PowerShell 命令，覆盖用户执行时的模块发现。本机修改后的用例耗时 247 ms，warning 门禁和正常 helper 构建通过。
 
-PSEC 的版本查询在 ARM64 `26200.9457` 上返回 `S_OK`、available=true、minor=0，即 PSEC `1.0`。独立入口表要求 `1.1`；现有官方代理模式又要求双向私网能力，因此当前机器不能完成严格 Managed 验收。适配器继续在执行前拒绝，并保留真实 Executor → adapter → SDK 拒绝用例：代理已启动但命令未启动、没有目标授权调用。代理身份完成或基础 PSEC 文件/进程测试通过，均不能替代这项契约。
+提交 `8465278af22b61c91a18b04fc3bd1e85a27d705c` 的 [修复 CI](https://github.com/chogng/ash/actions/runs/36975190704) 首次尝试 6/6 通过，没有重跑失败任务。三台机器各通过 9 项服务测试、36 项账户库测试、更新前后各 11 项执行用例，以及服务更新后的文件作用域用例。程序摘要发生改变，账户和 WFP 对象身份保持相同；最后删除账户运行时和服务。三个 PSEC 任务分别通过 ARM64 的指定成功路径或 Server 的能力不足拒绝用例。
 
-诊断与修复证据分别位于 `.build/acceptance/sandbox-strict/run-20261002-141600/` 和 `run-20261002-144600/`，包含精确 CI 源码摘要、原始日志、artifact 摘要、版本报告、超时转储及 `server2022-symbol-stacks.log`。初期的网络形式探索代码只归档在诊断证据中；当前仓库脚本只查询能力，不保留未经实机执行的策略组合。
+| 运行器 | 受限 PowerShell 用例耗时 | 账户安装、更新与清理 |
+| --- | --- | --- |
+| Windows 11 25H2 ARM64 | 3.598 秒 | 通过 |
+| Windows Server 2022 x64 | 3.859 秒 | 通过 |
+| Windows Server 2025 x64 | 2.213 秒 | 通过 |
+
+PSEC 的版本查询在 ARM64 `26200.9457` 上返回 `S_OK`、available=true、minor=0，即 PSEC `1.0`。修复 CI 的支持查询同样返回 `S_OK`、flags=`0x3`、`NetworkIngress=false`。独立入口表要求 `1.1`；现有官方代理模式又要求双向私网能力，因此当前机器不能完成严格 Managed 验收。适配器继续在执行前拒绝，并保留真实 Executor → adapter → SDK 拒绝用例：代理已启动但命令未启动、没有目标授权调用。代理身份完成或基础 PSEC 文件/进程测试通过，均不能替代这项契约。
+
+诊断与修复证据分别位于 `.build/acceptance/sandbox-strict/run-20261002-141600/` 和 `run-20261002-144600/`，包含精确 CI 源码摘要、原始日志、artifact 摘要、版本报告、超时转储及 `server2022-symbol-stacks.log`。修复目录的 `verification.json` 核对 CI 提交与当前源码、用例数量、程序更新、账户/WFP 身份及清理计划；下载 ZIP 的摘要均与 GitHub 返回值一致。初期的网络形式探索代码只归档在诊断证据中；当前仓库脚本只查询能力，不保留未经实机执行的策略组合。
 
 ## 已退出账户原型的受管网络记录
 
