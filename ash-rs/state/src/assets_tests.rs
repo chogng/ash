@@ -112,6 +112,12 @@ fn uploads_enforce_owner_order_capacity_and_cancel_without_publishing() {
         Err(AssetError::Capacity)
     ));
     assets.close_owner(1);
+    let mut invalid_source = request(FIRST);
+    invalid_source.source = "not a URI".into();
+    assert!(matches!(
+        assets.start(1, invalid_source),
+        Err(AssetError::Invalid)
+    ));
     let mut large = request(FIRST);
     large.size = assets::MAX_ASSET_BYTES + 1;
     assert!(matches!(assets.start(1, large), Err(AssetError::Invalid)));
@@ -140,4 +146,49 @@ fn invalid_images_and_conflicting_receipts_cannot_change_a_published_version() {
         assets.get(ASSET, SECOND),
         Err(AssetError::NotFound)
     ));
+}
+
+#[test]
+fn jpeg_webp_and_oriented_jpeg_keep_original_bytes_and_report_display_dimensions() {
+    let temp = tempfile::tempdir().unwrap();
+    let assets = Assets::new(Arc::new(
+        SqliteAssetStore::open(&temp.path().join("state.sqlite")).unwrap(),
+    ));
+    for (index, format, media_type) in [
+        (5, image::ImageFormat::Jpeg, assets::ImageType::Jpeg),
+        (6, image::ImageFormat::WebP, assets::ImageType::Webp),
+    ] {
+        let mut encoded = std::io::Cursor::new(Vec::new());
+        image::RgbImage::from_pixel(3, 2, image::Rgb([255, 0, 0]))
+            .write_to(&mut encoded, format)
+            .unwrap();
+        let mut bytes = encoded.into_inner();
+        if format == image::ImageFormat::Jpeg {
+            // An EXIF orientation of 6 rotates display by 90 degrees; the original JPEG stays intact.
+            let exif = [
+                b'E', b'x', b'i', b'f', 0, 0, b'I', b'I', 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 1, 3, 0,
+                1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0,
+            ];
+            let mut oriented = vec![255, 216, 255, 225, 0, 34];
+            oriented.extend_from_slice(&exif);
+            oriented.extend_from_slice(&bytes[2..]);
+            bytes = oriented;
+        }
+        let id = format!("55555555-5555-4555-8555-{index:012}");
+        let mut input = request(&id);
+        input.size = bytes.len();
+        assets.start(1, input).unwrap();
+        assets.write(1, &id, 0, &bytes).unwrap();
+        let version = assets.finish(1, &id).unwrap();
+        assert_eq!(version.media_type, media_type);
+        assert_eq!(
+            (version.width, version.height),
+            if format == image::ImageFormat::Jpeg {
+                (2, 3)
+            } else {
+                (3, 2)
+            }
+        );
+        assert_eq!(assets.read(ASSET, &id, 0, bytes.len()).unwrap(), bytes);
+    }
 }

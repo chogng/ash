@@ -16,9 +16,9 @@ test("Debug view switches sessions and renders threads, recursive variables, wat
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new FakeDebugService();
+		debug.activate(debug.sessions[0]!);
 		using view = new DebugViewPane(browser.window.document.body, { id: "ash.debug.test", title: "Debug" }, debug, editor);
 		browser.window.document.body.append(view.element);
-		debug.activate(debug.sessions[0]!);
 		await waitFor(() => view.element.querySelectorAll(".ash-debug-frame").length === 1);
 
 		assert.equal(view.element.querySelectorAll("select[aria-label='Active debug session'] option").length, 2);

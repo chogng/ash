@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { expect, test } from '../../../automation/test.js';
 
-const source = `fn main() {}\n#[cfg(test)]\nmod checks {\n    #[test] fn passes() { assert_eq!(2 + 2, 4); }\n    #[test] fn fails() { panic!("fixture failure"); }\n    #[test] #[ignore] fn ignored() {}\n    #[test] fn slow() { std::thread::sleep(std::time::Duration::from_secs(20)); }\n}\n`;
+const source = `fn main() {}\n#[cfg(test)]\nmod checks {\n    #[test] fn passes() {\n        assert_eq!(2 + 2, 4);\n    }\n    #[test] fn fails() { panic!("fixture failure"); }\n    #[test] #[ignore] fn ignored() {}\n    #[test] fn slow() { std::thread::sleep(std::time::Duration::from_secs(20)); }\n}\n`;
 
 test.describe('built-in Rust testing', () => {
 	test.beforeEach(async ({ target, testWorkspace }) => {
@@ -70,8 +70,10 @@ test.describe('built-in Rust testing', () => {
 		await passes.click();
 		await passes.press('Enter');
 		const editor = workbench.editors.groupAt(0).editor;
-		await expect(editor.element).toBeVisible();
-		await workbench.quickaccess.runCommand('editor.debug.action.toggleBreakpoint');
+		await editor.waitForEditorContents(contents => contents.includes('fn passes()'));
+		await editor.waitForEditorFocus();
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('F9');
 		await expect(editor.element.locator('.ash-debug-breakpoint-gutter')).toHaveCount(1);
 		await editor.waitForEditorFocus();
 		await page.keyboard.press('F9');
@@ -86,6 +88,10 @@ test.describe('built-in Rust testing', () => {
 		await expect(debug.getByRole('status')).toContainText('stopped');
 		await expect(debug.locator('.ash-debug-stack')).toContainText('checks::passes');
 		await expect(editor.element.locator('.ash-debug-breakpoint-gutter.verified')).toHaveCount(1);
+		// Macro expressions can resolve to multiple instruction locations on one line.
+		// Retire the verified breakpoint before checking continuation and session cleanup.
+		await debug.locator('.ash-debug-breakpoint-remove').click();
+		await expect(editor.element.locator('.ash-debug-breakpoint-gutter')).toHaveCount(0);
 		await debug.getByRole('button', { name: 'Continue', exact: true }).click();
 		await expect(debug.getByRole('status')).toHaveText('0 debug configurations.');
 		await page.getByRole('tab', { name: 'Testing', exact: true }).first().click();

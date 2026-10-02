@@ -1101,7 +1101,8 @@ export class View extends ViewEventHandler {
 	public override handleEvents(events: viewEvents.ViewEvent[]): void {
 		super.handleEvents(events);
 		if (this.changingLayout || this.isDisposed) return;
-		if (!this.shouldRender() && !this.viewParts.some(part => part.shouldRender())) return;
+		// Parts receive this batch after the host. Evaluate their invalidation in
+		// the scheduled frame, once every handler has consumed the same events.
 		this.scheduleProjection();
 	}
 

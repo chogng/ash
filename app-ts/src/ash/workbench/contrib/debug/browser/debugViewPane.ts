@@ -83,7 +83,8 @@ export class DebugViewPane extends ViewPane {
 		this._register(debug.onDidChangeWatchExpressions(() => { void this.refreshWatches(); this.render(); }));
 		this._register(debug.onDidChangeExceptionBreakpoints(() => this.render()));
 		this._register(debug.onDidChangeSession(session => this.acceptSessionChange(session)));
-		this.render();
+		// Testing can pause a session before this view is first opened.
+		this.acceptSessionChange(debug.session);
 		void debug.refresh().catch(error => { this.error = message(error); this.render(); });
 	}
 
@@ -180,16 +181,16 @@ export class DebugViewPane extends ViewPane {
 	}
 
 	private async openFrameSource(session: IDebugSession, frame: IDebugStackFrame): Promise<void> {
-		const position = new Position(Math.max(1, frame.lineNumber), Math.max(1, frame.columnNumber));
+		const selection = frame.lineNumber > 0 && frame.columnNumber > 0 ? Range.fromPositions(new Position(frame.lineNumber, frame.columnNumber)) : undefined;
 		if (frame.source?.resource) {
-			await this.editor.openEditor({ resource: frame.source.resource, label: frame.source.name }, { selection: Range.fromPositions(position) });
+			await this.editor.openEditor({ resource: frame.source.resource, label: frame.source.name }, { selection });
 			return;
 		}
 		if (frame.source?.sourceReference && frame.source.sourceReference > 0) {
 			const source = await session.source(frame.source);
 			const name = frame.source.name ?? `source-${frame.source.sourceReference}`;
 			const resource = URI.parse(`debug-source://session/${encodeURIComponent(session.id)}/${frame.source.sourceReference}/${encodeURIComponent(name)}`);
-			await this.editor.openEditor({ resource, label: name, contentType: source.mimeType, readOnly: true, initialText: source.content }, { selection: Range.fromPositions(position) });
+			await this.editor.openEditor({ resource, label: name, contentType: source.mimeType, readOnly: true, initialText: source.content }, { selection });
 		}
 	}
 
@@ -244,7 +245,7 @@ export class DebugViewPane extends ViewPane {
 	}
 
 	private activateBreakpoint(event: Event): void {
-		const index = indexFromEvent(event, ".ash-debug-breakpoint", "breakpointIndex", this.element.ownerDocument);
+		const index = indexFromEvent(event, ".ash-debug-breakpoint, .ash-debug-breakpoint-remove", "breakpointIndex", this.element.ownerDocument);
 		const breakpoint = index === undefined ? undefined : this.debug.breakpoints[index];
 		const remove = event.target instanceof this.element.ownerDocument.defaultView!.Element && Boolean(event.target.closest(".ash-debug-breakpoint-remove"));
 		if (!breakpoint) return;
@@ -265,7 +266,7 @@ export class DebugViewPane extends ViewPane {
 		this.threadsElement.replaceChildren(...this.threads.map(thread => option(this.element.ownerDocument, String(thread.id), thread.name)));
 		if (session?.threadId) this.threadsElement.value = String(session.threadId);
 		this.threadsElement.hidden = this.threads.length < 2;
-		this.stackElement.replaceChildren(heading(this.element.ownerDocument, "Call Stack"), ...this.frames.map((frame, index) => itemButton(this.element.ownerDocument, `${frame.name}  ${frame.source?.name ?? frame.source?.path ?? ""}:${frame.lineNumber}`, "ash-debug-frame", "frameIndex", index, frame.id === this.selectedFrameId)));
+		this.stackElement.replaceChildren(heading(this.element.ownerDocument, "Call Stack"), ...this.frames.map((frame, index) => itemButton(this.element.ownerDocument, `${frame.name}  ${frame.source?.name ?? frame.source?.path ?? ""}${frame.lineNumber > 0 ? `:${frame.lineNumber}` : ""}`, "ash-debug-frame", "frameIndex", index, frame.id === this.selectedFrameId)));
 		this.variablesElement.replaceChildren(heading(this.element.ownerDocument, "Variables"), ...this.variableRows.map((row, index) => variableItem(this.element.ownerDocument, row, index)));
 		this.watchElement.replaceChildren(heading(this.element.ownerDocument, "Watch"), ...this.debug.watchExpressions.map((expression, index) => watchItem(this.element.ownerDocument, expression, this.watchResults.find(result => result.expression === expression), index)));
 		const selectedExceptions = this.debug.exceptionBreakpoints;
@@ -288,7 +289,7 @@ function itemButton(document: Document, label: string, className: string, dataNa
 function variableItem(document: Document, row: DebugVariableRow, index: number): HTMLLIElement { const indicator = row.variablesReference > 0 ? row.expanded ? "▾ " : "▸ " : "  "; const label = `${indicator}${row.name}${row.value === undefined ? "" : ` = ${row.value}`}${row.type ? ` : ${row.type}` : ""}`; const item = itemButton(document, label, "ash-debug-variable", "variableIndex", index); const action = item.firstElementChild as HTMLButtonElement; action.style.paddingInlineStart = `${6 + row.depth * 14}px`; action.disabled = row.variablesReference <= 0 && row.value === undefined; return item; }
 function watchItem(document: Document, expression: string, result: DebugWatchResult | undefined, index: number): HTMLLIElement { const item = h(document, "li"); const value = h(document, "span"); value.className = "ash-debug-watch-value"; value.textContent = `${expression}${result?.result ? ` = ${result.result.result}` : result?.error ? ` — ${result.error}` : ""}`; const remove = button(document, "Remove", "removeWatch"); remove.className = "ash-debug-watch-remove"; remove.dataset.watchIndex = String(index); item.append(value, remove); return item; }
 function exceptionItem(owner: DisposableStore, document: Document, filter: string, label: string, description: string | undefined, checked: boolean): HTMLLIElement { const item = h(document, "li"); const control = owner.add(new Checkbox(item, { label, checked })); control.element.classList.add("ash-debug-exception-toggle"); control.input.dataset.exceptionFilter = filter; if (description) control.element.title = description; return item; }
-function breakpointItem(document: Document, breakpoint: IDebugBreakpoint, index: number): HTMLLIElement { const item = itemButton(document, `${basename(breakpoint.resource)}:${breakpoint.lineNumber}`, "ash-debug-breakpoint", "breakpointIndex", index); const remove = button(document, "Remove", "removeBreakpoint"); remove.className = "ash-debug-breakpoint-remove"; item.append(remove); return item; }
+function breakpointItem(document: Document, breakpoint: IDebugBreakpoint, index: number): HTMLLIElement { const item = itemButton(document, `${basename(breakpoint.resource)}:${breakpoint.lineNumber}`, "ash-debug-breakpoint", "breakpointIndex", index); const remove = button(document, "Remove", "removeBreakpoint"); remove.className = "ash-debug-breakpoint-remove"; remove.dataset.breakpointIndex = String(index); item.append(remove); return item; }
 function inputForm(document: Document, label: string, action: string): [HTMLFormElement, HTMLInputElement] { const form = h(document, "form"); form.className = "ash-debug-input-form"; const input = h(document, "input"); input.type = "text"; input.setAttribute("aria-label", label); const submit = h(document, "button"); submit.type = "submit"; submit.textContent = action; form.append(input, submit); return [form, input]; }
 function indexFromEvent(event: Event, selector: string, dataName: string, document: Document): number | undefined { const target = event.target instanceof document.defaultView!.Element ? event.target.closest<HTMLElement>(selector) : null; const raw = target?.dataset[dataName]; if (raw === undefined) return undefined; const index = Number(raw); return Number.isSafeInteger(index) && index >= 0 ? index : undefined; }
 function descendantEnd(rows: readonly DebugVariableRow[], index: number, depth: number): number { let end = index + 1; while (end < rows.length && rows[end]!.depth > depth) end += 1; return end; }

@@ -118,6 +118,7 @@ impl Assets {
         if request.name.trim().is_empty()
             || request.name.len() > 512
             || request.source.len() > 8192
+            || url::Url::parse(&request.source).is_err()
             || request.size == 0
             || request.size > MAX_ASSET_BYTES
         {

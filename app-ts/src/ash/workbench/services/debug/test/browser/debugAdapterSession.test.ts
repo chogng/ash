@@ -38,7 +38,7 @@ test("DebugAdapterSession handles zero-sequence DAP messages, clears breakpoints
 	await waitFor(() => session.state === "stopped");
 	const frames = await session.stackTrace();
 	assert.equal(processes.requests("threads").length, 1);
-	assert.deepEqual(frames.map(frame => ({ ...frame, source: frame.source ? { ...frame.source, resource: frame.source.resource?.toString() } : undefined })), [{ id: 11, name: "main", source: { name: "main.ts", path: "C:\\workspace\\main.ts", resource: URI.file("C:\\workspace\\main.ts").toString() }, lineNumber: 4, columnNumber: 1 }]);
+	assert.deepEqual(frames.map(frame => ({ ...frame, source: frame.source ? { ...frame.source, resource: frame.source.resource?.toString() } : undefined })), [{ id: 11, name: "main", source: { name: "main.ts", path: "C:\\workspace\\main.ts", resource: URI.file("C:\\workspace\\main.ts").toString() }, lineNumber: 4, columnNumber: 1 }, { id: 12, name: "system", source: undefined, lineNumber: 0, columnNumber: 0 }]);
 
 	assert.deepEqual(await session.threads(), [{ id: 7, name: "main" }, { id: 8, name: "worker" }]);
 	session.selectThread(8);
@@ -97,7 +97,7 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 		if (command === "launch") this.event("initialized");
 		const body = command === "initialize" ? { supportsConfigurationDoneRequest: true, supportsRestartRequest: true, supportsTerminateRequest: true, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions" }] }
 			: command === "threads" ? { threads: [{ id: 7, name: "main" }, { id: 8, name: "worker" }] }
-			: command === "stackTrace" ? { stackFrames: [{ id: 11, name: "main", source: { name: "main.ts", path: this.stackFramePath }, line: 4, column: 1 }] }
+			: command === "stackTrace" ? { stackFrames: [{ id: 11, name: "main", source: { name: "main.ts", path: this.stackFramePath }, line: 4, column: 1 }, { id: 12, name: "system", line: 0, column: 0 }] }
 			: command === "scopes" ? { scopes: [{ name: "Locals", variablesReference: 20 }] }
 			: command === "variables" ? { variables: [{ name: "answer", value: "42", type: "number", variablesReference: 0 }] }
 			: command === "evaluate" ? { result: "42", type: "number", variablesReference: 0 }

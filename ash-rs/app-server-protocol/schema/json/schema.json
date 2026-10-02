@@ -2368,6 +2368,8 @@
       "additionalProperties": false,
       "properties": {
         "versionId": {
+          "maxLength": 36,
+          "minLength": 36,
           "type": "string"
         }
       },
@@ -2380,20 +2382,29 @@
       "additionalProperties": false,
       "properties": {
         "assetId": {
+          "maxLength": 36,
+          "minLength": 36,
           "type": "string"
         },
         "name": {
+          "maxLength": 512,
+          "minLength": 1,
           "type": "string"
         },
         "size": {
           "format": "uint",
-          "minimum": 0,
+          "maximum": 16777216,
+          "minimum": 1,
           "type": "integer"
         },
         "source": {
+          "maxLength": 8192,
+          "minLength": 1,
           "type": "string"
         },
         "versionId": {
+          "maxLength": 36,
+          "minLength": 36,
           "type": "string"
         }
       },
@@ -2410,7 +2421,8 @@
       "properties": {
         "maxChunkBytes": {
           "format": "uint",
-          "minimum": 0,
+          "maximum": 196608,
+          "minimum": 1,
           "type": "integer"
         }
       },
@@ -2432,6 +2444,8 @@
           "type": "integer"
         },
         "versionId": {
+          "maxLength": 36,
+          "minLength": 36,
           "type": "string"
         }
       },
@@ -2459,6 +2473,8 @@
       "additionalProperties": false,
       "properties": {
         "assetId": {
+          "maxLength": 36,
+          "minLength": 36,
           "type": "string"
         },
         "maxBytes": {
@@ -2473,6 +2489,8 @@
           "type": "integer"
         },
         "versionId": {
+          "maxLength": 36,
+          "minLength": 36,
           "type": "string"
         }
       },
@@ -2487,10 +2505,12 @@
     "AssetReadResult": {
       "properties": {
         "dataBase64": {
+          "maxLength": 262144,
           "type": "string"
         },
         "decodedLength": {
           "format": "uint",
+          "maximum": 196608,
           "minimum": 0,
           "type": "integer"
         },
@@ -2515,9 +2535,13 @@
       "additionalProperties": false,
       "properties": {
         "assetId": {
+          "maxLength": 36,
+          "minLength": 36,
           "type": "string"
         },
         "versionId": {
+          "maxLength": 36,
+          "minLength": 36,
           "type": "string"
         }
       },
@@ -2530,36 +2554,49 @@
     "AssetVersionResult": {
       "properties": {
         "assetId": {
+          "maxLength": 36,
+          "minLength": 36,
           "type": "string"
         },
         "height": {
           "format": "uint32",
-          "minimum": 0,
+          "maximum": 32768,
+          "minimum": 1,
           "type": "integer"
         },
         "mediaType": {
           "$ref": "#/$defs/AssetImageType"
         },
         "name": {
+          "maxLength": 512,
+          "minLength": 1,
           "type": "string"
         },
         "sha256": {
+          "maxLength": 64,
+          "minLength": 64,
           "type": "string"
         },
         "size": {
           "format": "uint",
-          "minimum": 0,
+          "maximum": 16777216,
+          "minimum": 1,
           "type": "integer"
         },
         "source": {
+          "maxLength": 8192,
+          "minLength": 1,
           "type": "string"
         },
         "versionId": {
+          "maxLength": 36,
+          "minLength": 36,
           "type": "string"
         },
         "width": {
           "format": "uint32",
-          "minimum": 0,
+          "maximum": 32768,
+          "minimum": 1,
           "type": "integer"
         }
       },

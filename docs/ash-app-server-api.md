@@ -1345,3 +1345,16 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 `testing/prepareDebug` 使用相同的 `catalogId` 和一个 `testId`，异步准备包含调试信息的测试程序，通过 `testing/updated.launch` 和 `testing/read.launch` 返回 `program`、`arguments`、`directory`、`adapterProgram`。Renderer 将其交给已有 DebugService 启动 DAP 会话；断点、调用栈、继续、重启及停止归 DebugService。编辑器按 F9 设置断点，测试树选择“调试所选测试”，或按住 Alt 点击测试边栏图标启动。该操作不会写入 `launch.json`，也不会先运行所选测试。macOS 通过 `xcrun --find lldb-dap` 找到适配器，其他平台使用 PATH 中的 `lldb-dap`。文档测试的 `debuggable` 为 `false`，不提供调试按钮。
 
 `testing/read` 读取已有操作的完整快照，不重新执行。`testing/cancel` 等待进程终止与最终更新；`testing/release` 还删除操作状态。连接关闭取消并回收该连接的所有操作。操作最多保留 10,000 个测试，单条结果输出最多 16 KiB，每次运行保留的总输出最多 2 MiB；超出部分明确标记 `outputTruncated`。`TestingNotFound` 表示当前连接没有对应操作，`TestingBusy` 表示操作数量达到上限，`TestingOperationFailed` 表示后端无法完成操作。
+
+
+## 素材入库与确切版本读取
+
+`ash-rs/assets` 拥有 PNG、JPEG、WebP 原件校验、正式元数据和不可变版本；`ash-state::SqliteAssetStore` 将原件与版本在同一事务中保存。该存储属于 Profile，独立于 Thread、窗口与 connection。初始化的 `contracts.assets.version = 1` 表示接口可用。
+
+调用方先确定 `assetId` 与 `versionId`，调用 `asset/import/start`，按返回的 `maxChunkBytes` 顺序调用 `asset/import/write`，再调用 `asset/import/finish`。原件最多 16 MiB，上传块最多 192 KiB；上传资源只属于发起 connection，重复上传 ID 拒绝，取消使用 `asset/import/cancel`，断开连接清理未完成上传。完整上传的完成请求消费上传并进行原子入库，入库不承诺取消。修改响应丢失后使用 `asset/version` 查询原身份，不自动重放。相同版本与同一内容、名称和来源重试不产生第二条版本记录，身份冲突返回 `AssetConflict`。
+
+`asset/version` 返回确切版本的名称、来源、摘要、类型、原件大小和包含图片方向的显示尺寸。`asset/read` 按偏移与限长读取该版本的原始字节；返回长度、偏移和 EOF 用于边界验证。读取基于持久素材与版本身份，不建立短期 resource ID；不同已初始化 connection 可以读取同一 Profile 的已发布版本。当前没有目录订阅、删除回收或音视频接口。
+
+Frontend 的公共契约为 `platform/assets/common/assetService.ts`，`browser/appServerAssetService.ts` 机械转换生成协议并处理上传释放。所有领域适配器复用所在 Renderer 的唯一 protocol client 与既有 Main 透明 relay，不增加后端进程或连接。Design 导入使用该服务，采用后端版本身份并读取入库内容；文档模型、裁切、历史、工作副本及文件保存冲突留在前端。普通文件图片预览继续使用前端文件服务与浏览器显示资源。
+
+错误通过现有结构化 `data.kind` 区分 `AssetsUnavailable`、`AssetInvalid`、`AssetInvalidImage`、`AssetNotFound`、`AssetConflict`、`AssetCapacity` 和 `AssetOperationFailed`。不按错误消息字符串判断状态。

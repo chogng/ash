@@ -1,3 +1,4 @@
+import { IAssetService } from '../../platform/assets/common/assetService.js';
 import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
 import { IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
@@ -252,6 +253,7 @@ export class Workbench extends Disposable {
 
 		const configurationService = this.configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi, initialSnapshot: options.initialConfigurationSnapshot }));
 		const services = this._register(new InstantiationService());
+		services.registerInstance(IAssetService, options.api.assets);
 		services.registerInstance(IDictationService, options.api.dictation);
 		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 		services.registerSingleton(IDictationOnboardingService, () => services.createInstance(DictationOnboardingService));

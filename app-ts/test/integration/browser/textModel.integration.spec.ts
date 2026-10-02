@@ -56,6 +56,33 @@ test('symbol highlights stay on the symbol when the gutter, minimap and horizont
 	}
 });
 
+test('glyph decorations added and removed after rendering update without cursor or layout changes', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.getModel()!.setLanguage('plaintext');
+		editor.updateOptions({ glyphMargin: true, wordWrap: 'off' });
+		editor.setValue('first\nsecond\nthird');
+	});
+	const glyph = page.locator('.ash-delayed-glyph-probe');
+	await expect(page.locator('.view-lines')).toContainText('third');
+	await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+	await page.evaluate(() => {
+		const model = window.ashTextModelIntegration.getControl().getModel()!;
+		model.deltaDecorations([], [{
+			range: { startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 1 },
+			options: { description: 'delayed glyph invalidation', glyphMarginClassName: 'ash-delayed-glyph-probe' },
+		}]);
+	});
+	await expect(glyph).toHaveCount(1);
+	await page.evaluate(() => {
+		const model = window.ashTextModelIntegration.getControl().getModel()!;
+		const ids = model.getAllDecorations().filter(d => d.options.glyphMarginClassName === 'ash-delayed-glyph-probe').map(d => d.id);
+		model.deltaDecorations(ids, []);
+	});
+	await expect(glyph).toHaveCount(0);
+});
+
 test('line numbers and glyph markers share text coordinates after vertical and horizontal scrolling', async ({ page }) => {
 	await openEditor(page);
 	await page.evaluate(() => {

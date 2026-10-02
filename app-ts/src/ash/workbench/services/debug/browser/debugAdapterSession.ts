@@ -328,7 +328,7 @@ function event(value: Record<string, unknown>): DapEvent {
 
 function stackFrame(value: unknown, index: number, workspace: URI): IDebugStackFrame {
 	const frame = record(value, `stackFrames[${index}]`);
-	return { id: positiveInteger(frame.id, `stackFrames[${index}].id`), name: string(frame.name, `stackFrames[${index}].name`), lineNumber: positiveInteger(frame.line, `stackFrames[${index}].line`), columnNumber: positiveInteger(frame.column, `stackFrames[${index}].column`), ...(frame.source === undefined ? {} : { source: source(frame.source, `stackFrames[${index}].source`, workspace) }) };
+	return { id: positiveInteger(frame.id, `stackFrames[${index}].id`), name: string(frame.name, `stackFrames[${index}].name`), lineNumber: positiveInteger(frame.line, `stackFrames[${index}].line`, true), columnNumber: positiveInteger(frame.column, `stackFrames[${index}].column`, true), ...(frame.source === undefined ? {} : { source: source(frame.source, `stackFrames[${index}].source`, workspace) }) };
 }
 
 function thread(value: unknown, index: number): IDebugThread {

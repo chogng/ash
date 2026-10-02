@@ -47,6 +47,8 @@ export interface IDebugThread {
 	readonly name: string;
 }
 
+// DAP uses zero for an unavailable source line or column; retain that fact
+// so callers can inspect a frame without inventing an editor position.
 export interface IDebugStackFrame {
 	readonly id: number;
 	readonly name: string;

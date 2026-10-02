@@ -13,6 +13,7 @@ ash-utils-image = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg", "webp"] }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
+url = { workspace = true }
 
 [lints]
 workspace = true

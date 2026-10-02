@@ -919,3 +919,30 @@ test('Chinese frame and image controls use translated labels and accessible desc
 		assert.match(chinese.bundles.ash['sessions.design.mediaHelp'], /原图保持完整/u);
 	} finally { resetNlsResolver(); }
 });
+
+
+test('Design import adopts backend version identities and metadata and packages backend content', async () => {
+	using child = services.createChild();
+	const source = URI.file('/product.png');
+	const original = new Uint8Array([1, 2, 3]);
+	const committed = new Uint8Array([4, 5, 6]);
+	const backend = { assetId: generateUuid(), versionId: generateUuid(), name: 'Library product', source, sha256: createHash('sha256').update(committed).digest('hex'), mediaType: 'image/png' as const, size: committed.length, width: 320, height: 200 };
+	child.registerInstance(IFileDialogService, { ...services.get(IFileDialogService), showOpenDialog: async () => [source] });
+	child.registerInstance(IFileService, { ...services.get(IFileService), readFileBytes: async () => ({ resource: source, bytes: original, revision: '1' }) });
+	let imports = 0;
+	child.registerInstance(IAssetService, {
+		importImage: async request => { imports++; assert.deepEqual(request.bytes, original); assert.equal(request.source.toString(), source.toString()); return backend; },
+		getVersion: unexpected,
+		readVersion: async version => { assert.equal(version, backend); return committed; },
+	});
+	using controller = child.createInstance(DesignDocumentController);
+	const id = await controller.importImage({ x: 500, y: 400 });
+	assert.ok(id);
+	assert.equal(imports, 1);
+	const asset = controller.model.value.assets[0];
+	assert.equal(asset.id, backend.assetId);
+	assert.equal(asset.name, backend.name);
+	assert.deepEqual(asset.versions[0], { id: backend.versionId, mediaType: backend.mediaType, width: 320, height: 200, sha256: backend.sha256, path: `assets/${backend.sha256}` });
+	assert.deepEqual(controller.readMedia(asset.versions[0]), committed);
+	assert.equal(controller.model.value.shapes.find(shape => shape.id === id)!.width, 320);
+});

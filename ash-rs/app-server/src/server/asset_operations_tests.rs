@@ -5,6 +5,8 @@ use base64::engine::general_purpose::STANDARD;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 const PNG: &[u8] = &[
     137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 1, 8, 6, 0,
@@ -15,9 +17,16 @@ const ASSET: &str = "11111111-1111-4111-8111-111111111111";
 const VERSION: &str = "22222222-2222-4222-8222-222222222222";
 
 fn rpc(server: &AppServer, connection: &mut ConnectionState, method: &str, params: Value) -> Value {
-    let response = server.handle_json(connection, &json!({"jsonrpc":"2.0","id":1,"method":method,"params":params}).to_string());
+    static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    let response = server.handle_json(
+        connection,
+        &json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}).to_string(),
+    );
     let value: Value = serde_json::from_str(&response).unwrap();
-    if method == "asset/import/start" { assert!(value.get("result").is_some(), "{value}"); }
+    if method == "asset/import/start" {
+        assert!(value.get("result").is_some(), "{value}");
+    }
     value
 }
 

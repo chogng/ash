@@ -738,11 +738,10 @@ test('Sessions Design frames keep child geometry, nested selection and whole-ges
 	await expect(canvas).toBeFocused();
 });
 
-test('Sessions Design imports shared image versions, crops independently and reopens a portable media package', async ({ application, target, testWorkspace, workbench }) => {
+test('Sessions Design imports backend asset versions, crops independently and reopens a portable media package', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || (target.kind === 'electron' && target.appServerMode !== 'required'));
-	test.skip(target.kind === 'browser' && target.appServerMode !== 'disabled');
+	test.skip(target.kind === 'browser' && target.appServerMode !== 'required');
 	let page = workbench.page;
-	let folderName = '';
 	const directory = await realpath(testWorkspace.directory);
 	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
 	else {
@@ -758,18 +757,8 @@ test('Sessions Design imports shared image versions, crops independently and reo
 		context.fillStyle = '#ffffff'; context.fillRect(50, 0, 50, 80);
 		return image.toDataURL('image/png').split(',')[1];
 	});
-	if (target.kind === 'browser') {
-		folderName = await page.evaluate(async encoded => {
-			const name = `ash-media-${crypto.randomUUID()}`;
-			const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name, { create: true });
-			const file = await folder.getFileHandle('product.png', { create: true });
-			const writer = await file.createWritable();
-			await writer.write(Uint8Array.from(atob(encoded), character => character.charCodeAt(0))); await writer.close();
-			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
-			return name;
-		}, encoded);
-	} else {
-		await writeFile(join(directory, 'product.png'), Buffer.from(encoded, 'base64'));
+	await writeFile(join(directory, 'product.png'), Buffer.from(encoded, 'base64'));
+	if (target.kind === 'electron') {
 		if (!('windows' in application)) { throw new Error('Expected Electron application'); }
 		await application.evaluate(({ dialog }, folder) => {
 			dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [`${folder}/product.png`] });
@@ -804,32 +793,32 @@ test('Sessions Design imports shared image versions, crops independently and reo
 	}
 	await expect(page.locator('[data-part="editor"] [role="tab"]')).toContainText('design.ash-design');
 	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
-	const saved = target.kind === 'electron' ? await readFile(join(directory, 'design.ash-design/manifest.json'), 'utf8') : await page.evaluate(async name => {
-		const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-		const folder = await root.getDirectoryHandle('design.ash-design');
-		return (await (await folder.getFileHandle('manifest.json')).getFile()).text();
-	}, folderName);
+	const saved = await readFile(join(directory, 'design.ash-design/manifest.json'), 'utf8');
 	const designDocument = parseDesignDocument(saved);
 	expect(designDocument.assets).toHaveLength(1);
 	const asset = designDocument.assets[0];
 	expect(asset.versions).toHaveLength(1);
-	const originalBytes = target.kind === 'electron' ? await readFile(join(directory, 'design.ash-design', asset.versions[0].path)) : Buffer.from(await page.evaluate(async ({ folderName, path }) => {
-		const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(folderName);
-		const assets = await (await root.getDirectoryHandle('design.ash-design')).getDirectoryHandle('assets');
-		return Array.from(new Uint8Array(await (await (await assets.getFileHandle(path.split('/')[1])).getFile()).arrayBuffer()));
-	}, { folderName, path: asset.versions[0].path }));
+	const originalBytes = await readFile(join(directory, 'design.ash-design', asset.versions[0].path));
 	expect(originalBytes).toEqual(Buffer.from(encoded, 'base64'));
+	if (target.kind === 'browser') {
+		const committed = await page.evaluate(async ({ assetId, versionId }) => {
+			const service = globalThis.ashWebWorkbenchHost!.api.assets;
+			const version = await service.getVersion(assetId, versionId);
+			return { width: version.width, height: version.height, sha256: version.sha256, bytes: Array.from(await service.readVersion(version)) };
+		}, { assetId: asset.id, versionId: asset.versions[0].id });
+		expect(committed).toEqual({ width: 100, height: 80, sha256: asset.versions[0].sha256, bytes: Array.from(originalBytes) });
+	}
 	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(canvas.getByRole('textbox', { name: 'Generated code', exact: true })).toHaveValue(/href="data:image\/png;base64,/u);
 	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Design', exact: true }).click();
+	await rename(join(directory, 'design.ash-design'), join(directory, 'moved.ash-design'));
 	if (target.kind === 'electron') {
-		await rename(join(directory, 'design.ash-design'), join(directory, 'moved.ash-design'));
 		if (!('windows' in application)) { throw new Error('Expected Electron application'); }
 		await application.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [`${folder}/moved.ash-design`] }); }, directory);
 	}
 	await clickCanvasMenu(canvas, 'Open design', application);
-	if (target.kind === 'browser') { await page.locator('.ash-quick-pick-row-label').filter({ hasText: /^design\.ash-design$/u }).click(); }
-	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText(target.kind === 'electron' ? 'Opened moved.ash-design' : 'Opened design.ash-design');
+	if (target.kind === 'browser') { await page.locator('.ash-quick-pick-row-label').filter({ hasText: /^moved\.ash-design$/u }).click(); }
+	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Opened moved.ash-design');
 	await expect(images).toHaveCount(2);
 	await expect(images.last()).toHaveAttribute('viewBox', '0 0 50 80');
 	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');

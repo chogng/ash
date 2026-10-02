@@ -60,6 +60,7 @@ export class AppServerAssetService implements IAssetService {
 			return bytes;
 		} catch (error) { throw assetError(error); }
 	}
+
 	private requireAssets(): void {
 		if (this.connection.capabilities?.contracts.assets?.version !== 1) { throw new Error(localize('assets.unavailable', 'Connect to an asset service that supports version 1.')); }
 	}

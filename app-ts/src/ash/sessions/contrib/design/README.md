@@ -70,9 +70,9 @@ Design 与 Editor 共用 Base、Platform 提供的生命周期、控件、配置
 
 Design 通过 `sessions.common.main.ts` 加载，当前使用方是 Sessions。Design 消费 Workbench 的编辑器注册和工作副本契约；其基础层和共享服务保持既有依赖方向，不能导入本目录。
 
-图片类型识别、真实解码和尺寸读取由 [Platform 图片模块](../../../platform/media/browser/image.ts) 提供；`ImageResource` 创建并释放视图所用的对象 URL。[Workbench 图片预览](../../../workbench/contrib/mediaPreview/browser/imagePreview.ts) 和 Design 共用这套能力。普通文件查看负责适应窗口、原尺寸和缩放，Design 保留素材版本引用、裁切和文档历史。两种视图分别拥有预览资源，关闭一处不影响另一处；URL 不保存进文件，也不作为素材身份。后续 Library 可以消费同一模块，不需要导入 Design。
+普通图片查看的类型识别、显示解码和尺寸读取由 [Platform 图片模块](../../../platform/media/browser/image.ts) 提供；`ImageResource` 创建并释放视图所用的对象 URL。[Workbench 图片预览](../../../workbench/contrib/mediaPreview/browser/imagePreview.ts) 和 Design 共用这套能力。普通文件查看负责适应窗口、原尺寸和缩放。Design 导入通过 [素材服务](../../../platform/assets/common/assetService.ts) 使用 Rust 入库结果，前端不生成正式素材元数据；Design 保留素材版本引用、裁切和文档历史。两种视图分别拥有预览资源，关闭一处不影响另一处；URL 不保存进文件，也不作为素材身份。后续 Library 可以消费同一模块，不需要导入 Design。
 
-Library 面向整个产品收集、查找和整理素材，Design 文档保存采用的确切素材版本及使用方式。设计模型不属于聊天记录，Library 的素材目录也不属于某个 Design Widget。当前 Library 只有导航入口，尚未提供素材目录或导入接口；本次图片从文件导入，原始字节随设计包保存。后续 Library 接入通过所属共享领域服务提供素材版本，Design 不持有另一份全局素材目录，也不要求 Library 导入 Design 的编辑模型。规划见 [DESIGN.md](DESIGN.md#library-与编辑器的归属)。
+Library 面向整个产品收集、查找和整理素材，Design 文档保存采用的确切素材版本及使用方式。设计模型不属于聊天记录，Library 的素材目录也不属于某个 Design Widget。当前 Library 只有导航入口，尚未提供素材目录界面；[Rust 素材领域](../../../../../../ash-rs/assets/src/lib.rs) 已提供原件入库、不可变版本与分块读取，Design 从文件导入时使用该领域，原始字节随设计包保存。后续 Library 接入使用同一共享素材服务提供素材版本，Design 不持有另一份全局素材目录，也不要求 Library 导入 Design 的编辑模型。规划见 [DESIGN.md](DESIGN.md#library-与编辑器的归属)。
 
 ## 编辑与几何约定
 
