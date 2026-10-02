@@ -198,7 +198,7 @@ fn visible_entries(
                     !matches!(
                         entry,
                         KeyHint::Action { keys, suffix }
-                            if *keys == crate::keymap::bindings::CLOSE.keys()
+                            if keys.split('/').any(|key| key == crate::keymap::bindings::CLOSE.keys())
                                 && suffix.starts_with(" to ")
                     )
                 })

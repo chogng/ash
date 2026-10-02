@@ -3904,6 +3904,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("custom", "カスタム", "自定义", "personnalisé"),
     translation(
+        "return from inline Dashboard; group arrows expand or collapse",
+        "inline のダッシュボードから戻る；グループの矢印キーは展開・折りたたみ",
+        "从 inline 仪表盘返回；分组上的方向键用于展开或收起",
+        "revenir du tableau de bord inline ; les flèches des groupes déplient ou replient",
+    ),
+    translation(
         "ask the Agent to create or inspect a pull request",
         "エージェントにプルリクエストの作成または確認を依頼",
         "让智能体创建或检查拉取请求",

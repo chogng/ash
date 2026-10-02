@@ -251,6 +251,12 @@ pub(in crate::app) fn handle_screen_navigation_key(
         && app.inline.sessions.manager().focused()
     {
         return match app.inline.sessions.handle_manager_key(&app.sessions, key) {
+            // Group arrows belong to the list; otherwise → returns to the active session.
+            SessionManagerInputOutcome::Unhandled
+                if bindings::INLINE_DASHBOARD_RETURN.matches(key) =>
+            {
+                exit_manager(app)
+            }
             SessionManagerInputOutcome::Unhandled => None,
             SessionManagerInputOutcome::Consumed => Some(None),
             SessionManagerInputOutcome::Command(command) => Some(Some(command.into())),
@@ -598,7 +604,7 @@ fn empty_input_navigation(
 ) -> Option<EmptyInputNavigation> {
     match key {
         KeyCode::Left => Some(EmptyInputNavigation::PreviousScreen),
-        KeyCode::Esc if matches!(screen, Some(SessionScreen::Manager)) => {
+        KeyCode::Right | KeyCode::Esc if matches!(screen, Some(SessionScreen::Manager)) => {
             Some(EmptyInputNavigation::NextScreen)
         }
         KeyCode::Up if matches!(screen, Some(SessionScreen::Manager)) => {

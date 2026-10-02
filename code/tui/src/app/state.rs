@@ -2298,7 +2298,14 @@ impl App {
     }
 
     pub(crate) fn session_manager_hint(&self) -> &'static crate::widgets::key_hint::KeyHints {
-        self.session_navigation().manager().status_hint()
+        let manager = self.session_navigation().manager();
+        if self.screen_mode() == crate::terminal::ScreenMode::Inline
+            && (manager.focused() || self.input().is_empty())
+        {
+            manager.inline_status_hint()
+        } else {
+            manager.status_hint()
+        }
     }
 
     pub(crate) fn session_preview(&self) -> Option<&ConversationPreview> {

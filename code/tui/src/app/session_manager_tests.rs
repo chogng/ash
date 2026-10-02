@@ -154,6 +154,133 @@ fn dashboard_escape_exits_from_focused_list_and_right_does_not_exit() {
 }
 
 #[test]
+fn inline_dashboard_right_returns_from_input_and_session_list() {
+    let mut frames = Vec::new();
+    for focused in [false, true] {
+        let mut app = active_session_app();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
+        settings.set_language(crate::nls::Language::Chinese);
+        app.update(crate::config::Event::SettingsReceived(settings));
+
+        assert_eq!(app.handle_key(key(KeyCode::Left)), None);
+        assert!(app.session_manager_view().is_some());
+        if focused {
+            assert_eq!(app.handle_key(key(KeyCode::Up)), None);
+            assert!(app.session_manager_focused());
+        }
+        assert!(
+            app.session_manager_hint()
+                .text()
+                .ends_with("→/Esc to return")
+        );
+        assert!(render(&app).replace(' ', "").contains("→/Esc返回"));
+        frames.push(format!(
+            "Dashboard (list focused: {focused})\n{}",
+            render(&app)
+        ));
+
+        assert_eq!(app.handle_key(key(KeyCode::Right)), None);
+        assert!(app.session_manager_view().is_none());
+        assert!(!app.session_manager_focused());
+        assert!(app.chat_input_focused());
+        assert_eq!(
+            app.sessions.active_session_id().unwrap().as_str(),
+            "current"
+        );
+        assert_eq!(app.screen_thread_id().as_str(), "current");
+        assert!(app.input().is_empty());
+        assert_eq!(app.screen_navigation_tip(), Some("← Dashboard"));
+        if !focused {
+            frames.push(format!("Conversation after →\n{}", render(&app)));
+        }
+
+        assert_eq!(app.handle_key(key(KeyCode::Left)), None);
+        assert!(app.session_manager_view().is_some());
+        assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
+        assert!(app.session_manager_view().is_none());
+        assert!(app.chat_input_focused());
+    }
+    crate::tui_assert_snapshot!("inline_dashboard_arrow_navigation", frames.join("\n\n"));
+}
+
+#[test]
+fn inline_dashboard_arrows_keep_group_preview_and_detail_interactions() {
+    let mut app = active_session_app();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    app.handle_key(key(KeyCode::Left));
+    app.handle_key(key(KeyCode::Up));
+    app.handle_key(key(KeyCode::Up));
+    assert!(
+        app.session_manager_hint()
+            .text()
+            .contains("Enter to collapse")
+    );
+    assert!(!app.session_manager_hint().text().contains("→/Esc"));
+    app.handle_key(key(KeyCode::Left));
+    assert!(!render(&app).contains("Snapshot session"));
+    for _ in 0..2 {
+        assert_eq!(app.handle_key(key(KeyCode::Right)), None);
+        assert!(app.session_manager_view().is_some());
+        assert!(render(&app).contains("Snapshot session"));
+    }
+    app.handle_key(key(KeyCode::Down));
+    assert!(matches!(
+        app.handle_key(key(KeyCode::Char(' '))),
+        Some(AppCommand::Sessions(SessionCommand::Preview { .. }))
+    ));
+    assert_eq!(app.handle_key(key(KeyCode::Right)), None);
+    assert!(app.session_preview().is_some());
+    app.handle_key(key(KeyCode::Esc));
+    assert!(app.session_manager_focused());
+    app.handle_key(key(KeyCode::Char('i')));
+    assert!(app.overlay().is_some());
+    assert_eq!(app.handle_key(key(KeyCode::Right)), None);
+    assert!(app.overlay().is_some());
+    app.handle_key(key(KeyCode::Esc));
+    assert!(app.session_manager_focused());
+    app.handle_key(key(KeyCode::Right));
+    assert!(app.session_manager_view().is_none());
+    assert!(app.chat_input_focused());
+}
+
+#[test]
+fn inline_dashboard_right_in_a_draft_edits_the_input() {
+    let mut app = active_session_app();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    app.handle_key(key(KeyCode::Left));
+    app.insert_text("draft");
+    assert_eq!(app.session_manager_hint().text(), "Esc to return");
+    app.handle_key(key(KeyCode::Home));
+    assert_eq!(app.handle_key(key(KeyCode::Right)), None);
+    assert!(app.session_manager_view().is_some());
+    app.insert_text("X");
+    assert_eq!(app.input(), "dXraft");
+    crate::tui_assert_snapshot!("inline_dashboard_right_edits_draft", render(&app));
+}
+
+#[test]
+fn inline_dashboard_return_is_discoverable_in_localized_help() {
+    let mut app = active_session_app();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    app.insert_text("/help");
+    app.handle_key(key(KeyCode::Enter));
+    app.handle_key(key(KeyCode::Char('/')));
+    app.handle_paste("inline".into());
+    let output = render(&app);
+    assert!(output.contains("→/Esc"));
+    assert!(output.replace(' ', "").contains("从inline仪表盘返回"));
+    crate::tui_assert_snapshot!("inline_dashboard_return_help_chinese", output);
+}
+
+#[test]
 fn session_manager_preview_reads_conversation_and_restores_focus_without_editing() {
     let mut app = active_session_app();
     app.handle_key(key(KeyCode::Left));

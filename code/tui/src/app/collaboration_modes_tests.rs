@@ -224,7 +224,7 @@ fn collaboration_effort_changes_update_status_without_a_notice() {
 }
 
 #[test]
-fn collaboration_effort_boundaries_are_localized_not_added_to_the_transcript() {
+fn collaboration_effort_boundaries_are_silent_inline_and_localized_fullscreen() {
     for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
         let mut app = App::new();
         let mut settings = TerminalSettings::default();
@@ -279,10 +279,16 @@ fn collaboration_effort_boundaries_are_localized_not_added_to_the_transcript() {
             assert_eq!(app.messages().len(), rows);
             assert_eq!(app.input(), "keep this draft");
             let rendered = render(&app);
-            assert!(
-                rendered.replace(' ', "").contains(expected),
-                "{screen:?}: expected {expected}\n{rendered}"
-            );
+            match screen {
+                ScreenMode::Inline => {
+                    assert_eq!(app.top_tip().text(None), None);
+                    assert!(!rendered.replace(' ', "").contains(expected));
+                }
+                ScreenMode::Fullscreen => assert!(
+                    rendered.replace(' ', "").contains(expected),
+                    "{screen:?}: expected {expected}\n{rendered}"
+                ),
+            }
         }
         match screen {
             ScreenMode::Fullscreen => {

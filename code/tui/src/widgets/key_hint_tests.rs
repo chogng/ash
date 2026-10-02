@@ -29,6 +29,9 @@ fn narrow_hints_keep_the_exit_action_whole() {
         "Enter/Space to change · / to search · Tab to switch · Esc to close"
     );
     assert_eq!(visible(&hints, 32), "Esc to close");
+    let hints = &crate::keymap::bindings::INLINE_SESSION_HINTS;
+    assert_eq!(visible(hints, 32), "Enter to open · →/Esc to return");
+    assert_eq!(visible(hints, 16), "→/Esc to return");
 }
 
 #[test]

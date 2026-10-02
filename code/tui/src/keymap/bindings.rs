@@ -640,7 +640,10 @@ pub(crate) const CANCEL: Keybinding = Keybinding::new(
 pub(crate) const CANCEL_ANSWER: Keybinding = Keybinding::new(ESC, "cancel");
 pub(crate) const RETURN_INPUT: Keybinding = Keybinding::new(ESC, "return to input");
 pub(crate) const ESC_RETURN: Keybinding = Keybinding::new(ESC, "return");
-pub(crate) const HOOK_REFRESH: Keybinding = Keybinding::new(&[(NONE, KeyCode::Char('r'))], "refresh");
+pub(crate) const INLINE_DASHBOARD_RETURN: Keybinding =
+    Keybinding::new(&[(NONE, KeyCode::Right), (NONE, KeyCode::Esc)], "return");
+pub(crate) const HOOK_REFRESH: Keybinding =
+    Keybinding::new(&[(NONE, KeyCode::Char('r'))], "refresh");
 pub(crate) const SEARCH: Keybinding = Keybinding::new(&[(NONE, KeyCode::Char('/'))], "search");
 pub(crate) const SEARCH_RETURN: Keybinding = Keybinding::new(
     &[
@@ -746,29 +749,37 @@ pub(crate) static THREAD_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[THREAD_SWITCH, RETURN_INPUT]));
 pub(crate) static CANCEL_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[CANCEL]));
 pub(crate) static RETURN_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[ESC_RETURN]));
+pub(crate) static INLINE_DASHBOARD_RETURN_HINTS: LazyLock<KeyHints> =
+    LazyLock::new(|| hints(&[INLINE_DASHBOARD_RETURN]));
 pub(crate) static INPUT_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[ESC_RETURN]));
 pub(crate) static EXPAND_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[GROUP_EXPAND, ESC_RETURN]));
 pub(crate) static COLLAPSE_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[GROUP_COLLAPSE, ESC_RETURN]));
-pub(crate) static SESSION_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
+fn session_hints(return_binding: Keybinding) -> KeyHints {
     hints(&[
         SESSION_OPEN,
         SESSION_PREVIEW,
         SESSION_ARCHIVE,
         SESSION_DETAILS,
-        ESC_RETURN,
+        return_binding,
     ])
-});
-pub(crate) static ARCHIVED_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
+}
+pub(crate) static SESSION_HINTS: LazyLock<KeyHints> = LazyLock::new(|| session_hints(ESC_RETURN));
+pub(crate) static INLINE_SESSION_HINTS: LazyLock<KeyHints> =
+    LazyLock::new(|| session_hints(INLINE_DASHBOARD_RETURN));
+fn archived_hints(return_binding: Keybinding) -> KeyHints {
     hints(&[
         SESSION_RESTORE,
         SESSION_PREVIEW,
         SESSION_DELETE,
         SESSION_DETAILS,
-        ESC_RETURN,
+        return_binding,
     ])
-});
+}
+pub(crate) static ARCHIVED_HINTS: LazyLock<KeyHints> = LazyLock::new(|| archived_hints(ESC_RETURN));
+pub(crate) static INLINE_ARCHIVED_HINTS: LazyLock<KeyHints> =
+    LazyLock::new(|| archived_hints(INLINE_DASHBOARD_RETURN));
 pub(crate) static QUEUE_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     const MOVE_KEYS: &[(KeyModifiers, KeyCode)] = &[QUEUE_UP.bindings[0], QUEUE_DOWN.bindings[0]];
     let move_keys = Keybinding::new(MOVE_KEYS, "move");
@@ -834,6 +845,10 @@ pub(crate) fn fixed_bindings() -> impl Iterator<Item = (&'static str, &'static s
             (
                 CLOSE.keys(),
                 "return one interaction level; pending approval/query requires an explicit answer",
+            ),
+            (
+                INLINE_DASHBOARD_RETURN.keys(),
+                "return from inline Dashboard; group arrows expand or collapse",
             ),
         ]
     });
