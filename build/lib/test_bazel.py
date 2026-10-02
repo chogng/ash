@@ -1,12 +1,17 @@
 """Keep first-party Cargo dependency declarations consistent with Bazel."""
 
 import ast
-from pathlib import Path
+import os
+from pathlib import Path, PurePosixPath, PureWindowsPath
+import re
+import subprocess
+import sys
 import tempfile
 import textwrap
 import tomllib
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -111,12 +116,15 @@ def macro_required_argument_errors(root, build_file):
         ):
             continue
         source, definition = macros[call.func.id]
-        location = f"{build_file.relative_to(root)}:{call.lineno}: {call.func.id}"
+        location = (
+            f"{build_file.relative_to(root).as_posix()}:{call.lineno}: {call.func.id}"
+        )
+        owner = source.relative_to(root).as_posix()
         if any(isinstance(arg, ast.Starred) for arg in call.args) or any(
             key.arg is None for key in call.keywords
         ):
             errors.append(
-                f"{location}: dynamic arguments cannot be checked against {source.relative_to(root)}"
+                f"{location}: dynamic arguments cannot be checked against {owner}"
             )
             continue
         parameters = [arg.arg for arg in definition.args.args]
@@ -134,7 +142,7 @@ def macro_required_argument_errors(root, build_file):
         missing = [name for name in required if name not in supplied]
         if missing:
             errors.append(
-                f"{location}: missing required arguments {missing!r} from {source.relative_to(root)}"
+                f"{location}: missing required arguments {missing!r} from {owner}"
             )
     return errors
 
@@ -583,6 +591,107 @@ class BazelTestProfileTests(unittest.TestCase):
         self.assertIn("include-hidden-files: true", workflow)
 
 
+@unittest.skipUnless(sys.platform == "linux", "The TUI workflow runs on Ubuntu")
+class BazelTuiWorkflowTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
+        workflow = (REPOSITORY_ROOT / ".github/workflows/bazel-boundary.yml").read_text(
+            encoding="utf-8"
+        )
+        run = re.search(
+            r"      - name: Test real TUI terminal scenarios\n"
+            r"        shell: bash\n"
+            r"        run: \|\n(?P<script>(?:          [^\n]*\n|\n)+)",
+            workflow,
+        )
+        self.assertIsNotNone(run, "Test the actual workflow's explicit Bash block")
+        self.script = self.root / "step.sh"
+        self.script.write_text(textwrap.dedent(run["script"]), encoding="utf-8")
+        self.assertRegex(
+            workflow,
+            r"      - name: Upload TUI failure diagnostics\n"
+            r"        if: failure\(\)\n[\s\S]*?"
+            r"          path: \|\n            \.build/bazel-tui-scenarios\.log\n",
+        )
+        self.bin = self.root / "bin"
+        self.bin.mkdir()
+        bazel = self.bin / "bazel"
+        bazel.write_text(
+            "#!/usr/bin/env bash\n"
+            "printf '%s\\n' \"$@\" > bazel-arguments.txt\n"
+            "cat stdout.txt\n"
+            "cat stderr.txt >&2\n"
+            "cat tail.txt\n"
+            'exit "$FAKE_BAZEL_STATUS"\n',
+            encoding="utf-8",
+        )
+        bazel.chmod(0o755)
+
+    def run_step(self, status, stderr):
+        stdout = "".join(f"build output {index}\n" for index in range(240))
+        tail = "".join(f"final output {index}\n" for index in range(240))
+        for filename, content in (
+            ("stdout.txt", stdout),
+            ("stderr.txt", stderr),
+            ("tail.txt", tail),
+        ):
+            (self.root / filename).write_text(content, encoding="utf-8")
+        # Match GitHub's explicit `shell: bash` runner semantics, including -e and
+        # pipefail. The fake Bazel exits before producing any test.log or test.xml.
+        result = subprocess.run(
+            ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", str(self.script)],
+            cwd=self.root,
+            env={
+                **os.environ,
+                "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+                "FAKE_BAZEL_STATUS": str(status),
+            },
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        self.assertEqual(status, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(
+            stdout + stderr + tail,
+            (self.root / ".build/bazel-tui-scenarios.log").read_text(encoding="utf-8"),
+        )
+        self.assertFalse((self.root / ".build/bazel-testlogs").exists())
+        self.assertEqual(
+            [
+                "test",
+                "--config=ci",
+                "//ash-cli:tui-real-scenarios",
+                "//bazel:rust-test-profile-contract",
+                "--test_output=errors",
+                "--test_env=PATH",
+                "--test_env=ASH_RG_PATH",
+                "--test_env=ASH_TGREP_PATH",
+                "--test_arg=--test-threads=4",
+                "--test_arg=--skip",
+                "--test_arg=actual_tui_sandbox_",
+            ],
+            (self.root / "bazel-arguments.txt")
+            .read_text(encoding="utf-8")
+            .splitlines(),
+        )
+        self.assertIn("final output 239", result.stdout)
+        self.assertNotIn("build output 0", result.stdout)
+        self.assertLess(len(result.stdout.splitlines()), 250)
+        return result
+
+    def test_success_preserves_status_and_complete_output(self):
+        self.run_step(0, "successful stderr output\n")
+
+    def test_failure_preserves_status_and_reports_earlier_error(self):
+        error = "error[E0308]: controlled compiler failure\n"
+        result = self.run_step(7, error)
+        self.assertIn(error, result.stdout)
+
+    def test_failure_without_matching_diagnostic_preserves_status(self):
+        self.run_step(37, "controlled failure without an error prefix\n")
+
+
 class BazelMacroSignatureFixtureTests(unittest.TestCase):
     def setUp(self):
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
@@ -636,6 +745,42 @@ class BazelMacroSignatureFixtureTests(unittest.TestCase):
                     ],
                     self.check_call(arguments),
                 )
+
+    def test_diagnostics_use_posix_paths_for_build_and_nested_macro_owner(self):
+        (self.root / "app-rs").mkdir()
+        (self.root / "app-rs/defs.bzl").write_text(
+            (self.root / "defs.bzl").read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        original_relative_to = Path.relative_to
+        for path_type in (PurePosixPath, PureWindowsPath):
+            # Keep real fixture I/O while exercising both platforms' path rendering.
+            def relative_to(path, *other):
+                return path_type(*original_relative_to(path, *other).parts)
+
+            for arguments, diagnostic in (
+                (
+                    'crate_root="src/main.rs", deps=[], feature_mode="test"',
+                    "missing required arguments ['name'] from app-rs/defs.bzl",
+                ),
+                (
+                    "*inputs",
+                    "dynamic arguments cannot be checked against app-rs/defs.bzl",
+                ),
+                (
+                    "**inputs",
+                    "dynamic arguments cannot be checked against app-rs/defs.bzl",
+                ),
+            ):
+                with self.subTest(path_type=path_type.__name__, arguments=arguments):
+                    self.build.write_text(
+                        f'load("//app-rs:defs.bzl", binary = "owned_binary")\nbinary({arguments})\n',
+                        encoding="utf-8",
+                    )
+                    with patch.object(Path, "relative_to", relative_to):
+                        self.assertEqual(
+                            [f"consumer/BUILD.bazel:2: binary: {diagnostic}"],
+                            macro_required_argument_errors(self.root, self.build),
+                        )
 
 
 class BazelDependencyContractFixtureTests(unittest.TestCase):

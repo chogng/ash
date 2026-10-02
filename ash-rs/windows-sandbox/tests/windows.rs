@@ -507,9 +507,12 @@ fn managed_execution_proxy_rejects_unauthorized_external_connections() {
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
     let proxy_file = dir.canonical_path().join("proxy.txt");
+    let pending_file = dir.canonical_path().join("proxy.pending");
     let release_file = dir.canonical_path().join("release");
     let script = format!(
-        "$ErrorActionPreference='Stop'; Set-Content -LiteralPath {} -Value $env:HTTP_PROXY; while (!(Test-Path -LiteralPath {})) {{ Start-Sleep -Milliseconds 20 }}; exit 0",
+        "$ErrorActionPreference='Stop'; [IO.File]::WriteAllText({}, $env:HTTP_PROXY); [IO.File]::Move({}, {}); while (!(Test-Path -LiteralPath {})) {{ Start-Sleep -Milliseconds 20 }}; exit 0",
+        literal(&pending_file),
+        literal(&pending_file),
         literal(&proxy_file),
         literal(&release_file)
     );

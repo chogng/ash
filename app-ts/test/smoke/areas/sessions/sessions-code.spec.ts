@@ -1,3 +1,4 @@
+import { waitForNewElectronWindow } from '../../../automation/playwrightElectron.js';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { readFile } from 'node:fs/promises';
@@ -13,7 +14,7 @@ test.describe('Sessions from an Electron Workbench', () => {
 			await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 		} else {
 			if (!('windows' in application)) throw new Error('Expected Electron windows');
-			const opened = application.waitForEvent('window');
+			const opened = waitForNewElectronWindow(application, 'sessions');
 			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 			page = await opened;
 		}

@@ -2,11 +2,12 @@ import { execFile } from "node:child_process";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { appServerDaemonExecutablePath } from "../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js";
-import { _electron, type ElectronApplication, type Request } from "@playwright/test";
+import { _electron, type ElectronApplication, type Page, type Request } from "@playwright/test";
 import { ElectronPlaywrightDriver } from "./electronDriver.js";
 import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./electron.js";
 import { StartupDeadline } from './startupDeadline.js';
 import { createElectronCleanup } from './electronCleanup.js';
+import { Workbench } from './workbench.js';
 
 export interface ElectronLaunchResult {
 	readonly application: ElectronApplication;
@@ -16,6 +17,36 @@ export interface ElectronLaunchResult {
 }
 
 export type ElectronLaunchMilestone = 'electron-launch-resolved' | 'first-window' | 'trust-accepted' | 'workbench-ready';
+
+/**
+ * Arm before opening a window; resolves only after its initial navigation and renderer are usable.
+ * This observer never accepts workspace trust or dispatches/retries the action that opens the window.
+ * Tests exercising startup, trust prompts, or immediate close keep the raw window event boundary.
+ */
+export async function waitForNewElectronWindow(application: ElectronApplication, surface: 'sessions' | 'workbench'): Promise<Page> {
+	const deadline = new StartupDeadline();
+	let page: Page | undefined;
+	try {
+		page = await deadline.run(`new ${surface} window`, timeout => application.waitForEvent('window', { timeout }));
+		const opened = page;
+		// Electron can publish the Page while it still owns the initial about:blank context.
+		await deadline.run(`${surface} initial navigation`, timeout => opened.waitForURL(url => url.href !== 'about:blank', { waitUntil: 'load', timeout }));
+		await deadline.run(`${surface} renderer IPC bridge`, timeout => opened.waitForFunction(() => {
+			const bridge = (globalThis as unknown as { ash?: { ipcRenderer?: { invoke?: unknown } } }).ash?.ipcRenderer;
+			return typeof bridge?.invoke === 'function';
+		}, undefined, { timeout }));
+		if (surface === 'workbench') {
+			await new Workbench(opened).waitForReady(deadline);
+		} else {
+			// Sessions creates its shell after connecting Main IPC and loading configuration.
+			// Its hidden editor and independent lifecycle do not use Workbench's aria-busy contract.
+			await deadline.run('Sessions shell', timeout => opened.locator('.ash-code-sessions-window').waitFor({ state: 'visible', timeout }));
+		}
+		return opened;
+	} catch (error) {
+		throw new Error(`New ${surface} window failed at ${page?.url() ?? 'before the window event'}: ${String(error)}`, { cause: error });
+	}
+}
 
 /** Launches Ash Desktop through Playwright's Electron adapter. */
 export async function launchElectron(options: ElectronLaunchOptions, onMilestone?: (milestone: ElectronLaunchMilestone) => void): Promise<ElectronLaunchResult> {

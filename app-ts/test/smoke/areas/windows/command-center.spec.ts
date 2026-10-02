@@ -18,6 +18,7 @@ test('maximized Panel keeps its state when the sidebar moves and restores its he
 
 	await page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Accounts' }).click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Right' }).click();
+	await workbench.waitForSideBarLocation('right');
 	await expect(editor).toBeHidden();
 	await expect(panel.getByRole('button', { name: 'Restore Editor Area', exact: true })).toBeVisible();
 	await panel.getByRole('button', { name: 'Restore Editor Area', exact: true }).click();
@@ -355,6 +356,7 @@ test('activity bar tooltips follow left, right, top and bottom placement', async
 	const manageElement = await activitybar.getByRole('button', { name: 'Manage', exact: true }).elementHandle();
 	await activitybar.getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Right' }).click();
+	await workbench.waitForSideBarLocation('right');
 	await expect(activitybar).toHaveClass(/sidebar-right/);
 	// Direction changes must be read by the retained actions without replacing their DOM.
 	expect(await skillsElement!.evaluate(element => element.isConnected)).toBe(true);
@@ -379,6 +381,7 @@ test('activity bar tooltips follow left, right, top and bottom placement', async
 	await checkTooltip(activitybar.getByRole('tab', { name: 'Search', exact: true }), 'left');
 	await activitybar.getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Left' }).click();
+	await workbench.waitForSideBarLocation('left');
 	await checkTooltip(activitybar.getByRole('tab', { name: 'Skills', exact: true }), 'right');
 	await checkTooltip(activitybar.getByRole('button', { name: 'Manage', exact: true }), 'right');
 });
@@ -448,6 +451,7 @@ test('Accounts and Manage menus open beside the activity bar and below the title
 
 	await accounts.click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Right' }).click();
+	await workbench.waitForSideBarLocation('right');
 	const manage = activitybar.getByRole('button', { name: 'Manage' });
 	await manage.click();
 	const rightButton = await manage.boundingBox();
@@ -490,6 +494,7 @@ test('macOS right activity bar menus open beside their buttons', async ({ target
 	await page.locator('[data-settings-category-id="layout"]').click();
 	await page.locator('[data-configuration-key="workbench.sideBar.location"]').getByRole('combobox').click();
 	await page.getByRole('option', { name: 'Right' }).click();
+	await workbench.waitForSideBarLocation('right');
 	await page.getByRole('button', { name: 'Close Ash Settings' }).click();
 
 	const activitybar = page.locator('[data-part="activitybar"]');
@@ -654,6 +659,7 @@ test('activity bar context menu changes size and position', async ({ target, wor
 	await activitybar.getByRole('button', { name: 'Accounts' }).click({ button: 'right' });
 	menu = page.getByRole('menu').last();
 	await menu.getByRole('menuitem', { name: 'Move Primary Side Bar Right' }).click();
+	await workbench.waitForSideBarLocation('right');
 	const [sidebarBounds, editorBounds, activityBounds] = await Promise.all([sidebar.boundingBox(), editor.boundingBox(), activitybar.boundingBox()]);
 	expect(sidebarBounds).not.toBeNull();
 	expect(editorBounds).not.toBeNull();
@@ -760,6 +766,7 @@ test('activity bar context menu changes size and position', async ({ target, wor
 	await expect(titlebarManage).toHaveCount(0);
 	await activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Left' }).click();
+	await workbench.waitForSideBarLocation('left');
 	await expect(sidebar).not.toHaveClass(/sidebar-right/u);
 	const [leftSidebar, leftEditor, leftBar] = await Promise.all([sidebar.boundingBox(), editor.boundingBox(), activitybar.boundingBox()]);
 	expect(leftBar!.x).toBeLessThan(leftSidebar!.x);

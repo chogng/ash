@@ -1,3 +1,4 @@
+import { waitForNewElectronWindow } from '../../../automation/playwrightElectron.js';
 import type { App } from 'electron';
 import { resolve } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
@@ -33,7 +34,7 @@ test('Agents starts its connection before loading the page and reconnects on rel
 		};
 	}, mainRoot);
 	try {
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		const agents = await opened;
 		const input = agents.getByRole('textbox', { name: 'Chat message', exact: true });

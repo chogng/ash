@@ -9,10 +9,12 @@ use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::AsRawHandle;
 use std::path::PathBuf;
 use windows_sys::Win32::Foundation::ERROR_IO_PENDING;
+use windows_sys::Win32::Foundation::GENERIC_READ;
 use windows_sys::Win32::Foundation::GetLastError;
 use windows_sys::Win32::Foundation::HANDLE;
 use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
 use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OVERLAPPED;
+use windows_sys::Win32::Storage::FileSystem::FILE_WRITE_DATA;
 use windows_sys::Win32::Storage::FileSystem::ReadFile;
 use windows_sys::Win32::Storage::FileSystem::SECURITY_IMPERSONATION;
 use windows_sys::Win32::Storage::FileSystem::SECURITY_SQOS_PRESENT;
@@ -143,6 +145,7 @@ fn call(request: Request) -> Result<serde_json::Value, String> {
     let pipe = OpenOptions::new()
         .read(true)
         .write(true)
+        .access_mode(GENERIC_READ | FILE_WRITE_DATA)
         .custom_flags(FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IMPERSONATION)
         .open(PIPE_NAME)
         .map_err(|error| error.to_string())?;
@@ -180,17 +183,24 @@ fn call(request: Request) -> Result<serde_json::Value, String> {
         raw,
         &mut (bytes.len() as u32).to_le_bytes(),
         Direction::Write,
-    )?;
-    transfer(raw, &mut bytes, Direction::Write)?;
+    )
+    .map_err(|error| format!("request header: {error}"))?;
+    transfer(raw, &mut bytes, Direction::Write)
+        .map_err(|error| format!("request body: {error}"))?;
     let mut header = [0; 4];
-    transfer(raw, &mut header, Direction::Read)?;
+    transfer(raw, &mut header, Direction::Read)
+        .map_err(|error| format!("response header: {error}"))?;
     let length = u32::from_le_bytes(header) as usize;
     if length == 0 || length > MAX_MESSAGE_BYTES {
         return Err("invalid sandbox service response size".into());
     }
     let mut bytes = vec![0; length];
-    transfer(raw, &mut bytes, Direction::Read)?;
-    match serde_json::from_slice::<Response>(&bytes).map_err(|error| error.to_string())? {
+    transfer(raw, &mut bytes, Direction::Read)
+        .map_err(|error| format!("response body: {error}"))?;
+    let response = serde_json::from_slice::<Response>(&bytes).map_err(|error| error.to_string())?;
+    transfer(raw, &mut [RESPONSE_RECEIVED], Direction::Write)
+        .map_err(|error| format!("response receipt: {error}"))?;
+    match response {
         Response::Completed { data } => Ok(data),
         Response::Rejected { error } => Err(error),
     }

@@ -21,6 +21,27 @@ fn installation_requires_approval_of_the_current_complete_plan() {
     assert!(one.get("deviceAclChanges").is_none());
 }
 
+#[test]
+fn restored_acl_journal_directory_does_not_block_runner_update() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut account = account::plan(NetworkMode::Allowed, 0).unwrap();
+    account.sid = "S-1-5-21-101-102-103-104".into();
+    let accounts = [account];
+    let journal = temp.path().join("acl").join(&accounts[0].sid);
+    let writable = temp.path().join("writable");
+    std::fs::create_dir(&writable).unwrap();
+    let mut manager = wxc_common::filesystem_dacl::DaclManager::in_directory(&journal).unwrap();
+    manager
+        .grant_appcontainer_access(&accounts[0].sid, &[writable], &[])
+        .unwrap();
+    assert!(ensure_idle_accounts(temp.path(), &accounts).is_err());
+    manager.restore_strict().unwrap();
+    assert!(journal.is_dir());
+    ensure_idle_accounts(temp.path(), &accounts).unwrap();
+    std::fs::create_dir_all(temp.path().join("runs").join(&accounts[0].sid)).unwrap();
+    assert!(ensure_idle_accounts(temp.path(), &accounts).is_err());
+}
+
 fn layout() -> (tempfile::TempDir, String) {
     let temp = tempfile::tempdir().unwrap();
     std::fs::create_dir(temp.path().join("bin")).unwrap();

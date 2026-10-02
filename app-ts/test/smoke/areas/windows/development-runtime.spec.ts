@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { expect, test } from '../../../automation/test.js';
 import { resolveElectronConfiguration } from '../../../automation/electron.js';
-import { launchElectron } from '../../../automation/playwrightElectron.js';
+import { launchElectron, waitForNewElectronWindow } from '../../../automation/playwrightElectron.js';
 import { readDevelopmentAppServerGeneration } from '../../../../src/ash/platform/app-server-daemon/electron-main/developmentAppServerReloader.js';
 import { developmentAppServerGenerationPath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 import { execFile } from 'node:child_process';
@@ -60,7 +60,7 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		desktop.application.process().stdout?.on('data', output);
 		const workbench = desktop.driver.workbench.page;
-		const opened = desktop.application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(desktop.application, 'sessions');
 		await workbench.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		const agents = await opened;
 		await expect(agents.locator('.ash-sessions-window')).toBeVisible();

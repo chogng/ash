@@ -128,10 +128,23 @@ jobs:
           repository-cache: true
 
       - name: Test real TUI terminal scenarios
-        run: >-
-          bazel test --config=ci //ash-cli:tui-real-scenarios //bazel:rust-test-profile-contract --test_output=errors
-          --test_env=PATH --test_env=ASH_RG_PATH --test_env=ASH_TGREP_PATH
-          --test_arg=--test-threads=4 --test_arg=--skip --test_arg=actual_tui_sandbox_
+        shell: bash
+        run: |
+          mkdir -p .build
+          status=0
+          # Build failures can happen before Bazel creates any per-test logs.
+          bazel test --config=ci //ash-cli:tui-real-scenarios //bazel:rust-test-profile-contract --test_output=errors \
+            --test_env=PATH --test_env=ASH_RG_PATH --test_env=ASH_TGREP_PATH \
+            --test_arg=--test-threads=4 --test_arg=--skip --test_arg=actual_tui_sandbox_ \
+            > .build/bazel-tui-scenarios.log 2>&1 || status=$?
+          if [ "$status" -ne 0 ]; then
+            echo 'Bazel failure summary (last 80 matching lines):'
+            grep -nE '(^ERROR:|^error(\[|:)|FAILED:|panicked at|fatal error:|No space left on device|Killed)' \
+              .build/bazel-tui-scenarios.log | tail -n 80 || true
+          fi
+          echo 'Bazel output (last 120 lines; complete output is in the failure artifact):'
+          tail -n 120 .build/bazel-tui-scenarios.log || true
+          exit "$status"
 
       - name: Upload TUI failure diagnostics
         if: failure()
@@ -139,6 +152,7 @@ jobs:
         with:
           name: bazel-tui-scenarios-${{ github.run_attempt }}
           path: |
+            .build/bazel-tui-scenarios.log
             .build/bazel-testlogs/ash-cli/tui-real-scenarios/test.log
             .build/bazel-testlogs/ash-cli/tui-real-scenarios/test.xml
             .build/bazel-testlogs/bazel/rust-test-profile-contract-*/test.log

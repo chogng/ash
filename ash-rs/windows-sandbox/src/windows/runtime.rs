@@ -433,13 +433,7 @@ pub(super) fn update(runner: &Path, approved: &str) -> Result<()> {
         .as_ref()
         .ok_or("runtime network plan is missing")?
         .verify(&state.accounts)?;
-    for account in &state.accounts {
-        if root.join("runs").join(&account.sid).exists()
-            || root.join("acl").join(&account.sid).exists()
-        {
-            return Err("an incomplete execution must be recovered before update".into());
-        }
-    }
+    ensure_idle_accounts(&root, &state.accounts)?;
     let target = root.join("bin/ash-windows-sandbox.exe");
     let pending = root.join("bin/runner.pending");
     // New leases remain blocked after interruption until another explicit update
@@ -465,6 +459,26 @@ pub(super) fn update(runner: &Path, approved: &str) -> Result<()> {
     state.pending_runner_hash = None;
     state.status = Status::Ready;
     state.save(&root)
+}
+
+fn ensure_idle_accounts(root: &Path, accounts: &[Account]) -> Result<()> {
+    for account in accounts {
+        let journal = root.join("acl").join(&account.sid);
+        // DaclManager removes restored records but retains its reusable directory.
+        // An empty ACL journal is completed work; a run directory still belongs
+        // to an execution whose resource teardown has not finished.
+        let pending_acl = journal.try_exists().map_err(|error| error.to_string())?
+            && std::fs::read_dir(&journal)
+                .map_err(|error| error.to_string())?
+                .next()
+                .transpose()
+                .map_err(|error| error.to_string())?
+                .is_some();
+        if root.join("runs").join(&account.sid).exists() || pending_acl {
+            return Err("an incomplete execution must be recovered before update".into());
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn remove(approved: &str) -> Result<()> {

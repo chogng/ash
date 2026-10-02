@@ -1,3 +1,4 @@
+import { waitForNewElectronWindow } from '../../../automation/playwrightElectron.js';
 import { expect, test } from '../../../automation/test.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -96,7 +97,7 @@ test('Desktop Voice imports after Settings closes and shares model deletion with
 	await controls.getByRole('textbox', { name: 'Prepared Paraformer model directory' }).fill(source);
 	await controls.getByRole('button', { name: 'Import model', exact: true }).click();
 	await settings.locator('.ash-modal-editor-close').click();
-	const sessionPagePromise = application.waitForEvent('window');
+	const sessionPagePromise = waitForNewElectronWindow(application, 'sessions');
 	await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 	const sessionsPage = await sessionPagePromise;
 	await sessionsPage.locator('.ash-sessions-activity-bottom button').last().click();
@@ -218,7 +219,7 @@ test('Workbench and Sessions Models share model visibility', async ({ applicatio
 	await expect(settings.locator('.ash-models-settings-status')).toBeHidden();
 	await settings.locator('.ash-modal-editor-close').click();
 	await expect(settings).toBeHidden();
-	const sessionPagePromise = application.waitForEvent('window');
+	const sessionPagePromise = waitForNewElectronWindow(application, 'sessions');
 	await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 	const sessionsPage = await sessionPagePromise;
 	const accounts = sessionsPage.locator('.ash-sessions-activity-bottom button').last();

@@ -1,3 +1,4 @@
+import { waitForNewElectronWindow } from '../../../automation/playwrightElectron.js';
 import type { ElectronApplication, Page } from "@playwright/test";
 import { realpath } from "node:fs/promises";
 import { parseWorkspace } from "../../../../src/ash/platform/workspace/common/workspace.js";
@@ -64,7 +65,7 @@ test('Open in Agents reuses one window across Workbench workspaces', async ({ ap
 		}
 		await new Workbench(secondPage).waitForReady();
 
-		const agentsPagePromise = application.waitForEvent('window');
+		const agentsPagePromise = waitForNewElectronWindow(application, 'sessions');
 		await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		const agentsPage = await agentsPagePromise;
 		await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();

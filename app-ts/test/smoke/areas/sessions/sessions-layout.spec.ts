@@ -1,3 +1,4 @@
+import { waitForNewElectronWindow } from '../../../automation/playwrightElectron.js';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 
@@ -10,7 +11,7 @@ test('Sessions content shares one raised card with equal right and bottom margin
 		if (!('windows' in application)) {
 			throw new Error('Expected Electron windows');
 		}
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -93,7 +94,7 @@ test('Sessions shared layout preserves user geometry across pages, resize and re
 		if (!('windows' in application)) {
 			throw new Error('Expected Electron windows');
 		}
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -163,7 +164,7 @@ test('Sessions restores independent pane arrangements, active selections and dra
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}

@@ -81,7 +81,7 @@ fn pipe_name() -> String {
 #[tokio::test]
 async fn real_pipe_plan_uses_the_caller_and_preserves_thread_identity() {
     let name = pipe_name();
-    let mut pipe = listener(&name).unwrap();
+    let mut pipe = listener(&name, PipeInstance::First).unwrap();
     let runner = std::env::current_exe().unwrap();
     let client = tokio::spawn(async move {
         let mut client = ClientOptions::new()
@@ -98,7 +98,9 @@ async fn real_pipe_plan_uses_the_caller_and_preserves_thread_identity() {
         let length = client.read_u32_le().await.unwrap() as usize;
         let mut bytes = vec![0; length];
         client.read_exact(&mut bytes).await.unwrap();
-        serde_json::from_slice::<Response>(&bytes).unwrap()
+        let response = serde_json::from_slice::<Response>(&bytes).unwrap();
+        client.write_u8(RESPONSE_RECEIVED).await.unwrap();
+        response
     });
     pipe.connect().await.unwrap();
     let message = read_request(&mut pipe).await.unwrap();
@@ -116,19 +118,49 @@ async fn real_pipe_plan_uses_the_caller_and_preserves_thread_identity() {
     .await
     .unwrap();
     write_response(&mut pipe, &response).await.unwrap();
+    pipe.disconnect().unwrap();
     let Response::Completed { data } = client.await.unwrap() else {
         panic!("authenticated plan was rejected: {response:?}");
     };
     assert_eq!(data["changes"]["accounts"]["total"], 3);
     assert_eq!(data["changes"]["ownerSid"], owner());
     assert_eq!(data["sha256"].as_str().unwrap().len(), 64);
+}
+
+#[tokio::test]
+async fn delayed_reader_receives_the_response_before_server_disconnects() {
+    let name = pipe_name();
+    let mut pipe = listener(&name, PipeInstance::First).unwrap();
+    let payload = "response".repeat(4096);
+    let response = Response::Completed {
+        data: serde_json::json!({"payload": payload}),
+    };
+    let client = tokio::spawn(async move {
+        let mut client = ClientOptions::new().open(name).unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let length = client.read_u32_le().await.unwrap() as usize;
+        let mut bytes = vec![0; length];
+        client.read_exact(&mut bytes).await.unwrap();
+        let response = serde_json::from_slice::<Response>(&bytes).unwrap();
+        client.write_u8(RESPONSE_RECEIVED).await.unwrap();
+        response
+    });
+    pipe.connect().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(2), write_response(&mut pipe, &response))
+        .await
+        .unwrap()
+        .unwrap();
     pipe.disconnect().unwrap();
+    let Response::Completed { data } = client.await.unwrap() else {
+        panic!("response changed during transfer");
+    };
+    assert_eq!(data["payload"], payload);
 }
 
 #[tokio::test]
 async fn identification_only_client_cannot_dispatch_a_request() {
     let name = pipe_name();
-    let mut pipe = listener(&name).unwrap();
+    let mut pipe = listener(&name, PipeInstance::First).unwrap();
     let client = tokio::spawn(async move {
         let mut client = ClientOptions::new().open(name).unwrap();
         let bytes = serde_json::to_vec(&Message {
@@ -154,9 +186,53 @@ async fn identification_only_client_cannot_dispatch_a_request() {
 }
 
 #[tokio::test]
+async fn consecutive_clients_do_not_inherit_previous_connection_eof() {
+    let name = pipe_name();
+    let mut pipe = listener(&name, PipeInstance::First).unwrap();
+    for index in 0..3 {
+        let client_name = name.clone();
+        let client = tokio::spawn(async move {
+            let mut client = ClientOptions::new().open(client_name).unwrap();
+            let bytes = serde_json::to_vec(&Message {
+                version: PROTOCOL_VERSION,
+                request: Request::Status {},
+            })
+            .unwrap();
+            client.write_u32_le(bytes.len() as u32).await.unwrap();
+            client.write_all(&bytes).await.unwrap();
+            let length = client.read_u32_le().await.unwrap() as usize;
+            let mut bytes = vec![0; length];
+            client.read_exact(&mut bytes).await.unwrap();
+            let response = serde_json::from_slice::<Response>(&bytes).unwrap();
+            client.write_u8(RESPONSE_RECEIVED).await.unwrap();
+            response
+        });
+        pipe.connect().await.unwrap();
+        let message = read_request(&mut pipe).await.unwrap();
+        assert!(matches!(message.request, Request::Status {}));
+        write_response(
+            &mut pipe,
+            &Response::Completed {
+                data: serde_json::json!({"index": index}),
+            },
+        )
+        .await
+        .unwrap();
+        let Response::Completed { data } = client.await.unwrap() else {
+            panic!("response changed during transfer");
+        };
+        assert_eq!(data["index"], index);
+        // Give the eager I/O read time to observe the closed client before the
+        // next connection. Reusing its buffered state used to report a false EOF.
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        advance_listener(&mut pipe, &name).unwrap();
+    }
+}
+
+#[tokio::test]
 async fn restricted_client_is_rejected_before_provisioning() {
     let name = pipe_name();
-    let mut pipe = listener(&name).unwrap();
+    let mut pipe = listener(&name, PipeInstance::First).unwrap();
     let client = tokio::task::spawn_blocking(move || {
         use std::io::Write;
         use std::os::windows::fs::OpenOptionsExt;
@@ -217,9 +293,18 @@ async fn restricted_client_is_rejected_before_provisioning() {
             }
         }
         let _restore = Restore;
+        let extra_instance = ServerOptions::new()
+            .max_instances(2)
+            .reject_remote_clients(true)
+            .create(&name);
+        assert_eq!(extra_instance.unwrap_err().raw_os_error(), Some(5));
         let mut client = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
+            .access_mode(
+                windows_sys::Win32::Foundation::GENERIC_READ
+                    | windows_sys::Win32::Storage::FileSystem::FILE_WRITE_DATA,
+            )
             .custom_flags(SECURITY_SQOS_PRESENT | SECURITY_IMPERSONATION)
             .open(name)
             .unwrap();
@@ -254,7 +339,7 @@ async fn restricted_client_is_rejected_before_provisioning() {
 #[tokio::test]
 async fn oversized_request_is_rejected_before_dispatch() {
     let name = pipe_name();
-    let mut pipe = listener(&name).unwrap();
+    let mut pipe = listener(&name, PipeInstance::First).unwrap();
     let client = tokio::spawn(async move {
         let mut client = ClientOptions::new().open(name).unwrap();
         client
