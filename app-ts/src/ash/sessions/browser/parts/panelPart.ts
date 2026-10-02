@@ -42,7 +42,7 @@ export class PanelPart extends WorkbenchPanelPart {
 				contextKeyService: this.contextKeys,
 				paneLayout: 'fill',
 				paneHeaders: 'hidden',
-				onDidFailCreateView: error => { throw error; },
+				onDidFailCreateView: (error: unknown) => { throw error; },
 			}));
 		}
 		if (this.activeCompositeId === compositeId) {

@@ -44,7 +44,7 @@ test('Sessions Files selects one view from the current folder state and creates 
 		model,
 		instantiationService: services,
 		contextKeyService: contexts,
-		onDidFailCreateView: error => { throw error; },
+		onDidFailCreateView: (error: unknown) => { throw error; },
 	});
 	const message = host.element.querySelector('[role="status"]');
 	assert.equal(message?.textContent, 'Folders and files will appear here.');

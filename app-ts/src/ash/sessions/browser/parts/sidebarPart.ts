@@ -63,7 +63,7 @@ export class SidebarPart extends WorkbenchSidebarPart {
 				viewContainer, model: this.descriptors.getViewContainerModel(viewContainer.id),
 				instantiationService: this.instantiation, contextKeyService: this.contextKeys,
 				paneLayout: 'fill', mergeViewWithContainerWhenSingleView: true,
-				onDidFailCreateView: error => { throw error; },
+				onDidFailCreateView: (error: unknown) => { throw error; },
 			}));
 		}
 	}

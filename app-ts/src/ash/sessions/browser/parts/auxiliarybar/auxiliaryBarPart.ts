@@ -35,7 +35,7 @@ export class AuxiliaryBarPart extends AuxiliarybarPart {
 				contextKeyService: this.contextKeys,
 				paneLayout: 'fill',
 				paneHeaders: 'hidden',
-				onDidFailCreateView: error => { throw error; },
+				onDidFailCreateView: (error: unknown) => { throw error; },
 			}));
 		}
 		const restored = this.getCompositeIdToRestore();
