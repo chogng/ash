@@ -218,8 +218,8 @@ export class SessionsService extends Disposable implements ISessionsService {
 		const existing = state.visibleReferences.findIndex(candidate => visibilityKey(candidate) === visibilityKey(reference));
 		if (existing >= 0) state.visibleReferences[existing] = reference;
 		else {
-			const previousIndex = previous ? state.visibleReferences.findIndex(candidate => visibilityKey(candidate) === visibilityKey(referenceForSelection(previous))) : -1;
-			state.visibleReferences.splice(previousIndex >= 0 ? previousIndex + 1 : state.visibleReferences.length, 0, reference);
+			// Ordinary navigation owns the whole page; selecting a restored grid slot only changes its active session.
+			state.visibleReferences = [reference];
 		}
 		transaction(tx => {
 			state.activeReference.set(reference, tx);

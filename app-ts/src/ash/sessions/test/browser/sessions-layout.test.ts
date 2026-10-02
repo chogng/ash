@@ -35,8 +35,15 @@ type SessionsPartId = import("../../common/layoutConstants.js").SessionsPartId;
 type WorkbenchPartInstance = import("../../../workbench/browser/part.js").WorkbenchPart;
 
 class TestSessionsPart extends WorkbenchPart {
+	readonly layouts: import('../../../base/browser/dom.js').Dimension[] = [];
+
 	constructor(readonly id: SessionsPartId, container: HTMLElement) {
 		super(container, id);
+	}
+
+	override layout(dimension: import('../../../base/browser/dom.js').Dimension): void {
+		this.layouts.push(new Dimension(dimension.width, dimension.height));
+		super.layout(dimension);
 	}
 
 	override get minimumWidth(): number {
@@ -152,6 +159,28 @@ test("Sessions layout toggles the sidebar and auxiliary Part while keeping the p
 
 	subscription.dispose();
 	layout.dispose();
+	for (const part of parts.values()) part.dispose();
+	dom.window.close();
+});
+
+test('Sessions compound page changes lay out Parts once at the completed width', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
+	layout.layout(new Dimension(1_200, 800));
+	const sessions = parts.get('sessions') as TestSessionsPart;
+	sessions.layouts.length = 0;
+	const completed: unknown[] = [];
+	using subscription = layout.onDidLayoutMainContainer(dimension => completed.push(dimension));
+	layout.updateParts(() => {
+		layout.setPartAvailable('sidebar', false);
+		// Composite selection can synchronously select another page inside the outer update.
+		layout.updateParts(() => layout.setPartAvailable('auxiliarybar', false));
+		assert.deepEqual(sessions.layouts, []);
+		assert.deepEqual(completed, []);
+	});
+	assert.deepEqual(sessions.layouts, [new Dimension(1_200 - 44 - 4, 800 - WorkbenchWindowBarHeight - 4)]);
+	assert.deepEqual(completed, [new Dimension(1_200, 800)]);
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
 });

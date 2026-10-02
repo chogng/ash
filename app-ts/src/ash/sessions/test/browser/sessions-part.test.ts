@@ -216,9 +216,13 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(IStorageService, storage);
 	registerTestDictationOnboarding(services);
 	services.registerInstance(ISessionsManagementService, sessionService);
+	const initialDrafts = ['saved-first', 'saved-second'].map(untitledSessionId => ({ untitledSessionId, title: 'New code session', workspace: { type: 'current' } }));
+	storage.store('sessions.viewState', JSON.stringify({ version: 1, pages: {
+		chat: { visible: initialDrafts.map(session => ({ kind: 'untitled', session })), active: 1 },
+		code: { visible: [], active: -1 },
+	} }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	const viewService = services.createInstance(SessionsService);
-	viewService.openNewSession("New code session");
-	viewService.openNewSession("New code session");
+	await viewService.initialize();
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
@@ -288,7 +292,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	viewService.selectPage('code');
 	if (!viewService.activeSelection) viewService.openNewSession('New code session');
 	part.setPage('code');
-	const codeInput = part.domNode.querySelector('.code-composer');
+	let codeInput = part.domNode.querySelector('.code-composer');
 	assert.notEqual(codeInput, retainedInput);
 	assert.equal(part.domNode.querySelector('.ash-sessions-code-page')?.getAttribute('aria-label'), 'Code');
 	assert.equal(part.domNode.querySelector('.ash-sessions-code-page .ash-sessions-chat-view')?.hasAttribute('hidden'), false);
@@ -306,7 +310,9 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.deepEqual(readNewChatDraftState(storage, 'chat', `untitled:${chatSelection.session.untitledSessionId}`), draft);
 	assert.deepEqual(readNewChatDraftState(storage, 'code', `untitled:${codeSelection.session.untitledSessionId}`), separateDraft);
 	viewService.openNewSession('Another Code draft');
-	assert.equal(part.domNode.querySelectorAll('.code-composer').length, 2);
+	assert.equal(part.domNode.querySelectorAll('.code-composer').length, 1);
+	codeInput = part.domNode.querySelector('.code-composer');
+	part.restoreDraft(separateDraft);
 	part.setPage('empty');
 	assert.equal(part.domNode.querySelector('.ash-sessions-chat-view')?.hasAttribute('hidden'), true);
 	viewService.selectPage('chat');
@@ -319,7 +325,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.deepEqual(chatDraft.draft, draft);
 	part.setPage('code');
 	assert.equal(part.domNode.querySelector('.code-composer'), codeInput);
-	assert.deepEqual((await inputs[2]!.captureDraft())?.draft, separateDraft);
+	assert.deepEqual((await inputs[3]!.captureDraft())?.draft, separateDraft);
 
 	part.setPage('empty');
 	assert.equal(part.domNode.querySelector('[data-sessions-page="design"]'), null);

@@ -30,6 +30,7 @@ import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration
 import '../../workbench/browser/parts/notifications/notificationsCommands.js';
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { Dimension, getClientArea, h, type IDimension } from "../../base/browser/dom.js";
+import type { IPositionedRectangle } from '../../base/browser/geometry.js';
 import { SerializableGrid, type SerializedGridDescriptor } from '../../base/browser/ui/grid/grid.js';
 import { Emitter, type Event } from '../../base/common/event.js';
 import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
@@ -458,37 +459,39 @@ export class Workbench extends Disposable {
 		let codeComposite = SESSIONS_FILES_CONTAINER_ID;
 		let openingDesign = false;
 		const selectActivityPage = (page: SessionsActivityPage): void => {
-			activityPage = page;
-			activitybar.selectPage(page);
-			sidebar.setEmptyPage(page === 'colab' || page === 'library');
-			if (page === 'chat' || page === 'code') {
-				view.selectPage(page);
-				sessionsPart?.setPage(page);
-				if (sidebar.currentView === 'views') sidebar.selectView('chats');
-			} else sessionsPart?.setPage('empty');
-			layout.setPartAvailable('sidebar', page === 'chat' || page === 'code' || page === 'design');
-			layout.setPartAvailable('auxiliarybar', page === 'code' || page === 'design');
-			// Attach the replacement center before hiding Sessions so panel widths stay stable.
-			if (page === 'design') { layout.setPartAvailable('editor', true); layout.showPart('editor'); }
-			layout.setPartAvailable('sessions', page !== 'design');
-			layout.setPartAvailable('editor', page === 'design' || (page === 'code' && editor.activeInput?.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()));
-			if (page === 'design') {
-				if (auxiliarybar!.activeCompositeId && auxiliarybar!.activeCompositeId !== DESIGN_PROPERTIES_CONTAINER_ID) codeComposite = auxiliarybar!.activeCompositeId;
-				sidebar.showComposite(DESIGN_LAYERS_CONTAINER_ID);
-				auxiliarybar!.showComposite(DESIGN_PROPERTIES_CONTAINER_ID);
-				layout.showPart('editor');
-				if (!openingDesign && editor.activeInput?.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()) {
-					openingDesign = true;
-					void editors.openEditor(services.get(IDesignEditorService).input, { pinned: true, preserveFocus: true }).then(() => {
-						openingDesign = false;
-						selectActivityPage(activityPage);
-						if (activityPage === 'design') editor.focus();
-					}).catch(error => { openingDesign = false; notificationService.error(String(error)); });
+			layout.updateParts(() => {
+				activityPage = page;
+				activitybar.selectPage(page);
+				sidebar.setEmptyPage(page === 'colab' || page === 'library');
+				if (page === 'chat' || page === 'code') {
+					view.selectPage(page);
+					sessionsPart?.setPage(page);
+					if (sidebar.currentView === 'views') sidebar.selectView('chats');
+				} else sessionsPart?.setPage('empty');
+				layout.setPartAvailable('sidebar', page === 'chat' || page === 'code' || page === 'design');
+				layout.setPartAvailable('auxiliarybar', page === 'code' || page === 'design');
+				// Attach the replacement center before hiding Sessions so panel widths stay stable.
+				if (page === 'design') { layout.setPartAvailable('editor', true); layout.showPart('editor'); }
+				layout.setPartAvailable('sessions', page !== 'design');
+				layout.setPartAvailable('editor', page === 'design' || (page === 'code' && editor.activeInput?.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()));
+				if (page === 'design') {
+					if (auxiliarybar!.activeCompositeId && auxiliarybar!.activeCompositeId !== DESIGN_PROPERTIES_CONTAINER_ID) codeComposite = auxiliarybar!.activeCompositeId;
+					sidebar.showComposite(DESIGN_LAYERS_CONTAINER_ID);
+					auxiliarybar!.showComposite(DESIGN_PROPERTIES_CONTAINER_ID);
+					layout.showPart('editor');
+					if (!openingDesign && editor.activeInput?.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()) {
+						openingDesign = true;
+						void editors.openEditor(services.get(IDesignEditorService).input, { pinned: true, preserveFocus: true }).then(() => {
+							openingDesign = false;
+							selectActivityPage(activityPage);
+							if (activityPage === 'design') editor.focus();
+						}).catch(error => { openingDesign = false; notificationService.error(String(error)); });
+					}
+				} else if (page === 'code') {
+					if (auxiliarybar!.activeCompositeId === DESIGN_PROPERTIES_CONTAINER_ID) auxiliarybar!.showComposite(codeComposite);
+					if (codeEditor && editor.activeInput?.resource.toString() === DESIGN_EDITOR_RESOURCE.toString()) editor.activateEditor(codeEditor);
 				}
-			} else if (page === 'code') {
-				if (auxiliarybar!.activeCompositeId === DESIGN_PROPERTIES_CONTAINER_ID) auxiliarybar!.showComposite(codeComposite);
-				if (codeEditor && editor.activeInput?.resource.toString() === DESIGN_EDITOR_RESOURCE.toString()) editor.activateEditor(codeEditor);
-			}
+			});
 		};
 		this.showChat = () => selectActivityPage('chat');
 		activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
@@ -893,15 +896,21 @@ export interface SessionsWorkbenchLayoutOptions {
 
 /** Owns the fixed Part topology and mutable geometry of one dedicated Sessions window. */
 class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
-	constructor(partId: SessionsPartId, part: WorkbenchPart, private readonly isEditorPrimary: () => boolean) { super(partId, part); }
+	constructor(partId: SessionsPartId, part: WorkbenchPart, private readonly isEditorPrimary: () => boolean, private readonly isLayoutDeferred: () => boolean) { super(partId, part); }
 	public get priority(): 'high' | 'normal' {
 		return this.partId === 'sessions' || (this.partId === 'editor' && this.isEditorPrimary()) ? 'high' : 'normal';
+	}
+
+	public override layout(bounds: IPositionedRectangle): void {
+		// Page changes resize the Grid several times; sash drags still lay out Parts immediately.
+		if (!this.isLayoutDeferred()) super.layout(bounds);
 	}
 }
 
 export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAgentWorkbenchLayoutService {
-	private readonly views = new Map<SessionsPartId, WorkbenchPartView<SessionsPartId>>();
-	private grid!: SerializableGrid<WorkbenchPartView<SessionsPartId>>;
+	private readonly views = new Map<SessionsPartId, SessionsWorkbenchPartView>();
+	private grid!: SerializableGrid<SessionsWorkbenchPartView>;
+	private partUpdateDepth = 0;
 	private readonly unavailableParts = new Set<SessionsPartId>();
 	private readonly desiredVisibility: { sessions: boolean; sidebar: boolean; auxiliarybar: boolean; editor: boolean };
 	private titlebarHeight = 0;
@@ -942,7 +951,7 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 			throw new Error('Sessions Parts are already attached');
 		}
 		for (const partId of sessionsPartIds) {
-			this.views.set(partId, new SessionsWorkbenchPartView(partId, requiredPart(parts, partId), () => this.unavailableParts.has('sessions')));
+			this.views.set(partId, new SessionsWorkbenchPartView(partId, requiredPart(parts, partId), () => this.unavailableParts.has('sessions'), () => this.partUpdateDepth > 0));
 		}
 		this.titlebarHeight = this.view('titlebar').minimumHeight;
 		this._register(this.view('activitybar').part.onDidChangeConstraints(() => this.projectFrameInsets()));
@@ -993,9 +1002,21 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 	override layout(dimension: IDimension = getClientArea(this.mainContainer)): void {
 		assertDimension(dimension);
 		this.grid.layout(dimension.width, dimension.height);
+		if (this.partUpdateDepth > 0) return;
 		this.publishPartVisibility();
 		// Overlay consumers observe completed Part and nested Chat geometry.
 		super.layout(dimension);
+	}
+
+	/** Composite and editor events can reenter page selection; only the outer selection commits Part geometry. */
+	public updateParts(update: () => void): void {
+		this.partUpdateDepth++;
+		try {
+			update();
+		} finally {
+			this.partUpdateDepth--;
+			if (this.partUpdateDepth === 0) this.layout(new Dimension(this.grid.width, this.grid.height));
+		}
 	}
 
 	isPartVisible(partId: SessionsPartId): boolean { return this.grid.isViewVisible(this.view(partId)); }
@@ -1076,7 +1097,7 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		}
 	}
 
-	private view(partId: SessionsPartId): WorkbenchPartView<SessionsPartId> {
+	private view(partId: SessionsPartId): SessionsWorkbenchPartView {
 		const view = this.views.get(partId);
 		if (!view) throw new Error(`Unknown Sessions Part: ${partId}`);
 		return view;

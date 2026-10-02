@@ -166,7 +166,7 @@ WindowsAccount 在执行前检查工作目录、Grant、临时目录、用户目
 | --- | --- |
 | 执行前选择、故障停止、启动不重跑、每进程拒绝判定 | 有本机单测与 Executor 调用链回归 |
 | PSEC 探测错误分类 | 已完成准备链修复；明确能力缺失才允许检查下一候选，运行故障保留操作和系统错误码并停止 |
-| PSEC 受管代理与 Windows UI 策略 | UI 策略下 cmd/PowerShell 在 25H2 ARM64 CI 上执行通过；无法保持默认禁止入站的 PSEC Managed 组合会在准备阶段拒绝，正式代理身份仍未完成 |
+| PSEC 受管代理与 Windows UI 策略 | UI 策略下 cmd/PowerShell 在 25H2 ARM64 CI 上执行通过；该机器仅支持 PSEC 1.0，缺独立入口策略。严格 Managed 仍在准备阶段拒绝，正式代理身份及网络成功路径未完成；见 [契约复核](windows-sandbox-acceptance-runbook.md#2026-10-02-server-与-psec-契约复核) |
 | MXC 与 Windows 账户后端的组合选择 | 已接线；两个隔离模型的真实组合验证待补 |
 | 路径级规则、最小读取基线、受控 IPC | 对齐目标；现有目录作用域及全禁 Unix socket 策略不足以覆盖 |
 | 沙箱内 PTY、持续输入与会话管理 | 已接线并有 macOS 真实进程测试；Windows/Linux 交叉编译不代表实机验收 |

@@ -63,7 +63,7 @@ try {
     if ($LASTEXITCODE -eq 0) { throw 'Service removal accepted a remaining user runtime.' }
     Invoke-Checked $binary @('status')
     Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox-service', '--locked', '--target', $Target)
-    Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox', '--lib', '--test', 'windows', '--locked', '--target', $Target, '--', '--include-ignored', '--test-threads=1')
+    Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox', '--lib', '--test', 'windows', '--locked', '--target', $Target, '--', '--include-ignored', '--nocapture', '--test-threads=1')
     if ($NetworkDnsServer) {
         Invoke-Checked python @('-B', 'scripts/cargo.py', '--process-tests', 'test', '-p', 'ash-windows-sandbox', '--test', 'network_matrix', '--locked', '--target', $Target, '--', '--ignored', '--nocapture', '--test-threads=1')
     }

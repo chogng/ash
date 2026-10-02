@@ -106,7 +106,6 @@ export class SessionsPart extends WorkbenchPart {
 		for (const [id, contributedPage] of this.contributedPages) {
 			contributedPage.container.hidden = page !== id;
 		}
-		if (page !== 'empty') this.layout(new Dimension(this.contentDomNode.clientWidth, this.contentDomNode.clientHeight));
 	}
 
 	updateVisibleSelections(selections: readonly SessionsViewSelection[], active: SessionsViewSelection | undefined, page: SessionsPage = "chat"): void {

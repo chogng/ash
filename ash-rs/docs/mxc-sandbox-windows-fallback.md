@@ -140,6 +140,8 @@ MXC 的正式代理模式是 `runtimeConfig.networkProxy` 加 Windows `allowedPr
 
 这一决定保留长期的平台能力差异：PSEC 可用不等于它能执行本次 Managed 请求，拥有包身份也不消除入站能力耦合。补齐代理身份是必要条件，不能单独作为 PSEC Managed 发布条件。
 
+2026-10-02 的 Windows 11 25H2 ARM64 托管机器（build `26200.9457`）实测只支持 PSEC `1.0`，不具备 `1.1` 的独立入口策略。该机器的文件与进程用例通过，不能推导出严格 Managed 支持。CI 单独保存版本与 `NetworkIngress` 标志；即使将来系统同时报告 `1.1` 和入口能力，也仍须验证系统接受所需策略、代理身份、目标授权及入口拒绝，才能开放 Managed。证据见 [Server 与 PSEC 契约复核](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-server-与-psec-契约复核)。
+
 MXC 只保证允许的代理路径；HTTP/S 客户端还需要正确使用 WinHTTP、显式代理配置或代理环境变量。HTTP/CONNECT 的 DNS 由代理解析；SOCKS 需要验证客户端是否发送域名（例如 socks5h）。不支持代理的原始 socket 客户端应被拒绝，不能将 DNS 失败误判为应开放全部直连。SSH、Git-over-SSH 等另需获准的代理客户端配置，不承诺透明代理任意协议。
 
 ## 工具兼容策略

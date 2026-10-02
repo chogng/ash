@@ -64,8 +64,12 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	await expect(sessions).toHaveCSS('border-right-width', '0px');
 	await expect(page.locator('.ash-sessions-chat-slot:visible').last()).toHaveCSS('border-right-width', '0px');
 	await page.locator('.ash-sessions-list-add').click();
-	await expect(page.locator('.ash-sessions-chat-slot:visible')).toHaveCount(2);
-	expect(await page.locator('.ash-sessions-chat-slot:visible').first().evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderRightWidth)))).toBe(1);
+	await expect(page.locator('.ash-sessions-chat-slot:visible')).toHaveCount(1);
+	await expect.poll(async () => {
+		const part = (await sessions.boundingBox())!;
+		const pane = (await page.locator('.ash-sessions-chat-slot:visible').boundingBox())!;
+		return [pane.x - part.x, pane.width - part.width].map(Math.round);
+	}).toEqual([0, 0]);
 	await expect(page.locator('.ash-sessions-chat-slot:visible').last()).toHaveCSS('border-right-width', '0px');
 	await titlebar.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
 	await expect(sessions).toHaveCSS('border-top-left-radius', '12px');
@@ -119,6 +123,11 @@ test('Sessions shared layout preserves user geometry across pages, resize and re
 	await page.mouse.move(sash.x + sash.width / 2 + 40, sash.y + sash.height / 2, { steps: 5 });
 	await page.mouse.up();
 	await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeGreaterThan(sidebarBounds.width + 20);
+	await expect.poll(async () => {
+		const part = (await page.locator('[data-part="sessions"]').boundingBox())!;
+		const pane = (await page.locator('.ash-sessions-chat-slot:visible').boundingBox())!;
+		return Math.abs(pane.width - part.width);
+	}).toBeLessThanOrEqual(1);
 	const sidebarWidth = (await sidebar.boundingBox())!.width;
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(auxiliarybar).toBeVisible();
@@ -194,21 +203,48 @@ test('Sessions restores independent pane arrangements, active selections and dra
 			width: element.getBoundingClientRect().width,
 		};
 	}));
+	const draftReference = async (): Promise<{ kind: 'untitled'; session: { untitledSessionId: string; title: string; workspace: { type: 'current' } } }> => ({
+		kind: 'untitled',
+		session: { untitledSessionId: (await panes.locator('.ash-chat').getAttribute('data-untitled-session-id'))!, title: 'New session', workspace: { type: 'current' } },
+	});
 	await typeDraft('Chat first draft');
+	const chatReferences = [await draftReference()];
 	await add.click();
+	await expect(panes).toHaveCount(1);
 	await typeDraft('Chat second draft');
+	chatReferences.push(await draftReference());
 	await add.click();
+	await expect(panes).toHaveCount(1);
 	await typeDraft('Chat third draft');
+	chatReferences.push(await draftReference());
+	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await typeDraft('Code first draft');
+	const codeReferences = [await draftReference()];
+	await add.click();
+	await expect(panes).toHaveCount(1);
+	await typeDraft('Code second draft');
+	codeReferences.push(await draftReference());
+	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
+	// Restore an existing split arrangement; Add is ordinary navigation, not a split command.
+	await expect.poll(() => page.evaluate(() => [...Object.keys(localStorage)].some(name => name.endsWith('.storage.workspace.sessions') && JSON.parse(localStorage.getItem(name)!).entries['sessions.viewState']))).toBe(true);
+	await page.addInitScript(({ chat, code }) => {
+		if (sessionStorage.getItem('sessions-test-arrangement-seeded')) return;
+		const name = Object.keys(localStorage).find(name => name.endsWith('.storage.workspace.sessions') && JSON.parse(localStorage.getItem(name)!).entries['sessions.viewState'])!;
+		const state = JSON.parse(localStorage.getItem(name)!);
+		state.entries['sessions.viewState'].value = JSON.stringify({ version: 1, pages: { chat: { visible: chat, active: 0 }, code: { visible: code, active: 1 } } });
+		delete state.entries['sessions.gridState.chat'];
+		delete state.entries['sessions.gridState.code'];
+		localStorage.setItem(name, JSON.stringify(state));
+		sessionStorage.setItem('sessions-test-arrangement-seeded', 'true');
+	}, { chat: chatReferences, code: codeReferences });
+	await page.reload({ waitUntil: 'domcontentloaded' });
 	await expect(panes).toHaveCount(3);
 	await panes.first().locator('.ash-sessions-chat-slot-title').click();
 	const beforeDrag = (await panes.first().boundingBox())!.width;
 	await drag(-80);
-	await expect.poll(async () => (await panes.first().boundingBox())!.width).toBeLessThan(beforeDrag - 50);
+	await expect.poll(async () => Math.round((await panes.first().boundingBox())!.width)).toBe(Math.round(Math.max(300, beforeDrag - 80)));
 	const chat = await snapshot();
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await typeDraft('Code first draft');
-	await add.click();
-	await typeDraft('Code second draft');
 	await expect(panes).toHaveCount(2);
 	await drag(-60);
 	const code = await snapshot();
@@ -217,13 +253,13 @@ test('Sessions restores independent pane arrangements, active selections and dra
 	await expect(panes).toHaveCount(3);
 	await expect.poll(async () => (await snapshot()).map(({ width, ...state }) => state)).toEqual(chat.map(({ width, ...state }) => state));
 	for (let index = 0; index < chat.length; index++) {
-		expect(Math.abs((await panes.nth(index).boundingBox())!.width - chat[index]!.width)).toBeLessThanOrEqual(1);
+		await expect.poll(async () => Math.abs((await panes.nth(index).boundingBox())!.width - chat[index]!.width)).toBeLessThanOrEqual(1);
 	}
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panes).toHaveCount(2);
 	await expect.poll(async () => (await snapshot()).map(({ width, ...state }) => state)).toEqual(code.map(({ width, ...state }) => state));
 	for (let index = 0; index < code.length; index++) {
-		expect(Math.abs((await panes.nth(index).boundingBox())!.width - code[index]!.width)).toBeLessThanOrEqual(1);
+		await expect.poll(async () => Math.abs((await panes.nth(index).boundingBox())!.width - code[index]!.width)).toBeLessThanOrEqual(1);
 	}
 	await panes.first().locator('.ash-sessions-chat-slot-close').click();
 	await expect(panes).toHaveCount(1);

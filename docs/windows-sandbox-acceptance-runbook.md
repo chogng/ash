@@ -39,7 +39,9 @@ PSEC 检查不安装账户、不改变系统权限。`test-psec.ps1 -Capability 
 
 账户任务在独立的临时托管机器上运行 `test-windows-sandbox.ps1`，按已有安装计划创建账户，执行测试，并在 finally 中移除安装；同时运行后端选择与禁止重跑测试。手动 `self-hosted` 只运行 PSEC 成功路径，要求 `self-hosted`、`Windows`、`psec` 标签，以及 PowerShell 7、Python 3.11+、Rustup 和 MSVC 工具链。
 
-PSEC 报告包含系统版本、架构、工具链、MXC pin、各项退出码和输出。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。PSEC ConPTY、完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务。
+PSEC 报告包含系统版本、架构、工具链、MXC pin、各项退出码和输出。ARM64 另通过 `probe-psec-network.py` 保存系统报告的 PSEC 版本与 `NetworkIngress` 标志；这项只读查询不创建环境、不启动命令，也不宣布 Managed 支持。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。PSEC ConPTY、完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务。
+
+账户 CI 为受限子进程测试启用 `ASH_WINDOWS_SANDBOX_DIAGNOSTICS`：超过原有 10 秒期限时，在终止 Job 前保存 CPU 时间、线程栈及模块转储，再继续原有失败和清理。诊断只针对受控测试子进程，不包含堆内存，随账户 artifact 保存；正常完成的子进程记录执行时间。
 
 ## 2026-10-02 服务及账户管理员验收
 
@@ -179,6 +181,18 @@ Windows 的两个旧网络用例还暴露出 TCP 临时端口落入 Hyper-V UDP 
 首轮原始日志、安装更新计划和接收端修复的本机证据保存在 `.build/acceptance/sandbox-ci/run-20261002-111128/`；第二轮及重跑证据保存在 `.build/acceptance/sandbox-ci/run-20261002-115023/`，其中 `attempt-1/` 保留首次尝试失败，`verification.json` 核对提交、用例数量、程序摘要、账户/WFP 身份及清理计划。下载的 GitHub 原始任务日志包含测试输出；账户 artifact 的 `account.log` 仅包含 PowerShell 宿主信息，不能单独证明测试通过。原始 artifact ZIP 摘要均与 GitHub 返回的 SHA-256 一致。
 
 本次 CI 未执行公网 DNS/IPv6 矩阵、WSL、PSEC ConPTY 或 App Server 产品链路；公网与 WSL 结果仍引用上述本机证据。WSLC 一次性清理失败不属于本轮修复范围。
+
+## 2026-10-02 Server 与 PSEC 契约复核
+
+提交 `69e5c45d87f1fad4ecce72dacb129a445168431d` 的 [诊断 CI](https://github.com/chogng/ash/actions/runs/36972719869) 为 5/6 通过。Server 2022 再次在 `powershell_initializes_and_runs_a_pipeline_with_the_restricted_token` 的原有 10 秒期限失败，标准输出与错误为空；finally 删除了账户与服务。ARM64 和 Server 2025 的完整账户入口通过，其中 Server 2025 的同一 PowerShell 用例耗时 5.917 秒。
+
+Server 2022 的 `child-3560.dmp` 在终止前成功取得，配套 CPU 时间为 kernel 343 ms、user 1515 ms。微软调试器符号解析显示，主线程等待异步管道，执行线程位于 `ForEachObjectCommand.ProcessRecord` → `CommandDiscovery.TryModuleAutoDiscovery` → `AutoloadSpecifiedModule` → `ImportModuleCommand` → `ModuleIntrinsics.ExportModuleMembers`；已加载 `PSWindowsUpdate` 和 Visual Studio Setup 模块。由此定位为第一条输出命令的模块发现/导入，进程已越过 CLR 与受限令牌初始化。这份转储没有建立死锁或某个网络请求的因果证明。
+
+兼容性用例现在明确调用 `Microsoft.PowerShell.Utility\Write-Output`，并检查 `Write-Output` 的实际模块归属。10 秒期限、真实管道、私有桌面、受限令牌、输出与退出码断言保留。完整账户执行用例继续使用常规 PowerShell 命令，覆盖用户执行时的模块发现。本机修改后的用例耗时 247 ms，warning 门禁和正常 helper 构建通过；提交 `8465278af22b61c91a18b04fc3bd1e85a27d705c` 的 [修复 CI](https://github.com/chogng/ash/actions/runs/36975190704) 正在验收。
+
+PSEC 的版本查询在 ARM64 `26200.9457` 上返回 `S_OK`、available=true、minor=0，即 PSEC `1.0`。独立入口表要求 `1.1`；现有官方代理模式又要求双向私网能力，因此当前机器不能完成严格 Managed 验收。适配器继续在执行前拒绝，并保留真实 Executor → adapter → SDK 拒绝用例：代理已启动但命令未启动、没有目标授权调用。代理身份完成或基础 PSEC 文件/进程测试通过，均不能替代这项契约。
+
+诊断与修复证据分别位于 `.build/acceptance/sandbox-strict/run-20261002-141600/` 和 `run-20261002-144600/`，包含精确 CI 源码摘要、原始日志、artifact 摘要、版本报告、超时转储及 `server2022-symbol-stacks.log`。初期的网络形式探索代码只归档在诊断证据中；当前仓库脚本只查询能力，不保留未经实机执行的策略组合。
 
 ## 已退出账户原型的受管网络记录
 

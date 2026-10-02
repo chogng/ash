@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/psec.yml'
       - 'scripts/test-psec.ps1'
+      - 'scripts/probe-psec-network.py'
       - 'scripts/test-windows-sandbox.ps1'
       - 'ash-rs/windows-sandbox/**'
       - 'ash-rs/windows-sandbox-service/**'
@@ -60,12 +61,24 @@ jobs:
         timeout-minutes: 30
         shell: pwsh
         run: ./scripts/test-psec.ps1 -Capability '${{ (matrix.runner == 'windows-2022' || matrix.runner == 'windows-2025') && 'absent' || 'required' }}'
+      - name: Record PSEC network prerequisites
+        if: always() && matrix.runner == 'windows-11-arm'
+        shell: pwsh
+        run: python -B scripts/probe-psec-network.py
       - name: Upload PSEC evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: psec-${{ matrix.runner }}-${{ github.run_attempt }}
           path: .build/acceptance/psec/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload PSEC network investigation
+        if: always() && matrix.runner == 'windows-11-arm'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: psec-network-${{ matrix.runner }}-${{ github.run_attempt }}
+          path: .build/acceptance/psec-network/report.json
           if-no-files-found: error
           retention-days: 14
 
@@ -99,6 +112,7 @@ jobs:
         run: |
           $target = if ('${{ runner.arch }}' -eq 'ARM64') { 'aarch64-pc-windows-msvc' } else { 'x86_64-pc-windows-msvc' }
           New-Item -ItemType Directory -Force .build/acceptance | Out-Null
+          $env:ASH_WINDOWS_SANDBOX_DIAGNOSTICS = Join-Path $PWD '.build/acceptance/account-diagnostics'
           Start-Transcript -Path .build/acceptance/account.log
           try {
             Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture | Format-List
@@ -113,6 +127,7 @@ jobs:
           name: account-${{ matrix.runner }}-${{ github.run_attempt }}
           path: |
             .build/acceptance/account.log
+            .build/acceptance/account-diagnostics/
             .build/acceptance/windows-sandbox-*/*-plan.json
           if-no-files-found: warn
           retention-days: 14

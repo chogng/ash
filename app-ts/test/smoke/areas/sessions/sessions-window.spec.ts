@@ -2241,7 +2241,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect(sessionsPage.locator('.ash-sessions-empty')).toHaveText('No matching sessions');
 	await search.clear();
 	await sessionsPage.locator('.ash-sessions-list-add').click();
-	await expect(sessionsPage.locator(".ash-sessions-chat-slot")).toHaveCount(2);
+	await expect(sessionsPage.locator(".ash-sessions-chat-slot")).toHaveCount(1);
 	await expect(sessionsPage.locator(".ash-sessions-chat-slot.active")).toHaveCount(1);
 	await sessionsPage.locator(".ash-sessions-chat-slot-close").last().click();
 	await expect(sessionsPage.locator(".ash-sessions-chat-slot")).toHaveCount(1);
@@ -2339,7 +2339,7 @@ test('Sessions menus and history actions stay independent from Workbench', async
 	const originalSession = sessions.filter({ hasText: 'New code session' });
 	await expect(originalSession).toHaveAttribute('aria-current', 'page');
 	await page.locator('.ash-sessions-list-add').click();
-	await expect(sessions).toHaveCount(2);
+	await expect(sessions).toHaveCount(1);
 	const newSession = sessions.filter({ hasText: /^New session$/u });
 	await expect(newSession).toHaveAttribute('aria-current', 'page');
 	await expect(back).toBeEnabled();
@@ -2723,7 +2723,7 @@ test('Sessions Activity Bar switches Chat and Code with the keyboard with indepe
 	const forward = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Forward', exact: true });
 	await expect(back).toBeDisabled();
 	await page.locator('.ash-sessions-list-add').click();
-	await expect(page.locator('.ash-sessions-chat-slot:visible')).toHaveCount(2);
+	await expect(page.locator('.ash-sessions-chat-slot:visible')).toHaveCount(1);
 	await editor.waitForEditorContents(contents => contents === '');
 	await expect(back).toBeEnabled();
 	await back.click();
@@ -2737,8 +2737,9 @@ test('Sessions Activity Bar switches Chat and Code with the keyboard with indepe
 	await expect(forward).toBeDisabled();
 	await activityNavigation.getByRole('button', { name: 'Code' }).click();
 	await forward.click();
-	await page.locator('.ash-sessions-chat-slot.active:visible .ash-sessions-chat-slot-close').click();
 	await expect(page.locator('.ash-sessions-chat-slot:visible')).toHaveCount(1);
+	await editor.waitForEditorContents(contents => contents === '');
+	await back.click();
 	await editor.waitForEditorContents(contents => contents === 'Edited from Code');
 	await activityNavigation.getByRole('button', { name: 'Chat' }).click();
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft');
