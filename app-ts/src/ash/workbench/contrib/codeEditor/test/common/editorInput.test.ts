@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
 import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../../services/documentEditor/common/documentTypes.js";
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
+import { EditorResourceAccessor, SideBySideEditor } from '../../../../common/editor.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -69,6 +70,21 @@ test("Stanza diff inputs have one stable tab identity and select only the diff p
 	assert.equal(matchDiffEditor(input), EditorPaneMatch.Default);
 	assert.equal(matchCodeEditor(input), EditorPaneMatch.None);
 	assert.match(input.resource.toString(), /^ash-diff:\/compare\?/);
+});
+
+test('editor resource access selects comparison sides and filters their resources without changing tab identity', () => {
+	const original = { resource: URI.parse('git-change:/project/before.ts?revision=1') };
+	const modified = { resource: URI.file('/project/after.test.ts') };
+	const comparison = createDiffEditorInput(original, modified);
+	const identity = comparison.resource;
+	assert.equal(EditorResourceAccessor.getOriginalUri(comparison), undefined);
+	assert.strictEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.PRIMARY }), modified.resource);
+	assert.strictEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.SECONDARY }), original.resource);
+	assert.deepEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.BOTH }), { primary: modified.resource, secondary: original.resource });
+	assert.deepEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.BOTH, filterByScheme: 'file' }), { primary: modified.resource, secondary: undefined });
+	assert.equal(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.PRIMARY, filterByScheme: ['git-change'] }), undefined);
+	assert.strictEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.ANY, filterByScheme: ['git-change'] }), original.resource);
+	assert.strictEqual(comparison.resource, identity);
 });
 
 

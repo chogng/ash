@@ -214,7 +214,8 @@ class DiffEditorPaneSession extends Disposable {
 				this.editor.setConfiguredWordWrap(getDiffWordWrap(configuration));
 			}
 			if (event.affectsConfiguration("diffEditor.ignoreTrimWhitespace", { overrideIdentifier: languageId })
-				|| event.affectsConfiguration("diffEditor.maxComputationTime", { overrideIdentifier: languageId })) {
+				|| event.affectsConfiguration("diffEditor.maxComputationTime", { overrideIdentifier: languageId })
+				|| event.affectsConfiguration('diffEditor.experimental.showMoves')) {
 				this.updateOptions(getDiffComputationOptions(configuration, languageId));
 			}
 			if (event.affectsConfiguration("diffEditor.hideUnchangedRegions.enabled")

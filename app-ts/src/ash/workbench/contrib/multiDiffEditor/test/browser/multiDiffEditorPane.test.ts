@@ -128,10 +128,10 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 				id: `external.${index}`, label, tooltip: label, enabled: true, run: () => {},
 			})),
 		],
-		primaryRepositoryAction: () => ({
+		primaryRepositoryAction: input => input.source?.kind === 'external' ? ({
 			id: 'external.commit', label: 'Commit', tooltip: 'Commit', enabled: true,
 			run: () => { committedChangeSets.push('change-1'); },
-		}),
+		}) : undefined,
 	};
 	using editorServices = new DisposableStore();
 	const services = createCodeEditorServices(editorServices);
@@ -209,7 +209,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	assert.deepEqual(contextMenus, [
 		['Current Turn', 'Current Turn and Earlier', 'Previous Turn', 'Stage', 'Unstage', 'Uncommitted'],
 		['Commit', 'Commit and Push', 'Push'],
-		['Collapse All', 'Expand All', 'Stage All', 'Discard All'],
+		['Collapse All', 'Expand All'],
 	]);
 	requiredElement<HTMLButtonElement>(dom.window.document, 'button[aria-label="Commit"]').click();
 	assert.equal(parent.querySelector('.stanza-multi-diff-editor')?.getAttribute('aria-label'), 'Review changes, 2 files');
@@ -228,6 +228,20 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	assert.deepEqual(opened, ['file:///workspace/src/first.ts']);
 	assert.deepEqual(gitActions, ['stage:src/first.ts', 'discard:src/first.ts']);
 	assert.deepEqual(committedChangeSets, ['change-1']);
+	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/history'), [{
+		label: 'src/committed.ts',
+		original: { resource: URI.parse('git-commit:/parent/committed.ts'), initialText: 'before', readOnly: true },
+		modified: { resource: URI.parse('git-commit:/commit/committed.ts'), initialText: 'after', readOnly: true },
+	}], 'Committed changes', { kind: 'snapshot', repositoryId: 'repo', label: 'Committed changes' }), new AbortController().signal);
+	requiredElement<HTMLButtonElement>(parent, 'button[aria-label="Committed changes"]').click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(opened.at(-1), 'ash-multi-diff:/history');
+	assert.equal(parent.querySelector('button[aria-label="Commit"]'), null);
+	assert.equal(parent.querySelector('button[aria-label="Stage Changes"]'), null);
+	assert.equal(parent.querySelector('button[aria-label="Discard Changes"]'), null);
+	requiredElement<HTMLButtonElement>(parent, '.stanza-multi-diff-editor-repository-toolbar .ash-toolbar-more-actions button').click();
+	assert.deepEqual(contextMenus.at(-1), ['Collapse All', 'Expand All']);
+	assert.deepEqual(gitActions, ['stage:src/first.ts', 'discard:src/first.ts']);
 	pane.setVisible(EditorPaneVisibility.Hidden);
 	assert.equal((parent.firstElementChild as HTMLElement).hidden, true);
 	pane.clearInput();

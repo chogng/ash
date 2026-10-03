@@ -24,7 +24,7 @@ import type { IEditorGroupView } from './editor.js';
 import { ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import { EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
-import { EditorInputCapabilities, isEditorPaneWithSelection } from '../../../common/editor.js';
+import { EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, isEditorPaneWithSelection } from '../../../common/editor.js';
 import { isEditorPaneWithViewState } from "./editorWithViewState.js";
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { extractExternalEditorInputs } from "./editorDropData.js";
@@ -288,8 +288,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const menuContext = this.scopedContextKeyService?.createScoped(tab);
 		menuContext?.bufferChangeEvents(() => {
 			// Menu visibility follows the clicked tab, even while another editor stays active.
-			menuContext.setContext(ResourceContext.key, input.resource.toString());
-			menuContext.setContext(ResourceSchemeContext.key, input.resource.scheme);
+			const resource = EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.PRIMARY });
+			menuContext.setContext(ResourceContext.key, resource?.toString());
+			menuContext.setContext(ResourceSchemeContext.key, resource?.scheme);
 			menuContext.setContext(MultipleEditorsSelectedInGroupContext.key, this.selectedInputs.includes(input) && this.selectedInputs.length > 1);
 			menuContext.setContext(ActiveEditorPinnedContext.key, !entry.preview);
 			menuContext.setContext(ActiveEditorStickyContext.key, entry.sticky);
@@ -443,7 +444,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 				: input;
 			const association = options.preferredEditorId === undefined && this.configurationService
 				? associatedEditorId(
-					isDiffEditorInput(input) ? input.modified.resource.path : matchInput.resource.path,
+					EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.PRIMARY })!.path,
 					this.configurationService.getValue<EditorAssociations>(isDiffEditorInput(input) ? DiffEditorAssociationsConfiguration : EditorAssociationsConfiguration),
 				)
 				: undefined;

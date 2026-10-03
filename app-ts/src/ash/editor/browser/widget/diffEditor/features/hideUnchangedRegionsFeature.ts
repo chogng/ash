@@ -49,6 +49,22 @@ export class HideUnchangedRegionsFeature extends Disposable {
 		this.options = validateOptions(options);
 		if (options.enabled) this.connectSource();
 		this._register(model.onDidChange(() => this.recompute()));
+		for (const [editor, side] of [[original, 'original'], [modified, 'modified']] as const) {
+			this._register(editor.onDidChangeCursorSelection(() => {
+				let changed = false;
+				for (const region of this.regions) {
+					const range = hiddenRange(region[side], region);
+					if (!range) continue;
+					const selected = editor.getSelections()?.some(selection =>
+						selection.startLineNumber < range.endLineNumberExclusive && selection.endLineNumber >= range.startLineNumber);
+					if (selected) {
+						region.revealedAbove = region.original.length;
+						changed = true;
+					}
+				}
+				if (changed) this.render();
+			}));
+		}
 		this._register(onDidChangeNls(() => this.render()));
 		this._register(toDisposable(() => {
 			this.zones.clear();

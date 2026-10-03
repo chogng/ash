@@ -5,7 +5,7 @@ import { type IDimension } from '../common/core/2d/dimension.js';
 import { type IPosition, type Position } from '../common/core/position.js';
 import { type IRange, type Range } from '../common/core/range.js';
 import { type ISelection, type Selection } from '../common/core/selection.js';
-import { type GlyphMarginLane, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecorationsChangeAccessor, type PositionAffinity } from '../common/model.js';
+import { type GlyphMarginLane, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecoration, type IModelDecorationsChangeAccessor, type PositionAffinity } from '../common/model.js';
 import { type IModelDeltaDecoration } from '../common/model.js';
 import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } from '../common/textModelEvents.js';
 import { type InjectedText } from '../common/modelLineProjectionData.js';
@@ -253,6 +253,7 @@ export interface ICodeEditor extends IEditor {
 	getWidthOfLine(lineNumber: number): number;
 	applyFontInfo(target: HTMLElement): void;
 	createDecorationsCollection(decorations?: IModelDeltaDecoration[]): IEditorDecorationsCollection;
+	getLineDecorations(lineNumber: number): IModelDecoration[] | null;
 	changeDecorations<T>(callback: (changeAccessor: IModelDecorationsChangeAccessor) => T): T | null;
 	removeDecorations(decorationIds: string[]): void;
 	removeDecorationsByType(key: string): void;

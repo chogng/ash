@@ -300,7 +300,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 
 ### 贡献选择和实例身份
 
-- 省略 `contributions` 使用当前注册集合；传入数组只安装列出的贡献，空数组不安装贡献。
+- 省略 `contributions` 使用当前注册集合；传入数组只安装列出的贡献，空数组不安装贡献。模型 token 的绘制和就绪状态属于编辑器视图，不受 contribution 列表影响；语言扩展只提供语法规则、语言配置和主题。
 - 安装函数返回可供调用的控制器。`getContribution` 保持这个实例的身份，模型重新挂载后创建新实例。
 - 禁用、仅做模型配置或只注册副作用的贡献返回 `null`；资源容器不作为功能实例对外暴露。
 - 配置和安装上下文分别只声明各自使用的 options，不能读取完整 Widget 构造参数。

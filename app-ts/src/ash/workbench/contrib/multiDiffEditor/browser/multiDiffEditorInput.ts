@@ -50,6 +50,12 @@ export type GitMultiDiffScope = 'staged' | 'unstaged' | 'uncommitted';
 
 export type MultiDiffEditorSource =
 	| {
+		/** Captured contents reopen as-is and do not require a source resolver. */
+		readonly kind: 'snapshot';
+		readonly label: string;
+		readonly repositoryId?: string;
+	}
+	| {
 		readonly kind: 'git';
 		readonly repositoryId: string;
 		readonly scope: GitMultiDiffScope;
@@ -164,6 +170,9 @@ function requireMultiDiffSource(value: unknown): MultiDiffEditorSource {
 	if (!value || typeof value !== 'object' || !('kind' in value)) throw new TypeError('Multi-diff source is invalid');
 	const source = value as Partial<MultiDiffEditorSource>;
 	if (source.kind === 'git' && typeof source.repositoryId === 'string' && source.repositoryId.length > 0 && (source.scope === 'staged' || source.scope === 'unstaged' || source.scope === 'uncommitted') && (source.branchName === undefined || typeof source.branchName === 'string')) {
+		return freezeMultiDiffSource(source as MultiDiffEditorSource);
+	}
+	if (source.kind === 'snapshot' && typeof source.label === 'string' && source.label.length > 0 && (source.repositoryId === undefined || typeof source.repositoryId === 'string')) {
 		return freezeMultiDiffSource(source as MultiDiffEditorSource);
 	}
 	if (source.kind === 'external' && typeof source.providerId === 'string' && source.providerId.length > 0 && typeof source.label === 'string' && source.label.length > 0 && (source.repositoryId === undefined || typeof source.repositoryId === 'string') && (source.branchName === undefined || typeof source.branchName === 'string')) {

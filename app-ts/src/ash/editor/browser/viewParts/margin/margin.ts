@@ -37,8 +37,9 @@ export class Margin extends ViewPart {
 		this._domNode.setClassName(Margin.OUTER_CLASS_NAME);
 		this._domNode.setPosition('absolute');
 		this._domNode.setAttribute('role', 'presentation');
-		this._domNode.setAttribute('aria-hidden', 'true');
 		this._glyphMarginBackgroundDomNode = createFastDomNode(h(document, 'div'));
+		// The margin also hosts keyboard-operable glyph widgets; only its decorative surfaces are hidden.
+		this._glyphMarginBackgroundDomNode.setAttribute('aria-hidden', 'true');
 		this._glyphMarginBackgroundDomNode.setClassName(Margin.CLASS_NAME);
 		this._domNode.appendChild(this._glyphMarginBackgroundDomNode);
 	}

@@ -1,8 +1,8 @@
 import { localize2 } from '../../../../nls.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
-import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorExtensions.js';
+import { EditorAction, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 
-class ForceRetokenizeAction extends EditorAction {
+export class ForceRetokenizeAction extends EditorAction {
 	constructor() {
 		super({
 			id: 'editor.action.forceRetokenize',
@@ -15,5 +15,3 @@ class ForceRetokenizeAction extends EditorAction {
 		editor.getModel()?.tokenization.resetTokenization();
 	}
 }
-
-registerEditorAction(ForceRetokenizeAction);

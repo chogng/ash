@@ -87,7 +87,14 @@ export class AccessibleDiffViewer extends Disposable {
 		if (state.kind === 'loading') return localize('diffEditor.computing', 'Computing differences');
 		if (state.kind === 'error') return localize('diffEditor.error', 'Could not compute differences: {0}', state.error.message);
 		if (state.diff.hunks.length === 0) return localize('diffEditor.noChanges', 'No differences');
-		return state.diff.hunks.map((hunk, index) => this.hunkContent(hunk, index, state.diff.hunks.length)).join('\n\n');
+		const content = state.diff.hunks.map((hunk, index) => this.hunkContent(hunk, index, state.diff.hunks.length));
+		for (const move of state.diff.moves) {
+			const mapping = move.lineRangeMapping;
+			content.push(localize('diffEditor.movedLines', 'Moved original lines {0}–{1} to modified lines {2}–{3}',
+				mapping.original.startLineNumber, mapping.original.endLineNumberExclusive - 1,
+				mapping.modified.startLineNumber, mapping.modified.endLineNumberExclusive - 1));
+		}
+		return content.join('\n\n');
 	}
 
 	private move(direction: -1 | 1): void {

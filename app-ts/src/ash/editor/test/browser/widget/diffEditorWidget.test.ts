@@ -9,6 +9,9 @@ import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProvi
 import { DefaultLinesDiffComputer } from '../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../common/model.js';
 import { TextModel } from '../../../common/model/textModel.js';
+import { SyntaxProviderRegistry } from '../../../common/languageFeatureRegistry.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
 import { StandaloneCodeEditorService } from '../../../standalone/browser/standaloneCodeEditorService.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
@@ -40,6 +43,7 @@ setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(ic
 await import('../../../contrib/diffEditorBreadcrumbs/browser/contribution.js');
 const { DiffEditorWidget } = await import('../../../browser/widget/diffEditor/diffEditorWidget.js');
 const { DiffModel } = await import('../../../common/diff/diffModel.js');
+const { registerCodeEditorServices } = await import('../testCodeEditor.js');
 suiteTeardown(() => {
 	installedGlobals.dispose();
 	browserEnvironment.window.close();
@@ -60,6 +64,71 @@ const enabledAccessibilityService: IAccessibilityService = {
 	alert: () => {},
 	status: () => {},
 };
+
+test('DiffEditorWidget colors inline removed lines and refreshes their tokens without replacing the accessible zone', async () => {
+	using services = createServices();
+	using providers = new SyntaxProviderRegistry();
+	let tokenType = 'keyword';
+	using registration = providers.register({
+		id: 'test.diff-colors',
+		languageIds: ['diff-colors'],
+		provideTokens: () => ({ tokens: [{ range: new Range(1, 1, 1, 7), tokenType, modifiers: [] }] }),
+	});
+	using original = new TextModel('before', { languageId: 'diff-colors', tokenization: { syntaxProviderRegistry: providers } });
+	using modified = new TextModel('after');
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+	await waitForReady(model);
+	const container = browserEnvironment.window.document.createElement('main');
+	using editor = services.createInstance(DiffEditorWidget, { container, model, renderSideBySide: false });
+	editor.layout({ width: 400, height: 80 });
+	await original.tokenization.whenReady(new AbortController().signal);
+	const removedLine = editor.element.querySelector('.stanza-diff-inline-original-line');
+	assert.ok(removedLine);
+	assert.equal(removedLine.textContent, 'before');
+	assert.equal(removedLine.getAttribute('aria-label'), 'Removed line 1: before');
+	assert.equal([...removedLine.querySelectorAll('.token-keyword')].map(token => token.textContent).join(''), 'before');
+	assert.equal([...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''), 'bfoe');
+
+	tokenType = 'string';
+	original.tokenization.resetTokenization();
+	await original.tokenization.whenReady(new AbortController().signal);
+	assert.strictEqual(editor.element.querySelector('.stanza-diff-inline-original-line'), removedLine);
+	assert.equal(removedLine.querySelector('.token-keyword'), null);
+	assert.equal([...removedLine.querySelectorAll('.token-string')].map(token => token.textContent).join(''), 'before');
+});
+
+test('inline removed lines follow semantic theme styles and coloring settings while retaining their difference marks', async () => {
+	using services = createServices();
+	using providers = new SyntaxProviderRegistry();
+	using syntax = providers.register({ id: 'test.diff-theme', languageIds: ['diff-theme'], provideTokens: () => ({ tokens: [{ range: new Range(1, 1, 1, 7), tokenType: 'keyword', modifiers: [], presentation: { foreground: '#0000ff' } }] }) });
+	const features = services.get(ILanguageFeaturesService);
+	using semantic = features.documentSemanticTokensProvider.register('diff-theme', { provideSemanticTokens: () => ({ tokens: [{ range: new Range(1, 1, 1, 7), tokenType: 'variable', modifiers: [] }] }) });
+	using original = new TextModel('before', { languageId: 'diff-theme', tokenization: { syntaxProviderRegistry: providers, documentSemanticTokensProvider: features.documentSemanticTokensProvider } });
+	using modified = new TextModel('after');
+	await original.tokenization.whenReady(new AbortController().signal);
+	await original.tokenization.semanticTokens!.requestTokens('diff-theme');
+	const themes = services.get(IThemeService) as TestThemeService;
+	const theme = { ...darkColorTheme, semanticHighlighting: true, tokenColorMap: ['', '#ff0000'], getTokenStyleMetadata: () => ({ foreground: 1, bold: true }) };
+	themes.setColorTheme(theme);
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+	await waitForReady(model);
+	using editor = services.createInstance(DiffEditorWidget, { container: browserEnvironment.window.document.createElement('main'), model, renderSideBySide: false });
+	editor.layout({ width: 400, height: 80 });
+	const removedLine = editor.element.querySelector('.stanza-diff-inline-original-line')!;
+	const style = () => {
+		const token = removedLine.querySelector<HTMLElement>('.stanza-editor-token')!;
+		return [token.style.getPropertyValue('--ash-editor-token-foreground'), token.style.fontWeight];
+	};
+	assert.deepEqual(style(), ['#ff0000', 'bold']);
+	themes.setColorTheme({ ...theme, tokenColorMap: ['', '#00ff00'] });
+	assert.strictEqual(editor.element.querySelector('.stanza-diff-inline-original-line'), removedLine);
+	assert.deepEqual(style(), ['#00ff00', 'bold']);
+	await services.get(IConfigurationService).updateValue('editor.semanticHighlighting.enabled', false);
+	assert.deepEqual(style(), ['', '']);
+	assert.equal([...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''), 'bfoe');
+});
 
 test('DiffEditorWidget owns two editors, keeps source models caller-owned, and refreshes decorations after an edit', async () => {
 	using services = createServices();
@@ -179,14 +248,84 @@ test('DiffEditorWidget hides paired unchanged lines and reveals them from either
 	assert.equal(editor.originalEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber), true);
 });
 
+for (const [originalText, modifiedText] of [
+	['first\nlast', 'first\nadded\nlast'],
+	['first\nremoved\nlast', 'first\nlast'],
+	['first', 'first\nadded'],
+	['first\nremoved', 'first'],
+	['old', 'new'],
+	['first\r\nold', 'first\r\nnew'],
+	['', 'added'],
+	['removed', ''],
+	['first\n', 'first'],
+]) {
+	test(`DiffEditorWidget reverts a hunk and restores it with undo: ${JSON.stringify([originalText, modifiedText])}`, async () => {
+		using services = createServices();
+		using original = new TextModel(originalText);
+		using modified = new TextModel(modifiedText);
+		using computation = new WidgetTestDiffComputationService();
+		using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+		await waitForReady(model);
+		using editor = services.createInstance(DiffEditorWidget, { container: browserEnvironment.window.document.createElement('main'), model });
+		editor.revert(model.diff!.changes[0]!);
+		await waitForReady(model);
+		assert.equal(modified.getValue(), originalText);
+		modified.undo();
+		assert.equal(modified.getValue(), modifiedText);
+	});
+}
+
+test('DiffEditorWidget rejects stale hunk and character edits while recomputing and after a newer result', async () => {
+	using services = createServices();
+	using original = new TextModel('before');
+	using modified = new TextModel('after');
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+	await waitForReady(model);
+	using editor = services.createInstance(DiffEditorWidget, { container: browserEnvironment.window.document.createElement('main'), model });
+	const stale = model.diff!.changes[0]!;
+	model.refresh();
+	editor.revert(stale);
+	editor.revertRangeMappings([...stale.innerChanges!]);
+	assert.equal(modified.getValue(), 'after');
+	await waitForReady(model);
+	editor.revert(stale);
+	editor.revertRangeMappings([...stale.innerChanges!]);
+	assert.equal(modified.getValue(), 'after');
+	editor.updateOptions({ readOnly: true });
+	editor.revert(model.diff!.changes[0]!);
+	assert.equal(modified.getValue(), 'after');
+});
+
+test('DiffEditorWidget uses registered presentation defaults and preserves explicit option overrides', async () => {
+	using services = createServices();
+	using original = new TextModel('before');
+	using modified = new TextModel('after');
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+	await waitForReady(model);
+	using editor = services.createInstance(DiffEditorWidget, { container: browserEnvironment.window.document.createElement('main'), model });
+	const configuration = services.get(IConfigurationService);
+	assert.equal(editor.element.querySelectorAll('.ash-diff-revert').length, 1);
+	await configuration.updateValue('diffEditor.renderMarginRevertIcon', false);
+	assert.equal(editor.element.querySelectorAll('.ash-diff-revert').length, 0);
+	editor.updateOptions({ renderMarginRevertIcon: true });
+	assert.equal(editor.element.querySelectorAll('.ash-diff-revert').length, 1);
+	await configuration.updateValue('diffEditor.renderOverviewRuler', false);
+	assert.equal((editor.element.querySelector('.stanza-diff-overview') as HTMLElement).hidden, true);
+	await assert.rejects(configuration.updateValue('diffEditor.experimental.showMoves', 'yes'), /boolean/);
+});
+
 function createServices(): InstantiationService {
 	const services = new InstantiationService();
+	services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(IThemeService, new TestThemeService(darkColorTheme));
 	services.registerInstance(ILanguageConfigurationService, createTestLanguageConfigurationService());
 	services.registerInstance(ILanguageFeaturesService, new LanguageFeaturesService());
 	services.registerInstance(IAccessibilityService, enabledAccessibilityService);
 	services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
+	registerCodeEditorServices(services);
 	return services;
 }
 

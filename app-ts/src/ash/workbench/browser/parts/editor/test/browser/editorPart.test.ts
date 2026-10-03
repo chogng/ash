@@ -330,9 +330,13 @@ test("EditorPart applies diff editor associations to the modified resource", asy
 	registry.registerEditorPane(descriptor("ash.test.associatedDiff", ".other", () => new TestEditorPane("ash.test.associatedDiff")));
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(DiffEditorAssociationsConfiguration, { "*.ts": "ash.test.associatedDiff" });
-	const editor = createEditorPart(dom.window.document.body, { registry, configurationService: configuration });
-	await editor.openEditor(createDiffEditorInput(input("C:\\project\\old.ts"), input("C:\\project\\new.ts")));
+	using contextKeys = new ContextKeyService();
+	const editor = createEditorPart(dom.window.document.body, { registry, configurationService: configuration, contextKeyService: contextKeys });
+	using editorContexts = new EditorContextKeyController(contextKeys, editor, registry, undefined);
+	const modified = { ...input("C:\\project\\new.ts"), languageId: 'typescript' };
+	await editor.openEditor(createDiffEditorInput(input("C:\\project\\old.ts"), modified));
 	assert.equal(editor.activePane?.id, "ash.test.associatedDiff");
+	assert.deepEqual(['resource', 'resourceScheme', 'resourceFilename', 'resourceExtname', 'resourceLangId'].map(key => contextKeys.getValue(key)), [modified.resource.toString(), 'file', 'new.ts', '.ts', 'typescript']);
 	editor.dispose();
 	dom.window.close();
 });

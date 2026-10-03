@@ -350,6 +350,7 @@ const properties: Record<string, JsonSchema> = {
 	'diffEditor.useInlineViewWhenSpaceIsLimited': { type: 'boolean', default: diffEditorDefaultOptions.useInlineViewWhenSpaceIsLimited },
 	'diffEditor.renderMarginRevertIcon': { type: 'boolean', default: diffEditorDefaultOptions.renderMarginRevertIcon },
 	'diffEditor.renderGutterMenu': { type: 'boolean', default: diffEditorDefaultOptions.renderGutterMenu },
+	'diffEditor.renderOverviewRuler': { type: 'boolean', default: diffEditorDefaultOptions.renderOverviewRuler },
 	'diffEditor.ignoreTrimWhitespace': { type: 'boolean', default: diffEditorDefaultOptions.ignoreTrimWhitespace },
 	'diffEditor.renderIndicators': { type: 'boolean', default: diffEditorDefaultOptions.renderIndicators },
 	'diffEditor.codeLens': { type: 'boolean', default: diffEditorDefaultOptions.diffCodeLens },
@@ -445,6 +446,24 @@ function schemaForDefault(value: unknown): JsonSchema {
 	if (Array.isArray(value)) return { type: 'array', default: Object.freeze([...value]) };
 	if (value && typeof value === 'object') return { type: 'object' };
 	return {};
+}
+
+for (const [key, defaultValue, titleKey, title, descriptionKey, description] of [
+	['diffEditor.renderMarginRevertIcon', diffEditorDefaultOptions.renderMarginRevertIcon, 'diffEditor.revertIcon.title', 'Revert change buttons', 'diffEditor.revertIcon.description', 'Show buttons to revert changes in the modified editor margin.'],
+	['diffEditor.renderGutterMenu', diffEditorDefaultOptions.renderGutterMenu, 'diffEditor.gutterMenu.title', 'Change actions', 'diffEditor.gutterMenu.description', 'Show contributed actions beside changed blocks and selected changes.'],
+	['diffEditor.renderOverviewRuler', diffEditorDefaultOptions.renderOverviewRuler, 'diffEditor.overviewRuler.title', 'Diff overview ruler', 'diffEditor.overviewRuler.description', 'Show differences and the current viewport in the diff overview ruler.'],
+	['diffEditor.experimental.showMoves', diffEditorDefaultOptions.experimental.showMoves, 'diffEditor.showMoves.title', 'Show moved code', 'diffEditor.showMoves.description', 'Detect and connect code blocks that moved between the original and modified documents.'],
+] as const) {
+	configurationRegistry.registerConfiguration({
+		key,
+		defaultValue,
+		parse: value => modelBoolean(value, key),
+		setting: {
+			get title() { return localize(titleKey, title); },
+			get description() { return localize(descriptionKey, description); },
+			valueType: 'boolean',
+		},
+	});
 }
 
 // The schema owner also registers the model settings consumed by editor services.

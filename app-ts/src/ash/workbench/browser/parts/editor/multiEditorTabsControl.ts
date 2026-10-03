@@ -1,6 +1,6 @@
 import "./media/multiEditorTabsControl.css";
 import { DataTransfers } from "../../../../base/browser/dnd.js";
-import { EditorInputCapabilities } from '../../../common/editor.js';
+import { EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor } from '../../../common/editor.js';
 import { TAB_CLOSE_ACTION_ID } from '../../../../base/browser/ui/tablist/tabList.js';
 import { addDisposableListener, isElement } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
@@ -229,11 +229,12 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			});
 			const label = editorInputLabel(editor.input);
 			const icon = editor.input.getIcon?.();
-			const signature = JSON.stringify([editor.input.resource.toString(), label.name, label.description, icon]);
+			const resource = EditorResourceAccessor.getOriginalUri(editor.input, { supportSideBySide: SideBySideEditor.BOTH });
+			const signature = JSON.stringify([resource, label.name, label.description, icon]);
 			// Resource labels recreate their text when updated; selection must retain the click target.
 			if (rendered.signature !== signature) {
 				rendered.signature = signature;
-				rendered.label.setResource({ resource: editor.input.resource, name: label.name, description: label.description }, { ariaLabel: label.name, forceLabel: true, icon, fileDecorations: { colors: true, badges: true } });
+				rendered.label.setResource({ resource, name: label.name, description: label.description }, { ariaLabel: label.name, forceLabel: true, icon, fileDecorations: { colors: true, badges: true } });
 			}
 			this.updateTabAriaLabel(editor, rendered.label);
 		}

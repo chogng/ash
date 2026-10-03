@@ -222,7 +222,8 @@ class MultiDiffEditorPaneSession extends Disposable {
 				for (const model of this.models) {
 					const languageId = model.modified.getLanguageId();
 					if (event.affectsConfiguration(CodeEditorConfiguration.diffIgnoreTrimWhitespace, { overrideIdentifier: languageId })
-						|| event.affectsConfiguration(CodeEditorConfiguration.diffMaxComputationTime, { overrideIdentifier: languageId })) {
+						|| event.affectsConfiguration(CodeEditorConfiguration.diffMaxComputationTime, { overrideIdentifier: languageId })
+						|| event.affectsConfiguration('diffEditor.experimental.showMoves')) {
 						model.updateOptions(getDiffComputationOptions(configuration, languageId));
 					}
 				}

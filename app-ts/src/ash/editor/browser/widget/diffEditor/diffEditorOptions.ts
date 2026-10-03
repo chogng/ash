@@ -2,6 +2,8 @@ import { getWindow, isHTMLElement } from '../../../../base/browser/dom.js';
 import { isFiniteNumber } from '../../../../base/common/numbers.js';
 import { type HideUnchangedRegionsOptions, diffEditorDefaultOptions } from '../../../common/config/diffEditor.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
+import type { IDiffEditorOptions } from '../../../common/config/editorOptions.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
 export interface DiffEditorWidgetOptions {
 	readonly container: HTMLElement;
@@ -24,6 +26,10 @@ export interface DiffEditorWidgetOptions {
 	readonly renderSideBySideInlineBreakpoint?: number;
 	readonly enableSplitViewResizing?: boolean;
 	readonly splitViewDefaultRatio?: number;
+	readonly renderMarginRevertIcon?: boolean;
+	readonly renderGutterMenu?: boolean;
+	readonly renderOverviewRuler?: boolean;
+	readonly experimental?: IDiffEditorOptions['experimental'];
 }
 
 /** Owns the mutable presentation choices shared by Diff layout and its editors. */
@@ -35,8 +41,9 @@ export class DiffEditorOptions {
 	private inlineBreakpoint: number;
 	private splitViewResizingEnabled: boolean;
 	private defaultSplitViewRatio: number;
+	private featureOptions: IDiffEditorOptions;
 
-	constructor(options: DiffEditorWidgetOptions) {
+	constructor(options: DiffEditorWidgetOptions, @IConfigurationService private readonly configuration: IConfigurationService) {
 		validateOptions(options);
 		this.configuredWordWrap = options.wordWrap ?? false;
 		this.renderSideBySide = options.renderSideBySide ?? true;
@@ -44,6 +51,32 @@ export class DiffEditorOptions {
 		this.inlineBreakpoint = options.renderSideBySideInlineBreakpoint ?? diffEditorDefaultOptions.renderSideBySideInlineBreakpoint;
 		this.splitViewResizingEnabled = options.enableSplitViewResizing ?? diffEditorDefaultOptions.enableSplitViewResizing;
 		this.defaultSplitViewRatio = options.splitViewDefaultRatio ?? diffEditorDefaultOptions.splitViewDefaultRatio;
+		this.featureOptions = {
+			renderMarginRevertIcon: options.renderMarginRevertIcon,
+			renderGutterMenu: options.renderGutterMenu,
+			renderOverviewRuler: options.renderOverviewRuler,
+			experimental: options.experimental,
+		};
+	}
+
+	public get renderMarginRevertIcon(): boolean {
+		return this.featureOptions.renderMarginRevertIcon ?? this.configuration.getValue<boolean>('diffEditor.renderMarginRevertIcon');
+	}
+
+	public get renderGutterMenu(): boolean {
+		return this.featureOptions.renderGutterMenu ?? this.configuration.getValue<boolean>('diffEditor.renderGutterMenu');
+	}
+
+	public get renderOverviewRuler(): boolean {
+		return this.featureOptions.renderOverviewRuler ?? this.configuration.getValue<boolean>('diffEditor.renderOverviewRuler');
+	}
+
+	public get showMoves(): boolean {
+		return this.featureOptions.experimental?.showMoves ?? this.configuration.getValue<boolean>('diffEditor.experimental.showMoves');
+	}
+
+	public updateOptions(options: IDiffEditorOptions): void {
+		this.featureOptions = { ...this.featureOptions, ...options, experimental: { ...this.featureOptions.experimental, ...options.experimental } };
 	}
 
 	public get wordWrap(): boolean {
@@ -112,6 +145,10 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
 		['renderSideBySide', options.renderSideBySide],
 		['useInlineViewWhenSpaceIsLimited', options.useInlineViewWhenSpaceIsLimited],
 		['enableSplitViewResizing', options.enableSplitViewResizing],
+		['renderMarginRevertIcon', options.renderMarginRevertIcon],
+		['renderGutterMenu', options.renderGutterMenu],
+		['renderOverviewRuler', options.renderOverviewRuler],
+		['experimental.showMoves', options.experimental?.showMoves],
 	] as const) {
 		if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`Diff editor option '${name}' must be boolean`);
 	}

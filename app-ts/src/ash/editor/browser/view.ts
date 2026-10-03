@@ -455,8 +455,11 @@ export class View extends ViewEventHandler {
 		}));
 		this.updateAccessibilityStatus();
 		const semanticTokenSource = options.semanticTokenSource;
+		const updateTokenReadiness = () => this.domNode.domNode.classList.toggle('tokens-ready', this.textModel.tokenization.modelVersion === this.textModel.version && this.textModel.tokenization.tokenCount > 0);
+		updateTokenReadiness();
 		if (semanticTokenSource) {
 			this._register(semanticTokenSource.onDidChange(() => {
+				updateTokenReadiness();
 				this.viewLines.onTokensChanged();
 				this.viewLines.forceShouldRender();
 				this.viewLinesGpu?.forceShouldRender();

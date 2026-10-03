@@ -19,6 +19,11 @@ import { WorkbenchQuickDiffService } from '../../../src/ash/workbench/contrib/sc
 import { CodeEditorConfiguration } from '../../../src/ash/workbench/contrib/codeEditor/common/editorConfiguration.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
+import { MenusRegistry, MenuId } from '../../../src/ash/platform/actions/common/actions.js';
+import type { DiffEditorSelectionHunkToolbarContext } from '../../../src/ash/editor/browser/widget/diffEditor/features/gutterFeature.js';
+import type { IDiffEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
 
 const resources = new DisposableStore();
 const editorServices = StandaloneServices.initialize();
@@ -72,8 +77,32 @@ let dynamicSecond: DocumentDiffItem | undefined;
 let completeDeferredComparison: (() => void) | undefined;
 let compressedEditor: MultiDiffEditorWidget | undefined;
 let compressedViewState: unknown;
+let lastHunkAction: { text: string; originalStart: number; modifiedStart: number } | undefined;
 
 const harness = {
+	setEditorFeatures(options: IDiffEditorOptions): void {
+		single.updateOptions(options);
+	},
+	async setMoves(enabled: boolean): Promise<void> {
+		await editorServices.get(IConfigurationService).updateValue('diffEditor.experimental.showMoves', enabled);
+		model.updateOptions({ ...diffOptions, computeMoves: enabled });
+	},
+	registerHunkAction(selection = false): void {
+		const command = selection ? 'integration.selectionAction' : 'integration.hunkAction';
+		resources.add(CommandsRegistry.register(command, (_accessor, ...args) => {
+			const context = args[0] as DiffEditorSelectionHunkToolbarContext;
+			lastHunkAction = { text: context.originalWithModifiedChanges, originalStart: context.mapping.original.startLineNumber, modifiedStart: context.mapping.modified.startLineNumber };
+		}));
+		resources.add(MenusRegistry.appendMenuItem(selection ? MenuId.DiffEditorSelectionToolbar : MenuId.DiffEditorHunkToolbar, {
+			command: { id: command, title: selection ? 'Apply selected change' : 'Apply change' }, group: 'primary',
+		}));
+	},
+	get lastHunkAction() { return lastHunkAction; },
+	selectModified(range: [number, number, number, number]): void {
+		single.modifiedEditor.setSelection(new Range(...range));
+	},
+	undo(): void { modified.undo(); },
+	scrollModified(top: number): void { single.modifiedEditor.setScrollTop(top); },
 	setViewMode(renderSideBySide: boolean, useInlineViewWhenSpaceIsLimited: boolean, inlineBreakpoint: number): void {
 		single.setViewMode(renderSideBySide, useInlineViewWhenSpaceIsLimited, inlineBreakpoint);
 	},
@@ -199,6 +228,10 @@ const harness = {
 		return {
 			originalTop: single.originalEditor.getTopForLineNumber(originalLineNumber),
 			modifiedTop: single.modifiedEditor.getTopForLineNumber(modifiedLineNumber),
+			originalBottom: single.originalEditor.getBottomForLineNumber(originalLineNumber),
+			modifiedBottom: single.modifiedEditor.getBottomForLineNumber(modifiedLineNumber),
+			originalContentHeight: single.originalEditor.getContentHeight(),
+			modifiedContentHeight: single.modifiedEditor.getContentHeight(),
 			originalScrollTop: single.originalEditor.getScrollTop(),
 			modifiedScrollTop: single.modifiedEditor.getScrollTop(),
 		};
@@ -218,6 +251,8 @@ const harness = {
 			activeRow: single.currentChangeRow,
 			originalText: original.getText(),
 			modifiedText: modified.getText(),
+			moves: model.diff?.moves.length,
+			accessibleContent: single.getAccessibleContent(),
 		};
 	},
 	async cancelLargeComparison() {

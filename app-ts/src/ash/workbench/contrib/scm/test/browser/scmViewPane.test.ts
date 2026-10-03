@@ -1,4 +1,8 @@
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { EditorInputSerializers } from '../../../../services/editor/common/editorInputSerializer.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { isMultiDiffEditorInput } from '../../../multiDiffEditor/browser/multiDiffEditorInput.js';
 import { ActivityService } from '../../../../services/activity/browser/activityService.js';
 import { IActivityService } from '../../../../services/activity/common/activity.js';
 import type { CompositeBar } from '../../../../browser/parts/compositeBar.js';
@@ -603,6 +607,91 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+	}
+});
+
+test('SCM history opens a commit multi-diff from its inline action and context menu', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const installedGlobals = installDomGlobals(browser);
+	using services = new InstantiationService();
+	using contextKeys = new (await import('../../../../../platform/contextkey/browser/contextKeyService.js')).ContextKeyService();
+	using notifications = new NotificationService();
+	const { MenuService } = await import('../../../../../platform/actions/common/menuService.js');
+	const commands = new CommandService(services);
+	const menus = new MenuService(commands, contextKeys);
+	const objectId = '1'.repeat(40);
+	const parentId = '2'.repeat(40);
+	const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget }> = [];
+	services.registerInstance(IEditorService, testEditorService(opened));
+	services.registerInstance(INotificationService, notifications);
+	const requests: Array<{ readonly id: string; readonly path?: string; readonly repository?: string }> = [];
+	const changes = [
+		{ path: 'modified.ts', status: 'modified', originalPath: undefined },
+		{ path: 'added.ts', status: 'added', originalPath: undefined },
+		{ path: 'deleted.ts', status: 'deleted', originalPath: undefined },
+		{ path: 'renamed.ts', status: 'renamed', originalPath: 'old.ts' },
+		{ path: 'image.png', status: 'modified', originalPath: undefined },
+	];
+	const git = {
+		status: async () => ({ repositoryId: 'repo-1', head: { type: 'branch', name: 'main', objectId } }),
+		graph: async () => ({ commits: [{ objectId, parentObjectIds: [parentId, '3'.repeat(40)], subject: 'Review commit', timestampSeconds: 1 }], references: [], hasMore: false }),
+		commitChanges: async (id: string, repository?: string) => {
+			requests.push({ id, repository });
+			return { parentObjectId: parentId, changes };
+		},
+		commitFile: async (id: string, path: string, repository?: string) => {
+			requests.push({ id, path, repository });
+			return {
+				original: path === 'added.ts' ? { kind: 'missing' } : path === 'image.png' ? { kind: 'binary' } : { kind: 'text', text: 'before\n' },
+				modified: path === 'deleted.ts' ? { kind: 'missing' } : path === 'image.png' ? { kind: 'binary' } : { kind: 'text', text: 'after\n' },
+			};
+		},
+	} as unknown as IGitService;
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using history = createHistoryViewFixture(git);
+		const { SCMHistoryViewPane } = await import('../../browser/scmHistoryViewPane.js');
+		const hover: IHoverService = { setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() {} };
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history-multidiff', title: 'Graph' }, history.viewService, menus, testContextMenuProvider as IContextMenuService, contextKeys, hover, testEditorService(opened), testResourceLabelService());
+		browser.window.document.body.append(pane.element);
+		await waitFor(() => pane.element.querySelector('.ash-scm-graph-actions button') !== null);
+		const commit = pane.element.querySelector<HTMLElement>('.ash-scm-graph-commit')!;
+		const button = commit.querySelector<HTMLButtonElement>('[data-action-id="workbench.scm.action.graph.viewChanges"] > button')!;
+		assert.equal(button.getAttribute('aria-label'), '打开更改');
+		assert.match(pane.element.querySelector('[role="tree"]')!.getAttribute('aria-description')!, /比较该提交的所有文本文件/);
+		button.click();
+		await waitFor(() => opened.length === 1);
+		assert.equal(commit.getAttribute('aria-expanded'), 'false', 'Opening the multi-diff does not expand the commit');
+		const input = opened[0].input;
+		assert.ok(isMultiDiffEditorInput(input));
+		const serialized = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
+		assert.deepEqual(EditorInputSerializers.serialize(EditorInputSerializers.deserialize(serialized)), serialized);
+		assert.deepEqual(input.items.map(item => ({ label: item.label, before: item.original.initialText, after: item.modified.initialText, readOnly: [item.original.readOnly, item.modified.readOnly] })), [
+			{ label: 'modified.ts', before: 'before\n', after: 'after\n', readOnly: [true, true] },
+			{ label: 'added.ts', before: '', after: 'after\n', readOnly: [true, true] },
+			{ label: 'deleted.ts', before: 'before\n', after: '', readOnly: [true, true] },
+			{ label: 'old.ts → renamed.ts', before: 'before\n', after: 'after\n', readOnly: [true, true] },
+		]);
+		assert.ok(input.items[3].original.resource.path.endsWith('/old.ts'));
+		assert.ok(input.items[0].original.resource.path.includes(parentId));
+		assert.deepEqual(opened[0].options, { pinned: true });
+		assert.equal(notifications.getNotifications()[0].message, '1 个二进制文件无法在文本比较中显示。');
+		assert.equal(requests.length, 6);
+		assert.ok(requests.every(request => request.id === objectId && request.repository === 'repo-1'));
+		const historyItem = (await history.viewService.activeRepository!.provider.historyProvider!.provideHistoryItems({ limit: 1 }))![0];
+		const context = { repository: history.viewService.activeRepository!, historyItemViewModel: { historyItem }, type: 'historyItemViewModel' };
+		const action = menus.getMenuActions(MenuId.SCMHistoryItemContext, { arg: context }).flatMap(([, actions]) => actions).find(action => action.id === 'workbench.scm.action.graph.viewChanges')!;
+		await action.run();
+		assert.equal(opened.length, 2);
+		assert.equal(opened[1].input.resource.toString(), input.resource.toString());
+		pane.dispose();
+		button.click();
+		assert.equal(opened.length, 2);
+	} finally {
+		resetNlsResolver();
+		browser.window.close();
+		for (const name of installedGlobals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 

@@ -5,6 +5,7 @@ import { IFileTextModelService } from '../../../textmodelResolver/common/textMod
 import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
 import { EditorTitleControl } from '../../../../browser/parts/editor/editorTitleControl.js';
 import { EditorGroupModel } from '../../../../common/editor/editorGroupModel.js';
+import { createDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
 import { EditorShowIconsConfiguration, EditorTabsModeConfiguration } from '../../../editor/common/editorConfiguration.js';
 import type { EditorTabsDelegate } from '../../../../browser/parts/editor/editorTabsControl.js';
 import { IHostColorSchemeService } from '../../common/hostColorSchemeService.js';
@@ -73,7 +74,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		const label = labels.create(browser.window.document.body);
 		label.setFile(URI.file('C:/project/source.custom'));
 		services.registerInstance(IResourceIconRenderer, themes);
-		using editorServices = createTestEditorServices(configuration, services);
+		using editorServices = createTestEditorServices(configuration, services, browser.window.document);
 		const group = new EditorGroupModel();
 		const input = { resource: URI.file('C:/project/main.ts') };
 		group.openEditor(input);
@@ -99,6 +100,29 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		await configuration.updateValue(EditorTabsModeConfiguration, 'single');
 		assert.notEqual(title.domNode.querySelector('.ash-icon-label-icon')?.textContent, '');
 		await configuration.updateValue(EditorTabsModeConfiguration, 'multiple');
+		const comparison = createDiffEditorInput({ resource: URI.file('/project/old.rs') }, { resource: URI.parse('git-change:/unstaged/main.test.ts?revision=1') }, 'Renamed test');
+		const comparisons = [{ instanceId: 'comparison', input: comparison, panelId: 'comparison-panel', tabId: 'comparison-tab' }];
+		group.closeEditor(input);
+		group.openEditor(comparison);
+		title.setEditors(comparisons, comparison);
+		const assertComparisonIcon = (): void => {
+			const comparisonTab = title.domNode.querySelector<HTMLElement>('[role="tab"]')!;
+			const comparisonIcon = comparisonTab.querySelector<HTMLElement>('.ash-icon-label-icon')!;
+			assert.deepEqual([comparisonIcon.textContent, comparisonIcon.style.color], [render('main.test.ts').textContent, render('main.test.ts').style.color]);
+			assert(comparisonIcon.classList.contains('typescript-lang-file-icon'));
+			assert.equal(comparisonIcon.classList.contains('rust-lang-file-icon'), false);
+			assert.equal(comparisonIcon.getAttribute('aria-hidden'), 'true');
+			assert.equal(comparisonTab.id, 'comparison-tab');
+			assert.equal(comparisonTab.getAttribute('aria-controls'), 'comparison-panel');
+		};
+		assertComparisonIcon();
+		await configuration.updateValue(EditorTabsModeConfiguration, 'single');
+		assertComparisonIcon();
+		await configuration.updateValue(EditorTabsModeConfiguration, 'multiple');
+		assertComparisonIcon();
+		group.closeEditor(comparison);
+		group.openEditor(input);
+		title.setEditors(editors, input);
 		group.stick(input);
 		title.setEditors([{ ...editors[0]!, sticky: true }], input);
 		assert.notEqual(title.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-icon-label-icon')?.textContent, '');
@@ -140,6 +164,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		modelLabel.dispose();
 		title.dispose();
 		assert.equal(labels.get(1), undefined);
+		editorServices.dispose();
 		themes.dispose();
 		assert.equal(browser.window.document.head.querySelector('style'), null);
 	} finally { browser.window.close(); }

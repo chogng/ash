@@ -6,18 +6,32 @@ import { expect, test } from '../../../automation/test.js';
 
 const run = promisify(execFile);
 
-test.use({ gitRepository: true });
+test.use({ gitRepository: async ({ target }, use) => { await use(target.kind === 'electron'); } });
 
-test('SCM history shows Git commits and opens a changed file', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+test('SCM history shows Git commits and opens file and multi-file comparisons', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+	test.skip(target.kind === 'browser' && process.env.ASH_PLAYWRIGHT_GIT_REPOSITORY !== '1', 'Requires Web Git setup before server startup (ASH_PLAYWRIGHT_GIT_REPOSITORY=1).');
 
 	const cwd = testWorkspace.directory;
+	if (target.kind === 'browser') {
+		await run('git', ['add', 'main.ts'], { cwd });
+		await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Initial'], { cwd });
+	}
 	await run('git', ['remote', 'add', 'origin', 'https://github.com/ash-test/history.git'], { cwd });
 	await run('git', ['branch', 'topic'], { cwd });
 	await run('git', ['branch', 'feature'], { cwd });
 	await run('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd });
 	await run('git', ['update-ref', 'refs/remotes/origin/release', 'HEAD'], { cwd });
 	const page = workbench.page;
+	if (target.kind === 'electron' && process.platform === 'darwin') {
+		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+		await settings.locator('[data-settings-group-id="workbench"]').click();
+		await settings.locator('[data-settings-category-id="layout"]').click();
+		await settings.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
+		await page.getByRole('option', { name: 'Custom', exact: true }).click();
+		await settings.locator('.ash-modal-editor-close').click();
+	}
 	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await expect(history).toBeVisible();
@@ -48,6 +62,9 @@ test('SCM history shows Git commits and opens a changed file', async ({ target, 
 	for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		await workbench.quickaccess.select(theme);
+		if (theme.includes('High Contrast')) {
+			await expect(commit.locator('.ash-scm-graph-label').first()).toHaveCSS('outline-style', 'solid');
+		}
 		const colors = await commit.locator('.ash-scm-graph-label').evaluateAll(elements => elements.map(element => {
 			const style = getComputedStyle(element);
 			return { foreground: style.color, background: style.backgroundColor, outline: style.outlineStyle };
@@ -78,6 +95,38 @@ test('SCM history shows Git commits and opens a changed file', async ({ target, 
 	await expect(changedFile).toBeVisible();
 	await changedFile.click();
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
+	const openChanges = commit.getByRole('button', { name: 'Open Changes', exact: true });
+	await openChanges.focus();
+	await expect(commit.locator('.ash-scm-graph-actions')).toHaveCSS('opacity', '1');
+	await openChanges.press('Enter');
+	await expect(commit).toHaveAttribute('aria-expanded', 'true');
+	const comparisons = page.locator('.stanza-multi-diff-editor:visible');
+	await expect(comparisons).toBeVisible();
+	const toolbar = page.locator('.stanza-multi-diff-editor-pane:visible .stanza-multi-diff-editor-repository-toolbar');
+	await expect(toolbar.getByRole('button', { name: 'Commit', exact: true })).toHaveCount(0);
+	await toolbar.locator('.ash-toolbar-more-actions button').click();
+	await expect(page.getByRole('menuitem', { name: 'Stage All', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('menuitem', { name: 'Discard All', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['main.ts']);
+	await expect(comparisons.locator('.stanza-multi-diff-editor-section')).toHaveCount(1);
+
+	await writeFile(join(cwd, 'main.ts'), 'const value = 2;\n');
+	await writeFile(join(cwd, 'other.ts'), 'export const other = true;\n');
+	await run('git', ['add', 'main.ts', 'other.ts'], { cwd });
+	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Review all files'], { cwd });
+	await history.locator('[data-action-id="ash.git.graph.refresh"] > button').click();
+	const latest = history.getByRole('treeitem', { name: /Review all files/ });
+	await expect(latest).toBeVisible();
+	await latest.hover();
+	await latest.getByRole('button', { name: 'Open Changes', exact: true }).click();
+	await expect(latest).toHaveAttribute('aria-expanded', 'false');
+	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['main.ts', 'other.ts']);
+	await expect(comparisons.locator('.stanza-multi-diff-editor-section')).toHaveCount(2);
+	await latest.locator('.ash-scm-graph-subject').click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Open Changes', exact: true }).click();
+	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['main.ts', 'other.ts']);
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Review all files' })).toHaveCount(1);
 });
 
 test('SCM history pane opens without a connected repository', async ({ target, workbench }) => {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../base/browser/dom.js';
+import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Event } from '../../../../base/common/event.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -11,6 +12,7 @@ import { type ITextModel } from '../../../common/model.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { DocumentDiffItem, MultiDiffEditorModel, type IDocumentDiffItem } from '../../../browser/widget/multiDiffEditor/model.js';
 import { installEditorTestDom } from '../editorTestGlobals.js';
+import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -36,6 +38,7 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	using resources = new DisposableStore();
 	const services = createCodeEditorServices(resources);
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	setIconResolver(dom.window.document, icon => getIconDefinition(icon));
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using firstOriginal = new TextModel('old\nsame');

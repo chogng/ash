@@ -83,6 +83,8 @@ export class MenuId {
 	static readonly ExplorerContextShare = new MenuId("ExplorerContextShare");
 	static readonly MenubarCopy = new MenuId("MenubarCopy");
 	static readonly MultiDiffEditorFileToolbar = new MenuId("MultiDiffEditorFileToolbar");
+	static readonly DiffEditorHunkToolbar = new MenuId('DiffEditorHunkToolbar');
+	static readonly DiffEditorSelectionToolbar = new MenuId('DiffEditorSelectionToolbar');
 	static readonly ChatTitle = new MenuId("ChatTitle");
 	static readonly ChatTitleLayout = new MenuId("ChatTitleLayout");
 	static readonly AgentSidebarTitle = new MenuId("AgentSidebarTitle");

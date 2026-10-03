@@ -129,6 +129,7 @@ export class MarginViewOverlays extends ViewOverlays {
 		super(context, host);
 		this._contentLeft = this._context.configuration.options.get(EditorOption.layoutInfo).contentLeft;
 		this.domNode.setClassName('stanza-editor-row-layer margin-view-overlays');
+		this.domNode.setAttribute('aria-hidden', 'true');
 		this.domNode.setWidth(1);
 	}
 

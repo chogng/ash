@@ -32,7 +32,6 @@ import { type EditorIndentationOptions } from '../../../common/core/misc/indenta
 import { type ConfigurationChangedEvent, EditorLineWrapping, EditorOption, type EditorLayoutInfo, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, WrappingIndent } from '../../../common/config/editorOptions.js';
 import { type LanguageCompletionWorkerFactory, type LanguageLocation, type LanguageWorkspaceEdit, type LanguageDiagnosticsHost } from '../../../common/languages.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
-import { type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
 import { type URI } from '../../../../base/common/uri.js';
@@ -368,7 +367,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			const getService = services.get.bind(services);
 			const getOptionalService = services.getOptional.bind(services);
 			const provideService = services.registerInstance.bind(services);
-			let semanticTokenSource: SemanticTokenSource | undefined;
+			const semanticTokenSource = model.tokenization.renderedTokens;
 			const selectedContributions = options.contributions ?? EditorExtensionsRegistry.getEditorContributions();
 			const contributions = modelStore.add(services.createInstance(CodeEditorContributions));
 			contributions.configure(selectedContributions, {
@@ -384,10 +383,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				getService,
 				getOptionalService,
 				provideService,
-				setSemanticTokenSource: source => {
-					if (semanticTokenSource) throw new Error('Text editor semantic-token source is already configured');
-					semanticTokenSource = source;
-				},
 				register: value => modelStore.add(value),
 			});
 			const ariaLabel = options.ariaLabel ?? editorLabel(model.uri);
@@ -633,6 +628,10 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		return new EditorDecorationsCollection(this, () => this.modelGeneration, this.decorationOwnerId, decorations);
 	}
 
+	getLineDecorations(lineNumber: number): IModelDecoration[] | null {
+		return this.currentModel?.getLineDecorations(lineNumber, this.decorationOwnerId) ?? null;
+	}
+
 	layoutContentWidget(widget: IContentWidget): void {
 		if (this.currentModel) this.view.layoutContentWidget(widget);
 	}
@@ -834,6 +833,14 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	getScrollTop(): number {
 		return this.currentModel ? this.view.currentLayout.scrollPosition.top : 0;
+	}
+
+	public delegateVerticalScrollbarPointerDown(event: PointerEvent): void {
+		this.modelState?.view.delegateVerticalScrollbarPointerDown(event);
+	}
+
+	public delegateScrollFromMouseWheelEvent(event: IMouseWheelEvent): void {
+		this.modelState?.view.delegateScrollFromMouseWheelEvent(event);
 	}
 
 	getScrollLeft(): number {

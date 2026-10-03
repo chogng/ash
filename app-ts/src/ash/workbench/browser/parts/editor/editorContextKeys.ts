@@ -9,6 +9,8 @@ import type { EditorGroupChangeEvent, EditorGroupState, IEditorStateSource } fro
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 import type { IEditorPane } from './editorPane.js';
 import type { IEditorPaneRegistry } from '../../editor.js';
+import { EditorResourceAccessor, SideBySideEditor } from '../../../common/editor.js';
+import { isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 
 export interface EditorContextKeySource extends IEditorStateSource {
 	readonly activeInput: EditorInput | undefined;
@@ -168,7 +170,8 @@ function applyEditorContextKeys(
 	languageResolver: TextResourceLanguageResolver | undefined,
 	projection: EditorContextKeyProjection,
 ): void {
-	const resource = projection.input?.resource;
+	const resourceInput = projection.input && isDiffEditorInput(projection.input) ? projection.input.modified : projection.input;
+	const resource = EditorResourceAccessor.getOriginalUri(projection.input, { supportSideBySide: SideBySideEditor.PRIMARY });
 	const path = resource ? resourceContextPath(resource) : undefined;
 	const filename = path ? resourceFilename(path) : undefined;
 	contextKeyService.bufferChangeEvents(() => {
@@ -188,7 +191,7 @@ function applyEditorContextKeys(
 		keys.resourceFilename.set(filename);
 		keys.resourceDirname.set(path ? resourceDirname(path) : undefined);
 		keys.resourcePath.set(path);
-		keys.resourceLanguageId.set(projection.input ? resourceLanguageId(projection.input, languageResolver) : undefined);
+		keys.resourceLanguageId.set(resourceInput ? resourceLanguageId(resourceInput, languageResolver) : undefined);
 		keys.resourceExtension.set(filename ? resourceExtension(filename) : undefined);
 		keys.resourceSet.set(resource !== undefined);
 	});

@@ -151,7 +151,7 @@ Chromium 定向场景验证了截断、边界前点击不展开、边界点击�
 
 ## Contrib Tokenization 开发者命令（2026-09-24）
 
-`editor.action.forceRetokenize` 已由同路径 `contrib/tokenization/browser/tokenization.ts` 注册并接入 `editor.all.ts`。命令从当前编辑器取得模型，调用模型已有的 `resetTokenization()`；Ash 的语法提供者可以异步执行，因此新结果由模型原有请求链发布，命令不调用会在异步提供者下抛错的同步 `forceTokenization()`。无模型时命令不操作。现有 `tokenization.contribution.ts` 仍负责视图 token 来源和就绪状态，不承担请求或缓存。命令标题进入英中双语目录。
+`editor.action.forceRetokenize` 由同路径 `contrib/tokenization/browser/tokenization.ts` 实现，`tokenization.contribution.ts` 注册并接入 `editor.all.ts`。命令从当前编辑器取得模型，调用模型已有的 `resetTokenization()`；Ash 的语法提供者可以异步执行，因此新结果由模型原有请求链发布，命令不调用会在异步提供者下抛错的同步 `forceTokenization()`。无模型时命令不操作。视图 token 来源由 `CodeEditorWidget` 直接绑定到 `TextModel.tokenization.renderedTokens`，就绪状态由 `View` 管理；空 contribution 列表也保留基础着色。模型继续拥有请求和缓存。命令标题进入英中双语目录。
 
 编辑器动作单测 70 项通过，其中新增场景验证命令使旧 token 失效、重新请求并发布新 token，解绑模型后可安全调用。Chromium 定向场景通过，验证真实 TextMate Worker 重新发布后可见高亮恢复；`build:stanza`、`build:renderer` 和完整 Editor 对齐检查通过，后者包含 646 个 Chromium 场景。中文动作标题定向单测通过；语言服务整文件另有两个既有断言失败，分别涉及 Advisor 文案和 Git 自动获取设置，本批不计为语言服务测试全通过。
 
@@ -172,6 +172,22 @@ Chromium 定向场景验证了截断、边界前点击不展开、边界点击�
 Quick Diff 时限续批：独立默认值由不限时改为标准的 1000 毫秒，仍不继承普通 Diff 的 `diffEditor.maxComputationTime`；其余比较选项和基线生命周期不变。定向单测从 Quick Diff 的真实模型创建入口核对送往 provider 的时限，5/5 项通过；Playwright Chromium diff 场景 5/5、`typecheck:stanza` 和 `build:renderer` 在此改动后通过。前述完整对齐检查在此改动之前运行，本次新增的调用路径以定向测试和构建验证。
 
 行尾语义续批：`WorkerDiffComputationService` 在版本快照边界将 CRLF/CR 规范为 LF，使 Worker 的行拆分、结果坐标和文本模型的行内容一致；仅行尾格式不同的文档返回 `identical: true`，实际改动仍按逻辑行及列定位。Worker 单测先复现误报，再验证修正后的空结果与第 2 行行内范围；Playwright Chromium 的 6 个 diff 场景通过，包含真实 Worker 的 CRLF/LF 比较。`check-editor-alignment.mjs --test=all` 完整通过：Editor 单测 239/239 个文件、Chromium 场景 642/642 项；`build:renderer` 和 `build:stanza` 通过。测试仍输出既有 JSDOM Canvas 和 `NO_COLOR` / `FORCE_COLOR` 提示。
+
+## Diff Editor features 接入（2026-10-02）
+
+生产链为普通 Diff / Multi Diff → 当前版本的 `DiffModel` → `DiffEditorWidget` → `features` 控件。补入上游同路径的 `revertButtonsFeature.ts`、`gutterFeature.ts` 和 `movedBlocksLinesFeature.ts`，由 Ash 的按钮、菜单、glyph widget、装饰和编辑接口独立实现。原有 `overviewRulerFeature.ts` 接通指针与滚轮，按编辑器实际行位置绘制标记；`hideUnchangedRegionsFeature.ts` 在选区进入隐藏行时展开两侧区域。没有建立另一份文本、光标、滚动或比较结果状态。
+
+| 用户行为 | 实际接入与边界 |
+| --- | --- |
+| 还原更改、还原选中的字符更改 | 修改侧单次可撤销编辑；只读、重算中的旧映射及已替换结果的映射不能编辑。覆盖文件末尾、空文档、末尾换行和 CRLF |
+| 更改块和选区菜单 | `MenuId.DiffEditorHunkToolbar` / `DiffEditorSelectionToolbar` → `MenuWorkbenchToolBar`；上下文提供两侧 URI、标准 mapping 和仅应用所选更改的原文。菜单业务动作由贡献方提供 |
+| 显示移动块 | 标准 `moves` 保留到界面结果，普通 Diff 和 Multi Diff 的配置事件重算；并排视图提供连线、区块轮廓、键盘跳转和朗读 |
+| 动态显示设置 | 四个 feature 设置进入原配置注册表；已打开的控件更新，显式实例选项优先。没有独立设置文件 |
+| 键盘与无障碍 | Tab / Enter / Space 操作、修改侧焦点恢复、中英文文案；移除 margin 根的 `aria-hidden`，仅装饰层继续隐藏；无障碍比较视图显示时禁用图形控件 |
+
+这些文件只完成上述生产调用所需契约，不计为完整上游 API 对齐。上游构造参数、observable 状态接口及移动块独立比较模式仍有差异；算法仅检测精确整块移动，移动后再编辑的识别尚未接入。上游实际窗口没有运行相同场景，本批不声明与上游完整行为一致。
+
+定向单测 8 个文件共 86 项通过，Chromium Diff / Multi Diff 场景 35 项通过；包含实际菜单命令上下文、撤销、只读、配置切换、移动跳转与释放、换行和折叠后的定位、高对比主题及中文标签。Web、Electron UI、连接 App Server 的 Electron 各 1 项既有输入冒烟通过；Electron 首次启动被旧二进制的 Sessions 协议 11 与界面要求的 12 不兼容阻塞，更新本地构建产物后重跑通过，没有修改协议校验。`typecheck:stanza`、`build:stanza`、`build:renderer` 和 `build:host` 通过，最终完整单测编译通过。完整 Editor 浏览器编译仍被 `table.integration.ts` 缺少 `approvalMode` 阻塞；定向编译继承原 tsconfig 的编译选项并运行原 runner。结构、CSS 归属、台账、类型和 diff 检查通过；没有把定向通过写成完整套件通过。单测仍有既有 JSDOM Canvas 提示，Playwright 仍有终端颜色变量提示。
 
 ## Contrib 控制器身份入口（2026-09-24，续批）
 

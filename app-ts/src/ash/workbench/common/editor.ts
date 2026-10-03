@@ -4,6 +4,52 @@ import type { TextEditorSelectionSource } from '../../platform/editor/common/edi
 import type { IAction } from '../../base/common/actions.js';
 import { toError } from '../../base/common/errors.js';
 import type Severity from '../../base/common/severity.js';
+import type { URI } from '../../base/common/uri.js';
+import type { EditorInput } from '../services/editor/common/editorService.js';
+import { isDiffEditorInput } from './editor/diffEditorInput.js';
+
+export enum SideBySideEditor {
+	PRIMARY = 1,
+	SECONDARY = 2,
+	BOTH = 3,
+	ANY = 4,
+}
+
+export interface IEditorResourceAccessorOptions {
+	/** Compound inputs expose file resources only when the caller selects their sides. */
+	readonly supportSideBySide?: SideBySideEditor;
+	readonly filterByScheme?: string | readonly string[];
+}
+
+class EditorResourceAccessorImpl {
+	public getOriginalUri(editor: EditorInput | undefined | null, options?: IEditorResourceAccessorOptions & { supportSideBySide?: SideBySideEditor.PRIMARY | SideBySideEditor.SECONDARY | SideBySideEditor.ANY }): URI | undefined;
+	public getOriginalUri(editor: EditorInput | undefined | null, options: IEditorResourceAccessorOptions & { supportSideBySide: SideBySideEditor.BOTH }): URI | { primary?: URI; secondary?: URI } | undefined;
+	public getOriginalUri(editor: EditorInput | undefined | null, options: IEditorResourceAccessorOptions): URI | { primary?: URI; secondary?: URI } | undefined;
+	public getOriginalUri(editor: EditorInput | undefined | null, options: IEditorResourceAccessorOptions = {}): URI | { primary?: URI; secondary?: URI } | undefined {
+		if (!editor) {
+			return undefined;
+		}
+		if (isDiffEditorInput(editor)) {
+			if (options.supportSideBySide === undefined) {
+				return undefined;
+			}
+			if (options.supportSideBySide === SideBySideEditor.BOTH) {
+				const sideOptions = { ...options, supportSideBySide: SideBySideEditor.PRIMARY as const };
+				return { primary: this.getOriginalUri(editor.modified, sideOptions), secondary: this.getOriginalUri(editor.original, sideOptions) };
+			}
+			if (options.supportSideBySide === SideBySideEditor.ANY) {
+				const sideOptions = { ...options, supportSideBySide: SideBySideEditor.PRIMARY as const };
+				return this.getOriginalUri(editor.modified, sideOptions) ?? this.getOriginalUri(editor.original, sideOptions);
+			}
+			return this.getOriginalUri(options.supportSideBySide === SideBySideEditor.SECONDARY ? editor.original : editor.modified, options);
+		}
+		const filter = options.filterByScheme;
+		return filter === undefined || (typeof filter === 'string' ? filter === editor.resource.scheme : filter.includes(editor.resource.scheme)) ? editor.resource : undefined;
+	}
+}
+
+/** Resolves display and command resources without changing a compound tab's identity. */
+export const EditorResourceAccessor = new EditorResourceAccessorImpl();
 
 /** Input-owned restrictions enforced consistently by editor commands and tabs. */
 export const enum EditorInputCapabilities {

@@ -59,7 +59,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 	}
 
 	private createSourceToolbar(container: HTMLElement): void {
-		const primary = new ToolbarAction('multiDiff.source', sourceLabel(this.options.input.source), 'Select change source', undefined, true, () => this.selectCurrentSource());
+		const primary = new ToolbarAction('multiDiff.source', sourceLabel(this.options.input.source), 'Select change source', undefined, this.options.editorService !== undefined, () => this.selectCurrentSource());
 		const dropdown = new ToolbarAction('multiDiff.source.menu', 'Select Changes', 'Select Changes', Lxicon.chevronDown, true, () => {});
 		const actions: readonly IAction[] = [
 			...this.sourceResolvers.sourceActions().map(action => this.wrapExternalAction(action, 'Loading changes…')),
@@ -83,7 +83,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 		const primary = isMain
 			? contributedPrimary
 				? this.wrapExternalAction(contributedPrimary, 'Committing…')
-				: new ToolbarAction('multiDiff.commit.manual', 'Commit', 'Enter a commit message', Lxicon.gitCommit, this.options.gitService !== undefined, () => this.showCommitEditor(false))
+				: new ToolbarAction('multiDiff.commit.manual', 'Commit', 'Enter a commit message', Lxicon.gitCommit, this.canModifyGit(), () => this.showCommitEditor(false))
 			: new ToolbarAction('multiDiff.pullRequest.create', 'Create Pull Request', 'Pull request provider is not connected', Lxicon.git, false, () => {});
 		const dropdown = new ToolbarAction('multiDiff.repository.menu', 'Repository Actions', 'Repository Actions', Lxicon.chevronDown, true, () => {});
 		const actions = isMain ? this.commitActions() : this.pullRequestActions();
@@ -91,8 +91,10 @@ export class MultiDiffEditorToolbar extends Disposable {
 		const secondary = [
 			new ToolbarAction('multiDiff.collapseAll', 'Collapse All', 'Collapse all diffs', Lxicon.fold, true, this.options.collapseAll),
 			new ToolbarAction('multiDiff.expandAll', 'Expand All', 'Expand all diffs', Lxicon.unfold, true, this.options.expandAll),
-			new ToolbarAction('multiDiff.stageAll', 'Stage All', 'Stage all changes in this source', Lxicon.check, this.canOpenGit(), () => this.stageAll()),
-			new ToolbarAction('multiDiff.discardAll', 'Discard All', 'Discard all working-tree changes in this source', Lxicon.discard, this.canOpenGit(), () => this.discardAll()),
+			...(this.options.input.source?.kind === 'git' ? [
+				new ToolbarAction('multiDiff.stageAll', 'Stage All', 'Stage all changes in this source', Lxicon.check, this.canOpenGit(), () => this.stageAll()),
+				new ToolbarAction('multiDiff.discardAll', 'Discard All', 'Discard all working-tree changes in this source', Lxicon.discard, this.canOpenGit(), () => this.discardAll()),
+			] : []),
 		];
 		const toolbar = this._register(new WorkbenchToolBar(container, this.options.contextMenuProvider, {
 			ariaLabel: 'Multi-diff repository actions',
@@ -100,15 +102,16 @@ export class MultiDiffEditorToolbar extends Disposable {
 				? new DropdownWithPrimaryActionViewItem(primary, dropdown, actions, this.options.contextMenuProvider)
 				: undefined,
 		}));
-		toolbar.setActions([primary, files], secondary);
+		// Immutable sources supply their own actions; a connected Git service does not grant workspace mutations.
+		toolbar.setActions(this.options.input.source?.kind === 'git' || contributedPrimary ? [primary, files] : [files], secondary);
 		toolbar.element.classList.add('stanza-multi-diff-editor-repository-toolbar');
 	}
 
 	private commitActions(): readonly IAction[] {
 		return [
-			new ToolbarAction('multiDiff.commit.manual', 'Commit', 'Enter a commit message', Lxicon.gitCommit, this.options.gitService !== undefined, () => this.showCommitEditor(false)),
-			new ToolbarAction('multiDiff.commitAndPush', 'Commit and Push', 'Commit and push', Lxicon.repoPush, this.options.gitService !== undefined, () => this.showCommitEditor(true)),
-			new ToolbarAction('multiDiff.push', 'Push', 'Push the current branch', Lxicon.repoPush, this.options.gitService !== undefined, () => this.run('Pushing…', async () => {
+			new ToolbarAction('multiDiff.commit.manual', 'Commit', 'Enter a commit message', Lxicon.gitCommit, this.canModifyGit(), () => this.showCommitEditor(false)),
+			new ToolbarAction('multiDiff.commitAndPush', 'Commit and Push', 'Commit and push', Lxicon.repoPush, this.canModifyGit(), () => this.showCommitEditor(true)),
+			new ToolbarAction('multiDiff.push', 'Push', 'Push the current branch', Lxicon.repoPush, this.canModifyGit(), () => this.run('Pushing…', async () => {
 				await this.options.gitService!.push(this.repositoryId());
 				return 'Pushed the current branch.';
 			})),
@@ -126,6 +129,10 @@ export class MultiDiffEditorToolbar extends Disposable {
 
 	private async selectCurrentSource(): Promise<void> {
 		const source = this.options.input.source;
+		if (source?.kind === 'snapshot') {
+			await this.options.editorService!.openEditor(this.options.input, { pinned: true });
+			return;
+		}
 		if (source?.kind === 'external') {
 			const resolved = await this.sourceResolvers.resolve(this.options.input.resource);
 			if (!resolved) throw new Error('No resolver is registered for this multi-diff source.');
@@ -266,6 +273,10 @@ export class MultiDiffEditorToolbar extends Disposable {
 		}));
 	}
 
+	private canModifyGit(): boolean {
+		return this.options.input.source?.kind === 'git' && this.options.gitService !== undefined;
+	}
+
 	private canOpenGit(): boolean {
 		return this.options.gitService !== undefined && this.options.editorService !== undefined;
 	}
@@ -324,14 +335,14 @@ class ToolbarAction implements IAction {
 
 function sourceLabel(source: MultiDiffEditorSource | undefined): string {
 	if (!source) return 'Changes';
-	if (source.kind === 'external') return source.label;
+	if (source.kind !== 'git') return source.label;
 	if (source.scope === 'staged') return 'Stage';
 	if (source.scope === 'unstaged') return 'Unstage';
 	return 'Uncommitted';
 }
 
 function sourceBranch(source: MultiDiffEditorSource | undefined): string | undefined {
-	return source?.branchName;
+	return source?.kind === 'snapshot' ? undefined : source?.branchName;
 }
 
 function isMainBranch(branch: string | undefined): boolean {

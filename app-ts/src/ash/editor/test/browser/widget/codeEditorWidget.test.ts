@@ -130,7 +130,9 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	assert.equal(editor.controller.element.getAttribute("aria-label"), "Code");
 	const margin = requiredElement<HTMLElement>(editor.getDomNode(), '.margin');
 	assert.equal(margin.getAttribute('role'), 'presentation');
-	assert.equal(margin.getAttribute('aria-hidden'), 'true');
+	assert.equal(margin.hasAttribute('aria-hidden'), false);
+	assert.equal(margin.querySelector('.glyph-margin')?.getAttribute('aria-hidden'), 'true');
+	assert.equal(margin.querySelector('.margin-view-overlays')?.getAttribute('aria-hidden'), 'true');
 	assert.equal(margin.firstElementChild?.className, 'glyph-margin');
 	assert.ok(editor.controller.editContext instanceof ViewPart);
 	assert.strictEqual(TextAreaEditContextRegistry.get(editor.getId()), editor.controller.editContext);
@@ -175,7 +177,7 @@ test('CodeEditorWidget scopes and updates the standard editor context keys', () 
 });
 
 test('force retokenize action refreshes the active model through its syntax provider', async () => {
-	await import('../../../contrib/tokenization/browser/tokenization.js');
+	await import('../../../contrib/tokenization/browser/tokenization.contribution.js');
 	using providers = new SyntaxProviderRegistry();
 	let requests = 0;
 	using registration = providers.register({
@@ -210,6 +212,38 @@ test('force retokenize action refreshes the active model through its syntax prov
 	} finally {
 		dom.window.close();
 	}
+});
+
+test('an editor without contributions renders model tokens across model replacement and isolates view decorations', async () => {
+	using providers = new SyntaxProviderRegistry();
+	let tokenType = 'keyword';
+	using registration = providers.register({ id: 'test.core-tokens', languageIds: ['core-tokens'], provideTokens: () => ({ tokens: [{ range: new Range(1, 1, 1, 6), tokenType, modifiers: [] }] }) });
+	using model = new TextModel('value', { languageId: 'core-tokens', tokenization: { syntaxProviderRegistry: providers } });
+	using replacement = new TextModel('other', { languageId: 'core-tokens', tokenization: { syntaxProviderRegistry: providers } });
+	await Promise.all([model.tokenization.whenReady(new AbortController().signal), replacement.tokenization.whenReady(new AbortController().signal)]);
+	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using cleanup = toDisposable(() => dom.window.close());
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [], minimap: { enabled: false } });
+	using other = createTestCodeEditor({ container: requiredElement(dom.window.document, 'aside'), model, contributions: [], minimap: { enabled: false } });
+	editor.layout({ width: 400, height: 80 });
+	editor.view.render(true, false);
+	assert.equal(editor.getDomNode().querySelector('.token-keyword')?.textContent, 'value');
+	editor.createDecorationsCollection([{ range: new Range(1, 1, 1, 2), options: { description: 'own', inlineClassName: 'own-highlight' } }]);
+	other.createDecorationsCollection([{ range: new Range(1, 2, 1, 3), options: { description: 'other', inlineClassName: 'other-highlight' } }]);
+	assert.deepEqual(editor.getLineDecorations(1)?.map(decoration => decoration.options.description), ['own']);
+
+	editor.setModel(replacement);
+	tokenType = 'string';
+	model.tokenization.resetTokenization();
+	await model.tokenization.whenReady(new AbortController().signal);
+	editor.view.render(true, false);
+	assert.equal(editor.getDomNode().querySelector('.token-keyword')?.textContent, 'other');
+	assert.equal(editor.getDomNode().querySelector('.token-string'), null);
+	replacement.tokenization.resetTokenization();
+	await replacement.tokenization.whenReady(new AbortController().signal);
+	editor.view.render(true, false);
+	assert.equal(editor.getDomNode().querySelector('.token-string')?.textContent, 'other');
 });
 
 test('move selected text actions update text, selection and undo through the editor', async () => {

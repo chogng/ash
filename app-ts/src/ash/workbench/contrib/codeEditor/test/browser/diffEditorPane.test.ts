@@ -310,6 +310,37 @@ test('Diff pane recomputes an open comparison when ignore-trim-whitespace change
 	dom.window.close();
 });
 
+test('Diff pane recomputes moved blocks when the setting changes in an open comparison', async () => {
+	const dom = createTestDom();
+	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+	using models = new BrowserTextModelService(resourceStore);
+	using services = new DisposableStore();
+	const container = createCodeEditorServices(services);
+	const seen: boolean[] = [];
+	using pane = container.createInstance(DiffEditorPane, resourceStore, {
+		modelService: models,
+		createComputationService: () => new PaneTestDiffComputationService(options => seen.push(options.computeMoves)),
+	});
+	pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
+	pane.layout({ width: 1200, height: 300 });
+	await pane.setInput(createDiffEditorInput(
+		{ resource: URI.file('/before.ts'), initialText: 'head\nmove A\nmove B\nkeep A\nkeep B\nkeep C\ntail', label: 'before.ts' },
+		{ resource: URI.file('/after.ts'), initialText: 'head\nkeep A\nkeep B\nkeep C\nmove A\nmove B\ntail', label: 'after.ts' },
+	), new AbortController().signal);
+	await Promise.resolve();
+	const widget = container.get(ICodeEditorService).listDiffEditors()[0] as DiffEditorWidget;
+	assert.equal(widget.diff?.moves.length, 0);
+	await container.get(IConfigurationService).updateValue('diffEditor.experimental.showMoves', true);
+	await Promise.resolve();
+	assert.equal(widget.diff?.moves.length, 1);
+	assert.equal(widget.element.querySelectorAll('.ash-diff-moved-links > svg > path').length, 1);
+	await container.get(IConfigurationService).updateValue('diffEditor.experimental.showMoves', false);
+	await Promise.resolve();
+	assert.deepEqual({ calls: seen, moves: widget.diff?.moves.length }, { calls: [false, true, false], moves: 0 });
+	pane.dispose();
+	dom.window.close();
+});
+
 test('Diff pane follows the modified language override and language changes', async () => {
 	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');

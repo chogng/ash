@@ -9,6 +9,163 @@ test.afterEach(async ({ page }) => {
 	await page.evaluate(() => window.ashDiffIntegration?.dispose());
 });
 
+test('diff feature revert buttons support keyboard, undo, read-only and live options', async ({ page }) => {
+	await openDiffPage(page);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const button = page.locator('#single .ash-diff-revert').getByRole('button', { name: 'Revert change', exact: true });
+	await expect(button).toBeVisible();
+	await button.focus();
+	await page.keyboard.press('Space');
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe('same\nbefore 😀 after\nlast');
+	await page.evaluate(() => window.ashDiffIntegration.undo());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await expect(button).toBeVisible();
+	await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ readOnly: true }));
+	await expect(button).toHaveCount(0);
+	await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ readOnly: false, renderMarginRevertIcon: false, renderOverviewRuler: false }));
+	await expect(button).toHaveCount(0);
+	await expect(page.locator('#single .stanza-diff-overview')).toBeHidden();
+	await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ renderMarginRevertIcon: true, renderOverviewRuler: true }));
+	await expect(button).toBeVisible();
+	await button.click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(0);
+	await expect(button).toHaveCount(0);
+});
+
+test('diff feature selection reverts only the selected character change', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('first OLD middle OLD last', 'first NEW middle NEW last'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await page.evaluate(() => window.ashDiffIntegration.selectModified([1, 7, 1, 10]));
+	const button = page.locator('#single').getByRole('button', { name: 'Revert selected changes', exact: true });
+	await expect(button).toBeVisible();
+	await button.click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe('first OLD middle NEW last');
+});
+
+test('diff feature gutter menus receive hunk and selection edits and follow scroll', async ({ page }) => {
+	await openDiffPage(page);
+	const lines = Array.from({ length: 60 }, (_, index) => `line ${index}`);
+	await page.evaluate(([original, modified]) => {
+		window.ashDiffIntegration.setComparisonText(original!, modified!);
+		window.ashDiffIntegration.registerHunkAction();
+		window.ashDiffIntegration.registerHunkAction(true);
+	}, [lines.join('\n'), [...lines.slice(0, 2), 'changed', 'extra', ...lines.slice(3)].join('\n')]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const action = page.locator('#single .ash-diff-gutter').getByRole('button', { name: 'Apply change', exact: true });
+	await expect(action).toBeVisible();
+	await action.click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.lastHunkAction?.text)).toBe([...lines.slice(0, 2), 'changed', 'extra', ...lines.slice(3)].join('\n'));
+	await page.evaluate(() => window.ashDiffIntegration.scrollModified(400));
+	await expect(action).toBeHidden();
+	await page.evaluate(() => {
+		window.ashDiffIntegration.scrollModified(0);
+		window.ashDiffIntegration.selectModified([3, 1, 3, 8]);
+	});
+	const selection = page.locator('#single .ash-diff-gutter').getByRole('button', { name: 'Apply selected change', exact: true });
+	await expect(selection).toBeVisible();
+	await selection.click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.lastHunkAction?.text)).toBe([...lines.slice(0, 2), 'changed', ...lines.slice(3)].join('\n'));
+	await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ renderGutterMenu: false }));
+	await expect(page.locator('#single .ash-diff-gutter')).toBeHidden();
+	await expect(page.locator('#single .ash-diff-revert')).toHaveCount(1);
+});
+
+test('diff feature moved links follow editor geometry, options, locale and disposal', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(async () => {
+		window.ashDiffIntegration.setComparisonText('head\nmove A\nmove B\nkeep A\nkeep B\nkeep C\ntail', 'head\nkeep A\nkeep B\nkeep C\nmove A\nmove B\ntail');
+		await window.ashDiffIntegration.setMoves(true);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(1);
+	const links = page.locator('#single .ash-diff-moved-links');
+	await expect(links).toBeVisible();
+	await expect(links.locator(':scope > svg > path')).toHaveCount(1);
+	const button = links.getByRole('button');
+	await expect(button).toHaveAccessibleName('Moved original lines 2–3 to modified lines 5–6');
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent.includes('Moved original lines 2–3'))).toBe(true);
+	const geometry = await links.locator(':scope > svg > path').getAttribute('d');
+	await page.evaluate(() => window.ashDiffIntegration.setHiddenRegions(true));
+	await expect(links.locator(':scope > svg > path')).toHaveAttribute('d', geometry!);
+	await page.evaluate(() => {
+		document.documentElement.style.setProperty('--ash-description-foreground', 'rgb(90, 110, 130)');
+		document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
+		window.ashDiffIntegration.setChineseLocale();
+	});
+	await expect(button).toHaveAccessibleName('原始第 2–3 行已移动到修改后的第 5–6 行');
+	await expect(links.locator(':scope > svg')).toHaveCSS('stroke', 'rgb(90, 110, 130)');
+	await button.focus();
+	await page.keyboard.press('Enter');
+	await expect(page.locator('#single .modified .stanza-editor-accessibility-status')).toContainText('原始第 2–3 行');
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
+	await expect(links).toBeHidden();
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
+	await expect(links).toBeVisible();
+	await page.evaluate(async () => { await window.ashDiffIntegration.setMoves(false); });
+	await expect(links).toBeHidden();
+	await page.evaluate(() => window.ashDiffIntegration.dispose());
+	await expect(page.locator('.stanza-diff-editor')).toHaveCount(0);
+});
+
+test('diff feature overview delegates pointer and wheel input to editor scrolling', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => {
+		const lines = Array.from({ length: 120 }, (_, index) => `line ${index}`).join('\n');
+		window.ashDiffIntegration.setComparisonText(lines, `${lines}\nadded`);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const ruler = page.locator('#single .stanza-diff-overview');
+	await ruler.click({ position: { x: 10, y: 150 } });
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.linePositions(1, 1).modifiedScrollTop)).toBeGreaterThan(0);
+	await page.evaluate(() => window.ashDiffIntegration.scrollModified(0));
+	await ruler.hover();
+	await page.mouse.wheel(0, 200);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.linePositions(1, 1).modifiedScrollTop)).toBeGreaterThan(0);
+});
+
+test('diff feature geometry follows wrapping and collapse, and selecting hidden lines reveals both sides', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(async () => {
+		const header = Array.from({ length: 25 }, (_, index) => `header ${index}`);
+		const keep = Array.from({ length: 35 }, (_, index) => `keep ${index}`);
+		const moved = ['move A '.repeat(80), 'move B '.repeat(80)];
+		window.ashDiffIntegration.setComparisonText([...header, ...moved, ...keep, 'tail'].join('\n'), [...header, ...keep, ...moved, 'tail'].join('\n'));
+		await window.ashDiffIntegration.setMoves(true);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(1);
+	const path = page.locator('#single .ash-diff-moved-links > svg > path');
+	await page.evaluate(() => window.ashDiffIntegration.toggleWordWrap());
+	await expect.poll(async () => {
+		const positions = await page.evaluate(() => window.ashDiffIntegration.linePositions(26, 61));
+		return await path.getAttribute('d') === `M 0 ${positions.originalTop - positions.originalScrollTop + 10} C 12 ${positions.originalTop - positions.originalScrollTop + 10} 12 ${positions.modifiedTop - positions.modifiedScrollTop + 10} 24 ${positions.modifiedTop - positions.modifiedScrollTop + 10}`;
+	}).toBe(true);
+	const before = await path.getAttribute('d');
+	await expect.poll(() => page.evaluate(() => {
+		const first = window.ashDiffIntegration.linePositions(26, 61);
+		const last = window.ashDiffIntegration.linePositions(27, 62);
+		const originalMarker = document.querySelector<HTMLElement>('#single .stanza-diff-overview-lane.original .stanza-diff-overview-marker')!;
+		const modifiedMarker = document.querySelector<HTMLElement>('#single .stanza-diff-overview-lane.modified .stanza-diff-overview-marker')!;
+		return Math.abs(parseFloat(originalMarker.style.height) - (last.originalBottom - first.originalTop) / last.originalContentHeight * 100) < 0.001
+			&& Math.abs(parseFloat(modifiedMarker.style.height) - (last.modifiedBottom - first.modifiedTop) / last.modifiedContentHeight * 100) < 0.001;
+	})).toBe(true);
+	await page.evaluate(() => window.ashDiffIntegration.setHiddenRegions(true));
+	await expect.poll(() => path.getAttribute('d')).not.toBe(before);
+	const contains = (ranges: number[][]) => ranges.some(([start, end]) => start! <= 5 && end! >= 5);
+	expect(contains((await page.evaluate(() => window.ashDiffIntegration.visibleDiffRanges())).original)).toBe(false);
+	await page.evaluate(() => window.ashDiffIntegration.selectModified([5, 1, 6, 2]));
+	await expect.poll(async () => {
+		const ranges = await page.evaluate(() => window.ashDiffIntegration.visibleDiffRanges());
+		return contains(ranges.original) && contains(ranges.modified);
+	}).toBe(true);
+	await page.evaluate(() => {
+		document.documentElement.dataset.colorScheme = 'high-contrast-dark';
+		document.documentElement.style.setProperty('--ash-contrast-border', 'rgb(10, 20, 30)');
+		document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
+		window.ashDiffIntegration.scrollModified(window.ashDiffIntegration.linePositions(26, 61).originalTop);
+	});
+	await expect(page.locator('#single .ash-diff-moved-block').first()).toHaveCSS('outline-color', 'rgb(10, 20, 30)');
+});
+
 test('diff editors preserve source indentation on both sides', async ({ page }) => {
 	await openDiffPage(page);
 	const lines = ['xxxxxxxxxx', '    xxxxxx', '\txxxxxx', '\t\txx'];

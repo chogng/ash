@@ -12,6 +12,7 @@ import { resolveCommandsContext } from '../../../browser/parts/editor/editorComm
 import { IViewsService } from '../../../services/views/browser/viewsService.js';
 import { IExplorerService } from './files.js';
 import { VIEW_ID } from '../common/files.js';
+import { EditorResourceAccessor, SideBySideEditor } from '../../../common/editor.js';
 
 export async function copyFilePath(accessor: ServicesAccessor, resourceArgument?: unknown): Promise<void> {
 	const paths = resolveCopyResources(accessor, resourceArgument).map(resource => resource.scheme === Schemas.file ? resource.fsPath : getRemoteWorkspacePath(resource));
@@ -34,7 +35,7 @@ function resolveCopyResources(accessor: ServicesAccessor, argument: unknown): re
 	if (argument === undefined || argument instanceof URI) return [resolveFileResource(accessor, argument)];
 	const context = resolveCommandsContext([argument], accessor.get(IEditorGroupsService));
 	if (context.groupedEditors.length === 0) throw new TypeError('File command requires a resource URI or editor context');
-	return context.groupedEditors.flatMap(({ editors }) => editors.map(editor => resolveFileResource(accessor, editor.resource)));
+	return context.groupedEditors.flatMap(({ editors }) => editors.map(editor => resolveFileResource(accessor, EditorResourceAccessor.getOriginalUri(editor, { supportSideBySide: SideBySideEditor.PRIMARY }))));
 }
 
 export function resolveFileResource(accessor: ServicesAccessor, resourceArgument: unknown): URI {
@@ -42,9 +43,9 @@ export function resolveFileResource(accessor: ServicesAccessor, resourceArgument
 	if (resourceArgument instanceof URI) {
 		resource = resourceArgument;
 	} else if (resourceArgument === undefined) {
-		resource = accessor.get(IEditorService).activeEditor?.resource;
+		resource = EditorResourceAccessor.getOriginalUri(accessor.get(IEditorService).activeEditor, { supportSideBySide: SideBySideEditor.PRIMARY });
 	} else {
-		resource = resolveCommandsContext([resourceArgument], accessor.get(IEditorGroupsService)).groupedEditors[0]?.editors[0]?.resource;
+		resource = EditorResourceAccessor.getOriginalUri(resolveCommandsContext([resourceArgument], accessor.get(IEditorGroupsService)).groupedEditors[0]?.editors[0], { supportSideBySide: SideBySideEditor.PRIMARY });
 		if (!resource) throw new TypeError('File command requires a resource URI or editor context');
 	}
 	if (!resource) {

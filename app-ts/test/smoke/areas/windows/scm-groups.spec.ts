@@ -221,10 +221,21 @@ test.describe('SCM editor groups', () => {
 		await expect(icon).toHaveAttribute('aria-hidden', 'true');
 		expect(await icon.evaluate(element => ({ glyph: element.textContent, color: getComputedStyle(element).color }))).toEqual(appearance);
 		const foreground = await editor.evaluate(element => getComputedStyle(element).color);
-		for (const lexeme of ['import', 'const', 'after']) {
+		for (const lexeme of ['import', 'const']) {
 			const token = editor.locator('.stanza-editor-token').filter({ hasText: lexeme }).first();
 			await expect(token).toBeVisible();
 			await expect(token).not.toHaveCSS('color', foreground);
+		}
+		// Character-level changes split a string into several colored spans.
+		const modifiedString = editor.locator('.view-line[data-line-index="1"] .token-string');
+		await expect.poll(async () => (await modifiedString.allTextContents()).join('')).toBe('after');
+		const removed = editor.locator('.stanza-diff-inline-original-line');
+		await expect(removed).toHaveAttribute('aria-label', 'Removed line 2: export const value: Thing = "before";');
+		const originalString = removed.locator('.token-string');
+		await expect.poll(async () => (await originalString.allTextContents()).join('')).toBe('before');
+		await expect.poll(async () => (await removed.locator('.stanza-diff-inline-removed').allTextContents()).join('')).toBe('bfoe');
+		for (const tokens of [modifiedString, originalString]) {
+			for (const token of await tokens.all()) await expect(token).not.toHaveCSS('color', foreground);
 		}
 		const tab = comparison.getByRole('tab');
 		const tabId = await tab.getAttribute('id');

@@ -1,5 +1,6 @@
 import { type IDocumentDiff } from './documentDiffProvider.js';
-import { type RangeMapping } from './rangeMapping.js';
+import type { RangeMapping, DetailedLineRangeMapping } from './rangeMapping.js';
+import type { MovedText } from './linesDiffComputer.js';
 
 export enum LineDiffKind {
 	Unchanged = "unchanged",
@@ -35,10 +36,12 @@ export interface LineDiffHunk {
 export interface LineDiff {
 	readonly rows: readonly LineDiffRow[];
 	readonly hunks: readonly LineDiffHunk[];
+	readonly changes: readonly DetailedLineRangeMapping[];
+	readonly moves: readonly MovedText[];
 }
 
-/** Projects the standard diff result into aligned rows for Ash's read-only diff widget. */
-export function toLineDiff(diff: Pick<IDocumentDiff, 'changes'>, originalLineCount: number, modifiedLineCount: number): LineDiff {
+/** Builds aligned display rows while retaining the current result's mapping identities for edit and move controls. */
+export function toLineDiff(diff: Pick<IDocumentDiff, 'changes' | 'moves'>, originalLineCount: number, modifiedLineCount: number): LineDiff {
 	const rows: LineDiffRow[] = [];
 	const hunks: LineDiffHunk[] = [];
 	let originalIndex = 0;
@@ -77,7 +80,7 @@ export function toLineDiff(diff: Pick<IDocumentDiff, 'changes'>, originalLineCou
 	while (originalIndex < originalLineCount && modifiedIndex < modifiedLineCount) {
 		rows.push({ kind: LineDiffKind.Unchanged, originalLineIndex: originalIndex++, modifiedLineIndex: modifiedIndex++, originalChanges: [], modifiedChanges: [] });
 	}
-	return { rows, hunks };
+	return { rows, hunks, changes: diff.changes, moves: diff.moves };
 }
 
 function changesForLine(changes: readonly RangeMapping[] | undefined, lineNumber: number, side: 'original' | 'modified'): DiffRange[] {

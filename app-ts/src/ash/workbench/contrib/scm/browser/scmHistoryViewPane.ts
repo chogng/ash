@@ -4,9 +4,13 @@ import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../.
 import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { localize } from '../../../../nls.js';
+import { localizedString } from '../../../../platform/action/common/action.js';
+import { URI } from '../../../../base/common/uri.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
-import { IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
+import { Action2, IMenuService, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
@@ -21,6 +25,50 @@ import { ViewPane } from "../../../browser/parts/views/viewPane.js";
 import { createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { SWIMLANE_HEIGHT, renderSCMHistoryItemGraph, toISCMHistoryItemViewModelArray } from './scmHistory.js';
 import { SCMHistoryBusyContext, SCMHistoryProviderIdContext } from '../common/scm.js';
+import { createMultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../multiDiffEditor/browser/multiDiffEditorInput.js';
+
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.scm.action.graph.viewChanges',
+			title: localizedString('ash', 'scm.history.openChanges', 'Open Changes'),
+			icon: Lxicon.diff,
+			f1: false,
+			menu: { id: MenuId.SCMHistoryItemContext, group: 'inline', order: 1 },
+		});
+	}
+
+	public override async run(accessor: ServicesAccessor, element: SCMHistoryItemViewModelTreeElement): Promise<void> {
+		if (element?.type !== 'historyItemViewModel') { return; }
+		const { repository, historyItemViewModel } = element;
+		const provider = repository.provider.historyProvider;
+		if (!provider) { return; }
+		const historyItem = historyItemViewModel.historyItem;
+		const changes = await provider.provideHistoryItemChanges(historyItem.id, historyItem.parentIds[0]);
+		const items: MultiDiffEditorInputItem[] = [];
+		let binaryFiles = 0;
+		for (const change of changes ?? []) {
+			const file = await provider.resolveHistoryItemChangeContents(historyItem.id, change);
+			if (file.original.kind === 'binary' || file.modified.kind === 'binary') {
+				binaryFiles += 1;
+				continue;
+			}
+			// Missing sides represent additions and deletions; their revision URIs keep empty models distinct.
+			items.push({
+				label: change.originalPath ? `${change.originalPath} → ${change.path}` : change.path,
+				original: { resource: change.originalUri ?? change.uri, readOnly: true, initialText: file.original.kind === 'text' ? file.original.text : '' },
+				modified: { resource: change.modifiedUri ?? change.uri, readOnly: true, initialText: file.modified.kind === 'text' ? file.modified.text : '' },
+			});
+		}
+		if (binaryFiles > 0) {
+			accessor.get(INotificationService).info(localize('scm.history.binaryFiles', '{0} binary files cannot be shown in the text comparison.', binaryFiles));
+		}
+		if (items.length === 0) { return; }
+		const resource = URI.from({ scheme: 'ash-multi-diff', path: `/scm-history/${repository.id}/${historyItem.id}` });
+		const title = `${historyItem.displayId ?? historyItem.id} · ${historyItem.subject}`;
+		await accessor.get(IEditorService).openEditor(createMultiDiffEditorInput(resource, items, title, { kind: 'snapshot', repositoryId: repository.id, label: historyItem.displayId ?? historyItem.id }), { pinned: true });
+	}
+});
 
 const PageSize = 50;
 const LoadAhead = 48;
@@ -59,7 +107,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService) {
 		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.scmViewService = scmViewService;
@@ -172,6 +220,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.list.className = "ash-scm-graph-list";
 			this.list.setAttribute("role", "tree");
 			this.list.setAttribute('aria-label', this.graphLabel);
+			this.list.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a commit to expand its files. Use Tab to reach Open Changes and press Enter to compare all text files in that commit. The same action is available in the commit context menu.'));
 			children.push(this.list);
 		}
 		if (page.hasMore) children.push(this.renderMore());
@@ -338,15 +387,26 @@ export class SCMHistoryViewPane extends ViewPane {
 		const row = h(document, "div");
 		row.className = "ash-scm-graph-row";
 		row.append(graph, details, metadata);
+		const repository = this.scmViewService.activeRepository;
+		if (repository) {
+			const actions = h(document, 'div');
+			actions.className = 'ash-scm-graph-actions';
+			this.hovers.add(new MenuWorkbenchToolBar(actions, this.menuService, this.contextMenuService, MenuId.SCMHistoryItemContext, {
+				ariaLabel: localize('scm.history.commitActions', 'Commit actions'),
+				menuOptions: { arg: { repository, historyItemViewModel, type: 'historyItemViewModel' } satisfies SCMHistoryItemViewModelTreeElement },
+				toolbarOptions: { primaryGroup: 'inline' },
+			}));
+			row.append(actions);
+		}
 		item.append(row);
 		const expanded = this.expanded.get(historyItem.id);
 		if (expanded) item.append(this.renderCommitChanges(historyItemViewModel, expanded));
 		this.hovers.add(addDisposableListener(item, "click", (event) => {
-			if ((event.target as Element).closest(".ash-scm-graph-change")) return;
+			if ((event.target as Element).closest(".ash-scm-graph-change, .ash-scm-graph-actions")) return;
 			void this.toggleCommit(historyItem);
 		}));
 		this.hovers.add(addDisposableListener(item, "keydown", (event) => {
-			if (event.key !== "Enter" && event.key !== " ") return;
+			if (event.target !== item || (event.key !== "Enter" && event.key !== " ")) return;
 			event.preventDefault();
 			void this.toggleCommit(historyItem);
 		}));

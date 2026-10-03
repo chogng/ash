@@ -8,6 +8,7 @@ import { IViewsService } from '../../../../services/views/browser/viewsService.j
 import { FileEditorInput } from '../../browser/editors/fileEditorInput.js';
 import { REVEAL_IN_EXPLORER_COMMAND_ID } from '../../browser/fileConstants.js';
 import { MultipleEditorsSelectedInGroupContext, ResourceSchemeContext } from '../../../../common/contextkeys.js';
+import { createDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
 import { JSDOM } from 'jsdom';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -22,7 +23,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { IQuickInputService, type IQuickInputService as QuickInputServiceContract } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { IEditorService, type IEditorService as EditorServiceContract } from '../../../../services/editor/common/editorService.js';
+import { IEditorService, type EditorInput, type IEditorService as EditorServiceContract } from '../../../../services/editor/common/editorService.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import type { IEditorPart as EditorPartContract } from '../../../../browser/parts/editor/editorPart.js';
 import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, OPEN_FILE_COMMAND_ID, SAVE_FILE_COMMAND_ID } from '../../browser/fileConstants.js';
@@ -416,13 +417,14 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 	Object.defineProperty(globalThis, 'document', { configurable: true, value: browser.window.document });
 	try {
 		await import('../../browser/fileActions.contribution.js');
-		const root = URI.file('C:\\project');
-		const file = URI.file('C:\\project\\src\\main.ts');
+		const root = URI.file('/project');
+		const file = URI.file('/project/src/main.ts');
 		const copied: string[] = [];
 		using workspace = new WorkspaceContextService({ id: 'project', folders: [{ id: 'project', uri: root, name: 'project', index: 0 }] });
 		const services = new InstantiationService();
+		let activeEditor: EditorInput = { resource: file };
 		services.registerInstance(IEditorService, {
-			activeEditor: { resource: file },
+			get activeEditor() { return activeEditor; },
 		} as EditorServiceContract);
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IClipboardService, {
@@ -437,9 +439,13 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 		await commands.executeCommand(COPY_PATH_COMMAND_ID);
 		await commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID);
 
-		assert.deepEqual(copied, ['C:\\project\\src\\main.ts', 'src/main.ts']);
-		await assert.rejects(commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID, URI.file('C:\\outside\\other.ts')), /outside the current workspace/);
-		assert.equal(copied.length, 2);
+		assert.deepEqual(copied, [file.fsPath, 'src/main.ts']);
+		activeEditor = createDiffEditorInput({ resource: URI.parse('git-change:/src/main.ts?revision=1') }, { resource: file });
+		await commands.executeCommand(COPY_PATH_COMMAND_ID);
+		await commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID);
+		assert.deepEqual(copied.slice(2), [file.fsPath, 'src/main.ts']);
+		await assert.rejects(commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID, URI.file('/outside/other.ts')), /outside the current workspace/);
+		assert.equal(copied.length, 4);
 	} finally {
 		if (previousDocument) {
 			Object.defineProperty(globalThis, 'document', previousDocument);

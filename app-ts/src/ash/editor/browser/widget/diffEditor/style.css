@@ -1,7 +1,7 @@
 .stanza-diff-editor {
 	position: relative;
 	display: grid;
-	grid-template-columns: minmax(0, var(--stanza-diff-original-width)) minmax(0, 1fr) 30px;
+	grid-template-columns: minmax(0, var(--stanza-diff-original-width)) var(--ash-diff-center-width, 0px) minmax(0, 1fr) var(--ash-diff-overview-width, 30px);
 	box-sizing: border-box;
 	width: 100%;
 	height: 100%;
@@ -29,11 +29,11 @@
 }
 
 .stanza-diff-editor-side.modified {
-	grid-column: 2;
+	grid-column: 3;
 }
 
 .stanza-diff-editor.inline-view {
-	grid-template-columns: minmax(0, 1fr) 30px;
+	grid-template-columns: var(--ash-diff-center-width, 0px) minmax(0, 1fr) var(--ash-diff-overview-width, 30px);
 }
 
 .stanza-diff-editor.inline-view .stanza-diff-editor-side.original {
@@ -41,7 +41,7 @@
 }
 
 .stanza-diff-editor.inline-view .stanza-diff-editor-side.modified {
-	grid-column: 1;
+	grid-column: 2;
 }
 
 .stanza-diff-inline-original-line {
@@ -137,8 +137,12 @@
 	width: 30px;
 	overflow: hidden;
 	color: var(--ash-editor-foreground);
-	pointer-events: none;
+	pointer-events: auto;
 	background: color-mix(in srgb, currentColor 3%, transparent);
+}
+
+.stanza-diff-overview[hidden] {
+	display: none;
 }
 
 .stanza-diff-overview-lane {
@@ -196,7 +200,7 @@
 .stanza-diff-editor-incomplete-status:not([hidden]) {
 	position: absolute;
 	z-index: 8;
-	right: 30px;
+	right: var(--ash-diff-overview-width, 30px);
 	left: 0;
 	box-sizing: border-box;
 	padding: 4px 8px;
@@ -275,4 +279,60 @@
 [data-color-scheme="high-contrast-dark"] .ash-diff-hidden-region-content,
 [data-color-scheme="high-contrast-light"] .ash-diff-hidden-region-content {
 	border-color: var(--ash-contrast-border);
+}
+
+.ash-diff-revert {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.ash-diff-gutter,
+.ash-diff-moved-links {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	z-index: 7;
+	overflow: hidden;
+	background: var(--ash-editor-background);
+}
+
+.ash-diff-gutter[hidden],
+.ash-diff-moved-links[hidden],
+.ash-diff-gutter-item[hidden],
+.ash-diff-moved-action[hidden] {
+	display: none;
+}
+
+.ash-diff-gutter-item,
+.ash-diff-moved-action {
+	position: absolute;
+	left: 0;
+	width: 100%;
+	display: flex;
+	justify-content: center;
+}
+
+.ash-diff-moved-links > svg {
+	width: 100%;
+	height: 100%;
+	fill: none;
+	stroke: var(--ash-description-foreground);
+	stroke-width: var(--ash-stroke-thickness);
+	pointer-events: none;
+}
+
+.ash-diff-moved-block {
+	outline: var(--ash-stroke-thickness) solid var(--ash-description-foreground);
+	outline-offset: -1px;
+}
+
+[data-color-scheme="high-contrast-dark"] .ash-diff-moved-block,
+[data-color-scheme="high-contrast-light"] .ash-diff-moved-block {
+	outline-color: var(--ash-contrast-border);
+}
+
+.features-inert > .ash-diff-gutter,
+.features-inert > .ash-diff-moved-links {
+	visibility: hidden;
 }

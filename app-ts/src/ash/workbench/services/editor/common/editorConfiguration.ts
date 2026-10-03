@@ -109,7 +109,7 @@ export function getDiffComputationOptions(configuration: IConfigurationService, 
 	return {
 		ignoreTrimWhitespace: configuration.getValue<boolean>("diffEditor.ignoreTrimWhitespace", { overrideIdentifier: languageId }),
 		maxComputationTimeMs: configuration.getValue<number>("diffEditor.maxComputationTime", { overrideIdentifier: languageId }),
-		computeMoves: false,
+		computeMoves: configuration.getValue<boolean>('diffEditor.experimental.showMoves'),
 	};
 }
 
