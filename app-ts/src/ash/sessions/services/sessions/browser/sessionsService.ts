@@ -122,7 +122,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 				this.select(restored, this.pages.chat);
 			}
 			if (this.activeSelection && this.sessionService.state !== 'error') {
-				this.activate(referenceForSelection(this.activeSelection));
+				this.activate(referenceForSelection(this.activeSelection), this.current, 'focus');
 			}
 		}
 		this.syncFromSessionService();
@@ -140,7 +140,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		this.select({ kind: 'untitled', session }, this.pages[page]);
 		return session;
 	}
-	activateSelection(selection: SessionsViewSelection, page = this.page.get()): void { this.activate(referenceForSelection(selection), this.pages[page]); }
+	activateSelection(selection: SessionsViewSelection, page = this.page.get()): void { this.activate(referenceForSelection(selection), this.pages[page], 'focus'); }
 	closeVisibleSelection(selection: SessionsViewSelection, page = this.page.get()): void {
 		const state = this.pages[page];
 		const key = visibilityKey(referenceForSelection(selection));
@@ -158,7 +158,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		if (selection.kind === "untitled") {
 			this.sessionService.discardUntitledSession(selection.session.untitledSessionId);
 		}
-		if (wasActive && replacement) this.activate(replacement, state);
+		if (wasActive && replacement) this.activate(replacement, state, 'focus');
 		else if (wasActive) {
 			const session = this.sessionService.createUntitledSession(page === 'code' ? 'New code session' : 'New chat');
 			this.select({ kind: 'untitled', session }, state);
@@ -212,13 +212,13 @@ export class SessionsService extends Disposable implements ISessionsService {
 		return active ? { kind: 'session', sessionId: active.sessionId, threadId: active.threadId } : reference;
 	}
 
-	private select(selection: SessionsViewSelection, state = this.current): void {
+	private select(selection: SessionsViewSelection, state = this.current, mode: 'open' | 'focus' = 'open'): void {
 		const reference = referenceForSelection(selection);
 		const previous = state.activeSelection.get();
 		const existing = state.visibleReferences.findIndex(candidate => visibilityKey(candidate) === visibilityKey(reference));
-		if (existing >= 0) state.visibleReferences[existing] = reference;
+		if (mode === 'focus' && existing >= 0) state.visibleReferences[existing] = reference;
 		else {
-			// Ordinary navigation owns the whole page; selecting a restored grid slot only changes its active session.
+			// List and history navigation show only the requested Session, even when it already occupies a restored split.
 			state.visibleReferences = [reference];
 		}
 		transaction(tx => {
@@ -274,10 +274,10 @@ export class SessionsService extends Disposable implements ISessionsService {
 		return undefined;
 	}
 
-	private activate(reference: SessionsViewReference, state = this.current): void {
+	private activate(reference: SessionsViewReference, state = this.current, mode: 'open' | 'focus' = 'open'): void {
 		if (reference.kind === "session") this.sessionService.selectThread(reference.sessionId, reference.threadId);
 		else this.sessionService.selectUntitledSession(reference.untitledSessionId);
-		this.select(this.resolve(reference)!, state);
+		this.select(this.resolve(reference)!, state, mode);
 	}
 
 	private resolve(reference: SessionsViewReference | undefined): SessionsViewSelection | undefined {

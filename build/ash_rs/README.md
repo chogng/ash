@@ -3,7 +3,7 @@
 This directory owns the shared Ash package for development and release:
 
 - `prepare.py` resolves development inputs and publishes packages; `build/app_ts/runtimeStore.ts` reads published selections for Electron and Web.
-- `develop.py` uses `prepare.py` to publish a complete development package, then notifies Desktop reloaders of that package selection.
+- `develop.py` combines prepared resources with incremental binaries, atomically selects a development runtime, and collects unused generations and executable objects.
 - `protocol.py` runs the Rust protocol fixture generator; `build/protocol/` synchronizes TypeScript consumers.
 - `build.py` resolves release binaries and resources.
 - `layout.py` assembles and validates both development and release packages using `layout.json`.
@@ -137,9 +137,15 @@ that directory through `ASH_DEV_RUNTIME_ROOT`; managed resources resolve only
 inside it. One profile-wide reloader stops local connections, restarts the daemon
 once, and reconnects live windows. Custom development launchers may select an
 absolute pointer path with `ASH_DEV_APP_SERVER_GENERATION`. Resource or tool-lock
-changes require running Desktop preparation again. Development runtime objects
-and generations are retained under `.build/app-ts/dev/app-server`; removing them
-is an offline build-output cleanup operation after development processes stop.
+changes require running Desktop preparation again. Every successful selection,
+including an unchanged selection, collects unused generations under
+`.build/app-ts/dev/app-server`. The selected generation is always retained;
+older generations are removed only while holding an exclusive `.lease` lock,
+so running processes and daemon startup leases keep their complete runtime.
+After removing old generations, executable objects with no remaining runtime
+hard links are deleted. Publication and collection share `publish.lock` so
+concurrent builders cannot delete each other's pending outputs. A process that
+exits releases its lease; its old runtime is collected on the next selection.
 The Python release builder calls the same `layout.py` assembler with resolved inputs. It also honors `CARGO_TARGET_DIR`,
 and retains its refusal to replace an explicit output directory.
 

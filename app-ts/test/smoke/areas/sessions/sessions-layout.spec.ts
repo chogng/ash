@@ -282,5 +282,18 @@ test('Sessions restores independent pane arrangements, active selections and dra
 		}
 		return undefined;
 	}, code.map(pane => pane.identity))).toEqual({ removed: false, retained: true });
+	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+	await expect(panes).toHaveCount(3);
+	// A normal list selection exits the restored split, including a click on its already-active Session.
+	await page.locator('.ash-sessions-list-item[aria-current="page"]').click();
+	await expect(panes).toHaveCount(1);
+	await expect(panes.locator('.ash-chat')).toHaveAttribute('data-untitled-session-id', chat[0]!.identity!);
+	await new Editor(panes.first()).waitForEditorContents(text => text === 'Chat first draft');
+	await page.reload({ waitUntil: 'domcontentloaded' });
+	await expect(panes).toHaveCount(1);
+	await expect(panes.locator('.ash-chat')).toHaveAttribute('data-untitled-session-id', chat[0]!.identity!);
+	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(panes).toHaveCount(1);
+	await new Editor(panes.first()).waitForEditorContents(text => text === 'Code second draft');
 	expect(failures).toEqual([]);
 });

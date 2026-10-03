@@ -103,6 +103,59 @@ test('new Sessions replace a restored split across the entire page and leave the
 	assert.deepEqual(view.visibleSelections.map(selectionId), [`untitled:${second.untitledSessionId}`]);
 });
 
+for (const target of ['active', 'inactive', 'untitled'] as const) {
+	test(`opening the ${target} Session from a restored split shows only its content`, async () => {
+		using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
+		using storage = createTestStorage();
+		const visible = [
+			{ kind: 'session', sessionId: 'session-1', threadId: 'thread-1' },
+			{ kind: 'session', sessionId: 'session-2', threadId: 'thread-2' },
+			{ kind: 'untitled', session: { untitledSessionId: 'saved-draft', title: 'Draft', workspace: { type: 'current' } } },
+		];
+		storage.store('sessions.viewState', JSON.stringify({ version: 1, pages: {
+			chat: { visible, active: 0 }, code: { visible: [visible[1]], active: 0 },
+		} }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		using view = createView(sessions, storage);
+		await view.initialize();
+		assert.equal(view.visibleSelections.length, 3);
+
+		if (target === 'untitled') {
+			view.openUntitledSession('saved-draft');
+		} else {
+			const index = target === 'active' ? 1 : 2;
+			view.openSession(`session-${index}`, `thread-${index}`);
+		}
+
+		const expected = {
+			active: 'session:session-1:thread-1',
+			inactive: 'session:session-2:thread-2',
+			untitled: 'untitled:saved-draft',
+		}[target];
+		assert.deepEqual({ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection), code: view.getPageSelection('code').visibleSelections.map(selectionId) }, {
+			visible: [expected], active: expected, code: ['session:session-2:thread-2'],
+		});
+	});
+}
+
+test('pane focus and closing a pane preserve the remaining split while history navigation shows one Session', async () => {
+	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2'), session('session-3', 'thread-3')]);
+	using storage = createTestStorage();
+	const visible = sessions.sessions.map(session => ({ kind: 'session', sessionId: session.sessionId, threadId: session.chats[0]!.threadId }));
+	storage.store('sessions.viewState', JSON.stringify({ version: 1, pages: {
+		chat: { visible, active: 0 }, code: { visible: [], active: -1 },
+	} }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	using view = createView(sessions, storage);
+	await view.initialize();
+	view.activateSelection(view.visibleSelections[1]!);
+	assert.equal(view.visibleSelections.length, 3);
+	view.closeVisibleSelection(view.activeSelection!);
+	assert.deepEqual({ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection) }, {
+		visible: ['session:session-1:thread-1', 'session:session-3:thread-3'], active: 'session:session-3:thread-3',
+	});
+	view.navigateBack();
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-2:thread-2']);
+});
+
 test("Sessions view replaces a visible draft when it materializes", async () => {
 	using sessions = new FakeSessionService([]);
 	using storage = createTestStorage();

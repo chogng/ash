@@ -2969,12 +2969,41 @@ test('Sessions menus and history actions stay independent from Workbench', async
 	await expect(newSession).toHaveAttribute('aria-current', 'page');
 	await expect(back).toBeEnabled();
 	await expect(forward).toBeDisabled();
-	await toolbar.getByRole('button', { name: 'Application menu', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'File', exact: true }).hover();
-	await expect(page.getByRole('menuitem', { name: 'Return to Workbench', exact: true })).toBeVisible();
-	const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
-	await page.getByRole('menuitem', { name: 'Return to Workbench', exact: true }).click();
-	await closed;
+	if (target.kind === 'electron' && process.platform === 'darwin') {
+		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+		// Select the system-menu item in Main; keep the renderer menu, IPC and command execution real.
+		await application.evaluate(({ Menu }) => {
+			const popup = Menu.prototype.popup;
+			const probe = { selected: '', restore: () => { Menu.prototype.popup = popup; } };
+			(globalThis as typeof globalThis & { ashSessionsMenuProbe: typeof probe }).ashSessionsMenuProbe = probe;
+			Menu.prototype.popup = function (options) {
+				const file = this.items.find(item => item.label === 'File');
+				const item = file?.submenu?.items.find(item => item.label === 'Return to Workbench');
+				if (!file?.enabled || !item?.enabled) { throw new Error('Sessions File menu must enable Return to Workbench'); }
+				probe.selected = item.label;
+				item.click(item, options?.window, { shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, triggeredByAccelerator: false });
+				options?.callback?.();
+			};
+		});
+		try {
+			const closed = page.waitForEvent('close');
+			await toolbar.getByRole('button', { name: 'Application menu', exact: true }).click();
+			await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { ashSessionsMenuProbe: { selected: string } }).ashSessionsMenuProbe.selected)).toBe('Return to Workbench');
+			await closed;
+		} finally {
+			await application.evaluate(() => {
+				(globalThis as typeof globalThis & { ashSessionsMenuProbe: { restore(): void } }).ashSessionsMenuProbe.restore();
+				Reflect.deleteProperty(globalThis, 'ashSessionsMenuProbe');
+			});
+		}
+	} else {
+		await toolbar.getByRole('button', { name: 'Application menu', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'File', exact: true }).hover();
+		await expect(page.getByRole('menuitem', { name: 'Return to Workbench', exact: true })).toBeVisible();
+		const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
+		await page.getByRole('menuitem', { name: 'Return to Workbench', exact: true }).click();
+		await closed;
+	}
 	await workbench.waitForReady();
 });
 

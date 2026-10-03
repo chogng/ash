@@ -5,9 +5,11 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -25,6 +27,99 @@ from build.lib.targets import TARGETS, default_target
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@contextmanager
+def _exclusive_lock(path: Path, *, create: bool = False, blocking: bool = True):
+    """Use the same OS locks as ash-package-store's fs2 process leases."""
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        class Overlapped(ctypes.Structure):
+            _fields_ = [
+                ("internal", ctypes.c_size_t),
+                ("internal_high", ctypes.c_size_t),
+                ("offset", wintypes.DWORD),
+                ("offset_high", wintypes.DWORD),
+                ("event", wintypes.HANDLE),
+            ]
+
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.CreateFileW.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.HANDLE,
+        ]
+        kernel.CreateFileW.restype = wintypes.HANDLE
+        kernel.LockFileEx.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            ctypes.POINTER(Overlapped),
+        ]
+        kernel.LockFileEx.restype = wintypes.BOOL
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel.CloseHandle.restype = wintypes.BOOL
+        # Share deletion so cleanup can remove a directory while holding its lease.
+        handle = kernel.CreateFileW(
+            str(path), 0xC0000000, 0x7, None, 4 if create else 3, 0x80, None
+        )
+        if handle == ctypes.c_void_p(-1).value:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            overlapped = Overlapped()
+            locked = kernel.LockFileEx(
+                handle,
+                2 | (0 if blocking else 1),
+                0,
+                0xFFFFFFFF,
+                0xFFFFFFFF,
+                ctypes.byref(overlapped),
+            )
+            if not locked:
+                error = ctypes.get_last_error()
+                if blocking or error != 33:  # ERROR_LOCK_VIOLATION
+                    raise ctypes.WinError(error)
+            yield bool(locked)
+        finally:
+            kernel.CloseHandle(handle)
+    else:
+        import fcntl
+
+        with path.open("a+b" if create else "r+b") as file:
+            try:
+                fcntl.flock(file, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+            except BlockingIOError:
+                yield False
+            else:
+                yield True
+
+
+def _cleanup_generations(directory: Path, current: str) -> None:
+    for runtime in (directory / "generations").iterdir():
+        if (
+            runtime.name == current
+            or re.fullmatch(r"[a-f0-9]{64}", runtime.name) is None
+        ):
+            continue
+        with _exclusive_lock(runtime / ".lease", blocking=False) as acquired:
+            if acquired:
+                shutil.rmtree(runtime)
+    # Every retained runtime owns a hard link. Count actual links, including leased
+    # generations, instead of relying on the selected generation's digest manifest.
+    for immutable in (directory / "objects").iterdir():
+        if (
+            re.fullmatch(r"[a-f0-9]{64}", immutable.name)
+            and immutable.stat().st_nlink == 1
+        ):
+            immutable.unlink()
+
+
 def publish_generation(
     package: Path, binaries: dict[str, Path], directory: Path
 ) -> tuple[bool, str]:
@@ -32,6 +127,18 @@ def publish_generation(
     if os.name == "nt":
         package = Path("\\\\?\\" + str(package.resolve()).removeprefix("\\\\?\\"))
         directory = Path("\\\\?\\" + str(directory.resolve()).removeprefix("\\\\?\\"))
+    directory.mkdir(parents=True, exist_ok=True)
+    # Publication and collection must serialize: a concurrent publisher may already
+    # have linked its objects but not yet committed current.json.
+    with _exclusive_lock(directory / "publish.lock", create=True):
+        result = _publish_generation(package, binaries, directory)
+        _cleanup_generations(directory, result[1])
+        return result
+
+
+def _publish_generation(
+    package: Path, binaries: dict[str, Path], directory: Path
+) -> tuple[bool, str]:
     # Cargo may rewrite its outputs on the next build. Freeze only changed binary contents;
     # generations share executable objects through hard links. Declarative resource readers
     # require single-link files, so each generation must own copies of ash-resources.
@@ -59,7 +166,6 @@ def publish_generation(
     pointer = directory / "current.json"
     if pointer.is_file() and pointer.read_text(encoding="utf-8") == contents:
         return False, generation
-    directory.mkdir(parents=True, exist_ok=True)
     runtime = directory / "generations" / generation
     if not runtime.exists():
         staging = directory / f".staging-{uuid.uuid4()}"
