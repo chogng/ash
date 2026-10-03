@@ -2689,14 +2689,12 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect(activityButtons.nth(2)).toBeEnabled();
 	await expect(activityButtons.nth(3)).toBeEnabled();
 	if (target.appServerMode === 'required') {
-		await sessionsPage.getByRole('button', { name: 'Accounts', exact: true }).click();
-		await expect(sessionsPage.getByRole('button', { name: 'Accounts', exact: true })).toHaveAttribute('aria-expanded', 'true');
-		if (process.platform !== 'darwin') {
-			await expect(sessionsPage.getByRole('menuitem', { name: 'Settings' })).toBeVisible();
-			await expect(sessionsPage.getByRole('menuitem', { name: 'Return to Workbench' })).toBeVisible();
-			await expect(sessionsPage.getByRole('menuitem', { name: 'Sign in with ChatGPT' })).toHaveCount(0);
-		}
-		await sessionsPage.keyboard.press('Escape');
+		const accounts = sessionsPage.getByRole('button', { name: 'Accounts', exact: true });
+		const accountItems = await new Menus(sessionsPage).inspect(application, () => accounts.click());
+		expect(accountItems.map(item => item.label)).toContain('Settings');
+		expect(accountItems.map(item => item.label)).toContain('Return to Workbench');
+		expect(accountItems.map(item => item.label)).not.toContain('Sign in with ChatGPT');
+		await expect(accounts).toHaveAttribute('aria-expanded', 'false');
 	}
 	await expect(sessionsPage.locator("[data-part='sidebar']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='sessions']")).toBeVisible();

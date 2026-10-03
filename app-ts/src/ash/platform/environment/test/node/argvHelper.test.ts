@@ -30,3 +30,12 @@ test('Windows relaunch commands preserve spaces, embedded quotes and trailing pa
 	assert.equal(windowsCommandLine(['C:\\Program Files\\Ash\\Ash.exe', '--user-data-dir=C:\\Ash profile\\', 'a"b', '--new-window']), '"C:\\Program Files\\Ash\\Ash.exe" "--user-data-dir=C:\\Ash profile\\\\" "a\\"b" "--new-window"');
 });
 
+for (const packaging of ['development', 'packaged'] as const) {
+	test(`${packaging} launches keep macOS recovery preferences separate from requested files`, () => {
+		assert.deepEqual(parseMainProcessArgv({
+			arguments: ['/electron', ...(packaging === 'development' ? ['/repo/app-ts'] : []), '-ApplePersistenceIgnoreState', 'YES', '--folder=/project', '/project/main.ts'],
+			packaging,
+			appPath: '/repo/app-ts',
+		}), ['--folder=/project', '/project/main.ts']);
+	});
+}

@@ -62,6 +62,9 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 			"--in-process-gpu",
 			...(bundle ? [] : [desktopDirectory]),
 			`--user-data-dir=${options.userDataDirectory}`,
+			// AppKit's recovery prompt can block ready after test-owned processes are terminated.
+			// Keep this launch isolated from macOS saved UI; Ash restores its own profile state.
+			...(process.platform === 'darwin' ? ['-ApplePersistenceIgnoreState', 'YES'] : []),
 			...(options.workspaceDirectory === undefined ? [] : [`--folder=${options.workspaceDirectory}`]),
 			...(options.extraArgs ?? []),
 		],

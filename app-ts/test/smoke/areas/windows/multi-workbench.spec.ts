@@ -93,8 +93,10 @@ test('Open in Agents reuses one window across Workbench workspaces', async ({ ap
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number }> } } }).ash.ipcRenderer;
 			return ipc.invoke('ash:remote:connection');
 		});
-		const agentsWindowId = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id);
-		expect(agentsWindowId).toBeDefined();
+		const agentsWindow = await application.browserWindow(agentsPage);
+		const agentsWindowId = await agentsWindow.evaluate(window => window.id);
+		// Renderer restoration and the OS focus transition complete independently.
+		await expect.poll(() => agentsWindow.evaluate(window => window.isFocused())).toBe(true);
 		await expect.poll(() => readWindowLogs(application, agentsWindowId!)).toContainEqual(expect.objectContaining({ source: `window-${agentsWindowId}`, category: 'lifecycle', message: 'Agents restored' }));
 		await secondPage.evaluate(async () => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<void> } } }).ash.ipcRenderer;

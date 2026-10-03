@@ -58,14 +58,18 @@ test('window picker data includes the Agents window and can focus it', async ({ 
 	await workbench.page.keyboard.press('Enter');
 	const childPage = await opened;
 	try {
+		const agentsWindow = await application.browserWindow(childPage);
+		const agentsWindowId = await agentsWindow.evaluate(window => window.id);
+		await expect.poll(() => agentsWindow.evaluate(window => window.isFocused())).toBe(true);
 		const windows = await workbench.page.evaluate(async () => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
 			return ipc.invoke('ash:window:operation', { kind: 'list' }) as Promise<readonly { id: number; focused: boolean }[]>;
 		});
 		expect(windows).toHaveLength(2);
-		const agents = windows.find(window => window.focused);
+		const agents = windows.find(window => window.id === agentsWindowId);
 		const workbenchWindow = windows.find(window => window.id !== agents?.id);
 		expect(agents).toBeDefined();
+		expect(agents!.focused).toBe(true);
 		expect(workbenchWindow).toBeDefined();
 		await workbench.page.evaluate(async id => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;

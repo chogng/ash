@@ -203,6 +203,11 @@ export function parseMainProcessArgv(options: MainProcessArgumentsOptions): stri
 			index += 1;
 			continue;
 		}
+		// AppKit consumes a preference key and its value as process arguments.
+		if (argument === '-ApplePersistenceIgnoreState') {
+			index += 1;
+			continue;
+		}
 		// Electron accepts process switches before a development entry, so the entry has no fixed argv index.
 		if (!hasApplicationEntry && !argument.startsWith('-')) {
 			hasApplicationEntry = true;
