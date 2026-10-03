@@ -17,6 +17,153 @@ use ash_shell_command::RipgrepExecutable;
 
 struct PassThroughBackend;
 
+fn text_edit_suite(path: &std::path::Path) -> LocalToolSuite<PassThroughBackend> {
+    let grant = authorization(path);
+    let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
+    let shell = LocalShellToolService::new_with_action_policy_revision(
+        grant.authorize(Permission::ExecuteCommands).unwrap(),
+        ripgrep.clone(),
+        PassThroughBackend,
+        ActionPolicyRevision::new("test-policy-v1"),
+        super::super::shell_sandbox(),
+    )
+    .unwrap();
+    LocalToolSuite::new(
+        shell,
+        Arc::new(grep::Service::new(grep::Backend::Ripgrep, ripgrep, None).unwrap()),
+        Arc::new(file_search::Service),
+        Arc::new(crate::dir_grants::DirGrants::default()),
+        grant,
+    )
+}
+
+#[test]
+fn agent_text_edits_preserve_file_format_and_allow_subsequent_writes() {
+    for file_eol in ["\n", "\r\n"] {
+        for model_eol in ["\n", "\r\n"] {
+            for eof in ["", file_eol] {
+                let dir = tempfile::tempdir().unwrap();
+                let path = dir.path().join("file.txt");
+                fs::write(&path, format!("first{file_eol}old{file_eol}last{eof}")).unwrap();
+                let suite = text_edit_suite(dir.path());
+                let authority = ToolAuthorization::Sandboxed(super::super::read_only_sandbox());
+                let cancellation = ash_async_utils::CancellationSource::new().token();
+                for call in [
+                    tool_call(
+                        "read_file",
+                        json!({"path": path, "offset": null, "limit": null}),
+                    ),
+                    tool_call(
+                        "edit",
+                        json!({"path": path, "old_string": format!("old{model_eol}last"), "new_string": format!("new{model_eol}last"), "replace_all": false}),
+                    ),
+                ] {
+                    assert!(matches!(
+                        suite.execute(&call, &authority, &cancellation).unwrap(),
+                        ToolExecutionOutput::Success(_)
+                    ));
+                }
+                assert_eq!(
+                    fs::read_to_string(&path).unwrap(),
+                    format!("first{file_eol}new{file_eol}last{eof}")
+                );
+                // The normalized bytes, rather than the model input, must be the
+                // revision recorded for the next mutation in this conversation.
+                let rewrite = tool_call(
+                    "write_file",
+                    json!({"path": path, "content": format!("rewritten{model_eol}last{model_eol}")}),
+                );
+                assert!(matches!(
+                    suite.execute(&rewrite, &authority, &cancellation).unwrap(),
+                    ToolExecutionOutput::Success(_)
+                ));
+                assert_eq!(
+                    fs::read_to_string(&path).unwrap(),
+                    format!("rewritten{file_eol}last{eof}")
+                );
+                let edit = tool_call(
+                    "edit",
+                    json!({"path": path, "old_string": "rewritten", "new_string": "final", "replace_all": false}),
+                );
+                assert!(matches!(
+                    suite.execute(&edit, &authority, &cancellation).unwrap(),
+                    ToolExecutionOutput::Success(_)
+                ));
+                assert_eq!(
+                    fs::read_to_string(&path).unwrap(),
+                    format!("final{file_eol}last{eof}")
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn agent_replacements_match_mixed_endings_without_rewriting_untouched_bytes() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "头🙂\n旧🙂\r\nmore\n旧🙂\nmore\r\n尾🙂\r\n").unwrap();
+    let suite = text_edit_suite(dir.path());
+    let authority = ToolAuthorization::Sandboxed(super::super::read_only_sandbox());
+    let cancellation = ash_async_utils::CancellationSource::new().token();
+    let read = tool_call(
+        "read_file",
+        json!({"path": path, "offset": null, "limit": null}),
+    );
+    assert!(matches!(
+        suite.execute(&read, &authority, &cancellation).unwrap(),
+        ToolExecutionOutput::Success(_)
+    ));
+    let edit = tool_call(
+        "edit",
+        json!({"path": path, "old_string": "旧🙂\nmore", "new_string": "changed\r\nnext", "replace_all": true}),
+    );
+    assert!(matches!(
+        suite.execute(&edit, &authority, &cancellation).unwrap(),
+        ToolExecutionOutput::Success(_)
+    ));
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        "头🙂\nchanged\nnext\nchanged\nnext\r\n尾🙂\r\n"
+    );
+}
+
+#[test]
+fn agent_new_file_writes_follow_editorconfig_and_existing_content_takes_precedence() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join(".editorconfig"), "root = true\n[*]\nend_of_line = lf\ninsert_final_newline = true\n[{*.bat,*.cmd}]\nend_of_line = crlf\n").unwrap();
+    let suite = text_edit_suite(dir.path());
+    let authority = ToolAuthorization::Sandboxed(super::super::read_only_sandbox());
+    let cancellation = ash_async_utils::CancellationSource::new().token();
+    for (name, expected) in [("new.txt", "one\ntwo\n"), ("new.bat", "one\r\ntwo\r\n")] {
+        let path = dir.path().join("new").join(name);
+        let write = tool_call("write_file", json!({"path": path, "content": "one\r\ntwo"}));
+        assert!(matches!(
+            suite.execute(&write, &authority, &cancellation).unwrap(),
+            ToolExecutionOutput::Success(_)
+        ));
+        assert_eq!(fs::read_to_string(&path).unwrap(), expected);
+    }
+    let path = dir.path().join("existing.txt");
+    fs::write(&path, "one\r\ntwo").unwrap();
+    for call in [
+        tool_call(
+            "read_file",
+            json!({"path": path, "offset": null, "limit": null}),
+        ),
+        tool_call(
+            "write_file",
+            json!({"path": path, "content": "changed\nlast\n"}),
+        ),
+    ] {
+        assert!(matches!(
+            suite.execute(&call, &authority, &cancellation).unwrap(),
+            ToolExecutionOutput::Success(_)
+        ));
+    }
+    assert_eq!(fs::read_to_string(path).unwrap(), "changed\r\nlast");
+}
+
 impl SandboxBackend for PassThroughBackend {
     fn kind(&self) -> SandboxKind {
         SandboxKind::Unrestricted

@@ -1,3 +1,4 @@
+use crate::TextFileFormat;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::path::PathBuf;
@@ -210,7 +211,9 @@ fn parse_added_lines(lines: &[&str], mut index: usize) -> Result<(Vec<String>, u
 }
 
 pub(super) fn apply_hunks(original: &str, hunks: &[PatchHunk]) -> Result<String, PatchError> {
-    let (mut lines, trailing_newline) = split_text_lines(original);
+    let format = TextFileFormat::for_existing(original);
+    let trailing_newline = original.ends_with(['\r', '\n']);
+    let mut lines = split_text_lines(original);
     let mut cursor = 0;
     for hunk in hunks {
         let before = hunk
@@ -226,19 +229,42 @@ pub(super) fn apply_hunks(original: &str, hunks: &[PatchHunk]) -> Result<String,
                 "patch hunk context does not match the current file".to_owned(),
             ));
         };
-        let replacement = hunk
-            .lines
-            .iter()
-            .filter_map(|line| match line {
-                PatchLine::Context(text) | PatchLine::Add(text) => Some(text.clone()),
-                PatchLine::Remove(_) => None,
-            })
-            .collect::<Vec<_>>();
+        let mut source = position;
+        let mut replacement = Vec::new();
+        for line in &hunk.lines {
+            match line {
+                PatchLine::Context(_) => {
+                    replacement.push(lines[source].clone());
+                    source += 1;
+                }
+                PatchLine::Remove(_) => source += 1,
+                PatchLine::Add(text) => replacement.push(TextLine {
+                    text: text.clone(),
+                    ending: format.eol,
+                }),
+            }
+        }
         let replacement_len = replacement.len();
         lines.splice(position..position + before.len(), replacement);
         cursor = position + replacement_len;
     }
-    Ok(join_text_lines(&lines, trailing_newline))
+    // Context and untouched lines retain their exact endings, including mixed
+    // files. Only inserted lines use the preferred format; EOF keeps its original
+    // convention even when the last line is replaced or becomes an interior line.
+    let last = lines.len().saturating_sub(1);
+    let mut result = String::new();
+    for (index, line) in lines.iter().enumerate() {
+        result.push_str(&line.text);
+        if index == last && !trailing_newline {
+            continue;
+        }
+        result.push_str(if line.ending.is_empty() {
+            format.eol
+        } else {
+            line.ending
+        });
+    }
+    Ok(result)
 }
 
 pub(super) fn new_file_content(lines: &[String]) -> String {
@@ -249,21 +275,44 @@ pub(super) fn new_file_content(lines: &[String]) -> String {
     }
 }
 
-fn split_text_lines(text: &str) -> (Vec<String>, bool) {
-    let trailing_newline = text.ends_with('\n');
-    let lines = text.split_terminator('\n').map(str::to_owned).collect();
-    (lines, trailing_newline)
+#[derive(Clone)]
+struct TextLine {
+    text: String,
+    ending: &'static str,
 }
 
-fn join_text_lines(lines: &[String], trailing_newline: bool) -> String {
-    let mut text = lines.join("\n");
-    if trailing_newline && !lines.is_empty() {
-        text.push('\n');
+fn split_text_lines(text: &str) -> Vec<TextLine> {
+    let mut lines = Vec::new();
+    let mut start = 0;
+    let mut index = 0;
+    let bytes = text.as_bytes();
+    while index < bytes.len() {
+        let ending = match bytes[index] {
+            b'\r' if bytes.get(index + 1) == Some(&b'\n') => "\r\n",
+            b'\r' => "\r",
+            b'\n' => "\n",
+            _ => {
+                index += 1;
+                continue;
+            }
+        };
+        lines.push(TextLine {
+            text: text[start..index].to_owned(),
+            ending,
+        });
+        index += ending.len();
+        start = index;
     }
-    text
+    if start < text.len() {
+        lines.push(TextLine {
+            text: text[start..].to_owned(),
+            ending: "",
+        });
+    }
+    lines
 }
 
-fn find_lines(lines: &[String], needle: &[&str], start: usize) -> Option<usize> {
+fn find_lines(lines: &[TextLine], needle: &[&str], start: usize) -> Option<usize> {
     if needle.is_empty() {
         return Some(start.min(lines.len()));
     }
@@ -275,7 +324,7 @@ fn find_lines(lines: &[String], needle: &[&str], start: usize) -> Option<usize> 
             candidate
                 .iter()
                 .zip(needle)
-                .all(|(line, expected)| line == expected)
+                .all(|(line, expected)| line.text == *expected)
                 .then_some(index)
         })
 }

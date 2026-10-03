@@ -2,9 +2,14 @@
 //!
 //! The parser accepts a small explicit patch grammar. Every operation is prepared before any file
 //! is changed, and replacement writes are atomic per file.
+//! Updates retain existing line endings and EOF conventions. New files use the selected
+//! directory's EditorConfig rules; text writes and replacements share [`TextFileFormat`].
 
 mod patch_commit;
 mod patch_format;
+mod text_file;
+
+pub use text_file::TextFileFormat;
 
 use crate::patch_commit::{ChangeKind, PreparedChange, commit};
 use crate::patch_format::{
@@ -259,7 +264,9 @@ impl ApplyPatchTool {
                 Ok(PreparedChange::Replace {
                     target,
                     output_path: path.display().to_string(),
-                    content: new_file_content(&lines),
+                    content: TextFileFormat::for_new_file(dir, &path)
+                        .map_err(PatchError::io)?
+                        .normalize(&new_file_content(&lines)),
                     permissions: None,
                     kind: ChangeKind::Added,
                 })

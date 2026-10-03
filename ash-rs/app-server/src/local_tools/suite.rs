@@ -13,6 +13,7 @@ use ash_action_policy::CapabilitySet;
 use ash_action_policy::ProcessInvocationKind;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
+use ash_apply_patch::TextFileFormat;
 use ash_async_utils::CancellationToken;
 use ash_core::ToolAuthorization;
 use ash_core::ToolExecutionFacts;
@@ -485,6 +486,21 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             )));
         }
         let file_system = LocalFileSystem::from_authorization(resolved.authorization.clone());
+        let format = if resolved.absolute.exists() {
+            let read = self
+                .resolve(&path, true, session_id, thread_id, DirPermission::ReadFiles)
+                .map_err(CoreError::Execution)?;
+            let bytes = LocalFileSystem::from_authorization(read.authorization)
+                .read_file(&read.relative, MAX_READ_FILE_BYTES as usize)
+                .map_err(|error| CoreError::Execution(error.to_string()))?;
+            let original = String::from_utf8(bytes)
+                .map_err(|error| CoreError::Execution(error.to_string()))?;
+            TextFileFormat::for_existing(&original)
+        } else {
+            TextFileFormat::for_new_file(resolved.authorization.dir(), &resolved.relative)
+                .map_err(|error| CoreError::Execution(error.to_string()))?
+        };
+        let content = format.normalize(&content);
         let write = match expected_revision {
             Some(revision) => file_system.write_file_with_condition(
                 &resolved.relative,
@@ -567,7 +583,16 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 "{path} changed on disk after your last read. Read it again before editing"
             )));
         }
-        let count = text.match_indices(&old).count();
+        let format = TextFileFormat::for_existing(&text);
+        let old = format.normalize_fragment(&old);
+        let new = format.normalize_fragment(&new);
+        if old == new {
+            return Ok(ToolExecutionOutput::Failure(
+                "new_string must differ from old_string".into(),
+            ));
+        }
+        let matches = TextFileFormat::matching_ranges(&text, &old);
+        let count = matches.len();
         if count == 0 {
             return Ok(ToolExecutionOutput::Failure(format!(
                 "old_string not found in {path}. Re-read the file: the content may differ from what you expect (check whitespace and indentation)"
@@ -578,15 +603,19 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 "old_string matches {count} locations in {path}. Extend it with more surrounding context to make it unique, or set replace_all to true"
             )));
         }
-        let replacement_line = text[..text.find(&old).expect("count is non-zero")]
-            .lines()
-            .count()
-            .max(1);
-        let replaced = if replace_all {
-            text.replace(&old, &new)
-        } else {
-            text.replacen(&old, &new, 1)
-        };
+        let replacement_line = text[..matches[0].start].lines().count().max(1);
+        let mut replaced = String::new();
+        let mut cursor = 0;
+        for range in matches
+            .into_iter()
+            .take(if replace_all { count } else { 1 })
+        {
+            replaced.push_str(&text[cursor..range.start]);
+            replaced.push_str(&new);
+            cursor = range.end;
+        }
+        replaced.push_str(&text[cursor..]);
+        let replaced = format.finish_edit(replaced);
         let Some(expected_revision) = self
             .read_fingerprints
             .lock()

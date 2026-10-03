@@ -182,6 +182,165 @@ fn rejects_parent_directory_paths() {
 
 static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
 
+#[test]
+fn updates_preserve_line_endings_and_eof_independently_of_model_output() {
+    let cases = [
+        ("before\nafter\n", "changed\ninserted\nafter\n"),
+        ("before\r\nafter\r\n", "changed\r\ninserted\r\nafter\r\n"),
+        ("before\nafter", "changed\ninserted\nafter"),
+        ("before\r\nafter", "changed\r\ninserted\r\nafter"),
+        ("before\rafter\r", "changed\rinserted\rafter\r"),
+        (
+            "before\r\nafter\r\ntail\n",
+            "changed\r\ninserted\r\nafter\r\ntail\n",
+        ),
+        ("before", "changed\ninserted"),
+        ("before\n", "changed\ninserted\n"),
+    ];
+    for (original, expected) in cases {
+        for patch_eol in ["\n", "\r\n"] {
+            let dir = TestDir::new();
+            dir.write("file.txt", original);
+            let tool =
+                ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default())
+                    .unwrap();
+            let patch = "*** Begin Patch\n*** Update File: file.txt\n@@\n-before\n+changed\n+inserted\n*** End Patch\n".replace('\n', patch_eol);
+            let outcome =
+                resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+            assert!(
+                matches!(outcome, ToolExecutionOutcome::Returned(output) if output.status() == ToolOutputStatus::Success)
+            );
+            assert_eq!(
+                fs::read_to_string(dir.path().join("file.txt")).unwrap(),
+                expected
+            );
+        }
+    }
+}
+
+#[test]
+fn patch_context_preserves_mixed_endings_and_appending_preserves_eof() {
+    for (original, patch, expected) in [
+        (
+            "head\r\nbefore\ntail\r\n",
+            " head\n-before\n+changed\n tail\n",
+            "head\r\nchanged\r\ntail\r\n",
+        ),
+        ("head\r\nlast", " last\n+added\n", "head\r\nlast\r\nadded"),
+        ("before\r\n", "-before\n", ""),
+        ("", "+added\n", "added"),
+    ] {
+        let dir = TestDir::new();
+        dir.write("file.txt", original);
+        let tool =
+            ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
+        let patch =
+            format!("*** Begin Patch\n*** Update File: file.txt\n@@\n{patch}*** End Patch\n");
+        let outcome =
+            resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+        assert!(
+            matches!(outcome, ToolExecutionOutcome::Returned(output) if output.status() == ToolOutputStatus::Success)
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("file.txt")).unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn added_files_follow_editorconfig_patterns_and_directory_inheritance() {
+    let dir = TestDir::new();
+    dir.write(
+        ".editorconfig",
+        "root = true\n[*]\nend_of_line = lf\n[{*.bat,*.cmd}]\nend_of_line = crlf\n",
+    );
+    dir.write(
+        "src/.editorconfig",
+        "[*.txt]\nend_of_line = crlf\ninsert_final_newline = false\n",
+    );
+    for (path, expected) in [
+        ("new.rs", "one\ntwo\n"),
+        ("new.bat", "one\r\ntwo\r\n"),
+        ("new.cmd", "one\r\ntwo\r\n"),
+        ("src/new.txt", "one\r\ntwo"),
+        ("src/new.rs", "one\ntwo\n"),
+    ] {
+        let tool =
+            ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
+        let patch = format!("*** Begin Patch\n*** Add File: {path}\n+one\n+two\n*** End Patch\n");
+        let outcome =
+            resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+        assert!(
+            matches!(outcome, ToolExecutionOutcome::Returned(output) if output.status() == ToolOutputStatus::Success)
+        );
+        assert_eq!(fs::read_to_string(dir.path().join(path)).unwrap(), expected);
+    }
+}
+
+#[test]
+fn editorconfig_changes_do_not_convert_existing_files() {
+    let dir = TestDir::new();
+    dir.write(
+        ".editorconfig",
+        "root = true\n[*]\nend_of_line = lf\ninsert_final_newline = true\n",
+    );
+    dir.write("file.txt", "before\r\nlast");
+    let tool =
+        ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
+    let patch =
+        "*** Begin Patch\n*** Update File: file.txt\n@@\n-before\n+changed\n*** End Patch\n";
+    let outcome = resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+    assert!(
+        matches!(outcome, ToolExecutionOutcome::Returned(output) if output.status() == ToolOutputStatus::Success)
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("file.txt")).unwrap(),
+        "changed\r\nlast"
+    );
+}
+
+#[test]
+fn new_file_rules_respect_root_unset_and_the_selected_directory_boundary() {
+    let dir = TestDir::new();
+    dir.write(".editorconfig", "root = true\n[*]\nend_of_line = crlf\n");
+    dir.write(
+        "src/.editorconfig",
+        "root = true\n[*.txt]\nend_of_line = cr\n",
+    );
+    dir.write("unset/.editorconfig", "[*]\nend_of_line = unset\n");
+    for (path, expected) in [
+        ("root.txt", "one\r\n"),
+        ("src/new.txt", "one\r"),
+        ("src/new.rs", "one\n"),
+        ("unset/new.txt", "one\n"),
+    ] {
+        let tool =
+            ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
+        let patch = format!("*** Begin Patch\n*** Add File: {path}\n+one\n*** End Patch\n");
+        let outcome =
+            resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+        assert!(
+            matches!(outcome, ToolExecutionOutcome::Returned(output) if output.status() == ToolOutputStatus::Success)
+        );
+        assert_eq!(fs::read_to_string(dir.path().join(path)).unwrap(), expected);
+    }
+    // Selecting a subdirectory must not import settings from outside its grant.
+    dir.write("bounded/marker", "");
+    let selected = Dir::open_local(dir.path().join("bounded")).unwrap();
+    let tool =
+        ApplyPatchTool::new(environment_id(), selected, ApplyPatchLimits::default()).unwrap();
+    let patch = "*** Begin Patch\n*** Add File: selected.txt\n+one\n*** End Patch\n";
+    let outcome = resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+    assert!(
+        matches!(outcome, ToolExecutionOutcome::Returned(output) if output.status() == ToolOutputStatus::Success)
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("bounded/selected.txt")).unwrap(),
+        "one\n"
+    );
+}
+
 struct TestDir {
     path: PathBuf,
 }
