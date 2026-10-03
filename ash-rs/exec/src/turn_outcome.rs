@@ -108,13 +108,13 @@ fn interrupted_outcome(
     }
 }
 
-pub(crate) fn required_interaction(
-    approval: HeadlessApprovalMode,
-    turn: &Turn,
-) -> Option<ExecRequiredInteraction> {
+pub(crate) fn required_interaction(turn: &Turn) -> Option<ExecRequiredInteraction> {
     let waiting_requires_stop = match turn.status {
-        TurnStatus::WaitingForApproval => approval != HeadlessApprovalMode::AutomaticReview,
-        TurnStatus::WaitingForUserInput | TurnStatus::WaitingForCapability => true,
+        // Automatic review finishes before Core creates a pending human interaction.
+        // A headless client cannot resolve that interaction in any approval mode.
+        TurnStatus::WaitingForApproval
+        | TurnStatus::WaitingForUserInput
+        | TurnStatus::WaitingForCapability => true,
         _ => false,
     };
     if !waiting_requires_stop {

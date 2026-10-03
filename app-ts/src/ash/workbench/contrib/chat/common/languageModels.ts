@@ -4,6 +4,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IModelApi, type CustomModelProvider, type ModelProviderTestResult } from '../../../../platform/sessions/common/sessionApi.js';
 import type { ModelPreferencesUpdate } from '../../../../platform/sessions/common/sessionApi.js';
+import type { ApprovalReviewModelSelection } from '../../../../platform/sessions/common/sessionApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../../platform/app-server/common/appServerApi.js';
 import { ILanguageModelsConfigurationService } from './languageModelsConfiguration.js';
 import type { ModelRef, ModelProviderCredentialStatus } from '../../../services/chat/common/chatService.js';
@@ -11,6 +12,8 @@ import { modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat
 
 /** Model catalog, provider credentials and picker preferences shared by both windows. */
 export interface ILanguageModelsService {
+	readApprovalReviewModel(): Promise<ApprovalReviewModelSelection>;
+	setApprovalReviewModel(selection: ApprovalReviewModelSelection): Promise<void>;
 	setModelPreferences(model: ModelRef, update: ModelPreferencesUpdate): Promise<void>;
 	readonly onDidChangeModels: Event<void>;
 	listModels(): Promise<readonly ModelCatalogEntry[]>;
@@ -33,6 +36,11 @@ export interface ILanguageModelsService {
 export const ILanguageModelsService = createServiceIdentifier<ILanguageModelsService>('languageModelsService');
 
 export class LanguageModelsService extends Disposable implements ILanguageModelsService {
+	public readApprovalReviewModel(): Promise<ApprovalReviewModelSelection> { return this.modelApi.readApprovalReviewModel(); }
+	public async setApprovalReviewModel(selection: ApprovalReviewModelSelection): Promise<void> {
+		await this.modelApi.setApprovalReviewModel(selection);
+		this.changed.fire();
+	}
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeModels = this.changed.event;
 	private modelCatalog: readonly ModelCatalogEntry[] = [];

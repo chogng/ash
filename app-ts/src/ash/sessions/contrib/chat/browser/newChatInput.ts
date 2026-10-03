@@ -251,7 +251,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		const permission = this.model.inputState.approvalMode;
 		const label = permission === 'bypassPermissions' ? localize('sessions.chat.permission.full', 'Full access')
 			: permission === 'autoReview' ? localize('sessions.chat.permission.auto', 'Automatic review')
-				: localize('sessions.chat.permission.ask', 'Ask permissions');
+				: localize('sessions.chat.permission.ask', 'Manual confirmation');
 		this.permissionButton.textContent = label;
 		this.permissionButton.setAttribute('aria-label', localize('sessions.chat.permission.label', 'Permissions: {0}', label));
 		this.permissionButton.disabled = this.model.inputState.phase === 'submitting';

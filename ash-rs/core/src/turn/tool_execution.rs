@@ -510,6 +510,19 @@ impl ToolExecutionOrchestrator {
         let denial_reason = truncate(denial.reason(), MAX_DENIAL_REASON_CHARS);
         let denial_output = truncate(denial.output().aggregated_output(), MAX_DENIAL_OUTPUT_CHARS);
         let snapshot = self.threads.read_thread(context.thread_id)?;
+        let turn = snapshot
+            .turns
+            .iter()
+            .find(|turn| &turn.turn_id == context.turn_id)
+            .ok_or_else(|| CoreError::Journal("sandbox denial has no owning Turn".into()))?;
+        if turn.mode.is_analysis() {
+            return Ok(ToolAttempt::Commit {
+                output: ToolCallOutput::Failure(format!(
+                    "Plan and Ask cannot expand the investigation sandbox: {denial_reason}"
+                )),
+                completion: ToolExecutionCompletion::Complete,
+            });
+        }
         let second_review = reviewed
             .clone()
             .after_sandbox_denial(SandboxDenialEvidence::new(

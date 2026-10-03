@@ -82,7 +82,14 @@ export interface ModelPreferencesUpdate {
 	readonly contextWindow?: number;
 }
 
+/** Review selection does not change the model or effort used by the Agent. */
+export type ApprovalReviewModelSelection =
+	| { readonly type: 'automatic' }
+	| { readonly type: 'explicit'; readonly model: { readonly provider: string; readonly model: string }; readonly connection?: string; readonly reasoningEffort?: ReasoningEffort };
+
 export interface IModelApi {
+	readApprovalReviewModel(): Promise<ApprovalReviewModelSelection>;
+	setApprovalReviewModel(selection: ApprovalReviewModelSelection): Promise<void>;
 	setModelPreferences(model: ModelRef, update: ModelPreferencesUpdate): Promise<void>;
 	readAdvisorDefault(): Promise<AdvisorConfig | null>;
 	readConfiguredProviderIds(): Promise<readonly string[]>;

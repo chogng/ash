@@ -323,7 +323,7 @@ fn automatic_review_uses_the_provider_default_or_active_model() {
         builtins
             .automatic_approval_review_model(&model_ref("openai", "gpt-main"))
             .unwrap(),
-        model_ref("openai", "gpt-5.6")
+        model_ref("openai", "gpt-6-luna")
     );
 
     let custom = ProviderConfigRegistry::from_definitions([definition(

@@ -108,29 +108,40 @@ fn cancellation_sends_typed_interrupt_and_waits_for_interrupted_state() {
 
 #[test]
 fn denied_interaction_is_interrupted_and_reported_without_waiting_for_ui() {
-    let ids = TestIds::new();
-    let mut connection = FakeConnection::new(
-        &ids,
-        vec![
-            thread(&ids, 1, vec![]),
-            thread(
-                &ids,
-                2,
-                vec![turn(&ids, TurnStatus::WaitingForApproval, vec![])],
-            ),
-            thread(&ids, 3, vec![turn(&ids, TurnStatus::Interrupted, vec![])]),
-        ],
-    );
-    let mut sink = DiscardExecEventSink;
-    let outcome = test_runner()
-        .run_connected(&mut connection, new_request(), &mut sink, &NeverCancelled)
-        .unwrap();
-    assert!(matches!(
-        outcome,
-        ExecOutcome::RequiresInteraction { interaction, .. }
-            if interaction.kind == ExecInteractionKind::Approval
-    ));
-    assert_eq!(connection.interrupts, 1);
+    for approval in [
+        HeadlessApprovalMode::DenyInteractiveRequests,
+        HeadlessApprovalMode::AutomaticReview,
+        HeadlessApprovalMode::BypassPermissions,
+    ] {
+        let ids = TestIds::new();
+        let mut connection = FakeConnection::new(
+            &ids,
+            vec![
+                thread(&ids, 1, vec![]),
+                thread(
+                    &ids,
+                    2,
+                    vec![turn(&ids, TurnStatus::WaitingForApproval, vec![])],
+                ),
+                thread(&ids, 3, vec![turn(&ids, TurnStatus::Interrupted, vec![])]),
+            ],
+        );
+        let mut sink = DiscardExecEventSink;
+        let outcome = test_runner()
+            .run_connected(
+                &mut connection,
+                new_request().with_approval_mode(approval),
+                &mut sink,
+                &NeverCancelled,
+            )
+            .unwrap();
+        assert!(matches!(
+            outcome,
+            ExecOutcome::RequiresInteraction { interaction, .. }
+                if interaction.kind == ExecInteractionKind::Approval
+        ));
+        assert_eq!(connection.interrupts, 1);
+    }
 }
 
 #[test]

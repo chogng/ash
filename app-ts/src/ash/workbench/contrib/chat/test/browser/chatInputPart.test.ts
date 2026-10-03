@@ -59,6 +59,8 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 	partServices.registerInstance(IConfigurationService, inputResources.add(new InMemoryConfigurationService()));
 	partServices.registerSingleton(IActionWidgetService, () => partServices.createInstance(ActionWidgetService));
 	partServices.registerInstance(ILanguageModelsService, {
+		readApprovalReviewModel: async () => ({ type: 'automatic' }),
+		setApprovalReviewModel: async () => {},
 		onDidChangeModels: AshEvent.None,
 		setModelPreferences: async () => {},
 		listModels: async () => [],

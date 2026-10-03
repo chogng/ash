@@ -679,6 +679,8 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
         "modelReasoningEffort": "high",
         "approvalReviewModel": {
             "type": "explicit",
+            "connection": "chatgpt-subscription",
+            "reasoningEffort": "low",
             "model": {
                 "provider": "openai",
                 "model": "codex-auto-review"
@@ -698,8 +700,9 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
     );
     assert!(matches!(
         &params.approval_review_model,
-        Patch::Value(ApprovalReviewModelSelectionDto::Explicit { model })
-            if model.model == "codex-auto-review"
+        Patch::Value(ApprovalReviewModelSelectionDto::Explicit { model, connection, reasoning_effort })
+            if model.model == "codex-auto-review" && connection.as_deref() == Some("chatgpt-subscription")
+                && reasoning_effort == &Some(ReasoningEffort::Low)
     ));
     assert_eq!(params.expected_revision, 4);
     assert_eq!(params.grep_backend, Patch::Value(GrepBackendDto::Tgrep));

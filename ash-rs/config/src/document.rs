@@ -35,13 +35,18 @@ use std::collections::HashMap;
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
-    tag = "type"
+    tag = "type",
+    deny_unknown_fields
 )]
 pub enum ApprovalReviewModelSelection {
     #[default]
     Automatic,
     Explicit {
         model: ModelRef,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        connection: Option<ModelConnectionId>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reasoning_effort: Option<ReasoningEffort>,
     },
 }
 
@@ -49,7 +54,7 @@ impl ApprovalReviewModelSelection {
     pub fn explicit_model(&self) -> Option<&ModelRef> {
         match self {
             Self::Automatic => None,
-            Self::Explicit { model } => Some(model),
+            Self::Explicit { model, .. } => Some(model),
         }
     }
 }
@@ -314,6 +319,29 @@ impl UserConfigDocument {
                 model.provider
             )));
         }
+        if let ApprovalReviewModelSelection::Explicit { model, .. } =
+            &self.agent.approval_review_model
+        {
+            approval_review_effort(&self.agent.approval_review_model, model)?;
+        }
+        if let ApprovalReviewModelSelection::Explicit {
+            model,
+            connection: Some(connection),
+            ..
+        } = &self.agent.approval_review_model
+        {
+            let configured = self.connections.get(connection).ok_or_else(|| {
+                ConfigError(format!(
+                    "approval review connection '{connection}' is not configured"
+                ))
+            })?;
+            if configured.provider != model.provider {
+                return Err(ConfigError(format!(
+                    "approval review connection '{connection}' does not serve provider '{}'",
+                    model.provider
+                )));
+            }
+        }
         if let Some(model) = &self.agent.commit_message_model
             && !self.has_model_provider(&model.provider)
         {
@@ -417,7 +445,12 @@ impl ResolvedConfig {
     pub fn selected_approval_review_provider(&self) -> Option<&ModelProviderConfig> {
         match &self.approval_review_model {
             ApprovalReviewModelSelection::Automatic => self.selected_provider(),
-            ApprovalReviewModelSelection::Explicit { model } => self.providers.get(&model.provider),
+            ApprovalReviewModelSelection::Explicit {
+                model, connection, ..
+            } => match connection {
+                Some(connection) => self.connections.get(connection),
+                None => self.providers.get(&model.provider),
+            },
         }
     }
 
@@ -430,8 +463,45 @@ impl ResolvedConfig {
         &self,
         registry: &ProviderConfigRegistry,
     ) -> Result<ModelRef, ConfigError> {
+        Ok(self
+            .resolve_approval_review_config(registry)?
+            .model
+            .expect("resolved review model"))
+    }
+
+    /// Freezes the review connection and effort independently of the Agent invocation.
+    /// The source snapshot is never changed; credentials still belong to the selected connection.
+    pub fn resolve_approval_review_config(
+        &self,
+        registry: &ProviderConfigRegistry,
+    ) -> Result<Self, ConfigError> {
+        let mut config = self.clone();
+        if let ApprovalReviewModelSelection::Explicit {
+            model,
+            connection: Some(connection),
+            ..
+        } = &self.approval_review_model
+        {
+            let provider = self.connections.get(connection).ok_or_else(|| {
+                ConfigError(format!(
+                    "approval review connection '{connection}' is not configured"
+                ))
+            })?;
+            if provider.provider != model.provider {
+                return Err(ConfigError(format!(
+                    "approval review connection '{connection}' does not serve provider '{}'",
+                    model.provider
+                )));
+            }
+            config
+                .providers
+                .insert(model.provider.clone(), provider.clone());
+            config
+                .active_connections
+                .insert(model.provider.clone(), connection.clone());
+        }
         let registry = registry
-            .with_configs(self.providers.values())
+            .with_configs(config.providers.values())
             .map_err(provider_config_error)?;
         let model = match &self.approval_review_model {
             ApprovalReviewModelSelection::Automatic => {
@@ -442,9 +512,9 @@ impl ResolvedConfig {
                     .automatic_approval_review_model(active_model)
                     .map_err(provider_config_error)?
             }
-            ApprovalReviewModelSelection::Explicit { model } => model.clone(),
+            ApprovalReviewModelSelection::Explicit { model, .. } => model.clone(),
         };
-        let provider = self.providers.get(&model.provider).ok_or_else(|| {
+        let provider = config.providers.get(&model.provider).ok_or_else(|| {
             ConfigError(format!(
                 "approval review model provider '{}' is not configured",
                 model.provider
@@ -456,8 +526,48 @@ impl ResolvedConfig {
         registry
             .validate_model_selection(&model)
             .map_err(provider_config_error)?;
-        Ok(model)
+        config.model_reasoning_effort =
+            approval_review_effort(&self.approval_review_model, &model)?;
+        config.model = Some(model);
+        Ok(config)
     }
+}
+
+fn approval_review_effort(
+    selection: &ApprovalReviewModelSelection,
+    model: &ModelRef,
+) -> Result<Option<ReasoningEffort>, ConfigError> {
+    let selected_effort = match selection {
+        ApprovalReviewModelSelection::Automatic => None,
+        ApprovalReviewModelSelection::Explicit {
+            reasoning_effort, ..
+        } => *reasoning_effort,
+    };
+    let spec = ash_model_provider_config::find_static_model(model);
+    if let (Some(effort), Some(spec)) = (selected_effort, spec)
+        && !spec.supported_reasoning_efforts.contains(&effort)
+    {
+        return Err(ConfigError(format!(
+            "approval review model '{}' does not support reasoning effort '{effort:?}'",
+            model.model
+        )));
+    }
+    Ok(selected_effort.or_else(|| {
+        if model.provider.as_str() == "openai" && model.model.as_str() == "codex-auto-review" {
+            Some(ReasoningEffort::Low)
+        } else {
+            spec.and_then(|spec| {
+                if spec
+                    .supported_reasoning_efforts
+                    .contains(&ReasoningEffort::Low)
+                {
+                    Some(ReasoningEffort::Low)
+                } else {
+                    spec.model_reasoning_effort
+                }
+            })
+        }
+    }))
 }
 
 fn provider_config_error(error: ProviderConfigError) -> ConfigError {

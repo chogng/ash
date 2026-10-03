@@ -2378,7 +2378,8 @@ test('Chat mode accessibility help explains switch_mode in Chinese and restores 
 		input.focus();
 		const help = new SessionsChatAccessibilityHelp(container, () => input.focus());
 		const provider = help.getProvider()!;
-		assert.match(provider.provideContent(), /从 Plan 或 Ask 切到执行模式需要你选择/);
+		assert.match(provider.provideContent(), /从 Plan 或 Ask 切到 Agent、Debug 或 Multitask 需要你选择，权限选择保持不变/);
+		assert.match(provider.provideContent(), /高级菜单提供完全访问和审核模型/);
 		assert.match(provider.provideContent(), /你为下一条消息选好的不同模式会保留/);
 		input.blur();
 		provider.dispose();

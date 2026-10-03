@@ -16,7 +16,15 @@ async function prepareCanvasMenuSelection(application: PlaywrightApplication, na
 		const popup = Menu.prototype.popup;
 		Menu.prototype.popup = function (options) {
 			Menu.prototype.popup = popup;
-			const item = this.items.find(item => item.label === label);
+			const find = (items: typeof this.items): typeof this.items[number] | undefined => {
+				for (const item of items) {
+					if (item.label === label) return item;
+					const nested = item.submenu && find(item.submenu.items);
+					if (nested) return nested;
+				}
+				return undefined;
+			};
+			const item = find(this.items);
 			if (!item || !item.enabled) { throw new Error(`Expected enabled Design menu item: ${label}`); }
 			if (checked !== undefined && item.checked !== checked) { throw new Error(`Unexpected Design menu checked state: ${label}`); }
 			item.click(item, options?.window, { shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, triggeredByAccelerator: false });
@@ -1450,11 +1458,30 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(composer.locator('[data-action-id="ash.chat.input.attach"] button')).toHaveAccessibleName('Attach files');
 	await composer.locator('input[type="file"]').setInputFiles({ name: 'context.ts', mimeType: 'text/plain', buffer: Buffer.from('export const value = 42;') });
 	await expect(composer.getByRole('button', { name: 'Remove context.ts', exact: true })).toBeVisible();
-	await expect(composer.locator('[data-action-id="ash.chat.input.send"] button')).toBeEnabled();
-	const permissions = composer.getByRole('button', { name: 'Permissions: Ask permissions', exact: true });
+	// The connected fixture has an empty model profile; attachments do not grant a connection.
+	await expect(composer.locator('[data-action-id="ash.chat.input.send"] button')).toBeEnabled({ enabled: target.appServerMode === 'disabled' });
+	const permissions = composer.getByRole('button', { name: 'Permissions: Manual confirmation', exact: true });
+	await prepareCanvasMenuSelection(application, 'Automatic review', false);
 	await permissions.press('ArrowDown');
-	await page.getByRole('menuitemradio', { name: 'Automatic review', exact: true }).click();
+	if (!('windows' in application) || process.platform !== 'darwin') await page.getByRole('menuitemradio', { name: 'Automatic review', exact: true }).click();
 	await expect(composer.getByRole('button', { name: 'Permissions: Automatic review', exact: true })).toBeFocused();
+	const modeButton = composer.getByRole('button', { name: 'Mode: Agent', exact: true });
+	await modeButton.click();
+	const modes = page.locator('.ash-chat-input-mode-menu');
+	await expect(modes.getByRole('menuitemradio', { name: 'Execute', exact: true })).toHaveCount(0);
+	await modes.getByRole('menuitemradio', { name: 'Plan', exact: true }).click();
+	await expect(composer.getByRole('button', { name: 'Permissions: Automatic review', exact: true })).toBeVisible();
+	await prepareCanvasMenuSelection(application, 'Full access');
+	await composer.getByRole('button', { name: 'Permissions: Automatic review', exact: true }).press('ArrowDown');
+	if (!('windows' in application) || process.platform !== 'darwin') {
+		await page.getByRole('menuitem', { name: 'Advanced', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitem', { name: 'Full access', exact: true }).click();
+	}
+	const warning = page.getByRole('dialog').filter({ hasText: 'Skip most permission approvals?' });
+	await expect(warning).toContainText('File and network access limits still apply');
+	await warning.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(composer.getByRole('button', { name: 'Permissions: Automatic review', exact: true })).toBeVisible();
+	await expect(composer.getByRole('button', { name: 'Mode: Plan', exact: true })).toBeVisible();
 	await replaceChatInput(editor, 'Keep the attached draft');
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Attachments can be sent without text/u);
@@ -1491,7 +1518,9 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(composer.getByRole('button', { name: 'Remove context.ts', exact: true })).toBeVisible();
 	await expect(composer.getByRole('button', { name: 'Remove clipboard.png', exact: true })).toBeVisible();
 	await expect(composer.locator('.ash-chat-input-tip')).toHaveCount(0);
-	await returnFromSessions(page);
+	const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
+	await returnFromSessions(page, application);
+	await closed;
 });
 
 test('Sessions composer configuration leaves Workbench input defaults unchanged', async ({ application, target, workbench }) => {
@@ -1834,8 +1863,13 @@ test.describe('Notification Center', () => {
 	});
 });
 
-async function returnFromSessions(page: Page): Promise<void> {
+async function returnFromSessions(page: Page, application?: PlaywrightApplication): Promise<void> {
 	const accountButton = page.getByRole('button', { name: 'Accounts' });
+	if (application && 'windows' in application && process.platform === 'darwin') {
+		await prepareCanvasMenuSelection(application, 'Return to Workbench');
+		await accountButton.click();
+		return;
+	}
 	await accountButton.click();
 	await expect(accountButton).toHaveAttribute('aria-expanded', 'true');
 	if (process.platform === 'darwin' && page.url().includes('/electron-browser/')) {

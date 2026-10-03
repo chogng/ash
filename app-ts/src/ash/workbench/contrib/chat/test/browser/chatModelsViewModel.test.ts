@@ -24,6 +24,8 @@ function fixture(provider: CustomModelProvider) {
 	let failSave = false;
 	let pendingProbe: Promise<{ type: 'passed' }> | undefined;
 	const models: ILanguageModelsService = {
+		readApprovalReviewModel: async () => ({ type: 'automatic' }),
+		setApprovalReviewModel: async () => {},
 		setModelPreferences: async () => {},
 		onDidChangeModels: Event.None,
 		listModels: async () => [],

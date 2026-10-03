@@ -20,6 +20,39 @@ Auto Review 只在确定性规则无法独立判断时提供风险建议；它�
 
 ## 1. 决策摘要
 
+### 审核模型选择
+
+`agent.approvalReviewModel` 是独立的用户配置。Sessions 的“权限 → 高级 → 审核模型”可以修改它。
+`automatic` 按主模型的当前连接选用该连接定义的审核默认值；其他提供方保留自身默认值。
+
+| OpenAI 连接 | 默认审核模型 | 默认思考强度 |
+| --- | --- | --- |
+| ChatGPT 订阅 | `codex-auto-review` | `low` |
+| OpenAI API | `gpt-6-luna` | `low` |
+
+`codex-auto-review` 是订阅服务的审核模型标识，不能据此断言底层模型就是 GPT-6 Luna。
+用户可以明确绑定其他连接、模型和支持的思考强度：
+
+```toml
+[agent.approvalReviewModel]
+type = "explicit"
+connection = "openai"
+reasoningEffort = "medium"
+
+[agent.approvalReviewModel.model]
+provider = "openai"
+model = "gpt-6-luna"
+```
+
+`connection` 和 `reasoningEffort` 可省略。连接省略时使用所选提供方的当前连接；思考强度省略时
+优先使用模型支持的 `low`，否则使用该模型的目录默认值。主模型的思考强度不传给审核模型。
+显式连接必须已经配置，且必须服务于所选提供方；已知模型不支持的思考强度在保存时拒绝。
+未列出的模型由连接服务检查是否可用。不可用时保留人工批准路径，不偷偷换用其他模型。
+每轮使用冻结的审核配置；用户后续修改不会影响正在运行的审核。审核请求不包含工具权限。
+
+无人值守运行仍可使用自动审核，但审核要求人工决定时，运行器中断并返回 `RequiresInteraction`。
+该行为与权限模式独立：不会把“无人值守”解释成自动批准。
+
 Ash 把 Auto Review 定义为“受确定性策略约束的风险审查建议层”，而不是第二套权限系统。
 
 核心决策：
@@ -304,6 +337,7 @@ Auto Review 的失败模式必须显式：
 - 可能已有副作用时禁止重放；
 - 结构化的安全动作建议、拒绝反馈与单 Turn 断路器；
 - App Server 不可变且不带工具的审查模型适配器；
+- 独立的审核连接、模型、思考强度，以及订阅/API 默认分支；
 - 合成种子样本集和 Cargo、Bazel 离线契约测试。
 
 当前仍有限：

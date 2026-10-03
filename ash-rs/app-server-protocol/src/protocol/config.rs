@@ -143,7 +143,15 @@ pub struct ToolSearchConfigDto {
 #[ts(rename = "ApprovalReviewModelSelection")]
 pub enum ApprovalReviewModelSelectionDto {
     Automatic,
-    Explicit { model: ModelRefDto },
+    Explicit {
+        model: ModelRefDto,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        connection: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        reasoning_effort: Option<ReasoningEffort>,
+    },
 }
 
 /// Non-secret declarative provider settings exposed through the App Server contract.

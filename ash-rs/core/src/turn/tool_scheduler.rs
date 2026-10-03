@@ -337,6 +337,15 @@ impl ToolScheduler {
                             request.clone(),
                         ));
                         if let Some(denial) = request.sandbox_denial.clone() {
+                            if turn.mode.is_analysis() {
+                                self.record_failure(
+                                    thread_id,
+                                    turn_id,
+                                    pending.call.id,
+                                    "Plan and Ask cannot approve an outside-sandbox retry",
+                                )?;
+                                continue;
+                            }
                             if !snapshot.started_tool_calls.contains(&pending.call.id) {
                                 self.record_failure(
                                     thread_id,
@@ -644,6 +653,13 @@ impl ToolScheduler {
                 )
             }
         };
+        let mode = snapshot
+            .turns
+            .iter()
+            .find(|turn| &turn.turn_id == turn_id)
+            .ok_or_else(|| CoreError::Journal("tool review has no owning Turn".into()))?
+            .mode;
+        let request = constrain_analysis_review(request, mode)?;
         attach_review_context(request, &self.threads, snapshot, item_id, evidence)
     }
 
@@ -688,6 +704,29 @@ impl ToolScheduler {
         reviewed: &ash_action_policy::ActionReviewRequest,
         authorization: ToolAuthorization,
     ) -> Result<ToolSchedulingProgress, CoreError> {
+        // A permission grant never changes the work mode. Investigation processes retain the
+        // read-only sandbox even when a deterministic rule or approval would allow more access.
+        let authorization = match (reviewed.action().kind(), reviewed.sandbox()) {
+            (
+                ash_action_policy::ActionKind::LocalProcess(_),
+                ash_action_policy::SandboxCompatibility::Supported(policy),
+            ) => {
+                let snapshot = self.threads.read_thread(context.thread_id())?;
+                let turn = snapshot
+                    .turns
+                    .iter()
+                    .find(|turn| &turn.turn_id == context.turn_id())
+                    .ok_or_else(|| {
+                        CoreError::Journal("tool execution has no owning Turn".into())
+                    })?;
+                if turn.mode.is_analysis() {
+                    ToolAuthorization::Sandboxed(*policy)
+                } else {
+                    authorization
+                }
+            }
+            _ => authorization,
+        };
         let tool_name = call.name.to_string();
         let tool_call_id = call.id.clone();
         let orchestrator = ToolExecutionOrchestrator::new(
@@ -831,6 +870,56 @@ impl ToolScheduler {
         )?;
         Ok(())
     }
+}
+
+fn constrain_analysis_review(
+    request: ash_action_policy::ActionReviewRequest,
+    mode: ash_protocol::CollaborationMode,
+) -> Result<ash_action_policy::ActionReviewRequest, CoreError> {
+    use ash_action_policy::ActionKind;
+    use ash_action_policy::CapabilityKind;
+    use ash_action_policy::SandboxCompatibility;
+    if !mode.is_analysis() {
+        return Ok(request);
+    }
+    if matches!(request.action().kind(), ActionKind::LocalProcess(_)) {
+        if !matches!(request.sandbox(), SandboxCompatibility::Supported(_)) {
+            return Err(CoreError::Policy(
+                "Plan and Ask require an available read-only process sandbox".into(),
+            ));
+        }
+        return Ok(request.with_sandbox(SandboxCompatibility::Supported(
+            ash_sandboxing::SandboxPolicy::new(
+                ash_sandboxing::FileSystemAccess::ReadOnly,
+                ash_sandboxing::NetworkAccess::Denied,
+            ),
+        )));
+    }
+    let isolated_control = request.provenance().source()
+        == &ash_action_policy::ActionSource::BuiltInTool
+        && request.provenance().source_id() == "code-mode";
+    if !isolated_control
+        && (matches!(
+            request.action().kind(),
+            ActionKind::FileSystemMutation | ActionKind::ExternalServiceMutation
+        ) || request
+            .action()
+            .required_capabilities()
+            .iter()
+            .any(|capability| {
+                matches!(
+                    capability.kind(),
+                    CapabilityKind::FileWrite
+                        | CapabilityKind::ExternalMutation
+                        | CapabilityKind::SystemConfiguration
+                        | CapabilityKind::UserInterface
+                        | CapabilityKind::ProcessSpawn
+                )
+            }))
+    {
+        return Err(CoreError::Policy("Plan and Ask permit investigation only; switch modes before changing files or external state".into()));
+    }
+    Ok(request)
 }
 
 struct PendingToolCall {

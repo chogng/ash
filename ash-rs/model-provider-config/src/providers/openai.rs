@@ -38,7 +38,7 @@ pub(super) fn definition() -> ProviderDefinition {
         InputTokenCountProfile::OpenAiResponses,
     ));
     definition.defaults.approval_review_model = crate::ApprovalReviewModelDefault::Model {
-        model: crate::ModelId::new("gpt-5.6").expect("built-in model ID"),
+        model: crate::ModelId::new("gpt-6-luna").expect("built-in model ID"),
     };
     definition
 }
@@ -55,5 +55,8 @@ pub(super) fn subscription_definition() -> ProviderDefinition {
     .with_native_streaming();
     definition.api_key_policy = crate::ApiKeyPolicy::Unsupported;
     definition.model_catalog_policy = crate::ModelCatalogPolicy::AllowUnlisted;
+    definition.defaults.approval_review_model = crate::ApprovalReviewModelDefault::Model {
+        model: crate::ModelId::new("codex-auto-review").expect("built-in review model ID"),
+    };
     definition
 }

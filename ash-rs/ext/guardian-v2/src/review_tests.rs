@@ -162,6 +162,7 @@ fn automatic_review_resolves_provider_default_and_uses_a_review_only_request() {
     );
     let config = ResolvedConfig {
         model: Some(model_ref("test", "agent-model")),
+        model_reasoning_effort: Some(protocol::ReasoningEffort::High),
         providers: BTreeMap::from([(
             provider_id("test"),
             ModelProviderConfig::new(provider_id("test")),
@@ -180,11 +181,12 @@ fn automatic_review_resolves_provider_default_and_uses_a_review_only_request() {
         selected.lock().unwrap().as_slice(),
         &[model_ref("test", "review-model")]
     );
-    let requests = requests.lock().unwrap();
-    let request = requests.first().unwrap();
+    let recorded = requests.lock().unwrap();
+    let request = recorded.first().unwrap();
     assert!(request.tools.is_empty());
     assert_eq!(request.tool_choice, ToolChoice::None);
     assert!(!request.parallel_tool_calls);
+    assert_eq!(request.reasoning, None);
     let instructions = request.instructions.as_deref().unwrap();
     assert!(instructions.contains("security review classifier"));
     assert!(instructions.contains("response schema"));
@@ -196,12 +198,32 @@ fn automatic_review_resolves_provider_default_and_uses_a_review_only_request() {
     };
     assert!(input.contains("\"policy_revision\":\"policy-1\""));
     assert!(input.contains("\"user_intent\":\"call the configured API for this task\""));
+    drop(recorded);
+    let explicit = ResolvedConfig {
+        approval_review_model: config::ApprovalReviewModelSelection::Explicit {
+            model: model_ref("test", "review-model"),
+            connection: None,
+            reasoning_effort: Some(protocol::ReasoningEffort::Low),
+        },
+        ..config
+    };
+    LlmActionClassifier::new(resolver.resolve(&explicit).unwrap())
+        .classify(&review_request(), &CancellationSource::new().token())
+        .unwrap();
+    assert_eq!(
+        requests.lock().unwrap().last().unwrap().reasoning,
+        Some(protocol::ReasoningConfig {
+            effort: protocol::ReasoningEffort::Low,
+            summary: false
+        })
+    );
 }
 
 #[test]
 fn review_adapter_enforces_the_classifier_response_budget_while_collecting_text() {
     let reviewer = ProviderReviewModel {
         model: model_ref("test", "review-model"),
+        reasoning: None,
         invoker: Arc::new(StaticResponseInvoker("x".repeat(20 * 1024))),
     };
     let classifier = LlmActionClassifier::new(reviewer);
@@ -224,6 +246,8 @@ fn explicit_review_rejects_a_model_outside_a_listed_catalog() {
     let config = ResolvedConfig {
         approval_review_model: config::ApprovalReviewModelSelection::Explicit {
             model: model_ref("test", "missing"),
+            connection: None,
+            reasoning_effort: None,
         },
         providers: BTreeMap::from([(
             provider_id("test"),
@@ -263,6 +287,7 @@ impl ActionPolicyService for AskPolicy {
 #[test]
 fn approval_mode_policy_runs_the_reviewer_only_for_auto_review() {
     let review_model = ProviderReviewModel {
+        reasoning: None,
         model: model_ref("test", "review-model"),
         invoker: Arc::new(StaticResponseInvoker(
             r#"{"recommendation":"deny","reason":"unsafe"}"#.into(),

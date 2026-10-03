@@ -90,8 +90,9 @@ Turn 创建前取消返回 `ExecError::CancelledBeforeStart`。Turn 创建后取
 canonical terminal status 才返回 `Interrupted` 或 `RequiresInteraction`。
 
 默认 `DenyInteractiveRequests` 使用普通 approval policy，但一旦 Turn 等待 approval、user input 或
-capability，就请求 interrupt。`AutomaticReview` 允许 App Server 自动审查 approval，仍会停止无法呈现
-的 user input/capability。`BypassPermissions` 必须由宿主显式选择，不能成为远程 worker 默认值。
+capability，就请求 interrupt。`AutomaticReview` 先由 App Server 自动审核；如果仍需人工批准，
+Runner 同样中断并返回 `RequiresInteraction`，不会等待不存在的 UI。所有权限模式下的 user input
+和 capability 也如此处理。`BypassPermissions` 必须由宿主显式选择，不能成为远程 worker 默认值。
 
 连接关闭不会转换成 `Failed`。Runner 会做一次最终 Thread read；无法确认 terminal status 时返回
 `OutcomeUnknown`。当前没有 remote reconnect/resubscribe backend，因而 unknown outcome 必须交给上层

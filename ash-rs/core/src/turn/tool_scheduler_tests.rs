@@ -1748,6 +1748,128 @@ struct Fixture {
     call_id: ToolCallId,
 }
 
+#[test]
+fn analysis_sandbox_denial_never_reviews_or_retries_outside_the_sandbox() {
+    let policy = Arc::new(ReviewingPolicy {
+        base: Arc::new(AskPolicy),
+        reviews: Default::default(),
+    });
+    let fixture = fixture_with_modes(
+        Arc::new(ReviewTool {
+            action_kind: ActionKind::LocalProcess(ash_action_policy::ProcessInvocationKind::Shell),
+            outputs: Mutex::new(VecDeque::from([safe_sandbox_denial()])),
+            ..Default::default()
+        }),
+        policy.clone(),
+        ash_protocol::CollaborationMode::Plan,
+        ash_protocol::ApprovalMode::BypassPermissions,
+    );
+    assert_eq!(
+        fixture
+            .scheduler
+            .run_pending(
+                &fixture.thread_id,
+                &fixture.turn_id,
+                &CancellationSource::new().token()
+            )
+            .unwrap(),
+        ToolSchedulingProgress::Complete
+    );
+    assert_eq!(fixture.tools.authorizations.lock().unwrap().len(), 1);
+    assert_eq!(policy.reviews.load(std::sync::atomic::Ordering::SeqCst), 0);
+    let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    assert!(snapshot.escalated_tool_calls.is_empty());
+    assert!(snapshot.turns.last().unwrap().pending_interaction.is_none());
+    assert!(snapshot.items.iter().any(|item| matches!(item, ThreadItem::ToolResult { text, is_error: true, .. } if text.contains("cannot expand"))));
+}
+
+#[test]
+fn analysis_modes_block_mutation_before_review_or_execution_in_every_permission_mode() {
+    for mode in [
+        ash_protocol::CollaborationMode::Plan,
+        ash_protocol::CollaborationMode::Ask,
+    ] {
+        for approval in [
+            ash_protocol::ApprovalMode::AskPermissions,
+            ash_protocol::ApprovalMode::AutoReview,
+            ash_protocol::ApprovalMode::BypassPermissions,
+        ] {
+            for kind in [
+                ActionKind::FileSystemMutation,
+                ActionKind::ExternalServiceMutation,
+            ] {
+                let policy = Arc::new(ReviewingPolicy {
+                    base: Arc::new(AskPolicy),
+                    reviews: Default::default(),
+                });
+                let fixture = fixture_with_modes(
+                    Arc::new(ReviewTool {
+                        action_kind: kind,
+                        ..Default::default()
+                    }),
+                    policy.clone(),
+                    mode,
+                    approval,
+                );
+                assert_eq!(
+                    fixture
+                        .scheduler
+                        .run_pending(
+                            &fixture.thread_id,
+                            &fixture.turn_id,
+                            &CancellationSource::new().token()
+                        )
+                        .unwrap(),
+                    ToolSchedulingProgress::Complete
+                );
+                assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
+                assert_eq!(policy.reviews.load(std::sync::atomic::Ordering::SeqCst), 0);
+                let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+                assert!(snapshot.tool_execution_starts.is_empty());
+                assert!(snapshot.turns.last().unwrap().pending_interaction.is_none());
+                assert!(snapshot.items.iter().any(|item| matches!(item, ThreadItem::ToolResult { text, is_error: true, .. } if text.contains("Plan and Ask"))));
+            }
+        }
+    }
+}
+
+#[test]
+fn analysis_investigation_process_keeps_read_only_sandbox_after_permission_bypass() {
+    let fixture = fixture_with_modes(
+        Arc::new(ReviewTool {
+            action_kind: ActionKind::LocalProcess(ash_action_policy::ProcessInvocationKind::Shell),
+            ..Default::default()
+        }),
+        Arc::new(AskPolicy),
+        ash_protocol::CollaborationMode::Plan,
+        ash_protocol::ApprovalMode::BypassPermissions,
+    );
+    assert_eq!(
+        fixture
+            .scheduler
+            .run_pending(
+                &fixture.thread_id,
+                &fixture.turn_id,
+                &CancellationSource::new().token()
+            )
+            .unwrap(),
+        ToolSchedulingProgress::Complete
+    );
+    assert!(
+        matches!(fixture.tools.authorizations.lock().unwrap().as_slice(),
+        [ToolAuthorization::Sandboxed(policy)] if *policy == SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied))
+    );
+    let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    assert_eq!(
+        snapshot.tool_execution_starts[&fixture.call_id].authority,
+        ToolExecutionAuthority::Sandboxed
+    );
+    assert_eq!(
+        snapshot.turns.last().unwrap().approval_mode,
+        ash_protocol::ApprovalMode::BypassPermissions
+    );
+}
+
 fn fixture() -> Fixture {
     fixture_with(Arc::new(ReviewTool::default()), Arc::new(AskPolicy))
 }
@@ -1759,6 +1881,20 @@ fn fixture_with(tools: Arc<ReviewTool>, policy: Arc<dyn ActionPolicyService>) ->
 fn fixture_with_approval_mode(
     tools: Arc<ReviewTool>,
     policy: Arc<dyn ActionPolicyService>,
+    approval_mode: ash_protocol::ApprovalMode,
+) -> Fixture {
+    fixture_with_modes(
+        tools,
+        policy,
+        ash_protocol::CollaborationMode::Agent,
+        approval_mode,
+    )
+}
+
+fn fixture_with_modes(
+    tools: Arc<ReviewTool>,
+    policy: Arc<dyn ActionPolicyService>,
+    mode: ash_protocol::CollaborationMode,
     approval_mode: ash_protocol::ApprovalMode,
 ) -> Fixture {
     let store = Arc::new(InMemoryThreadStore::default());
@@ -1780,7 +1916,7 @@ fn fixture_with_approval_mode(
         .start_turn(
             &thread_id,
             StartTurnRequest {
-                mode: Default::default(),
+                mode,
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -1860,6 +1996,7 @@ fn resolve(fixture: &Fixture, decision: ActionApprovalDecision) {
 }
 
 struct ReviewTool {
+    action_kind: ActionKind,
     authorizations: Mutex<Vec<ToolAuthorization>>,
     outputs: Mutex<VecDeque<ToolExecutionOutput>>,
     requires_escalation: bool,
@@ -1871,6 +2008,7 @@ struct ReviewTool {
 impl Default for ReviewTool {
     fn default() -> Self {
         Self {
+            action_kind: ActionKind::ExternalServiceMutation,
             authorizations: Mutex::new(Vec::new()),
             outputs: Mutex::new(VecDeque::new()),
             requires_escalation: false,
@@ -1900,7 +2038,11 @@ impl ToolService for ReviewTool {
         if let Some(error) = &self.preparation_error {
             return Err(error.clone());
         }
-        Ok(review_request(call, self.requires_escalation))
+        Ok(review_request_for_kind(
+            call,
+            self.requires_escalation,
+            self.action_kind.clone(),
+        ))
     }
 
     fn execution_interaction(&self, call: &ToolCall) -> Result<Option<AgentRequest>, CoreError> {
@@ -2190,6 +2332,18 @@ impl ActionClassifier for RevisingClassifier {
 }
 
 fn review_request(call: &ToolCall, requires_escalation: bool) -> ActionReviewRequest {
+    review_request_for_kind(
+        call,
+        requires_escalation,
+        ActionKind::ExternalServiceMutation,
+    )
+}
+
+fn review_request_for_kind(
+    call: &ToolCall,
+    requires_escalation: bool,
+    kind: ActionKind,
+) -> ActionReviewRequest {
     let capabilities = CapabilitySet::new([Capability::new(
         CapabilityKind::ExternalMutation,
         "reviewed/value/1",
@@ -2197,7 +2351,7 @@ fn review_request(call: &ToolCall, requires_escalation: bool) -> ActionReviewReq
     ActionReviewRequest::new(
         ResolvedAction::new(
             ActionDigest::from_canonical_bytes(format!("{}:{}", call.name, call.arguments)),
-            ActionKind::ExternalServiceMutation,
+            kind,
             "mutate reviewed value",
             capabilities,
         ),

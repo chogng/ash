@@ -6,4 +6,5 @@ export const Menus = {
 	TitleBarLeftLayout: new MenuId('SessionsTitleBarLeftLayout'),
 	CodeAddTab: new MenuId('SessionsAddTab'),
 	NewSessionControl: new MenuId('NewSessions.SessionControlMenu'),
+	NewSessionAdvancedControl: new MenuId('NewSessions.AdvancedControlMenu'),
 } as const;

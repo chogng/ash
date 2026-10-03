@@ -208,7 +208,7 @@ where
         if interrupt.is_none() {
             let requested = if cancellation.is_cancelled() {
                 Some(InterruptIntent::CancellationRequested)
-            } else if let Some(interaction) = required_interaction(request.approval, turn) {
+            } else if let Some(interaction) = required_interaction(turn) {
                 Some(InterruptIntent::RequiresInteraction(interaction))
             } else if now >= run_deadline {
                 Some(InterruptIntent::TurnTimeout)

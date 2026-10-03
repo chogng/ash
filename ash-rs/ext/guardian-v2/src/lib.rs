@@ -44,9 +44,10 @@ impl ReviewModelResolver {
         &self,
         config: &ResolvedConfig,
     ) -> Result<ProviderReviewModel, ReviewModelResolutionError> {
-        let model = config
-            .resolve_approval_review_model(&self.registry)
+        let config = config
+            .resolve_approval_review_config(&self.registry)
             .map_err(|error| ReviewModelResolutionError(error.0))?;
+        let model = config.model.clone().expect("resolved review model");
         let provider = config.providers.get(&model.provider).ok_or_else(|| {
             ReviewModelResolutionError(format!(
                 "approval review model provider '{}' is not configured",
@@ -57,7 +58,14 @@ impl ReviewModelResolver {
             .model_provider
             .runtime(ModelRuntimeRequest::new(model.clone(), provider.clone()))
             .map_err(|error| ReviewModelResolutionError(error.to_string()))?;
-        Ok(ProviderReviewModel { model, invoker })
+        Ok(ProviderReviewModel::new(model, invoker).with_reasoning(
+            config
+                .model_reasoning_effort
+                .map(|effort| protocol::ReasoningConfig {
+                    effort,
+                    summary: false,
+                }),
+        ))
     }
 }
 
@@ -72,19 +80,30 @@ impl Default for ReviewModelResolver {
 pub struct ProviderReviewModel {
     model: ModelRef,
     invoker: Arc<dyn ModelInvoker>,
+    reasoning: Option<protocol::ReasoningConfig>,
 }
 
 impl ProviderReviewModel {
     /// Uses the runtime already frozen by the Turn owner.
     pub fn new(model: ModelRef, invoker: Arc<dyn ModelInvoker>) -> Self {
-        Self { model, invoker }
+        Self {
+            model,
+            invoker,
+            reasoning: None,
+        }
+    }
+
+    /// Review effort is frozen independently; it never inherits the Agent's effort.
+    pub fn with_reasoning(mut self, reasoning: Option<protocol::ReasoningConfig>) -> Self {
+        self.reasoning = reasoning;
+        self
     }
 
     pub fn model(&self) -> &ModelRef {
         &self.model
     }
 
-    fn request(request: &ReviewModelRequest) -> ModelRequest {
+    fn request(&self, request: &ReviewModelRequest) -> ModelRequest {
         let mut model_request = ModelRequest::text(request.input_json());
         model_request.instructions = Some(format!(
             "{}\n\nReturn JSON matching this response schema:\n{}",
@@ -95,6 +114,7 @@ impl ProviderReviewModel {
         model_request.tool_choice = ToolChoice::None;
         model_request.parallel_tool_calls = false;
         model_request.temperature = Some(0.0);
+        model_request.reasoning = self.reasoning.clone();
         model_request
     }
 }
@@ -110,7 +130,7 @@ impl ReviewModel for ProviderReviewModel {
             .map_err(|signal| ReviewModelError::Invocation(signal.reason().to_string()))?;
         let response = self
             .invoker
-            .invoke_with_cancellation(&Self::request(request), cancellation)
+            .invoke_with_cancellation(&self.request(request), cancellation)
             .map_err(|error| match error {
                 model_provider::ModelProviderError::Unavailable(message) => {
                     ReviewModelError::Transient(message)
@@ -192,7 +212,12 @@ impl extension_api::ApprovalReviewContributor for PooledReviewer {
 
 /// Captures the isolated reviewer and its revision identity for a host policy.
 pub fn reviewer(model: ProviderReviewModel) -> extension_api::ApprovalReviewer {
-    let identity = format!("{}/{}", model.model().provider, model.model().model);
+    let identity = format!(
+        "{}/{}:{:?}",
+        model.model().provider,
+        model.model().model,
+        model.reasoning
+    );
     let mut builder = extension_api::ExtensionRegistryBuilder::new();
     install(&mut builder, model);
     extension_api::ApprovalReviewer::Configured {

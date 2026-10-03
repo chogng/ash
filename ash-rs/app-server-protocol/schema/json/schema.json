@@ -2364,8 +2364,24 @@
         },
         {
           "properties": {
+            "connection": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "model": {
               "$ref": "#/$defs/ModelRefDto"
+            },
+            "reasoningEffort": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ReasoningEffort"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "type": {
               "const": "explicit",

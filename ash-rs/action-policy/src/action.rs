@@ -366,6 +366,13 @@ impl ActionReviewRequest {
         self
     }
 
+    /// Replaces host execution constraints without changing the canonical action or its identity.
+    /// The Turn owner uses this to restrict investigation commands in analysis modes.
+    pub fn with_sandbox(mut self, sandbox: SandboxCompatibility) -> Self {
+        self.sandbox = sandbox;
+        self
+    }
+
     /// Converts an initial request into a second review of the same exact action.
     ///
     /// Callers must invoke this only after a trustworthy sandbox denial result. The action,

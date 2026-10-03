@@ -148,6 +148,8 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		async listModelCatalog() { return []; },
 		async listModelProviders() { return []; },
 		setModelPreferences: async () => {},
+		readApprovalReviewModel: async () => ({ type: 'automatic' }),
+		setApprovalReviewModel: async () => {},
 		listCustomModelProviders: async () => [],
 		saveCustomModelProvider: async () => {},
 		testProviderModel: async () => ({ type: 'passed' }),

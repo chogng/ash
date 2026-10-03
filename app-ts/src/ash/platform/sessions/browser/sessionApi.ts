@@ -27,6 +27,8 @@ export function createDisconnectedSessionApi(unavailable: UnavailableOperation):
 
 export function createDisconnectedModelApi(unavailable: UnavailableOperation): IModelApi {
 	return {
+		readApprovalReviewModel: () => unavailable('model.readApprovalReviewModel'),
+		setApprovalReviewModel: () => unavailable('model.setApprovalReviewModel'),
 		setModelPreferences: () => unavailable('model.setModelPreferences'),
 		listCustomProviders: () => unavailable('model.listCustomProviders'),
 		saveCustomProvider: () => unavailable('model.saveCustomProvider'),
@@ -89,6 +91,20 @@ export function createAppServerSessionApi(connection: AppServerProtocolClient): 
 
 export function createAppServerModelApi(connection: AppServerProtocolClient): IModelApi {
 	return {
+		readApprovalReviewModel: async () => {
+			const selection = (await appServerRequest(connection, 'config/read', {})).approvalReviewModel;
+			return selection.type === 'automatic' ? { type: 'automatic' } : {
+				type: 'explicit', model: { ...selection.model },
+				...(selection.connection != null ? { connection: selection.connection } : {}),
+				...(selection.reasoningEffort != null ? { reasoningEffort: selection.reasoningEffort } : {}),
+			};
+		},
+		setApprovalReviewModel: async selection => {
+			const config = await appServerRequest(connection, 'config/read', {});
+			await appServerRequest(connection, 'config/update', {
+				commandId: createUuid(), expectedRevision: config.revision, approvalReviewModel: selection,
+			});
+		},
 		setModelPreferences: async (model, update) => {
 			const snapshot = await appServerRequest(connection, 'config/read', {});
 			await appServerRequest(connection, 'model/preferences/update', {

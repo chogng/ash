@@ -251,7 +251,7 @@ fn migrate_subscription_models(document: &mut UserConfigDocument) {
     if let Some(model) = &mut document.agent.model {
         migrate(model);
     }
-    if let crate::ApprovalReviewModelSelection::Explicit { model } =
+    if let crate::ApprovalReviewModelSelection::Explicit { model, .. } =
         &mut document.agent.approval_review_model
     {
         migrate(model);

@@ -11,6 +11,10 @@ import "../../../sessions/browser/actions/sessionsChatActions.js";
 import { ISessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
 import type { ISession } from "../../../sessions/services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../../sessions/services/sessions/common/sessionsManagement.js";
+import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
+import type { ApprovalReviewModelSelection } from '../../../platform/sessions/common/sessionApi.js';
+import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
+import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
 
 test("Sessions owns the local New Chat command without requiring regular Workbench Views", async () => {
 	const onDidChange = new Emitter<void>();
@@ -87,9 +91,13 @@ test("Sessions History opens the selected active chat", async () => {
 
 class TestQuickInputService implements IQuickInputService {
 	picker: TestQuickPick<IQuickPickItem> | undefined;
+	constructor(private readonly labels: string[] = []) {}
 
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
-		const picker = new TestQuickPick<TItem>();
+		const picker = new TestQuickPick<TItem>(() => {
+			const label = this.labels.shift();
+			if (label) picker.accept(label);
+		});
 		this.picker = picker as unknown as TestQuickPick<IQuickPickItem>;
 		return picker;
 	}
@@ -98,6 +106,7 @@ class TestQuickInputService implements IQuickInputService {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements IQuickPick<TItem> {
+	constructor(private readonly onShow: () => void) { super(); }
 	private readonly acceptEmitter = this._register(new Emitter<TItem>());
 	private readonly hideEmitter = this._register(new Emitter<void>());
 	readonly onDidAccept = this.acceptEmitter.event;
@@ -117,6 +126,35 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 		if (item) this.acceptEmitter.fire(item);
 	}
 
-	show(): void {}
+	accept(label: string): void {
+		const item = this.items.find(item => item.label === label);
+		assert.ok(item, `Expected review choice: ${label}`);
+		this.acceptEmitter.fire(item);
+	}
+	show(): void { this.onShow(); }
 	hide(): void { this.hideEmitter.fire(); }
 }
+
+test('Review settings select an independent connection, model and effort through the Chinese picker', async () => {
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	using services = new InstantiationService();
+	const selections: ApprovalReviewModelSelection[] = [];
+	const models = {
+		readApprovalReviewModel: async () => ({ type: 'automatic' }),
+		listModelProviders: async () => [{ provider: 'openai', connection: 'openai', displayName: 'OpenAI API', configured: true }],
+		listModelCatalog: async () => [{ model: { provider: 'openai', model: 'gpt-6-luna' }, displayName: 'GPT-6 Luna', supportedReasoningEfforts: ['low', 'medium'] }],
+		setApprovalReviewModel: async (selection: ApprovalReviewModelSelection) => { selections.push(selection); },
+	};
+	services.registerInstance(ILanguageModelsService, models as unknown as ILanguageModelsService);
+	const input = new TestQuickInputService(['OpenAI API', 'GPT-6 Luna', 'low', '自动（连接默认值）']);
+	services.registerInstance(IQuickInputService, input);
+	using commands = new CommandService(services);
+	try {
+		await commands.executeCommand('sessions.chat.permission.reviewModel');
+		assert.equal(input.picker?.ariaLabel, '审核思考强度');
+		assert.deepEqual(selections, [{ type: 'explicit', connection: 'openai', model: { provider: 'openai', model: 'gpt-6-luna' }, reasoningEffort: 'low' }]);
+		await commands.executeCommand('sessions.chat.permission.reviewModel');
+		assert.deepEqual(selections[1], { type: 'automatic' });
+	} finally { resetNlsResolver(); }
+});
