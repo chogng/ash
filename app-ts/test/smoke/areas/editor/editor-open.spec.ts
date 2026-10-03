@@ -1410,3 +1410,29 @@ test('file open failures stay in the editor and binary actions work with an exis
 	await expect(group.content.locator('.stanza-editor')).toBeVisible();
 	await expect(group.content.locator('.stanza-editor-line-text').first()).toContainText('const value = 1;');
 });
+
+test('text-file saves retain UTF-8 BOM and CRLF, and external reloads remain undoable', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	const group = workbench.editors.groupAt(0);
+	for (const bom of ['', '\uFEFF']) {
+		const name = bom ? 'bom-crlf.txt' : 'plain-crlf.txt';
+		const path = join(testWorkspace.directory, name);
+		await writeFile(path, bom + 'first\r\nsecond', 'utf8');
+		const row = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: name });
+		await expect(row).toHaveCount(1);
+		await row.dblclick();
+		const input = group.content.getByRole('textbox', { name, exact: true });
+		await input.focus();
+		await input.press('ControlOrMeta+Home');
+		await input.type('edited ');
+		await input.press('ControlOrMeta+s');
+		await expect.poll(() => readFile(path)).toEqual(Buffer.from(bom + 'edited first\r\nsecond', 'utf8'));
+
+		await writeFile(path, bom + 'external\nsecond', 'utf8');
+		await expect(group.editor.lines).toHaveText(['external', 'second']);
+		await input.press('ControlOrMeta+z');
+		await expect(group.editor.lines).toHaveText(['edited first', 'second']);
+		await input.press('ControlOrMeta+s');
+		await expect.poll(() => readFile(path)).toEqual(Buffer.from(bom + 'edited first\r\nsecond', 'utf8'));
+	}
+});

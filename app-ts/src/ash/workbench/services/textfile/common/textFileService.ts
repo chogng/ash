@@ -21,12 +21,13 @@ export interface ResolvedTextFileContent {
 	readonly source: TextFileContentSource;
 	/** Opaque file revision when the content came from the workspace file service. */
 	readonly revision: string | undefined;
-	readonly encoding: "utf8";
+	readonly encoding: "utf8" | "utf8bom";
 }
 
 export interface TextFileSaveRequest {
 	readonly resource: URI;
 	readonly text: string;
+	readonly encoding?: "utf8" | "utf8bom";
 	readonly expectedRevision?: string;
 }
 
@@ -98,7 +99,7 @@ export class TextFileService implements ITextFileService {
 			text: decodeUtf8Text(content.bytes, request.resource),
 			source: TextFileContentSource.FileSystem,
 			revision: content.revision,
-			encoding: "utf8",
+			encoding: content.bytes[0] === 0xef && content.bytes[1] === 0xbb && content.bytes[2] === 0xbf ? "utf8bom" : "utf8",
 		});
 	}
 
@@ -108,7 +109,7 @@ export class TextFileService implements ITextFileService {
 		try {
 			const saved = await raceCancellationError(this.files.writeFile({
 				resource: request.resource,
-				content: request.text,
+				content: request.encoding === "utf8bom" ? "\uFEFF" + request.text : request.text,
 				...(request.expectedRevision === undefined ? {} : { expectedRevision: request.expectedRevision }),
 			}), signal, "Text file save was cancelled");
 			return Object.freeze({ revision: saved.revision });
@@ -125,7 +126,7 @@ function decodeUtf8Text(bytes: Uint8Array, resource: URI): string {
 	if (looksBinary(bytes)) throw new TextFileBinaryError(resource);
 	try {
 		const offset = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
-		return new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(offset));
+		return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes.subarray(offset));
 	} catch (error) {
 		throw new TextFileBinaryError(resource, "The file is not valid UTF-8 text", { cause: error });
 	}

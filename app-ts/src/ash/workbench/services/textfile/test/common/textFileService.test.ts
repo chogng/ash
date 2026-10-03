@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
+import { BrowserTextModelService } from "../../../textmodelResolver/browser/browserTextModelService.js";
+import { BrowserTextResourceStore } from "../../../../contrib/codeEditor/browser/browserTextResourceStore.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileRevisionConflictError, type IFileService, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
 import {
@@ -182,3 +185,24 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 	});
 	return { promise, resolve };
 }
+
+test("text-file editing preserves UTF-8 BOM through the model, resource adapter and save service", async () => {
+	for (const hasBom of [false, true]) {
+		const files = new TestFileService(new TextEncoder().encode((hasBom ? "\uFEFF" : "") + "first\r\nsecond"));
+		using models = new BrowserTextModelService(new BrowserTextResourceStore(new TextFileService(files)));
+		using reference = await models.acquire({ resource: URI.file("C:\\project\\bom.txt") }, new AbortController().signal);
+		reference.model.applyOperations([{ range: new Range(1, 1, 1, 6), text: "saved" }]);
+		await reference.save(new AbortController().signal);
+		assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty, written: files.writes[0]?.content }, {
+			text: "saved\r\nsecond", dirty: false, written: (hasBom ? "\uFEFF" : "") + "saved\r\nsecond",
+		});
+	}
+});
+
+test("text-file decoding retains a leading content character after the UTF-8 BOM", async () => {
+	const resource = URI.file("C:\\project\\bom.txt");
+	const service = new TextFileService(new TestFileService(new TextEncoder().encode("\uFEFF\uFEFFcontent")));
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(service));
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	assert.equal(reference.model.getText(), "\uFEFFcontent");
+});

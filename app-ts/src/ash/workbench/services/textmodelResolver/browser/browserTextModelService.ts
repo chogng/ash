@@ -6,8 +6,11 @@ import { type URI } from "../../../../base/common/uri.js";
 import { Schemas } from '../../../../base/common/network.js';
 import { runWhenWindowIdle } from "../../../../base/browser/dom.js";
 import { TextModelConflictError, type TextModelInput, type TextModelReference, type IFileTextModelService } from "../common/textModelResourceService.js";
-import { TextResourceConflictError, type TextResourceChangeEvent, type ITextResourceStore } from "../common/textResourceStore.js";
-import { normalizeTextLineEndings } from "../../../../editor/common/core/textChange.js";
+import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type ITextResourceStore } from "../common/textResourceStore.js";
+import { ModelService } from "../../../../editor/common/services/modelService.js";
+import { createPieceTreeTextBuffer } from "../../../../editor/common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js";
+import { EndOfLineSequence, EndOfLinePreference } from "../../../../editor/common/model.js";
+import { Range } from "../../../../editor/common/core/range.js";
 import { TextModel, type TextModelMaintenanceOptions } from "../../../../editor/common/model/textModel.js";
 import { RetainedModelUndoRedoHistory } from '../common/retainedModelUndoRedoHistory.js';
 import { type IAshLanguageService } from '../../../../editor/common/languages/language.js';
@@ -24,17 +27,13 @@ interface TextModelEntry {
 	readonly fileChangeListener: IDisposable;
 	savedText: string;
 	revision: string | undefined;
-	lineEnding: ExternalLineEnding;
+	encoding: TextResourceContent["encoding"];
+	updatingFile: boolean;
 	dirty: boolean;
 	hasExternalChange: boolean;
 	disposed: boolean;
 	saveQueue: Promise<void>;
 	references: number;
-}
-
-enum ExternalLineEnding {
-	LF = "\n",
-	CRLF = "\r\n",
 }
 
 export interface BrowserTextModelServiceOptions {
@@ -93,7 +92,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 					? this.options.languageService.createByMimeType(input.contentType)
 					: this.options.languageService.createByFilepathOrFirstLine(input.resource, firstLine(content.text))
 			: undefined;
-		const model = new TextModel(content.text, {
+		const model = new TextModel(modelText(content), {
 			resource: input.resource,
 			languageConfigurationService: this.options.languageConfigurationService,
 			languageId: languageSelection?.languageId ?? input.languageId,
@@ -117,13 +116,18 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			model,
 			dirtyEmitter,
 			externalChangeEmitter,
-			modelChangeListener: model.onDidChangeContent(() => this.refreshDirty(entry)),
+			modelChangeListener: model.onDidChangeContent(() => {
+				if (!entry.updatingFile) {
+					this.refreshDirty(entry);
+				}
+			}),
 			languageChangeListener: model.onDidChangeLanguage(event => this.modelLanguageChanged.fire({ model, oldLanguageId: event.oldLanguage })),
 			fileChangeListener: this.resourceStore.onDidChange(event => this.acceptFileChange(entry, event)),
 			// Untitled content has no persisted baseline, including caller supplied initial text.
 			savedText: input.resource.scheme === Schemas.untitled ? "" : model.getText(),
 			revision: content.revision,
-			lineEnding: detectExternalLineEnding(content.text),
+			encoding: content.encoding,
+			updatingFile: false,
 			dirty: input.resource.scheme === Schemas.untitled && model.getText().length > 0,
 			hasExternalChange: false,
 			disposed: false,
@@ -191,10 +195,16 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		this.ensureEntryAlive(entry);
 		throwIfCancelled(signal, "Text model save was cancelled");
 		const savedText = entry.model.getText();
+		const encoding = entry.encoding;
 		const save = entry.saveQueue.then(async () => {
 			let saved;
 			try {
-				saved = await this.resourceStore.save({ resource: entry.resource, text: toExternalLineEndings(savedText, entry.lineEnding), ...(entry.revision === undefined ? {} : { expectedRevision: entry.revision }) }, signal);
+				saved = await this.resourceStore.save({
+					resource: entry.resource,
+					text: savedText,
+					...(encoding === undefined ? {} : { encoding }),
+					...(entry.revision === undefined ? {} : { expectedRevision: entry.revision }),
+				}, signal);
 			} catch (error) {
 				if (error instanceof TextResourceConflictError) {
 					this.setExternalChange(entry, true);
@@ -218,14 +228,19 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		await entry.saveQueue;
 		this.ensureEntryAlive(entry);
 		if (entry.resource.scheme === Schemas.untitled) {
-			this.applyFileContent(entry, entry.savedText, entry.revision);
+			this.applyFileContent(entry, {
+				resource: entry.resource,
+				text: entry.savedText,
+				revision: entry.revision,
+				...(entry.encoding === undefined ? {} : { encoding: entry.encoding }),
+			}, "revert");
 			this.setExternalChange(entry, false);
 			return;
 		}
 		const content = await this.resourceStore.resolve({ resource: entry.resource }, signal);
 		throwIfCancelled(signal, "Text model revert was cancelled");
 		this.ensureEntryAlive(entry);
-		this.applyFileContent(entry, content.text, content.revision);
+		this.applyFileContent(entry, content, "revert");
 		this.setExternalChange(entry, false);
 	}
 
@@ -251,12 +266,12 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 				return;
 			}
 			if (content.text === entry.savedText) {
-				entry.lineEnding = detectExternalLineEnding(content.text);
+				entry.encoding = content.encoding;
 				entry.revision = content.revision;
 				this.setExternalChange(entry, false);
 				return;
 			}
-			this.applyFileContent(entry, content.text, content.revision);
+			this.applyFileContent(entry, content, "reload");
 			this.setExternalChange(entry, false);
 		}).catch(() => {
 			if (!entry.disposed) this.setExternalChange(entry, true);
@@ -277,15 +292,32 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			this.setExternalChange(entry, true);
 			return;
 		}
-		this.applyFileContent(entry, content.text, content.revision);
+		this.applyFileContent(entry, content, "reload");
 		this.setExternalChange(entry, false);
 	}
 
-	private applyFileContent(entry: TextModelEntry, text: string, revision: string | undefined): void {
-		entry.savedText = text;
-		entry.revision = revision;
-		entry.lineEnding = detectExternalLineEnding(text);
-		entry.model.reset(text);
+	private applyFileContent(entry: TextModelEntry, content: TextResourceContent, mode: "reload" | "revert"): void {
+		const buffer = createPieceTreeTextBuffer(modelText(content), entry.model.getOptions().defaultEOL);
+		try {
+			const lastLine = buffer.getLineCount();
+			entry.savedText = buffer.getValueInRange(new Range(1, 1, lastLine, buffer.getLineLength(lastLine) + 1), EndOfLinePreference.TextDefined);
+			entry.revision = content.revision;
+			entry.encoding = content.encoding;
+			// File reloads publish one dirty transition after text and EOL are both updated.
+			entry.updatingFile = true;
+			if (mode === "revert") {
+				entry.model.reset(modelText(content));
+			} else {
+				const edits = ModelService._computeEdits(entry.model, buffer);
+				entry.model.pushStackElement();
+				entry.model.pushEditOperations(null, edits, () => null);
+				entry.model.pushEOL(buffer.getEOL() === "\r\n" ? EndOfLineSequence.CRLF : EndOfLineSequence.LF);
+				entry.model.pushStackElement();
+			}
+		} finally {
+			entry.updatingFile = false;
+			buffer.dispose();
+		}
 		this.refreshDirty(entry);
 	}
 
@@ -355,11 +387,7 @@ function validateInput(input: TextModelInput): void {
 	}
 }
 
-function detectExternalLineEnding(text: string): ExternalLineEnding {
-	return text.includes("\r\n") ? ExternalLineEnding.CRLF : ExternalLineEnding.LF;
-}
-
-function toExternalLineEndings(text: string, lineEnding: ExternalLineEnding): string {
-	const normalized = normalizeTextLineEndings(text);
-	return lineEnding === ExternalLineEnding.CRLF ? normalized.replaceAll("\n", "\r\n") : normalized;
+function modelText(content: TextResourceContent): string {
+	// The buffer consumes the encoding BOM; any following U+FEFF belongs to the document.
+	return content.encoding === "utf8bom" ? "\uFEFF" + content.text : content.text;
 }

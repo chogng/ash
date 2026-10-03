@@ -12,6 +12,7 @@ import { type IWorkspaceEditService, type WorkspaceEditResult } from "../common/
 interface AcquiredModel {
 	readonly reference: TextModelReference;
 	readonly wasOpen: boolean;
+	version: number;
 }
 
 interface VirtualFile {
@@ -139,7 +140,7 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 				if (!state.exists || state.text === undefined) throw new Error(`Workspace edit target '${entry.resource.toString()}' does not exist`);
 				const model = acquired.get(entry.resource.toString())!;
 				if (entry.version !== undefined && model.reference.model.version !== entry.version) throw new Error(`Workspace edit for '${entry.resource.toString()}' is stale`);
-				if (entry.expectedText !== undefined && normalizeTextLineEndings(entry.expectedText) !== state.text) throw new Error(`Workspace edit content for '${entry.resource.toString()}' is stale`);
+				if (entry.expectedText !== undefined && normalizeTextLineEndings(entry.expectedText) !== normalizeTextLineEndings(state.text)) throw new Error(`Workspace edit content for '${entry.resource.toString()}' is stale`);
 				using snapshot = new TextModel(state.text);
 				for (const edit of entry.edits) {
 					if (!snapshot.isValidRange(edit.range)) throw new Error("Workspace edit range is outside the document: " + entry.resource.toString());
@@ -189,9 +190,11 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 	private async execute(operation: PreparedEdit, undo: UndoOperation[], signal: AbortSignal): Promise<void> {
 		if (operation.kind === "textDocument") {
 			const { entry, model, before, after } = operation;
+			if (model.reference.model.version !== model.version) throw new Error(`Workspace edit for '${entry.resource.toString()}' is stale`);
 			if (model.reference.model.getText() !== before) throw new Error(`Workspace edit content for '${entry.resource.toString()}' changed during application`);
 			if (before === after) return;
 			model.reference.model.applyOperations(entry.edits);
+			model.version = model.reference.model.version;
 			const appliedVersion = model.reference.model.getAlternativeVersionId();
 			undo.push(() => this.undoText(entry.resource, before, after, appliedVersion, model.wasOpen));
 			if (!model.wasOpen) {
@@ -272,7 +275,7 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 			const retained = this.retainedFailedSaves.get(key);
 			const reference = retained ?? await this.models.acquire({ resource, ...(existing?.synthetic && existing.text !== undefined ? { initialText: existing.text } : {}) }, signal);
 			if (retained) this.retainedFailedSaves.delete(key);
-			model = { reference, wasOpen };
+			model = { reference, wasOpen, version: reference.model.version };
 			acquired.set(key, model);
 		}
 		const state = existing ?? { exists: true, text: model.reference.model.getText(), synthetic: false };

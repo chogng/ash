@@ -14,7 +14,7 @@ export class BrowserTextResourceStore implements ITextResourceStore {
 
 	async resolve(request: TextResourceResolveRequest, signal: AbortSignal): Promise<TextResourceContent> {
 		const content = await this.textFiles.resolve(request, signal);
-		return Object.freeze({ resource: content.resource, text: content.text, revision: content.revision });
+		return Object.freeze({ resource: content.resource, text: content.text, encoding: content.encoding, revision: content.revision });
 	}
 
 	async save(request: TextResourceSaveRequest, signal: AbortSignal): Promise<TextResourceSaveResult> {

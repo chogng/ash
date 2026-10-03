@@ -360,3 +360,42 @@ class MemoryFileService implements IFileService {
 		if (!this.resources.delete(resource.toString()) && missing === "error") throw new Error("FileSystemOperationFailed");
 	}
 }
+
+test("workspace edit content checks accept the current CRLF document and preserve its EOL", async () => {
+	const resource = URI.file("C:\\project\\crlf.ts");
+	using store = new MemoryResourceStore([[resource, "alpha\r\nbravo"]]);
+	using models = new BrowserTextModelService(store);
+	using workingCopies = new BrowserWorkingCopyService();
+	using service = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[resource, "alpha\r\nbravo"]]));
+	const result = await service.apply({ entries: [{
+		kind: "textDocument", resource, expectedText: "alpha\r\nbravo",
+		edits: [{ range: new Range(1, 1, 1, 6), text: "updated" }],
+	}] });
+	assert.equal(store.text(resource), "updated\r\nbravo");
+	await result.undo();
+	assert.equal(store.text(resource), "alpha\r\nbravo");
+});
+
+test("workspace edits recheck model versions after asynchronous file operations", async () => {
+	const resource = URI.file("C:\\project\\version.ts");
+	const created = URI.file("C:\\project\\created.ts");
+	using store = new MemoryResourceStore([[resource, "original"]]);
+	using models = new BrowserTextModelService(store);
+	using workingCopies = new BrowserWorkingCopyService();
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	const files = new class extends MemoryFileService {
+		override async createFile(...args: Parameters<MemoryFileService['createFile']>) {
+			const result = await super.createFile(...args);
+			// The user can edit and undo while another resource is being written.
+			reference.model.applyOperations([{ range: new Range(1, 1, 1, 1), text: "user " }]);
+			reference.model.undo();
+			return result;
+		}
+	}([[resource, "original"]]);
+	using service = new BrowserWorkspaceEditService(models, workingCopies, files);
+	await assert.rejects(service.apply({ entries: [
+		{ kind: "create", resource: created, existing: "error" },
+		{ kind: "textDocument", resource, version: reference.model.version, edits: [{ range: new Range(1, 1, 1, 9), text: "agent" }] },
+	] }), /stale/);
+	assert.deepEqual({ text: reference.model.getText(), created: files.has(created) }, { text: "original", created: false });
+});

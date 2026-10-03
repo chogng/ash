@@ -11,6 +11,8 @@ export interface TextResourceResolveRequest {
 export interface TextResourceContent {
 	readonly resource: URI;
 	readonly text: string;
+	/** Persistence format; absent for resources without a UTF-8 file encoding. */
+	readonly encoding?: "utf8" | "utf8bom";
 	/** Opaque file revision when the resource was resolved from persistent storage. */
 	readonly revision: string | undefined;
 }
@@ -19,6 +21,8 @@ export interface TextResourceContent {
 export interface TextResourceSaveRequest {
 	readonly resource: URI;
 	readonly text: string;
+	/** Persistence format; absent for resources without a UTF-8 file encoding. */
+	readonly encoding?: "utf8" | "utf8bom";
 	readonly expectedRevision?: string;
 }
 

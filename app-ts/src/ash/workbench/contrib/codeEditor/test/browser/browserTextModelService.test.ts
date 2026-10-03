@@ -6,6 +6,7 @@ import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserTextModelService } from "../../../../services/textmodelResolver/browser/browserTextModelService.js";
 import { Position } from "../../../../../editor/common/core/position.js";
+import { EndOfLineSequence } from "../../../../../editor/common/model.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { TextModelConflictError } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
 import { type IFileChangeEvent } from "../../../../../platform/files/common/files.js";
@@ -414,4 +415,48 @@ test('file model observers see one shared model, language changes and final rele
 	models.dispose();
 	assert.equal(models.getModel(resource), null);
 	assert.deepEqual(events.slice(3), ['added:typescript', 'removed']);
+});
+
+test("mixed line endings reload as a clean model and save with the model EOL", async () => {
+	const resource = URI.file("C:\\project\\mixed.txt");
+	const textFiles = new TestTextFileService("original\n");
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	textFiles.setText("first\r\nsecond\nthird\n");
+	await models.refresh(resource);
+	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty }, { text: "first\nsecond\nthird\n", dirty: false });
+	await reference.save(new AbortController().signal);
+	assert.deepEqual(textFiles.savedTexts, ["first\nsecond\nthird\n"]);
+});
+
+test("saving an explicit model EOL change does not restore the original file EOL", async () => {
+	const textFiles = new TestTextFileService("first\r\nsecond");
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using reference = await models.acquire({ resource: URI.file("C:\\project\\eol.txt") }, new AbortController().signal);
+	reference.model.pushEOL(EndOfLineSequence.LF);
+	await reference.save(new AbortController().signal);
+	assert.deepEqual(textFiles.savedTexts, ["first\nsecond"]);
+});
+
+test("external file reload is one undo step and retains earlier saved edits", async () => {
+	const resource = URI.file("C:\\project\\reload.txt");
+	const textFiles = new TestTextFileService("first\nsecond");
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	reference.model.applyOperations([{ range: new Range(1, 6, 1, 6), text: "!" }]);
+	await reference.save(new AbortController().signal);
+	const dirtyEvents: boolean[] = [];
+	using listener = reference.onDidChangeDirty(() => dirtyEvents.push(reference.isDirty));
+	textFiles.setText("external\r\nsecond");
+	await models.refresh(resource);
+	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty, events: dirtyEvents }, {
+		text: "external\r\nsecond", dirty: false, events: [],
+	});
+	reference.model.undo();
+	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty }, { text: "first!\nsecond", dirty: true });
+	reference.model.undo();
+	assert.equal(reference.model.getText(), "first\nsecond");
+	reference.model.redo();
+	reference.model.redo();
+	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty }, { text: "external\r\nsecond", dirty: false });
 });

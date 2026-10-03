@@ -1467,7 +1467,7 @@ Stanza 内部契约见
 Grammar catalog 由共享 Workbench `ITextMateService` 拥有，声明式 extension resource contribution
 会更新其 revision；每个文档的 Analysis Worker 仍由其 model coordinator 独立拥有，避免故障域和增量 mirror 互相污染。
 
-本阶段明确没有把 TextFile、TextMate 或 document identity 下沉到 `base`。当前 host 已具备原子写入与粗粒度变更通知，Stanza 因而拥有 dirty/save/revert 和外改 policy；expected-revision write、workspace-scoped working-copy 备份恢复已经接通。TextFile resolve 先以 stat 限制文本大小，再读取 bytes、剥离 UTF-8 BOM、拒绝 NUL/控制字符密集内容和非法 UTF-8；被拒绝的内容可显式切换到只读 Binary Editor。保留原编码写回与编码选择器仍是独立的未来能力，当前实现不会静默转码。
+本阶段明确没有把 TextFile、TextMate 或 document identity 下沉到 `base`。当前 host 已具备原子写入与粗粒度变更通知，Stanza 因而拥有 dirty/save/revert 和外改 policy；expected-revision write、workspace-scoped working-copy 备份恢复已经接通。TextFile resolve 先以 stat 限制文本大小，再读取 bytes、剥离 UTF-8 BOM、拒绝 NUL/控制字符密集内容和非法 UTF-8；被拒绝的内容可显式切换到只读 Binary Editor。UTF-8 BOM 的标记随资源内容进入模型服务，保存时恢复；LF/CRLF 由文本模型决定，混合换行按模型归一化后的内容建立保存基线。干净文件的外部刷新保留撤销记录，显式 revert 清空被丢弃的历史。非 UTF-8 原编码写回与编码选择器仍是独立的未来能力，当前实现不会静默转码。
 
 ### Current 47：Workbench Editor 宿主与 VS Code 文件边界
 
