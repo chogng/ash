@@ -37,7 +37,7 @@ export interface SessionsPartOptions {
 /** Passive primary Part that renders the visible Sessions supplied by its owner. */
 export class SessionsPart extends WorkbenchPart {
 	private readonly views: Record<SessionsPage, SessionsChatView>;
-	private page: SessionsPage | 'design' | 'library' | 'empty' = 'chat';
+	private page = 'chat';
 	private readonly codePage: HTMLDivElement;
 	private readonly contributedPages = new Map<string, { readonly container: HTMLElement; readonly view: ISessionsPageView }>();
 
@@ -68,10 +68,13 @@ export class SessionsPart extends WorkbenchPart {
 		this.views = { chat: createView("chat", this.contentDomNode), code: createView("code", this.codePage) };
 		this.contentDomNode.append(this.codePage);
 		for (const [id, descriptor] of SessionsPageRegistry.getPages()) {
+			if (!descriptor.viewDescriptor) {
+				continue;
+			}
 			const container = h(ownerDocument, 'div', { className: 'ash-sessions-contributed-page' });
 			container.dataset.sessionsPage = id;
 			container.hidden = true;
-			const view = this._register(services.createInstance(descriptor, ownerDocument));
+			const view = this._register(services.createInstance(descriptor.viewDescriptor, ownerDocument));
 			container.append(view.domNode);
 			this.contentDomNode.append(container);
 			this.contributedPages.set(id, { container, view });
@@ -98,9 +101,10 @@ export class SessionsPart extends WorkbenchPart {
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>, page: SessionsPage = this.page === 'code' ? 'code' : 'chat'): void { this.views[page].restoreDraft(draft); }
 
-	setPage(page: 'chat' | 'code' | 'design' | 'library' | 'empty'): void {
+	setPage(page: string): void {
 		this.page = page;
-		this.contentDomNode.classList.toggle('empty-page', page === 'empty');
+		const empty = page !== 'chat' && page !== 'code' && !this.contributedPages.has(page);
+		this.contentDomNode.classList.toggle('empty-page', empty);
 		this.views.chat.domNode.hidden = page !== 'chat';
 		this.views.code.domNode.hidden = page !== 'code';
 		this.views.chat.setVisible(page === 'chat');
@@ -118,7 +122,7 @@ export class SessionsPart extends WorkbenchPart {
 
 	override layout(dimension: Dimension): void {
 		// Empty pages resize the Part, not the retained Chat or Code geometry beneath it.
-		if (this.page === 'empty') {
+		if (this.page !== 'chat' && this.page !== 'code' && !this.contributedPages.has(this.page)) {
 			return;
 		}
 		const contributedPage = this.contributedPages.get(this.page);

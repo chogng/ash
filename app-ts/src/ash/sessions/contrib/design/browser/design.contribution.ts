@@ -18,10 +18,21 @@ import { SessionsViewRegistry } from '../../../common/views.js';
 import { DesignEditorPage } from './designEditorPage.js';
 import { DesignEditorWidget } from './widget/designEditorWidget.js';
 import { DESIGN_EDITOR_RESOURCE } from './designDocumentController.js';
-import { DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from './designEditorService.js';
+import { IDesignEditorService, DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from './designEditorService.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { SessionsPageRegistry } from '../../../browser/pages.js';
 import { DesignLayersView, DesignPropertiesView } from './designViews.js';
 import { designToolActions, designModeActions } from './widget/designToolsWidget.js';
 import { ColorPicker } from '../../../../base/browser/ui/colorPicker/colorPicker.js';
+
+SessionsPageRegistry.registerPage({
+	id: 'design', title: 'Design', titleKey: 'sessions.activity.design', icon: Lxicon.symbolColor, activeIcon: Lxicon.symbolColorFilled, order: 50,
+	layout: {
+		sidebar: { containerId: DESIGN_LAYERS_CONTAINER_ID }, primary: 'editor', editor: { resource: DESIGN_EDITOR_RESOURCE },
+		auxiliaryBar: { containerId: DESIGN_PROPERTIES_CONTAINER_ID }, panel: false,
+	},
+	getEditorInput: accessor => accessor.get(IDesignEditorService).input,
+});
 
 EditorPanes.registerStatic({
 	id: DesignEditorPage.ID,

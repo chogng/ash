@@ -1,5 +1,7 @@
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
+import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
+import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
 
 test('Sessions content shares one raised card with equal right and bottom margins', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
@@ -79,7 +81,9 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	await titlebar.getByRole('button', { name: 'Show sidebar', exact: true }).click();
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
-	await expect(page.locator('[data-part="auxiliarybar"]')).toHaveCSS('border-bottom-right-radius', '12px');
+	// Code Details shares the editor's outer frame and keeps its own content below the tabs.
+	await expect(page.locator('[data-part="editor"]')).toHaveClass(/ash-sessions-frame-end/u);
+	await expect(page.locator('[data-part="editor"]')).toHaveCSS('border-bottom-right-radius', '12px');
 	await expectCardGeometry();
 	await navigation.getByRole('button', { name: 'Collaboration', exact: true }).click();
 	await expect(sidebar).toBeHidden();
@@ -154,10 +158,12 @@ test('Sessions shared layout preserves user geometry across pages, resize and re
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await expect(sidebar).toBeHidden();
 	await expect(auxiliarybar).toBeHidden();
+	// The Library page has no sidebar; reopen Code to check the retained visibility preference.
+	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(sidebar).toBeHidden();
 	await titlebar.getByRole('button', { name: 'Show sidebar', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	expect(Math.abs((await sidebar.boundingBox())!.width - sidebarWidth)).toBeLessThanOrEqual(1);
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(auxiliarybar).toBeVisible();
 	expect(Math.abs((await auxiliarybar.boundingBox())!.width - auxiliaryWidth)).toBeLessThanOrEqual(1);
 	await editor.waitForEditorContents(value => value === 'Retained Code draft');
@@ -226,18 +232,15 @@ test('Sessions restores independent pane arrangements, active selections and dra
 	codeReferences.push(await draftReference());
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
 	// Restore an existing split arrangement; Add is ordinary navigation, not a split command.
-	await expect.poll(() => page.evaluate(() => [...Object.keys(localStorage)].some(name => name.endsWith('.storage.workspace.sessions') && JSON.parse(localStorage.getItem(name)!).entries['sessions.viewState']))).toBe(true);
-	await page.addInitScript(({ chat, code }) => {
-		if (sessionStorage.getItem('sessions-test-arrangement-seeded')) return;
-		const name = Object.keys(localStorage).find(name => name.endsWith('.storage.workspace.sessions') && JSON.parse(localStorage.getItem(name)!).entries['sessions.viewState'])!;
-		const state = JSON.parse(localStorage.getItem(name)!);
-		state.entries['sessions.viewState'].value = JSON.stringify({ version: 1, pages: { chat: { visible: chat, active: 0 }, code: { visible: code, active: 1 } } });
-		delete state.entries['sessions.gridState.chat'];
-		delete state.entries['sessions.gridState.code'];
-		localStorage.setItem(name, JSON.stringify(state));
-		sessionStorage.setItem('sessions-test-arrangement-seeded', 'true');
-	}, { chat: chatReferences, code: codeReferences });
+	const identity = { applicationId: target.workbenchMode, scope: StorageScope.WORKSPACE, id: 'sessions' };
+	await expect.poll(async () => Boolean((await readStorageEntries(application, page, identity))['sessions.viewState'])).toBe(true);
+	await seedStorageOnNextLoad(application, page, identity, {
+		'sessions.viewState': { value: JSON.stringify({ version: 1, pages: { chat: { visible: chatReferences, active: 0 }, code: { visible: codeReferences, active: 1 } } }), target: StorageTarget.MACHINE },
+		'sessions.gridState.chat': null,
+		'sessions.gridState.code': null,
+	});
 	await page.reload({ waitUntil: 'domcontentloaded' });
+	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(panes).toHaveCount(3);
 	await panes.first().locator('.ash-sessions-chat-slot-title').click();
 	const beforeDrag = (await panes.first().boundingBox())!.width;
@@ -250,6 +253,7 @@ test('Sessions restores independent pane arrangements, active selections and dra
 	const code = await snapshot();
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
 	await page.reload({ waitUntil: 'domcontentloaded' });
+	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(panes).toHaveCount(3);
 	await expect.poll(async () => (await snapshot()).map(({ width, ...state }) => state)).toEqual(chat.map(({ width, ...state }) => state));
 	for (let index = 0; index < chat.length; index++) {
@@ -264,24 +268,18 @@ test('Sessions restores independent pane arrangements, active selections and dra
 	await panes.first().locator('.ash-sessions-chat-slot-close').click();
 	await expect(panes).toHaveCount(1);
 	await page.reload({ waitUntil: 'domcontentloaded' });
+	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(panes).toHaveCount(3);
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panes).toHaveCount(1);
 	await new Editor(panes.first()).waitForEditorContents(text => text === 'Code second draft');
-	await expect.poll(async () => page.evaluate(identities => {
-		for (let index = 0; index < localStorage.length; index++) {
-			const name = localStorage.key(index)!;
-			if (!name.endsWith('.storage.workspace.sessions')) continue;
-			const state = JSON.parse(localStorage.getItem(name)!);
-			if (state.entries['sessions.viewState']) {
-				return {
-					removed: Boolean(state.entries[`sessions.codeDraftState:untitled:${identities[0]}`]),
-					retained: Boolean(state.entries[`sessions.codeDraftState:untitled:${identities[1]}`]),
-				};
-			}
-		}
-		return undefined;
-	}, code.map(pane => pane.identity))).toEqual({ removed: false, retained: true });
+	await expect.poll(async () => {
+		const entries = await readStorageEntries(application, page, identity);
+		return {
+			removed: Boolean(entries[`sessions.codeDraftState:untitled:${code[0]!.identity}`]),
+			retained: Boolean(entries[`sessions.codeDraftState:untitled:${code[1]!.identity}`]),
+		};
+	}).toEqual({ removed: false, retained: true });
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(panes).toHaveCount(3);
 	// A normal list selection exits the restored split, including a click on its already-active Session.

@@ -272,7 +272,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		assert.match(part.domNode.querySelector('.ash-chat-input-tip')?.textContent ?? '', /用 \+ 按钮添加文本文件或图片/u);
 		assert.equal(part.domNode.querySelector('[data-action-id="ash.chat.input.attach"] button')?.getAttribute('aria-label'), '添加附件');
-		assert.equal(part.domNode.querySelector('.ash-sessions-chat-input-footer button')?.getAttribute('aria-label'), '权限：请求权限');
+		assert.equal(part.domNode.querySelector('.ash-sessions-chat-input-footer button')?.getAttribute('aria-label'), '权限：手动确认');
 	} finally {
 		resetNlsResolver();
 	}

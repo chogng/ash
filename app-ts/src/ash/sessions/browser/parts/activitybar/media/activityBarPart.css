@@ -13,8 +13,7 @@
 	padding: var(--ash-spacing-size80) 0;
 }
 
-.ash-sessions-activity-content.compact,
-.ash-sessions-activity-content.horizontal {
+.ash-sessions-activity-content.compact {
 	--ash-sessions-activity-bar-icon-size: 16px;
 }
 
@@ -42,8 +41,8 @@
 	flex-direction: row;
 }
 
-.ash-sessions-activity-content.compact:not(.horizontal) .ash-sessions-activity-top,
-.ash-sessions-activity-content.compact:not(.horizontal) .ash-sessions-activity-bottom {
+.ash-sessions-activity-content.compact .ash-sessions-activity-top,
+.ash-sessions-activity-content.compact .ash-sessions-activity-bottom {
 	gap: var(--ash-spacing-size40);
 }
 
@@ -59,13 +58,18 @@
 	background: transparent;
 }
 
-.ash-sessions-activity-content.compact:not(.horizontal) .ash-sessions-activity-item {
+.ash-sessions-activity-content.compact .ash-sessions-activity-item {
 	width: var(--ash-spacing-size280);
 	height: var(--ash-spacing-size280);
+	border-radius: var(--ash-corner-radius-medium);
 }
 
-.ash-sessions-activity-item:not(:disabled):hover,
-.ash-sessions-activity-item.selected {
+.ash-sessions-activity-item:not(:disabled):hover {
+	color: var(--ash-foreground);
+	background: var(--ash-toolbar-hover-background);
+}
+
+.ash-sessions-activity-item.selected:not(:disabled) {
 	color: var(--ash-foreground);
 	background: var(--ash-sessions-selection-background);
 }
@@ -78,4 +82,12 @@
 .ash-workbench[data-color-scheme^="high-contrast-"] .ash-sessions-activity-item:is(.selected, :hover):not(:disabled):not(:focus-visible) {
 	outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
 	outline-offset: -1px;
+}
+
+.ash-sessions-page-navigation {
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-activity-content.compact .ash-sessions-page-navigation {
+	gap: var(--ash-spacing-size40);
 }

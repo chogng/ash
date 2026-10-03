@@ -72,6 +72,7 @@ export class CompositeBar extends Disposable {
 	private renderedContainerIds: readonly string[] = [];
 	private overflowingContainerIds = new Set<string>();
 	private draggedCompositeId: string | undefined;
+	private restoringOrder = false;
 	private _activeCompositeId: string | undefined;
 
 	readonly onDidSelectComposite: Event<CompositeBarSelectionEvent> =
@@ -88,6 +89,7 @@ export class CompositeBar extends Disposable {
 		this.contextMenuProvider = options.contextMenuProvider;
 		this.storageService = this.orientation === 'vertical' ? options.storageService : undefined;
 		this.hiddenContainerIds = this.readHiddenContainerIds();
+		this.restoreContainerOrder();
 		this.overflowEnabled = (presentation === 'label' || this.orientation === 'vertical') && this.contextMenuProvider !== undefined;
 		this.containerFilter = options.containerFilter ?? (() => true);
 		this.domNode = h(container.ownerDocument, "section");
@@ -131,10 +133,18 @@ export class CompositeBar extends Disposable {
 			this.render();
 		}));
 		this._register(this.viewDescriptorService.onDidChangeViewContainerOrder((location) => {
-			if (location === this.location) this.render();
+			if (location !== this.location) return;
+			if (!this.restoringOrder) {
+				this.storageService?.store(this.containerOrderKey, JSON.stringify(this.viewDescriptorService.getViewContainers(this.location).map(container => container.id)), StorageScope.PROFILE, StorageTarget.USER);
+			}
+			this.render();
 		}));
 		if (this.localizationService) this._register(this.localizationService.onDidChange(() => this.render()));
 		if (this.storageService) this._register(this.storageService.onDidChangeValue(event => {
+			if (event.key === this.containerOrderKey && event.scope === StorageScope.PROFILE && event.external) {
+				this.restoreContainerOrder();
+				return;
+			}
 			if (event.key !== HIDDEN_VIEW_CONTAINERS_KEY || event.scope !== StorageScope.PROFILE || !event.external) return;
 			this.hiddenContainerIds = this.readHiddenContainerIds();
 			this.render();
@@ -413,6 +423,23 @@ export class CompositeBar extends Disposable {
 			return new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []);
 		} catch {
 			return new Set();
+		}
+	}
+
+	private get containerOrderKey(): string { return `workbench.activityBar.viewContainerOrder.${this.location}`; }
+
+	private restoreContainerOrder(): void {
+		const raw = this.storageService?.get(this.containerOrderKey, StorageScope.PROFILE);
+		if (raw === undefined) return;
+		const ids: unknown = JSON.parse(raw);
+		if (!Array.isArray(ids) || !ids.every(id => typeof id === 'string') || new Set(ids).size !== ids.length) {
+			throw new TypeError(localize(this.localizationService, { bundle: 'ash', key: 'workbench.activityBar.invalidOrder' }, 'Saved view container order is invalid.'));
+		}
+		this.restoringOrder = true;
+		try {
+			this.viewDescriptorService.setViewContainerOrder(this.location, ids);
+		} finally {
+			this.restoringOrder = false;
 		}
 	}
 

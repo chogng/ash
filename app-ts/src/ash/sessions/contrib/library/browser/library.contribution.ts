@@ -9,8 +9,13 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { SessionsPageRegistry } from '../../../browser/pages.js';
 import { LibraryPage } from './libraryPage.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 
-SessionsPageRegistry.registerPage('library', new SyncDescriptor(LibraryPage));
+SessionsPageRegistry.registerPage({
+	id: 'library', title: 'Library', titleKey: 'sessions.activity.library', icon: Lxicon.library, activeIcon: Lxicon.libraryFilled, order: 30,
+	viewDescriptor: new SyncDescriptor(LibraryPage),
+	layout: { sidebar: 'hidden', primary: 'sessions', editor: 'hidden', auxiliaryBar: 'hidden', panel: false },
+});
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Library,

@@ -24,7 +24,11 @@ Content
     └── Panel
 ```
 
-The workbench omits the standard Activity Bar, Status Bar, and Banner. Part positions are fixed by the Agents Window rather than user settings.
+The workbench omits the standard Activity Bar, Status Bar, and Banner. Its Sessions Activity Bar selects registered product pages. Part positions are fixed by the Agents Window rather than user settings.
+
+Pages register their identity, localized title metadata, icons, and composition of existing Parts through `SessionsPageRegistry`. `ISessionsPageService` owns the active product page and profile-scoped navigation order; the active page is restored per workspace. The Activity Bar renders this state and changes order by page ID, independently of activation. Account actions remain outside the sortable page group. Activity Bar placement changes retain the same navigation items and order.
+
+`SessionsPageLayoutController` applies the registered composition to Sidebar, Sessions, Editor, Auxiliary Bar, and Panel. A page may select a sidebar or auxiliary container, retain session tools, or use an editor as the primary surface. The controller owns coordination and editor-driven page activation; individual Parts retain their models and views. `ISessionsService` continues to own Chat and Code conversation selections and drafts, independently of the active product page. User navigation, commands, and container opening all use the page service.
 
 | Part | Ownership |
 |------|-----------|

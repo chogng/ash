@@ -1,0 +1,128 @@
+import { expect, test } from '../../../automation/test.js';
+import { Editor } from '../../../automation/editor.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
+
+test('Sessions registered pages coordinate Parts and retain drafts through drag and keyboard ordering', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	const navigation = page.locator('.ash-sessions-activity-content');
+	const items = navigation.locator('.ash-sessions-activity-top .ash-action-view-item');
+	const chat = navigation.getByRole('button', { name: 'Chat', exact: true });
+	const design = navigation.getByRole('button', { name: 'Design', exact: true });
+	const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('Retain the navigation draft');
+	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
+	const retainedChat = await chat.elementHandle();
+	await navigation.locator('[data-action-id="design"]').dragTo(navigation.locator('[data-action-id="chat"]'), { targetPosition: { x: 8, y: 2 } });
+	await expect(items.first()).toHaveAttribute('draggable', 'true');
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['design', 'chat', 'colab', 'library', 'code']);
+	await expect(chat).toHaveAttribute('aria-current', 'page');
+	expect(await chat.evaluate((element, retained) => element === retained, retainedChat)).toBe(true);
+	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-sessions-list-add').click();
+	await new QuickAccess(page).runCommand('workbench.action.files.newUntitledFile');
+	await expect(page.locator('[data-part="editor"]').getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
+	await design.click();
+	await expect(design).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
+	await expect(page.locator('[data-part="editor"]')).toBeVisible();
+	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
+	await expect(page.locator('[data-part="panel"]')).toBeHidden();
+	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
+	await expect(page.locator('[data-sessions-page="library"]')).toBeVisible();
+	await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+	await expect(page.locator('[data-part="editor"]')).toBeHidden();
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
+	await chat.click();
+	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
+	await design.focus();
+	await page.keyboard.press('Shift+F10');
+	await page.getByRole('menuitem', { name: 'Move later', exact: true }).click();
+	await expect(design).toBeFocused();
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['chat', 'design', 'colab', 'library', 'code']);
+	await expect(chat).toHaveAttribute('aria-current', 'page');
+	await page.keyboard.press('Home');
+	await expect(chat).toBeFocused();
+	await page.keyboard.press('End');
+	await expect(navigation.getByRole('button', { name: 'Code', exact: true })).toBeFocused();
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('region', { name: 'Code', exact: true })).toBeVisible();
+	await expect(page.locator('[data-part="editor"]').getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
+	await chat.click();
+	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
+	await chat.click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'Top', exact: true }).click();
+	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
+	await expect(navigation.locator('[role="toolbar"]')).toHaveAttribute('aria-orientation', 'horizontal');
+	await navigation.locator('[data-action-id="code"]').dragTo(navigation.locator('[data-action-id="colab"]'), { targetPosition: { x: 2, y: 8 } });
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['chat', 'design', 'code', 'colab', 'library']);
+	await expect(chat).toHaveAttribute('aria-current', 'page');
+	await chat.focus();
+	await page.keyboard.press('ArrowRight');
+	await expect(design).toBeFocused();
+	await page.reload();
+	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
+	await expect(chat).toHaveAttribute('aria-current', 'page');
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['chat', 'design', 'code', 'colab', 'library']);
+	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
+	await retainedChat!.dispose();
+});
+
+for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
+	test(`Sessions registered navigation retains selection and exposes hover and keyboard focus in ${theme}`, async ({ application, target, workbench }) => {
+		test.skip(target.workbenchMode !== 'code');
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		const search = workbench.page.locator('.ash-quick-pick').getByRole('combobox');
+		await search.fill(theme);
+		await search.press('Enter');
+		await expect(workbench.page.locator('.ash-quick-pick')).toHaveCount(0);
+		let page = workbench.page;
+		if (target.kind === 'browser') {
+			await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+		} else {
+			if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+			const opened = application.waitForEvent('window');
+			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+			page = await opened;
+		}
+		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'high-contrast-dark' : 'high-contrast-light');
+		const navigation = page.locator('.ash-sessions-activity-content');
+		const chat = navigation.getByRole('button', { name: 'Chat', exact: true });
+		const library = navigation.getByRole('button', { name: 'Library', exact: true });
+		await page.mouse.move(400, 180);
+		const selectedBackground = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
+		await expect(chat).toHaveCSS('outline-style', 'solid');
+		await chat.hover();
+		await expect(chat).toHaveCSS('background-color', selectedBackground);
+		await library.hover();
+		await expect(library).not.toHaveAttribute('aria-current');
+		await expect(library).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(library).toHaveCSS('outline-style', 'solid');
+		await chat.focus();
+		await page.keyboard.press('ArrowDown');
+		const collaboration = navigation.getByRole('button', { name: 'Collaboration', exact: true });
+		await expect(collaboration).toBeFocused();
+		await expect(collaboration).toHaveCSS('outline-style', 'solid');
+		expect(await collaboration.evaluate(button => parseFloat(getComputedStyle(button).outlineWidth))).toBeGreaterThan(0);
+		await expect(chat).toHaveAttribute('aria-current', 'page');
+		await page.keyboard.press('End');
+		const design = navigation.getByRole('button', { name: 'Design', exact: true });
+		await expect(design).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(design).toHaveAttribute('aria-current', 'page');
+		await expect(chat).not.toHaveAttribute('aria-current');
+		await expect(page.locator('[data-part="editor"]')).toBeVisible();
+	});
+}

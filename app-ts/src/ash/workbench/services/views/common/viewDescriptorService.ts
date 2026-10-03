@@ -55,6 +55,7 @@ export interface IViewDescriptorService {
 		containerId: string,
 	): IViewContainerModel;
 	moveViewContainer(location: ViewContainerLocation, containerId: string, targetContainerId: string | undefined, position: "before" | "after"): void;
+	setViewContainerOrder(location: ViewContainerLocation, containerIds: readonly string[]): void;
 }
 
 export const IViewDescriptorService =
@@ -155,6 +156,14 @@ export class ViewDescriptorService
 		const previous = this.containerOrders.get(location);
 		if (previous && sameContainerOrder(previous, current)) return;
 		this.containerOrders.set(location, current);
+		this._onDidChangeViewContainerOrder.fire(location);
+	}
+
+	setViewContainerOrder(location: ViewContainerLocation, containerIds: readonly string[]): void {
+		const registered = this.registry.getViewContainers(location).map(container => container.id);
+		const order = [...containerIds.filter(id => registered.includes(id)), ...registered.filter(id => !containerIds.includes(id))];
+		if (sameContainerOrder(this.getViewContainers(location).map(container => container.id), order)) return;
+		this.containerOrders.set(location, order);
 		this._onDidChangeViewContainerOrder.fire(location);
 	}
 

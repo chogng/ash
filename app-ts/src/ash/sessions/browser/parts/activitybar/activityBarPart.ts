@@ -1,8 +1,7 @@
 import './media/activityBarPart.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button, type ButtonOptions } from '../../../../base/browser/ui/button/button.js';
-import { SubmenuAction, type IAction } from '../../../../base/common/actions.js';
-import type { Icon } from '../../../../base/common/icon.js';
+import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -12,22 +11,23 @@ import { getActivityHoverPosition } from '../../../../workbench/browser/parts/co
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
 import { WorkbenchPart } from '../../../../workbench/browser/part.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
+import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
+import { ActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { autorun } from '../../../../base/common/observable.js';
+import { status } from '../../../../base/browser/ui/aria/aria.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ISessionsPageService, type ISessionsPageDescriptor } from '../../../common/pages.js';
 
 export interface ActivityBarPartDelegate {
 	focusList(): void;
-	selectPage(page: SessionsActivityPage): void;
 	showAccountMenu(anchor: HTMLElement): void;
 }
 
-export type SessionsActivityPage = 'chat' | 'colab' | 'library' | 'code' | 'design';
-
 /** Primary view selector and account entry for the Sessions window. */
 export class ActivityBarPart extends WorkbenchPart {
-	private readonly chatButton: Button;
-	private readonly colabButton: Button;
-	private readonly libraryButton: Button;
-	private readonly codeButton: Button;
-	private readonly designButton: Button;
+	private readonly navigation: ActionBar;
+	private readonly pageActions = new Map<string, IAction>();
+	private draggedPageId: string | undefined;
 
 	private compact = false;
 
@@ -41,6 +41,8 @@ export class ActivityBarPart extends WorkbenchPart {
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IHoverService private readonly hoverService: IHoverService,
+		@ISessionsPageService private readonly pages: ISessionsPageService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super(container, 'activitybar');
 		this.domNode.classList.replace('ash-workbench-activitybar', 'ash-sessions-activitybar');
@@ -50,62 +52,46 @@ export class ActivityBarPart extends WorkbenchPart {
 		const bottom = h(container.ownerDocument, 'div');
 		bottom.className = 'ash-sessions-activity-bottom';
 
-		const chatLabel = localize('sessions.activity.chat', 'Chat');
-		this.chatButton = this.createActivityButton(top, {
-			label: chatLabel,
-			icon: Lxicon.chat2Filled,
-			iconOnly: true,
-			ariaLabel: chatLabel,
-			title: chatLabel,
-			onClick: () => {
-				delegate.selectPage('chat');
-				delegate.focusList();
+		this.navigation = this._register(new ActionBar(top, {
+			ariaLabel: localize('sessions.activity.navigation', 'Pages'),
+			orientation: 'vertical',
+			actionViewItemProvider: action => instantiation.createInstance(PageActivityActionViewItem, action, pages.getPage(action.id)),
+			dragAndDrop: {
+				canDrop: () => this.draggedPageId !== undefined,
+				onDragStart: (action, event) => {
+					this.draggedPageId = action.id;
+					event.dataTransfer!.setData('text/plain', action.id);
+					event.dataTransfer!.effectAllowed = 'move';
+				},
+				onDrop: (target, position) => {
+					const id = this.draggedPageId!;
+					this.draggedPageId = undefined;
+					this.pages.movePage(id, target?.id, position);
+				},
+				onDragEnd: () => { this.draggedPageId = undefined; },
 			},
-		});
-		this.chatButton.domNode.classList.add('ash-sessions-activity-item', 'selected');
-		this.chatButton.domNode.setAttribute('aria-current', 'page');
-
-		const colabLabel = localize('sessions.activity.colab', 'Collaboration');
-		this.colabButton = this.createActivityButton(top, {
-			label: colabLabel,
-			icon: Lxicon.colab,
-			iconOnly: true,
-			ariaLabel: colabLabel,
-			title: colabLabel,
-			onClick: () => delegate.selectPage('colab'),
-		});
-		this.colabButton.domNode.classList.add('ash-sessions-activity-item');
-		const libraryLabel = localize('sessions.activity.library', 'Library');
-		this.libraryButton = this.createActivityButton(top, {
-			label: libraryLabel,
-			icon: Lxicon.library,
-			iconOnly: true,
-			ariaLabel: libraryLabel,
-			title: libraryLabel,
-			onClick: () => delegate.selectPage('library'),
-		});
-		this.libraryButton.domNode.classList.add('ash-sessions-activity-item');
-		const codeLabel = localize('sessions.mode.code', 'Code');
-		this.codeButton = this.createActivityButton(top, {
-			label: codeLabel,
-			icon: Lxicon.code,
-			iconOnly: true,
-			ariaLabel: codeLabel,
-			title: codeLabel,
-			onClick: () => delegate.selectPage('code'),
-		});
-		this.codeButton.domNode.classList.add('ash-sessions-activity-item');
-		const designLabel = localize('sessions.activity.design', 'Design');
-		this.designButton = this.createActivityButton(top, {
-			label: designLabel,
-			icon: Lxicon.symbolColor,
-			iconOnly: true,
-			ariaLabel: designLabel,
-			title: designLabel,
-			onClick: () => delegate.selectPage('design'),
-		});
-		this.designButton.domNode.classList.add('ash-sessions-activity-item');
-		this.addUnavailableButton(bottom, Lxicon.deviceMobile, localize('sessions.activity.mobile', 'Mobile devices'));
+		}));
+		this.navigation.element.classList.add('ash-sessions-page-navigation');
+		this._register(autorun(reader => {
+			const registered = pages.pages.read(reader);
+			for (const id of this.pageActions.keys()) {
+				if (!registered.some(page => page.id === id)) {
+					this.pageActions.delete(id);
+				}
+			}
+			for (const page of registered) {
+				if (!this.pageActions.has(page.id)) {
+					this.pageActions.set(page.id, {
+						id: page.id, label: localize(page.titleKey, page.title), tooltip: localize(page.titleKey, page.title), icon: page.icon, enabled: true,
+						run: () => {
+							pages.openPage(page.id);
+							if (page.layout.conversation === 'chat') { delegate.focusList(); }
+						},
+					});
+				}
+			}
+			this.navigation.setActions(registered.map(page => this.pageActions.get(page.id)!));
+		}));
 
 		const accountLabel = localize('workbench.accounts', 'Accounts');
 		const accountButton = this.createActivityButton(bottom, {
@@ -126,21 +112,6 @@ export class ActivityBarPart extends WorkbenchPart {
 		}));
 	}
 
-	public selectPage(page: SessionsActivityPage): void {
-		for (const [button, selected, icon] of [
-			[this.chatButton, page === 'chat', page === 'chat' ? Lxicon.chat2Filled : Lxicon.chat2],
-			[this.colabButton, page === 'colab', page === 'colab' ? Lxicon.colabFilled : Lxicon.colab],
-			[this.libraryButton, page === 'library', page === 'library' ? Lxicon.libraryFilled : Lxicon.library],
-			[this.codeButton, page === 'code', Lxicon.code],
-			[this.designButton, page === 'design', page === 'design' ? Lxicon.symbolColorFilled : Lxicon.symbolColor],
-		] as const) {
-			button.icon = icon;
-			button.toggleClassName('selected', selected);
-			if (selected) button.domNode.setAttribute('aria-current', 'page');
-			else button.domNode.removeAttribute('aria-current');
-		}
-	}
-
 	public setCompact(compact: boolean): void {
 		if (this.compact === compact) return;
 		this.compact = compact;
@@ -155,7 +126,9 @@ export class ActivityBarPart extends WorkbenchPart {
 		} else {
 			this.domNode.append(this.contentDomNode);
 		}
-		this.contentDomNode.classList.toggle('horizontal', location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM);
+		const horizontal = location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM;
+		this.contentDomNode.classList.toggle('horizontal', horizontal);
+		this.navigation.setOrientation(horizontal ? 'horizontal' : 'vertical');
 	}
 
 	private showContextMenu(event: MouseEvent | KeyboardEvent): void {
@@ -165,7 +138,7 @@ export class ActivityBarPart extends WorkbenchPart {
 			getAnchor: () => event.type === 'contextmenu'
 				? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: this.domNode.ownerDocument.defaultView ?? undefined }
 				: event.target as HTMLElement,
-			getActions: () => this.getContextMenuActions(),
+			getActions: () => Separator.join([...this.getPageOrderActions(event.target as Element)], [...this.getContextMenuActions()]),
 			getCheckedActionsRepresentation: () => 'radio',
 		});
 	}
@@ -201,23 +174,61 @@ export class ActivityBarPart extends WorkbenchPart {
 		return button;
 	}
 
-	private addUnavailableButton(container: HTMLElement, icon: Icon, label: string): void {
-		const unavailableLabel = localize('sessions.activity.unavailable', '{0} (coming soon)', label);
-		const button = this.createActivityButton(container, {
-			label: unavailableLabel,
-			icon,
-			iconOnly: true,
-			ariaLabel: unavailableLabel,
-			title: unavailableLabel,
-			enabled: false,
-		});
-		button.domNode.classList.add('ash-sessions-activity-item');
+	private getPageOrderActions(target: Element): readonly IAction[] {
+		const id = target.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
+		const pages = this.pages.pages.get();
+		const index = pages.findIndex(page => page.id === id);
+		if (index < 0) { return []; }
+		return [
+			{ id: 'sessions.activity.moveBefore', label: localize('sessions.activity.moveBefore', 'Move earlier'), tooltip: '', enabled: index > 0, run: () => this.movePage(id!, pages[index - 1]!.id, 'before') },
+			{ id: 'sessions.activity.moveAfter', label: localize('sessions.activity.moveAfter', 'Move later'), tooltip: '', enabled: index < pages.length - 1, run: () => this.movePage(id!, pages[index + 1]!.id, 'after') },
+		];
+	}
+
+	private movePage(id: string, targetId: string, position: 'before' | 'after'): void {
+		this.pages.movePage(id, targetId, position);
+		this.navigation.setTabStop(id);
+		this.navigation.focus();
+		status(localize('sessions.activity.moved', '{0}, position {1} of {2}', localize(this.pages.getPage(id).titleKey, this.pages.getPage(id).title), this.pages.pages.get().findIndex(page => page.id === id) + 1, this.pages.pages.get().length));
 	}
 
 	public updateHelpHint(hint: string | undefined): void {
-		const label = localize('sessions.activity.chat', 'Chat');
-		this.chatButton.domNode.setAttribute('aria-label', hint
-			? localize('sessions.activity.helpHint', '{0}. {1}', label, hint)
-			: label);
+		const label = localize('sessions.activity.navigation', 'Pages');
+		this.navigation.element.setAttribute('aria-label', hint ? localize('sessions.activity.helpHint', '{0}. {1}', label, hint) : label);
 	}
+}
+
+class PageActivityActionViewItem extends ActionViewItem {
+	private button!: Button;
+
+	constructor(
+		action: IAction,
+		private readonly page: ISessionsPageDescriptor,
+		@ISessionsPageService private readonly pages: ISessionsPageService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IHoverService private readonly hover: IHoverService,
+	) {
+		super(action, { draggable: true });
+	}
+
+	public override render(container: HTMLElement): void {
+		this.button = this._register(new Button(container, {
+			label: localize(this.page.titleKey, this.page.title), icon: this.page.icon, iconOnly: true, ariaLabel: localize(this.page.titleKey, this.page.title), onClick: () => this.action.run(),
+		}));
+		this.button.domNode.classList.add('ash-sessions-activity-item');
+		this._register(this.hover.setupDelayedHover(this.button.domNode, () => ({
+			content: localize(this.page.titleKey, this.page.title),
+			position: { hoverPosition: getActivityHoverPosition(this.configuration.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
+		}), { groupId: 'actions' }));
+		this._register(autorun(reader => {
+			const selected = this.pages.activePage.read(reader) === this.page.id;
+			this.button.icon = selected ? this.page.activeIcon ?? this.page.icon : this.page.icon;
+			this.button.toggleClassName('selected', selected);
+			if (selected) { this.button.domNode.setAttribute('aria-current', 'page'); }
+			else { this.button.domNode.removeAttribute('aria-current'); }
+		}));
+	}
+
+	public override focus(): void { this.button.focus(); }
+	public override setTabbable(tabbable: boolean): void { this.button.domNode.tabIndex = tabbable ? 0 : -1; }
 }
