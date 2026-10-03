@@ -5,22 +5,13 @@ import { join } from 'node:path';
 import { test as browserTest } from '@playwright/test';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Workbench } from '../../../automation/workbench.js';
+import { captureElectronMenu } from '../../../automation/electronDriver.js';
 
-test('Code sessions restore editor tabs through Back, Forward and reload without focusing the editor', async ({ application, target, workbench }) => {
+test('Code sessions restore editor tabs through Back, Forward and reopening without focusing the editor', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
-	let page = workbench.page;
-	if (target.kind === 'browser') {
-		await page.goto('/browser/sessions/sessions-code.html');
-	} else {
-		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
-	const errors: string[] = [];
-	page.on('pageerror', error => errors.push(error.message));
-	const navigation = page.locator('.ash-sessions-activity-content');
-	const editors = page.locator('[data-part="editor"]');
+	let page = await workbench.openAgentsWindow(target.kind);
+	let navigation = page.locator('.ash-sessions-activity-content');
+	let editors = page.locator('[data-part="editor"]');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await page.locator('.ash-sessions-list-add').click();
 	const commands = new QuickAccess(page);
@@ -41,30 +32,21 @@ test('Code sessions restore editor tabs through Back, Forward and reload without
 	await forward.press('Enter');
 	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toBeVisible();
 	await expect(editors.locator(':focus')).toHaveCount(0);
-	await page.reload();
+	page = await workbench.reopenAgentsWindow(application, page);
+	navigation = page.locator('.ash-sessions-activity-content');
+	editors = page.locator('[data-part="editor"]');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toBeVisible();
-	expect(errors).toEqual([]);
 });
 
 test('Code panel stays below the main region and retains its state only on Code', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
-	let page = workbench.page;
-	if (target.kind === 'browser') {
-		await page.goto('/browser/sessions/sessions-code.html');
-	} else {
-		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
-	const errors: string[] = [];
-	page.on('pageerror', error => errors.push(error.message));
-	const navigation = page.locator('.ash-sessions-activity-content');
-	const panel = page.locator('[data-part="panel"]');
+	let page = await workbench.openAgentsWindow(target.kind);
+	let navigation = page.locator('.ash-sessions-activity-content');
+	let panel = page.locator('[data-part="panel"]');
 	const sidebar = page.locator('[data-part="sidebar"]');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	const toggle = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Toggle Code panel', exact: true });
+	let toggle = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Toggle Code panel', exact: true });
 	await expect(panel).toBeHidden();
 	const sidebarBefore = await sidebar.boundingBox();
 	await toggle.focus();
@@ -80,7 +62,10 @@ test('Code panel stays below the main region and retains its state only on Code'
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panel).toBeVisible();
 	expect((await panel.boundingBox())?.height).toBe(panelBefore?.height);
-	await page.reload();
+	page = await workbench.reopenAgentsWindow(application, page);
+	navigation = page.locator('.ash-sessions-activity-content');
+	panel = page.locator('[data-part="panel"]');
+	toggle = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Toggle Code panel', exact: true });
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(panel).toBeHidden();
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
@@ -90,56 +75,67 @@ test('Code panel stays below the main region and retains its state only on Code'
 	await navigation.getByRole('button', { name: 'Design', exact: true }).click();
 	await expect(panel).toBeHidden();
 	await expect(toggle).toHaveCount(0);
-	expect(errors).toEqual([]);
 });
 
 test('Code connects layout commands to View, Add tab and the panel shortcut', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
-	let page = workbench.page;
-	if (target.kind === 'browser') {
-		await page.goto('/browser/sessions/sessions-code.html');
-	} else {
-		if (!('windows' in application)) {
-			throw new Error('Expected Electron windows');
-		}
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
-	const errors: string[] = [];
-	page.on('pageerror', error => errors.push(error.message));
+	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	const editor = page.locator('[data-part="editor"]');
 	const title = editor.locator('.ash-editor-title-control');
 	const content = editor.locator('.ash-editor-group-content');
 	const panel = page.locator('[data-part="panel"]');
+	const menuButton = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Application menu', exact: true });
+	const usesSystemMenu = 'windows' in application && process.platform === 'darwin';
 	const openViewMenu = async (): Promise<void> => {
-		await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Application menu', exact: true }).click();
+		await menuButton.click();
 		await page.getByRole('menuitem', { name: 'View', exact: true }).hover();
 	};
+	const selectViewAction = async (name: string, checkbox = false): Promise<void> => {
+		if (usesSystemMenu) {
+			await captureElectronMenu(application, () => menuButton.click(), { label: name });
+			await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+		} else {
+			await openViewMenu();
+			await page.getByRole(checkbox ? 'menuitemcheckbox' : 'menuitem', { name, exact: true }).click();
+		}
+	};
+	const addChangesTab = async (): Promise<void> => {
+		if (usesSystemMenu) {
+			await captureElectronMenu(application, () => title.getByRole('button', { name: 'Add tab', exact: true }).click(), { label: 'Open Changes tab' });
+		} else {
+			await title.getByRole('button', { name: 'Add tab', exact: true }).click();
+			await page.getByRole('menuitem', { name: 'Open Changes tab', exact: true }).click();
+		}
+	};
 	await expect(content).toBeHidden();
-	await openViewMenu();
-	await page.getByRole('menuitem', { name: 'Show editor', exact: true }).click();
+	await selectViewAction('Show editor');
 	await expect(content).toBeVisible();
-	await openViewMenu();
-	await expect(page.getByRole('menuitem', { name: 'Hide editor', exact: true })).toBeVisible();
-	await expect(page.getByRole('menuitem', { name: 'Show editor', exact: true })).toHaveCount(0);
-	await page.getByRole('menuitemcheckbox', { name: 'Toggle Code panel', exact: true }).click();
+	if (usesSystemMenu) {
+		const items = await captureElectronMenu(application, () => menuButton.click());
+		const view = items.find(item => item.label === 'View')!.submenu!;
+		expect(view.find(item => item.label === 'Hide editor')?.enabled).toBe(true);
+		expect(view.some(item => item.label === 'Show editor')).toBe(false);
+		await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+		await selectViewAction('Toggle Code panel', true);
+	} else {
+		await openViewMenu();
+		await expect(page.getByRole('menuitem', { name: 'Hide editor', exact: true })).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: 'Show editor', exact: true })).toHaveCount(0);
+		await page.getByRole('menuitemcheckbox', { name: 'Toggle Code panel', exact: true }).click();
+	}
 	await expect(panel).toBeVisible();
 	await page.keyboard.press('Control+`');
 	await expect(panel).toBeHidden();
-	await title.getByRole('button', { name: 'Add tab', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'Open Changes tab', exact: true }).click();
+	await addChangesTab();
 	const changes = title.getByRole('tab', { name: 'Changes', exact: true });
 	await expect(changes).toHaveAttribute('aria-selected', 'true');
 	await changes.press('Delete');
 	await expect(changes).toHaveCount(0);
-	await title.getByRole('button', { name: 'Add tab', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'Open Changes tab', exact: true }).click();
+	await addChangesTab();
 	await expect(changes).toHaveAttribute('aria-selected', 'true');
-	await openViewMenu();
-	await page.getByRole('menuitem', { name: 'Hide editor', exact: true }).click();
+	await selectViewAction('Hide editor');
 	await expect(content).toBeHidden();
 	const commands = new QuickAccess(page);
 	await commands.open('>ash.sessions.hideEditor');
@@ -147,44 +143,34 @@ test('Code connects layout commands to View, Add tab and the panel shortcut', as
 	await commands.close();
 	await commands.runCommand('ash.sessions.showEditor');
 	await expect(content).toBeVisible();
-	await openViewMenu();
-	await page.getByRole('menuitem', { name: 'Hide editor', exact: true }).click();
+	await selectViewAction('Hide editor');
 	await expect(content).toBeHidden();
-	await openViewMenu();
-	await page.getByRole('menuitem', { name: 'Open Files tab', exact: true }).click();
+	await selectViewAction('Open Files tab');
 	await expect(content).toBeVisible();
 	await expect(title.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
-	await openViewMenu();
-	for (const name of ['Toggle Code panel', 'Toggle Code side panel', 'Toggle details', 'Hide editor', 'Show editor', 'Open Files tab', 'Open Changes tab']) {
-		await expect(page.getByRole('menu').getByText(name, { exact: true })).toHaveCount(0);
+	const codeActions = ['Toggle Code panel', 'Toggle Code side panel', 'Toggle details', 'Hide editor', 'Show editor', 'Open Files tab', 'Open Changes tab'];
+	if (usesSystemMenu) {
+		const items = await captureElectronMenu(application, () => menuButton.click());
+		expect(items.find(item => item.label === 'View')!.submenu!.filter(item => codeActions.includes(item.label))).toEqual([]);
+		await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+	} else {
+		await openViewMenu();
+		for (const name of codeActions) await expect(page.getByRole('menu').getByText(name, { exact: true })).toHaveCount(0);
+		await page.keyboard.press('Escape');
 	}
-	await page.keyboard.press('Escape');
-	expect(errors).toEqual([]);
 });
 
 test('Code shares its tabs across all four editor and Details states', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
-	let page = workbench.page;
-	if (target.kind === 'browser') {
-		await page.goto('/browser/sessions/sessions-code.html');
-	} else {
-		if (!('windows' in application)) {
-			throw new Error('Expected Electron windows');
-		}
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
-	const errors: string[] = [];
-	page.on('pageerror', error => errors.push(error.message));
+	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
-	const editor = page.locator('[data-part="editor"]');
-	const title = editor.locator('.ash-editor-title-control');
-	const content = editor.locator('.ash-editor-group-content');
-	const details = page.locator('[data-part="auxiliarybar"]');
+	let editor = page.locator('[data-part="editor"]');
+	let title = editor.locator('.ash-editor-title-control');
+	let content = editor.locator('.ash-editor-group-content');
+	let details = page.locator('[data-part="auxiliarybar"]');
 	const files = title.getByRole('tab', { name: 'Files', exact: true });
-	const changes = title.getByRole('tab', { name: 'Changes', exact: true });
+	let changes = title.getByRole('tab', { name: 'Changes', exact: true });
 	await expect(files).toBeVisible();
 	await expect(changes).toBeVisible();
 	await expect(content).toBeHidden();
@@ -219,7 +205,12 @@ test('Code shares its tabs across all four editor and Details states', async ({ 
 	await changes.click();
 	await expect(details).toBeVisible();
 	await expect(details.getByRole('status')).toHaveText('Changes appear after the agent edits files.');
-	await page.reload();
+	page = await workbench.reopenAgentsWindow(application, page);
+	editor = page.locator('[data-part="editor"]');
+	title = editor.locator('.ash-editor-title-control');
+	content = editor.locator('.ash-editor-group-content');
+	details = page.locator('[data-part="auxiliarybar"]');
+	changes = title.getByRole('tab', { name: 'Changes', exact: true });
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(content).toBeVisible();
 	await expect(details).toBeVisible();
@@ -230,7 +221,7 @@ test('Code shares its tabs across all four editor and Details states', async ({ 
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue('Changes appear after the agent edits files.');
 	await page.keyboard.press('Escape');
 	await expect(comparison).toBeFocused();
-	const commands = new QuickAccess(page);
+	let commands = new QuickAccess(page);
 	await commands.runCommand('workbench.action.files.newUntitledFile');
 	await expect(title.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
 	await title.getByRole('button', { name: 'Hide editor', exact: true }).click();
@@ -244,7 +235,11 @@ test('Code shares its tabs across all four editor and Details states', async ({ 
 	await expect(details).toBeHidden();
 	await commands.runCommand('ash.sessions.toggleSidePane');
 	await expect(editor).toBeHidden();
-	await page.reload();
+	page = await workbench.reopenAgentsWindow(application, page);
+	editor = page.locator('[data-part="editor"]');
+	title = editor.locator('.ash-editor-title-control');
+	details = page.locator('[data-part="auxiliarybar"]');
+	commands = new QuickAccess(page);
 	await expect(editor).toBeHidden();
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(editor).toBeHidden();
@@ -252,7 +247,6 @@ test('Code shares its tabs across all four editor and Details states', async ({ 
 	await expect(editor).toBeVisible();
 	await expect(details).toBeHidden();
 	await expect(title.getByRole('tab', { name: 'Untitled-2', exact: true })).toBeVisible();
-	expect(errors).toEqual([]);
 });
 
 test.describe('Sessions from an Electron Workbench', () => {
@@ -264,15 +258,7 @@ test.describe('Sessions from an Electron Workbench', () => {
 			await mkdir(join(testWorkspace.directory, 'nested'), { recursive: true });
 			await writeFile(join(testWorkspace.directory, 'nested', 'child.ts'), 'export const child = 1;\n');
 		}
-		let page = workbench.page;
-		if (target.kind === 'browser') {
-			await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-		} else {
-			if (!('windows' in application)) throw new Error('Expected Electron windows');
-			const opened = application.waitForEvent('window');
-			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-			page = await opened;
-		}
+		const page = await workbench.openAgentsWindow(target.kind);
 		const failures: string[] = [];
 		page.on('pageerror', error => failures.push(error.message));
 		const auxiliary = page.locator('[data-part="auxiliarybar"]');

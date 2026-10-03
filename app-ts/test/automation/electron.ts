@@ -1,9 +1,12 @@
 import { dirname, join, resolve } from "node:path";
 import { createRequire } from "node:module";
+import { createTestEnvironment } from './testEnvironment.js';
 import type { AppServerTestMode, DesktopWorkbenchMode } from "./testTarget.js";
 
 export interface ElectronLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
+	/** Total budget for process launch and Workbench restoration. */
+	readonly startupTimeout?: number;
 	readonly userDataDirectory: string;
 	readonly profileDirectory?: string;
 	readonly workspaceDirectory?: string;
@@ -36,13 +39,10 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 	const electronExecutablePath = bundle
 		? process.platform === 'darwin' ? join(bundle, 'Contents', 'MacOS', 'Ash') : join(bundle, 'Ash.exe')
 		: createRequire(resolve(desktopDirectory, "package.json"))("electron") as string;
-	const environment = Object.fromEntries(
-		Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
-	);
+	const environment = createTestEnvironment(options.userDataDirectory, process.env);
 	if (bundle) {
 		for (const key of Object.keys(environment)) if (key.startsWith('ASH_')) delete environment[key];
 		environment.ELECTRON_ENABLE_LOGGING = '1';
-		if (process.platform === 'darwin') environment.HOME = options.userDataDirectory;
 	}
 	if (options.appServerMode === "disabled") {
 		environment.ASH_DESKTOP_UI_ONLY = "1";

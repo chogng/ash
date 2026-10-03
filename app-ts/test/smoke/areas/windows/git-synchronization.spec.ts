@@ -2,12 +2,21 @@ import { execFile } from 'node:child_process';
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import type { ElectronApplication, Page } from '@playwright/test';
-import { launchBrowser } from '../../../automation/playwrightBrowser.js';
+import type { ElectronApplication, Locator, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
 
 const run = promisify(execFile);
+
+async function openHistoryGraph(page: Page): Promise<Locator> {
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	const toggle = history.getByRole('button', { name: 'Graph', exact: true });
+	// Windows in one browser profile share saved pane expansion state.
+	if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	return history;
+}
 
 test.use({ gitRepository: false });
 test.beforeEach(async ({ target, testWorkspace }) => {
@@ -24,19 +33,17 @@ test('External Git init and ref changes update status and history without a manu
 	await expect(branch).toContainText('main');
 	await run('git', ['add', '.'], { cwd });
 	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash@example.invalid', 'commit', '-m', 'External baseline'], { cwd });
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
-	const history = page.locator('[data-view-id="ash.gitGraph"]');
-	await history.locator('.ash-pane-view-header').click();
+	const history = await openHistoryGraph(page);
 	await expect(history.getByRole('treeitem', { name: /External baseline/ }).first()).toBeVisible();
 	await run('git', ['branch', 'external-topic'], { cwd });
-	await expect(history.getByText('external-topic', { exact: true })).toBeVisible();
+	await expect(history.getByRole('img', { name: 'external-topic', exact: true })).toBeVisible();
 	await run('git', ['tag', '-a', 'external-tag', '-m', 'External tag', '--'], { cwd, env: { ...process.env, GIT_COMMITTER_NAME: 'Ash Test', GIT_COMMITTER_EMAIL: 'ash@example.invalid' } });
-	const tag = history.locator('.ash-scm-graph-label[title="external-tag"]');
+	const tag = history.getByRole('img', { name: 'external-tag', exact: true });
 	await expect(tag).toBeVisible();
 	await expect(tag).toHaveAttribute('data-icon', 'tag');
 	await run('git', ['pack-refs', '--all', '--prune'], { cwd });
 	await run('git', ['branch', '-d', 'external-topic'], { cwd });
-	await expect(history.getByText('external-topic', { exact: true })).toHaveCount(0);
+	await expect(history.getByRole('img', { name: 'external-topic', exact: true })).toHaveCount(0);
 	await run('git', ['tag', '-d', 'external-tag'], { cwd });
 	await expect(tag).toHaveCount(0);
 	expect((await run('git', ['status', '--porcelain'], { cwd })).stdout).toBe('');
@@ -74,9 +81,10 @@ test('External Git refs refresh two Workbench windows sharing the backend', asyn
 	let second: Page;
 	let close: () => Promise<void>;
 	if (target.kind === 'browser') {
-		const launched = await launchBrowser(target);
-		second = launched.driver.workbench.page;
-		close = () => launched.application.close();
+		// One application owns both windows, their authentication, and diagnostics.
+		second = await workbench.page.context().newPage();
+		close = () => second.close();
+		await second.goto(target.baseURL, { waitUntil: 'domcontentloaded' });
 	} else {
 		const electron = application as ElectronApplication;
 		const opened = electron.waitForEvent('window');
@@ -88,16 +96,16 @@ test('External Git refs refresh two Workbench windows sharing the backend', asyn
 	}
 	try {
 		await new Workbench(second).waitForReady();
-		const histories = [workbench.page, second].map(page => page.locator('[data-view-id="ash.gitGraph"]'));
-		for (const [index, page] of [workbench.page, second].entries()) {
-			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
-			await histories[index]!.locator('.ash-pane-view-header').click();
-			await expect(histories[index]!.getByRole('treeitem', { name: /Shared baseline/ }).first()).toBeVisible();
+		const histories: Locator[] = [];
+		for (const page of [workbench.page, second]) {
+			const history = await openHistoryGraph(page);
+			histories.push(history);
+			await expect(history.getByRole('treeitem', { name: /Shared baseline/ }).first()).toBeVisible();
 		}
 		await run('git', ['branch', 'shared-topic'], { cwd });
-		for (const history of histories) await expect(history.getByText('shared-topic', { exact: true })).toBeVisible();
+		for (const history of histories) await expect(history.getByRole('img', { name: 'shared-topic', exact: true })).toBeVisible();
 		await run('git', ['branch', '-d', 'shared-topic'], { cwd });
-		for (const history of histories) await expect(history.getByText('shared-topic', { exact: true })).toHaveCount(0);
+		for (const history of histories) await expect(history.getByRole('img', { name: 'shared-topic', exact: true })).toHaveCount(0);
 	} finally {
 		await close();
 	}

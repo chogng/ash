@@ -236,7 +236,8 @@ export class Workbench extends Disposable {
 	private readonly sessionsPart: SessionsPart;
 	private readonly showChat: () => void;
 	private readonly workspaceSelection: () => SessionWorkspaceSelection;
-	private readonly initialized: Promise<void>;
+	/** Saved page and session layout are restored before the host completes startup. */
+	public readonly whenRestored: Promise<void>;
 	private readonly logService: ILogService;
 
 	public static async create(options: IWorkbenchOptions): Promise<Workbench> {
@@ -687,12 +688,11 @@ export class Workbench extends Disposable {
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		this.lifecycleService.phase = LifecyclePhase.Ready;
-		this.initialized = this.initialize(view, configurationService, ownerWindow, layoutController, contributions, pageLayoutController);
-		void this.initialized.catch(error => console.error('Failed to initialize Sessions Workbench', error));
+		this.whenRestored = this.initialize(view, configurationService, ownerWindow, layoutController, contributions, pageLayoutController);
 	}
 
 	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
-		await this.initialized;
+		await this.whenRestored;
 		this.showChat();
 		if (options.conversation) {
 			await this.sessionsView.openThread(options.conversation.sessionId, options.conversation.threadId);

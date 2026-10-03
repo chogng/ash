@@ -12,11 +12,12 @@ interface WebLaunch {
 	close(): Promise<void>;
 }
 
-export async function startWeb(options: { port: number; assets?: string; origin?: string }): Promise<WebLaunch> {
+export async function startWeb(options: { port: number; assets?: string; origin?: string; environment: Readonly<NodeJS.ProcessEnv> }): Promise<WebLaunch> {
 	const root = resolve(import.meta.dirname, '../..');
 	const packageRoot = developmentAshPackagePath(root, 'packaged-node');
 	const suffix = process.platform === 'win32' ? '.exe' : '';
-	const executable = process.env.ASH_APP_SERVER_PATH ?? join(packageRoot, 'bin', `ash-app-server${suffix}`);
+	const source = options.environment;
+	const executable = source.ASH_APP_SERVER_PATH ?? join(packageRoot, 'bin', `ash-app-server${suffix}`);
 	let hostPlatform: AppServerHostPlatform;
 	switch (process.platform) {
 		case 'win32': hostPlatform = 'windows'; break;
@@ -24,11 +25,11 @@ export async function startWeb(options: { port: number; assets?: string; origin?
 		case 'linux': hostPlatform = 'linux'; break;
 		default: throw new Error(`Unsupported App Server host platform: ${process.platform}`);
 	}
-	const environment = buildAppServerEnvironment(process.env, hostPlatform, {
-		ASH_HOME: resolve(process.env.ASH_WEB_APP_SERVER_PROFILE ?? join(root, '.build/app-ts/dev/web-profile')),
-		ASH_WORKSPACE_ROOT: resolve(process.env.ASH_WORKSPACE_ROOT ?? root),
-		ASH_RG_PATH: resolve(process.env.ASH_RG_PATH ?? join(packageRoot, 'ash-path', `rg${suffix}`)),
-		...(process.env.ASH_PRODUCT_SERVICES_PATH ? { ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH } : {}),
+	const environment = buildAppServerEnvironment(source, hostPlatform, {
+		ASH_HOME: resolve(source.ASH_WEB_APP_SERVER_PROFILE ?? join(root, '.build/app-ts/dev/web-profile')),
+		ASH_WORKSPACE_ROOT: resolve(source.ASH_WORKSPACE_ROOT ?? root),
+		ASH_RG_PATH: resolve(source.ASH_RG_PATH ?? join(packageRoot, 'ash-path', `rg${suffix}`)),
+		...(source.ASH_PRODUCT_SERVICES_PATH ? { ASH_PRODUCT_SERVICES_PATH: source.ASH_PRODUCT_SERVICES_PATH } : {}),
 	}, 'web');
 	const arguments_ = ['--web', '--port', String(options.port)];
 	if (options.assets) { arguments_.push('--assets', options.assets); }

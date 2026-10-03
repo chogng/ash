@@ -9,7 +9,7 @@ const port = Number(process.argv[3] ?? 5173);
 if (!Number.isInteger(port) || port < 1 || port > 65535) { throw new Error('Invalid Web server port'); }
 
 if (process.env.ASH_WEB_APP_SERVER === '1') {
-	const launch = await startWeb({ port, assets: root });
+	const launch = await startWeb({ port, assets: root, environment: process.env });
 	console.log(JSON.stringify(launch.info));
 	console.error(`Open Ash: ${authenticatedWebUrl(launch.info)}`);
 	process.once('SIGTERM', () => void launch.close());

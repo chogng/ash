@@ -46,7 +46,7 @@
     "test:main": "pnpm run test:build-tools && pnpm run test:unit",
     "test:build-tools": "pnpm --dir ../build test",
     "test:extensions": "node test/unit/clean.ts && tsc -p tsconfig.extensions-test.json && node test/unit/extensions.ts",
-    "test:unit": "node test/unit/clean.ts && tsc -p tsconfig.test.json && node test/unit/run.ts",
+    "test:unit": "node test/unit/clean.ts && tsc -p tsconfig.test.json && node --test test/unit/mocha.test.ts && node test/unit/run.ts",
     "test:editor:unit": "node test/unit/clean.ts && tsc -p tsconfig.test.json && node test/unit/editor.ts",
     "test:editor": "pnpm run test:editor:unit && pnpm run test:editor:browser",
     "test:editor:browser:build": "vite build --config test/integration/browser/vite.config.ts",

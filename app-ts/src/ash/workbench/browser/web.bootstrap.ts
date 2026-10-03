@@ -9,11 +9,7 @@ import type { IDisposable } from "../../base/common/lifecycle.js";
 import { connectBrowserWorkbenchHost } from './web.host.js';
 
 /** Starts a Workbench mode after resolving its optional development host. */
-export function startBrowserWorkbench(modeId: WorkbenchModeId, rendererCapabilities: readonly RendererCapabilityContribution[] = []): void {
-	void startBrowserWorkbenchAsync(modeId, rendererCapabilities);
-}
-
-async function startBrowserWorkbenchAsync(modeId: WorkbenchModeId, rendererCapabilities: readonly RendererCapabilityContribution[]): Promise<void> {
+export async function startBrowserWorkbench(modeId: WorkbenchModeId, rendererCapabilities: readonly RendererCapabilityContribution[] = []): Promise<void> {
 	let connectedHost: IDisposable | undefined;
 	try {
 		let documentClient: AppServerProtocolClient | undefined;

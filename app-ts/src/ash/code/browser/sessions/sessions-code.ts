@@ -11,7 +11,7 @@ try {
 		await initializeBrowserLocalization(configuration, new BrowserLanguagePackStore());
 	}
 	const { startBrowserSessions } = await import('../../../sessions/browser/web.main.js');
-	startBrowserSessions(WorkbenchModeId.Code, codeSessionsProfile);
+	await startBrowserSessions(WorkbenchModeId.Code, codeSessionsProfile);
 } catch (error) {
 	showStartupError(error, text => navigator.clipboard.writeText(text));
 }

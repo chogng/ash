@@ -1442,9 +1442,8 @@ test('Agent document requests preserve unsaved editor content, undo, BOM and CRL
 	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
 	const page = workbench.page;
 	await installDocumentProtocolProbe(page);
-	const restored = page.waitForEvent('console', { predicate: message => message.text() === '[lifecycle] Workbench restored' });
-	await page.reload({ waitUntil: 'domcontentloaded' });
-	await Promise.all([workbench.waitForReady(), restored]);
+	await workbench.reloadWindow();
+	await workbench.waitForReady();
 	const name = 'agent-document-crlf.txt';
 	const path = join(testWorkspace.directory, name);
 	await writeFile(path, '\uFEFFfirst\r\nsecond');
@@ -1475,20 +1474,11 @@ test('Agent document requests preserve unsaved editor content, undo, BOM and CRL
 });
 
 
-test('Agent document requests use the Agents window model and save closed files through editor services', async ({ application, target, testWorkspace, workbench }) => {
+test('Agent document requests use the Agents window model and save closed files through editor services', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
-	let page = workbench.page;
-	if (target.kind === 'electron') {
-		if (!('windows' in application)) throw new Error('Missing Electron application');
-		const opened = application.waitForEvent('window');
-		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
-		page = await opened;
-	} else {
-		await page.locator("[data-action-id='ash.code.open-sessions'] button").click();
-	}
-	await expect(page.locator('.ash-code-sessions-window')).toBeVisible();
+	const page = await workbench.openAgentsWindow(target.kind);
 	await installDocumentProtocolProbe(page);
-	await page.reload({ waitUntil: 'domcontentloaded' });
+	await workbench.reloadWindow(page);
 	await expect(page.locator('.ash-code-sessions-window')).toBeVisible();
 	const path = join(testWorkspace.directory, 'agents-document.txt');
 	await writeFile(path, '\uFEFForiginal\r\nsecond');

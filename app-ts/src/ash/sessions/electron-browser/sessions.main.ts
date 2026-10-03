@@ -162,6 +162,12 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	sessions.add(addDisposableListener(window, "pagehide", () => {
 		void workbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Sessions Workbench", error)).finally(() => sessions.dispose());
 	}, { once: true }));
-	await lifecycleService.initialize();
-	return sessions;
+	try {
+		await lifecycleService.initialize();
+		await workbench.whenRestored;
+		return sessions;
+	} catch (error) {
+		sessions.dispose();
+		throw error;
+	}
 }

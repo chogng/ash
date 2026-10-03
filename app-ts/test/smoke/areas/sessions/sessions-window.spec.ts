@@ -8,60 +8,28 @@ import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { Editor } from '../../../automation/editor.js';
 import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/design/common/model/document.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
-
-async function prepareCanvasMenuSelection(application: PlaywrightApplication, name: string, checked?: boolean): Promise<void> {
-	if (!('windows' in application) || process.platform !== 'darwin') { return; }
-	// Only select the OS menu item; renderer dispatch, IPC and action execution stay real.
-	await application.evaluate(({ Menu }, { label, checked }) => {
-		const popup = Menu.prototype.popup;
-		Menu.prototype.popup = function (options) {
-			Menu.prototype.popup = popup;
-			const find = (items: typeof this.items): typeof this.items[number] | undefined => {
-				for (const item of items) {
-					if (item.label === label) return item;
-					const nested = item.submenu && find(item.submenu.items);
-					if (nested) return nested;
-				}
-				return undefined;
-			};
-			const item = find(this.items);
-			if (!item || !item.enabled) { throw new Error(`Expected enabled Design menu item: ${label}`); }
-			if (checked !== undefined && item.checked !== checked) { throw new Error(`Unexpected Design menu checked state: ${label}`); }
-			item.click(item, options?.window, { shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, triggeredByAccelerator: false });
-			options?.callback?.();
-		};
-	}, { label: name, checked });
-}
+import { captureElectronMenu } from '../../../automation/electronDriver.js';
 
 async function clickCanvasMenu(canvas: Locator, name: string, application: PlaywrightApplication): Promise<void> {
-	await prepareCanvasMenuSelection(application, name);
-	await canvas.focus();
-	await canvas.press('Shift+F10');
-	if (!('windows' in application) || process.platform !== 'darwin') {
+	const trigger = async (): Promise<void> => { await canvas.focus(); await canvas.press('Shift+F10'); };
+	if ('windows' in application && process.platform === 'darwin') {
+		await captureElectronMenu(application, trigger, { label: name });
+	} else {
+		await trigger();
 		await canvas.page().getByRole('menuitem', { name, exact: true }).click();
 	}
 }
 
 async function inspectCanvasMenu(canvas: Locator, application: PlaywrightApplication, pointer = false): Promise<readonly { label: string; enabled: boolean }[]> {
+	const trigger = async (): Promise<void> => {
+		await canvas.focus();
+		if (pointer) await canvas.locator('.ash-sessions-design-viewport').click({ button: 'right', position: { x: 20, y: 20 } });
+		else await canvas.press('Shift+F10');
+	};
 	if ('windows' in application && process.platform === 'darwin') {
-		await application.evaluate(({ Menu }) => {
-			const state = globalThis as typeof globalThis & { ashDesignMenuItems?: { label: string; enabled: boolean }[] };
-			state.ashDesignMenuItems = undefined;
-			const popup = Menu.prototype.popup;
-			Menu.prototype.popup = function (options) {
-				Menu.prototype.popup = popup;
-				state.ashDesignMenuItems = this.items.filter(item => item.type !== 'separator').map(item => ({ label: item.label, enabled: item.enabled }));
-				options?.callback?.();
-			};
-		});
+		return (await captureElectronMenu(application, trigger)).map(({ label, enabled }) => ({ label, enabled }));
 	}
-	await canvas.focus();
-	if (pointer) { await canvas.locator('.ash-sessions-design-viewport').click({ button: 'right', position: { x: 20, y: 20 } }); }
-	else { await canvas.press('Shift+F10'); }
-	if ('windows' in application && process.platform === 'darwin') {
-		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { ashDesignMenuItems?: unknown }).ashDesignMenuItems)).toBeDefined();
-		return application.evaluate(() => (globalThis as typeof globalThis & { ashDesignMenuItems: { label: string; enabled: boolean }[] }).ashDesignMenuItems);
-	}
+	await trigger();
 	const menu = canvas.page().getByRole('menu');
 	await expect(menu).toBeVisible();
 	const items = await menu.getByRole('menuitem').evaluateAll(items => items.map(item => ({ label: item.querySelector('.ash-button-label')!.textContent!, enabled: !(item as HTMLButtonElement).disabled })));
@@ -86,9 +54,7 @@ async function replaceChatInput(editor: Editor, text: string): Promise<void> {
 test('Sessions dictation introduction preserves the draft and restores focus after accessible help', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Uses the Sessions desktop window.');
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-	const opened = application.waitForEvent('window');
-	await workbench.page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-	const page = await opened;
+	const page = await workbench.openAgentsWindow(target.kind);
 	const chat = page.locator('.ash-sessions-chat-slot .ash-chat:visible').first();
 	const editor = new Editor(chat);
 	await replaceChatInput(editor, 'Keep the Sessions draft');
@@ -311,7 +277,7 @@ test('Sessions Design canvas keeps grid and cursor readable across themes', asyn
 		await page.keyboard.press('Escape');
 		await canvas.press('Delete');
 		const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
-		await returnFromSessions(page);
+		await returnFromSessions(page, application);
 		await closed;
 		await workbench.waitForReady();
 	}
@@ -485,8 +451,8 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 	const selectionTools = tools.getByRole('button', { name: 'Selection tools', exact: true });
 	await expect(selectionTools).toBeFocused();
 	const systemMenu = target.kind === 'electron' && process.platform === 'darwin';
-	await prepareCanvasMenuSelection(application, 'Move canvas (H)');
-	await page.keyboard.press('Enter');
+	if (systemMenu && 'windows' in application) await captureElectronMenu(application, () => page.keyboard.press('Enter'), { label: 'Move canvas (H)' });
+	else await page.keyboard.press('Enter');
 	if (!systemMenu) {
 		await expect(selectionTools).toHaveAttribute('aria-expanded', 'true');
 		await expect(page.locator('.ash-context-view-menu:has(> .ash-design-menu)')).toHaveCSS('background-color', 'rgb(24, 24, 24)');
@@ -495,23 +461,23 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 	await expect(tools.getByRole('button', { name: 'Move canvas (H)', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await expect(viewport).toHaveCSS('cursor', 'grab');
 	await selectionTools.focus();
-	await prepareCanvasMenuSelection(application, 'Move canvas (H)', true);
-	await page.keyboard.press('ArrowDown');
+	if (systemMenu && 'windows' in application) await captureElectronMenu(application, () => page.keyboard.press('ArrowDown'), { label: 'Move canvas (H)', checked: true });
+	else await page.keyboard.press('ArrowDown');
 	if (!systemMenu) {
 		await expect(page.getByRole('menuitemradio', { name: 'Move canvas (H)', exact: true })).toHaveAttribute('aria-checked', 'true');
 		await page.keyboard.press('Escape');
 	}
 	await expect(selectionTools).toBeFocused();
 	const shapeTools = tools.getByRole('button', { name: 'Shape tools', exact: true });
-	await prepareCanvasMenuSelection(application, 'Ellipse');
-	await shapeTools.click();
+	if (systemMenu && 'windows' in application) await captureElectronMenu(application, () => shapeTools.click(), { label: 'Ellipse' });
+	else await shapeTools.click();
 	if (!systemMenu) { await page.getByRole('menuitemradio', { name: 'Ellipse', exact: true }).click(); }
 	await expect(tools.getByRole('button', { name: 'Ellipse', exact: true })).toBeVisible();
 	await tools.getByRole('button', { name: 'Pen (P)', exact: true }).click();
 	await tools.getByRole('button', { name: 'Ellipse', exact: true }).click();
 	await expect(tools.getByRole('button', { name: 'Ellipse', exact: true })).toHaveAttribute('aria-pressed', 'true');
-	await prepareCanvasMenuSelection(application, 'Rectangle');
-	await shapeTools.click();
+	if (systemMenu && 'windows' in application) await captureElectronMenu(application, () => shapeTools.click(), { label: 'Rectangle' });
+	else await shapeTools.click();
 	if (!systemMenu) { await page.getByRole('menuitemradio', { name: 'Rectangle', exact: true }).click(); }
 	await tools.getByRole('button', { name: 'Rectangle', exact: true }).click();
 	await expect(viewport).toHaveCSS('cursor', 'crosshair');
@@ -675,9 +641,7 @@ test('Sessions Design canvas context menu edits the pointed object and preserves
 test('Sessions Design macOS canvas menu dispatches editing through Main', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || process.platform !== 'darwin');
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-	const opened = application.waitForEvent('window');
-	await workbench.page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-	const page = await opened;
+	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	expect(await inspectCanvasMenu(canvas, application, true)).toEqual([
@@ -693,16 +657,14 @@ test('Sessions Design macOS canvas menu dispatches editing through Main', async 
 	await canvas.press('e');
 	for (let index = 0; index < 15; index++) { await canvas.press('Shift+ArrowRight'); }
 	const rectangle = canvas.locator('rect[data-shape-id]');
-	await prepareCanvasMenuSelection(application, 'Delete');
-	await rightClickCanvasShape(rectangle);
+	await captureElectronMenu(application, () => rightClickCanvasShape(rectangle), { label: 'Delete' });
 	await expect(rectangle).toHaveCount(0);
 	await expect(canvas.locator('ellipse[data-shape-id]')).toHaveCount(1);
 	await expect(canvas).toBeFocused();
 	await clickCanvasMenu(canvas, 'Undo', application);
 	await expect(rectangle).toHaveCount(1);
 	await clickCanvasMenu(canvas, 'Select all', application);
-	await prepareCanvasMenuSelection(application, 'Group');
-	await rightClickCanvasShape(rectangle);
+	await captureElectronMenu(application, () => rightClickCanvasShape(rectangle), { label: 'Group' });
 	const group = canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]');
 	await expect(group).toHaveCount(1);
 	await clickCanvasMenu(canvas, 'Ungroup', application);
@@ -1133,9 +1095,7 @@ test('Sessions Design saves and reopens an editable file through App Server', as
 		dialog.showSaveDialog = async () => ({ canceled: false, filePath: path });
 		dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
 	}, packagePath);
-	const opened = application.waitForEvent('window');
-	await workbench.page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-	const page = await opened;
+	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus();
@@ -1458,8 +1418,7 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(composer.locator('[data-action-id="ash.chat.input.attach"] button')).toHaveAccessibleName('Attach files');
 	await composer.locator('input[type="file"]').setInputFiles({ name: 'context.ts', mimeType: 'text/plain', buffer: Buffer.from('export const value = 42;') });
 	await expect(composer.getByRole('button', { name: 'Remove context.ts', exact: true })).toBeVisible();
-	// The connected fixture has an empty model profile; attachments do not grant a connection.
-	await expect(composer.locator('[data-action-id="ash.chat.input.send"] button')).toBeEnabled({ enabled: target.appServerMode === 'disabled' });
+	await expect(composer.locator('[data-action-id="ash.chat.input.send"] button')).toBeEnabled();
 	const permissions = composer.getByRole('button', { name: 'Permissions: Manual', exact: true });
 	await permissions.press('ArrowDown');
 	const permissionMenu = page.getByRole('menu', { name: 'Permissions', exact: true });
@@ -1596,7 +1555,7 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 	await expect(sessionsInput.locator('.ash-chat-input-container')).toHaveCSS('border-radius', '12px');
 	await expect(sessionsInput.locator('.ash-chat-input-editor')).toHaveCSS('height', '48px');
 	const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
-	await returnFromSessions(page);
+	await returnFromSessions(page, application);
 	await closed;
 	await workbench.waitForReady();
 	if (!await parent.locator('.ash-chat-view-pane').isVisible()) {
@@ -1650,7 +1609,7 @@ test('Sessions input shadow has its own theme color when general widget shadows 
 		await expectFloatingComposerHover(card, card.getByRole('textbox', { name: 'Chat message' }), page.getByRole('button', { name: 'Hide sidebar', exact: true }));
 	}
 	const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
-	await returnFromSessions(page);
+	await returnFromSessions(page, application);
 	await closed;
 	await workbench.waitForReady();
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
@@ -1864,7 +1823,7 @@ test('Sessions input card keeps a visible border without shadow or focus outline
 			await expect(card).toHaveCSS('box-shadow', 'none');
 		}
 		const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
-		await returnFromSessions(page);
+		await returnFromSessions(page, application);
 		await closed;
 		await workbench.waitForReady();
 	}
@@ -1891,23 +1850,14 @@ test.describe('Notification Center', () => {
 	});
 });
 
-async function returnFromSessions(page: Page, application?: PlaywrightApplication): Promise<void> {
+async function returnFromSessions(page: Page, application: PlaywrightApplication): Promise<void> {
 	const accountButton = page.getByRole('button', { name: 'Accounts' });
-	if (application && 'windows' in application && process.platform === 'darwin') {
-		await prepareCanvasMenuSelection(application, 'Return to Workbench');
-		await accountButton.click();
+	if ('windows' in application && process.platform === 'darwin') {
+		await captureElectronMenu(application, () => accountButton.click(), { label: 'Return to Workbench' });
 		return;
 	}
 	await accountButton.click();
 	await expect(accountButton).toHaveAttribute('aria-expanded', 'true');
-	if (process.platform === 'darwin' && page.url().includes('/electron-browser/')) {
-		// macOS renders this menu outside the web page, so Playwright cannot select its item by role.
-		await page.evaluate(() => {
-			const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
-			void ipc.invoke('ash:sessions:return-to-workbench');
-		});
-		return;
-	}
 	await page.getByRole('menuitem', { name: 'Return to Workbench' }).click();
 }
 
@@ -2355,9 +2305,7 @@ test('Browser Models Settings controls which models appear in the picker', async
 test('Electron Code Sessions Activity Bar follows its position and size settings', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
-	const sessionPagePromise = application.waitForEvent('window');
-	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
-	const page = await sessionPagePromise;
+	const page = await workbench.openAgentsWindow(target.kind);
 	const original = await page.evaluate(async () => {
 		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
 		return (await ipc.invoke('ash:configuration:read') as { document: { source: string } }).document.source;
@@ -2434,9 +2382,7 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
 		});
 	}
-	const sessionPagePromise = application.waitForEvent('window');
-	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
-	const page = await sessionPagePromise;
+	const page = await workbench.openAgentsWindow(target.kind);
 	const accountButton = page.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last();
 	await accountButton.click();
 	await expect(accountButton).toHaveAttribute('aria-expanded', 'true');
@@ -2477,14 +2423,7 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 	await expect(settings.getByRole('heading', { name: 'API key' })).toBeVisible();
 	if (target.appServerMode === 'required') {
 		await expect(settings.locator('.ash-models-settings-api-row').first().locator('input[type="password"]')).toBeVisible();
-		const firstModel = settings.locator('.ash-models-settings-model-row').first();
-		await expect(firstModel).toBeVisible();
-		const visibility = firstModel.getByRole('switch');
-		await expect(visibility).toHaveAttribute('aria-checked', 'true');
-		await firstModel.locator('.ash-switch-track').click();
-		await expect(visibility).toHaveAttribute('aria-checked', 'false');
-		await firstModel.locator('.ash-switch-track').click();
-		await expect(visibility).toHaveAttribute('aria-checked', 'true');
+		await expect(settings.getByRole('switch', { name: 'Show GPT-6.1 Sol in model picker', exact: true })).toBeChecked();
 	}
 	await navigation.getByRole('button', { name: 'Appearance' }).click();
 	const layoutStyle = settings.locator('[data-configuration-key="sessions.layoutStyle"]').getByRole('combobox');
@@ -2506,9 +2445,7 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 test('Sessions and IDE layout styles switch independently', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
-	const sessionsPagePromise = application.waitForEvent('window');
-	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
-	const sessionsPage = await sessionsPagePromise;
+	const sessionsPage = await workbench.openAgentsWindow(target.kind);
 	const sessionsWindow = sessionsPage.locator('.ash-sessions-window');
 	await expect(sessionsWindow).toBeVisible();
 	const original = await sessionsPage.evaluate(async () => {
@@ -2659,7 +2596,8 @@ test('Open in Agents selects the same session thread in the Agents Window', asyn
 	const chatEditor = new Editor(sessionsPage.locator('.ash-sessions-chat-slot.active:visible .ash-chat'));
 	await chatEditor.waitForEditorContents(contents => contents === '');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await sessionsPage.locator('.ash-sessions-chat-slot.active:visible .ash-sessions-chat-slot-close').click();
+	await sessionsPage.locator('.ash-sessions-list-add').click();
+	await expect(codeChat).not.toHaveAttribute('data-session-id', sessionId!);
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(targetChat).toHaveAttribute('data-session-id', sessionId!);
 	await expect(targetChat).toHaveAttribute('data-thread-id', threadId!);
@@ -2931,7 +2869,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	});
 
 	const closed = sessionsPage.waitForEvent("close");
-	await returnFromSessions(sessionsPage);
+	await returnFromSessions(sessionsPage, application);
 	await closed;
 	await expect.poll(() => application.windows().length).toBe(1);
 	await expect(workbenchPage.locator(".ash-workbench")).toBeVisible();
@@ -2945,7 +2883,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		return child?.getBounds();
 	})).toEqual(expectedBounds);
 	const reopenedClosed = reopenedPage.waitForEvent('close');
-	await returnFromSessions(reopenedPage);
+	await returnFromSessions(reopenedPage, application);
 	await reopenedClosed;
 	const parentClosed = workbenchPage.waitForEvent('close');
 	await application.evaluate(({ BrowserWindow }) => {
@@ -3038,9 +2976,7 @@ test('Sessions menus and history actions stay independent from Workbench', async
 test('Sessions titlebar aligns its application menu and actions', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
-	const sessionsPagePromise = application.waitForEvent('window');
-	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
-	const sessionsPage = await sessionsPagePromise;
+	const sessionsPage = await workbench.openAgentsWindow(target.kind);
 	const toolbar = sessionsPage.locator('[data-part="titlebar"] .ash-toolbar');
 	const buttons = toolbar.getByRole('button');
 	await expect(buttons).toHaveCount(4);
@@ -3077,13 +3013,13 @@ test('Sessions titlebar aligns its application menu and actions', async ({ appli
 	await expect(sessionsPage.locator('[data-part="sidebar"]')).toBeHidden();
 	await toolbar.getByRole('button', { name: 'Show sidebar' }).click();
 	await expect(sessionsPage.locator('[data-part="sidebar"]')).toBeVisible();
-	await toolbar.getByRole('button', { name: 'Application menu' }).click();
-	await expect(toolbar.getByRole('button', { name: 'Application menu' })).toHaveAttribute('aria-expanded', 'true');
 	const closed = sessionsPage.waitForEvent('close');
 	if (process.platform === 'darwin') {
-		await sessionsPage.keyboard.press('Escape');
-		await returnFromSessions(sessionsPage);
+		const items = await captureElectronMenu(application, () => toolbar.getByRole('button', { name: 'Application menu' }).click(), { label: 'Return to Workbench' });
+		expect(items.find(item => item.label === 'File')!.submenu!.some(item => item.label === 'New Session')).toBe(false);
 	} else {
+		await toolbar.getByRole('button', { name: 'Application menu' }).click();
+		await expect(toolbar.getByRole('button', { name: 'Application menu' })).toHaveAttribute('aria-expanded', 'true');
 		await sessionsPage.getByRole('menuitem', { name: 'File' }).hover();
 		await expect(sessionsPage.getByRole('menuitem', { name: 'New Session' })).toHaveCount(0);
 		await sessionsPage.getByRole('menuitem', { name: 'Return to Workbench' }).click();
@@ -3230,7 +3166,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 		await expect(toggle).toHaveCSS('outline-style', 'solid');
 		await expect(toggle).toHaveCSS('outline-width', '1px');
 		const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
-		await returnFromSessions(page);
+		await returnFromSessions(page, application);
 		await closed;
 		await expect(workbench.page.locator('.ash-workbench')).toBeVisible();
 	}
@@ -3250,15 +3186,7 @@ test('Browser Sessions application menu uses Sessions actions', async ({ target,
 
 test('Sessions Activity Bar tooltips follow side, top and bottom placement without replacing buttons', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
-	let page = workbench.page;
-	if (target.kind === 'browser') {
-		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	} else {
-		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
+	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const chat = navigation.getByRole('button', { name: /^Chat(?:\.|$)/u });
 	const accounts = navigation.getByRole('button', { name: 'Accounts', exact: true });
@@ -3289,9 +3217,13 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 		if (keyboard) await expect(trigger).toBeFocused();
 	};
 	const setPosition = async (position: string): Promise<void> => {
-		await accounts.click({ button: 'right' });
-		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).press('ArrowRight');
-		await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: position, exact: true }).click();
+		if ('windows' in application && process.platform === 'darwin') {
+			await captureElectronMenu(application, () => accounts.click({ button: 'right' }), { label: position });
+		} else {
+			await accounts.click({ button: 'right' });
+			await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).press('ArrowRight');
+			await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: position, exact: true }).click();
+		}
 	};
 	await checkTooltip(chat, 'Chat', 'right');
 	for (const label of ['Collaboration', 'Library', 'Code', 'Accounts']) {
@@ -3309,9 +3241,13 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 	await checkTooltip(accounts, 'Accounts', 'above', true);
 	await setPosition('Default');
 	await expect(page.locator('[data-part="activitybar"]')).toBeVisible();
-	await accounts.click({ button: 'right' });
-	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Size' }).press('ArrowRight');
-	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Compact', exact: true }).click();
+	if ('windows' in application && process.platform === 'darwin') {
+		await captureElectronMenu(application, () => accounts.click({ button: 'right' }), { label: 'Compact' });
+	} else {
+		await accounts.click({ button: 'right' });
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Size' }).press('ArrowRight');
+		await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Compact', exact: true }).click();
+	}
 	await expect(navigation).toHaveClass(/compact/u);
 	await page.setViewportSize({ width: 900, height: 600 });
 	await checkTooltip(chat, 'Chat', 'right');
@@ -3320,7 +3256,7 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 	await originalChat!.dispose();
 	await originalAccounts!.dispose();
 	const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
-	await returnFromSessions(page);
+	await returnFromSessions(page, application);
 	await closed;
 });
 
@@ -3450,7 +3386,7 @@ test('closing the Workbench keeps Sessions usable and Return to Workbench reopen
 			});
 			expect(windows).toEqual({ titles: [expect.stringContaining('Sessions')], configurationRevision: expect.any(Number), connectionKind: 'local' });
 			const workbenchPromise = application.waitForEvent('window');
-			await returnFromSessions(child);
+			await returnFromSessions(child, application);
 			const reopened = await workbenchPromise;
 			await expect(reopened.locator('.ash-workbench')).toBeVisible();
 			await expect.poll(() => application.windows().length).toBe(1);

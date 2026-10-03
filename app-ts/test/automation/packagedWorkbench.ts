@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { expect, test, type ConsoleMessage, type TestInfo } from '@playwright/test';
+import { expect, test, type TestInfo } from '@playwright/test';
 import { launchElectron } from './playwrightElectron.js';
 
 /** Verify file and terminal operations through the delivered application's own backend. */
@@ -8,12 +8,7 @@ export async function exercisePackagedWorkbench(installation: string, version: s
 	const packagedBundle = process.platform === 'darwin' ? join(installation, 'Ash.app') : installation;
 	const desktop = await test.step(`${stage}: launch delivered application`, () => launchElectron({ packagedBundle, appServerMode: 'required', userDataDirectory, workspaceDirectory, workspacePermissions: 'development' }));
 	const page = desktop.driver.workbench.page;
-	const errors: string[] = [];
-	const consoleErrors: string[] = [];
-	const onPageError = (error: Error): void => { errors.push(error.message); };
-	const onConsole = (message: ConsoleMessage): void => { if (message.type() === 'error') consoleErrors.push(message.text()); };
-	page.on('pageerror', onPageError);
-	page.on('console', onConsole);
+	const diagnostics = desktop.driver.diagnostics;
 	let failed = false;
 	try {
 		await page.context().tracing.start({ snapshots: true, sources: true });
@@ -40,10 +35,10 @@ export async function exercisePackagedWorkbench(installation: string, version: s
 			// Match a complete output row; the prompt's echoed command cannot satisfy this assertion.
 			await expect(terminal.locator('.xterm-rows > div').filter({ hasText: /^ash-release-ready\s*$/ })).toHaveCount(1, { timeout: 30_000 });
 			await page.getByRole('button', { name: 'Kill Terminal', exact: true }).click();
-			expect(errors).toEqual([]);
+			expect(diagnostics.errors).toEqual([]);
 		} catch (error) {
 			failed = true;
-			await testInfo.attach(`${stage}-diagnostics`, { body: JSON.stringify({ errors, console: consoleErrors, dom: await page.locator('body').innerText() }, null, 2), contentType: 'application/json' });
+			await testInfo.attach(`${stage}-diagnostics`, { body: JSON.stringify({ pageErrors: diagnostics.pageErrors, consoleErrors: diagnostics.consoleErrors, dom: await page.locator('body').innerText() }, null, 2), contentType: 'application/json' });
 			throw error;
 		} finally {
 			if (failed) {
@@ -53,8 +48,6 @@ export async function exercisePackagedWorkbench(installation: string, version: s
 			} else await page.context().tracing.stop();
 		}
 	} finally {
-		page.off('pageerror', onPageError);
-		page.off('console', onConsole);
 		await test.step(`${stage}: stop delivered backend`, () => desktop.close());
 	}
 }

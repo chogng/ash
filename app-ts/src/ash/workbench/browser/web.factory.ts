@@ -111,6 +111,7 @@ export async function startWebWorkbench(
 		workbench.add(addDisposableListener(window, "pagehide", () => {
 			void instance.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => workbench.dispose());
 		}, { once: true }));
+		await instance.whenRestored;
 		return workbench;
 	} catch (error) {
 		workbench.dispose();

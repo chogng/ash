@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, globSync, mkdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 
 interface Selection {
@@ -38,27 +39,41 @@ export function runUnitTests(patterns: readonly string[], editorEnvironment: boo
 	}
 
 	const failed: string[] = [];
-	for (const file of files) {
-		if (!file.startsWith(`${outputDirectory}${sep}`) || !existsSync(file)) {
-			throw new Error(`Compiled unit test does not exist: ${file}`);
+	let executedTests = 0;
+	const resultDirectory = mkdtempSync(resolve(tmpdir(), 'ash-unit-results-'));
+	try {
+		for (const [index, file] of files.entries()) {
+			if (!file.startsWith(`${outputDirectory}${sep}`) || !existsSync(file)) {
+				throw new Error(`Compiled unit test does not exist: ${file}`);
+			}
+			const countFile = resolve(resultDirectory, `${index}.txt`);
+			const result = spawnSync(process.execPath, [
+				'--import', './test/unit/ignore-css-imports.ts',
+				'--import', './test/unit/theme-resources.ts',
+				...(editorEnvironment ? ['--import', './test/unit/editor-environment.ts'] : []),
+				'node_modules/mocha/bin/mocha.js',
+				'--ui', 'tdd',
+				'--reporter', './test/unit/reporter.ts',
+				'--reporter-option', `countFile=${countFile}`,
+				'--timeout', String(selection.timeout),
+				...(selection.grep ? ['--grep', selection.grep] : []),
+				file,
+			], { cwd: desktopDirectory, stdio: 'inherit', windowsHide: true });
+			if (result.error) throw result.error;
+			if (result.status !== 0) failed.push(file);
+			if (existsSync(countFile)) executedTests += Number(readFileSync(countFile, 'utf8'));
 		}
-		const result = spawnSync(process.execPath, [
-			'--import', './test/unit/ignore-css-imports.ts',
-			'--import', './test/unit/theme-resources.ts',
-			...(editorEnvironment ? ['--import', './test/unit/editor-environment.ts'] : []),
-			'node_modules/mocha/bin/mocha.js',
-			'--ui', 'tdd',
-			'--timeout', String(selection.timeout),
-			...(selection.grep ? ['--grep', selection.grep] : []),
-			file,
-		], { cwd: desktopDirectory, stdio: 'inherit', windowsHide: true });
-		if (result.error) throw result.error;
-		if (result.status !== 0) failed.push(file);
+	} finally {
+		rmSync(resultDirectory, { recursive: true, force: true });
 	}
 
-	process.stdout.write(`Mocha: ${files.length - failed.length}/${files.length} test files passed\n`);
+	process.stdout.write(`Mocha: ${executedTests} tests executed across ${files.length} files; ${failed.length} failed files\n`);
 	if (failed.length > 0) {
 		process.stderr.write(`Failed test files:\n${failed.join('\n')}\n`);
+		process.exitCode = 1;
+	}
+	if (executedTests === 0) {
+		process.stderr.write('No unit tests executed; check the file selection and --grep pattern.\n');
 		process.exitCode = 1;
 	}
 }

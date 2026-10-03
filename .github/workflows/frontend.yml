@@ -49,7 +49,7 @@ concurrency:
 
 jobs:
   check:
-    name: ${{ matrix.surface }}
+    name: ${{ matrix.surface }} (${{ matrix.runner }})
     strategy:
       fail-fast: false
       matrix:
@@ -58,8 +58,10 @@ jobs:
             runner: ubuntu-24.04
           - surface: electron
             runner: windows-latest
+          - surface: electron
+            runner: macos-26
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 40
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -68,9 +70,21 @@ jobs:
       - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3
         with:
           install: false
-      - name: Install Linux keyboard build dependencies
+      - name: Install Linux frontend and App Server build dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes libx11-dev libxkbfile-dev
+        run: sudo apt-get update && sudo apt-get install --yes libx11-dev libxkbfile-dev libcap-dev libssl-dev pkg-config
+      - name: Set up the App Server media build toolchain
+        if: runner.os == 'macOS'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26'
+          cache: false
+      - name: Cache App Server builds
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: ". -> .build/cargo"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
       - name: Check generated protocol contracts
@@ -102,10 +116,48 @@ jobs:
       - name: Test Electron UI
         if: matrix.surface == 'electron'
         run: pnpm --dir app-ts run test:smoke:ui:no-compile
+      - name: Prepare connected Web smoke tests
+        if: matrix.surface == 'browser'
+        run: pnpm --dir app-ts run pretest:smoke:browser:full
+      - name: Test connected Web settings and scenario isolation
+        if: matrix.surface == 'browser'
+        run: >-
+          pnpm --dir app-ts run test:smoke:browser:full:no-compile
+          test/smoke/areas/automation.spec.ts
+          test/smoke/areas/windows/settings-json.spec.ts
+          test/smoke/areas/windows/models-settings.spec.ts
+          test/smoke/areas/windows/network-settings.spec.ts
+          test/smoke/areas/windows/startup-error.spec.ts
+          test/smoke/areas/windows/git-synchronization.spec.ts
+      - name: Test connected Web document protocol
+        if: matrix.surface == 'browser'
+        run: >-
+          pnpm --dir app-ts run test:smoke:browser:full:no-compile
+          test/smoke/areas/editor/editor-open.spec.ts
+          --grep 'Agent document requests'
+      - name: Prepare connected Electron smoke tests
+        if: matrix.surface == 'electron'
+        run: pnpm --dir app-ts run pretest:smoke:desktop
+      - name: Test connected Electron settings and process lifecycle
+        if: matrix.surface == 'electron'
+        run: >-
+          pnpm --dir app-ts run test:smoke:desktop:no-compile
+          test/smoke/areas/automation.spec.ts
+          test/smoke/areas/windows/settings-json.spec.ts
+          test/smoke/areas/windows/models-settings.spec.ts
+          test/smoke/areas/windows/network-settings.spec.ts
+          test/smoke/areas/windows/startup-error.spec.ts
+          test/smoke/areas/windows/git-synchronization.spec.ts
+      - name: Test connected Electron document protocol
+        if: matrix.surface == 'electron'
+        run: >-
+          pnpm --dir app-ts run test:smoke:desktop:no-compile
+          test/smoke/areas/editor/editor-open.spec.ts
+          --grep 'Agent document requests'
       - name: Upload test diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: frontend-${{ matrix.surface }}
+          name: frontend-${{ matrix.surface }}-${{ matrix.runner }}
           path: .build/app-ts/playwright/
           if-no-files-found: ignore

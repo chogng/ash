@@ -1,7 +1,7 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { execFile } from 'node:child_process';
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { promisify } from 'node:util';
 import { createAcademicDocumentSchema } from "../../src/ash/editor/contrib/academic/common/schema.js";
 import { serializeDocument } from "../../src/ash/editor/common/model/documentSerialization.js";
@@ -13,7 +13,6 @@ export interface TestWorkspace {
 	readonly academicFile: string;
 	readonly largeFile: string;
 	readonly pdfFile: string;
-	readonly removeOnDispose: boolean;
 }
 
 export interface TestWorkspaceOptions {
@@ -27,9 +26,9 @@ const run = promisify(execFile);
 /** Creates an isolated folder and text file for App Server-backed UI tests. */
 export async function createTestWorkspace(options: TestWorkspaceOptions = {}): Promise<TestWorkspace> {
 	if (options.gitMergeConflict && !options.gitRepository) throw new Error('A merge conflict requires a Git test repository');
-	const sharedDirectory = process.env.ASH_PLAYWRIGHT_WORKSPACE;
-	const directory = sharedDirectory && !options.gitRepository ? resolve(sharedDirectory) : await mkdtemp(join(tmpdir(), "ash-playwright-workspace-"));
-	await mkdir(directory, { recursive: true });
+	// The backend canonicalizes workspace roots, including macOS's /var symlink.
+	// Protocol requests and editor resources must use that same path identity.
+	const directory = await realpath(await mkdtemp(join(tmpdir(), "ash-playwright-workspace-")));
 	const file = join(directory, "main.ts");
 	const rustFile = join(directory, "main.rs");
 	const rustManifest = join(directory, "Cargo.toml");
@@ -60,13 +59,15 @@ export async function createTestWorkspace(options: TestWorkspaceOptions = {}): P
 				throw new Error('Test repository did not produce a merge conflict');
 			}
 		}
+	} else if (process.env.ASH_PLAYWRIGHT_GIT_REPOSITORY === '1') {
+		await run('git', ['init', '-b', 'main'], { cwd: directory });
 	}
-	return { directory, file, rustFile, academicFile, largeFile, pdfFile, removeOnDispose: sharedDirectory === undefined || options.gitRepository === true };
+	return { directory, file, rustFile, academicFile, largeFile, pdfFile };
 }
 
 /** Removes one test workspace created by {@link createTestWorkspace}. */
 export async function disposeTestWorkspace(workspace: TestWorkspace): Promise<void> {
-	if (workspace.removeOnDispose) await rm(workspace.directory, { force: true, recursive: true });
+	await rm(workspace.directory, { force: true, recursive: true });
 }
 
 function createAcademicDocument(): string {

@@ -1,46 +1,30 @@
-import { _electron, expect, test } from '@playwright/test';
-import { execFile } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { promisify } from 'node:util';
-import { appServerDaemonExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
-import { resolveElectronConfiguration } from '../../../automation/electron.js';
+import { expect, test } from '../../../automation/test.js';
 import { launchBrowser } from '../../../automation/playwrightBrowser.js';
 
-test('Electron startup failure copies the complete error before the Workbench exists', async ({}, testInfo) => {
+test('Electron renderer startup failure copies the complete error before the Workbench exists', async ({ application, workbench }, testInfo) => {
 	test.skip(testInfo.project.name !== 'electron-app-server', 'Requires the desktop App Server.');
-	const userDataDirectory = testInfo.outputPath('user-data');
-	await mkdir(userDataDirectory, { recursive: true });
-	const productServicesPath = join(userDataDirectory, 'invalid-product-services.json');
-	await writeFile(productServicesPath, '{}');
-	const configuration = resolveElectronConfiguration({ appServerMode: 'required', userDataDirectory });
-	const environment = { ...configuration.env, ASH_PRODUCT_SERVICES_PATH: productServicesPath };
-	const application = await _electron.launch({
-		args: [...configuration.args],
-		cwd: configuration.cwd,
-		env: environment,
-		executablePath: configuration.executablePath,
-	});
-	try {
-		const page = await application.firstWindow();
-		const details = page.getByRole('textbox', { name: 'Error details' });
-		await expect.poll(() => details.inputValue()).toContain('product services configuration is invalid');
-		await page.getByRole('button', { name: 'Copy details' }).click();
-		await expect(page.getByRole('status')).toHaveText('Error details copied.');
-		expect(await application.evaluate(({ clipboard }) => clipboard.readText())).toBe(await details.inputValue());
-	} finally {
-		const daemon = appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: false, platform: process.platform, resourcesPath: '' });
-		try {
-			await promisify(execFile)(daemon, ['stop'], { env: environment, windowsHide: true, timeout: 30_000 });
-		} finally {
-			await application.close();
-		}
-	}
+	if (!('windows' in application)) throw new Error('An Electron application is required');
+	const failure = 'Renderer startup IPC failed\nThe complete diagnostic remains selectable and copyable.';
+	// The Main startup gate presents a system dialog before it opens a window.
+	// Fail the renderer's first real IPC call on reload to exercise its error view.
+	await application.evaluate(({ ipcMain }, failure) => {
+		ipcMain.removeHandler('ash:ipc:window-id');
+		ipcMain.handle('ash:ipc:window-id', () => { throw new Error(failure); });
+	}, failure);
+	const page = workbench.page;
+	await page.reload();
+	const details = page.getByRole('textbox', { name: 'Error details' });
+	await expect.poll(() => details.inputValue()).toContain(failure);
+	await expect(page.locator('.ash-workbench')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Copy details' }).click();
+	await expect(page.getByRole('status')).toHaveText('Error details copied.');
+	expect(await application.evaluate(({ clipboard }) => clipboard.readText())).toBe(await details.inputValue());
 });
 
-test('Web startup failure copies its details and keeps them selectable', async ({ baseURL }, testInfo) => {
+test('Web startup failure copies its details and keeps them selectable', async ({ webAppServer }, testInfo) => {
 	test.skip(testInfo.project.name !== 'browser-app-server', 'Requires the connected Web product.');
-	const browser = await launchBrowser({ appServerMode: 'required', baseURL: baseURL! });
+	if (!webAppServer) { throw new Error('The Web startup scenario requires its App Server'); }
+	const browser = await launchBrowser({ appServerMode: 'required', baseURL: webAppServer.connection.endpoint, webSession: webAppServer.connection });
 	try {
 		const page = browser.driver.workbench.page;
 		await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);

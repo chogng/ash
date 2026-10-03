@@ -16,7 +16,8 @@ import { ILanguageServerService } from '../../../../../platform/language/common/
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suiteTeardown, test } from 'mocha';
+import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { JSDOM } from 'jsdom';
 import { formatNlsMessage, localize, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import type { IAction } from '../../../../../base/common/actions.js';
@@ -59,22 +60,13 @@ Object.defineProperty(browserEnvironment.window.Element.prototype, 'scrollIntoVi
 	configurable: true,
 	value() {},
 });
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	MouseEvent: browserEnvironment.window.MouseEvent,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent'], {
 	navigator: browserEnvironment.window.navigator,
-})) {
-	Object.defineProperty(globalThis, name, {
-		configurable: true,
-		value,
-	});
-}
+});
+suiteTeardown(() => {
+	installedGlobals.dispose();
+	browserEnvironment.window.close();
+});
 
 const { h } = await import('../../../../../base/browser/dom.js');
 const { Emitter, Event } = await import('../../../../../base/common/event.js');
@@ -405,6 +397,78 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	assert.equal(root.querySelector('.ash-models-settings-api-row h5')?.textContent, 'OpenAI API');
 	assert.equal(root.querySelector('.ash-models-settings-model-row'), retainedModel);
 	assert.equal(root.querySelector('.ash-models-settings-model-copy > span')?.textContent, 'GPT Test Updated');
+});
+
+test('Models Settings orders enabled models by catalog position and restores disabled positions', async () => {
+	using resources = new DisposableStore();
+	const root = h(browserEnvironment.window.document, 'div');
+	const catalog = [
+		{ model: { provider: 'first', model: 'newest' }, displayName: 'First newest', contextWindowOptions: [] },
+		{ model: { provider: 'first', model: 'older' }, displayName: 'First older', contextWindowOptions: [] },
+		{ model: { provider: 'second', model: 'newest' }, displayName: 'Second', contextWindowOptions: [] },
+		{ model: { provider: 'third', model: 'newest' }, displayName: 'Third', contextWindowOptions: [] },
+	];
+	const enabled = new Set<string>();
+	const changed = resources.add(new Emitter<void>());
+	const models: ILanguageModelsService = {
+		readApprovalReviewModel: async () => ({ type: 'automatic' }),
+		setApprovalReviewModel: async () => {},
+		setModelPreferences: async () => {},
+		onDidChangeModels: changed.event,
+		listModels: async () => catalog.filter(entry => enabled.has(entry.displayName)),
+		getDefaultNewChatModel: () => undefined,
+		rememberSelectedModel() {},
+		listModelCatalog: async () => catalog,
+		listCustomModelProviders: async () => [],
+		saveCustomModelProvider: async () => {},
+		testProviderModel: async () => ({ type: 'passed' }),
+		listModelProviders: async () => [],
+		setModelProviderApiKey: async () => {},
+		removeModelProviderApiKey: async () => {},
+		listAdvisorModels: async () => [],
+		refreshModels: async () => catalog,
+		isModelVisible: model => catalog.some(entry => entry.model.provider === model.provider && entry.model.model === model.model && enabled.has(entry.displayName)),
+		setModelVisible: async (model, visible) => {
+			const entry = catalog.find(entry => entry.model.provider === model.provider && entry.model.model === model.model)!;
+			if (visible) { enabled.add(entry.displayName); } else { enabled.delete(entry.displayName); }
+			changed.fire();
+		},
+		discoverProviderModels: async () => catalog,
+	};
+	const services = resources.add(new InstantiationService());
+	services.registerInstance(ILanguageModelsService, models);
+	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
+	services.registerInstance(INotificationService, resources.add(new NotificationService()));
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
+	const content = resources.add(services.createInstance(ModelSettingsContent, root));
+	const loaded = new DeferredPromise<void>();
+	resources.add(content.onDidChange(() => {
+		if (content.getNodes()[0].children?.some(node => node.element.id === 'models.catalog.first/newest')) { void loaded.complete(); }
+	}));
+	content.setVisible(true);
+	await loaded.p;
+	const names = (query?: InstanceType<typeof SettingsSearchQuery>): string[] => content.getNodes(query)[0].children!.filter(node => node.element.id.startsWith('models.catalog.') && node.element.id !== 'models.catalog.expand').map(node => node.element.title);
+	assert.deepEqual(names(), ['First newest', 'Second', 'Third']);
+	// Enable in reverse order so activation order cannot masquerade as catalog order.
+	await models.setModelVisible(catalog[3].model, true);
+	await models.setModelVisible(catalog[2].model, true);
+	assert.deepEqual(names(), ['Second', 'Third', 'First newest']);
+	await models.setModelVisible(catalog[2].model, false);
+	assert.deepEqual(names(), ['Third', 'First newest', 'Second']);
+	await models.setModelVisible(catalog[3].model, false);
+	assert.deepEqual(names(), ['First newest', 'Second', 'Third']);
+	await models.setModelVisible(catalog[1].model, true);
+	const group = content.getNodes()[0].element;
+	assert.ok(group.kind === 'group');
+	const search = group.titleDomNode!.querySelector<HTMLInputElement>('input')!;
+	search.value = 'first';
+	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.deepEqual(names(), ['First older', 'First newest']);
+	await models.setModelVisible(catalog[1].model, false);
+	assert.deepEqual(names(), ['First newest', 'First older']);
+	search.value = '';
+	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.deepEqual(names(new SettingsSearchQuery('older')), ['First newest', 'First older', 'Second', 'Third']);
 });
 
 test('Settings tree preserves item identity while filtering and updating', () => {

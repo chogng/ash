@@ -1,14 +1,11 @@
 import { defineConfig } from "@playwright/test";
 
 const browserServerMode = process.env.ASH_PLAYWRIGHT_SERVER;
-if (browserServerMode === 'full' && !process.env.ASH_SMOKE_BROWSER_EXTERNAL_SERVER) {
-	throw new Error('Run pnpm run test:smoke:browser:full to create an authenticated Web session.');
-}
 const workbenchMode = process.env.ASH_WORKBENCH_MODE === "academic" ? "academic" : "code";
 const browserProjects = browserServerMode === "disconnected"
 	? [{ name: "browser-ui", use: { baseURL: `http://127.0.0.1:${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}` } }]
 	: browserServerMode === "full"
-		? [{ name: "browser-app-server", use: { baseURL: `http://127.0.0.1:${process.env.ASH_SMOKE_BROWSER_PORT ?? 5174}` } }]
+		? [{ name: "browser-app-server" }]
 		: [];
 
 export default defineConfig({
@@ -30,9 +27,7 @@ export default defineConfig({
 		].map(project => ({ ...project, testIgnore: '**/release-package.spec.ts' })),
 		{ name: 'electron-release', testMatch: '**/release-package.spec.ts', testIgnore: '', timeout: 600_000 },
 	],
-	webServer: process.env.ASH_SMOKE_BROWSER_EXTERNAL_SERVER
-		? undefined
-		: browserServerMode === "disconnected"
+	webServer: browserServerMode === "disconnected"
 		? {
 				// The browser smoke preparation script builds the renderer before Playwright starts.
 				command: `node ../build/app_ts/launch/web.ts ../.build/app-ts/renderer/ash ${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}`,

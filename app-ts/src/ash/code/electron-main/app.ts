@@ -379,10 +379,10 @@ export class AshApplication extends Disposable {
 		}
 		if (process.platform === "darwin") {
 			assertDefined(app.dock, 'macOS Dock API is unavailable');
+			// Dock customization must not gate creation of the first Workbench window.
 			if (!app.isPackaged) {
 				app.dock.setIcon(join(app.getAppPath(), '..', 'resources', 'darwin', 'ash.png'));
 			}
-			await app.dock.show();
 		} else {
 			clearElectronApplicationMenu();
 		}

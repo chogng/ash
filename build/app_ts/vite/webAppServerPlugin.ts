@@ -11,7 +11,7 @@ export function webAppServerVitePlugin(): Plugin {
 			server.config.server.host = '127.0.0.1';
 			server.config.server.strictPort = true;
 			const origin = `http://127.0.0.1:${server.config.server.port ?? 5173}`;
-			const launch = await startWeb({ port: 0, origin });
+			const launch = await startWeb({ port: 0, origin, environment: process.env });
 			close = launch.close;
 			server.httpServer.once('listening', () => console.info(`Open Ash: ${authenticatedWebUrl(launch.info, origin)}`));
 			server.httpServer.once('close', () => void launch.close());

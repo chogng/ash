@@ -29,4 +29,4 @@ registerAction2(class OpenCodeSessionsAction extends Action2 {
 		location.assign(new URL('../sessions/sessions-code.html', location.href).href);
 	}
 });
-startBrowserWorkbench(WorkbenchModeId.Code, [createAppServerDebugAdapterCapability]);
+await startBrowserWorkbench(WorkbenchModeId.Code, [createAppServerDebugAdapterCapability]);

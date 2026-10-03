@@ -7,9 +7,9 @@ import { expect, test } from '../../../automation/test.js';
 test('Network Settings supports search, keyboard help and Chinese labels while disconnected', async ({ target, workbench, restartWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode === 'required', 'Exercises disconnected Workbench Settings.');
 	let page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+,');
+	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.locator('.ash-settings-editor');
-	await settings.locator('[data-settings-category-id="network"]').click();
+	await workbench.settingsEditor.selectCategory('network');
 	await expect(settings.getByRole('combobox', { name: 'HTTP compatibility mode', exact: true })).toBeDisabled();
 	await expect(settings.locator('.ash-network-settings [role="status"]')).toHaveText('Could not read network configuration. Connect to App Server and refresh.');
 	await expect(settings.getByRole('button', { name: 'Run diagnostic', exact: true })).toBeDisabled();
@@ -26,20 +26,17 @@ test('Network Settings supports search, keyboard help and Chinese labels while d
 	await search.fill('DNS');
 	await expect(settings.getByRole('button', { name: 'Run diagnostic', exact: true })).toBeVisible();
 	await search.fill('');
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await workbench.settingsEditor.selectCategory('general');
 	await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
 	await page.getByRole('option', { name: '简体中文', exact: true }).click();
 	({ workbench } = await restartWorkbench());
 	page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+,');
-	await page.locator('.ash-modal-editor-close').click();
-	await page.reload();
-	await workbench.waitForReady();
-	await page.keyboard.press('ControlOrMeta+,');
-	await settings.locator('[data-settings-category-id="network"]').click();
-	await expect(settings.getByRole('heading', { name: '所需域名', exact: true })).toBeVisible();
-	await expect(settings.getByRole('combobox', { name: 'HTTP 兼容模式', exact: true })).toBeDisabled();
-	const chineseRefresh = settings.getByRole('button', { name: '刷新', exact: true });
+	await workbench.settingsEditor.openUserSettingsUI();
+	const chineseSettings = page.getByRole('dialog', { name: 'Ash 设置' });
+	await workbench.settingsEditor.selectCategory('network');
+	await expect(chineseSettings.getByRole('heading', { name: '所需域名', exact: true })).toBeVisible();
+	await expect(chineseSettings.getByRole('combobox', { name: 'HTTP 兼容模式', exact: true })).toBeDisabled();
+	const chineseRefresh = chineseSettings.getByRole('button', { name: '刷新', exact: true });
 	await chineseRefresh.focus();
 	await chineseRefresh.press('Alt+F1');
 	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/HTTP\/1.1 将后续应用 HTTP 请求限制为 HTTP\/1.1/);
@@ -58,10 +55,10 @@ test('Network Settings persists HTTP mode, copies configured domains and reports
 		const address = server.address();
 		if (!address || typeof address === 'string') { throw new Error('Local network test server has no port'); }
 		const page = workbench.page;
-		await page.keyboard.press('ControlOrMeta+,');
+		await workbench.settingsEditor.openUserSettingsUI();
 		const settings = page.locator('.ash-settings-editor');
-		await settings.locator('[data-settings-group-id="agents"]').click();
-		await settings.locator('[data-settings-category-id="models"]').click();
+		await workbench.settingsEditor.selectGroup('agents');
+		await workbench.settingsEditor.selectCategory('models');
 		await settings.getByRole('button', { name: 'New provider', exact: true }).click();
 		const card = settings.locator('.ash-chat-models-widget').first();
 		await card.getByRole('textbox', { name: 'Provider name', exact: true }).fill('Network test gateway');
@@ -72,7 +69,7 @@ test('Network Settings persists HTTP mode, copies configured domains and reports
 		await key.fill('isolated-network-key');
 		await key.press('Tab');
 		await expect(key).toHaveValue('••••••••');
-		await settings.locator('[data-settings-category-id="network"]').click();
+		await workbench.settingsEditor.selectCategory('network');
 		const mode = settings.getByRole('combobox', { name: 'HTTP compatibility mode', exact: true });
 		await expect(mode).toBeEnabled();
 		await mode.click();
@@ -103,13 +100,10 @@ test('Network Settings persists HTTP mode, copies configured domains and reports
 		await accessible.getByRole('button', { name: 'Close', exact: true }).click();
 		await page.locator('.ash-modal-editor-close').click();
 		// Editor restoration opens Welcome and closes modal editors; reopen Settings after it finishes.
-		await Promise.all([
-			page.waitForEvent('console', message => message.text() === '[lifecycle] Startup phase: Restored'),
-			page.reload(),
-		]);
+		await page.reload();
 		await workbench.waitForReady();
-		await page.keyboard.press('ControlOrMeta+,');
-		await settings.locator('[data-settings-category-id="network"]').click();
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectCategory('network');
 		await expect(mode).toContainText('HTTP/1.1');
 		await expect(mode).toBeEnabled();
 		await mode.click();

@@ -42,6 +42,8 @@ export interface IWebWorkbenchConstructionOptions {
 
 /** Lifecycle facade returned to a Web Workbench embedder. */
 export interface IWebWorkbench extends IDisposable {
+	/** Saved editors and dirty working copies are restored before startup completes. */
+	readonly whenRestored: Promise<void>;
 	shutdown(reason: ShutdownReason): Promise<void>;
 }
 

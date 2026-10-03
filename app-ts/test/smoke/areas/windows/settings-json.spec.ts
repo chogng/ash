@@ -15,15 +15,15 @@ async function pasteJson(input: Locator, source: string): Promise<void> {
 test('Settings JSON opens a pinned tab, reveals a value, saves immediately and persists Chinese labels', async ({ target, workbench, restartWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code settings editor');
 	let page = workbench.page;
-	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	if (target.kind === 'electron' && process.platform === 'darwin') {
-		await settings.locator('[data-settings-group-id="workbench"]').click();
-		await settings.locator('[data-settings-category-id="layout"]').click();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('layout');
 		await settings.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 	}
-	await settings.locator('[data-settings-category-id="editor"]').click();
+	await workbench.settingsEditor.selectCategory('editor');
 	await settings.getByRole('searchbox').fill('@id:editor.fontSize');
 	const row = settings.locator('[data-settings-item-id="editor.fontSize"]');
 	const menu = row.getByRole('button', { name: /^More actions/ });
@@ -43,15 +43,15 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 	await group.editor.input.press('ControlOrMeta+S');
 	await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 
-	await workbench.quickaccess.runCommand('workbench.action.openSettings');
-	await settings.locator('[data-settings-category-id="editor"]').click();
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectCategory('editor');
 	await settings.getByRole('searchbox').fill('@id:editor.fontSize');
 	await expect(settings.getByRole('spinbutton', { name: 'Font size', exact: true })).toHaveValue('23');
 	await settings.locator('.ash-modal-editor-close').click();
 	await page.reload();
 	await workbench.waitForReady();
-	await workbench.quickaccess.runCommand('workbench.action.openSettings');
-	await settings.locator('[data-settings-category-id="editor"]').click();
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectCategory('editor');
 	await settings.getByRole('searchbox').fill('@id:editor.fontSize');
 	await expect(settings.getByRole('spinbutton', { name: 'Font size', exact: true })).toHaveValue('23');
 	await settings.locator('.ash-modal-editor-close').click();
@@ -63,17 +63,18 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 	({ workbench } = await restartWorkbench());
 	page = workbench.page;
 	group = workbench.editors.groupAt(0);
-	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	await workbench.settingsEditor.openUserSettingsUI();
 	const chineseSettings = page.getByRole('dialog', { name: 'Ash 设置' });
-	await chineseSettings.locator('[data-settings-group-id="workbench"]').click();
-	await chineseSettings.locator('[data-settings-category-id="appearance"]').click();
+	await workbench.settingsEditor.selectGroup('workbench');
+	await workbench.settingsEditor.selectCategory('appearance');
 	await chineseSettings.getByRole('searchbox').fill('@id:editor.semanticTokenColorCustomizations');
 	await expect(chineseSettings.locator('[data-settings-item-id="editor.semanticTokenColorCustomizations"]').getByRole('button', { name: '在 JSON 中编辑', exact: true })).toBeVisible();
 	await chineseSettings.getByRole('searchbox').fill('@id:editor.tokenColorCustomizations');
 	const button = chineseSettings.locator('[data-settings-item-id="editor.tokenColorCustomizations"]').getByRole('button', { name: '在 JSON 中编辑', exact: true });
 	await button.focus();
 	await expect(button).toHaveCSS('outline-style', 'solid');
-	await button.press('Space');
+	await expect(button).toBeFocused();
+	await page.keyboard.press('Space');
 	await expect(chineseSettings).toBeHidden();
 	await expect(group.tabs.filter({ hasText: '用户设置（JSON）' })).toHaveCount(1);
 	await expect(group.editor.input).toBeFocused();
@@ -92,10 +93,10 @@ test('Saving JSON token customization refreshes Markdown and the canonical profi
 	const group = workbench.editors.groupAt(0);
 	const heading = group.editor.element.locator('.stanza-editor-token').filter({ hasText: /^\s*Heading$/u });
 	await expect(heading).toHaveCSS('font-weight', '700');
-	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await settings.locator('[data-settings-group-id="workbench"]').click();
-	await settings.locator('[data-settings-category-id="appearance"]').click();
+	await workbench.settingsEditor.selectGroup('workbench');
+	await workbench.settingsEditor.selectCategory('appearance');
 	await settings.getByRole('searchbox').fill('@id:editor.tokenColorCustomizations');
 	await settings.locator('[data-settings-item-id="editor.tokenColorCustomizations"]').getByRole('button', { name: 'Edit in settings.json', exact: true }).click();
 	await expect(group.editor.input).toBeFocused();
@@ -155,9 +156,9 @@ test('Settings JSON rejects invalid values and preserves dirty edits during a co
 		await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('characters selected');
 		await pasteJson(group.editor.input, '{ "editor.fontSize": 18 }');
 
-		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		await workbench.settingsEditor.openUserSettingsUI();
 		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-		await settings.locator('[data-settings-category-id="editor"]').click();
+		await workbench.settingsEditor.selectCategory('editor');
 		await settings.getByRole('searchbox').fill('@id:editor.fontSize');
 		const font = settings.getByRole('spinbutton', { name: 'Font size', exact: true });
 		await expect(font).toHaveValue('13');

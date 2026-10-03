@@ -17,9 +17,11 @@
 | Electron + App Server 场景 | `test/smoke/areas/<area>` | `pnpm test:smoke:desktop` |
 | 构建工具测试 | `../build/**/*.test.ts` | `pnpm test:build-tools` |
 
-`pnpm test:main` 依次运行构建工具测试和全部单元测试。仓库根 `package.json` 直接调用这里的公开测试命令。`test/unit/` 使用 Mocha，逐文件启动独立进程，并提供 `--run`、`--runGlob`、`--grep` 筛选；清理与 loader 也归此目录，由 `pnpm typecheck:test-unit` 检查。编辑器浏览器集成测试位于 `test/integration/browser/`，Browser smoke 入口位于 `test/smoke/`。`pnpm test:smoke:browser` 启动 5173 的 disconnected Browser Workbench；`pnpm test:smoke:browser:full` 启动 5174 的 Browser + Vite App Server 模式。`pnpm test:smoke:ui` 启动禁用 App Server 的 Electron，适合快速验证 Renderer 和 Workbench；`pnpm test:smoke:desktop` 会额外组装 Rust 开发包并启动真实 App Server。仓库根目录 `pnpm test:desktop:smoke` 指向完整 Electron + App Server 模式；`pnpm test:desktop:smoke:ui` 显式运行 Electron 快速模式，也可通过 `pnpm test:desktop:smoke:browser` 和 `pnpm test:desktop:smoke:browser:full` 运行 Browser 模式。CI 先运行对应的 `pretest:smoke:*` 准备步骤，再用 `test:smoke:*:no-compile` 运行已准备好的测试，便于重复排查偶发失败。
+`pnpm test:main` 依次运行构建工具测试和全部单元测试。仓库根 `package.json` 直接调用这里的公开测试命令。`test/unit/` 使用 Mocha，逐文件启动独立进程，并提供 `--run`、`--runGlob`、`--grep` 筛选。`pnpm test:unit` 编译后先验证 runner 的筛选和失败行为，再执行选择的用例；汇总执行数量不包含跳过项，没有执行任何用例时返回失败。清理、reporter 与 loader 也归此目录，由 `pnpm typecheck:test-unit` 检查。编辑器浏览器集成测试位于 `test/integration/browser/`，Browser smoke 入口位于 `test/smoke/`。`pnpm test:smoke:browser` 启动 5173 的 disconnected Browser Workbench；`pnpm test:smoke:browser:full` 为每个场景在独立端口启动生产 Web 服务和真实 App Server，使用该场景的工作区与配置目录。`pnpm test:smoke:ui` 启动禁用 App Server 的 Electron，适合快速验证 Renderer 和 Workbench；`pnpm test:smoke:desktop` 会额外组装 Rust 开发包并启动真实 App Server。仓库根目录 `pnpm test:desktop:smoke` 指向完整 Electron + App Server 模式；`pnpm test:desktop:smoke:ui` 显式运行 Electron 快速模式，也可通过 `pnpm test:desktop:smoke:browser` 和 `pnpm test:desktop:smoke:browser:full` 运行 Browser 模式。CI 先运行对应的 `pretest:smoke:*` 准备步骤，再用 `test:smoke:*:no-compile` 运行已准备好的测试，便于重复排查偶发失败。
 
 新增测试时先选择拥有被验证 contract 的最窄源码模块，再按真实运行时选择 `common`、`browser`、`node`、`electron-browser` 或 `electron-main`。只有没有单一源码 owner 的全仓库约束才进入 `test/architecture`；跨多个用户操作的场景才进入 `test/smoke`。
+
+应用场景复用 `test/automation/test.ts` 的 fixture：它负责工作区、配置、启动、重启、全窗口错误收集和退出清理。不同场景使用独立数据，同一场景重启保留数据。设置导航复用 `workbench.settingsEditor`，常规 Sessions 入口复用 `workbench.openAgentsWindow(target.kind)`；专门验证快捷键、菜单或窗口入口的场景保留对应真实操作。工作台和 Sessions 的启动入口均等待自身状态恢复完成；导航辅助代码等待操作结果，功能断言留在用例中。
 
 ## 发布成品检查
 

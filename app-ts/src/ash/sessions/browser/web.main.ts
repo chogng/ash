@@ -42,11 +42,7 @@ registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
 
 /** Starts a browser-hosted Sessions page with the optional renderer host. */
-export function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile): void {
-	void startBrowserSessionsAsync(modeId, profile);
-}
-
-async function startBrowserSessionsAsync(modeId: WorkbenchModeId, profile: SessionsProfile): Promise<void> {
+export async function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile): Promise<void> {
 	let connectedHost: IDisposable | undefined;
 	try {
 		let documentClient: AppServerProtocolClient | undefined;
@@ -114,6 +110,7 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 			void workbench.shutdown("pageHide").catch(onUnexpectedError).finally(() => sessions.dispose());
 		}, { once: true }));
 		if (connectedHost) sessions.add(connectedHost);
+		await workbench.whenRestored;
 	} catch (error) {
 		sessions.dispose();
 		throw error;

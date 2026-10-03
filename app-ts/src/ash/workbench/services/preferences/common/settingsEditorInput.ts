@@ -1,6 +1,7 @@
 import { localize } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
+import { EditorInputSerializers } from '../../editor/common/editorInputSerializer.js';
 import type { EditorInput } from '../../editor/common/editorService.js';
 
 export const SettingsEditorContentType = 'application/vnd.ash.settings-editor';
@@ -33,3 +34,14 @@ export function createUserSettingsEditorInput(): EditorInput {
 		get label(): string { return localize({ bundle: 'ash.settings', key: 'json.editorLabel' }, 'User Settings (JSON)'); },
 	});
 }
+
+// Working sets persist identity, while the restored input resolves its label in the new locale.
+EditorInputSerializers.registerStatic({
+	typeId: 'workbench.editorInput.userSettings',
+	canSerialize: input => input.resource.toString() === UserSettingsResource.toString(),
+	serialize: () => UserSettingsResource.toString(),
+	deserialize: value => {
+		if (value !== UserSettingsResource.toString()) throw new TypeError('Invalid user settings editor resource');
+		return createUserSettingsEditorInput();
+	},
+});
