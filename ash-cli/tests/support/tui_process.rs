@@ -138,6 +138,8 @@ pub struct Fixture {
     app_server: PathBuf,
     product_services: Option<PathBuf>,
     voice_host: Option<PathBuf>,
+    #[cfg(unix)]
+    model_download_proxy: Option<std::net::SocketAddr>,
 }
 
 impl Fixture {
@@ -206,6 +208,8 @@ impl Fixture {
             app_server,
             product_services: None,
             voice_host: None,
+            #[cfg(unix)]
+            model_download_proxy: None,
         }
     }
 
@@ -221,25 +225,56 @@ impl Fixture {
         self
     }
 
-    fn environment(&self) -> Vec<(&'static str, PathBuf)> {
+    #[cfg(unix)]
+    pub fn with_model_download_proxy(mut self, address: std::net::SocketAddr) -> Self {
+        self.model_download_proxy = Some(address);
+        // Downloads must finish validation before acquiring audio. Any premature helper
+        // launch leaves a marker, without touching the test machine's microphone.
+        let helper = self.root.join("voice-host-guard");
+        cargo_bin::write_executable(
+            &helper,
+            "#!/bin/sh\n: > \"$ASH_HOME/voice-host-started\"\nexit 1\n",
+        )
+        .unwrap();
+        self.voice_host = Some(helper);
+        self
+    }
+
+    fn environment(&self) -> Vec<(&'static str, std::ffi::OsString)> {
         let mut environment = vec![
-            ("ASH_HOME", self.profile.clone()),
-            ("ASH_WORKSPACE_ROOT", self.workspace.clone()),
-            ("CODEX_HOME", self.codex_home()),
-            ("ASH_APP_SERVER_PATH", self.app_server.clone()),
+            ("ASH_HOME", self.profile.clone().into_os_string()),
+            (
+                "ASH_WORKSPACE_ROOT",
+                self.workspace.clone().into_os_string(),
+            ),
+            ("CODEX_HOME", self.codex_home().into_os_string()),
+            (
+                "ASH_APP_SERVER_PATH",
+                self.app_server.clone().into_os_string(),
+            ),
         ];
         if let Some(path) = &self.product_services {
-            environment.push(("ASH_PRODUCT_SERVICES_PATH", path.clone()));
+            environment.push(("ASH_PRODUCT_SERVICES_PATH", path.clone().into_os_string()));
         }
         if let Some(path) = &self.voice_host {
-            environment.push(("ASH_VOICE_HOST_PATH", path.clone()));
+            environment.push(("ASH_VOICE_HOST_PATH", path.clone().into_os_string()));
+        }
+        #[cfg(unix)]
+        if let Some(address) = self.model_download_proxy {
+            let proxy = std::ffi::OsString::from(format!("http://{address}"));
+            environment.push(("HTTPS_PROXY", proxy.clone()));
+            environment.push(("https_proxy", proxy));
+            environment.push(("NO_PROXY", "127.0.0.1,localhost".into()));
+            environment.push(("no_proxy", "127.0.0.1,localhost".into()));
         }
         #[cfg(windows)]
         let environment = {
             let mut environment = environment;
             environment.push((
                 "ASH_WINDOWS_COMMAND_RUNNER_PATH",
-                self.ash.with_file_name("ash-command-runner.exe"),
+                self.ash
+                    .with_file_name("ash-command-runner.exe")
+                    .into_os_string(),
             ));
             environment
         };
@@ -310,6 +345,11 @@ contextWindow = 128000
 
     pub fn workspace(&self) -> &Path {
         &self.workspace
+    }
+
+    #[cfg(unix)]
+    pub fn profile(&self) -> &Path {
+        &self.profile
     }
 
     pub fn codex_home(&self) -> PathBuf {
@@ -800,6 +840,45 @@ impl TuiProcess {
             thread::sleep(Duration::from_millis(20));
         }
         self.close_terminal();
+    }
+
+    #[cfg(unix)]
+    pub fn exit_with_command(&mut self) {
+        self.type_text("/quit");
+        self.send(b"\r");
+        self.wait_for_successful_exit();
+    }
+
+    #[cfg(unix)]
+    pub fn terminate(&mut self) {
+        let pid = self.child.child.process_id().expect("running TUI process");
+        assert!(
+            std::process::Command::new("kill")
+                .args(["-TERM", &pid.to_string()])
+                .status()
+                .unwrap()
+                .success()
+        );
+        self.wait_for_successful_exit();
+    }
+
+    #[cfg(unix)]
+    fn wait_for_successful_exit(&mut self) {
+        let deadline = Instant::now() + PROCESS_TIMEOUT;
+        loop {
+            if let Some(status) = self.child.try_wait().unwrap() {
+                self.close_terminal();
+                assert!(status.success(), "TUI exit failed: {status:?}");
+                assert!(self.raw_text().contains("\x1b[?2004l"));
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "TUI did not exit:\n{}",
+                self.screen()
+            );
+            thread::sleep(Duration::from_millis(20));
+        }
     }
 
     fn close_terminal(&mut self) {

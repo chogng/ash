@@ -198,6 +198,10 @@ dictationShortcut = "ctrl+g"
 
 `dictationShortcutEnabled` 缺省为 `false`。开启后，在 TUI 任意页面按 `dictationShortcut` 开始或停止听写，结果写入当前草稿；输入框聚焦时按 Enter 会结束听写，等最终文字返回后发送。`/dictate` 不受开关影响。默认键为 `ctrl+g`，可在 Config 修改为一个带修饰键的组合键。两个值读写运行 TUI 的本机 profile，连接远端 App Server 不改变它们。macOS 的媒体键不作为默认听写键。
 
+听写或 `/voice` 启动、下载模型和录音期间，中断键（默认 `Ctrl+C`）先停止语音会话，不退出 TUI。听写保留草稿，不触发发送；`/voice` 停止时仍提交最后一句识别结果。停止完成后，中断键恢复聊天任务中断或退出的原有行为。模型准备提示显示当前中断快捷键。下载期间输入 `/quit`，会先停止听写再退出。下载失败与停止同时发生时仍显示错误，不发送草稿。
+
+取消或下载失败会清理安装临时目录并释放模型锁；进程被强杀留下的临时目录在下次安装前清理，不会断点续传。已经结束的下载不会因网络恢复自动重启。模型被另一个进程安装时显示占用错误，保留对方的安装临时文件。
+
 `keyHintStyle` 只接受 `contrast` 和 `muted`，缺省为 `contrast`。`contrast` 使用当前主题的前景色与粗体显示按键，说明文字使用弱化色；`muted` 保留整条弱化斜体效果。该设置由 Config 的“通用”页写入，fullscreen、inline 和两者的功能面板共用同一渲染通路并即时应用。
 
 `glyphSet` 只接受 `powerline` 和 `plain`，缺省为 `powerline`。`powerline` 用 U+E0A0 显示 Git 分支标识，需要终端选用包含 Powerline 字形的字体；`plain` 显示文字 `git`，不依赖特殊字体。Config 的“通用”页可以切换该设置，保存和外部配置重载后立即更新顶部栏与丰富样式状态栏。终端名称不能可靠说明用户选用的字体，因此不会据此自动切换。
@@ -264,6 +268,8 @@ just test-tui
 | [conversation.rs](../ash-cli/tests/tui/conversation.rs) | 对话、队列、审批、会话及对话中的 Git 状态 |
 | [config.rs](../ash-cli/tests/tui/config.rs) | 设置、供应商、账户、语言与配置面板导航 |
 | [issues.rs](../ash-cli/tests/tui/issues.rs) | Issue 选择、会话创建与 PR；目前仅 Unix 场景 |
+
+`just test-tui actual_tui_dictation_download` 用本地代理验证语音模型准备时的中断、断网重试、退出和跨进程模型锁；`/dictate` 与 `/voice` 的取消、断网和重试在 fullscreen、inline 分别验证。这组场景目前仅 Unix，不下载完整模型，也不使用真实麦克风。
 
 状态、请求和副作用断言与终端文本 snapshot 分别验证行为和显示；执行与基线审阅见 [test-tui](../.agents/skills/test-tui/SKILL.md)。两种模式的定向场景与终端兼容范围见 [LAYOUT.md](LAYOUT.md#验证入口与支持范围)。
 

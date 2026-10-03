@@ -11,6 +11,94 @@ use std::time::Duration;
 
 const STATE_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// An HTTPS proxy that exposes each CONNECT socket without answering it.
+/// Tests can then cancel the client or disconnect the network at an exact boundary.
+#[cfg(unix)]
+pub struct DownloadProxy {
+    address: std::net::SocketAddr,
+    connections: std::sync::mpsc::Receiver<TcpStream>,
+    stopped: Arc<std::sync::atomic::AtomicBool>,
+    thread: Option<thread::JoinHandle<()>>,
+}
+
+#[cfg(unix)]
+impl DownloadProxy {
+    pub fn start() -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let (send, connections) = std::sync::mpsc::channel();
+        let stopped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stopping = Arc::clone(&stopped);
+        let worker = thread::spawn(move || {
+            loop {
+                let (mut stream, _) = listener.accept().unwrap();
+                if stopping.load(std::sync::atomic::Ordering::Acquire) {
+                    break;
+                }
+                let request = read_http_request(&mut stream);
+                if !request.starts_with("CONNECT modelscope.cn:443 ") {
+                    // Startup may inspect other configured providers; this fixture serves
+                    // only model downloads and rejects every other outbound proxy request.
+                    let _ = stream.write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                    continue;
+                }
+                if send.send(stream).is_err() {
+                    break;
+                }
+            }
+        });
+        Self {
+            address,
+            connections,
+            stopped,
+            thread: Some(worker),
+        }
+    }
+
+    pub fn address(&self) -> std::net::SocketAddr {
+        self.address
+    }
+
+    pub fn connection(&self) -> TcpStream {
+        let stream = self.connections.recv_timeout(STATE_TIMEOUT).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(3)))
+            .unwrap();
+        stream
+    }
+
+    pub fn assert_no_pending_connections(&self) {
+        assert!(matches!(
+            self.connections.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Empty)
+        ));
+    }
+
+    pub fn assert_disconnected(mut connection: TcpStream) {
+        let mut byte = [0];
+        assert_eq!(
+            connection.read(&mut byte).unwrap(),
+            0,
+            "download socket remains open"
+        );
+    }
+}
+
+#[cfg(unix)]
+impl Drop for DownloadProxy {
+    fn drop(&mut self) {
+        self.stopped
+            .store(true, std::sync::atomic::Ordering::Release);
+        let _ = TcpStream::connect(self.address);
+        if let Some(worker) = self.thread.take() {
+            let result = worker.join();
+            if !thread::panicking() {
+                result.unwrap();
+            }
+        }
+    }
+}
+
 pub struct ScenarioServer {
     address: std::net::SocketAddr,
     state: Arc<Mutex<ServerState>>,

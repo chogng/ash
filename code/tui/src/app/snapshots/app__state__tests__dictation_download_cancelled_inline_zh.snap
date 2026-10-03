@@ -1,6 +1,6 @@
 ---
-source: code/tui/src/app/inline/frame_tests.rs
-expression: "text(&render(&app, 80, 20))"
+source: code/tui/src/app/state_tests.rs
+expression: render_dictation_frame(&app)
 ---
                                                                                 
                                                                                 
@@ -11,8 +11,18 @@ expression: "text(&render(&app, 80, 20))"
                                                                                 
                                                                                 
                                                                                 
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                  听 写 已 停 止 。   
 ────────────────────────────────────────────────────────────────────────────────
->                                                                               
+> keep draft                                                                    
 ────────────────────────────────────────────────────────────────────────────────
                                                                                 
-  语音 · 正在下载 encoder.onnx：2.0 MiB · ctrl+c 停止
+  ⏸ 手 动

@@ -838,6 +838,186 @@ fn dictate_command_adds_recognized_text_to_the_draft_and_stops() {
 }
 
 #[test]
+fn interrupt_cancels_dictation_download_without_quitting_or_sending_the_draft() {
+    use crate::terminal::ScreenMode;
+    use ash_app_server_protocol::protocol::dictation::DictationModelStage;
+
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        settings.set_language(Language::Chinese);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        app.insert_text("/dictate");
+        let Some(AppCommand::DictationStart { resource_id }) =
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        else {
+            panic!("expected dictation start");
+        };
+        app.update(AppEvent::DictationStarted {
+            resource_id: resource_id.clone(),
+            error: None,
+        });
+        app.insert_text("keep draft");
+        app.dictation_model_progress(
+            &resource_id,
+            DictationModelStage::Downloading {
+                file: "model_quant.onnx".into(),
+                downloaded_bytes: 2 * 1024 * 1024,
+            },
+        );
+        let name = match mode {
+            ScreenMode::Fullscreen => "dictation_download_fullscreen_zh",
+            ScreenMode::Inline => "dictation_download_inline_zh",
+        };
+        crate::tui_assert_snapshot!(name, render_dictation_frame(&app));
+
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+            Some(AppCommand::DictationStop {
+                resource_id: resource_id.clone(),
+            })
+        );
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+            None
+        );
+        assert_eq!(app.voice_status().as_deref(), Some("语音 · 正在停止"));
+        app.update(AppEvent::DictationStopped {
+            resource_id: resource_id.clone(),
+            result: Ok(None),
+        });
+        assert_eq!(app.input(), "keep draft");
+        assert_eq!(app.take_dictation_submission(), None);
+        assert_eq!(app.take_dictation_stop_requested(), None);
+        assert_eq!(app.voice_status(), None);
+        app.dictation_model_progress(&resource_id, DictationModelStage::Loading);
+        assert_eq!(app.voice_status(), None);
+        let name = match mode {
+            ScreenMode::Fullscreen => "dictation_download_cancelled_fullscreen_zh",
+            ScreenMode::Inline => "dictation_download_cancelled_inline_zh",
+        };
+        crate::tui_assert_snapshot!(name, render_dictation_frame(&app));
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+            Some(AppCommand::Quit)
+        );
+    }
+}
+
+#[test]
+fn speech_preparation_hint_and_stop_use_the_configured_interrupt_binding() {
+    let mut app = App::new();
+    let settings = keymap_settings_from_tui(&FrontendConfigDto(BTreeMap::from([(
+        "keybindings".into(),
+        serde_json::json!([{
+            "key": "ctrl+y",
+            "command": "ashCode.action.interruptOrQuit"
+        }]),
+    )])))
+    .unwrap();
+    app.update(KeymapEvent::SettingsReceived(settings));
+    app.insert_text("/voice");
+    let Some(AppCommand::VoiceStart { resource_id }) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected voice start");
+    };
+    app.voice_model_progress(&resource_id, realtime_voice::ModelProgress::Checking);
+    assert_eq!(
+        app.voice_status().as_deref(),
+        Some("Voice · checking model files · ctrl+y to stop")
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL)),
+        Some(AppCommand::VoiceStop { resource_id })
+    );
+}
+
+#[test]
+fn interrupt_cancels_submission_while_dictation_stop_is_pending() {
+    let mut app = App::new();
+    let Some(AppCommand::DictationStart { resource_id }) = app.toggle_dictation() else {
+        panic!("expected dictation start");
+    };
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    app.insert_text("keep draft");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::DictationStop {
+            resource_id: resource_id.clone(),
+        })
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+        None
+    );
+    app.dictation_ended(&resource_id, None);
+    app.update(AppEvent::DictationStopped {
+        resource_id,
+        result: Ok(None),
+    });
+    assert_eq!(app.input(), "keep draft");
+    assert_eq!(app.take_dictation_submission(), None);
+}
+
+#[test]
+fn interrupt_during_dictation_start_stops_after_acknowledgement() {
+    let mut app = App::new();
+    app.insert_text("/dictate");
+    let Some(AppCommand::DictationStart { resource_id }) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected dictation start");
+    };
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+        None
+    );
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    assert_eq!(
+        app.take_dictation_stop_requested(),
+        Some(AppCommand::DictationStop { resource_id })
+    );
+}
+
+#[test]
+fn interrupt_stops_speech_preparation_before_a_running_chat_turn() {
+    for command in ["/dictate", "/voice"] {
+        let mut app = App::new();
+        app.insert_text(command);
+        let start = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        let stop = match start {
+            Some(AppCommand::DictationStart { resource_id }) => {
+                app.update(AppEvent::DictationStarted {
+                    resource_id: resource_id.clone(),
+                    error: None,
+                });
+                AppCommand::DictationStop { resource_id }
+            }
+            Some(AppCommand::VoiceStart { resource_id }) => AppCommand::VoiceStop { resource_id },
+            other => panic!("expected speech start, got {other:?}"),
+        };
+        app.set_status(Status::Working);
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+            Some(stop)
+        );
+        assert_eq!(app.status(), &Status::Working);
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+            None
+        );
+    }
+}
+
+#[test]
 fn dictation_shortcut_is_inactive_until_enabled() {
     let mut app = App::new();
     assert_eq!(
@@ -908,6 +1088,43 @@ fn ctrl_g_during_dictation_start_stops_after_start_completes() {
 }
 
 #[test]
+fn dictation_stop_completion_preserves_submission_after_an_early_ended_notification() {
+    for draft in ["keep final text", "/quit"] {
+        let mut app = App::new();
+        let Some(AppCommand::DictationStart { resource_id }) = app.toggle_dictation() else {
+            panic!("expected dictation start");
+        };
+        app.update(AppEvent::DictationStarted {
+            resource_id: resource_id.clone(),
+            error: None,
+        });
+        app.insert_text(draft);
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(AppCommand::DictationStop {
+                resource_id: resource_id.clone()
+            })
+        );
+        app.dictation_ended(&resource_id, None);
+        assert_eq!(app.take_dictation_submission(), None);
+        app.update(AppEvent::DictationStopped {
+            resource_id,
+            result: Ok(None),
+        });
+        let command = app.take_dictation_submission();
+        if draft == "/quit" {
+            assert_eq!(command, Some(AppCommand::Quit));
+        } else {
+            let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) = command else {
+                panic!("the stop response must finish the requested submission");
+            };
+            assert_eq!(submission.display_text, draft);
+        }
+        assert_eq!(app.take_dictation_submission(), None);
+    }
+}
+
+#[test]
 fn enter_waits_for_final_dictation_text_before_sending() {
     let mut app = App::new();
     app.dictation_shortcut_settings.enabled = true;
@@ -960,6 +1177,7 @@ fn failed_dictation_stop_keeps_the_draft_without_sending() {
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::DictationStop { .. }),
     ));
+    app.dictation_ended(&resource_id, Some("microphone unavailable".into()));
     app.update(AppEvent::DictationStopped {
         resource_id,
         result: Err("microphone unavailable".into()),

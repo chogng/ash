@@ -9,6 +9,209 @@ use std::process::Command;
 use std::time::Duration;
 use std::time::Instant;
 
+#[cfg(unix)]
+const DICTATION_MODEL_ID: &str = "paraformer-large-online-ec6a3c64";
+
+#[cfg(unix)]
+fn assert_dictation_download_released(fixture: &Fixture) {
+    let root = fixture.profile().join("dictation-models");
+    let staging = root.join(format!(".{DICTATION_MODEL_ID}.installing"));
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(root.join(format!(".{DICTATION_MODEL_ID}.lock")))
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while staging.exists() || lock.try_lock().is_err() {
+        assert!(
+            Instant::now() < deadline,
+            "dictation download retained its staging or lock"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(!root.join(DICTATION_MODEL_ID).exists());
+    assert!(!fixture.profile().join("voice-host-started").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn actual_tui_dictation_download_cancels_recovers_and_restarts() {
+    use crate::scenario_http::DownloadProxy;
+
+    for mode in ["fullscreen", "inline"] {
+        let proxy = DownloadProxy::start();
+        let fixture = Fixture::new().with_model_download_proxy(proxy.address());
+        let server =
+            ScenarioServer::start([HttpResponse::streaming(["AFTER-DICTATION-CANCEL"], None)]);
+        fixture.write_config(&server.base_url());
+        fixture.append_config(&format!("\n[tui]\nscreenMode = \"{mode}\"\n"));
+        let staging = fixture
+            .profile()
+            .join("dictation-models")
+            .join(format!(".{DICTATION_MODEL_ID}.installing"));
+        std::fs::create_dir_all(&staging).unwrap();
+        std::fs::write(
+            staging.join("encoder.onnx.download"),
+            b"leftover from a killed installer",
+        )
+        .unwrap();
+
+        let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+        process.wait_for_stable_screen(if mode == "fullscreen" {
+            "Enter send"
+        } else {
+            "Manual"
+        });
+        process.submit("/dictate");
+        process.wait_for_screen("Voice · checking model files");
+        let connection = proxy.connection();
+        process.wait_for_stable_screen("Voice · checking model files · ctrl+c to stop");
+        assert_eq!(
+            std::fs::metadata(staging.join("encoder.onnx.download"))
+                .unwrap()
+                .len(),
+            0
+        );
+        process.type_text("KEEP-DICTATION-DRAFT");
+        let cancelled_at = Instant::now();
+        process.send(b"\x03");
+        process.wait_for_stable_screen("Dictation stopped.");
+        assert!(cancelled_at.elapsed() < Duration::from_secs(3));
+        DownloadProxy::assert_disconnected(connection);
+        assert_dictation_download_released(&fixture);
+        proxy.assert_no_pending_connections();
+        assert!(process.screen().contains("KEEP-DICTATION-DRAFT"));
+        assert_eq!(server.request_count(), 0);
+
+        // A new request must acquire the released model lock, and a broken connection
+        // must finish with an error instead of restarting the download in the background.
+        process.send(&vec![0x7f; "KEEP-DICTATION-DRAFT".len()]);
+        process.wait_for_screen_to_omit("KEEP-DICTATION-DRAFT");
+        process.submit("/dictate");
+        process.wait_for_screen("Voice · checking model files");
+        let connection = proxy.connection();
+        drop(connection);
+        process.wait_for_stable_screen("Dictation failed:");
+        assert_dictation_download_released(&fixture);
+        proxy.assert_no_pending_connections();
+        process.submit("/dictate");
+        process.wait_for_screen("Voice · checking model files");
+        let connection = proxy.connection();
+        process.send(b"\x03");
+        process.wait_for_stable_screen("Dictation stopped.");
+        DownloadProxy::assert_disconnected(connection);
+        assert_dictation_download_released(&fixture);
+        proxy.assert_no_pending_connections();
+        assert_eq!(server.request_count(), 0);
+        process.type_text("KEEP-DICTATION-DRAFT");
+        if mode == "fullscreen" {
+            process.assert_snapshot("real/07-lifecycle/05-dictation-download-cancelled");
+        }
+        process.enter();
+        process.wait_for_stable_screen("AFTER-DICTATION-CANCEL");
+        assert_eq!(server.request_count(), 1);
+
+        // /voice owns its worker in the CLI rather than through the App Server;
+        // exercise that separate shutdown path after establishing a chat.
+        for disconnect in [false, true, false] {
+            process.submit("/voice");
+            process.wait_for_screen("Voice · checking model files");
+            let connection = proxy.connection();
+            if disconnect {
+                drop(connection);
+                process.wait_for_stable_screen("Voice failed:");
+            } else {
+                process.send(b"\x03");
+                process.wait_for_stable_screen("Voice mode stopped.");
+                DownloadProxy::assert_disconnected(connection);
+            }
+            assert_dictation_download_released(&fixture);
+            proxy.assert_no_pending_connections();
+            assert_eq!(server.request_count(), 1);
+        }
+        process.quit();
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn actual_tui_dictation_download_exit_releases_the_connection_owner() {
+    use crate::scenario_http::DownloadProxy;
+
+    enum Exit {
+        Command,
+        TerminationSignal,
+        KilledProcess,
+    }
+
+    for exit in [Exit::Command, Exit::TerminationSignal, Exit::KilledProcess] {
+        let proxy = DownloadProxy::start();
+        let fixture = Fixture::new().with_model_download_proxy(proxy.address());
+        let server = ScenarioServer::start([]);
+        fixture.write_config(&server.base_url());
+        let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+        process.wait_for_stable_screen("Enter send");
+        process.submit("/dictate");
+        process.wait_for_screen("Voice · checking model files");
+        let connection = proxy.connection();
+        process.wait_for_stable_screen("Voice · checking model files · ctrl+c to stop");
+        match exit {
+            Exit::Command => process.exit_with_command(),
+            Exit::TerminationSignal => process.terminate(),
+            Exit::KilledProcess => drop(process),
+        }
+        DownloadProxy::assert_disconnected(connection);
+        assert_dictation_download_released(&fixture);
+        proxy.assert_no_pending_connections();
+        assert_eq!(server.request_count(), 0);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn actual_tui_dictation_download_respects_another_process_model_lock() {
+    use crate::scenario_http::DownloadProxy;
+
+    let proxy = DownloadProxy::start();
+    let fixture = Fixture::new().with_model_download_proxy(proxy.address());
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    let root = fixture.profile().join("dictation-models");
+    let staging = root.join(format!(".{DICTATION_MODEL_ID}.installing"));
+    std::fs::create_dir_all(&staging).unwrap();
+    let partial = staging.join("encoder.onnx.download");
+    std::fs::write(&partial, b"owned by another process").unwrap();
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(root.join(format!(".{DICTATION_MODEL_ID}.lock")))
+        .unwrap();
+    lock.try_lock().unwrap();
+
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("Enter send");
+    process.submit("/dictate");
+    process.wait_for_stable_screen("Dictation model is being prepared by another operation");
+    assert_eq!(
+        std::fs::read(&partial).unwrap(),
+        b"owned by another process"
+    );
+    proxy.assert_no_pending_connections();
+    drop(lock);
+    process.submit("/dictate");
+    process.wait_for_screen("Voice · checking model files");
+    let connection = proxy.connection();
+    process.send(b"\x03");
+    process.wait_for_stable_screen("Dictation stopped.");
+    DownloadProxy::assert_disconnected(connection);
+    assert_dictation_download_released(&fixture);
+    proxy.assert_no_pending_connections();
+    assert_eq!(server.request_count(), 0);
+    process.quit();
+}
+
 #[test]
 fn actual_tui_guardian_setup_saves_project_background_through_the_app_server() {
     let fixture = Fixture::new();

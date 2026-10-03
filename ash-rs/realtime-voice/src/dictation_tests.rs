@@ -6,6 +6,103 @@ use std::sync::atomic::Ordering;
 type EventSink = Box<dyn Fn(DictationEvent) + Send + Sync>;
 
 #[tokio::test]
+async fn stopping_a_stalled_model_download_closes_the_connection_and_cleans_staging() {
+    use std::time::Duration;
+    use tokio::io::AsyncReadExt;
+
+    let root = tempfile::tempdir().unwrap();
+    // Hold the HTTPS proxy handshake open: cancellation must work without a response or body.
+    let proxy = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let network = http_client::OutboundNetworkSnapshot::new(
+        http_client::HttpClientConfig::new()
+            .with_proxy_policy(http_client::ProxyPolicy::Explicit(format!(
+                "http://{}",
+                proxy.local_addr().unwrap()
+            )))
+            .with_timeouts(http_client::TransportTimeouts::new(
+                http_client::Timeout::After(Duration::from_secs(5)),
+                http_client::Timeout::Disabled,
+                http_client::Timeout::Disabled,
+                http_client::Timeout::After(Duration::from_secs(5)),
+            )),
+    )
+    .unwrap();
+    let manager = Arc::new(DictationManager::default());
+    let (send, receive) = std::sync::mpsc::channel();
+    manager
+        .start(
+            1,
+            "downloading".into(),
+            DictationRequest::Local(LocalDictationRequest {
+                input_device: None,
+                model_id: DEFAULT_MODEL_ID.into(),
+                model_root: root.path().into(),
+                audio_host: root.path().join("must-not-start-audio"),
+                network,
+            }),
+            move |event| {
+                send.send(event).unwrap();
+            },
+        )
+        .unwrap();
+    let (mut connection, _) = tokio::time::timeout(Duration::from_secs(5), proxy.accept())
+        .await
+        .unwrap()
+        .unwrap();
+    let mut headers = Vec::new();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !headers.ends_with(b"\r\n\r\n") {
+            headers.push(connection.read_u8().await.unwrap());
+        }
+    })
+    .await
+    .unwrap();
+    assert!(headers.starts_with(b"CONNECT modelscope.cn:443 "));
+    let staging = root.path().join(format!(".{DEFAULT_MODEL_ID}.installing"));
+    assert!(staging.join("encoder.onnx.download").is_file());
+
+    let stopping = Arc::clone(&manager);
+    assert_eq!(
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            tokio::task::spawn_blocking(move || stopping.stop(1, "downloading")),
+        )
+        .await
+        .expect("stop must not wait for the download timeout")
+        .unwrap()
+        .unwrap(),
+        None
+    );
+    assert!(!manager.is_active());
+    assert!(!staging.exists());
+    assert!(!root.path().join(DEFAULT_MODEL_ID).exists());
+    let events: Vec<_> = receive.try_iter().collect();
+    assert_eq!(events.last(), Some(&DictationEvent::Ended { error: None }));
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, DictationEvent::Transcript { .. }))
+    );
+    let mut remaining = Vec::new();
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        connection.read_to_end(&mut remaining),
+    )
+    .await
+    .expect("the cancelled download must close its socket")
+    .unwrap();
+    assert!(remaining.is_empty());
+    // The small lock file is retained, but its lock is released before stop acknowledges.
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(root.path().join(format!(".{DEFAULT_MODEL_ID}.lock")))
+        .unwrap();
+    lock.try_lock().unwrap();
+    assert_eq!(lock.metadata().unwrap().len(), 0);
+}
+
+#[tokio::test]
 #[ignore = "requires ASH_TEST_DICTATION_MODEL_DIR and ASH_TEST_VOICE_HOST_PATH and a microphone"]
 async fn real_microphone_capture_and_local_session_release_the_device() {
     use std::time::Duration;
@@ -206,4 +303,22 @@ fn ended_recognition_releases_the_device_before_the_next_owner_starts() {
     );
     manager.stop(2, "second").unwrap();
     assert_eq!(stops.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn stop_preserves_a_worker_failure_and_releases_the_session() {
+    let (manager, sink, stops) = manager();
+    manager.start(1, "first".into(), request(), |_| {}).unwrap();
+    sink.lock().unwrap().as_ref().unwrap()(DictationEvent::Ended {
+        error: Some("model download disconnected".into()),
+    });
+    assert_eq!(
+        manager.stop(1, "first"),
+        Err("model download disconnected".into())
+    );
+    assert_eq!(stops.load(Ordering::SeqCst), 1);
+    manager
+        .start(1, "second".into(), request(), |_| {})
+        .unwrap();
+    manager.stop(1, "second").unwrap();
 }

@@ -238,7 +238,13 @@ struct ActiveDictation {
     resource_id: String,
     session: Box<dyn RecognitionSession>,
     ended: Arc<AtomicBool>,
-    final_text: Arc<Mutex<Option<String>>>,
+    outcome: Arc<Mutex<DictationOutcome>>,
+}
+
+#[derive(Default)]
+struct DictationOutcome {
+    final_text: Option<String>,
+    error: Option<String>,
 }
 
 /// One device-local dictation manager shared by all product connections in a process.
@@ -323,18 +329,25 @@ impl DictationManager {
         }
         let ended = Arc::new(AtomicBool::new(false));
         let event_ended = Arc::clone(&ended);
-        let final_text = Arc::new(Mutex::new(None));
-        let event_final_text = Arc::clone(&final_text);
+        let outcome = Arc::new(Mutex::new(DictationOutcome::default()));
+        let event_outcome = Arc::clone(&outcome);
         let session = self.recognizer.start(
             request,
             Box::new(move |event| {
-                if let DictationEvent::Transcript {
-                    text,
-                    is_final: true,
-                } = &event
-                    && let Ok(mut final_text) = event_final_text.lock()
-                {
-                    *final_text = Some(text.clone());
+                if let Ok(mut outcome) = event_outcome.lock() {
+                    match &event {
+                        DictationEvent::Transcript {
+                            text,
+                            is_final: true,
+                        } => {
+                            outcome.final_text = Some(text.clone());
+                        }
+                        DictationEvent::Ended { error } => outcome.error = error.clone(),
+                        DictationEvent::ModelProgress(_)
+                        | DictationEvent::Transcript {
+                            is_final: false, ..
+                        } => {}
+                    }
                 }
                 if matches!(event, DictationEvent::Ended { .. }) {
                     event_ended.store(true, Ordering::Release);
@@ -347,11 +360,13 @@ impl DictationManager {
             resource_id,
             session,
             ended,
-            final_text,
+            outcome,
         });
         Ok(())
     }
 
+    /// Releases the session before responding with its final text or worker failure.
+    /// The Ended notification may arrive before this response, including during cancellation.
     pub fn stop(&self, owner: u64, resource_id: &str) -> Result<Option<String>, String> {
         let mut active = self
             .active
@@ -365,11 +380,16 @@ impl DictationManager {
         }
         let mut session = active.take().expect("validated active dictation");
         session.session.stop();
-        session
-            .final_text
+        // Ended precedes the stop response. Retain worker failures in that response so
+        // clients waiting to submit a draft cannot mistake a failed download for success.
+        let outcome = session
+            .outcome
             .lock()
-            .map(|text| text.clone())
-            .map_err(|_| "Dictation state unavailable".into())
+            .map_err(|_| "Dictation state unavailable")?;
+        match &outcome.error {
+            Some(error) => Err(error.clone()),
+            None => Ok(outcome.final_text.clone()),
+        }
     }
 
     pub fn close(&self, owner: u64) {

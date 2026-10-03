@@ -359,7 +359,7 @@ fn voice_model_preparation_shows_real_download_bytes_in_chinese() {
     );
     assert_eq!(
         app.voice_status().unwrap(),
-        "语音 · 正在下载 encoder.onnx：2.0 MiB"
+        "语音 · 正在下载 encoder.onnx：2.0 MiB · ctrl+c 停止"
     );
     crate::tui_assert_snapshot!("voice_model_downloading_zh", text(&render(&app, 80, 20)));
 }

@@ -4458,6 +4458,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Voix · téléchargement de {0} : {1} MiB",
     ),
     translation(
+        "{0} · {1} to stop",
+        "{0} · {1} で停止",
+        "{0} · {1} 停止",
+        "{0} · {1} pour arrêter",
+    ),
+    translation(
         "Voice · listening · /voice to stop",
         "音声 · 聞き取り中 · /voice で停止",
         "语音 · 正在听 · 输入 /voice 停止",

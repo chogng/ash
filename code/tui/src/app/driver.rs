@@ -189,7 +189,11 @@ impl AppDriver {
             _ => None,
         };
         let ended_dictation = match &event {
-            client::ClientEvent::DictationEnded(ended) => Some(ended.resource_id.clone()),
+            client::ClientEvent::DictationEnded(ended)
+                if !self.app.dictation_stop_pending(&ended.resource_id) =>
+            {
+                Some(ended.resource_id.clone())
+            }
             _ => None,
         };
         if matches!(event, client::ClientEvent::QueueChanged) {

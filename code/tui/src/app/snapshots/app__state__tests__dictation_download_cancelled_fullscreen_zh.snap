@@ -1,10 +1,10 @@
 ---
-source: code/tui/src/app/fullscreen/frame_tests.rs
-expression: "render(&app, 80, 20)"
+source: code/tui/src/app/state_tests.rs
+expression: render_dictation_frame(&app)
 ---
   .                                                           [— / —] [仪 表 盘 ]  
                                                                                 
-> /voice                                                                        
+> /dictate                                                                      
                                                                                 
                                                                                 
                                                                                 
@@ -17,8 +17,12 @@ expression: "render(&app, 80, 20)"
                                                                                 
                                                                                 
                                                                                 
+                                                                                
+                                                                                
+                                                                                
+                                                                  听 写 已 停 止 。   
   ────────────────────────────────────────────────────────────────────────────  
-  >                                                                             
+  > keep draft                                                                  
   ────────────────────────────────────────────────────────────────── 自 动 模 型    
                                                                                 
-  语 音  · 正 在 下 载  encoder.onnx： 2.0 MiB · ctrl+c 停 止
+  Enter 发 送   ·  shift+tab 模 式   ·  shift+↓/↑ 思 考

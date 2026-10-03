@@ -141,6 +141,13 @@ enum DictationTarget {
     Thread(ash_protocol::ThreadId),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DictationRequest {
+    Idle,
+    Starting,
+    Stopping,
+}
+
 #[derive(Debug)]
 pub(crate) struct App {
     next_panel_generation: u64,
@@ -148,7 +155,7 @@ pub(crate) struct App {
     dictation_model_progress:
         Option<ash_app_server_protocol::protocol::dictation::DictationModelStage>,
     dictation_target: Option<DictationTarget>,
-    dictation_pending: bool,
+    dictation_request: DictationRequest,
     dictation_stop_requested: bool,
     dictation_send_after_stop: bool,
     dictation_submission_ready: bool,
@@ -193,7 +200,7 @@ impl App {
             dictation_resource_id: None,
             dictation_model_progress: None,
             dictation_target: None,
-            dictation_pending: false,
+            dictation_request: DictationRequest::Idle,
             dictation_stop_requested: false,
             dictation_send_after_stop: false,
             dictation_submission_ready: false,
@@ -303,7 +310,7 @@ impl App {
             dictation_resource_id: None,
             dictation_model_progress: None,
             dictation_target: None,
-            dictation_pending: false,
+            dictation_request: DictationRequest::Idle,
             dictation_stop_requested: false,
             dictation_send_after_stop: false,
             dictation_submission_ready: false,
@@ -1046,6 +1053,15 @@ impl App {
 
     pub(crate) fn voice_status(&self) -> Option<String> {
         if self.dictation_resource_id.is_some()
+            && (self.dictation_stop_requested
+                || self.dictation_request == DictationRequest::Stopping)
+        {
+            return Some(crate::nls::localize_owned(
+                self.language(),
+                "Voice · stopping",
+            ));
+        }
+        if self.dictation_resource_id.is_some()
             && let Some(stage) = &self.dictation_model_progress
         {
             use ash_app_server_protocol::protocol::dictation::DictationModelStage;
@@ -1065,7 +1081,7 @@ impl App {
                     error: error.clone(),
                 },
             };
-            if let Some(text) = model_progress_text(self.language(), &progress) {
+            if let Some(text) = self.model_preparation_status(&progress) {
                 return Some(text);
             }
         }
@@ -1075,7 +1091,7 @@ impl App {
         } else if !self.voice_ready {
             self.voice_model_progress
                 .as_ref()
-                .and_then(|progress| model_progress_text(self.language(), progress))
+                .and_then(|progress| self.model_preparation_status(progress))
                 .unwrap_or_else(|| {
                     crate::nls::localize(self.language(), "Voice · preparing microphone")
                         .into_owned()
@@ -1089,6 +1105,25 @@ impl App {
                 self.voice_partial
             )
         };
+        Some(status)
+    }
+
+    fn model_preparation_status(&self, progress: &realtime_voice::ModelProgress) -> Option<String> {
+        let status = model_progress_text(self.language(), progress)?;
+        if let Some(key) = self.app_keymap.action_hint(
+            AppKeymapAction::InterruptOrQuit,
+            self.app_keymap_context(true),
+        ) {
+            let mut text = crate::nls::Text::template(
+                "{0} · {1} to stop",
+                vec![
+                    crate::nls::Text::literal(status),
+                    crate::nls::Text::literal(key),
+                ],
+            );
+            text.localize(self.language());
+            return Some(text.to_string());
+        }
         Some(status)
     }
 
@@ -1118,6 +1153,7 @@ impl App {
     ) {
         if self.dictation_resource_id.as_deref() == Some(resource_id)
             && !self.dictation_stop_requested
+            && self.dictation_request != DictationRequest::Stopping
         {
             self.dictation_model_progress = Some(progress);
         }
@@ -1208,8 +1244,18 @@ impl App {
         }
     }
 
+    pub(crate) fn dictation_stop_pending(&self, resource_id: &str) -> bool {
+        self.dictation_resource_id.as_deref() == Some(resource_id)
+            && self.dictation_request == DictationRequest::Stopping
+    }
+
     pub(crate) fn dictation_ended(&mut self, resource_id: &str, error: Option<String>) {
         if self.dictation_resource_id.as_deref() != Some(resource_id) {
+            return;
+        }
+        // The worker publishes Ended before the stop response. That response owns the
+        // final transcript and deferred Enter action, including slash commands.
+        if self.dictation_stop_pending(resource_id) {
             return;
         }
         if let Some(input) = self.dictation_input_mut() {
@@ -1217,7 +1263,7 @@ impl App {
         }
         self.dictation_resource_id = None;
         self.dictation_target = None;
-        self.dictation_pending = false;
+        self.dictation_request = DictationRequest::Idle;
         self.dictation_stop_requested = false;
         self.dictation_send_after_stop = false;
         self.dictation_submission_ready = false;
@@ -1247,14 +1293,17 @@ impl App {
             );
             return None;
         }
-        if self.dictation_pending {
-            if self.dictation_resource_id.is_some() {
+        match self.dictation_request {
+            DictationRequest::Starting => {
                 self.dictation_stop_requested = true;
+                return None;
             }
-            return None;
+            DictationRequest::Stopping => return None,
+            DictationRequest::Idle => {}
         }
         if let Some(resource_id) = self.dictation_resource_id.clone() {
-            self.dictation_pending = true;
+            self.dictation_request = DictationRequest::Stopping;
+            self.dictation_stop_requested = false;
             return Some(AppCommand::DictationStop { resource_id });
         }
         self.dictation_next_id += 1;
@@ -1262,7 +1311,7 @@ impl App {
         self.dictation_resource_id = Some(resource_id.clone());
         self.dictation_model_progress = None;
         self.dictation_target = Some(self.current_dictation_target());
-        self.dictation_pending = true;
+        self.dictation_request = DictationRequest::Starting;
         self.dictation_stop_requested = false;
         self.dictation_send_after_stop = false;
         self.dictation_submission_ready = false;
@@ -1274,7 +1323,7 @@ impl App {
     }
 
     pub(crate) fn take_dictation_stop_requested(&mut self) -> Option<AppCommand> {
-        if !self.dictation_stop_requested || self.dictation_pending {
+        if !self.dictation_stop_requested || self.dictation_request != DictationRequest::Idle {
             return None;
         }
         self.dictation_stop_requested = false;
@@ -2581,13 +2630,14 @@ impl App {
                 if self.dictation_resource_id.as_deref() != Some(resource_id.as_str()) {
                     return;
                 }
-                self.dictation_pending = false;
+                self.dictation_request = DictationRequest::Idle;
                 if error.is_some() {
                     if let Some(input) = self.dictation_input_mut() {
                         input.finish_dictation(None);
                     }
                     self.dictation_resource_id = None;
                     self.dictation_target = None;
+                    self.dictation_stop_requested = false;
                     self.dictation_final_received = false;
                     self.dictation_send_after_stop = false;
                 }
@@ -2640,7 +2690,7 @@ impl App {
                 }
                 self.dictation_resource_id = None;
                 self.dictation_target = None;
-                self.dictation_pending = false;
+                self.dictation_request = DictationRequest::Idle;
                 self.dictation_stop_requested = false;
                 self.dictation_send_after_stop = false;
                 self.dictation_submission_ready = send_after_stop;
@@ -3971,6 +4021,15 @@ impl App {
     }
 
     fn quit_or_interrupt(&mut self) -> Option<AppCommand> {
+        // Speech preparation owns a download before capture starts. Stop that session
+        // before interrupting a chat turn or exiting, so its worker can clean staging files.
+        if self.dictation_resource_id.is_some() {
+            self.dictation_send_after_stop = false;
+            return self.toggle_dictation();
+        }
+        if self.voice_resource_id.is_some() {
+            return self.toggle_voice();
+        }
         match &self.status {
             Status::Working
             | Status::WaitingForApproval
