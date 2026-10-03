@@ -94,6 +94,11 @@ import { createAppServerWorkspaceTransitionAdapter } from "../../platform/worksp
 import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS } from '../../platform/workspace/common/workspaceTrust.js';
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
+import { StorageMainService } from '../../platform/storage/electron-main/storageMainService.js';
+import { StorageDatabaseChannel } from '../../platform/storage/electron-main/storageIpc.js';
+import { LoggerService } from '../../platform/log/node/loggerService.js';
+import { LoggerChannel } from '../../platform/log/electron-main/logIpc.js';
+import { disposableTimeout } from '../../base/common/async.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
 import { parseLaunchArguments, parseWorkspaceLaunchArguments, parseMainProcessArgv, windowsCommandLine } from '../../platform/environment/node/argvHelper.js';
 import { LaunchMainService, parseWindowLaunch, type IStartArguments } from '../../platform/launch/electron-main/launchMainService.js';
@@ -281,6 +286,10 @@ export class AshApplication extends Disposable {
 	private jumpListUpdates: Promise<void> = Promise.resolve();
 	private workspaces: WorkspacesManagementMainService | undefined;
 	private persistentServices: PersistentServices | undefined;
+	private storageMainService: StorageMainService | undefined;
+	private readonly loggerService = this._register(new LoggerService({ logsHome: app.getPath('logs') }));
+	private readonly logService = this._register(this.loggerService.createLogger('main'));
+	private readonly maintenance = this._register(new MutableDisposable<IDisposable>());
 	private closePersistentServicesPromise: Promise<void> | undefined;
 	private quitRequested = false;
 	private quitAfterServicesClosed = false;
@@ -371,7 +380,13 @@ export class AshApplication extends Disposable {
 			clearElectronApplicationMenu();
 		}
 
+		await this.loggerService.initialize();
+		this.mainProcessIpcServer.registerChannel('logger', new LoggerChannel(this.loggerService));
+		this.logService.info('lifecycle', 'Desktop startup', { mode: this.defaultModeId, appServer: this.appServerStartupMode });
 		await this.createPersistentServices();
+		const storage = this.storageMainService = this._register(new StorageMainService(join(app.getPath('userData'), 'workbench-state.json')));
+		await storage.initialize();
+		this.mainProcessIpcServer.registerChannel('storage', new StorageDatabaseChannel(storage));
 		const launchServices = this._register(new InstantiationService());
 		launchServices.registerInstance(IStateService, this.services.state);
 		this.workspacesHistory = this._register(launchServices.createInstance(WorkspacesHistoryMainService));
@@ -408,6 +423,12 @@ export class AshApplication extends Disposable {
 			return;
 		}
 		await this.windowSessionStateHandler.saveSession();
+		this.maintenance.value = disposableTimeout(() => {
+			const protectedIds = new Set(this.getOpenWindowSessions().map(window => window.entry.workspace.id));
+			for (const entry of this.windowSessionStateHandler.readSession()?.windows ?? []) { protectedIds.add(entry.workspace.id); }
+			void storage.cleanUpStorage(protectedIds).catch(error => this.logService.error('storage', 'Failed to clean up Desktop storage', error));
+			void this.loggerService.cleanUpLogs().catch(error => this.logService.error('logs', 'Failed to clean up Desktop logs', error));
+		}, 30_000);
 		this.createTray();
 		await this.drainPendingWindowLaunches();
 		if (process.platform === 'win32') {
@@ -889,6 +910,7 @@ export class AshApplication extends Disposable {
 			workspaceRoot: !remote && role === 'workbench' && isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri.fsPath : undefined,
 			role,
 		});
+		resources.add(connection.launcher);
 		const processLauncher = remote ? this.createRemoteAppServerProcessLauncher(workspace, resources, connection.launcher) : connection.launcher;
 		const generationFile = connection.generationFile;
 		const supervisor = existing ?? new AppServerConnectionRelay({
@@ -1022,6 +1044,7 @@ export class AshApplication extends Disposable {
 			icon: this.windowIconPath,
 		}, resources);
 		const window = windowHost.win;
+		this.trackAppServerConnection(window, supervisor, resources);
 		const remoteConnections = this.createRemoteConnections(workspaces);
 		const windowStateTracking = windowsStateHandler.trackWindow(window);
 		const record: WorkbenchWindowRecord = {
@@ -1417,6 +1440,7 @@ export class AshApplication extends Disposable {
 					let sessionsRelay: AppServerConnectionRelay;
 					try {
 						sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(session.workspaceContext.getWorkspace(), runtimeResources, undefined, 'agents'));
+						this.trackAppServerConnection(window, sessionsRelay, windowDisposables);
 						// Start before routes bind the renderer so daemon selection overlaps page loading.
 						if (this.appServerStartupMode === 'required') await sessionsRelay.start();
 					} catch (error) {
@@ -1877,16 +1901,37 @@ export class AshApplication extends Disposable {
 	};
 
 	private closePersistentServices(): Promise<void> {
+		this.maintenance.clear();
 		const services = this.persistentServices;
-		this.closePersistentServicesPromise ??= services
-			? Promise.all([
-					services.state.close(),
-					services.configuration.close(),
-					services.keybindings.close(),
-					services.userKeyboardLayout.close(),
-				]).then(() => undefined)
-			: Promise.resolve();
+		this.closePersistentServicesPromise ??= Promise.all([
+			this.storageMainService?.close(),
+			...(services ? [
+				services.state.close(),
+				services.configuration.close(),
+				services.keybindings.close(),
+				services.userKeyboardLayout.close(),
+			] : []),
+		]).catch(error => {
+			this.logService.error('lifecycle', 'Failed to close persistent services', error);
+			throw error;
+		}).finally(() => this.loggerService.close()).then(() => undefined);
 		return this.closePersistentServicesPromise;
+	}
+
+	private trackAppServerConnection(window: BrowserWindow, relay: AppServerConnectionRelay, resources: DisposableStore): void {
+		let phaseStarted = performance.now();
+		let previousState = relay.state;
+		const record = (state: typeof relay.state): void => {
+			const now = performance.now();
+			const detail = { windowId: window.id, generation: relay.generation, previousState, state, phaseDurationMillis: Math.round(now - phaseStarted) };
+			if (state === 'crashed') { this.logService.error('app-server', 'Connection phase', detail, relay.diagnostics()); }
+			else { this.logService.info('app-server', 'Connection phase', detail); }
+			previousState = state;
+			phaseStarted = now;
+		};
+		// A carrier can start before its window exists. Record its current phase before tracking the handshake.
+		record(relay.state);
+		resources.add(relay.onStateChange(record));
 	}
 
 	private getOpenWindowSessions(): readonly IWindowSessionWindow<WindowSessionEntry>[] {

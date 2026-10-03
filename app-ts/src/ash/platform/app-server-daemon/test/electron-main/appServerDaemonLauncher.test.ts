@@ -33,6 +33,7 @@ test('packaged daemon connections use verified binaries and an explicit workspac
 			workspaceRoot: '/selected/workspace',
 			role: 'workbench',
 		});
+		using ownedLauncher = launcher;
 		assert.deepStrictEqual({ executable: launcher.executable, args: launcher.options.args, environment: launcher.environment, generationFile }, {
 			executable: join(resourcesPath, 'bin', 'ash-app-server-daemon'),
 			args: ['connect'],
@@ -67,6 +68,7 @@ test('Agents daemon connections identify their role without a workspace grant', 
 			sourceEnvironment: { Path: 'C:\\Windows', DISPLAY: ':0', ASH_WORKSPACE_ROOT: '/ignored' },
 			profileRoot: '/profile', electronExecutable: '/electron', role: 'agents',
 		});
+		using ownedLauncher = launcher;
 		assert.deepStrictEqual({ executable: launcher.executable, environment: launcher.environment }, {
 			executable: join(resourcesPath, 'bin', 'ash-app-server-daemon.exe'),
 			environment: { PATH: 'C:\\Windows', ASH_ELECTRON_RUN_AS_NODE_PATH: '/electron', ASH_APP_SERVER_PATH: join(resourcesPath, 'bin', 'ash-app-server.exe'), ASH_HOME: '/profile', ASH_APP_SERVER_SHA256: 'c'.repeat(64), ASH_APP_SERVER_CONNECTION_ROLE: 'agents' },
@@ -78,7 +80,7 @@ test('Agents daemon connections identify their role without a workspace grant', 
 
 test('a daemon launcher starts a connection carrier with its selected environment', () => {
 	let launched: unknown;
-	const launcher = new AppServerDaemonLauncher({
+	using launcher = new AppServerDaemonLauncher({
 		executable: '/package/ash-app-server-daemon', args: ['connect-selected'], environment: { ASH_HOME: '/profile', ASH_APP_SERVER_PATH: '/backend/old' },
 		spawnProcess: (executable, args, options) => { launched = { executable, args, options }; return {} as ReturnType<AppServerDaemonLauncher['launch']>; },
 	});

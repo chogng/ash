@@ -1,6 +1,7 @@
 //! PID-managed App Server lifecycle, control endpoint, and stdio connection carrier.
 
 mod client;
+mod development;
 mod endpoint;
 mod installation;
 mod managed;

@@ -143,9 +143,15 @@ including an unchanged selection, collects unused generations under
 older generations are removed only while holding an exclusive `.lease` lock,
 so running processes and daemon startup leases keep their complete runtime.
 After removing old generations, executable objects with no remaining runtime
-hard links are deleted. Publication and collection share `publish.lock` so
-concurrent builders cannot delete each other's pending outputs. A process that
-exits releases its lease; its old runtime is collected on the next selection.
+hard links are deleted. Publication, collection, and Desktop runtime selection
+share `publish.lock`. Desktop starts a `lease-development` command from the
+prepared package, outside the collected generation tree. That command reads
+the pointer and acquires the runtime lease before releasing the publication
+lock. Its stdin follows the Electron owner lifetime; the profile reloader keeps
+the selected and pending leases until connections adopt the next runtime.
+Thus a publication between selection and process startup cannot delete the
+selected runtime. Closing the pipe releases the lease, and an old runtime is
+collected on the next publication.
 The Python release builder calls the same `layout.py` assembler with resolved inputs. It also honors `CARGO_TARGET_DIR`,
 and retains its refusal to replace an explicit output directory.
 

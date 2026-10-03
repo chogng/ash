@@ -15,6 +15,11 @@ pub fn run_command(
         return Err("daemon executable must be an absolute path".into());
     }
     let arguments = arguments.into_iter().collect::<Vec<_>>();
+    if let [command, generation_file] = arguments.as_slice()
+        && command == "lease-development"
+    {
+        return crate::development::hold_runtime_lease(Path::new(generation_file));
+    }
     let (command, product_services) = parse(&arguments)?;
     let expected_digest = match std::env::var("ASH_APP_SERVER_SHA256") {
         Ok(expected) => Some(expected),

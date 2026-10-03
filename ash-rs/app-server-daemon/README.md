@@ -19,6 +19,7 @@
 - 发布产品通过 `ASH_APP_SERVER_SHA256` 传入后台程序的预期摘要，匹配后才启动；开发 generation 使用实际内容身份。
 - `--product-services PATH` 显式指定产品服务配置；profile 路径和随包资源发现由 `install-context` 提供。
 - 包租约覆盖启动交接，后台服务自己持有运行期间的租约。
+- Desktop 开发重载通过准备包中的 `lease-development <current.json 的绝对路径>` 取得构建租约。命令持有 `publish.lock` 完成读取与租约获取后输出单行 `{ "runtime": "绝对路径" }`，直到 stdin 关闭才释放租约；Electron 在旧连接停止和新进程启动期间持续持有这条管道。
 
 本地端点按 profile 固定，不随产品包版本、schema hash 或后端文件摘要变化。它使用 [`ash-uds`](../uds/README.md) 的私有目录和同用户校验。不同版本安装通过 initialize 校验协议主版本和必需能力；schema hash 差异只作诊断。普通 start/connect 遇到协议不兼容时连接失败；只有明确的 `ensure-selected` 或 `restart` 会替换后台进程。协议不兼容的旧客户端需要更新后才能使用新后台。控制程序不需要长期驻留；每个窗口保留自己的连接。
 

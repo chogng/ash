@@ -1,11 +1,12 @@
 import { execFile } from 'node:child_process';
-import { lstatSync, mkdirSync, readFileSync, watch } from 'node:fs';
+import { mkdirSync, readFileSync, watch } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { Disposable, DisposableMap, DisposableStore, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, type IDisposable, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { AppServerConnectionRelay } from '../../app-server/electron-main/appServerConnectionRelay.js';
 import type { AppServerDaemonLauncher } from './appServerDaemonLauncher.js';
+import type { IDevelopmentAppServerRuntime } from './developmentAppServerRuntime.js';
 
 const execFileAsync = promisify(execFile);
 type DevelopmentConnection = Pick<AppServerConnectionRelay, 'onStateChange' | 'start' | 'state' | 'stop'>;
@@ -18,6 +19,7 @@ interface DevelopmentAppServerReloaderOptions {
 	readonly debounceMs?: number;
 	readonly watchGeneration?: (generationFile: string, listener: () => void) => IDisposable;
 	readonly readGeneration?: (generationFile: string) => Promise<string | undefined>;
+	readonly acquireGeneration?: (launcher: AppServerDaemonLauncher) => Promise<IDevelopmentAppServerRuntime>;
 	readonly restartDaemon?: (launcher: AppServerDaemonLauncher) => Promise<void>;
 	readonly log?: (message: string, error?: unknown) => void;
 }
@@ -29,8 +31,10 @@ export class DevelopmentAppServerReloader extends Disposable {
 	private readonly readGeneration: (generationFile: string) => Promise<string | undefined>;
 	private readonly log: (message: string, error?: unknown) => void;
 	private timeout?: NodeJS.Timeout;
-	private pendingRuntime?: string;
-	private selectedRuntime?: string;
+	private readonly pendingRuntime = this._register(new MutableDisposable<IDevelopmentAppServerRuntime>());
+	private readonly restartingRuntime = this._register(new MutableDisposable<IDevelopmentAppServerRuntime>());
+	private readonly selectedRuntime = this._register(new MutableDisposable<IDevelopmentAppServerRuntime>());
+	private selectionPromise?: Promise<void>;
 	private drainPromise?: Promise<void>;
 	private restartBarrier?: Promise<void>;
 
@@ -51,26 +55,45 @@ export class DevelopmentAppServerReloader extends Disposable {
 		resources.add(toDisposable(() => { this.connections.delete(connection); }));
 		resources.add(launcher.setDevelopmentStartupBarrier(async () => {
 			await this.restartBarrier;
-			if (this.selectedRuntime) selectRuntime(launcher, this.selectedRuntime);
+			await this.ensureSelectedRuntime(launcher);
+			launcher.selectDevelopmentRuntime(this.selectedRuntime.value!);
 		}));
 		resources.add(supervisor.onStateChange(() => {
-			if (this.pendingRuntime && this.canRestart()) void this.ensureDrain().catch(error => this.log('[app-server] Development restart failed', error));
+			if (this.pendingRuntime.value && this.canRestart()) void this.ensureDrain().catch(error => this.log('[app-server] Development restart failed', error));
 		}));
 		return toDisposable(() => {
 			// Workspace switches reuse the relay; an older scope must not unregister its replacement.
 			if (this.registrations.get(supervisor) !== resources) return;
 			this.registrations.deleteAndDispose(supervisor);
-			if (this.pendingRuntime && this.canRestart()) void this.ensureDrain().catch(error => this.log('[app-server] Development restart failed', error));
+			if (this.pendingRuntime.value && this.canRestart()) void this.ensureDrain().catch(error => this.log('[app-server] Development restart failed', error));
 		});
 	}
 
 	async reloadNow(): Promise<void> {
 		if (this.isDisposed) return;
+		await this.selectionPromise;
 		const runtime = await this.readGeneration(this.options.generationFile);
 		if (this.isDisposed || !runtime) return;
-		if (runtime === this.selectedRuntime && !this.pendingRuntime) return;
-		this.pendingRuntime = runtime;
+		if (runtime === this.selectedRuntime.value?.runtime && !this.pendingRuntime.value) return;
+		const carrier = [...this.connections][0];
+		if (!carrier) return;
+		const lease = await (this.options.acquireGeneration?.(carrier.launcher) ?? carrier.launcher.acquireDevelopmentRuntime());
+		if (this.isDisposed || lease.runtime === this.selectedRuntime.value?.runtime) { lease.dispose(); return; }
+		this.pendingRuntime.value = lease;
 		await this.ensureDrain();
+	}
+
+	private async ensureSelectedRuntime(launcher: AppServerDaemonLauncher): Promise<void> {
+		if (this.selectedRuntime.value) return;
+		if (!this.selectionPromise) {
+			this.selectionPromise = (async () => {
+				const lease = await (this.options.acquireGeneration?.(launcher) ?? launcher.acquireDevelopmentRuntime());
+				if (this.isDisposed) { lease.dispose(); this.assertNotDisposed(); }
+				this.selectedRuntime.value = lease;
+			})();
+		}
+		try { await this.selectionPromise; } finally { this.selectionPromise = undefined; }
+		this.assertNotDisposed();
 	}
 
 	private schedule(): void {
@@ -86,13 +109,17 @@ export class DevelopmentAppServerReloader extends Disposable {
 	}
 
 	private async drain(): Promise<void> {
-		while (!this.isDisposed && this.pendingRuntime && this.canRestart()) {
-			const runtime = this.pendingRuntime;
-			this.pendingRuntime = undefined;
+		while (!this.isDisposed && this.pendingRuntime.value && this.canRestart()) {
+			const lease = this.pendingRuntime.clearAndLeak()!;
+			this.restartingRuntime.value = lease;
+			const runtime = lease.runtime;
 			const connections = [...this.connections];
 			const changed = connections.some(({ launcher }) => launcher.environment.ASH_DEV_RUNTIME_ROOT !== runtime);
-			this.selectedRuntime = runtime;
-			if (!changed) continue;
+			if (!changed) {
+				for (const { launcher } of connections) launcher.selectDevelopmentRuntime(lease);
+				this.selectedRuntime.value = this.restartingRuntime.clearAndLeak();
+				continue;
+			}
 			const running = connections.filter(({ supervisor }) => supervisor.state !== 'stopped');
 			// New windows wait until the profile daemon has adopted this generation. Release the
 			// barrier before reconnecting existing windows, whose launcher validation also awaits it.
@@ -100,10 +127,13 @@ export class DevelopmentAppServerReloader extends Disposable {
 			this.restartBarrier = new Promise<void>(resolvePromise => { release = resolvePromise; });
 			try {
 				await Promise.all(running.map(({ supervisor }) => supervisor.stop()));
-				for (const { launcher } of this.connections) selectRuntime(launcher, runtime);
+				if (this.isDisposed) return;
+				for (const { launcher } of this.connections) launcher.selectDevelopmentRuntime(lease);
+				this.selectedRuntime.value = this.restartingRuntime.clearAndLeak();
 				const carrier = [...this.connections][0];
 				if (running.length > 0 && carrier) await (this.options.restartDaemon ?? restartManagedDaemon)(carrier.launcher);
 			} finally {
+				this.restartingRuntime.clear();
 				this.restartBarrier = undefined;
 				release();
 			}
@@ -126,14 +156,10 @@ export class DevelopmentAppServerReloader extends Disposable {
 	private completeDrain(drain: Promise<void>): void {
 		if (this.drainPromise !== drain) return;
 		this.drainPromise = undefined;
-		if (this.pendingRuntime && this.canRestart() && !this.isDisposed) {
+		if (this.pendingRuntime.value && this.canRestart() && !this.isDisposed) {
 			void this.ensureDrain().catch(error => this.log('[app-server] Development restart failed', error));
 		}
 	}
-}
-
-function selectRuntime(launcher: AppServerDaemonLauncher, runtime: string): void {
-	launcher.replaceEnvironment({ ...launcher.environment, ASH_DEV_RUNTIME_ROOT: runtime, ASH_APP_SERVER_PATH: resolve(runtime, 'bin', process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server') });
 }
 
 export async function readDevelopmentAppServerGeneration(generationFile: string): Promise<string | undefined> {
@@ -161,14 +187,8 @@ function parseDevelopmentAppServerGeneration(generationFile: string, contents: s
 	const record = value as Record<string, unknown>;
 	if (Object.keys(record).sort().join(',') !== 'runtime,version' || record.version !== 3 || typeof record.runtime !== 'string' || !/^generations\/[a-f0-9]{64}$/u.test(record.runtime)) throw new Error('Development runtime generation is invalid');
 	const runtime = resolve(dirname(generationFile), record.runtime);
-	for (const directory of ['', 'bin', 'ash-path', 'ash-resources']) {
-		const metadata = lstatSync(resolve(runtime, directory));
-		if (!metadata.isDirectory() || metadata.isSymbolicLink()) throw new Error(`Invalid development runtime directory: ${directory}`);
-	}
-	for (const file of ['ash-development.json', `bin/ash-app-server${process.platform === 'win32' ? '.exe' : ''}`, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`]) {
-		const metadata = lstatSync(resolve(runtime, file));
-		if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error(`Invalid development runtime file: ${file}`);
-	}
+	// This read is only a change notification. Rust validates the files while
+	// holding publish.lock and returns a lease before they can be used.
 	return runtime;
 }
 

@@ -2,11 +2,12 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { AbstractDisposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { buildAppServerEnvironment, isAllowedAppServerEnvironmentKey, type AppServerHostPlatform } from '../../app-server/common/appServerEnvironment.js';
 import type { IAppServerProcessLauncher } from '../../app-server/electron-main/appServerProcessLauncher.js';
 import { appServerDaemonExecutablePath, appServerExecutablePath, developmentAppServerGenerationPath, packagedAppServerDaemonSha256, packagedAppServerSha256, type AppServerDaemonPackageLocation } from '../node/appServerDaemonPackage.js';
 import { readDevelopmentAppServerGenerationSync } from './developmentAppServerReloader.js';
+import { acquireDevelopmentAppServerRuntime, type IDevelopmentAppServerRuntime } from './developmentAppServerRuntime.js';
 
 interface AppServerDaemonConnectionOptions {
 	readonly packageLocation: AppServerDaemonPackageLocation;
@@ -58,7 +59,10 @@ export function createAppServerDaemonLauncher(options: AppServerDaemonConnection
 	}
 	return {
 		launcher: new AppServerDaemonLauncher({
-			executable: developmentRuntime ? join(developmentRuntime, 'bin', packageLocation.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon') : appServerDaemonExecutablePath(packageLocation),
+			// The prepared command carrier is outside the collected generation tree. It
+			// acquires a lease before any generation executable becomes a launch target.
+			executable: appServerDaemonExecutablePath(packageLocation),
+			generationFile,
 			expectedSha256: packagedAppServerDaemonSha256(packageLocation),
 			// Development selects the current build; released clients reuse the profile's selected backend.
 			args: [packageLocation.isPackaged ? 'connect' : 'connect-selected'],
@@ -82,17 +86,21 @@ interface AppServerDaemonLauncherOptions {
 	readonly fileExists?: (path: string) => boolean;
 	readonly expectedSha256?: string;
 	readonly fileSha256?: (path: string) => Promise<string>;
+	readonly generationFile?: string;
 }
 
 /** Launches the packaged daemon command used by the Desktop connection. */
-export class AppServerDaemonLauncher implements IAppServerProcessLauncher {
+export class AppServerDaemonLauncher extends AbstractDisposable implements IAppServerProcessLauncher {
 	private readonly spawnProcess: SpawnAppServerDaemon;
 	private readonly fileExists: (path: string) => boolean;
 	private readonly fileSha256: (path: string) => Promise<string>;
 	private environmentValue: Readonly<Record<string, string>>;
 	private developmentStartupBarrier?: () => Promise<void>;
+	private ownedDevelopmentRuntime?: IDevelopmentAppServerRuntime;
+	private developmentRuntime?: IDevelopmentAppServerRuntime;
 
 	constructor(readonly options: AppServerDaemonLauncherOptions) {
+		super();
 		validateExecutable(options.executable);
 		if (options.expectedSha256 !== undefined && !/^[a-f0-9]{64}$/.test(options.expectedSha256)) throw new Error("App Server executable digest must be a SHA-256 hex string");
 		this.validateEnvironment(options.environment);
@@ -107,7 +115,7 @@ export class AppServerDaemonLauncher implements IAppServerProcessLauncher {
 	}
 
 	get executable(): string {
-		const runtime = this.environmentValue.ASH_DEV_RUNTIME_ROOT;
+		const runtime = this.developmentRuntime?.runtime;
 		return runtime ? join(runtime, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon') : this.options.executable;
 	}
 
@@ -122,12 +130,33 @@ export class AppServerDaemonLauncher implements IAppServerProcessLauncher {
 	}
 
 	async validate(): Promise<void> {
-		await this.developmentStartupBarrier?.();
+		this.assertNotDisposed();
+		if (this.developmentStartupBarrier) {
+			await this.developmentStartupBarrier();
+		} else if (this.options.generationFile && !this.developmentRuntime) {
+			const lease = await this.acquireDevelopmentRuntime();
+			if (this.isDisposed) { lease.dispose(); this.assertNotDisposed(); }
+			this.ownedDevelopmentRuntime = lease;
+			this.selectDevelopmentRuntime(lease);
+		}
+		this.developmentRuntime?.assertActive();
 		if (!this.fileExists(this.executable)) throw new Error(`Packaged Ash binary is missing: ${this.executable}`);
 		if (this.options.expectedSha256 !== undefined) {
 			const actual = await this.fileSha256(this.executable);
 			if (actual !== this.options.expectedSha256) throw new Error(`Packaged Ash binary failed integrity validation: ${this.executable}`);
 		}
+	}
+
+	acquireDevelopmentRuntime(): Promise<IDevelopmentAppServerRuntime> {
+		if (!this.options.generationFile) throw new Error('Development generation path is required');
+		return acquireDevelopmentAppServerRuntime(this.options.executable, this.options.generationFile, this.environmentValue);
+	}
+
+	/** The caller owns the lease and keeps it until every connection adopts its replacement. */
+	selectDevelopmentRuntime(lease: IDevelopmentAppServerRuntime): void {
+		lease.assertActive();
+		this.developmentRuntime = lease;
+		this.replaceEnvironment({ ...this.environmentValue, ASH_DEV_RUNTIME_ROOT: lease.runtime, ASH_APP_SERVER_PATH: join(lease.runtime, 'bin', process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server') });
 	}
 
 	/** Gates connection startup while the profile-wide development daemon is restarting. */
@@ -137,7 +166,13 @@ export class AppServerDaemonLauncher implements IAppServerProcessLauncher {
 	}
 
 	launch(): ChildProcessWithoutNullStreams {
+		this.assertNotDisposed();
+		this.developmentRuntime?.assertActive();
 		return this.spawnProcess(this.executable, this.options.args, { environment: this.environmentValue });
+	}
+
+	protected override disposeCore(): void {
+		this.ownedDevelopmentRuntime?.dispose();
 	}
 
 	private validateEnvironment(environment: Readonly<Record<string, string>>): void {
