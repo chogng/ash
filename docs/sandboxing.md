@@ -34,7 +34,7 @@ flowchart TD
 | App Server / Hook / 独立服务 | 提供权限要求，通过 `LocalSandbox` 取得统一后端；不自行注册平台候选或判断系统版本 |
 
 后端 crate 依赖统一契约，统一契约不依赖 MXC 或 Codex。平台 crate 用于能力和依赖隔离，不按转发层数拆 crate。`windows-sandbox` 当前还直接使用固定 MXC 版本的 `wxc_common` 策略类型与 ACL 日志；这项共享依赖保留在后端内部，其变更必须同时验证两个消费者，不能宣称两个后端在实现依赖上完全独立。
-授权语义见 [permissions.md](permissions.md)，审查语义见 [auto-review.md](auto-review.md)。
+授权语义见 [permissions.md](permissions.md)，审查语义见 [guardian.md](guardian.md)。
 
 ## 选择与执行
 

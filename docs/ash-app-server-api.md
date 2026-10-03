@@ -157,7 +157,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```json
 {
   "serverInfo": { "name": "ash-app-server", "version": "0.1.0" },
-  "protocolVersion": { "major": 7, "revision": 8 },
+  "protocolVersion": { "major": 7, "revision": 9 },
   "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,
@@ -165,6 +165,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "turns": true,
     "projects": true,
     "memories": true,
+    "approvalEnvironment": true,
     "resources": true,
     "fileSystem": true,
     "directorySearch": true,
@@ -281,6 +282,10 @@ Desktop 当前实现和 Playwright 后续边界见
 | `session/thread/subscribe` | Session + Thread + connection | Thread 与正文快照，加上 `afterSequence` 之后的 durable gap |
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
 | `config/read` | config | 读取配置 |
+| `approval/environment/read` | Guardian Environment | 按实际 Thread 或已授权目录读取资料，返回实际根目录和当前来源状态 |
+| `approval/environment/scan` | Guardian Environment | 按范围生成待确认草稿；`operationId` 绑定取消；可使用当前任务模型整理，模型没有工具 |
+| `approval/environment/save` | Guardian Environment + State | 带 `commandId`、`expectedRevision` 和可选 `draftId` 保存用户选中的条目；版本冲突不覆盖 |
+| `approval/environment/cancel` | 当前 connection | 取消所属 `operationId` 的扫描；断开 connection 同样取消 |
 | `network/read` | configured network dependencies | 返回配置 revision、HTTP 兼容模式，以及服务域名、用途、端口和实际代理路线；不发送网络请求 |
 | `network/http/configure` | User Config + shared HTTP transport | 带 revision 保存 HTTP 兼容模式，后续请求使用所选协议 |
 | `network/diagnostics/run` | configured network dependencies + Account | 使用共享 HTTP 客户端检查连通性，并单独查询已就绪账号额度；只返回安全的状态与错误分类 |
@@ -1364,3 +1369,23 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 Frontend 的公共契约为 `platform/assets/common/assetService.ts`，`browser/appServerAssetService.ts` 机械转换生成协议并处理上传释放。所有领域适配器复用所在 Renderer 的唯一 protocol client 与既有 Main 透明 relay，不增加后端进程或连接。Design 导入使用该服务，采用后端版本身份并读取入库内容；文档模型、裁切、历史、工作副本及文件保存冲突留在前端。普通文件图片预览继续使用前端文件服务与浏览器显示资源。
 
 错误通过现有结构化 `data.kind` 区分 `AssetsUnavailable`、`AssetInvalid`、`AssetInvalidImage`、`AssetNotFound`、`AssetConflict`、`AssetCapacity` 和 `AssetOperationFailed`。不按错误消息字符串判断状态。
+
+## 审核环境契约
+
+`approvalEnvironment` capability 仅向产品或浏览器连接提供。普通连接不能扫描、读取或修改用户确认的
+审核资料，initialize 参数不能提升连接身份。领域定义位于 `ash-rs/guardian-environment`，State 实现
+持久化和命令回执；App Server 只解析目录权限、路由模型调用和编解码。
+
+`scope` 为 `{ "type": "thread", "threadId": "…" }` 或
+`{ "type": "directory", "root": "/absolute/path" }`。Thread 使用它实际执行的工作目录，
+Directory 必须已被当前环境授权。读取结果为 `{ root, profile }`，扫描结果为 `{ root, draft }`。
+草稿不参与审核；保存只接受后端已记录的来源 ID，客户端不能提供来源路径或校验值。
+草稿保留 15 分钟，成功保存后释放；重新扫描会取代同一项目的旧草稿。
+来源变化、草稿失效、保存版本过期或命令 ID 被用于不同内容时返回
+`ApprovalEnvironmentConflict`。失败不会自动重放保存，也不会切换整理模型。
+相同命令 ID 与相同请求可读取原提交回执，来源后续变化不会使该回执重新接受新资料。
+
+扫描选项为 `recentCommands`、`shellHistory`、`otherRepositories` 和 `summarizeWithModel`；
+近期命令只适用于 Thread。三个扩展来源默认关闭，整理选项在界面默认开启。历史观察不能确认
+目标归属；`target` 是用户确认的精确归属说明，仍不授予操作权限。条目含来源种类、版本、接受状态
+和当前状态；详细范围与信任规则见 [准备项目审核环境](guardian.md#准备项目审核环境)。

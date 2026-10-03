@@ -105,7 +105,7 @@ Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不
 
 `approvalReviewModel` 可独立指定 `connection`、`model` 和 `reasoningEffort`。自动选择时，ChatGPT 订阅
 使用 `codex-auto-review`，OpenAI API 使用 `gpt-6-luna`，均使用 `low`；不继承主模型的推理强度。
-其他提供方保留自己的审核默认值。配置和连接约束见 [审核模型选择](auto-review.md#审核模型选择)。
+其他提供方保留自己的审核默认值。配置和连接约束见 [审核模型选择](guardian.md#审核模型选择)。
 
 保存供应商配置时，若 `agent.model` 尚未设置，Config 从内置模型目录中选取该供应商
 首个 `ProviderApi` 模型，并与供应商配置一起持久化。已有选择保持不变，包括新增其他供应商时。

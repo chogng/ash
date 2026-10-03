@@ -2179,6 +2179,9 @@
         "MemoryDiagnosticsStopped",
         "MemoryDiagnosticsStale",
         "MemoryUnavailable",
+        "ApprovalEnvironmentUnavailable",
+        "ApprovalEnvironmentConflict",
+        "ApprovalEnvironmentOperationFailed",
         "MemoryNotFound",
         "MemoryAlreadyExists",
         "MemoryConflict",
@@ -2338,6 +2341,163 @@
         "endpoint"
       ],
       "type": "object"
+    },
+    "ApprovalEnvironmentCancelParams": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId"
+      ],
+      "type": "object"
+    },
+    "ApprovalEnvironmentReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/ApprovalEnvironmentScope"
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "type": "object"
+    },
+    "ApprovalEnvironmentReadResult": {
+      "properties": {
+        "profile": {
+          "$ref": "#/$defs/EnvironmentProfile"
+        },
+        "root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "profile"
+      ],
+      "type": "object"
+    },
+    "ApprovalEnvironmentSaveParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "type": "string"
+        },
+        "draftId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/EntryInput"
+          },
+          "type": "array"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope": {
+          "$ref": "#/$defs/ApprovalEnvironmentScope"
+        }
+      },
+      "required": [
+        "scope",
+        "commandId",
+        "expectedRevision",
+        "entries"
+      ],
+      "type": "object"
+    },
+    "ApprovalEnvironmentScanParams": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/$defs/ScanOptions"
+        },
+        "scope": {
+          "$ref": "#/$defs/ApprovalEnvironmentScope"
+        }
+      },
+      "required": [
+        "scope",
+        "operationId",
+        "options"
+      ],
+      "type": "object"
+    },
+    "ApprovalEnvironmentScanResult": {
+      "properties": {
+        "draft": {
+          "$ref": "#/$defs/EnvironmentDraft"
+        },
+        "root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "draft"
+      ],
+      "type": "object"
+    },
+    "ApprovalEnvironmentScope": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "type": {
+              "const": "directory",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "root"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "thread",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "ApprovalMode": {
       "enum": [
@@ -6103,6 +6263,70 @@
             },
             "params": {
               "$ref": "#/$defs/SessionThreadUnsubscribeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "approval/environment/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ApprovalEnvironmentReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "approval/environment/scan",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ApprovalEnvironmentScanParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "approval/environment/save",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ApprovalEnvironmentSaveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "approval/environment/cancel",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ApprovalEnvironmentCancelParams"
             }
           },
           "required": [
@@ -11495,6 +11719,70 @@
           "properties": {
             "method": {
               "const": "session/thread/unsubscribe",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "approval/environment/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ApprovalEnvironmentReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "approval/environment/scan",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ApprovalEnvironmentScanResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "approval/environment/save",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ApprovalEnvironmentReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "approval/environment/cancel",
               "type": "string"
             },
             "result": {
@@ -19175,6 +19463,44 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "EntryInput": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/EntryKind"
+        },
+        "sourceId": {
+          "description": "None creates a user-authored entry. Clients cannot supply source labels or revisions.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "content"
+      ],
+      "type": "object"
+    },
+    "EntryKind": {
+      "enum": [
+        "fact",
+        "target"
+      ],
+      "type": "string"
+    },
     "EnvDirDto": {
       "properties": {
         "id": {
@@ -19247,6 +19573,113 @@
     "EnvId": {
       "description": "Stable host-selected identity for one execution and filesystem environment.",
       "type": "string"
+    },
+    "EnvironmentDraft": {
+      "properties": {
+        "baseRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/EnvironmentEntry"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "baseRevision",
+        "entries"
+      ],
+      "type": "object"
+    },
+    "EnvironmentEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "description": "Approval accepts this description as background, not as authorization for an action.",
+          "type": "boolean"
+        },
+        "content": {
+          "type": "string"
+        },
+        "current": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/EntryKind"
+        },
+        "source": {
+          "$ref": "#/$defs/EnvironmentSource"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "content",
+        "source",
+        "accepted",
+        "current"
+      ],
+      "type": "object"
+    },
+    "EnvironmentProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/EnvironmentEntry"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision",
+        "entries"
+      ],
+      "type": "object"
+    },
+    "EnvironmentSource": {
+      "additionalProperties": false,
+      "description": "A source identifies the exact observation, never a permission to read its parent directory.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "label": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "label",
+        "revision"
+      ],
+      "type": "object"
     },
     "ExecPolicyActionKindDto": {
       "description": "Coarse action category available to deterministic execution-policy selectors.",
@@ -33738,6 +34171,30 @@
       ],
       "type": "object"
     },
+    "ScanOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "otherRepositories": {
+          "type": "boolean"
+        },
+        "recentCommands": {
+          "type": "boolean"
+        },
+        "shellHistory": {
+          "type": "boolean"
+        },
+        "summarizeWithModel": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "recentCommands",
+        "shellHistory",
+        "otherRepositories",
+        "summarizeWithModel"
+      ],
+      "type": "object"
+    },
     "SchemaHash": {
       "type": "string"
     },
@@ -33798,6 +34255,9 @@
     "ServerCapabilities": {
       "properties": {
         "agentInteractions": {
+          "type": "boolean"
+        },
+        "approvalEnvironment": {
           "type": "boolean"
         },
         "attachments": {
@@ -33887,6 +34347,7 @@
         "turns",
         "projects",
         "memories",
+        "approvalEnvironment",
         "resources",
         "attachments",
         "fileSystem",
@@ -36615,6 +37076,16 @@
         "argumentMode"
       ],
       "type": "object"
+    },
+    "SourceKind": {
+      "enum": [
+        "projectFile",
+        "recentCommand",
+        "shellHistory",
+        "otherRepository",
+        "manual"
+      ],
+      "type": "string"
     },
     "StableTurnError": {
       "properties": {

@@ -101,6 +101,8 @@ enum EvalEvidenceKind {
     PriorToolResult,
     PreparedAction,
     WorkspaceFile,
+    EnvironmentFact,
+    EnvironmentTarget,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -464,6 +466,8 @@ impl EvalEvidenceKind {
             Self::PriorToolResult => ReviewEvidenceKind::PriorToolResult,
             Self::PreparedAction => ReviewEvidenceKind::PreparedAction,
             Self::WorkspaceFile => ReviewEvidenceKind::DirectoryFile,
+            Self::EnvironmentFact => ReviewEvidenceKind::EnvironmentFact,
+            Self::EnvironmentTarget => ReviewEvidenceKind::EnvironmentTarget,
         }
     }
 }

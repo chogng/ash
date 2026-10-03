@@ -78,6 +78,40 @@ test('Hooks use the shared protocol, retain disabled declarations, and refresh o
 	assert.equal(connected.api.hooks.userConfigurationEditor, undefined);
 });
 
+test('review environment adapter preserves scope, provenance, cancellation, and revision conflicts', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const environment = connected.api.approvalEnvironment;
+	assert.ok(environment);
+	const scope = { type: 'thread' as const, threadId: 'own-thread' };
+	const entry = { id: 'entry-1', kind: 'fact' as const, title: 'Build', content: 'pnpm build', source: { id: 'source-1', kind: 'projectFile' as const, label: 'package.json', revision: 'sha256-version' }, accepted: false, current: true };
+	const read = environment.read(scope);
+	assert.deepEqual(transport.requests.at(-1)?.params, { scope });
+	transport.respondAt(-1, { root: '/own-worktree', profile: { revision: 3, entries: [entry] } });
+	assert.deepEqual(await read, { root: '/own-worktree', revision: 3, entries: [entry] });
+	const options = { recentCommands: false, shellHistory: false, otherRepositories: false, summarizeWithModel: true };
+	const model = { provider: 'openai', model: 'task-model' };
+	const scan = environment.scan(scope, 'scan-id', options, model);
+	assert.equal(transport.requests.at(-1)?.method, 'approval/environment/scan');
+	assert.deepEqual(transport.requests.at(-1)?.params, { scope, operationId: 'scan-id', options, model });
+	transport.respondAt(-1, { root: '/own-worktree', draft: { id: 'scan-id', baseRevision: 3, entries: [entry] } });
+	assert.deepEqual(await scan, { root: '/own-worktree', id: 'scan-id', baseRevision: 3, entries: [entry] });
+	const cancel = environment.cancel('scan-id');
+	assert.deepEqual(transport.requests.at(-1)?.params, { operationId: 'scan-id' });
+	transport.respondAt(-1, null);
+	await cancel;
+	const input = { id: entry.id, kind: entry.kind, title: entry.title, content: entry.content, sourceId: entry.source.id };
+	const save = environment.save(scope, 'save-id', 3, [input], 'scan-id');
+	assert.deepEqual(transport.requests.at(-1)?.params, { scope, commandId: 'save-id', expectedRevision: 3, entries: [input], draftId: 'scan-id' });
+	transport.rejectAt(-1, { code: -32091, message: 'ApprovalEnvironmentConflict', data: { kind: 'ApprovalEnvironmentConflict' } });
+	await assert.rejects(save, /Rescan before saving/);
+	const disabledTransport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, approvalEnvironment: false } }));
+	const disabled = await connectWebRendererApi(disabledTransport, connectorHostServices);
+	using disabledCleanup = toDisposable(() => disabled.dispose());
+	assert.equal(disabled.api.approvalEnvironment, undefined);
+});
+
 class FakeTransport implements AppServerTransport {
 	constructor(private readonly initialize: (value: InitializeResult) => unknown = value => value, private readonly initializeDelayMs = 0) {}
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
@@ -122,7 +156,7 @@ class FakeTransport implements AppServerTransport {
 					threads: true,
 					turns: true,
 					projects: true,
-					memories: true,
+					memories: true, approvalEnvironment: true,
 					resources: true,
 					attachments: true,
 					fileSystem: true,

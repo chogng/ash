@@ -29,7 +29,7 @@ class Transport implements AppServerTransport {
 				threads: true,
 				turns: true,
 				projects: true,
-				memories: true,
+				memories: true, approvalEnvironment: true,
 				resources: true,
 				attachments: true,
 				fileSystem: true,

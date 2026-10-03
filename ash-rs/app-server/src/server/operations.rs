@@ -261,6 +261,11 @@ impl AppServer {
             turns: true,
             projects: self.projects.is_some(),
             memories: self.memories.is_some(),
+            approval_environment: self.approval_environment.is_some()
+                && matches!(
+                    connection.authority,
+                    super::ConnectionAuthority::ProductHost | super::ConnectionAuthority::Browser
+                ),
             resources: true,
             attachments: true,
             file_system,

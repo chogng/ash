@@ -264,7 +264,7 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 Sandbox backend 的内部调度、平台 crate 边界和 fail-closed 规则见
 [`sandboxing.md`](sandboxing.md)。这里的 sandbox manager 不是 Core `ToolScheduler`。
 Action classifier、exact grant 与最终 execution decision 见
-[`auto-review.md`](auto-review.md)。
+[`guardian.md`](../guardian.md)。
 
 禁止：
 

@@ -58,6 +58,7 @@ pub(super) struct ToolScheduler {
     threads: Arc<ThreadController>,
     tools: Arc<dyn ToolService>,
     policy: Arc<dyn ActionPolicyService>,
+    review_environment: Option<Arc<dyn core_api::ReviewEnvironmentService>>,
     hooks: Arc<dyn HookService>,
     updates: Arc<dyn ThreadUpdateSink>,
     code_mode: Option<CodeModeBroker>,
@@ -75,6 +76,7 @@ impl ToolScheduler {
             threads,
             tools,
             policy,
+            review_environment: None,
             hooks: Arc::new(NoHooks),
             updates: Arc::new(NoThreadUpdates),
             code_mode: None,
@@ -88,6 +90,14 @@ impl ToolScheduler {
         provider: Arc<dyn crate::HarnessContextProvider>,
     ) -> Self {
         self.harness_context = Some(provider);
+        self
+    }
+
+    pub(super) fn with_review_environment(
+        mut self,
+        environment: Option<Arc<dyn core_api::ReviewEnvironmentService>>,
+    ) -> Self {
+        self.review_environment = environment;
         self
     }
 
@@ -276,6 +286,7 @@ impl ToolScheduler {
                     Arc::clone(&self.threads),
                     Arc::clone(&self.tools),
                     Arc::clone(&self.policy),
+                    self.review_environment.clone(),
                     Arc::clone(&self.updates),
                     Arc::clone(&self.execution_observer),
                 )
@@ -368,6 +379,7 @@ impl ToolScheduler {
                                 Arc::clone(&self.threads),
                                 Arc::clone(&self.tools),
                                 Arc::clone(&self.policy),
+                                self.review_environment.clone(),
                                 Arc::clone(&self.updates),
                                 Arc::clone(&self.execution_observer),
                             )
@@ -636,7 +648,7 @@ impl ToolScheduler {
             .code_mode
             .as_ref()
             .filter(|broker| broker.owns_control_binding(call, call_binding(snapshot, item_id)));
-        let (request, evidence) = match control_broker {
+        let (request, mut evidence) = match control_broker {
             Some(broker) => (broker.prepare_control(call)?, Vec::new()),
             None => {
                 let facts = ToolExecutionFacts::for_turn(
@@ -660,6 +672,9 @@ impl ToolScheduler {
             .ok_or_else(|| CoreError::Journal("tool review has no owning Turn".into()))?
             .mode;
         let request = constrain_analysis_review(request, mode)?;
+        if let Some(environment) = &self.review_environment {
+            evidence.extend(environment.evidence(&snapshot.thread_id, &request)?);
+        }
         attach_review_context(request, &self.threads, snapshot, item_id, evidence)
     }
 
@@ -733,6 +748,7 @@ impl ToolScheduler {
             Arc::clone(&self.threads),
             Arc::clone(&self.tools),
             Arc::clone(&self.policy),
+            self.review_environment.clone(),
             Arc::clone(&self.updates),
             Arc::clone(&self.execution_observer),
         );

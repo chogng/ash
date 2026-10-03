@@ -60,6 +60,7 @@ pub use model::ModelSelection;
 pub use model::ModelService;
 pub use model::ModelStreamSink;
 pub use policy::ActionPolicyService;
+pub use policy::ReviewEnvironmentService;
 pub use runtime::AcceptedCommand;
 pub use runtime::AgentRuntime;
 pub use runtime::CompactThreadRequest;

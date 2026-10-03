@@ -5,6 +5,8 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../base/comm
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { localize, onDidChangeNls } from '../../../../nls.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IApprovalEnvironmentService } from '../../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -24,6 +26,7 @@ export class NewChatPermissionPicker extends Disposable {
 		@IContextViewService private readonly views: IContextViewService,
 		@ICommandService private readonly commands: ICommandService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IInstantiationService private readonly services: IInstantiationService,
 	) {
 		super();
 		this._register(onDidChangeNls(() => { if (this.visible) this.views.hide(); }));
@@ -100,6 +103,17 @@ export class NewChatPermissionPicker extends Disposable {
 		this.listeners.add(addDisposableListener(settings, 'click', () => activate('sessions.chat.permission.reviewModel')));
 		menu.append(settings);
 		buttons.push(settings);
+		if (this.services.getOptional(IApprovalEnvironmentService)) {
+			const environment = h(menu.ownerDocument, 'button');
+			environment.type = 'button';
+			environment.tabIndex = -1;
+			environment.className = 'ash-sessions-permission-settings';
+			environment.setAttribute('role', 'menuitem');
+			environment.textContent = localize('approvalEnvironment.title', 'Prepare review environment…');
+			this.listeners.add(addDisposableListener(environment, 'click', () => activate('sessions.chat.permission.environment')));
+			menu.append(environment);
+			buttons.push(environment);
+		}
 		this.listeners.add(addDisposableListener(menu, 'keydown', event => {
 			if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
 			const index = buttons.indexOf(menu.ownerDocument.activeElement as HTMLButtonElement);

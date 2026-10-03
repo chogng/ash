@@ -1,4 +1,5 @@
 import { IAssetService, type AssetVersion } from '../../platform/assets/common/assetService.js';
+import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { ActionWidgetService, IActionWidgetService } from '../../platform/actionWidget/browser/actionWidget.js';
 import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
 import { IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
@@ -28,6 +29,7 @@ import { DictationOnboardingService, IDictationOnboardingService } from '../../w
 import "../../workbench/browser/style.js";
 import "./media/workbench.css";
 import "./actions/sessionsChatActions.js";
+import "./actions/approvalEnvironmentActions.js";
 import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
 import '../../workbench/browser/parts/notifications/notificationsCommands.js';
@@ -264,6 +266,7 @@ export class Workbench extends Disposable {
 		const configurationService = this.configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi, initialSnapshot: options.initialConfigurationSnapshot }));
 		const services = this._register(new InstantiationService());
 		services.registerInstance(IAssetService, options.api.assets);
+		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);
 		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 		services.registerSingleton(IDictationOnboardingService, () => services.createInstance(DictationOnboardingService));

@@ -2,8 +2,8 @@
 
 > 本 README 负责最终 action authority 的 crate 契约。确定性规则语言、layer merge 和 semantic
 > revision 由 [`ash-execpolicy`](../execpolicy/README.md) 负责；端到端权限语义见
-> [`docs/permissions.md`](../../docs/permissions.md)，Auto Review 见
-> [`docs/auto-review.md`](../../docs/auto-review.md)。
+> [`docs/permissions.md`](../../docs/permissions.md)，Guardian 审核系统见
+> [`docs/guardian.md`](../../docs/guardian.md)。
 
 `ash-action-policy` 是执行前最终决策 authority。它消费 immutable `ExecPolicySnapshot`、已完整
 materialize 的 action、sandbox compatibility、exact one-action grants 和 advisory classifier 输出，
@@ -51,7 +51,7 @@ ActionPolicyEngine::decide
 → initial sandbox-supported action → RunSandboxed
 → ActionClassifier::classify
 → validate assessment digest/revision/capability constraints
-→ Auto Review risk/authorization matrix → grant / revise / ask / block
+→ automatic review risk/authorization matrix → grant / revise / ask / block
 ```
 
 这一顺序是安全 contract：deterministic rule 先于历史 exact grant，sandbox fast path 先于模型审查；
@@ -67,7 +67,7 @@ classifier failure 按显式 `ReviewFailurePolicy` fail closed 或转人工。
 | `ensure_revision` | request/engine safe-point equality | mismatch 被降级为普通 Tool failure |
 | `UserAllowlist::matching_grant` | exact digest + capabilities + revision lookup | Tool 名称或 command prefix 被当成 historical grant |
 | `apply_assessment` | classifier identity 与 capability constraints 复检 | 约束只存在于某个 classifier implementation |
-| `automatic_approval_decision` | Auto Review risk/authorization gate | classifier 或外层直接构造 `AutoReviewGrant` |
+| `automatic_approval_decision` | automatic review risk/authorization gate | classifier 或外层直接构造 `AutoReviewGrant` |
 | `DeterministicPolicyGrant::matches` | Core execution-time recheck | durable authority 不再绑定 exact action/revision |
 
 ## 失败语义
@@ -92,5 +92,5 @@ bazel test //ash-rs/action-policy:action-policy-unit-tests
 
 测试覆盖 deterministic effect mapping、exact grant binding、sandbox denial、revision mismatch、
 classifier constraints、风险矩阵和失败策略。新增 effect/decision/capability 时必须同步这些组件：
-包括 `ash-execpolicy`、Core scheduler/durable authority、App Server materializer、Auto Review schema、
+包括 `ash-execpolicy`、Core scheduler/durable authority、App Server materializer、Guardian 审查 schema、
 protocol contract tests 和权限文档。

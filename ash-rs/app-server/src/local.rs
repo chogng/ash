@@ -1758,6 +1758,11 @@ pub fn open_app_server_with_codebase_providers(
     server = server
         .with_execution_environments(options.execution_environments)
         .map_err(OpenAppServerError)?;
+    // Install the background provider before the local host shares the environment runtime.
+    // Later tool-service composition retains it in the executor's immutable dependencies.
+    server = server
+        .with_local_approval_environment(&database_path)
+        .map_err(OpenAppServerError)?;
     server = server
         .with_env_config(&runtime_config)
         .with_local_env_host(mcp, DirGrantPolicy::UserConfig(Arc::clone(&config)))

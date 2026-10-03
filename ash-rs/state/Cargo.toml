@@ -20,6 +20,7 @@ async-utils = { package = "ash-async-utils", path = "../async-utils" }
 agent-graph-store = { workspace = true }
 message-history = { workspace = true }
 memories = { workspace = true }
+guardian-environment = { workspace = true }
 github = { workspace = true }
 fs2 = { workspace = true }
 rusqlite = { workspace = true }

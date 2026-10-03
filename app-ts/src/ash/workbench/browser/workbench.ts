@@ -23,6 +23,7 @@ import { FontMeasurements } from '../../editor/browser/config/fontMeasurements.j
 import { createBareFontInfoFromRawSettings } from '../../editor/common/config/fontInfoFromSettings.js';
 import { type IEditorOptions } from '../../editor/common/config/editorOptions.js';
 import { IMarkerDecorationsService } from '../../editor/common/services/markerDecorations.js';
+import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IMemoriesService } from '../../platform/memories/common/memoriesService.js';
 import { IMemoryDiagnosticsService } from '../../platform/memory/common/memoryDiagnosticsService.js';
 import "./style.js";
@@ -484,6 +485,7 @@ export class Workbench extends Disposable {
 		if (api.debugAdapter) services.registerInstance(IDebugAdapterProcessService, api.debugAdapter);
 		services.registerInstance(IAssetService, api.assets);
 		services.registerInstance(ITestExecutionService, api.testing);
+		if (api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, api.approvalEnvironment); }
 		if (api.memories) { services.registerInstance(IMemoriesService, api.memories); }
 		if (api.memoryDiagnostics) { services.registerInstance(IMemoryDiagnosticsService, api.memoryDiagnostics); }
 		if (api.calls) { services.registerInstance(ICallService, api.calls); }

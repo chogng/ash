@@ -10,6 +10,8 @@ mod history;
 mod handoff;
 #[path = "sqlite/memories.rs"]
 mod memories;
+#[path = "sqlite/approval_environment.rs"]
+mod approval_environment;
 #[path = "sqlite/projects.rs"]
 mod projects;
 #[path = "sqlite/teams.rs"]
@@ -19,6 +21,7 @@ mod thread;
 
 pub use git_turn_changes::{SqliteTurnChangeStore, TurnChangeCommandOutcome};
 pub use memories::SqliteMemoryStore;
+pub use approval_environment::SqliteEnvironmentStore;
 pub use projects::SqliteProjectStore;
 pub use teams::SqliteTeamStore;
 pub use thread::SqliteThreadStore;

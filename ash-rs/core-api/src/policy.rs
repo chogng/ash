@@ -3,6 +3,16 @@ use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ExecutionDecision;
 use ash_async_utils::CancellationToken;
 
+/// Supplies project-bound background after action preparation. Implementations must resolve the
+/// exact Thread's directory authority, recheck provenance, and never turn observations into grants.
+pub trait ReviewEnvironmentService: Send + Sync {
+    fn evidence(
+        &self,
+        thread: &ash_protocol::ThreadId,
+        request: &ActionReviewRequest,
+    ) -> Result<Vec<ash_action_policy::ReviewEvidence>, CoreError>;
+}
+
 /// Evaluates one fully resolved action without executing it or mutating durable Thread state.
 ///
 /// Implementations own the authoritative policy decision. Core checks the Turn's frozen revision

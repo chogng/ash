@@ -4,7 +4,7 @@
 提供的 immutable rule layers 组合成一个带 semantic revision 的 snapshot，并对 host 已完整
 materialize 的 action subject 做纯求值。
 
-它不执行 Tool、不选择 sandbox backend、不调用 Auto Review、不显示 approval UI，也不签发
+它不执行 Tool、不选择 sandbox backend、不调用 Guardian、不显示 approval UI，也不签发
 execution grant。最终执行决定和 exact action binding 属于
 [`ash-action-policy`](../action-policy/README.md)；跨 crate 权限语义由
 [`docs/permissions.md`](../../docs/permissions.md) 统一说明。

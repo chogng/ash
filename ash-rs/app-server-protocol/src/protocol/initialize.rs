@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 8;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 9;
 // Version 12 uses manual/auto permission IDs. Clients must reject older contracts before
 // sending a Turn, rather than silently selecting an unintended permission mode.
 pub const APP_SERVER_CAPABILITY_VERSION: u32 = 12;
@@ -187,6 +187,7 @@ pub struct ServerCapabilities {
     pub turns: bool,
     pub projects: bool,
     pub memories: bool,
+    pub approval_environment: bool,
     pub resources: bool,
     pub attachments: bool,
     pub file_system: bool,
@@ -220,6 +221,7 @@ impl ServerCapabilities {
             "turns" => Some(self.turns),
             "projects" => Some(self.projects),
             "memories" => Some(self.memories),
+            "approvalEnvironment" => Some(self.approval_environment),
             "resources" => Some(self.resources),
             "attachments" => Some(self.attachments),
             "fileSystem" => Some(self.file_system),
@@ -251,6 +253,7 @@ impl ServerCapabilities {
             ("turns", self.turns),
             ("projects", self.projects),
             ("memories", self.memories),
+            ("approvalEnvironment", self.approval_environment),
             ("resources", self.resources),
             ("attachments", self.attachments),
             ("fileSystem", self.file_system),

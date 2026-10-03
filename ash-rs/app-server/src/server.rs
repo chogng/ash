@@ -67,6 +67,7 @@ mod agent_environment_source;
 #[cfg(test)]
 mod agent_runtime_tests;
 mod agent_selection;
+mod approval_environment_operations;
 mod asset_operations;
 #[cfg(test)]
 mod asset_operations_tests;
@@ -210,6 +211,7 @@ pub struct AppServer {
     pub(super) assets: Option<Arc<assets::Assets>>,
     memory_diagnostics: ash_memory_diagnostics::MemoryDiagnostics,
     memories: Option<Arc<memories::Memories>>,
+    approval_environment: Option<Arc<guardian_environment::Environment>>,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
     calls: call_runtime::Calls,
     dictation: realtime_voice::DictationManager,
@@ -528,6 +530,7 @@ impl AppServer {
             assets: None,
             memory_diagnostics: ash_memory_diagnostics::MemoryDiagnostics::default(),
             memories: None,
+            approval_environment: None,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
             calls: call_runtime::Calls::default(),
             dictation: realtime_voice::DictationManager::default(),
@@ -2410,6 +2413,18 @@ impl AppServer {
             }
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
+            Some(ClientMethod::ApprovalEnvironmentRead) => {
+                self.approval_environment_read(connection, &request.params)
+            }
+            Some(ClientMethod::ApprovalEnvironmentScan) => {
+                self.approval_environment_scan(connection, &request.params, cancellation)
+            }
+            Some(ClientMethod::ApprovalEnvironmentSave) => {
+                self.approval_environment_save(connection, &request.params)
+            }
+            Some(ClientMethod::ApprovalEnvironmentCancel) => {
+                self.approval_environment_cancel(connection, &request.params)
+            }
             Some(ClientMethod::AccountRead) => self.account_read(),
             Some(ClientMethod::AccountRateLimitsRead) => {
                 self.account_rate_limits_read(&request.params, cancellation)

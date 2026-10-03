@@ -61,6 +61,20 @@ use crate::protocol::agent::ToolExposureDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::ToolSourceDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::approval_environment::ApprovalEnvironmentCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::approval_environment::ApprovalEnvironmentReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::approval_environment::ApprovalEnvironmentReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::approval_environment::ApprovalEnvironmentSaveParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::approval_environment::ApprovalEnvironmentScanParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::approval_environment::ApprovalEnvironmentScanResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::approval_environment::ApprovalEnvironmentScope;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::assets::AssetCatalogEntry;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::assets::AssetCatalogParams;
@@ -92,6 +106,22 @@ use crate::protocol::assets::AssetVersionResult;
 use crate::protocol::attachments::AttachmentImportRemoteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentMaterializeResult;
+#[cfg(any(test, feature = "export"))]
+use guardian_environment::EntryInput;
+#[cfg(any(test, feature = "export"))]
+use guardian_environment::EntryKind;
+#[cfg(any(test, feature = "export"))]
+use guardian_environment::EnvironmentDraft;
+#[cfg(any(test, feature = "export"))]
+use guardian_environment::EnvironmentEntry;
+#[cfg(any(test, feature = "export"))]
+use guardian_environment::EnvironmentProfile;
+#[cfg(any(test, feature = "export"))]
+use guardian_environment::EnvironmentSource;
+#[cfg(any(test, feature = "export"))]
+use guardian_environment::ScanOptions;
+#[cfg(any(test, feature = "export"))]
+use guardian_environment::SourceKind;
 
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::assets::AssetReadParams;
@@ -2907,6 +2937,18 @@ client_methods! {
         response: (),
         serialization: None,
     },
+    ApprovalEnvironmentRead => "approval/environment/read" {
+        params: ApprovalEnvironmentReadParams, response: ApprovalEnvironmentReadResult, serialization: None,
+    },
+    ApprovalEnvironmentScan => "approval/environment/scan" {
+        params: ApprovalEnvironmentScanParams, response: ApprovalEnvironmentScanResult, serialization: None, cancellation: "operationId",
+    },
+    ApprovalEnvironmentSave => "approval/environment/save" {
+        params: ApprovalEnvironmentSaveParams, response: ApprovalEnvironmentReadResult, serialization: None,
+    },
+    ApprovalEnvironmentCancel => "approval/environment/cancel" {
+        params: ApprovalEnvironmentCancelParams, response: (), serialization: None,
+    },
     ConfigRead => "config/read" {
         params: EmptyParams,
         response: ConfigReadResult,
@@ -4677,6 +4719,21 @@ typescript_bindings! {
     AgentJoin,
     SkillVersionSelector,
     SkillRef,
+    ApprovalEnvironmentScope,
+    ApprovalEnvironmentReadParams,
+    ApprovalEnvironmentReadResult,
+    ApprovalEnvironmentScanResult,
+    ApprovalEnvironmentScanParams,
+    ApprovalEnvironmentSaveParams,
+    ApprovalEnvironmentCancelParams,
+    EnvironmentProfile,
+    EnvironmentDraft,
+    EnvironmentEntry,
+    EnvironmentSource,
+    EntryInput,
+    EntryKind,
+    SourceKind,
+    ScanOptions,
     SkillActivationReason,
     FrozenSkillActivation,
     SkillCatalogReloadDto,

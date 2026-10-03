@@ -131,7 +131,7 @@ impl ReviewProtocol {
 }
 
 pub(crate) const CURRENT_REVIEW_PROTOCOL: ReviewProtocol = ReviewProtocol {
-    revision: "review-protocol-5",
+    revision: "review-protocol-6",
     system_prompt: SYSTEM_PROMPT,
     response_schema_json: RESPONSE_SCHEMA_JSON,
 };

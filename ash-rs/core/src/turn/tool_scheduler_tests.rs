@@ -1031,10 +1031,29 @@ fn reviewer_approval_executes_with_bound_authority_and_user_context() {
         },
         ReviewFailurePolicy::Block,
     );
-    let fixture = fixture_with(
+    let mut fixture = fixture_with(
         tools,
         Arc::new(crate::approval_request::tests::EnginePolicy(engine)),
     );
+    struct EnvironmentEvidence;
+    impl core_api::ReviewEnvironmentService for EnvironmentEvidence {
+        fn evidence(
+            &self,
+            thread: &ThreadId,
+            _: &ActionReviewRequest,
+        ) -> Result<Vec<ReviewEvidence>, CoreError> {
+            assert!(!thread.as_str().is_empty());
+            Ok(vec![ReviewEvidence::new(
+                ReviewEvidenceKind::EnvironmentFact,
+                ReviewEvidenceTrust::UntrustedContent,
+                "environment:package.json",
+                "Background only: script.py uses Python",
+            )])
+        }
+    }
+    fixture.scheduler = fixture
+        .scheduler
+        .with_review_environment(Some(Arc::new(EnvironmentEvidence)));
     fixture
         .threads
         .set_goal(
@@ -1066,7 +1085,7 @@ fn reviewer_approval_executes_with_bound_authority_and_user_context() {
     let context = observed.lock().unwrap();
     let context = context.as_ref().unwrap();
     assert_eq!(context.user_intent(), "Inspect before running");
-    assert_eq!(context.evidence().len(), 3);
+    assert_eq!(context.evidence().len(), 4);
     assert_eq!(
         context.evidence()[0].kind(),
         ReviewEvidenceKind::UserMessage
@@ -1081,6 +1100,118 @@ fn reviewer_approval_executes_with_bound_authority_and_user_context() {
         ReviewEvidenceTrust::TrustedUser
     );
     assert_eq!(context.evidence()[2].source(), "script.py");
+    assert_eq!(
+        context.evidence()[3].kind(),
+        ReviewEvidenceKind::EnvironmentFact
+    );
+    assert_eq!(
+        context.evidence()[3].trust(),
+        ReviewEvidenceTrust::UntrustedContent
+    );
+    assert_eq!(context.evidence()[3].source(), "environment:package.json");
+}
+
+#[test]
+fn changed_review_environment_requires_a_new_assessment_before_execution() {
+    struct ChangingEnvironment(Arc<Mutex<u32>>);
+    impl core_api::ReviewEnvironmentService for ChangingEnvironment {
+        fn evidence(
+            &self,
+            _: &ThreadId,
+            _: &ActionReviewRequest,
+        ) -> Result<Vec<ReviewEvidence>, CoreError> {
+            Ok(vec![ReviewEvidence::new(
+                ReviewEvidenceKind::EnvironmentTarget,
+                ReviewEvidenceTrust::TrustedUser,
+                format!("revision-{}", *self.0.lock().unwrap()),
+                "Background only: staging.example.com",
+            )])
+        }
+    }
+    struct UpdatingClassifier {
+        version: Arc<Mutex<u32>>,
+        observed: Arc<Mutex<Vec<String>>>,
+    }
+    impl ActionClassifier for UpdatingClassifier {
+        type Error = ContextClassifierError;
+        fn classify(
+            &self,
+            request: &ActionReviewRequest,
+            _: &CancellationToken,
+        ) -> Result<ClassifierAssessment, Self::Error> {
+            let source = request
+                .context()
+                .evidence()
+                .iter()
+                .find(|entry| entry.kind() == ReviewEvidenceKind::EnvironmentTarget)
+                .unwrap()
+                .source()
+                .to_owned();
+            self.observed.lock().unwrap().push(source);
+            let recommendation = if *self.version.lock().unwrap() == 1 {
+                *self.version.lock().unwrap() = 2;
+                ClassifierRecommendation::Approve {
+                    capabilities: request.action().required_capabilities().clone(),
+                    risk: RiskLevel::Medium,
+                    user_authorization: UserAuthorization::Implicit,
+                    reason: "approved original background".into(),
+                }
+            } else {
+                ClassifierRecommendation::Deny {
+                    reason: "changed target needs confirmation".into(),
+                }
+            };
+            Ok(ClassifierAssessment::new(
+                AssessmentId::new("changing-review"),
+                request.action().digest().clone(),
+                request.action_policy_revision().clone(),
+                "test-prompt",
+                recommendation,
+            ))
+        }
+    }
+    let version = Arc::new(Mutex::new(1));
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let tools = Arc::new(ReviewTool {
+        requires_escalation: true,
+        ..ReviewTool::default()
+    });
+    let policy = ActionPolicyEngine::with_no_exec_rules(
+        ActionPolicyRevision::new("policy-v1"),
+        UpdatingClassifier {
+            version: version.clone(),
+            observed: observed.clone(),
+        },
+        ReviewFailurePolicy::Block,
+    );
+    let mut fixture = fixture_with(
+        tools,
+        Arc::new(crate::approval_request::tests::EnginePolicy(policy)),
+    );
+    fixture.scheduler = fixture
+        .scheduler
+        .with_review_environment(Some(Arc::new(ChangingEnvironment(version))));
+    fixture
+        .scheduler
+        .run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    assert_eq!(
+        observed.lock().unwrap().as_slice(),
+        ["revision-1", "revision-2"]
+    );
+    assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
+    assert!(
+        !fixture
+            .threads
+            .read_thread(&fixture.thread_id)
+            .unwrap()
+            .tool_execution_starts
+            .contains_key(&fixture.call_id)
+    );
 }
 
 #[test]
@@ -1107,11 +1238,26 @@ fn safe_sandbox_denial_is_reviewed_and_retried_once() {
         },
         ReviewFailurePolicy::Block,
     );
-    let fixture = fixture_with(
+    let mut fixture = fixture_with(
         tools,
         Arc::new(crate::approval_request::tests::EnginePolicy(engine)),
     );
 
+    struct RefreshEvidence(Arc<Mutex<Vec<ActionReviewPhase>>>);
+    impl core_api::ReviewEnvironmentService for RefreshEvidence {
+        fn evidence(
+            &self,
+            _: &ThreadId,
+            request: &ActionReviewRequest,
+        ) -> Result<Vec<ReviewEvidence>, CoreError> {
+            self.0.lock().unwrap().push(request.phase().clone());
+            Ok(Vec::new())
+        }
+    }
+    let reads = Arc::new(Mutex::new(Vec::new()));
+    fixture.scheduler = fixture
+        .scheduler
+        .with_review_environment(Some(Arc::new(RefreshEvidence(reads.clone()))));
     fixture
         .scheduler
         .run_pending(
@@ -1121,6 +1267,14 @@ fn safe_sandbox_denial_is_reviewed_and_retried_once() {
         )
         .unwrap();
 
+    assert!(matches!(
+        reads.lock().unwrap().as_slice(),
+        [
+            ActionReviewPhase::Initial,
+            ActionReviewPhase::SandboxDenial(_),
+            ActionReviewPhase::SandboxDenial(_)
+        ]
+    ));
     let authorizations = fixture.tools.authorizations.lock().unwrap();
     assert!(matches!(
         authorizations.as_slice(),

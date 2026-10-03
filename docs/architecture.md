@@ -84,7 +84,7 @@ flowchart TD
 | --- | --- | --- | --- | --- |
 | 模型系统 | 最终使用哪个供应商、模型和调用配置？ | 模型目录、能力、配置解析和运行时选择 | 目录、配置、凭据、供应商适配、传输和重试是否分层 | [`models-manager.md`](models-manager.md)、[`model-provider.md`](model-provider.md)、[`model-provider-config.md`](model-provider-config.md) |
 | 工具系统 | Agent 能看到和调用哪些能力？ | 工具定义、发现、绑定、参数验证、调用和结果契约 | 工具定义、调度、授权、执行与结果持久化是否互相越界 | [`tools.md`](tools.md) |
-| 权限系统 | 某个具体动作能否执行？ | 授权规则、批准范围、批准有效期与最终授权决定 | 权限、Auto Review、工具调度和沙箱是否都在做最终决定 | [`permissions.md`](permissions.md)、[`auto-review.md`](auto-review.md) |
+| 权限系统 | 某个具体动作能否执行？ | 授权规则、批准范围、批准有效期与最终授权决定 | 权限、Guardian、工具调度和沙箱是否都在做最终决定 | [`permissions.md`](permissions.md)、[`guardian.md`](guardian.md) |
 | 沙箱系统 | 已获准动作实际能触及什么？ | 文件、网络、进程能力和平台强制执行 | 策略选择、用户批准与操作系统强制执行是否分开 | [`sandboxing.md`](sandboxing.md) |
 | 配置系统 | 当前作用域下哪个值最终生效？ | 配置来源、优先级、作用域、合并和不可变领域快照 | 通用合并与各领域验证是否有清楚交接 | [`config.md`](config.md) |
 | 身份与秘密系统 | 用户如何登录，敏感凭据保存在哪里？ | 登录流程、账户状态和秘密的安全存取 | 身份、账户展示、供应商凭据和网络调用是否解耦 | [`login.md`](login.md)、[`secrets.md`](secrets.md)、[`subscriptions.md`](subscriptions.md) |

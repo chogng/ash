@@ -44,7 +44,10 @@ pub fn fit(
         .iter()
         .enumerate()
         .filter_map(|(index, entry)| {
-            (entry.trust() == ReviewEvidenceTrust::UntrustedContent
+            (matches!(
+                entry.kind(),
+                ReviewEvidenceKind::EnvironmentFact | ReviewEvidenceKind::EnvironmentTarget
+            ) || entry.trust() == ReviewEvidenceTrust::UntrustedContent
                 && matches!(
                     entry.kind(),
                     ReviewEvidenceKind::AgentMessage

@@ -3,6 +3,7 @@ import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common
 import type { ICallService } from '../../call/common/callService.js';
 import type { IDictationService } from '../../dictation/common/dictationService.js';
 import type { ILocalTranscriptionService } from '../../localTranscription/common/localTranscription.js';
+import type { IApprovalEnvironmentService } from '../../approvalEnvironment/common/approvalEnvironmentService.js';
 import type { IMemoriesService } from '../../memories/common/memoriesService.js';
 import type { IMemoryDiagnosticsService } from '../../memory/common/memoryDiagnosticsService.js';
 import type { IAppServerApi, IResourceApi, IServerEventApi } from "../../app-server/common/appServerApi.js";
@@ -68,6 +69,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly automation?: IAutomationService;
 	readonly memoryDiagnostics?: IMemoryDiagnosticsService;
 	readonly memories?: IMemoriesService;
+	readonly approvalEnvironment?: IApprovalEnvironmentService;
 	readonly appServer: IAppServerApi;
 	readonly accounts: IAccountApi;
 	readonly remote?: IRemoteAgentApi;

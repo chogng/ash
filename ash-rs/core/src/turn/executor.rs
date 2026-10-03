@@ -101,6 +101,7 @@ pub struct TurnExecutor {
     tools: Arc<dyn ToolService>,
     policy: Arc<dyn ActionPolicyService>,
     policy_source: Arc<dyn ActionPolicyService>,
+    review_environment: Option<Arc<dyn core_api::ReviewEnvironmentService>>,
     compaction: Arc<dyn ContextCompactionService>,
     updates: Arc<dyn ThreadUpdateSink>,
     harness_context: Arc<dyn HarnessContextProvider>,
@@ -270,6 +271,7 @@ impl TurnExecutor {
             tools,
             policy_source: Arc::clone(&policy),
             policy,
+            review_environment: None,
             compaction,
             updates: Arc::new(NoThreadUpdates),
             harness_context: Arc::new(FixedHarnessContext {
@@ -291,6 +293,14 @@ impl TurnExecutor {
             Arc::new(NoTools),
             Arc::new(UnavailableActionPolicyService),
         )
+    }
+
+    pub fn with_review_environment(
+        mut self,
+        environment: Arc<dyn core_api::ReviewEnvironmentService>,
+    ) -> Self {
+        self.review_environment = Some(environment);
+        self
     }
 
     /// Adds the outer transport sink for durable and transient Thread updates.
@@ -1717,6 +1727,7 @@ impl TurnExecutor {
             self.policy.clone(),
         )
         .with_thread_updates(self.updates.clone())
+        .with_review_environment(self.review_environment.clone())
         .with_harness_context(self.harness_context.clone())
         .with_hooks(self.hooks.clone())
         .with_code_mode(self.code_mode.clone())

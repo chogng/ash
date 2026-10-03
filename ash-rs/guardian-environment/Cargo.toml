@@ -1,0 +1,27 @@
+[package]
+name = "ash-guardian-environment"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+name = "guardian_environment"
+doctest = false
+
+[dependencies]
+action-policy = { package = "ash-action-policy", path = "../action-policy" }
+file-access = { package = "ash-file-access", path = "../file-access" }
+async-utils = { package = "ash-async-utils", path = "../async-utils" }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+ts-rs = { workspace = true, features = ["no-serde-warnings"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

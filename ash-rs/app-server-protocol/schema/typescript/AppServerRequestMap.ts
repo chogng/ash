@@ -13,6 +13,12 @@ import type { AgentReadParams } from './types/AgentReadParams.js';
 import type { AgentReadResult } from './types/AgentReadResult.js';
 import type { AgentRoleListResult } from './types/AgentRoleListResult.js';
 import type { AppServerError } from './types/AppServerError.js';
+import type { ApprovalEnvironmentCancelParams } from './types/ApprovalEnvironmentCancelParams.js';
+import type { ApprovalEnvironmentReadParams } from './types/ApprovalEnvironmentReadParams.js';
+import type { ApprovalEnvironmentReadResult } from './types/ApprovalEnvironmentReadResult.js';
+import type { ApprovalEnvironmentSaveParams } from './types/ApprovalEnvironmentSaveParams.js';
+import type { ApprovalEnvironmentScanParams } from './types/ApprovalEnvironmentScanParams.js';
+import type { ApprovalEnvironmentScanResult } from './types/ApprovalEnvironmentScanResult.js';
 import type { AssetCatalogParams } from './types/AssetCatalogParams.js';
 import type { AssetCatalogResult } from './types/AssetCatalogResult.js';
 import type { AssetCatalogUpdateParams } from './types/AssetCatalogUpdateParams.js';
@@ -577,6 +583,10 @@ export interface AppServerRequestMap {
   "team/message/list": { params: TeamMessageListParams; response: TeamMessageListResult };
   "session/thread/subscribe": { params: SessionThreadSubscribeParams; response: SessionThreadSubscribeResult };
   "session/thread/unsubscribe": { params: SessionThreadUnsubscribeParams; response: null };
+  "approval/environment/read": { params: ApprovalEnvironmentReadParams; response: ApprovalEnvironmentReadResult };
+  "approval/environment/scan": { params: ApprovalEnvironmentScanParams; response: ApprovalEnvironmentScanResult };
+  "approval/environment/save": { params: ApprovalEnvironmentSaveParams; response: ApprovalEnvironmentReadResult };
+  "approval/environment/cancel": { params: ApprovalEnvironmentCancelParams; response: null };
   "config/read": { params: Record<string, never>; response: ConfigReadResult };
   "mcp/server/status": { params: Record<string, never>; response: McpServerStatusResult };
   "mcp/server/connect": { params: McpServerRuntimeIntentParams; response: McpServerRuntimeIntentResult };
@@ -926,6 +936,10 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "team/message/list": { method: "team/message/list" },
   "session/thread/subscribe": { method: "session/thread/subscribe" },
   "session/thread/unsubscribe": { method: "session/thread/unsubscribe" },
+  "approval/environment/read": { method: "approval/environment/read" },
+  "approval/environment/scan": { method: "approval/environment/scan" },
+  "approval/environment/save": { method: "approval/environment/save" },
+  "approval/environment/cancel": { method: "approval/environment/cancel" },
   "config/read": { method: "config/read" },
   "mcp/server/status": { method: "mcp/server/status" },
   "mcp/server/connect": { method: "mcp/server/connect" },

@@ -4,6 +4,7 @@ import { createAppServerHooksApi } from '../../hooks/browser/hooksApi.js';
 import { AppServerTestExecutionService } from '../../testing/browser/appServerTestExecutionService.js';
 import { createAppServerLanguageServerService } from "../../language/browser/languageServerService.js";
 import { AppServerCallService } from '../../call/browser/appServerCallService.js';
+import { AppServerApprovalEnvironmentService } from '../../approvalEnvironment/browser/appServerApprovalEnvironmentService.js';
 import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../memory/browser/appServerMemoryDiagnosticsService.js';
 import { generateUuid } from '../../../base/common/uuid.js';
@@ -93,6 +94,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 	const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
 	return {
 		appServer,
+		approvalEnvironment: connection.capabilities?.approvalEnvironment ? new AppServerApprovalEnvironmentService(connection) : undefined,
 		accounts: createAppServerAccountApi(connection, connectorHostServices),
 		session: createAppServerSessionApi(connection),
 		teams: createAppServerTeamApi(connection),

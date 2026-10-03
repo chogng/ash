@@ -53,7 +53,7 @@
 
 ## 安全与权限
 
-[`permissions.md`](permissions.md)、[`auto-review.md`](auto-review.md)、
+[`permissions.md`](permissions.md)、[`guardian.md`](guardian.md)、
 [`sandboxing.md`](sandboxing.md)、[`environment-access.md`](environment-access.md)、
 [`workspace-security.md`](workspace-security.md)（当前实现）、
 [`windows-sandbox-acceptance-runbook.md`](windows-sandbox-acceptance-runbook.md)（参考/手册）

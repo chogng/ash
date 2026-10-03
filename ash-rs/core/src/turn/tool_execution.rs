@@ -29,6 +29,7 @@ use crate::thread_controller::RecordToolExecutionStart;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::CapabilityKind;
 use ash_action_policy::ExecutionDecision;
+use ash_action_policy::ReviewEvidenceKind;
 use ash_action_policy::SandboxDenialEvidence;
 use ash_async_utils::CancellationToken;
 use ash_protocol::AgentRequest;
@@ -125,15 +126,44 @@ pub(super) struct ToolExecutionOrchestrator {
     threads: Arc<ThreadController>,
     tools: Arc<dyn ToolService>,
     policy: Arc<dyn ActionPolicyService>,
+    review_environment: Option<Arc<dyn core_api::ReviewEnvironmentService>>,
     updates: Arc<dyn ThreadUpdateSink>,
     execution_observer: Arc<dyn TurnExecutionObserver>,
 }
 
 impl ToolExecutionOrchestrator {
+    /// Environment sources live outside the Thread journal. A sequence check alone cannot catch
+    /// a profile edit or changed deployment configuration while the reviewer was running.
+    fn validate_review_environment(
+        &self,
+        thread: &ThreadId,
+        reviewed: &ActionReviewRequest,
+    ) -> Result<(), CoreError> {
+        if let Some(environment) = &self.review_environment {
+            let current = environment.evidence(thread, reviewed)?;
+            let original = reviewed
+                .context()
+                .evidence()
+                .iter()
+                .filter(|entry| {
+                    matches!(
+                        entry.kind(),
+                        ReviewEvidenceKind::EnvironmentFact | ReviewEvidenceKind::EnvironmentTarget
+                    )
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            if current != original {
+                return Err(CoreError::ReviewContextChanged);
+            }
+        }
+        Ok(())
+    }
     pub(super) fn new(
         threads: Arc<ThreadController>,
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn ActionPolicyService>,
+        review_environment: Option<Arc<dyn core_api::ReviewEnvironmentService>>,
         updates: Arc<dyn ThreadUpdateSink>,
         execution_observer: Arc<dyn TurnExecutionObserver>,
     ) -> Self {
@@ -141,6 +171,7 @@ impl ToolExecutionOrchestrator {
             threads,
             tools,
             policy,
+            review_environment,
             updates,
             execution_observer,
         }
@@ -153,6 +184,9 @@ impl ToolExecutionOrchestrator {
         reviewed: &ActionReviewRequest,
         authorization: ToolAuthorization,
     ) -> Result<ToolExecutionCompletion, CoreError> {
+        if matches!(authorization, ToolAuthorization::AutoReviewed(_)) {
+            self.validate_review_environment(context.thread_id, reviewed)?;
+        }
         self.threads.record_tool_execution_started(
             context.thread_id,
             context.turn_id,
@@ -529,12 +563,16 @@ impl ToolExecutionOrchestrator {
                 denial_reason.clone(),
                 denial_output,
             ));
+        let mut evidence = self.tools.review_evidence(call)?;
+        if let Some(environment) = &self.review_environment {
+            evidence.extend(environment.evidence(&snapshot.thread_id, &second_review)?);
+        }
         let second_review = attach_review_context(
             second_review,
             &self.threads,
             &snapshot,
             context.item_id,
-            self.tools.review_evidence(call)?,
+            evidence,
         )?;
         let decision = match crate::decide_turn_action(
             self.policy.as_ref(),
@@ -657,6 +695,15 @@ impl ToolExecutionOrchestrator {
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         let authority = execution_authority(&authorization);
+        if matches!(authorization, ToolAuthorization::AutoReviewed(_)) {
+            match self.validate_review_environment(context.thread_id, &second_review) {
+                Err(CoreError::ReviewContextChanged) => return Ok(ToolAttempt::Commit {
+                    output: ToolCallOutput::Failure("review environment changed before outside-sandbox retry; the exact call was not retried".into()),
+                    completion: ToolExecutionCompletion::Complete,
+                }),
+                result => result?,
+            }
+        }
         let escalated = self.threads.record_tool_execution_escalated(
             context.thread_id,
             context.turn_id,

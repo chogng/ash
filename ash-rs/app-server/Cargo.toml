@@ -53,6 +53,8 @@ arg0 = { workspace = true }
 ash-package-store = { workspace = true }
 process-hardening = { workspace = true }
 memories = { workspace = true }
+guardian-environment = { workspace = true }
+dirs = { workspace = true }
 memories-extension = { workspace = true }
 queue = { workspace = true }
 ash-otel = { workspace = true }

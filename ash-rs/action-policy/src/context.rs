@@ -27,6 +27,8 @@ pub enum ReviewEvidenceKind {
     PriorToolResult,
     PreparedAction,
     DirectoryFile,
+    EnvironmentFact,
+    EnvironmentTarget,
 }
 
 /// One bounded, host-labeled observation relevant to the proposed action.

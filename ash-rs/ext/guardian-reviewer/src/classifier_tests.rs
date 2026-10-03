@@ -214,7 +214,7 @@ fn binds_model_advice_to_the_host_action_and_action_policy_revision() {
         assessment.action_policy_revision(),
         request.action_policy_revision()
     );
-    assert_eq!(assessment.review_protocol_revision(), "review-protocol-5");
+    assert_eq!(assessment.review_protocol_revision(), "review-protocol-6");
     assert!(matches!(
         assessment.recommendation(),
         ClassifierRecommendation::Approve { .. }

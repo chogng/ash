@@ -24,6 +24,7 @@ noop-macros = { package = "ash-app-server-protocol-noop-macros", path = "../app-
 call = { package = "ash-call", path = "../call" }
 response-debug-context = { workspace = true }
 memories = { workspace = true }
+guardian-environment = { workspace = true }
 extension-items = { workspace = true }
 queue = { workspace = true }
 build-info = { workspace = true }

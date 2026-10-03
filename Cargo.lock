@@ -612,6 +612,7 @@ dependencies = [
  "ash-glm",
  "ash-goal",
  "ash-grep",
+ "ash-guardian-environment",
  "ash-guardian-v2",
  "ash-history-notes",
  "ash-home",
@@ -674,6 +675,7 @@ dependencies = [
  "ash-websocket-client",
  "ash-workflows",
  "base64 0.22.1",
+ "dirs",
  "dunce",
  "external-agent-migration",
  "futures",
@@ -768,6 +770,7 @@ dependencies = [
  "ash-features",
  "ash-feedback-contract",
  "ash-file-access",
+ "ash-guardian-environment",
  "ash-memories",
  "ash-memory-diagnostics",
  "ash-protocol",
@@ -1712,6 +1715,22 @@ dependencies = [
  "ash-action-policy",
  "ash-protocol",
  "serde_json",
+]
+
+[[package]]
+name = "ash-guardian-environment"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-file-access",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+ "ts-rs",
 ]
 
 [[package]]
@@ -2735,6 +2754,7 @@ dependencies = [
  "ash-core-api",
  "ash-file-access",
  "ash-github",
+ "ash-guardian-environment",
  "ash-history",
  "ash-memories",
  "ash-message-history",

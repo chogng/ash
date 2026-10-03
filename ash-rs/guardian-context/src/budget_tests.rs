@@ -53,6 +53,39 @@ fn removes_old_observations_without_changing_user_instructions() {
 }
 
 #[test]
+fn confirmed_environment_ownership_is_optional_background_not_required_authorization() {
+    let context = ReviewContext::new(
+        "Read staging status",
+        [
+            ReviewEvidence::new(
+                ReviewEvidenceKind::EnvironmentTarget,
+                ReviewEvidenceTrust::TrustedUser,
+                "user-confirmed-target",
+                "staging.example.com ".repeat(60),
+            ),
+            ReviewEvidence::new(
+                ReviewEvidenceKind::UserMessage,
+                ReviewEvidenceTrust::TrustedUser,
+                "request",
+                "Read staging status",
+            ),
+        ],
+    );
+    let fitted = fit(
+        &context,
+        RequestBudget {
+            max_bytes: 500,
+            max_estimated_tokens: 500,
+        },
+        size,
+    )
+    .unwrap();
+    assert_eq!(fitted.evidence().len(), 1);
+    assert_eq!(fitted.evidence()[0].kind(), ReviewEvidenceKind::UserMessage);
+    assert_eq!(fitted.omitted_evidence(), 1);
+}
+
+#[test]
 fn required_authorization_and_actions_are_never_shortened_to_fit() {
     for kind in [
         ReviewEvidenceKind::UserAnswer,

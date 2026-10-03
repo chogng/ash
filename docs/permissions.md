@@ -31,7 +31,12 @@ Core 在工具准备时拒绝分析模式下的直接文件或外部修改；调
 桌面端和 Web 选择 Bypass permissions 时先确认风险；取消确认不会更改工作模式或权限选择。
 Manual 由用户处理需要批准的操作；Auto 使用自动审核；Bypass permissions 跳过大部分权限审批。
 菜单底部的“审核模型”可以选择连接、模型和思考强度，设置保存在用户配置并用于后续 Turn，
-不会更改输入区的主模型。默认选择规则和配置示例见 [自动审核](auto-review.md#审核模型选择)。
+不会更改输入区的主模型。默认选择规则和配置示例见 [Guardian 审核模型](guardian.md#审核模型选择)。
+
+同一菜单的“准备审核环境”可以扫描当前项目、审阅草稿并保存背景资料，也可以手动填写。
+终端历史和其他仓库需要分别开启。目标归属、项目事实和操作授权分别处理；扫描不会生成命令
+允许规则。源文件变化后，旧说明停止参与审核，重新扫描的新条目需要重新接受。
+范围、存储和模型调用细节见 [准备项目审核环境](guardian.md#准备项目审核环境)。
 
 Ash 使用分层权限系统来平衡功能和安全性：能在明确沙箱边界内完成的动作优先受限执行；需要越过
 边界的动作再结合用户意图、风险和已有授权决定是自动批准、询问用户还是阻止。
@@ -133,13 +138,13 @@ durable 记录。
 | 能力模型 | 描述动作需要的最小能力与作用范围 | 不判断用户意图 |
 | 确定性规则 | `ash-execpolicy` 组合 Host / Organization / User / Directory layer 并返回纯 effect | 不签发 grant、不执行工具 |
 | 最终 action policy | `ash-action-policy` 把 rule effect、exact grants、sandbox 与 reviewer 结果合成最终决定 | 不解析或持久化规则、不执行工具 |
-| Auto Review | 根据标明信任来源的上下文给出风险建议 | 不能签发最终执行授权 |
+| Guardian | 根据标明信任来源的上下文给出风险建议 | 不能签发最终执行授权 |
 | 持久化批准与执行 | `ConfigStore` 保存精确用户规则；Core 保存一次性批准和副作用起点 | 不改变前面的安全判断 |
 
 因此：
 
 - 沙箱负责**强制执行边界**，不负责用户批准；
-- Auto Review 是**风险审查建议层**，不是第二套权限系统；
+- Guardian 是**风险审查建议层**，不是第二套权限系统；
 - 批准界面负责**取得用户授权**，不是策略引擎；
 - 工具或 MCP 服务器声称“只读”只能作为证据，不能成为执行授权；
 - Skill 的 `allowed-tools` 是提示，不是权限；
@@ -176,7 +181,7 @@ Agent 提出工具调用
   → AllowUnsandboxed：签发绑定 rule、exec-policy revision、动作与能力的 RunExecPolicyGranted
   → 精确用户授权：匹配动作摘要、能力集合和策略版本
   → 可用沙箱：RunSandboxed
-  → Auto Review：Approve / ReviseAction / AskUser / Deny
+  → Guardian：Approve / ReviseAction / AskUser / Deny
   → 策略引擎 ActionPolicyEngine：RunAutoReviewed / ReviseAction / AskUser / Block
   → Core 持久化记录执行授权与 ToolExecutionStarted
   → 执行器按 Sandboxed 或 Unrestricted 授权执行
@@ -336,9 +341,9 @@ Windows 本地工具使用 `HostAclChanges::ScopedWithTraversal`：在范围内 
 | source、command prefix、network、capability、action selector | 当前已实现 | selector 只消费 host-materialized typed fields |
 | User rule 持久化与 Directory 只收紧规则 | 当前已实现 | 统一规则编辑 UI、expiry 尚未实现 |
 | exec-policy exact durable execution authority | 当前已实现 | 绑定 rule ID、exec-policy revision、action、capabilities 与 Tool Call |
-| Auto Review 类型化建议与风险门槛 | 当前已实现 | 当前是单次审查，没有分层审查或多审查器协作 |
+| Guardian 类型化建议与风险门槛 | 当前已实现 | 当前是单次审查，没有分层审查或多审查器协作 |
 | 持久化批准请求与 `ApproveOnce` / `Decline` | 当前已实现 | 各客户端的呈现体验尚未完全统一 |
-| TUI 的 Ask / Auto Review / Bypass per-Turn 模式 | 当前已实现 | 模式在提交时冻结；review model 当前在 App Server 启动时解析 |
+| TUI 的逐轮权限模式 | 当前已实现 | 模式在提交时冻结；review model 当前在 App Server 启动时解析 |
 | 副作用前记录工具执行开始 | 当前已实现 | 崩溃后的未知结果不自动重放 |
 | 类型化沙箱拒绝再审查 | 当前已实现 | 最多一次；真实平台拒绝样本仍有限 |
 | macOS、Linux 和 Windows 平台沙箱 | 部分具备 | 具体支持和集成验收以沙箱文档为准 |
@@ -354,7 +359,7 @@ Windows 本地工具使用 `HostAclChanges::ScopedWithTraversal`：在范围内 
 3. 提供可查询的权限决定历史，但对密钥和敏感参数做结构化脱敏；
 4. 为已实现的 User/Directory rules 提供可解释的管理 UI，并为 Organization 分发和 expiry 增加
    独立 adapter；
-5. 用真实沙箱拒绝、危险自动批准率和人工标签评估 Auto Review，而不是只统计减少了多少弹窗；
+5. 用真实沙箱拒绝、危险自动批准率和人工标签评估 Guardian，而不是只统计减少了多少弹窗；
 6. 各客户端共享生成的协议和相同决定语义，不各自创造权限模式。
 
 长期规则不是一次性批准的“快捷保存”。它已经是独立、typed、revision-bound 的策略对象；未来 UI
