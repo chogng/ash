@@ -4,15 +4,18 @@ import { URI } from '../../../../../base/common/uri.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Range } from '../../../../../editor/common/core/range.js';
-import { ResourceEdit, ResourceFileEdit, ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
+import { IBulkEditService, ResourceEdit, ResourceFileEdit, ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import type { LanguageWorkspaceEdit } from '../../../../../editor/common/languages.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { DialogResult, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { BulkEditService, toLanguageWorkspaceEdit } from '../../browser/bulkEditService.js';
+import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
+import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
+import { toLanguageWorkspaceEdit } from '../../browser/bulkEditService.js';
 import { BulkEditTestServices } from './bulkEditTestServices.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -130,18 +133,41 @@ test('confirmation metadata requests preview even when ordinary preview is disab
 	assert.deepEqual({ previews, text: fixture.store.text(first) }, { previews: 1, text: 'one' });
 });
 
-test('bulk edit assembly requires its registered model, working copy and file owners', async () => {
+test('registered bulk edits reject missing model and dialog dependencies before use', async () => {
 	using fixture = new BulkEditTestServices([[first, '']]);
-	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(BulkEditService), /textModelResourceService/);
+	using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors().filter(([id]) => id === IBulkEditService)));
+	assert.throws(() => services.get(IBulkEditService), /Unknown service: textModelResourceService/);
 	services.registerInstance(ITextModelResourceService, fixture.models);
 	services.registerInstance(IWorkingCopyService, fixture.workingCopies);
 	services.registerInstance(IFileService, fixture.files);
 	services.registerInstance(IConfigurationService, fixture.configuration);
+	assert.throws(() => services.get(IBulkEditService), /Unknown service: dialogService/);
 	services.registerInstance(IDialogService, fixture.dialogs);
-	using service = services.createInstance(BulkEditService);
+	const service = services.get(IBulkEditService);
 	await service.apply(textEdit(first, 'one'));
 	assert.equal(fixture.store.text(first), 'one');
+});
+
+test('registered bulk edits share the window dialog queue regardless of registration order', async () => {
+	using fixture = new BulkEditTestServices([[first, 'a']]);
+	const descriptors = getSingletonServiceDescriptors().filter(([id]) => id === IBulkEditService || id === IDialogService).reverse();
+	using services = new InstantiationService(new ServiceCollection(...descriptors));
+	services.registerInstance(ITextModelResourceService, fixture.models);
+	services.registerInstance(IWorkingCopyService, fixture.workingCopies);
+	services.registerInstance(IFileService, fixture.files);
+	services.registerInstance(IConfigurationService, fixture.configuration);
+	const service = services.get(IBulkEditService);
+	const dialogs = services.get(IDialogService);
+	assert.ok(dialogs instanceof DialogService);
+	assert.equal(services.get(IBulkEditService), service);
+	assert.equal(services.get(IDialogService), dialogs);
+	const result = await service.apply(textEdit(first, '1'), { label: 'Rename symbol', confirmBeforeUndo: true });
+	assert.ok(result.isApplied);
+	const undo = result.undo();
+	assert.equal(dialogs.model.dialogs[0]!.request.message, 'Undo Rename symbol?');
+	dialogs.model.dialogs[0]!.close({ button: DialogResult.Primary });
+	await undo;
+	assert.deepEqual({ text: fixture.store.text(first), pendingDialogs: dialogs.model.dialogs.length }, { text: 'a', pendingDialogs: 0 });
 });
 
 test('standard workspace edits use original coordinates and expose an exact inverse', async () => {

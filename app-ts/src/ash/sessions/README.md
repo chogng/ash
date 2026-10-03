@@ -83,6 +83,9 @@ before flushing storage.
    `ISessionsManagementService`, one window `ISessionsService`, and one
    `ChatService`, then registers their frontend contracts in a window-local
    `InstantiationService`.
+   Shared service descriptions are loaded by `sessions.common.main.ts` and
+   collected before consumers are created. The container owns their instances;
+   Sessions supplies its window-specific services in that same scope.
 3. The Sessions `Workbench` creates `BrowserLayoutService` and registers
    commands, context keys, menus, keybindings, overlays, quick input, settings,
    and hover services for its own window, using the same service implementations

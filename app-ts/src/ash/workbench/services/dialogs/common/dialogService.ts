@@ -6,7 +6,7 @@ import {
 	type IConfirmationDialogResult,
 	type IActionPromptOptions,
 	type IActionPromptResult,
-	type IDialogService,
+	IDialogService,
 	type IInputDialogOptions,
 	type IInputDialogResult,
 	type IMessageDialogOptions,
@@ -15,6 +15,7 @@ import {
 } from "../../../../platform/dialogs/common/dialogs.js";
 import { DialogsModel } from "../../../common/dialogs.js";
 import packageMetadata from '../../../../../../package.json' with { type: 'json' };
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 
 /**
  * Maps the platform dialog API onto the workbench-owned dialog model.
@@ -104,6 +105,8 @@ export class DialogService extends Disposable
 		});
 	}
 }
+
+registerSingleton(IDialogService, DialogService, InstantiationType.Delayed);
 
 function messageTitle(severity: DialogSeverity): string {
 	switch (severity) {

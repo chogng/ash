@@ -152,9 +152,7 @@ import {
 import {
 	WorkbenchConfigurationService,
 } from "../services/configuration/browser/configurationService.js";
-import {
-	DialogService,
-} from "../services/dialogs/common/dialogService.js";
+import type { DialogService } from "../services/dialogs/common/dialogService.js";
 import { WorkbenchContextKeysHandler } from './contextkeys.js';
 import { WorkbenchThemeService } from "../services/themes/browser/workbenchThemeService.js";
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from "./labels.js";
@@ -252,7 +250,6 @@ import { IDocumentEditorTextModelService } from '../services/documentEditor/comm
 import { DocumentEditorTextModelService } from '../services/documentEditor/browser/documentEditorTextModelService.js';
 import { ITextModelService } from '../../editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../services/textmodelResolver/common/textModelResolverService.js';
-import { BulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
 import { IBulkEditService } from "../../editor/browser/services/bulkEditService.js";
 import { getBrowserTextModelService } from "../services/textmodelResolver/browser/browserTextModelService.js";
 import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
@@ -503,8 +500,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IRemoteAgentService, remoteAgentService);
 		services.registerInstance(IRemoteConnectionService, api.remoteConnections ?? UnavailableRemoteConnectionService);
 		services.registerInstance(IRemoteTunnelService, api.remoteTunnels ?? UnavailableRemoteTunnelService);
-		const dialogService = this._register(new DialogService());
-		services.registerInstance(IDialogService, dialogService);
+		const dialogService = services.get(IDialogService) as DialogService;
 		services.registerInstance(IDialogsModel, dialogService.model);
 		if (nativeHostApi) {
 			services.registerInstance(INativeHostService, nativeHostApi);
@@ -622,8 +618,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ITextModelResourceService, textModelService);
 		services.registerInstance(IFileTextModelService, textModelService);
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
-		const bulkEditService = this._register(services.createInstance(BulkEditService));
-		services.registerInstance(IBulkEditService, bulkEditService);
+		const bulkEditService = services.get(IBulkEditService);
 		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }
 		this._register(services.createInstance(WorkbenchLanguageFeatures));
 		// Only the desktop host may inspect directory grants. Web language requests

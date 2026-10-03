@@ -1,16 +1,9 @@
 import { ITextModelService } from '../../editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../../workbench/services/textmodelResolver/common/textModelResolverService.js';
-import { IBulkEditService } from '../../editor/browser/services/bulkEditService.js';
-import { BulkEditService } from '../../workbench/contrib/bulkEdit/browser/bulkEditService.js';
-import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
-import { ChatEditingService } from '../../workbench/contrib/chat/browser/chatEditing/chatEditingServiceImpl.js';
-import { IHostService } from '../../workbench/services/host/browser/host.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
-import { ILanguagePackStore } from "../../platform/languagePacks/common/languagePackStore.js";
 import { IAssetService, type AssetVersion } from '../../platform/assets/common/assetService.js';
 import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
-import { ActionWidgetService, IActionWidgetService } from '../../platform/actionWidget/browser/actionWidget.js';
 import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
 import { IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
@@ -70,7 +63,7 @@ import { ILocalTranscriptionService } from '../../platform/localTranscription/co
 import { NullLocalTranscriptionService } from '../../workbench/services/localTranscription/browser/localTranscriptionService.js';
 import { ICodeEditorService } from '../../editor/browser/services/codeEditorService.js';
 import { StandaloneCodeEditorService } from '../../editor/standalone/browser/standaloneCodeEditorService.js';
-import { ILanguageConfigurationService, LanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
+import { ILanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
 import { NewChatInputWidget } from '../contrib/chat/browser/newChatInput.js';
@@ -100,7 +93,7 @@ import { IClipboardService } from '../../platform/clipboard/common/clipboardServ
 import { IDialogService, IFileDialogService } from '../../platform/dialogs/common/dialogs.js';
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { MultiplexFileService } from '../../platform/files/browser/multiplexFileService.js';
-import { DialogService } from '../../workbench/services/dialogs/common/dialogService.js';
+import type { DialogService } from '../../workbench/services/dialogs/common/dialogService.js';
 import { BrowserDialogHandler } from '../../workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { ILabelService, LabelService } from '../../platform/label/common/labelService.js';
@@ -112,8 +105,6 @@ import { IWorkingCopyService } from '../../workbench/services/workingCopy/common
 import { BrowserWorkingCopyService } from '../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IUntitledTextEditorService } from '../../workbench/services/untitled/common/untitledTextEditorService.js';
 import { BrowserUntitledTextEditorService } from '../../workbench/services/untitled/browser/browserUntitledTextEditorService.js';
-import { IExplorerService } from '../../workbench/contrib/files/browser/files.js';
-import { ExplorerService } from '../../workbench/contrib/files/browser/explorerService.js';
 import { TextFileEditorTracker } from '../../workbench/contrib/files/browser/editors/textFileEditorTracker.js';
 import { ITextModelResourceService, IFileTextModelService } from '../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { getBrowserTextModelService } from '../../workbench/services/textmodelResolver/browser/browserTextModelService.js';
@@ -122,7 +113,6 @@ import { BrowserTextMateService } from '../../workbench/services/textMate/browse
 import { ITextMateService } from '../../workbench/services/textMate/common/textMateService.js';
 import { DiffService } from '../../workbench/services/diff/browser/diffService.js';
 import { EditorPart, IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
-import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
 import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
@@ -277,14 +267,11 @@ export class Workbench extends Disposable {
 
 		const configurationService = this.configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi, initialSnapshot: options.initialConfigurationSnapshot }));
 		const serviceCollection = new ServiceCollection();
-		// Sessions owns its editor services; the runtime registers host and local language storage.
+		// Load service descriptions before consumers so shared dependencies resolve in this window's scope.
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
-			if (id === IHostService || id === ILanguagePackStore) serviceCollection.set(id, descriptor);
+			serviceCollection.set(id, descriptor);
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
-		// Bulk edits and their consumers resolve dialogs before the UI handler is mounted.
-		const dialogs = this._register(new DialogService());
-		services.registerInstance(IDialogService, dialogs);
 		services.registerInstance(IAssetService, options.api.assets);
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);
@@ -295,7 +282,6 @@ export class Workbench extends Disposable {
 		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);
 		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
-		services.registerInstance(ILanguageConfigurationService, this._register(new LanguageConfigurationService(configurationService, languageService)));
 		services.registerInstance(ILanguageFeaturesService, this._register(new LanguageFeaturesService()));
 		services.registerInstance(ICodeEditorService, this._register(new StandaloneCodeEditorService()));
 		this.logService = this._register(logger);
@@ -347,9 +333,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, ownerDocument)));
 		services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));
-		services.registerSingleton(IExplorerService, () => services.createInstance(ExplorerService));
 		services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(BrowserUntitledTextEditorService));
-		services.registerSingleton(IMultiDiffSourceResolverService, () => services.createInstance(MultiDiffSourceResolverService));
 		services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
 		const textFiles = new TextFileService(files);
 		services.registerInstance(ITextFileService, textFiles);
@@ -367,8 +351,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(ITextModelResourceService, textModels);
 		services.registerInstance(IFileTextModelService, textModels);
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
-		services.registerInstance(IBulkEditService, this._register(services.createInstance(BulkEditService)));
-		services.registerInstance(IChatEditingService, this._register(services.createInstance(ChatEditingService)));
 		if (options.createTextDocumentHost) { this._register(options.createTextDocumentHost(services)); }
 		services.registerInstance(IChatService, chat);
 		services.registerInstance(ModelApiId, options.api.model);
@@ -399,6 +381,7 @@ export class Workbench extends Disposable {
 		this.domNode.className = "ash-sessions-window ash-code-sessions-window";
 		options.container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
+		const dialogs = services.get(IDialogService) as DialogService;
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
 		this._register(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(this.domNode)));
 
@@ -453,7 +436,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMenuService, menus);
 		const contextViews = this._register(new BrowserContextViewService(this.layoutService.activeContainer, this.layoutService));
 		services.registerInstance(IContextViewService, contextViews);
-		services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 		const quickInputService = this._register(new WorkbenchQuickInputService({
 			container: this.layoutService.activeContainer,
 			contextKeyService: contextKeys,

@@ -9,13 +9,14 @@ import { IWorkingCopyService } from '../../../services/workingCopy/common/workin
 import { Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { normalizeLanguageWorkspaceEdit, type LanguageTextDocumentEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry, type WorkspaceEdit } from "../../../../editor/common/languages.js";
-import { type IBulkEditOptions, type IBulkEditPreviewHandler, type IBulkEditResult, type IBulkEditService, ResourceEdit, ResourceFileEdit, ResourceTextEdit, WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
+import { type IBulkEditOptions, type IBulkEditPreviewHandler, type IBulkEditResult, IBulkEditService, ResourceEdit, ResourceFileEdit, ResourceTextEdit, WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { Extensions, type IConfigurationRegistry, ConfigurationScope } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { getErrorMessage } from '../../../../base/common/errors.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 
 const autoSaveSetting = Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<boolean>({
 	key: 'files.refactoring.autoSave',
@@ -458,3 +459,5 @@ async function rollback(operations: readonly UndoOperation[]): Promise<unknown[]
 	}
 	return errors;
 }
+
+registerSingleton(IBulkEditService, BulkEditService, InstantiationType.Delayed);
