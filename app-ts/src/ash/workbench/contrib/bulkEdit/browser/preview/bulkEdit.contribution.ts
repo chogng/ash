@@ -1,24 +1,45 @@
 import { Disposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { addDisposableListener, isHTMLElement } from '../../../../../base/browser/dom.js';
 import { isCancellationError } from "../../../../../base/common/errors.js";
-import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages.js";
-import { IBulkEditService, ResourceEdit, ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
-import { ITextModelResourceService } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
+import { IBulkEditService, type ResourceEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import { IDialogService } from "../../../../../platform/dialogs/common/dialogs.js";
 import { SyncDescriptor } from "../../../../../platform/instantiation/common/descriptors.js";
-import { IFileService } from "../../../../../platform/files/common/files.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../../common/views.js";
 import { IViewsService } from "../../../../services/views/browser/viewsService.js";
-import { IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";
-import { createBulkEditPreview } from "./bulkEditPreview.js";
 import { BulkEditPane } from "./bulkEditPane.js";
-import { toLanguageWorkspaceEdit } from '../bulkEditService.js';
-import { ConflictDetector } from '../conflicts.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import type { IContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
+
+const previewActions = [
+	{ id: 'refactorPreview.apply', title: localize('bulkEdit.applySelected', 'Apply selected'), run: (pane: BulkEditPane) => pane.accept() },
+	{ id: 'refactorPreview.discard', title: localize('bulkEdit.cancel', 'Cancel'), run: (pane: BulkEditPane) => pane.discard() },
+	{ id: 'refactorPreview.toggleCheckedState', title: localize('bulkEdit.toggleChecked', 'Toggle selected change'), run: (pane: BulkEditPane) => pane.toggleChecked() },
+	{ id: 'refactorPreview.groupByFile', title: localize('bulkEdit.groupByFile', 'Group by file'), run: (pane: BulkEditPane) => pane.groupByFile() },
+	{ id: 'refactorPreview.groupByType', title: localize('bulkEdit.groupByType', 'Group by type'), run: (pane: BulkEditPane) => pane.groupByType() },
+	{ id: 'refactorPreview.toggleGrouping', title: localize('bulkEdit.toggleGrouping', 'Toggle grouping'), run: (pane: BulkEditPane) => pane.toggleGrouping() },
+];
+
+for (const action of previewActions) {
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({ id: action.id, title: action.title, f1: true, precondition: ContextKeyExpr.has('refactorPreview.enabled') });
+		}
+		public run(accessor: ServicesAccessor): void {
+			const pane = accessor.get(IViewsService).getViewWithId(BulkEditPane.ID);
+			if (pane instanceof BulkEditPane && pane.hasInput) {
+				action.run(pane);
+			}
+		}
+	});
+}
 
 /** Registers the Workbench panel that hosts the transient bulk-edit preview. */
 export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
@@ -37,19 +58,21 @@ export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegi
 /** Connects the bulk-edit service to the transient preview pane. */
 export class BulkEditPreviewContribution extends Disposable {
 	private activeSession: PreviewSession | undefined;
+	private readonly enabledContext: IContextKey<boolean>;
 
 	constructor(
 		@IBulkEditService bulkEdits: IBulkEditService,
 		@IViewsService private readonly views: IViewsService,
-		@IFileService private readonly files: IFileService,
-		@ITextModelResourceService private readonly models: ITextModelResourceService,
-		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
 		@IDialogService private readonly dialogs: IDialogService,
-		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
+		this.enabledContext = contextKeys.createKey('refactorPreview.enabled', false);
 		this._register(bulkEdits.setPreviewHandler((edits, options) => this.preview(edits, options?.token ?? new AbortController().signal)));
-		this._register(toDisposable(() => this.activeSession?.controller.abort()));
+		this._register(toDisposable(() => {
+			this.activeSession?.controller.abort();
+			this.enabledContext.reset();
+		}));
 	}
 
 	private async preview(edits: ResourceEdit[], signal: AbortSignal): Promise<ResourceEdit[]> {
@@ -74,23 +97,19 @@ export class BulkEditPreviewContribution extends Disposable {
 		if (signal.aborted) controller.abort();
 		const session = { controller };
 		this.activeSession = session;
+		this.enabledContext.set(true);
 		try {
 			if (controller.signal.aborted) return [];
-			const conflicts = lifetime.add(this.instantiationService.createInstance(ConflictDetector, edits));
-			const edit: LanguageWorkspaceEdit = await toLanguageWorkspaceEdit(edits);
-			const model = await createBulkEditPreview(edit, { files: this.files, models: this.models, workingCopies: this.workingCopies }, controller.signal);
-			const accepted = await view.setInput({ ...model, conflicts }, controller.signal);
-			if (!accepted || conflicts.hasConflicts()) return [];
-			const selectedText = new Set(accepted.entries.flatMap(entry => entry.kind === 'textDocument' ? entry.edits : []));
-			const fileEntries = model.edit.entries.filter(entry => entry.kind !== 'textDocument');
-			let fileIndex = 0;
-			return edits.filter(edit => edit instanceof ResourceTextEdit ? selectedText.has(edit.textEdit) : accepted.entries.includes(fileEntries[fileIndex++]!));
+			return await view.setInput(edits, controller.signal) ?? [];
 		} catch (error) {
 			if (isCancellationError(error) || controller.signal.aborted) return [];
 			throw error;
 		} finally {
 			lifetime.dispose();
-			if (this.activeSession === session) this.activeSession = undefined;
+			if (this.activeSession === session) {
+				this.activeSession = undefined;
+				this.enabledContext.set(false);
+			}
 		}
 	}
 }
@@ -106,7 +125,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const focused = pane.element.ownerDocument.activeElement;
 			if (!focused || !pane.element.contains(focused)) return undefined;
 			return new AccessibleContentProvider(AccessibleViewProviderId.BulkEditPreview, { type },
-				() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('bulkEdit.help', 'Refactor preview\nUse Tab and Shift+Tab to move between changes and actions. Press Space to select a change. File operations and dependent text changes are selected together. Expand Show text change to review the selected replacements. Group by file or type to organize the changes. Press Ctrl or Command+Enter to apply selected changes. Press Escape to cancel. Changes to the source files disable Apply; cancel and run the refactoring again. Press Alt+F2 to read the full changes.'),
+				() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('bulkEdit.help', 'Refactor preview\nUse Tab and Shift+Tab to move between changes and actions. Press Space to select a change. File operations and dependent text changes are selected together. Choose Open changes to review the selected replacements in a diff editor, or expand Show text change. Group by file or type to organize the changes. Press Ctrl or Command+Enter to apply selected changes. Press Escape to cancel. Changes to the source files disable Apply; cancel and run the refactoring again. Press Alt+F2 to read the full changes.'),
 				() => { if (isHTMLElement(focused) && focused.isConnected) focused.focus(); },
 				AccessibilityVerbositySettingId.BulkEditPreview);
 		},

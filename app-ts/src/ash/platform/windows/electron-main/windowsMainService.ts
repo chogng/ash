@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { WORKSPACE_RECOVERY_CHANNEL, validateWorkspaceRecovery } from '../../window/common/window.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { AbstractDisposable, Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
@@ -178,6 +179,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 	private readonly rendererReadiness = new Map<number, DeferredPromise<void>>();
 	private readonly closedWindows = new WeakMap<TWindow, Promise<void>>();
 	private readonly workspaceOpenings = new Map<string, Promise<TWindow | undefined>>();
+	private readonly recoveredWorkspaces = new Set<string>();
 	private activationOrder: number[] = [];
 	private nextFileRequest = 0;
 	constructor(
@@ -235,6 +237,23 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 			host = hosts.find(host => host.openedWorkspace.id === workspace.id);
 		}
 		return host?.win;
+	}
+
+	/** Every newly restored renderer reads the same catalog. Claim each window once for this app run. */
+	public async restoreWorkspaces(workspaces: readonly IAnyWorkspaceIdentifier[], open: (workspace: IAnyWorkspaceIdentifier) => Promise<TWindow | undefined>): Promise<void> {
+		const results = await Promise.allSettled(workspaces.map(async workspace => {
+			if (this.recoveredWorkspaces.has(workspace.id)) return;
+			this.recoveredWorkspaces.add(workspace.id);
+			if (this.findWorkspace(workspace)) return;
+			try {
+				if (!await open(workspace)) throw new Error(`Workspace recovery did not open ${workspace.id}`);
+			} catch (error) {
+				this.recoveredWorkspaces.delete(workspace.id);
+				throw error;
+			}
+		}));
+		const failures = results.filter(result => result.status === 'rejected');
+		if (failures.length) throw new AggregateError(failures.map(result => result.reason), 'Failed to restore backup workspaces');
 	}
 
 	public openWorkspace(workspace: IAnyWorkspaceIdentifier, create: () => Promise<TWindow | undefined>): Promise<TWindow | undefined> {
@@ -600,6 +619,11 @@ export function windowOperationIpcRoute<TWindow extends IWorkbenchWindow<TWindow
 		validate: validateWindowOperation,
 		invoke: operation => service.perform(window, operation as WindowOperation),
 	};
+}
+
+/** The renderer selects recovery scopes; Main only creates their windows. */
+export function workspaceRecoveryIpcRoute(restore: (workspaces: readonly IAnyWorkspaceIdentifier[]) => Promise<void>): IpcRoute<unknown, unknown> {
+	return { channel: WORKSPACE_RECOVERY_CHANNEL, validate: validateWorkspaceRecovery, invoke: workspaces => restore(workspaces as readonly IAnyWorkspaceIdentifier[]) };
 }
 
 /** Publishes one window's committed workspace through the trusted IPC router. */

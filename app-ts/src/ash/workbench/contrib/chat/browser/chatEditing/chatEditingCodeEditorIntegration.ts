@@ -21,6 +21,8 @@ import { IChatEditingService, type IModifiedFileEntry, type IModifiedFileEntryCh
 export class ChatEditingCodeEditorIntegration extends Disposable implements IOverlayWidget {
 	private readonly domNode = $('.ash-chat-editing-overlay');
 	private readonly labelDomNode = $('.ash-chat-editing-count');
+	private readonly countdownDomNode = $('.ash-chat-editing-auto-accept');
+	private countingDown = false;
 	private readonly toolbar: WorkbenchToolBar;
 	private readonly decorations;
 	private zones: string[] = [];
@@ -29,7 +31,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 
 	constructor(private readonly editor: ICodeEditor, @IChatEditingService private readonly editing: IChatEditingService, @IContextMenuService contextMenus: IContextMenuService, @IContextKeyService contexts: IContextKeyService, @IAccessibleViewService accessibleViews: IAccessibleViewService, @INotificationService private readonly notifications: INotificationService) {
 		super();
-		this.domNode.append(this.labelDomNode);
+		this.domNode.append(this.labelDomNode, this.countdownDomNode);
 		this.toolbar = this._register(new WorkbenchToolBar(this.domNode, contextMenus, { ariaLabel: localize('chatEditing.toolbar', 'Review Agent changes') }));
 		this.decorations = editor.createDecorationsCollection();
 		this._register(toDisposable(() => { this.clearZones(); this.decorations.clear(); editor.removeOverlayWidget(this); }));
@@ -41,7 +43,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 				getProvider: () => {
 					const focused = this.domNode.ownerDocument.activeElement as HTMLElement;
 					if (!this.domNode.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(AccessibleViewProviderId.ChatEditing, { type }, () => type === AccessibleViewType.Help ? localize('chatEditing.help', 'Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Press Escape to return to the editor. Use the Review Agent changes command to review closed or deleted files.') : this.entry?.getAccessibleContent() ?? '', () => focused.isConnected ? focused.focus() : this.editor.focus(), AccessibilityVerbositySettingId.ChatEditing);
+					return new AccessibleContentProvider(AccessibleViewProviderId.ChatEditing, { type }, () => type === AccessibleViewType.Help ? localize('chatEditing.help', 'Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Cancel automatic acceptance to keep reviewing when a countdown appears. Press Escape to return to the editor. Use the Review Agent changes command to review closed or deleted files.') : [this.entry?.getAccessibleContent(), this.countdownDomNode.textContent].filter(Boolean).join('\n'), () => focused.isConnected ? focused.focus() : this.editor.focus(), AccessibilityVerbositySettingId.ChatEditing);
 				},
 			}));
 		}
@@ -53,6 +55,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 			if (event.key === 'Escape') { event.stopPropagation(); editor.focus(); }
 		}));
 		this._register(editing.onDidChange(() => this.render()));
+		this._register(editing.onDidChangeAutoAccept(entry => { if (entry === this.entry) { this.updateCountdown(); } }));
 		this._register(editor.onDidChangeModel(() => { this.index = 0; this.render(); }));
 		editor.addOverlayWidget(this);
 		this.render();
@@ -70,7 +73,15 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 		this.domNode.hidden = !entry;
 		this.clearZones();
 		this.decorations.clear();
-		if (!entry) { this.toolbar.setActions([]); this.editor.layoutOverlayWidget(this); return; }
+		if (!entry) {
+			if (this.countingDown) {
+				status(localize('chatEditing.autoAccepted', 'Agent changes accepted automatically.'));
+				if (this.domNode.contains(this.domNode.ownerDocument.activeElement)) { this.editor.focus(); }
+			}
+			this.countingDown = false;
+			this.countdownDomNode.textContent = '';
+			this.toolbar.setActions([]); this.editor.layoutOverlayWidget(this); return;
+		}
 		this.index = Math.min(this.index, Math.max(0, entry.hunks.length - 1));
 		this.labelDomNode.textContent = entry.hunks.length > 0 ? localize('chatEditing.counter', '{0} of {1}', this.index + 1, entry.hunks.length) : localize('chatEditing.fileSet', '{0} files', entry.resources.length);
 		this.decorations.set(entry.hunks.map(hunk => ({ range: hunk.range, options: { description: 'chat-editing-review', isWholeLine: true, className: 'ash-chat-editing-added', linesDecorationsClassName: 'ash-chat-editing-gutter' } })));
@@ -87,13 +98,39 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 				this.zones.push(accessor.addZone({ afterLineNumber: Math.max(0, hunk.range.startLineNumber - 1), heightInLines: height, domNode: deletedDomNode }));
 			}
 		});
+		this.updateCountdown();
+		this.renderActions(entry);
+		this.editor.layoutOverlayWidget(this);
+	}
+
+	private renderActions(entry: IModifiedFileEntry): void {
 		const actions: IAction[] = [];
 		if (entry.hunks.length > 0) {
 			actions.push(this.action('previous', localize('chatEditing.previous', 'Previous change'), Lxicon.chevronUp, () => this.navigate(-1)), this.action('next', localize('chatEditing.next', 'Next change'), Lxicon.chevronDown, () => this.navigate(1)));
 			actions.push(this.action('acceptHunk', localize('chatEditing.acceptHunk', 'Accept change'), Lxicon.check, () => this.decide(entry, true, entry.hunks[this.index])), this.action('rejectHunk', localize('chatEditing.rejectHunk', 'Reject change'), Lxicon.discard, () => this.decide(entry, false, entry.hunks[this.index])));
 		}
 		actions.push(this.action('accept', entry.isFileOperation ? localize('chatEditing.acceptSet', 'Accept change set') : localize('chatEditing.accept', 'Accept file changes'), Lxicon.check, () => this.decide(entry, true)), this.action('reject', entry.isFileOperation ? localize('chatEditing.rejectSet', 'Reject change set') : localize('chatEditing.reject', 'Reject file changes'), Lxicon.discard, () => this.decide(entry, false)));
+		if (this.countingDown) {
+			actions.push(this.action('cancelAutoAccept', localize('chatEditing.cancelAutoAccept', 'Cancel automatic acceptance'), Lxicon.close, () => {
+				this.editing.cancelAutoAccept(entry);
+				status(localize('chatEditing.autoAcceptCancelled', 'Automatic acceptance cancelled. Changes remain available for review.'));
+				this.toolbar.focus();
+			}));
+		}
 		this.toolbar.setActions(actions);
+	}
+
+	private updateCountdown(): void {
+		if (!this.entry) { return; }
+		const seconds = this.editing.getAutoAcceptCountdown(this.entry);
+		this.countdownDomNode.textContent = seconds === undefined ? '' : localize('chatEditing.autoAcceptCountdown', 'Accepting in {0}s', seconds);
+		this.countdownDomNode.hidden = seconds === undefined;
+		if (this.countingDown !== (seconds !== undefined)) {
+			this.countingDown = seconds !== undefined;
+			this.renderActions(this.entry);
+			if (this.countingDown) { status(localize('chatEditing.autoAcceptStarted', 'Agent changes will be accepted in {0} seconds. Cancel automatic acceptance to keep reviewing.', seconds)); }
+		}
+		// Ticks update only text, preserving diff zones and the focused toolbar action.
 		this.editor.layoutOverlayWidget(this);
 	}
 

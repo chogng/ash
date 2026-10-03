@@ -1,6 +1,8 @@
+import { parseJsonc } from '../../base/common/jsonc.js';
+import { applyEdits, setProperty } from '../../base/common/jsonEdit.js';
+
 export const WorkbenchModeId = Object.freeze({
 	Code: 'code',
-	Academic: 'academic',
 } as const);
 
 export type WorkbenchModeId = typeof WorkbenchModeId[keyof typeof WorkbenchModeId];
@@ -31,12 +33,6 @@ const definitions: Readonly<Record<WorkbenchModeId, WorkbenchModeDefinition>> = 
 		dedicatedSessions: Object.freeze({
 			rendererEntry: 'sessions-code',
 		}),
-	}),
-	[WorkbenchModeId.Academic]: Object.freeze({
-		id: WorkbenchModeId.Academic,
-		label: 'Academic',
-		title: 'Ash Academic',
-		storageNamespace: 'academic',
 	}),
 });
 
@@ -71,4 +67,18 @@ export function withWorkbenchModeId(url: string, modeId: WorkbenchModeId): strin
 	const result = new URL(url);
 	result.searchParams.set(WorkbenchModeQueryParameter, modeId);
 	return result.href;
+}
+
+/** Migrates the retired mode in its persisted source; ordinary mode validation remains strict. */
+export function migrateAcademicWorkbenchSettings(source: string): string | undefined {
+	const values = parseJsonc(source, 'settings') as Record<string, unknown>;
+	if (values[WorkbenchModeConfigurationKey] !== 'academic') { return undefined; }
+	return applyEdits(source, setProperty(source, [WorkbenchModeConfigurationKey], WorkbenchModeId.Code));
+}
+
+export function migrateAcademicWorkbenchUrl(url: string): string {
+	const parsed = new URL(url);
+	if (parsed.searchParams.get(WorkbenchModeQueryParameter) !== 'academic') { return url; }
+	parsed.searchParams.set(WorkbenchModeQueryParameter, WorkbenchModeId.Code);
+	return parsed.href;
 }

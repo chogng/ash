@@ -13,7 +13,7 @@ test("editor exposes one flat VS Code-shaped domain for both feature implementat
 	assert.deepEqual(directoryNames(join(editorRoot, "common")), ["commands", "config", "core", "cursor", "diff", "languages", "model", "services", "standalone", "tokens", "viewLayout", "viewModel"]);
 	assert.deepEqual(directoryNames(join(editorRoot, "browser")), ["config", "controller", "gpu", "services", "view", "viewParts", "widget"]);
 	assert.equal(statSafe(join(editorRoot, "contrib", "academic")), true);
-	assert.equal(statSafe(join(editorRoot, "editor.academic.all.ts")), true);
+	assert.equal(statSafe(join(editorRoot, "editor.all.ts")), true);
 	assert.deepEqual(collectFiles(editorRoot).filter(file => /[\\/]index\.ts$/u.test(file)), []);
 });
 
@@ -90,7 +90,7 @@ test("document editing keeps lines and orthogonal rich semantics in one TextMode
 	const editor = readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
 	const formatting = readFileSync(join(editorRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8");
 	const academicContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
-	const editorAll = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
+	const editorAll = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
 	assert.match(schema, /codeBlock:/u);
 	assert.match(schema, /"root" \| "group" \| "block" \| "line" \| "inline" \| "text"/u);
 	assert.match(pane, /export class DocumentEditorPane/u);
@@ -143,9 +143,10 @@ test("document editing keeps lines and orthogonal rich semantics in one TextMode
 	assert.match(documentPane, /new CollaborationContribution/u);
 	assert.doesNotMatch(collaborationWidget, /createInvite|listMembers|accessToken|RoomRole/u);
 	assert.doesNotMatch(collaborationWidget, /AppServerDocumentCollaborationService|endpoint|bearerToken/u);
-	assert.match(collaborationRouter, /ownerWindow\.prompt/u);
+	assert.match(collaborationRouter, /dialogs\.input/u);
+	assert.doesNotMatch(collaborationRouter, /ownerWindow\.prompt/u);
 	assert.match(collaborationRouter, /RemoteDocumentCollaborationService/u);
-	assert.match(documentPane, /createDocumentCollaborationService\(ownerWindow\)/u);
+	assert.match(documentPane, /createDocumentCollaborationService\(\)/u);
 	assert.doesNotMatch(editor, /Session/u);
 	assert.doesNotMatch(editorAll, /academicEditor\.contribution|workbench/u);
 });

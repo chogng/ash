@@ -107,6 +107,24 @@ use crate::protocol::attachments::AttachmentImportRemoteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentMaterializeResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupContentDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupDiscardParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupListParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupRecordDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupWorkspaceDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupWorkspacesParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupWorkspacesResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupWriteParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::common::TextDocumentsCapability;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentApplyParams;
@@ -126,6 +144,9 @@ use crate::protocol::text_document::TextDocumentReadParams;
 use crate::protocol::text_document::TextDocumentReadResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentReleaseParams;
+use crate::protocol::text_document::TextDocumentTurnFinished;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentTurnOutcome;
 #[cfg(any(test, feature = "export"))]
 use guardian_environment::CommandEvidence;
 #[cfg(any(test, feature = "export"))]
@@ -3539,6 +3560,10 @@ client_methods! {
         response: FsReadFileResult,
         serialization: GlobalSharedRead,
     },
+    BackupWorkspaces => "backup/workspaces" { params: BackupWorkspacesParams, response: BackupWorkspacesResult, serialization: None, },
+    BackupList => "backup/list" { params: BackupListParams, response: BackupListResult, serialization: None, },
+    BackupWrite => "backup/write" { params: BackupWriteParams, response: BackupRecordDto, serialization: None, },
+    BackupDiscard => "backup/discard" { params: BackupDiscardParams, response: (), serialization: None, },
     FsReadBinaryFile => "fs/readBinaryFile" {
         params: FsReadBinaryFileParams,
         response: FsReadBinaryFileResult,
@@ -4315,6 +4340,7 @@ macro_rules! notification_storage {
 }
 
 server_notifications! {
+    TextDocumentTurnFinished => "textDocument/turnFinished" { params: TextDocumentTurnFinished, },
     TestingUpdated => "testing/updated" {
         params: TestingUpdate,
     },
@@ -4450,6 +4476,15 @@ typescript_bindings! {
     crate::protocol::issues::IssueReadResult,
     crate::protocol::issues::IssueComment,
     AccountDto,
+    BackupContentDto,
+    BackupDiscardParams,
+    BackupListParams,
+    BackupListResult,
+    BackupRecordDto,
+    BackupWorkspaceDto,
+    BackupWorkspacesParams,
+    BackupWorkspacesResult,
+    BackupWriteParams,
     AccountLoginCancelParams,
     AccountLoginCancelResult,
     AccountLoginCancelStatusDto,
@@ -4594,6 +4629,8 @@ typescript_bindings! {
     TextDocumentReadParams,
     TextDocumentReadResult,
     TextDocumentApplyParams,
+    TextDocumentTurnFinished,
+    TextDocumentTurnOutcome,
     TextDocumentApplyResult,
     TextDocumentChangeDto,
     TextDocumentReleaseParams,

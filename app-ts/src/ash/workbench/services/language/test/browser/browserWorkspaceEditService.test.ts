@@ -1,7 +1,10 @@
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { TestDialogService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { MemoryResourceStore, MemoryFileService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
-import { Emitter, Event } from "../../../../../base/common/event.js";
+import { Event } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserTextModelService } from "../../../textmodelResolver/browser/browserTextModelService.js";
 import { Position } from "../../../../../editor/common/core/position.js";
@@ -9,7 +12,6 @@ import { Range } from "../../../../../editor/common/core/range.js";
 import { type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type ITextResourceStore } from "../../../textmodelResolver/common/textResourceStore.js";
 import { BrowserWorkingCopyService } from "../../../workingCopy/browser/browserWorkingCopyService.js";
 import { type IWorkingCopy } from "../../../workingCopy/common/workingCopyService.js";
-import { BrowserWorkspaceEditService } from "../../browser/browserWorkspaceEditService.js";
 import { BulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
 import { ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileService } from "../../../../../platform/files/common/files.js";
@@ -23,8 +25,10 @@ test("workspace edits preflight every document before mutating and persist close
 	using store = new MemoryResourceStore([[first, "alpha"], [second, "bravo"]]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([[first, "alpha"], [second, "bravo"]]);
-	using service = new BrowserWorkspaceEditService(models, workingCopies, files);
+	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 
 	await service.apply({ entries: [
 		{ kind: "textDocument", resource: first, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "one" }] },
@@ -42,12 +46,15 @@ test("workspace edit undo restores multiple closed documents", async () => {
 	using store = new MemoryResourceStore([[first, 'alpha'], [second, 'bravo']]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
-	using service = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[first, 'alpha'], [second, 'bravo']]));
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
+	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[first, 'alpha'], [second, 'bravo']]), configuration, dialogs);
 
 	const applied = await service.apply({ entries: [
 		{ kind: 'textDocument', resource: first, edits: [{ range: new Range(1, 1, 1, 6), text: 'one' }] },
 		{ kind: 'textDocument', resource: second, edits: [{ range: new Range(1, 1, 1, 6), text: 'two' }] },
 	] });
+	assert.ok(applied.isApplied);
 	await applied.undo();
 	assert.deepEqual([store.text(first), store.text(second)], ['alpha', 'bravo']);
 });
@@ -58,8 +65,10 @@ test('approved bulk edits still reject a document that changed during preview', 
 	using models = new BrowserTextModelService(store);
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	using workingCopies = new BrowserWorkingCopyService();
-	using transaction = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[resource, 'original']]));
-	using bulkEdits = new BulkEditService(transaction);
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
+
+	using bulkEdits = new BulkEditService(models, workingCopies, new MemoryFileService([[resource, 'original']]), configuration, dialogs);
 	using handler = bulkEdits.setPreviewHandler(async edits => {
 		reference.model.setValue('changed');
 		return edits;
@@ -74,8 +83,10 @@ test('bulk edit progress follows the committed operations and undo restores thei
 	using store = new MemoryResourceStore([[first, 'a'], [second, 'b']]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
-	using transaction = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[first, 'a'], [second, 'b']]));
-	using bulkEdits = new BulkEditService(transaction);
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
+
+	using bulkEdits = new BulkEditService(models, workingCopies, new MemoryFileService([[first, 'a'], [second, 'b']]), configuration, dialogs);
 	const progress: unknown[] = [];
 	const applied = await bulkEdits.apply({ entries: [
 		{ kind: 'textDocument', resource: first, edits: [{ range: new Range(1, 1, 1, 2), text: 'A' }] },
@@ -83,6 +94,7 @@ test('bulk edit progress follows the committed operations and undo restores thei
 	] }, { progress: { report: update => progress.push(update) } });
 	assert.deepEqual({ progress, text: [store.text(first), store.text(second)] }, { progress: [{ total: 2, increment: 0 }, { increment: 1 }, { increment: 1 }], text: ['A', 'B'] });
 	if (!applied.isApplied) throw new Error('Expected the transaction to apply');
+	assert.ok(applied.isApplied);
 	await applied.undo();
 	assert.deepEqual([store.text(first), store.text(second)], ['a', 'b']);
 });
@@ -93,9 +105,11 @@ test('bulk edits with unchanged text and ignored file operations report no appli
 	using store = new MemoryResourceStore([[resource, 'original']]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([[resource, 'original']]);
-	using transaction = new BrowserWorkspaceEditService(models, workingCopies, files);
-	using bulkEdits = new BulkEditService(transaction);
+
+	using bulkEdits = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 	const progress: unknown[] = [];
 	const result = await bulkEdits.apply({ entries: [
 		{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 9), text: 'original' }] },
@@ -112,8 +126,10 @@ test('bulk text edits against one resource use the original coordinate space', a
 	using store = new MemoryResourceStore([[resource, 'abc def']]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
-	using workspaceEdits = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[resource, 'abc def']]));
-	using bulkEdits = new BulkEditService(workspaceEdits);
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
+
+	using bulkEdits = new BulkEditService(models, workingCopies, new MemoryFileService([[resource, 'abc def']]), configuration, dialogs);
 
 	const result = await bulkEdits.apply([
 		new ResourceTextEdit(resource, { range: new Range(1, 1, 1, 4), text: 'longword' }),
@@ -121,6 +137,7 @@ test('bulk text edits against one resource use the original coordinate space', a
 	]);
 	assert.equal(store.text(resource), 'longword XYZ');
 	if (!result.isApplied) throw new Error('Expected the bulk edit to apply');
+	assert.ok(result.isApplied);
 	await result.undo();
 	assert.equal(store.text(resource), 'abc def');
 });
@@ -130,8 +147,10 @@ test('bulk language workspace edits preserve explicitly ordered document operati
 	using store = new MemoryResourceStore([[resource, 'abc def']]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
-	using workspaceEdits = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[resource, 'abc def']]));
-	using bulkEdits = new BulkEditService(workspaceEdits);
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
+
+	using bulkEdits = new BulkEditService(models, workingCopies, new MemoryFileService([[resource, 'abc def']]), configuration, dialogs);
 
 	const result = await bulkEdits.apply({ entries: [
 		{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 4), text: 'longword' }] },
@@ -148,13 +167,16 @@ test("workspace edit undo reverses a created file and its inserted text", async 
 	using store = new MemoryResourceStore([]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([]);
-	using service = new BrowserWorkspaceEditService(models, workingCopies, files);
+	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 
 	const applied = await service.apply({ entries: [
 		{ kind: 'create', resource, existing: 'error' },
 		{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 1), text: 'ready' }] },
 	] });
+	assert.ok(applied.isApplied);
 	await applied.undo();
 	assert.equal(files.has(resource), false);
 });
@@ -167,14 +189,17 @@ test('workspace edit undo restores file creation, rename, and deletion together'
 	using store = new MemoryResourceStore([]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([[source, 'source'], [deleted, 'deleted']]);
-	using service = new BrowserWorkspaceEditService(models, workingCopies, files);
+	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 
 	const applied = await service.apply({ entries: [
 		{ kind: 'create', resource: created, existing: 'error' },
 		{ kind: 'rename', source, target: renamed, existing: 'error' },
 		{ kind: 'delete', resource: deleted, missing: 'error', mode: 'fileOrEmptyDirectory' },
 	] });
+	assert.ok(applied.isApplied);
 	await applied.undo();
 	assert.deepEqual({
 		created: files.has(created),
@@ -190,7 +215,9 @@ test('workspace edit undo leaves all resources intact when another target change
 	using store = new MemoryResourceStore([[first, 'alpha'], [second, 'bravo']]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
-	using service = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[first, 'alpha'], [second, 'bravo']]));
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
+	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[first, 'alpha'], [second, 'bravo']]), configuration, dialogs);
 	const secondReference = await models.acquire({ resource: second }, new AbortController().signal);
 
 	const applied = await service.apply({ entries: [
@@ -198,6 +225,7 @@ test('workspace edit undo leaves all resources intact when another target change
 		{ kind: 'textDocument', resource: second, edits: [{ range: new Range(1, 1, 1, 6), text: 'two' }] },
 	] });
 	secondReference.model.applyOperations([{ range: new Range(1, 4, 1, 4), text: '!' }]);
+	assert.ok(applied.isApplied);
 	await assert.rejects(applied.undo(), /changed before replacement/);
 	assert.deepEqual([store.text(first), secondReference.model.getText()], ['one', 'two!']);
 	secondReference.dispose();
@@ -208,7 +236,9 @@ test("workspace edits keep open working copies dirty instead of saving behind th
 	using store = new MemoryResourceStore([[resource, "alpha"]]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
-	using service = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[resource, "alpha"]]));
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
+	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[resource, "alpha"]]), configuration, dialogs);
 	const reference = await models.acquire({ resource }, new AbortController().signal);
 	const registration = workingCopies.register(workingCopy(reference));
 
@@ -227,7 +257,9 @@ test("workspace edit preflight rejects stale or invalid edits without changing a
 	using store = new MemoryResourceStore([[first, "alpha"], [second, "bravo"]]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
-	using service = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[first, "alpha"], [second, "bravo"]]));
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
+	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[first, "alpha"], [second, "bravo"]]), configuration, dialogs);
 	const reference = await models.acquire({ resource: first }, new AbortController().signal);
 
 	await assert.rejects(service.apply({ entries: [
@@ -247,7 +279,9 @@ test("workspace edit preflight rejects a changed target content baseline atomica
 	using store = new MemoryResourceStore([[first, "first"], [second, "changed"]]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
-	using service = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[first, "first"], [second, "changed"]]));
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
+	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[first, "first"], [second, "changed"]]), configuration, dialogs);
 
 	await assert.rejects(service.apply({ entries: [
 		{ kind: "textDocument", resource: first, expectedText: "first", edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] },
@@ -262,8 +296,10 @@ test("workspace edit applies create then text edit in protocol order", async () 
 	using store = new MemoryResourceStore([]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([]);
-	using service = new BrowserWorkspaceEditService(models, workingCopies, files);
+	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 
 	await service.apply({ entries: [
 		{ kind: "create", resource: created, existing: "error" },
@@ -280,9 +316,11 @@ test("workspace edit rolls back created resources when a later operation fails",
 	using store = new MemoryResourceStore([]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([[target, "occupied"]]);
 	files.failRename = true;
-	using service = new BrowserWorkspaceEditService(models, workingCopies, files);
+	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 
 	await assert.rejects(service.apply({ entries: [
 		{ kind: "create", resource: created, existing: "error" },
@@ -298,14 +336,16 @@ test("workspace edits classify caller cancellation before mutating resources", a
 	using store = new MemoryResourceStore([]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([]);
-	using service = new BrowserWorkspaceEditService(models, workingCopies, files);
+	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 	const controller = new AbortController();
 	controller.abort("superseded");
 
 	await assert.rejects(service.apply({ entries: [
 		{ kind: "create", resource: created, existing: "error" },
-	] }, controller.signal), error => isCancellationError(error) && error.reason === "superseded");
+	] }, { token: controller.signal }), error => isCancellationError(error) && error.reason === "superseded");
 
 	assert.equal(files.has(created), false);
 });
@@ -329,107 +369,21 @@ function workingCopy(reference: Awaited<ReturnType<BrowserTextModelService["acqu
 	};
 }
 
-class MemoryResourceStore implements ITextResourceStore {
-	private readonly changes = new Emitter<TextResourceChangeEvent>();
-	readonly onDidChange = this.changes.event;
-	readonly saved: string[] = [];
-	private readonly resources = new Map<string, { text: string; revision: number }>();
-
-	constructor(resources: readonly (readonly [URI, string])[]) {
-		for (const [resource, text] of resources) this.resources.set(resource.toString(), { text, revision: 1 });
-	}
-
-	text(resource: URI): string {
-		return this.require(resource).text;
-	}
-
-	async resolve(request: TextResourceResolveRequest): Promise<TextResourceContent> {
-		const entry = this.resources.get(request.resource.toString());
-		if (!entry && request.bootstrapText !== undefined) return { resource: request.resource, text: request.bootstrapText, revision: undefined };
-		if (!entry) throw new Error(`Unknown resource ${request.resource.toString()}`);
-		return { resource: request.resource, text: entry.text, revision: String(entry.revision) };
-	}
-
-	async save(request: TextResourceSaveRequest): Promise<{ readonly revision: string }> {
-		let entry = this.resources.get(request.resource.toString());
-		if (!entry) {
-			entry = { text: "", revision: 0 };
-			this.resources.set(request.resource.toString(), entry);
-		}
-		entry.text = request.text;
-		entry.revision += 1;
-		this.saved.push(request.resource.toString());
-		return { revision: String(entry.revision) };
-	}
-
-	dispose(): void {
-		this.changes.dispose();
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
-
-	private require(resource: URI): { text: string; revision: number } {
-		const entry = this.resources.get(resource.toString());
-		if (!entry) throw new Error(`Unknown resource ${resource.toString()}`);
-		return entry;
-	}
-}
-
-class MemoryFileService implements IFileService {
-	readonly onDidChangeFiles = Event.None;
-	private readonly resources = new Map<string, string>();
-	failRename = false;
-
-	constructor(resources: readonly (readonly [URI, string])[]) {
-		for (const [resource, text] of resources) this.resources.set(resource.toString(), text);
-	}
-
-	has(resource: URI): boolean { return this.resources.has(resource.toString()); }
-	text(resource: URI): string { const text = this.resources.get(resource.toString()); if (text === undefined) throw new Error(`Unknown resource ${resource.toString()}`); return text; }
-	async stat(resource: URI) { if (!this.has(resource)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: this.text(resource).length, readonly: false, modifiedAtMillis: undefined }; }
-	async readDirectory(): Promise<readonly never[]> { return []; }
-	async readFile(resource: URI) { return { resource, content: this.text(resource), revision: this.text(resource) }; }
-	async readFileBytes(resource: URI) { return { resource, bytes: new TextEncoder().encode(this.text(resource)), revision: this.text(resource) }; }
-	async writeFile(request: { readonly resource: URI; readonly content: string }) { this.resources.set(request.resource.toString(), request.content); return { stat: await this.stat(request.resource), revision: request.content }; }
-	async writeFileBytes(resource: URI, bytes: Uint8Array) { this.resources.set(resource.toString(), new TextDecoder().decode(bytes)); return { stat: await this.stat(resource), revision: 'bytes' }; }
-	async createFile(resource: URI, existing: FileExistingTargetBehavior) {
-		if (this.has(resource)) {
-			if (existing === "error") throw new Error("FileSystemOperationFailed");
-			if (existing === "ignore") return this.stat(resource);
-		}
-		this.resources.set(resource.toString(), "");
-		return this.stat(resource);
-	}
-	async createDirectory(): Promise<never> { throw new Error('Workspace edit tests do not create directories'); }
-	async copy(): Promise<void> { throw new Error("Copy is not used in this test"); }
-	async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
-		if (this.failRename) throw new Error("injected rename failure");
-		const sourceText = this.text(source);
-		if (this.has(target)) {
-			if (existing === "error") throw new Error("FileSystemOperationFailed");
-			if (existing === "ignore") return;
-		}
-		this.resources.delete(source.toString());
-		this.resources.set(target.toString(), sourceText);
-	}
-	async delete(resource: URI, missing: FileMissingTargetBehavior, _mode: FileDeleteMode): Promise<void> {
-		if (!this.resources.delete(resource.toString()) && missing === "error") throw new Error("FileSystemOperationFailed");
-	}
-}
 
 test("workspace edit content checks accept the current CRLF document and preserve its EOL", async () => {
 	const resource = URI.file("C:\\project\\crlf.ts");
 	using store = new MemoryResourceStore([[resource, "alpha\r\nbravo"]]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
-	using service = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[resource, "alpha\r\nbravo"]]));
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
+	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[resource, "alpha\r\nbravo"]]), configuration, dialogs);
 	const result = await service.apply({ entries: [{
 		kind: "textDocument", resource, expectedText: "alpha\r\nbravo",
 		edits: [{ range: new Range(1, 1, 1, 6), text: "updated" }],
 	}] });
 	assert.equal(store.text(resource), "updated\r\nbravo");
+	assert.ok(result.isApplied);
 	await result.undo();
 	assert.equal(store.text(resource), "alpha\r\nbravo");
 });
@@ -440,6 +394,8 @@ test("workspace edits recheck model versions after asynchronous file operations"
 	using store = new MemoryResourceStore([[resource, "original"]]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
+	using configuration = new InMemoryConfigurationService();
+	const dialogs = new TestDialogService();
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	const files = new class extends MemoryFileService {
 		override async createFile(...args: Parameters<MemoryFileService['createFile']>) {
@@ -450,7 +406,7 @@ test("workspace edits recheck model versions after asynchronous file operations"
 			return result;
 		}
 	}([[resource, "original"]]);
-	using service = new BrowserWorkspaceEditService(models, workingCopies, files);
+	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 	await assert.rejects(service.apply({ entries: [
 		{ kind: "create", resource: created, existing: "error" },
 		{ kind: "textDocument", resource, version: reference.model.version, edits: [{ range: new Range(1, 1, 1, 9), text: "agent" }] },

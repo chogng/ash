@@ -2,8 +2,9 @@ import { VSBuffer } from '../../../base/common/buffer.js';
 import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
-import { type TextEdit, normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from '../../common/languages.js';
+import { type TextEdit, normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry, type LanguageTextDocumentEdit, type WorkspaceEdit } from '../../common/languages.js';
 import { type ICodeEditor } from '../editorBrowser.js';
+import type { TextModelEditSource } from '../../common/textModelEditSource.js';
 
 export const IBulkEditService = createServiceIdentifier<IBulkEditService>('bulkEditService');
 
@@ -37,7 +38,18 @@ interface ResourceFileEditLike {
 export abstract class ResourceEdit {
 	protected constructor(readonly metadata?: WorkspaceEditMetadata) {}
 
-	static convert(edit: LanguageWorkspaceEdit): ResourceEdit[] {
+	static convert(edit: LanguageWorkspaceEdit | WorkspaceEdit): ResourceEdit[] {
+		if ('edits' in edit) {
+			return edit.edits.map(entry => {
+				if (ResourceTextEdit.is(entry)) {
+					return ResourceTextEdit.lift(entry);
+				}
+				if (ResourceFileEdit.is(entry)) {
+					return ResourceFileEdit.lift(entry);
+				}
+				throw new TypeError('Unsupported workspace edit');
+			});
+		}
 		return normalizeLanguageWorkspaceEdit(edit).entries.flatMap(entry => resourceEdits(entry));
 	}
 }
@@ -59,6 +71,8 @@ export class ResourceTextEdit extends ResourceEdit {
 		readonly textEdit: TextEdit,
 		readonly versionId: number | undefined = undefined,
 		metadata?: WorkspaceEditMetadata,
+		/** Ordered language edits capture the baseline of each document step. */
+		readonly snapshot?: LanguageTextDocumentEdit,
 	) {
 		super(metadata);
 	}
@@ -99,7 +113,7 @@ export interface IBulkEditOptions {
 	readonly undoRedoGroupId?: number;
 	readonly confirmBeforeUndo?: boolean;
 	readonly respectAutoSaveConfig?: boolean;
-	readonly reason?: unknown;
+	readonly reason?: TextModelEditSource;
 }
 
 export type IBulkEditResult = {
@@ -109,6 +123,7 @@ export type IBulkEditResult = {
 	readonly ariaSummary: string;
 	readonly isApplied: true;
 	readonly undo: () => Promise<void>;
+	readonly resources: readonly URI[];
 };
 
 export type IBulkEditPreviewHandler = (edits: ResourceEdit[], options?: IBulkEditOptions) => Promise<ResourceEdit[]>;
@@ -117,13 +132,13 @@ export interface IBulkEditService {
 	readonly _serviceBrand: undefined;
 	hasPreviewHandler(): boolean;
 	setPreviewHandler(handler: IBulkEditPreviewHandler): IDisposable;
-	apply(edit: ResourceEdit[] | LanguageWorkspaceEdit, options?: IBulkEditOptions): Promise<IBulkEditResult>;
+	apply(edit: ResourceEdit[] | WorkspaceEdit | LanguageWorkspaceEdit, options?: IBulkEditOptions): Promise<IBulkEditResult>;
 }
 
 function resourceEdits(entry: LanguageWorkspaceEditEntry): ResourceEdit[] {
 	switch (entry.kind) {
 		case 'textDocument':
-			return entry.edits.map(edit => new ResourceTextEdit(entry.resource, edit, entry.version));
+			return entry.edits.map(edit => new ResourceTextEdit(entry.resource, edit, entry.version, undefined, entry));
 		case 'create':
 			return [new ResourceFileEdit(undefined, entry.resource, {
 				...(entry.contents !== undefined ? { contents: Promise.resolve(VSBuffer.fromString(entry.contents)) } : {}),
@@ -142,3 +157,6 @@ function resourceEdits(entry: LanguageWorkspaceEditEntry): ResourceEdit[] {
 			})];
 	}
 }
+
+/** A captured document version or content no longer matches the shared model. */
+export class WorkspaceEditConflictError extends Error {}

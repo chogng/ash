@@ -1,7 +1,5 @@
 import { ITextModelService } from '../../editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../../workbench/services/textmodelResolver/common/textModelResolverService.js';
-import { IWorkspaceEditService } from '../../workbench/services/language/common/workspaceEditService.js';
-import { BrowserWorkspaceEditService } from '../../workbench/services/language/browser/browserWorkspaceEditService.js';
 import { IBulkEditService } from '../../editor/browser/services/bulkEditService.js';
 import { BulkEditService } from '../../workbench/contrib/bulkEdit/browser/bulkEditService.js';
 import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
@@ -366,9 +364,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ITextModelResourceService, textModels);
 		services.registerInstance(IFileTextModelService, textModels);
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
-		const workspaceEdits = this._register(new BrowserWorkspaceEditService(textModels, workingCopies, fileService));
-		services.registerInstance(IWorkspaceEditService, workspaceEdits);
-		services.registerInstance(IBulkEditService, this._register(new BulkEditService(workspaceEdits)));
+		services.registerInstance(IBulkEditService, this._register(services.createInstance(BulkEditService)));
 		services.registerInstance(IChatEditingService, this._register(services.createInstance(ChatEditingService)));
 		if (options.createTextDocumentHost) { this._register(options.createTextDocumentHost(services)); }
 		services.registerInstance(IChatService, chat);

@@ -1,3 +1,4 @@
+import { EditSources } from '../../../common/textModelEditSource.js';
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
@@ -10,7 +11,7 @@ import { EditorOption } from '../../../common/config/editorOptions.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
 import { ActionListItemKind, type IActionListItem } from '../../../../platform/actionWidget/browser/actionList.js';
 import { localize } from '../../../../nls.js';
-import { IBulkEditService } from '../../../browser/services/bulkEditService.js';
+import { IBulkEditService, type IBulkEditOptions } from '../../../browser/services/bulkEditService.js';
 
 interface CodeActionEntry {
 	readonly action: languages.LanguageCodeAction;
@@ -34,7 +35,7 @@ export class CodeActionController extends Disposable {
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
 		private readonly diagnostics: TextDecorationCollection<languages.LanguageDiagnostic>,
-		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit) => void | Promise<void>) | undefined,
+		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>) | undefined,
 		private readonly onError: (error: unknown) => void,
 		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
 		@IActionWidgetService private readonly actionWidgetService: IActionWidgetService,
@@ -189,14 +190,19 @@ export class CodeActionController extends Disposable {
 				this.close();
 				return;
 			}
+			const options: IBulkEditOptions = {
+				editor: this.editor, label: resolved.title, quotableLabel: resolved.title,
+				code: 'undoredo.codeAction', respectAutoSaveConfig: true, showPreview: preview,
+				reason: EditSources.codeAction({ kind: resolved.kind, providerId: undefined }),
+			};
 			if (preview) {
 				// Dismissing the menu hands focus to the preview without cancelling its version-bound request.
 				this.actionWidgetService.hide(false);
 				editDispatched = true;
-				await this.bulkEditService.apply(resolved.edit, { editor: this.editor, showPreview: true, token: context.signal, label: resolved.title });
+				await this.bulkEditService.apply(resolved.edit, { ...options, token: context.signal });
 			} else if (this.applyWorkspaceEdit) {
 				editDispatched = true;
-				await this.applyWorkspaceEdit(resolved.edit);
+				await this.applyWorkspaceEdit(resolved.edit, options);
 			} else {
 				const documentEdit = resolved.edit.entries.find(edit => edit.kind === "textDocument" && edit.resource.toString() === context.resource.toString());
 				if (resolved.edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== "textDocument") throw new Error("This editor host cannot apply a multi-resource code action");

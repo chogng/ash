@@ -211,7 +211,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			workingCopyService: options.workingCopyService,
 			onWillCloseEditor: (group, input, pane) => this.confirmEditorClose(group, input, pane),
 			onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range, selectionSource: TextEditorSelectionSource.JUMP }).then(() => undefined),
-			onApplyWorkspaceEdit: options.bulkEditService ? edit => options.bulkEditService!.apply(edit).then(() => undefined) : undefined,
+			onApplyWorkspaceEdit: options.bulkEditService ? (edit, bulkOptions) => options.bulkEditService!.apply(edit, bulkOptions).then(() => undefined) : undefined,
 			titleActions: options.titleActions,
 			showBreadcrumbPicker: options.showBreadcrumbPicker,
 			breadcrumbsService: options.breadcrumbsService,
@@ -267,7 +267,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				serverEvents: options.serverEvents,
 				workingCopyService: options.workingCopyService,
 				onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range, selectionSource: TextEditorSelectionSource.JUMP }).then(() => undefined),
-				onApplyWorkspaceEdit: options.bulkEditService ? edit => options.bulkEditService!.apply(edit).then(() => undefined) : undefined,
+				onApplyWorkspaceEdit: options.bulkEditService ? (edit, bulkOptions) => options.bulkEditService!.apply(edit, bulkOptions).then(() => undefined) : undefined,
 				...(options.titleActions ? {
 					actionServices: {
 						menuService: options.titleActions.menuService,

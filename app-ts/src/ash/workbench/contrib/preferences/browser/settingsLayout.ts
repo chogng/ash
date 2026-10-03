@@ -271,7 +271,12 @@ export const SettingsNavigation = [
 				description: 'Choose the default agent and shared execution behavior.',
 				keywords: ['default agent', 'default team', 'execution'],
 				presentation: 'general',
-				groups: [],
+				groups: [{
+					id: 'chat-editing',
+					get label() { return localize('settings.chatEditing.label', 'Editing'); },
+					get description() { return localize('settings.chatEditing.description', 'Choose how Agent edits are reviewed.'); },
+					settings: ['chat.editing.autoAcceptDelay'],
+				}],
 			},
 			{
 				id: 'models',

@@ -10,7 +10,7 @@ export interface EditorInputMatcher {
 
 /** Matches structured document resources without loading their browser view. */
 export function matchDocumentEditor(input: EditorInput, matcher: EditorInputMatcher): EditorPaneMatch {
-	if (matcher.contentTypes?.includes(input.contentType ?? "")) return EditorPaneMatch.Default;
+	if (input.contentType !== undefined) return matcher.contentTypes?.includes(input.contentType) ? EditorPaneMatch.Default : EditorPaneMatch.None;
 	const path = input.resource.path.toLowerCase();
 	if (matcher.extensions?.some(extension => path.endsWith(extension.toLowerCase()))) return EditorPaneMatch.Default;
 	return EditorPaneMatch.None;

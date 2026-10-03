@@ -1,5 +1,6 @@
 import { createTestLocaleService } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import '../../../chat/common/languageModelsConfiguration.js';
+import '../../../chat/browser/chat.shared.contribution.js';
 import { ILanguageModelsService } from '../../../../contrib/chat/common/languageModels.js';
 import type { SettingsContentItem } from '../../browser/settingsTreeModels.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
@@ -238,6 +239,8 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'general');
 	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), 'models');
+	assert.equal(findSettingCategory(layout, 'chat.editing.autoAcceptDelay'), 'agent-defaults');
+	assert.equal(defaults.get('chat.editing.autoAcceptDelay').valueType, 'number');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, 'workbench.tips.enabled'), 'appearance');
 	assert.equal(defaults.get('workbench.tips.enabled').valueType, 'boolean');

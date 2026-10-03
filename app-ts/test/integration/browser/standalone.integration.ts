@@ -1,3 +1,8 @@
+import { MultiDiffEditorPane } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorPane.js';
+import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
+import { DiffService } from '../../../src/ash/workbench/services/diff/browser/diffService.js';
+import { IFileTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
+import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { setNlsResolver, formatNlsMessage } from '../../../src/ash/nls.js';
 import { ILanguageFeatureDebounceService } from '../../../src/ash/editor/common/services/languageFeatureDebounce.js';
@@ -42,10 +47,16 @@ import { INotificationService } from '../../../src/ash/platform/notification/com
 import { FontMeasurements } from '../../../src/ash/editor/browser/config/fontMeasurements.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 import { StandaloneEditor } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditor.js';
-import { IBulkEditService, ResourceEdit } from '../../../src/ash/editor/browser/services/bulkEditService.js';
-import { BulkEditService, toLanguageWorkspaceEdit } from '../../../src/ash/workbench/contrib/bulkEdit/browser/bulkEditService.js';
+import { IBulkEditService } from '../../../src/ash/editor/browser/services/bulkEditService.js';
+import { BulkEditService } from '../../../src/ash/workbench/contrib/bulkEdit/browser/bulkEditService.js';
 import { BulkEditPane } from '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEditPane.js';
-import { IWorkspaceEditService } from '../../../src/ash/workbench/services/language/common/workspaceEditService.js';
+import { ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
+import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
+import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
+import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { MemoryFileService, MemoryResourceStore, TestDialogService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { Event as EventUtils } from '../../../src/ash/base/common/event.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEdit.css';
@@ -2644,16 +2655,51 @@ window.ashStandaloneIntegration = {
 		});
 	},
 	prepareCodeActionPreview: (kind = 'single') => {
+		if (!(callerModel instanceof stanza.TextModel)) throw new Error('Preview requires the shared text model');
 		actionPreviewResources.clear();
 		callerEditor.setValue('value');
 		const parent = StandaloneServices.get(IInstantiationService);
 		const services = actionPreviewResources.add(parent.createChild());
-		const applier = parent.get(IBulkEditService);
-		services.registerInstance(IWorkspaceEditService, { apply: async (edit, signal) => {
-			const result = await applier.apply(edit, { editor: previewEditor, showPreview: false, token: signal });
-			if (!result.isApplied) throw new Error('Previewed edits were not applied');
-			return { resources: edit.entries.map(entry => entry.kind === 'rename' ? entry.target : entry.resource), undo: result.undo };
-		} });
+		const snapshots = actionPreviewResources.add(new BrowserTextModelService(actionPreviewResources.add(new MemoryResourceStore([]))));
+		services.registerInstance(ITextModelResourceService, {
+			acquire: async (input, signal) => input.resource.toString() === callerModel.uri.toString() ? ({
+				resource: callerModel.uri, model: callerModel, isDirty: false, hasExternalChange: false,
+				onDidChangeDirty: EventUtils.None, onDidChangeExternalChange: EventUtils.None,
+				save: async () => {}, revert: async () => {}, dispose: () => {}, [Symbol.dispose]: () => {},
+			}) : await snapshots.acquire(input, signal),
+			dispose: () => {}, [Symbol.dispose]: () => {},
+		});
+		services.registerInstance(IFileTextModelService, {
+			...services.get(ITextModelResourceService),
+			getModel: resource => resource.toString() === callerModel.uri.toString() ? callerModel : null,
+			onModelRemoved: EventUtils.None,
+			onModelLanguageChanged: EventUtils.None,
+			refresh: async () => {},
+			onModelAdded: EventUtils.None,
+		});
+		services.registerInstance(IWorkingCopyService, actionPreviewResources.add(new BrowserWorkingCopyService()));
+		services.registerInstance(IFileService, new MemoryFileService([[callerModel.uri, 'value']]));
+		services.registerInstance(IDialogService, new TestDialogService());
+		services.registerInstance(IEditorService, {
+			onDidActiveEditorChange: EventUtils.None, onDidVisibleEditorsChange: EventUtils.None,
+			activeEditor: undefined, visibleEditors: [], focusActiveEditor: () => {},
+			openEditor: async input => {
+				const host = h(document, 'div');
+				host.id = 'action-preview-diff';
+				host.style.width = '800px';
+				host.style.height = '320px';
+				document.body.append(host);
+				actionPreviewResources.add(bindColorTheme(parent.get(IThemeService), host));
+				actionPreviewResources.add(toDisposable(() => host.remove()));
+				const diff = actionPreviewResources.add(services.createInstance(MultiDiffEditorPane, {
+					modelService: services.get(ITextModelResourceService),
+					createComputationService: () => new DiffService().createComputationService(),
+				}));
+				diff.create(host);
+				diff.layout({ width: 800, height: 320 });
+				await diff.setInput(input, new AbortController().signal);
+			},
+		});
 		const bulkEdits = actionPreviewResources.add(services.createInstance(BulkEditService));
 		services.registerInstance(IBulkEditService, bulkEdits);
 		const editorHost = h(document, 'div');
@@ -2669,18 +2715,7 @@ window.ashStandaloneIntegration = {
 		paneHost.append(pane.element);
 		pane.setVisible(true);
 		actionPreviewResources.add(bulkEdits.setPreviewHandler(async (edits, options) => {
-			const edit = await toLanguageWorkspaceEdit(edits);
-			const entries = edit.entries.map((entry, index) => {
-				if (entry.kind !== 'textDocument') throw new Error('This fixture only previews text edits');
-				const before = callerModel.getValue();
-				using snapshot = new stanza.TextModel(before);
-				snapshot.applyEdits(entry.edits);
-				return { index, kind: entry.kind, resource: entry.resource, detail: 'Replace value with result', before, after: snapshot.getText() };
-			});
-			const pending = pane.setInput({ edit, entries, canApply: true }, options!.token!);
-			pane.element.querySelector<HTMLButtonElement>('.ash-bulk-edit-cancel')!.focus();
-			const accepted = await pending;
-			return accepted ? ResourceEdit.convert(accepted) : [];
+			return await pane.setInput(edits, options!.token!) ?? [];
 		}));
 		const previewEditor = actionPreviewResources.add(services.createInstance(StandaloneEditor, { container: editorHost, model: callerModel, ariaLabel: 'preview.ts', dimension: { width: 640, height: 100 } }, callerModel, false));
 		actionPreviewResources.add(StandaloneServices.get(ILanguageFeaturesService).codeActionProvider.register('plaintext', {

@@ -1,4 +1,7 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
+import { IContextKeyService, ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { TestEditorService } from './bulkEditTestServices.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -8,7 +11,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
-import { createBulkEditPreview } from '../../browser/preview/bulkEditPreview.js';
+import { BulkFileOperations } from '../../browser/preview/bulkEditPreview.js';
 import { ConflictDetector } from '../../browser/conflicts.js';
 import { BulkEditPane } from '../../browser/preview/bulkEditPane.js';
 import { BulkEditPreviewContribution } from '../../browser/preview/bulkEdit.contribution.js';
@@ -20,8 +23,7 @@ import { IWorkingCopyService } from "../../../../services/workingCopy/common/wor
 import { ResourceFileEdit, ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BulkEditService } from '../../browser/bulkEditService.js';
-import { IBulkEditService } from '../../../../../editor/browser/services/bulkEditService.js';
-import { IWorkspaceEditService } from '../../../../services/language/common/workspaceEditService.js';
+import { IBulkEditService, ResourceEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IViewsService } from '../../../../services/views/browser/viewsService.js';
@@ -49,7 +51,7 @@ test("bulk edit preview follows ordered create and text operations without mutat
 	};
 
 	try {
-		const preview = await createBulkEditPreview(edit, { files, models, workingCopies: emptyWorkingCopies() }, new AbortController().signal);
+		using preview = await previewEdits(edit, { files, models, workingCopies: emptyWorkingCopies() }, new AbortController().signal);
 
 		assert.equal(preview.canApply, true);
 		assert.equal(preview.entries.every(entry => entry.error === undefined), true);
@@ -74,7 +76,7 @@ test('bulk edit preview reports invalid ranges without clamping or mutating the 
 	using files = new PreviewFileService([[resource, 'abc']]);
 	using models = new PreviewTextModelService([[resource, 'abc']], [resource]);
 	try {
-		const preview = await createBulkEditPreview({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(2, 1, 2, 2), text: 'invalid' }] }] }, { files, models, workingCopies: emptyWorkingCopies() }, new AbortController().signal);
+		using preview = await previewEdits({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(2, 1, 2, 2), text: 'invalid' }] }] }, { files, models, workingCopies: emptyWorkingCopies() }, new AbortController().signal);
 		assert.deepEqual({ canApply: preview.canApply, error: preview.entries[0]?.error, text: models.getModel(resource)?.getText() }, { canApply: false, error: 'The edit range is outside the document.', text: 'abc' });
 	} finally {
 		globals.dispose();
@@ -119,13 +121,14 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 		using models = new PreviewTextModelService([[resource, 'ab']], [resource]);
 		using configuration = new InMemoryConfigurationService();
 		using services = new InstantiationService();
-		const applied: LanguageWorkspaceEdit[] = [];
 		services.registerInstance(IFileService, files);
 		services.registerInstance(IFileTextModelService, models);
 		services.registerInstance(ITextModelResourceService, models);
 		services.registerInstance(IConfigurationService, configuration);
+		using contextKeys = new ContextKeyService();
+		services.registerInstance(IContextKeyService, contextKeys);
+		services.registerInstance(IEditorService, new TestEditorService());
 		services.registerInstance(IWorkingCopyService, emptyWorkingCopies());
-		services.registerInstance(IWorkspaceEditService, { apply: async edit => { applied.push(edit); return { resources: [resource], undo: async () => {} }; } });
 		services.registerInstance(IDialogService, {
 			onWillShowDialog: EventUtils.None, onDidShowDialog: EventUtils.None,
 			confirm: async () => ({ confirmed: true }),
@@ -157,7 +160,7 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 				pane.element.querySelector<HTMLInputElement>('input[data-text-edit-index="0"]')!.click();
 				pane.accept();
 				assert.equal((await pending).isApplied, true);
-				assert.deepEqual(applied, [{ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits: [edits[1]] }] }]);
+				assert.equal(models.getModel(resource)!.getText(), 'aB');
 			} else {
 				if (outcome === 'conflict') {
 					models.getModel(resource)!.setValue('changed');
@@ -165,7 +168,7 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 					pane.accept();
 					pane.discard();
 				} else contribution.dispose();
-				assert.deepEqual({ applied: (await pending).isApplied, writes: applied }, { applied: false, writes: [] });
+				assert.deepEqual({ applied: (await pending).isApplied, text: models.getModel(resource)!.getText() }, { applied: false, text: outcome === 'conflict' ? 'changed' : 'ab' });
 			}
 		} finally {
 			globals.dispose();
@@ -272,4 +275,13 @@ function emptyWorkingCopies(): IWorkingCopyService {
 function installDomGlobals(browser: JSDOM) {
 	// Keep the main realm's globals while the pane runs in a registered second window.
 	return registerWindow(browser.window as unknown as Window);
+}
+
+async function previewEdits(edit: LanguageWorkspaceEdit, dependencies: { files: PreviewFileService; models: PreviewTextModelService; workingCopies: IWorkingCopyService }, signal: AbortSignal): Promise<BulkFileOperations> {
+	using services = new InstantiationService();
+	services.registerInstance(IFileService, dependencies.files);
+	services.registerInstance(ITextModelResourceService, dependencies.models);
+	services.registerInstance(IFileTextModelService, dependencies.models);
+	services.registerInstance(IWorkingCopyService, dependencies.workingCopies);
+	return await services.invokeFunction(BulkFileOperations.create, ResourceEdit.convert(edit), signal);
 }

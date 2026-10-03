@@ -2,6 +2,12 @@
 
 mod assets;
 pub use assets::SqliteAssetStore;
+mod backup;
+pub use backup::BackupContent;
+pub use backup::BackupError;
+pub use backup::BackupRecord;
+pub use backup::BackupWorkspace;
+pub use backup::SqliteBackupStore;
 mod dir_index;
 mod issue_cache;
 mod message_history;

@@ -1606,6 +1606,9 @@ pub fn open_app_server_with_codebase_providers(
     .with_approval_review_model(Some(approval_review_model))
     .with_call_network_policy(network_policy.clone())
     .with_config_store(Arc::clone(&config))
+    .with_backup_store(Arc::new(
+        ash_state::SqliteBackupStore::open(&database_path).map_err(open_error)?,
+    ))
     .with_login_service(login_service)
     .with_chatgpt_account(Arc::new(ash_chatgpt::ChatGptAccount::new(chatgpt_oauth)))
     .with_kimi_account(kimi_oauth)

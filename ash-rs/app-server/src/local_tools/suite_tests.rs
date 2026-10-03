@@ -774,7 +774,7 @@ fn rpc_agent_tools_search_unsaved_content_and_persist_edits_through_the_originat
         call(
             connection,
             "initialize",
-            json!({"clientInfo":{"name":"desktop-test","version":"1"},"capabilities":{"textDocuments":{"version":1}}}),
+            json!({"clientInfo":{"name":"desktop-test","version":"1"},"capabilities":{"textDocuments":{"version":2}}}),
         );
     }
     let created = call(

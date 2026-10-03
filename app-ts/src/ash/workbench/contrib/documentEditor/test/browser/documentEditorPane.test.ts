@@ -6,6 +6,12 @@ import { type IDimension } from "../../../../../base/browser/dom.js";
 import { URI } from "../../../../../base/common/uri.js";
 import type { IFileChangeEvent } from "../../../../../platform/files/common/files.js";
 import { TextFileSaveConflictError, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
+import { DocumentEditorTextModelService } from '../../../../services/documentEditor/browser/documentEditorTextModelService.js';
+import { IDocumentEditorTextModelService } from '../../../../services/documentEditor/common/documentTypes.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { EditorPanes } from '../../../../browser/editor.js';
+import { IDialogService as DialogServiceId } from '../../../../../platform/dialogs/common/dialogs.js';
+import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { DOCUMENT_EDITOR_ID } from "../../browser/documentEditorInput.js";
 import { DocumentEditorPane, type EditorPaneOptions } from "../../browser/documentEditorPane.js";
 import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -16,11 +22,13 @@ import { createReferenceIndexPlugin } from "../../../../../editor/contrib/citati
 import { createAcademicDocumentSchema, createEmptyAcademicDocument } from "../../../../../editor/contrib/academic/common/schema.js";
 import { createDocumentDecoration, DocumentDecorationSet } from "../../../../../editor/common/model/documentDecoration.js";
 import { createDocumentPlugin, DocumentPluginKey } from "../../../../../editor/common/model/documentPlugin.js";
-import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, serializeDocument } from "../../../../../editor/common/model/documentSerialization.js";
+import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, documentFromPlainText, serializeDocument } from "../../../../../editor/common/model/documentSerialization.js";
 import { createDefaultDocumentSchema, DocumentSchema } from "../../../../../editor/common/model/documentSchema.js";
 import { h } from "../../../../../base/browser/dom.js";
 
 await import("../../../../../editor/contrib/documentEditor.contribution.js");
+await import('../../../academic/browser/academicEditor.contribution.js');
+await import('../../browser/documentEditor.contribution.js');
 
 let dialogValues: readonly string[] = [];
 const testDialogs: IDialogService = {
@@ -37,10 +45,76 @@ const testDialogs: IDialogService = {
 };
 
 class EditorPane extends DocumentEditorPane {
-	constructor(files: ITextFileService, options: EditorPaneOptions = {}) {
-		super(files, options, testDialogs);
+	constructor(files: ITextFileService, options: Partial<EditorPaneOptions> = {}) {
+		const copies = new BrowserWorkingCopyService();
+		const models = new DocumentEditorTextModelService(files, copies);
+		super({ contentType: 'application/vnd.ash.document+json', ...options }, testDialogs, models);
+		this._register(copies);
+		this._register(models);
 	}
 }
+
+test('registered Academic panes share one model, save baseline and working copy until their last view closes', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	const schema = createAcademicDocumentSchema();
+	const document = createEmptyAcademicDocument(schema);
+	const files = new MemoryTextFiles(serializeDocument(document, schema));
+	using copies = new BrowserWorkingCopyService();
+	using models = new DocumentEditorTextModelService(files, copies);
+	using services = new InstantiationService();
+	services.registerInstance(IDocumentEditorTextModelService, models);
+	services.registerInstance(DialogServiceId, testDialogs);
+	const input = { resource: URI.file('/paper.ash-academic') };
+	const descriptor = EditorPanes.getEditorPane(input)!;
+	using first = descriptor.create({ input, instantiationService: services }) as DocumentEditorPane;
+	using second = descriptor.create({ input, instantiationService: services }) as DocumentEditorPane;
+	try {
+		first.create(environment.window.document.body);
+		second.create(environment.window.document.body);
+		await Promise.all([first.setInput(input, new AbortController().signal), second.setInput(input, new AbortController().signal)]);
+		assert.equal(copies.get(input.resource).length, 1);
+		const textareas = environment.window.document.querySelectorAll<HTMLTextAreaElement>('textarea.stanza-document-text-input');
+		textareas[0]!.value = 'Shared title';
+		textareas[0]!.dispatchEvent(new environment.window.Event('input', { bubbles: true }));
+		assert.equal(second.isDirty, true);
+		assert.equal((second as DocumentEditorPane).getDocument().content[0]!.content[0]!.content[0]!.text, 'Shared title');
+		assert.equal(copies.get(input.resource)[0]!.backupContentType, 'application/vnd.ash.academic-document+json');
+		await Promise.all([first.save!(), second.save!()]);
+		assert.equal(first.isDirty, false);
+		assert.equal(second.isDirty, false);
+		first.clearInput();
+		assert.equal(copies.get(input.resource).length, 1);
+		await second.save!();
+		second.clearInput();
+		assert.equal(copies.get(input.resource).length, 0);
+	} finally { environment.window.close(); }
+});
+
+test('shared untitled save uses a live view after the original view closes', async () => {
+	using copies = new BrowserWorkingCopyService();
+	using models = new DocumentEditorTextModelService(new MemoryTextFiles('Draft'), copies);
+	const input = { resource: URI.parse('untitled:document/shared'), contentType: 'test.document', schema: createDefaultDocumentSchema() };
+	let saves = 0;
+	const first = await models.acquire({ ...input, onSave: async () => { throw new Error('Closed view must not save'); } }, new AbortController().signal);
+	using second = await models.acquire({ ...input, onSave: async () => { saves += 1; } }, new AbortController().signal);
+	first.dispose();
+	await copies.get(input.resource)[0]!.save(new AbortController().signal);
+	assert.equal(saves, 1);
+	assert.equal(copies.get(input.resource).length, 1);
+});
+
+test('structured acquisition rejects plain text, cancellation and conflicting document types', async () => {
+	using copies = new BrowserWorkingCopyService();
+	using models = new DocumentEditorTextModelService(new MemoryTextFiles('Initial'), copies);
+	const input = { resource: URI.file('/document.ash-paper'), contentType: 'test.document', schema: createDefaultDocumentSchema() };
+	using reference = await models.acquire(input, new AbortController().signal);
+	await assert.rejects(models.acquire({ ...input, contentType: 'other.document' }, new AbortController().signal), /different document type/u);
+	await assert.rejects(models.acquire(input, AbortSignal.abort()), /cancelled/u);
+	assert.equal(copies.getAll().length, 1);
+	const { parseDocument } = await import('../../../../services/documentEditor/browser/documentWorkingCopy.js');
+	assert.throws(() => parseDocument('Plain text', input.schema));
+	assert.throws(() => parseDocument('{broken', input.schema));
+});
 
 function documentAction(parent: ParentNode, actionId: string): HTMLButtonElement {
 	const button = parent.querySelector<HTMLButtonElement>(`[data-action-id='${actionId}'] button`);
@@ -48,7 +122,7 @@ function documentAction(parent: ParentNode, actionId: string): HTMLButtonElement
 	return button;
 }
 
-test("Stanza editor migrates plain text and edits a structured paragraph", async () => {
+test("Stanza editor edits and saves a structured paragraph", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles("Title\nBody");
 	const parent = h(environment.window.document, "main");
@@ -1700,12 +1774,13 @@ class MemoryTextFiles implements ITextFileService {
 	lastSavedText = "";
 	private revision = 1;
 
-	constructor(private text: string) {}
+	private text: string;
+	constructor(text: string) { this.text = structuredText(text); }
 
 	async resolve(request: TextFileResolveRequest, _signal: AbortSignal): Promise<ResolvedTextFileContent> {
 		return {
 			resource: request.resource,
-			text: request.bootstrapText ?? this.text,
+			text: request.bootstrapText === undefined ? this.text : structuredText(request.bootstrapText),
 			source: request.bootstrapText === undefined ? "fileSystem" as ResolvedTextFileContent["source"] : "bootstrap" as ResolvedTextFileContent["source"],
 			revision: request.bootstrapText === undefined ? this.currentRevision() : undefined,
 			encoding: "utf8",
@@ -1723,7 +1798,7 @@ class MemoryTextFiles implements ITextFileService {
 	}
 
 	setExternalText(text: string): void {
-		this.text = text;
+		this.text = structuredText(text);
 		this.revision += 1;
 	}
 
@@ -1780,3 +1855,8 @@ test('switching a document cancels a pending room and disposes a late connection
 		environment.window.close();
 	}
 });
+
+function structuredText(text: string): string {
+	const schema = createDefaultDocumentSchema();
+	return text && !text.trimStart().startsWith('{') ? serializeDocument(documentFromPlainText(schema, text), schema) : text;
+}

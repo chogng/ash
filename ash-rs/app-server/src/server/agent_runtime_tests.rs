@@ -224,6 +224,7 @@ fn recovered_spawn_with_document_context(documents: bool) {
     server.client_host.finish_turn(
         &spawned.context_seed.parent_thread_id,
         &spawned.context_seed.parent_turn_id,
+        ash_app_server_protocol::protocol::text_document::TextDocumentTurnOutcome::Interrupted,
     );
     assert_eq!(server.resume_recovered_agent_coordinations().unwrap(), 1);
     let deadline = Instant::now() + Duration::from_secs(1);

@@ -1071,7 +1071,7 @@ fn changes_require_snapshot_identity_and_preserve_typed_commit_outcomes() {
         }))
         .is_err()
     );
-    let changes = serde_json::json!({"changes": [
+    let changes = serde_json::json!({"threadId": "thread", "turnId": "turn", "changes": [
         {"kind": "update", "snapshot": "lease-1", "text": "new\ntext"},
         {"kind": "move", "snapshot": "lease-2", "target": "/new", "text": "moved"}
     ]});

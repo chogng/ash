@@ -53,7 +53,7 @@ test.beforeEach(({}, testInfo) => {
 
 for (const scenario of [
 	{ name: 'missing settings', settings: undefined, mode: 'code' },
-	{ name: 'JSONC mode selection', settings: '{\n// startup mode\n"workbench.mode":"academic",\n}', mode: 'academic' },
+	{ name: 'retired Academic JSONC mode migration', settings: '{\n// startup mode\n"workbench.mode":"academic",\n}', mode: 'code' },
 	{ name: 'unregistered mode', settings: '{"workbench.mode":"unknown"}', mode: 'code' },
 	{ name: 'obsolete settings wrapper', settings: '{"version":1,"values":{"workbench.mode":"academic"}}', mode: 'code' },
 ]) {
@@ -70,6 +70,12 @@ for (const scenario of [
 			const page = await application.firstWindow();
 			await expect(page.locator('.ash-workbench')).toBeVisible();
 			expect(new URL(page.url()).searchParams.get('ash-workbench-mode')).toBe(scenario.mode);
+			if (scenario.name === 'retired Academic JSONC mode migration') {
+				const source = await readFile(join(profile, 'settings.json'), 'utf8');
+				expect(source).toContain('// startup mode');
+				expect(source).toContain('"code"');
+				expect(source).not.toContain('"academic"');
+			}
 		} finally {
 			await application.close();
 		}

@@ -1,5 +1,7 @@
 use crate::JsonSchema;
 use crate::TS;
+use ash_protocol::ThreadId;
+use ash_protocol::TurnId;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -41,8 +43,27 @@ pub enum TextDocumentChangeDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TextDocumentApplyParams {
+    pub thread_id: ThreadId,
+    pub turn_id: TurnId,
     #[schemars(length(min = 1, max = 128))]
     pub changes: Vec<TextDocumentChangeDto>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum TextDocumentTurnOutcome {
+    Completed,
+    Failed,
+    Interrupted,
+}
+
+/// Sent only to the document connection that owns this Turn, after its tools finish.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TextDocumentTurnFinished {
+    pub thread_id: ThreadId,
+    pub turn_id: TurnId,
+    pub outcome: TextDocumentTurnOutcome,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

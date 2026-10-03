@@ -46,7 +46,7 @@ function createContext(resources: DisposableStore, modeId: WorkbenchModeId = Wor
 }
 
 test('WindowTitle replaces the startup title and follows workspace changes in each product', () => {
-	for (const [mode, product] of [[WorkbenchModeId.Code, 'Ash Code'], [WorkbenchModeId.Academic, 'Ash Academic']] as const) {
+	for (const [mode, product] of [[WorkbenchModeId.Code, 'Ash Code']] as const) {
 		using resources = new DisposableStore();
 		const context = createContext(resources, mode);
 		resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window));

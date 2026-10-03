@@ -1,3 +1,7 @@
+import { IDocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/common/documentTypes.js';
+import { DocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.js';
+import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
+import type { TextFileResolveRequest, TextFileSaveRequest } from '../../../src/ash/workbench/services/textfile/common/textFileService.js';
 import { URI } from "../../../src/ash/base/common/uri.js";
 import { Emitter, type Event } from "../../../src/ash/base/common/event.js";
 import { Disposable, DisposableStore } from "../../../src/ash/base/common/lifecycle.js";
@@ -7,10 +11,10 @@ import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
 import { createDefaultDocumentSchema } from "../../../src/ash/editor/editor.api.js";
 import { createTextNode } from "../../../src/ash/editor/editor.api.js";
 import { TextModel } from "../../../src/ash/editor/editor.api.js";
-import "../../../src/ash/editor/editor.academic.all.js";
+import "../../../src/ash/editor/contrib/documentEditor.contribution.js";
 import { DocumentEditorPane } from "../../../src/ash/workbench/contrib/documentEditor/browser/documentEditorPane.js";
 import type { DocumentNode } from "../../../src/ash/editor/common/model/document.js";
-import { serializeDocument } from "../../../src/ash/editor/common/model/documentSerialization.js";
+import { documentFromPlainText, serializeDocument } from "../../../src/ash/editor/common/model/documentSerialization.js";
 import type { DocumentSchema } from "../../../src/ash/editor/common/model/documentSchema.js";
 import type { DocumentCollaborationRoom } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
 import type { DocumentCollaborationInvite } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
@@ -128,14 +132,17 @@ const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", 
 	id: "editor-code-block",
 })], "editor-text-document");
 const codeBlockFiles = new MemoryTextFiles(codeBlockResource, serializeDocument(codeBlockDocument, schema));
-const structuredFiles = new MemoryTextFiles(structuredResource, "Title\nBody");
+const structuredFiles = new MemoryTextFiles(structuredResource, serializeDocument(documentFromPlainText(schema, "Title\nBody"), schema));
 const disposables = new DisposableStore();
 const services = disposables.add(new InstantiationService());
 const dialogs = disposables.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
 disposables.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
-const codeBlockPane = disposables.add(services.createInstance(DocumentEditorPane, codeBlockFiles, {}));
-const structuredPane = disposables.add(services.createInstance(DocumentEditorPane, structuredFiles, { createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() }));
+const copies = disposables.add(new BrowserWorkingCopyService());
+const files = { onDidChangeFiles: codeBlockFiles.onDidChangeFiles, resolve: (request: TextFileResolveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).resolve(request, signal), save: (request: TextFileSaveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).save(request, signal) };
+services.registerInstance(IDocumentEditorTextModelService, disposables.add(new DocumentEditorTextModelService(files, copies)));
+const codeBlockPane = disposables.add(services.createInstance(DocumentEditorPane, { contentType: 'application/vnd.ash.document+json' }));
+const structuredPane = disposables.add(services.createInstance(DocumentEditorPane, { contentType: 'application/vnd.ash.document+json', createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() }));
 
 codeBlockPane.create(requiredElement("#code-block"));
 structuredPane.create(requiredElement("#document-editor"));

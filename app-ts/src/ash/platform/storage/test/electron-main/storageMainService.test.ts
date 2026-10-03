@@ -14,6 +14,31 @@ suite('Desktop storage owner', () => {
 	const application: IStorageIdentity = { applicationId: 'ash.code', scope: StorageScope.APPLICATION, id: 'application' };
 	const entry = (value: string) => ({ value, target: StorageTarget.MACHINE });
 
+	test('retiring an application moves resources by scope and preserves conflicting target state', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'ash-store-'));
+		try {
+			const file = join(directory, 'state.json');
+			using storage = new StorageMainService(file);
+			await storage.initialize();
+			const oldIdentity = { applicationId: 'academic', scope: StorageScope.WORKSPACE, id: 'research' };
+			const newIdentity = { ...oldIdentity, applicationId: 'code' };
+			await storage.getItems(oldIdentity, { editors: entry('paper.ash-academic'), layout: entry('academic-layout') });
+			await storage.getItems(newIdentity, { layout: entry('code-layout') });
+			assert.deepEqual(await storage.migrateApplicationStorage('academic', 'code'), ['workspace/research/layout']);
+			assert.deepEqual({ ...(await storage.getItems(newIdentity)).entries }, { editors: entry('paper.ash-academic'), layout: entry('code-layout') });
+			assert.deepEqual({ ...(await storage.getItems(oldIdentity)).entries }, { layout: entry('academic-layout') });
+			await storage.updateItems(newIdentity, 'layout', entry('academic-layout'));
+			assert.deepEqual(await storage.migrateApplicationStorage('academic', 'code'), []);
+			assert.deepEqual(await storage.migrateApplicationStorage('academic', 'code'), []);
+			await storage.close();
+			using restored = new StorageMainService(file);
+			await restored.initialize();
+			assert.deepEqual({ ...(await restored.getItems(newIdentity)).entries }, { editors: entry('paper.ash-academic'), layout: entry('academic-layout') });
+			const data = JSON.parse(await readFile(file, 'utf8'));
+			assert.equal(data.storages.some((snapshot: { identity: IStorageIdentity }) => snapshot.identity.applicationId === 'academic'), false);
+		} finally { await rm(directory, { recursive: true, force: true }); }
+	});
+
 	test('concurrent windows merge independent keys and restore the durable result', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-store-'));
 		try {

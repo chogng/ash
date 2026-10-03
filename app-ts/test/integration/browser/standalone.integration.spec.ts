@@ -5992,6 +5992,26 @@ test('code action preview preserves partial selection, focus and expanded change
 	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
 });
 
+test('code action preview opens selected replacements in the read-only MultiDiff editor without applying them', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionPreview('multiple'));
+	await page.locator('#action-preview-editor .stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+.');
+	await page.locator('.ash-action-widget').getByRole('button', { name: 'Preview', exact: true }).click();
+	const pane = page.locator('#action-preview-pane');
+	await pane.locator('.ash-bulk-edit-replacements input').nth(1).uncheck();
+	await pane.locator('.ash-bulk-edit-toolbar').getByRole('button', { name: 'Open changes' }).click();
+	const diff = page.locator('#action-preview-diff');
+	await expect(diff.locator('.view-lines')).toContainText(['value', 'relue']);
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
+	await pane.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(pane.getByRole('button', { name: 'Apply selected' })).toBeDisabled();
+	await expect(diff.locator('.view-lines')).toContainText(['value', 'relue']);
+	expect(errors).toEqual([]);
+});
+
 test('code action category tabs preserve the query, skip labels and dispatch the original action', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.enableCodeActions('grouped'));

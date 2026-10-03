@@ -51,6 +51,38 @@ export class StorageMainService extends Disposable {
 		});
 	}
 
+	/** Moves retired application state by key, preserving conflicting target and source entries. */
+	public migrateApplicationStorage(sourceApplicationId: string, targetApplicationId: string): Promise<readonly string[]> {
+		return this.run(async () => {
+			const next = new Map(this.storages);
+			const conflicts: string[] = [];
+			for (const [sourceKey, source] of this.storages) {
+				if (source.identity.applicationId !== sourceApplicationId) { continue; }
+				const identity = { ...source.identity, applicationId: targetApplicationId };
+				const targetKey = storageIdentityKey(identity);
+				const target = next.get(targetKey);
+				const entries = { ...target?.entries };
+				const remaining: Record<string, IStorageEntry> = {};
+				for (const [key, entry] of Object.entries(source.entries)) {
+					const existing = entries[key];
+					if (existing && (existing.value !== entry.value || existing.target !== entry.target)) {
+						remaining[key] = entry;
+						conflicts.push(`${source.identity.scope}/${source.identity.id}/${key}`);
+					} else { entries[key] = entry; }
+				}
+				next.set(targetKey, { identity, entries, revision: (target?.revision ?? 0) + 1, isNew: false });
+				if (Object.keys(remaining).length > 0) { next.set(sourceKey, { ...source, entries: remaining }); }
+				else { next.delete(sourceKey); }
+			}
+			if ([...this.storages.values()].some(storage => storage.identity.applicationId === sourceApplicationId)) {
+				await this.write(next);
+				this.storages.clear();
+				for (const [key, snapshot] of next) { this.storages.set(key, snapshot); }
+			}
+			return conflicts;
+		});
+	}
+
 	public updateItems(identity: IStorageIdentity, key: string, entry: IStorageEntry | null): Promise<IStorageSnapshot> {
 		return this.run(async () => {
 			const identityKey = storageIdentityKey(identity);

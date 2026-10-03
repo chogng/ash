@@ -249,7 +249,7 @@ impl AppServer {
             .capabilities
             .text_documents
             .as_ref()
-            .is_some_and(|capability| capability.version != 1)
+            .is_some_and(|capability| capability.version != 2)
         {
             self.browser_host.unregister(connection.connection_id);
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));

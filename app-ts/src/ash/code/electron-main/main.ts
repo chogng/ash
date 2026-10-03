@@ -3,7 +3,8 @@ import { app } from 'electron/main';
 import { basename, dirname, join } from 'node:path';
 import { AshApplicationId, AshApplicationName, AshRendererDirectory, AshUserDataFolderName } from '../common/application.js';
 import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
-import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, type WorkbenchModeId } from '../../workbench/common/workbenchMode.js';
+import { migrateAcademicWorkbenchSettings, WorkbenchModeConfigurationKey, WorkbenchModeRegistry, type WorkbenchModeId } from '../../workbench/common/workbenchMode.js';
+import { ConfigurationMainService } from '../../platform/configuration/electron-main/configurationMainService.js';
 import { getDefaultUserDataPath } from '../../platform/environment/node/userDataPath.js';
 import { resolveHome } from '../../platform/home/node/home.js';
 import { migrateLegacyLocalProfile } from '../../platform/profile/node/localProfile.js';
@@ -25,6 +26,12 @@ export async function startElectronApplication(options: StartElectronApplication
 	const profileRoot = resolveHome();
 	const migrationConflict = await migrateLegacyLocalProfile({ legacyUserDataRoot: app.getPath('userData'), profileRoot });
 	if (migrationConflict) console.error(`Settings migration conflict: ${migrationConflict.legacyPath} and ${migrationConflict.settingsPath}`);
+	const settings = await ConfigurationMainService.create({ filePath: join(profileRoot, 'settings.json') });
+	try {
+		const snapshot = settings.read();
+		const source = migrateAcademicWorkbenchSettings(snapshot.document.source);
+		if (source !== undefined) { await settings.update({ expectedRevision: snapshot.revision, document: { version: 1, source } }); }
+	} finally { await settings.close(); }
 	const initialModeId = options.initialModeId ?? (!app.isPackaged && process.env.ASH_WORKBENCH_MODE !== undefined
 		? WorkbenchModeRegistry.resolveModeId(process.env.ASH_WORKBENCH_MODE)
 		: readPersistedWorkbenchModeId(join(profileRoot, 'settings.json'), WorkbenchModeRegistry.defaultModeId));

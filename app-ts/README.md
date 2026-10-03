@@ -22,7 +22,7 @@
 
 F5 配置见 [launch.json](../.vscode/launch.json)。macOS 的 Electron 入口通过 `uv run --python 3.12` 选择 Python；手动运行命令时，按 [macOS 环境要求](../docs/build.md#macos-与-linux-开发环境) 配置。
 
-`code` 与 `academic` 共用启动入口和 Renderer 产物。Settings 中切换 Workbench Mode 会保存选择并重载窗口；开发时可用 `ASH_WORKBENCH_MODE` 覆盖初始模式，见 [Workbench 模式](../docs/workbench-modes.md)。停止开发启动器使用 `Ctrl+C`；退出 Web 启动器会撤销该入口的浏览器授权，不终止其他客户端正在使用的后端。
+当前使用 Code 工作台，共同装配代码与 Academic 文档编辑器；打开论文不需要切换模式，旧 Academic 模式数据在启动时迁移，见 [工作台与文档贡献](../docs/workbench-modes.md)。停止开发启动器使用 `Ctrl+C`；退出 Web 启动器会撤销该入口的浏览器授权，不终止其他客户端正在使用的后端。
 
 ### 开发态热更新
 
@@ -124,7 +124,7 @@ iframe 仅通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来
 
 测试入口会准备对应输入；完整 Web 测试不构建 Electron Main/Preload。Electron UI、Browser UI 和真实后端测试使用各自的 Playwright 项目，失败时查看报告和 trace。
 
-需要验证 Academic 初始模式时，Bash 使用 `ASH_WORKBENCH_MODE=academic pnpm test:desktop:app`；PowerShell 先设置 `$env:ASH_WORKBENCH_MODE = 'academic'`，再运行同一测试命令。模式切换契约见 [Workbench 模式](../docs/workbench-modes.md)。
+Academic 文件打开与保存已纳入 `pnpm test:desktop:app`，直接在 Code 工作台验证。旧模式迁移见 [工作台与文档贡献](../docs/workbench-modes.md)。
 
 ### UI 场景录屏
 

@@ -1,12 +1,12 @@
 # Work / Code 工作台与文档编辑器目标设计
 
-> 状态：目标设计，尚未实施。本文用于后续修改 Ash Desktop 的 Workbench 与 Stanza Editor；当前实现以 [Workbench 模式说明](../../../docs/workbench-modes.md)、[Stanza 目录说明](../../src/ash/editor/README.md)和[富文档设计](../../src/ash/editor/document-engine.md)为准。本文不宣称 Work 模式已经存在。
+> 状态：目标设计，部分基础已完成。当前只有 Code 工作台，Academic 已通过文档贡献接入，共享模型、严格读取和旧模式迁移已完成。普通文档类型、Work 模式、Chat 主画布及 Agent 文档修改尚未实施。本文用于后续修改 Ash Desktop 的 Workbench 与 Stanza Editor；当前实现以 [Workbench 模式说明](../../../docs/workbench-modes.md)、[Stanza 目录说明](../../src/ash/editor/README.md)和[富文档设计](../../src/ash/editor/document-engine.md)为准。本文不宣称 Work 模式已经存在。
 
 ## 结论
 
 Ash Desktop 保留一个安装包、一个 Workbench 和一套编辑器内核，提供 **Code** 与 **Work** 两种用户可选模式。模式决定默认布局、主要入口和专用工具；资源类型决定打开哪个编辑器。两种模式都能在同一窗口以标签打开代码文件和结构化文档，切换标签不重载窗口。
 
-**Chat 是 Work 的主要入口，也是 Code 可使用的 Agent 对话能力。** 用户可以只聊天，也可以在同一对话中讨论或修改代码、文档；会话与对话由同一套服务管理，不按 Chat / Work / Code 分成三类，也不随模式复制。当前的 Academic 从顶层模式变成 Work 中的论文文档类型；其标题、摘要、引用等规则保留在 Academic 文档配置中，普通文章不继承这些规则。
+**Chat 是 Work 的主要入口，也是 Code 可使用的 Agent 对话能力。** 用户可以只聊天，也可以在同一对话中讨论或修改代码、文档；会话与对话由同一套服务管理，不按 Chat / Work / Code 分成三类，也不随模式复制。Academic 已从顶层模式退出，作为 Code 及未来 Work 中的论文文档类型；其标题、摘要、引用等规则保留在 Academic 文档配置中，普通文章不继承这些规则。
 
 | 维度 | Code | Work |
 | --- | --- | --- |
@@ -22,9 +22,9 @@ Work 和 Code 是同一 Desktop 产品内部的工作台模式，不改变 [`ash
 
 | 事项 | 当前实现 | 目标 |
 | --- | --- | --- |
-| 模式 | `code`、`academic`；切换当前窗口时保存状态并重载 | `code`、`work`；继续在窗口重载边界更换模式贡献 |
-| 初始布局 | 两种模式使用同一套默认 Workbench 区域布局 | 由模式入口选择 Code 或 Work 的默认布局；布局机制继续共用 |
-| 编辑器装配 | Code 与 Academic 分别加载自己的编辑器贡献 | 两种模式都在启动时装配代码和文档编辑器；模式只增加各自专用工具 |
+| 模式 | 只有 `code`；旧 `academic` 值迁移为 `code` | `code`、`work`；继续在窗口重载边界更换模式贡献 |
+| 初始布局 | Code 使用默认 Workbench 区域布局 | 由模式入口选择 Code 或 Work 的默认布局；布局机制继续共用 |
+| 编辑器装配 | Code 共同装配代码与文档编辑器，Academic 注册论文配置 | 两种模式都在启动时装配代码和文档编辑器；模式只增加各自专用工具 |
 | Chat | 普通 Workbench 已注册 Chat；Code Sessions 复用聊天界面 | Work 将 Chat 放在主要导航位置；Code 继续使用同一会话能力 |
 | 文档类型 | Academic 匹配 `.ash-academic`、`.ash-paper` 和专用内容类型 | 增加普通 Work 文档类型；Academic 保留为独立文档类型 |
 | 富文档保存 | 使用带版本的 `ash.document` JSON；工作副本负责保存、回退与冲突 | 文档持久记录类型与格式版本；打开时据此选定规则并校验 |
@@ -74,7 +74,7 @@ Work 和 Code 是同一 Desktop 产品内部的工作台模式，不改变 [`ash
 
 - Workbench 模式是本地 Desktop UI 的个人偏好，目标设置仍叫 `workbench.mode`，允许值为 `code` 或 `work`，只在用户配置范围生效。它不随 workspace 或远程连接改变。长期配置文件目标为 profile 的 `settings.json`；当前 Electron 启动前从 `configuration.json` 读取旧值，迁移必须在选择初始模式前完成。
 - 旧值 `academic` 一次性映射到 `work`。迁移应先校验旧值和完整目标配置，再持久写入新值；目标有不同用户值时报告冲突，不覆盖。迁移完成后只读写新表示，不永久双读或双写。
-- 当前 Academic 使用独立的 `academic` 工作台状态命名空间。改为 `work` 时，须迁移仍需恢复的打开资源、未保存工作副本和窗口状态；布局若与 Work 不兼容，可以按 Work 默认布局重建，但不能删除未保存内容。状态留在工作台状态存储，不进入 `workbench.mode` 设置。
+- 原 `academic` 工作台状态已按 key 合并到 `code`，冲突源项保留。未来增加 `work` 时，须明确打开资源、未保存工作副本和窗口状态的恢复规则；布局若与 Work 不兼容，可以按 Work 默认布局重建，但不能删除未保存内容。状态留在工作台状态存储，不进入 `workbench.mode` 设置。
 - 新结构化文档使用自描述的文档类型和格式版本，并在读取时严格校验。现有 Academic v1 文件需有一次性读取迁移；新写入只生成目标格式。纯文本和 Markdown 的导入由显式转换命令负责，不作为结构化文件解析失败后的隐式读法。
 - 文档文件中的图片使用受文档拥有的稳定资源身份；显示尺寸与位置由编辑器计算，不把浏览器节点或临时 URL 当成持久数据。
 
@@ -88,17 +88,17 @@ Work 和 Code 是同一 Desktop 产品内部的工作台模式，不改变 [`ash
 
 整体属于**中高难度的 Workbench 改造**。编辑器内核和富文档控件已经存在，主要工作集中在文档格式、同一文件的模型归属、Chat 的主画布位置以及旧用户状态迁移。以下是依赖顺序；每一项都应连同对应测试形成可单独审查的改动，不能靠临时的第二套模型或模式专用文件格式完成界面演示。
 
-### 1. 固定文档身份和唯一模型
+### 1. 完成自描述文档类型与格式升级
 
 - 在 [`documentSerialization.ts`](../../src/ash/editor/common/model/documentSerialization.ts) 定义磁盘文件的新版本包络：`format: "ash.document"`、`version: 2`、`type: "general" | "academic"`、`document`。解析时先验证包络和类型，再选对应结构规则；扩展名、内容类型与包络类型不一致时明确报错。只对既有 `.ash-academic` / `.ash-paper` 文件接受无类型的 v1 包络，下次实际保存时写 v2。协作传输与剪贴板片段各有用途和版本，更新调用方时不能把磁盘迁移规则套到它们身上。
-- 将 [`DocumentEditorTextModelService`](../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.ts) 从每个 Pane 自建改成 Workbench 范围的资源服务：按规范化资源地址取得一个 `TextModel` 和一个 [`DocumentWorkingCopy`](../../src/ash/workbench/services/documentEditor/browser/documentWorkingCopy.ts)，由引用计数管理多个视图的释放；第二个视图请求不同文档类型时拒绝打开。备份内容类型随文档类型设置，撤销、保存、外部修改冲突都针对这一个模型。另存为时明确转移旧、新资源的引用与工作副本身份。
-- 删除结构化文件解析失败后自动按纯文本导入的行为。验收：旧 Academic 文件可读并升级；错误类型或损坏 JSON 不会变成正文；同一文件在分栏中编辑只产生一份脏工作副本；关闭一个视图不会销毁另一个视图的内容。
+- 已完成：[`DocumentEditorTextModelService`](../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.ts) 是 Workbench 范围的资源服务：按规范化资源地址取得一个 `TextModel` 和一个 [`DocumentWorkingCopy`](../../src/ash/workbench/services/documentEditor/browser/documentWorkingCopy.ts)，由引用计数管理多个视图的释放；第二个视图请求不同文档类型时拒绝打开。备份内容类型随文档类型设置，撤销、保存、外部修改冲突都针对这一个模型。另存为时明确转移旧、新资源的引用与工作副本身份。
+- 已完成：结构化文件不再隐式按纯文本导入。未来格式升级验收：旧 Academic 文件可读并升级；错误类型或损坏 JSON 不会变成正文；同一文件在分栏中编辑只产生一份脏工作副本；关闭一个视图不会销毁另一个视图的内容。
 
-### 2. 两种模式共用编辑器注册
+### 2. 保持共同编辑器注册（基础已完成）
 
-- 把当前 [`academicEditor.contribution.ts`](../../src/ash/workbench/contrib/academic/browser/academicEditor.contribution.ts) 的逐配置注册改成一个文档编辑器注册入口。它维护完整文档配置集合，`DOCUMENT_EDITOR_ID` 只注册一次；匹配与实例化都按同一个配置结果进行。通用配置使用现有默认文档结构，Academic 配置继续使用论文结构与引用能力。
-- 在 [Code 模式贡献](../../src/ash/code/browser/workbench/modes/code.contribution.ts)和目前的 [Academic 模式贡献](../../src/ash/code/browser/workbench/modes/academic.contribution.ts)中整理共同编辑器装配：Code 与未来的 Work 均加载代码、文档编辑器；测试、调试等工具仍只由 Code 装配。[代码编辑器匹配规则](../../src/ash/workbench/contrib/codeEditor/browser/codeEditorInput.ts)须排除两种结构化文档，包括未命名文档；“使用其他编辑器打开”只展示真正兼容的选项。
-- 验收：当前 Code 与 Academic 入口都能打开 `.ts`、`.md`、`.ash-academic`；第 3 项加入 `.ash-doc` 后，两种入口也能打开普通文档。活动标签切换不触发模式切换；构建中没有重复编辑器 ID 或重复命令注册。
+- [文档编辑器贡献](../../src/ash/workbench/contrib/documentEditor/browser/documentEditor.contribution.ts)只注册一次 `DOCUMENT_EDITOR_ID`；Academic 贡献只登记论文配置。匹配与实例化使用同一配置集合。
+- [Code 贡献](../../src/ash/code/browser/workbench/modes/code.contribution.ts)已装配代码与文档编辑器；未来 Work 使用同一装配契约，再增加本模式工具。代码匹配规则排除已注册的结构化文档，包括通过内容类型指定的未命名文档。
+- 当前验收是 Code 中代码和论文在同一窗口打开；增加普通文档后再验证两种文档配置，增加 Work 后再验证跨模式恢复。
 
 ### 3. 完成普通文档的创建与文件流程
 
@@ -112,12 +112,12 @@ Work 和 Code 是同一 Desktop 产品内部的工作台模式，不改变 [`ash
 - 打开的文档沿用其脏工作副本；未打开的文档经相同资源服务加载、修改和保存。版本已变化或磁盘有冲突时向对话返回冲突，不覆盖用户修改。对话只聊天时无需绑定文档；用户明确指定资源后，同一对话可以继续修改该文档或切回代码任务。
 - 验收：Agent 修改打开和未打开的普通文档、Academic 文档后，界面、磁盘和对话结果一致；用户能撤销打开文档的一次 Agent 修改；过期版本被拒绝且文件内容不变。
 
-### 5. 将顶层 Academic 模式迁移为 Work
+### 5. 增加 Work 模式
 
-- 更新 [`workbenchMode.ts`](../../src/ash/workbench/common/workbenchMode.ts)、Browser/Electron 的模式加载入口、构建入口和可见模式选择：公开值只保留 `code`、`work`。`Academic` 留作文档类型名，不再出现为顶层模式。模式切换仍在生命周期保存与窗口重载后完成；当前打开的编辑器和未保存内容要能恢复。
-- 让 profile 的 `settings.json` 成为用户配置的最终写入位置，并让 Desktop 启动前读取器与运行中的配置服务使用同一来源。旧 `configuration.json` 保存的是整份 JSONC 配置源；迁移须连同其他用户设置及注释一起处理，不能只搬 `workbench.mode`。先校验目标配置：目标已有旧值 `academic` 时将其改成 `work`；目标缺少某个设置时才从旧文件迁入，旧模式值同时转换。使用原子写入；两处同名设置有不同的有效值时保留目标值并报告冲突，其他无效目标值明确报错。迁移成功后不继续双读或双写旧值。相关入口见 [Desktop 启动入口](../../src/ash/code/electron-main/main.ts) 与 [Workbench 配置注册](../../src/ash/workbench/common/configuration.ts)。
-- 将 `ash.academic.storage` 中仍需恢复的编辑器状态和用户布局迁到 `ash.work.storage`，逐项处理同名目标状态，不能整包覆盖。工作副本备份目前按 workspace ID 保存，不受模式存储命名空间控制；迁移时核对备份的文档内容类型及打开资源能否恢复，而不是复制备份数据库。旧链接或启动参数里的 `academic` 只在迁移入口转换一次，内部状态统一使用 `work`。
-- 验收：旧 Academic 用户首次启动进入 Work、打开旧论文和未保存备份；重启后只保留新模式值；已有 Code 偏好不受影响；配置和工作台状态冲突可见且没有数据覆盖。
+- Academic 顶层模式已删除，旧设置和链接中的 `academic` 已转换为 `code`。未来在中央注册表与 Browser/Electron loader 中新增 `work`，切换仍通过保存状态和重载完成。
+- profile 用户配置由 `settings.json` 拥有；旧 `configuration.json` 的一次性迁移使用现有配置迁移流程。不要再新增 Academic 模式迁移规则或第二份配置来源。
+- 明确 Code 与 Work 的打开资源、布局和会话恢复范围。工作副本备份按工作区身份保存，保持文档类型及未保存内容。当前 `ash.academic.storage` 到 `ash.code.storage` 的逐 key 迁移保留冲突，见 [当前说明](../../../docs/workbench-modes.md)。
+- 验收：Code/Work 切换及重启后恢复文件与未保存内容，布局符合各自默认值，配置和状态冲突没有数据覆盖。
 
 ### 6. 把 Chat 放到 Work 主画布
 
@@ -136,4 +136,4 @@ Work 和 Code 是同一 Desktop 产品内部的工作台模式，不改变 [`ash
 
 每一项改动运行受影响的单测与 TypeScript 类型检查；共同入口变化还要运行 Renderer 正常构建，用户流程用 Playwright 覆盖 Web 和 Electron。交互以内容、焦点、工作副本和持久状态断言，不用截图推断是否正确。最后核对本文件链接和构建警告。
 
-**建议首先实施第 1 项**：它直接解决新旧文档类型、安全保存和重复打开同一文件的根问题。其余步骤建立在这一契约上。完成本设计时，用户应能在任一模式创建和编辑结构化文档、打开代码、与 Agent 对话并让 Agent 修改文档；切换模式及重启后能恢复文件和会话。`.md` 与 `.txt` 不会被静默改写为结构化 JSON。分页、`.docx` 和 PDF 导出分别另行设计与验收。
+**建议下一步实施第 1 项的格式类型升级**：共享模型、唯一工作副本和严格读取已经完成，后续在此基础上增加自描述格式与普通文档类型。其余步骤建立在这一契约上。完成本设计时，用户应能在任一模式创建和编辑结构化文档、打开代码、与 Agent 对话并让 Agent 修改文档；切换模式及重启后能恢复文件和会话。`.md` 与 `.txt` 不会被静默改写为结构化 JSON。分页、`.docx` 和 PDF 导出分别另行设计与验收。

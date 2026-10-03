@@ -12,6 +12,14 @@ export type { ModelCatalogEntry } from "./modelCatalog.js";
 export type SessionId = string;
 export type ThreadId = string;
 
+/** Identifies the reply that produced a document edit, independently of the visible Chat. */
+export interface ChatEditSource {
+	readonly threadId: ThreadId;
+	readonly turnId: string;
+}
+
+export type ChatEditOutcome = 'completed' | 'failed' | 'interrupted';
+
 export interface ModelRef {
 	readonly provider: string;
 	readonly model: string;

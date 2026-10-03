@@ -99,6 +99,20 @@ test('working-copy backup tracker retains a crash backup while a clean editor op
 	assert.deepEqual(await backups.list(), []);
 });
 
+test('working-copy backup tracker retains content when a clean recovery editor fails and unregisters', async () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using backups = new MemoryBackups();
+	const ownerWindow = new TestWindow();
+	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
+	const resource = URI.file('C:\\project\\recovery.ts');
+	await backups.store({ resource, kind: 'text', content: 'still needs recovery', updatedAt: 1 });
+	using copy = new TestWorkingCopy(resource);
+	const registration = workingCopies.register(copy);
+	registration.dispose();
+	await tracker.flush();
+	assert.equal((await backups.list())[0]?.content, 'still needs recovery');
+});
+
 class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	private readonly dirtyChanges = this._register(new Emitter<void>());
 	private readonly contentChanges = this._register(new Emitter<void>());

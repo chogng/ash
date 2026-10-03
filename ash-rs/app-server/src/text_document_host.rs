@@ -46,6 +46,8 @@ impl TextDocumentEditorProvider for TextDocumentHost {
         Ok(Some(Arc::new(ConnectionDocuments {
             clients: Arc::clone(&self.clients),
             owner: binding.connection_id,
+            thread_id: thread.clone(),
+            turn_id: turn.clone(),
         })))
     }
 }
@@ -53,6 +55,8 @@ impl TextDocumentEditorProvider for TextDocumentHost {
 struct ConnectionDocuments {
     clients: Arc<ClientHost>,
     owner: u64,
+    thread_id: ash_protocol::ThreadId,
+    turn_id: ash_protocol::TurnId,
 }
 
 impl TextDocumentEditor for ConnectionDocuments {
@@ -146,7 +150,11 @@ impl TextDocumentEditor for ConnectionDocuments {
             .request(
                 self.owner,
                 HostMethod::TextDocumentApply,
-                &TextDocumentApplyParams { changes },
+                &TextDocumentApplyParams {
+                    thread_id: self.thread_id.clone(),
+                    turn_id: self.turn_id.clone(),
+                    changes,
+                },
                 cancellation,
             )
             .map_err(|error| {

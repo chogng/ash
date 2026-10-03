@@ -1,3 +1,10 @@
+import { migrateBrowserStorage } from '../services/storage/browser/storageService.js';
+import { IBackupService } from '../../platform/backup/common/backup.js';
+import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
+import { WORKSPACE_RECOVERY_CHANNEL } from '../../platform/window/common/window.js';
+import { serializeWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
+import { WorkingCopyBackupService } from '../services/workingCopy/browser/workingCopyBackupService.js';
+import { IndexedDbWorkingCopyBackupService } from '../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
 import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../services/textfile/browser/appServerTextDocumentHost.js';
 import { IChatEditingService } from '../contrib/chat/common/editing/chatEditingService.js';
@@ -76,10 +83,16 @@ export class DesktopMain extends Disposable {
 				modeId: this.modeId,
 				createTextDocumentHost: documentClient && this.modeId === WorkbenchModeId.Code ? services => {
 					const editing = services.get(IChatEditingService);
-					return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
+					return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 				} : undefined,
 				createLogService: () => logger.createLogger('workbench'),
+				createWorkingCopyBackupService: (services, workspaceId) => {
+					if (!api.backup) return new IndexedDbWorkingCopyBackupService(workspaceId);
+					return services.createChild(new ServiceCollection([IBackupService, api.backup])).createInstance(WorkingCopyBackupService);
+				},
 				createStorageService: async options => {
+					const conflicts = migrateBrowserStorage(options.ownerWindow.localStorage, 'academic', 'code');
+					if (conflicts.length > 0) { console.warn('Academic state migration retained conflicting entries', conflicts); }
 					const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
 					try { await storage.initialize(); return storage; }
 					catch (error) { storage.dispose(); throw error; }
@@ -129,6 +142,19 @@ export class DesktopMain extends Disposable {
 			await lifecycleService.initialize();
 			await workbench.whenRestored;
 			await desktopWindow.initialize();
+			if (api.backup) {
+				try {
+					const pending = await api.backup.getWorkspaces();
+					const workspaces = pending.map(scope => {
+						const identifier: IAnyWorkspaceIdentifier = scope.configuration ? { id: scope.id, configPath: scope.configuration }
+							: scope.folders.length === 1 ? { id: scope.id, uri: scope.folders[0]! } : { id: scope.id, ...(scope.remoteAuthority ? { remoteAuthority: scope.remoteAuthority } : {}) };
+						return serializeWorkspaceIdentifier(identifier);
+					});
+					await invoke<void>(WORKSPACE_RECOVERY_CHANNEL, workspaces);
+				} catch (error) {
+					console.error('Failed to reopen backup workspaces', error);
+				}
+			}
 		} catch (error) {
 			try {
 				this.dispose();

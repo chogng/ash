@@ -1,5 +1,5 @@
 export type AppServerTestMode = "disabled" | "required";
-export type DesktopWorkbenchMode = "academic" | "code";
+export type DesktopWorkbenchMode = "code";
 
 export type PlaywrightTarget =
 	| {
@@ -22,8 +22,6 @@ export function playwrightTargetForProject(projectName: string, baseURL: string 
 			return { kind: "browser", appServerMode: "required", baseURL: requiredBaseURL(baseURL, projectName), workbenchMode: testWorkbenchMode() };
 		case "electron-ui":
 			return { kind: "electron", appServerMode: "disabled", workbenchMode: testWorkbenchMode() };
-		case "electron-academic-ui":
-			return { kind: "electron", appServerMode: "disabled", workbenchMode: "academic" };
 		case "electron-app-server":
 		case "electron-editor-app-server":
 		case "electron-pdf-corpus-app-server":
@@ -34,7 +32,7 @@ export function playwrightTargetForProject(projectName: string, baseURL: string 
 }
 
 function testWorkbenchMode(): DesktopWorkbenchMode {
-	return process.env.ASH_WORKBENCH_MODE === "academic" ? "academic" : "code";
+	return "code";
 }
 
 function requiredBaseURL(baseURL: string | undefined, projectName: string): string {

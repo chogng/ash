@@ -4,7 +4,7 @@
 
 本文只维护实施顺序和验收边界。当前职责与已有实现分别见 [Editor 目录说明](../../src/ash/editor/README.md)、[文本内核](../../src/ash/editor/text-engine.md)、[富文档内核](../../src/ash/editor/document-engine.md) 和[跨系统边界](../../../docs/editor-architecture.md)；VS Code 对应关系及未处理项由 [API 对齐台账](../../src/ash/editor/api-alignment-status.md)维护。
 
-Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](work-code-workbench.md)；该设计尚未实施，本路线图中的 Code / Academic 状态仍描述当前实现。
+Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](work-code-workbench.md)；其中共享文档模型、共同编辑器注册及 Academic 模式退场已完成；Work 模式与普通文档流程仍未实施。本路线图中的 Academic 指论文文档能力。
 
 ## 范围与当前基线
 
@@ -28,7 +28,7 @@ Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](w
 | 7 Diff 与多文件审阅 | `browser/widget/diffEditor/diffEditorWidget.ts`、`browser/widget/multiDiffEditor/multiDiffEditorWidget.ts` |
 | 8 宿主与持久化 | `standalone/browser/standaloneEditor.ts`、`workbench/browser/parts/editor/editorPane.ts` |
 
-这张表是核对入口，不表示表中 API 已对齐。Ash 专属的 Code/Academic bundle、`CodeEditorPane`、`DocumentEditorPane` 和 App Server 适配不强行套用 VS Code 名称；共享职责仍须回到上游同路径 owner。具体差异和处理决定只维护在台账中，不在这里复制一份易过期的成员清单。
+这张表是核对入口，不表示表中 API 已对齐。Ash 专属的 Code 入口与 Academic 文档配置、`CodeEditorPane`、`DocumentEditorPane` 和 App Server 适配不强行套用 VS Code 名称；共享职责仍须回到上游同路径 owner。具体差异和处理决定只维护在台账中，不在这里复制一份易过期的成员清单。
 
 以第一项为例，双方的 `standalone/browser/standaloneEditor.ts` 都有 `create`、`createModel`、`getEditors`、`onDidCreateEditor`；这只确认名称存在。`create` 的 options、返回对象、模型归属和释放，`onDidCreateEditor` 的回调类型与触发时机仍须逐项验收。上游还有 `createDiffEditor`、`createMultiFileDiffEditor` 等入口，放到第 7 部分按真实调用需求核对，不能因为第 0 部分通过就宣称整个公开 API 对齐。
 
@@ -61,7 +61,7 @@ Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](w
 
 ### 0. 入口与装配
 
-先验收外部传入模型与编辑器自己创建的模型各由谁释放，再验收 `editor.create`、Workbench pane 和 Code/Academic bundle 是否只装配各自的能力。一个贡献必须从标准入口真正激活，并随编辑器释放；“源文件存在”不算接入。
+先验收外部传入模型与编辑器自己创建的模型各由谁释放，再验收 `editor.create`、Workbench pane 和共同 contribution 是否按资源类型装配相应能力。一个贡献必须从标准入口真正激活，并随编辑器释放；“源文件存在”不算接入。
 
 ### 1. 文本与文档内核
 
@@ -93,7 +93,7 @@ Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](w
 
 ### 8. 宿主与持久化
 
-在第 0 部分建立挂载契约后，再逐项闭合 Standalone 服务、Workbench pane/input、文件 dirty/save/revert、外部变更冲突、工作副本恢复和 Code/Academic 模式装配。Workbench 持有文件与 pane 生命周期；Editor 仍持有编辑事务、选区和视图。Web 与 Electron 分别用真实入口验证。
+在第 0 部分建立挂载契约后，再逐项闭合 Standalone 服务、Workbench pane/input、文件 dirty/save/revert、外部变更冲突、工作副本恢复和 Code 工作台中的代码与 Academic 文档装配。Workbench 持有文件与 pane 生命周期；Editor 仍持有编辑事务、选区和视图。Web 与 Electron 分别用真实入口验证。
 
 ## 第一项工作：0.1 编辑器创建与释放（已验收）
 
@@ -107,7 +107,7 @@ Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](w
 
 ## 0.3 Code/Academic bundle 与贡献释放（已验收）
 
-Code 模式入口加载行式编辑贡献，Academic 模式入口只加载文档格式与协作贡献。两个独立浏览器入口从真实 pane 验证贡献注册、对应 UI 激活、互不混装和销毁后 DOM 退出。Academic 工具栏的监听随贡献释放；协作成员列表重绘时旧按钮监听立即释放，销毁后的异步结果不能再写回 DOM。`collaborationContribution.test.ts`、`formattingContribution.test.ts` 与 Code/Academic 浏览器用例覆盖这些行为。
+Code 工作台入口共同装配行式与文档贡献，Academic 配置添加论文结构和引用能力。浏览器用例从真实 pane 验证按资源选择视图、贡献激活及销毁后 DOM 退出。Academic 工具栏的监听随贡献释放；协作成员列表重绘时旧按钮监听立即释放，销毁后的异步结果不能再写回 DOM。`collaborationContribution.test.ts`、`formattingContribution.test.ts` 与 Code/Academic 浏览器用例覆盖这些行为。
 
 ## 0.4 同一 Widget 切换模型（行为已验收）
 

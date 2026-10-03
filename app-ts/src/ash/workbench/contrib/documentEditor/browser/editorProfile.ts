@@ -7,12 +7,12 @@ import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { EditorPaneMatch } from "../../../browser/parts/editor/editorPane.js";
 import type { EditorPaneOptions } from "./documentEditorPane.js";
 import { matchDocumentEditor, type EditorInputMatcher } from "./documentEditorInput.js";
+import { DocumentTypes } from '../../../services/documentEditor/common/documentTypes.js';
 
 /** Product-neutral schema and browser composition for one document kind. */
 export interface EditorProfile {
 	readonly id: string;
-	readonly editorId: string;
-	readonly editorName: string;
+	readonly contentType: string;
 	readonly input: EditorInputMatcher;
 	readonly createSchema: () => DocumentSchema;
 	readonly createEmptyDocument?: (schema: DocumentSchema) => DocumentNode;
@@ -28,9 +28,18 @@ export interface EditorProfile {
 
 export interface EditorRuntimeOptions {
 	readonly onSave?: () => Promise<void | boolean>;
-	readonly workingCopyService?: EditorPaneOptions["workingCopyService"];
 	readonly createDocumentCollaborationService?: EditorPaneOptions["createDocumentCollaborationService"];
 }
+
+const profiles: EditorProfile[] = [];
+
+/** Document types and their editing configuration are registered together before file restoration. */
+export function registerEditorProfile(profile: EditorProfile): void {
+	DocumentTypes.register({ id: profile.id, contentType: profile.contentType, extensions: profile.input.extensions ?? [] });
+	profiles.push(profile);
+}
+
+export function getEditorProfiles(): readonly EditorProfile[] { return profiles; }
 
 /** Selects the first profile that claims one Workbench input. */
 export function findEditorProfile(input: EditorInput, profiles: readonly EditorProfile[]): EditorProfile | undefined {
@@ -47,6 +56,7 @@ export function createDocumentEditorPaneOptions(profile: EditorProfile, runtime:
 	const schema = profile.createSchema();
 	return {
 		...runtime,
+		contentType: profile.contentType,
 		schema,
 		...(profile.createEmptyDocument ? { createEmptyDocument: () => profile.createEmptyDocument!(schema) } : {}),
 		...(profile.outline === undefined ? {} : { outline: profile.outline }),

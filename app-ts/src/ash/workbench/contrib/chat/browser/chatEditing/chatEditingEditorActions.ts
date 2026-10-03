@@ -18,11 +18,26 @@ registerAction2(class ReviewChangesAction extends Action2 {
 		const store = new DisposableStore();
 		const picker = store.add(accessor.get(IQuickInputService).createQuickPick<IQuickPickItem & { entry: IModifiedFileEntry }>());
 		picker.ariaLabel = picker.placeholder = localize('chatEditing.review', 'Review Agent changes');
+		const countdowns = new Map<IModifiedFileEntry, boolean>();
 		const refresh = (): void => {
-			picker.items = editing.entries.map(entry => ({ entry, label: entry.resources.map(basename).join(', '), description: entry.isFileOperation ? localize('chatEditing.atomic', 'Atomic file operation') : localize('chatEditing.changeCount', '{0} changes', entry.hunks.length), detail: entry.getAccessibleContent(), buttons: [{ id: 'accept', label: entry.isFileOperation ? localize('chatEditing.acceptSet', 'Accept change set') : localize('chatEditing.accept', 'Accept file changes') }, { id: 'reject', label: entry.isFileOperation ? localize('chatEditing.rejectSet', 'Reject change set') : localize('chatEditing.reject', 'Reject file changes') }] }));
+			countdowns.clear();
+			picker.items = editing.entries.map(entry => {
+				const seconds = editing.getAutoAcceptCountdown(entry);
+				countdowns.set(entry, seconds !== undefined);
+				return { entry, label: entry.resources.map(basename).join(', '), description: entry.isFileOperation ? localize('chatEditing.atomic', 'Atomic file operation') : localize('chatEditing.changeCount', '{0} changes', entry.hunks.length), detail: seconds === undefined ? entry.getAccessibleContent() : localize('chatEditing.autoAcceptPending', 'Automatic acceptance pending. {0}', entry.getAccessibleContent()), buttons: [{ id: 'accept', label: entry.isFileOperation ? localize('chatEditing.acceptSet', 'Accept change set') : localize('chatEditing.accept', 'Accept file changes') }, { id: 'reject', label: entry.isFileOperation ? localize('chatEditing.rejectSet', 'Reject change set') : localize('chatEditing.reject', 'Reject file changes') }, ...(seconds === undefined ? [] : [{ id: 'cancelAutoAccept', label: localize('chatEditing.cancelAutoAccept', 'Cancel automatic acceptance') }])] };
+			});
 		};
 		store.add(editing.onDidChange(refresh));
+		store.add(editing.onDidChangeAutoAccept(entry => {
+			// The list changes only when cancellation becomes available, so ticks preserve keyboard focus.
+			if (countdowns.get(entry) !== (editing.getAutoAcceptCountdown(entry) !== undefined)) { refresh(); }
+		}));
 		store.add(picker.onDidTriggerItemButton(({ item, button }) => {
+			if (button.id === 'cancelAutoAccept') {
+				editing.cancelAutoAccept(item.entry);
+				status(localize('chatEditing.autoAcceptCancelled', 'Automatic acceptance cancelled. Changes remain available for review.'));
+				return;
+			}
 			void (button.id === 'accept' ? editing.acceptEntry(item.entry) : editing.rejectEntry(item.entry)).then(() => status(localize('chatEditing.reviewed', 'Changes reviewed.')), error => notifications.error(localize('chatEditing.failed', 'Could not review changes: {0}', String(error))));
 		}));
 		store.add(picker.onDidAccept(item => { picker.hide(); void codeEditors.openCodeEditor({ resource: item.entry.modifiedURI }, null); }));

@@ -1,4 +1,6 @@
 import '../../../../test/browser/testEditorDom.js';
+import type { IBulkEditOptions } from '../../../../browser/services/bulkEditService.js';
+import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -139,7 +141,20 @@ for (const outcome of ['complete', 'error'] as const) {
 	});
 }
 
-function createEditor(onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => Promise<void>) {
+test('rename forwards refactoring autosave and its edit reason through the host apply boundary', async () => {
+	let received: IBulkEditOptions | undefined;
+	using fixture = createEditor(async (_edit, options) => { received = options; });
+	using provider = fixture.features.renameProvider.register('typescript', {
+		provideRenameEdits: request => ({ entries: [{ kind: 'textDocument', resource: request.resource, edits: [{ range: fixture.model.getFullModelRange(), text: request.newName! }] }] }),
+	});
+	await fixture.open();
+	fixture.input.value = 'renamed';
+	fixture.press(fixture.input, 'Enter');
+	await flushPromises();
+	assert.deepEqual({ autoSave: received?.respectAutoSaveConfig, label: received?.label, source: received?.reason?.metadata.source }, { autoSave: true, label: 'Rename to renamed', source: 'rename' });
+});
+
+function createEditor(onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => Promise<void>) {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const model = new TextModel('value', { languageId: 'typescript' });

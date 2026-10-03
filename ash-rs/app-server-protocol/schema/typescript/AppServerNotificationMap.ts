@@ -28,6 +28,7 @@ import type { SessionChanged } from './types/SessionChanged.js';
 import type { SessionDeleted } from './types/SessionDeleted.js';
 import type { SkillsChanged } from './types/SkillsChanged.js';
 import type { TestingUpdate } from './types/TestingUpdate.js';
+import type { TextDocumentTurnFinished } from './types/TextDocumentTurnFinished.js';
 import type { ThreadGoalClearedNotification } from './types/ThreadGoalClearedNotification.js';
 import type { ThreadGoalUpdatedNotification } from './types/ThreadGoalUpdatedNotification.js';
 import type { ThreadTranscriptUpdateEnvelope } from './types/ThreadTranscriptUpdateEnvelope.js';
@@ -36,6 +37,7 @@ import type { TurnChangesChanged } from './types/TurnChangesChanged.js';
 import type { JsonRpcVersion } from './protocol.js';
 
 export interface AppServerNotificationMap {
+  "textDocument/turnFinished": TextDocumentTurnFinished;
   "testing/updated": TestingUpdate;
   "account/login/completed": AccountLoginCompleted;
   "account/updated": AccountUpdated;
@@ -89,6 +91,7 @@ readonly __params?: NotificationParams<M>;
 export const APP_SERVER_NOTIFICATIONS: {
 [M in AppServerNotificationMethod]: AppServerNotificationDefinition<M>
 } = {
+  "textDocument/turnFinished": { method: "textDocument/turnFinished" },
   "testing/updated": { method: "testing/updated" },
   "account/login/completed": { method: "account/login/completed" },
   "account/updated": { method: "account/updated" },

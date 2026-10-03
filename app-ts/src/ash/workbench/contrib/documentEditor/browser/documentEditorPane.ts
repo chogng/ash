@@ -18,22 +18,20 @@ import type { DocumentOutline } from "../../../../editor/common/model/documentOu
 import type { IDocumentCollaborationService } from '../../../services/documentCollaboration/common/documentCollaborationService.js';
 import { EditorPaneVisibility, type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
-import { DocumentEditorTextModelService } from "../../../services/documentEditor/browser/documentEditorTextModelService.js";
-import type { ITextFileService } from "../../../services/textfile/common/textFileService.js";
+import { IDocumentEditorTextModelService } from '../../../services/documentEditor/common/documentTypes.js';
 import type { IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
-import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { DOCUMENT_EDITOR_ID } from "./documentEditorInput.js";
 import { h } from "../../../../base/browser/dom.js";
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 
 /** Workbench-only services that complement one document editor. */
 export interface EditorPaneOptions extends RichTextEditorOptions {
+	readonly contentType: string;
 	readonly collaborationSchemaId?: string;
 	readonly onSave?: () => Promise<void | boolean>;
 	readonly plugins?: readonly DocumentPlugin<unknown>[];
 	readonly schema?: DocumentSchema;
 	readonly createEmptyDocument?: () => DocumentNode;
-	readonly workingCopyService?: IWorkingCopyService;
 	readonly createDocumentCollaborationService?: () => IDocumentCollaborationService;
 }
 
@@ -44,7 +42,6 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 	private readonly modelReference = this._register(new MutableDisposable<TextModelWorkingCopyReference>());
 	private readonly schema: DocumentSchema;
 	private inputGeneration = 0;
-	private readonly modelService: DocumentEditorTextModelService;
 	private readonly options: EditorPaneOptions;
 	private collaborationService: IDocumentCollaborationService | undefined;
 	private collaboration: CollaborationContribution | undefined;
@@ -59,12 +56,11 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 		return this.modelReference.value;
 	}
 
-	constructor(textFiles: ITextFileService, options: EditorPaneOptions = {}, @IDialogService private readonly dialogs: IDialogService) {
+	constructor(options: EditorPaneOptions, @IDialogService private readonly dialogs: IDialogService, @IDocumentEditorTextModelService private readonly modelService: IDocumentEditorTextModelService) {
 		super();
 		this.options = options;
 		this._register(toDisposable(() => this.stopCollaboration()));
 		this.schema = options.schema ?? createDefaultDocumentSchema();
-		this.modelService = this._register(new DocumentEditorTextModelService(textFiles, options.workingCopyService));
 		this._register(toDisposable(() => {
 			this.container?.remove();
 			this.container = undefined;
@@ -77,7 +73,7 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 		container.className = "stanza-structured-editor-pane";
 		parent.append(container);
 		this.container = container;
-		const { workingCopyService: _workingCopyService, createDocumentCollaborationService, ...editorOptions } = this.options;
+		const { createDocumentCollaborationService, ...editorOptions } = this.options;
 		this.collaborationService = createDocumentCollaborationService ? this._register(createDocumentCollaborationService()) : undefined;
 		const collaboration = this._register(new CollaborationContribution(container, {
 			onStart: roomId => this.startCollaboration(roomId),
@@ -101,6 +97,7 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 		const generation = ++this.inputGeneration;
 		const reference = await this.modelService.acquire({
 			resource: input.resource,
+			contentType: this.options.contentType,
 			initialText: input.initialText,
 			schema: this.schema,
 			plugins: this.options.plugins,

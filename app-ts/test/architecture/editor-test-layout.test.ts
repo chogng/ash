@@ -35,14 +35,14 @@ test("Stanza browser integration is flat and named after concrete model mount po
 	assert.doesNotMatch(config, /firefox/u);
 });
 
-test("browser integrations import the stable API and only their mode bundle", () => {
+test("browser integrations import the stable API and required contributions", () => {
 	const textModelIntegration = readFileSync(join(browserIntegrationRoot, "textModel.integration.ts"), "utf8");
 	const academicIntegration = readFileSync(join(browserIntegrationRoot, "academic.integration.ts"), "utf8");
 	assert.match(textModelIntegration, /editor\/editor\.api\.js/u);
 	assert.match(textModelIntegration, /editor\/editor\.code\.all\.js/u);
 	assert.doesNotMatch(textModelIntegration, /editor\.(?:main|academic\.all)\.js/u);
 	assert.match(academicIntegration, /editor\/editor\.api\.js/u);
-	assert.match(academicIntegration, /editor\/editor\.academic\.all\.js/u);
+	assert.match(academicIntegration, /editor\/contrib\/documentEditor\.contribution\.js/u);
 	assert.doesNotMatch(academicIntegration, /editor\.(?:main|code\.all)\.js/u);
 });
 

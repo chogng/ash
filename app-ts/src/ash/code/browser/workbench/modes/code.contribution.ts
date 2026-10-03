@@ -3,6 +3,8 @@ import "../../../../workbench/contrib/automation/browser/automation.contribution
 import "../../../../editor/editor.code.all.js";
 import '../../../../editor/standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.js';
 import "../../../../workbench/contrib/codeEditor/browser/codeEditor.contribution.js";
+import '../../../../workbench/contrib/documentEditor/browser/documentEditor.contribution.js';
+import '../../../../workbench/contrib/academic/browser/academicEditor.contribution.js';
 import "../../../../workbench/contrib/debug/browser/debug.contribution.js";
 import "../../../../workbench/contrib/tasks/browser/tasks.contribution.js";
 import "../../../../workbench/contrib/testing/browser/testing.contribution.js";

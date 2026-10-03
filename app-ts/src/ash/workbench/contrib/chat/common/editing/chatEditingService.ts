@@ -4,6 +4,7 @@ import type { URI } from '../../../../../base/common/uri.js';
 import type { LanguageWorkspaceEdit } from '../../../../../editor/common/languages.js';
 import type { Range } from '../../../../../editor/common/core/range.js';
 import { createServiceIdentifier } from '../../../../../platform/instantiation/common/instantiation.js';
+import type { ChatEditSource, ChatEditOutcome } from '../../../../services/chat/common/chatService.js';
 
 export interface IModifiedFileEntryChangeHunk {
 	readonly range: Range;
@@ -29,7 +30,11 @@ export interface IModifiedFileEntry extends IDisposable {
 export interface IChatEditingService {
 	readonly entries: readonly IModifiedFileEntry[];
 	readonly onDidChange: Event<void>;
-	applyEdits(edit: LanguageWorkspaceEdit, signal: AbortSignal): Promise<{ readonly isApplied: boolean }>;
+	readonly onDidChangeAutoAccept: Event<IModifiedFileEntry>;
+	applyEdits(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<{ readonly isApplied: boolean }>;
+	finishTurn(source: ChatEditSource, outcome: ChatEditOutcome): Promise<void>;
+	getAutoAcceptCountdown(entry: IModifiedFileEntry): number | undefined;
+	cancelAutoAccept(entry: IModifiedFileEntry): void;
 	acceptEntry(entry: IModifiedFileEntry, hunk?: IModifiedFileEntryChangeHunk): Promise<void>;
 	rejectEntry(entry: IModifiedFileEntry, hunk?: IModifiedFileEntryChangeHunk): Promise<void>;
 	accept(...resources: URI[]): Promise<void>;

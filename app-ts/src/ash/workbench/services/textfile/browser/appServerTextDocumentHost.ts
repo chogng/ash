@@ -1,6 +1,6 @@
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableMap, toDisposable, type IDisposable, type IReference } from '../../../../base/common/lifecycle.js';
-import { isCancellationError } from '../../../../base/common/errors.js';
+import { isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import type { LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from '../../../../editor/common/languages.js';
@@ -8,8 +8,14 @@ import { ITextModelService, type ITextModelService as ITextModelServiceContract,
 import { AppServerProtocolClient } from '../../../../platform/app-server/browser/appServerProtocolClient.js';
 import { APP_SERVER_SERVER_REQUESTS, type TextDocumentApplyParams, type TextDocumentApplyResult, type TextDocumentReadResult, type TextDocumentListResult } from '../../../../platform/app-server/common/generated/index.js';
 import { FileNotFoundError } from '../../../../platform/files/common/files.js';
-import { WorkspaceEditConflictError } from '../../language/common/workspaceEditService.js';
+import { WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
 import { IWorkingCopyService, type IWorkingCopyService as IWorkingCopyServiceContract } from '../../workingCopy/common/workingCopyService.js';
+import type { ChatEditSource, ChatEditOutcome } from '../../chat/common/chatService.js';
+
+interface DocumentEditReview {
+	applyEdits(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<{ readonly isApplied: boolean }>;
+	finishTurn(source: ChatEditSource, outcome: ChatEditOutcome): Promise<void>;
+}
 
 interface DocumentSnapshot extends IDisposable {
 	readonly reference: IReference<IResolvedTextEditorModel>;
@@ -21,7 +27,7 @@ interface DocumentSnapshot extends IDisposable {
 export class AppServerTextDocumentHost extends Disposable {
 	private readonly snapshots = this._register(new DisposableMap<string, DocumentSnapshot>());
 
-	constructor(client: AppServerProtocolClient, private readonly applyEdits: (edit: LanguageWorkspaceEdit, signal: AbortSignal) => Promise<{ readonly isApplied: boolean }>, @ITextModelService private readonly models: ITextModelServiceContract, @IWorkingCopyService private readonly workingCopies: IWorkingCopyServiceContract) {
+	constructor(client: AppServerProtocolClient, private readonly review: DocumentEditReview, @ITextModelService private readonly models: ITextModelServiceContract, @IWorkingCopyService private readonly workingCopies: IWorkingCopyServiceContract) {
 		super();
 		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/read'], (params, context) => this.read(params.path, context.signal)));
 		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/list'], (params, context) => this.list(params.root, context.signal)));
@@ -32,6 +38,11 @@ export class AppServerTextDocumentHost extends Disposable {
 		}));
 		this._register(client.onStateChange(state => {
 			if (state !== 'ready') { this.snapshots.clearAndDisposeAll(); }
+		}));
+		this._register(client.onNotification(notification => {
+			if (notification.method === 'textDocument/turnFinished') {
+				void this.review.finishTurn({ threadId: notification.params.threadId, turnId: notification.params.turnId }, notification.params.outcome).catch(onUnexpectedError);
+			}
 		}));
 	}
 
@@ -99,7 +110,7 @@ export class AppServerTextDocumentHost extends Disposable {
 					entries.push({ kind: 'rename', source: snapshot.resource, target, existing: 'error' });
 				}
 			}
-			const result = await this.applyEdits({ entries }, signal);
+			const result = await this.review.applyEdits({ entries }, signal, { threadId: params.threadId, turnId: params.turnId });
 			if (!result.isApplied) { return { kind: 'cancelled' }; }
 			applied = true;
 			// File tools participate in executable Agent tasks. Their success means the next

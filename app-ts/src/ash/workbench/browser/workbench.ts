@@ -244,13 +244,12 @@ import { BrowserWorkingCopyService } from "../services/workingCopy/browser/brows
 import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyService.js";
 import { IActivityService } from '../services/activity/common/activity.js';
 import { ActivityService } from '../services/activity/browser/activityService.js';
-import { IndexedDbWorkingCopyBackupService } from "../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js";
 import { WorkingCopyBackupTracker } from "../services/workingCopy/browser/workingCopyBackupTracker.js";
 import { IWorkingCopyBackupService, type WorkingCopyBackup } from "../services/workingCopy/common/workingCopyBackupService.js";
 import { projectColorThemeTokens } from "../services/textMate/common/textMateThemeProjection.js";
-import { BrowserWorkspaceEditService } from "../services/language/browser/browserWorkspaceEditService.js";
-import { IWorkspaceEditService } from "../services/language/common/workspaceEditService.js";
 import { IFileTextModelService, ITextModelResourceService } from "../services/textmodelResolver/common/textModelResourceService.js";
+import { IDocumentEditorTextModelService } from '../services/documentEditor/common/documentTypes.js';
+import { DocumentEditorTextModelService } from '../services/documentEditor/browser/documentEditorTextModelService.js';
 import { ITextModelService } from '../../editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../services/textmodelResolver/common/textModelResolverService.js';
 import { BulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
@@ -321,6 +320,7 @@ export interface IStartWorkbenchOptions {
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly createWindow?: (services: IInstantiationService) => IDisposable;
 	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> }>;
+	readonly createWorkingCopyBackupService: (services: IInstantiationService, workspaceId: string) => IWorkingCopyBackupService;
 	readonly createLogService: () => LogService;
 	readonly configurationApi?: IConfigurationApi;
 	readonly initialConfigurationSnapshot?: IConfigurationSnapshot;
@@ -350,6 +350,7 @@ export async function startWorkbench({
 	createWindow,
 	createTextDocumentHost,
 	createStorageService,
+	createWorkingCopyBackupService,
 	createLogService,
 	configurationApi,
 	initialConfigurationSnapshot,
@@ -400,6 +401,7 @@ export async function startWorkbench({
 			themes,
 			storage,
 			logger,
+			createWorkingCopyBackupService,
 			createWindow,
 			createTextDocumentHost,
 		);
@@ -422,7 +424,7 @@ export class Workbench extends Disposable {
 	private readonly editor: IEditorPartsService;
 	private readonly untitledTextEditorService: IUntitledTextEditorService;
 	private readonly workbenchLayout: WorkbenchLayout;
-	private readonly workingCopyBackups: IndexedDbWorkingCopyBackupService;
+	private readonly workingCopyBackups: IWorkingCopyBackupService;
 	private readonly workingCopyBackupTracker: WorkingCopyBackupTracker;
 	private readonly workbenchWindow: WorkbenchWindow;
 	private readonly logService: ILogService;
@@ -459,6 +461,7 @@ export class Workbench extends Disposable {
 		themes: ExtensionColorThemeService,
 		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> },
 		logger: LogService,
+		createWorkingCopyBackupService: IStartWorkbenchOptions['createWorkingCopyBackupService'],
 		createWindow?: (services: IInstantiationService) => IDisposable,
 		createTextDocumentHost?: (services: IInstantiationService) => IDisposable,
 	) {
@@ -581,10 +584,12 @@ export class Workbench extends Disposable {
 		services.registerInstance(ITextFileService, textFileService);
 		const workingCopyService = this._register(new BrowserWorkingCopyService());
 		services.registerInstance(IWorkingCopyService, workingCopyService);
+		const documentTextModelService = this._register(services.createInstance(DocumentEditorTextModelService));
+		services.registerInstance(IDocumentEditorTextModelService, documentTextModelService);
 		const untitledTextEditorService = this._register(services.createInstance(BrowserUntitledTextEditorService));
 		this.untitledTextEditorService = untitledTextEditorService;
 		services.registerInstance(IUntitledTextEditorService, untitledTextEditorService);
-		const workingCopyBackups = this._register(new IndexedDbWorkingCopyBackupService(workspace.id));
+		const workingCopyBackups = this._register(createWorkingCopyBackupService(services, workspace.id));
 		this.workingCopyBackups = workingCopyBackups;
 		services.registerInstance(IWorkingCopyBackupService, workingCopyBackups);
 		const configuration = this._register(new WorkbenchConfigurationService({
@@ -617,8 +622,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(ITextModelResourceService, textModelService);
 		services.registerInstance(IFileTextModelService, textModelService);
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
-		const workspaceEditService = this._register(new BrowserWorkspaceEditService(textModelService, workingCopyService, fileService));
-		services.registerInstance(IWorkspaceEditService, workspaceEditService);
 		const bulkEditService = this._register(services.createInstance(BulkEditService));
 		services.registerInstance(IBulkEditService, bulkEditService);
 		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }

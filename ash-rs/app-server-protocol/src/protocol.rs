@@ -6,6 +6,7 @@ pub mod approval_environment;
 pub mod assets;
 pub mod attachments;
 pub mod automation;
+pub mod backup;
 pub mod browser;
 pub mod call;
 pub mod codebase;

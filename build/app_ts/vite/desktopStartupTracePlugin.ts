@@ -16,9 +16,6 @@ const marksByFile: Readonly<Record<string, readonly StartupMark[]>> = {
 	'src/ash/code/electron-browser/workbench/modes/code.ts': [
 		{ name: 'ash.desktop.contributions-ready', anchor: 'await main(WorkbenchModeId.Code, [createAppServerDebugAdapterCapability]);', position: 'before' },
 	],
-	'src/ash/code/electron-browser/workbench/modes/academic.ts': [
-		{ name: 'ash.desktop.contributions-ready', anchor: 'await main(WorkbenchModeId.Academic);', position: 'before' },
-	],
 	'src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.ts': [
 		{ name: 'ash.decoder.schema-start', anchor: 'const protocolSchema = JSON.parse(', position: 'before' },
 		{ name: 'ash.decoder.schema-ready', anchor: 'export class AppServerProtocolDecodeError extends Error {', position: 'before' },

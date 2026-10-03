@@ -1,3 +1,4 @@
+import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
 import type {
 	IDimension,
 } from "../../../../base/browser/dom.js";
@@ -110,7 +111,7 @@ export interface EditorPaneCreationOptions {
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly onSave?: () => Promise<void | boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
-	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
+	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>;
 }
 
 export enum EditorPaneMatch {

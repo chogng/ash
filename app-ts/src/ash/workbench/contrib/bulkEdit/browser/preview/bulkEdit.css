@@ -12,30 +12,6 @@
   padding-bottom: var(--ash-spacing-size80);
 }
 
-.ash-bulk-edit-toolbar button {
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-  color: inherit;
-  background: var(--ash-input-background);
-  font: inherit;
-  cursor: pointer;
-}
-
-.ash-bulk-edit-toolbar button:hover:not(:disabled) {
-  background: var(--ash-toolbar-hover-background);
-}
-
-.ash-bulk-edit-toolbar button:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
-}
-
-.ash-bulk-edit-toolbar button:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-
 .ash-bulk-edit-status {
   min-height: 18px;
   padding: var(--ash-spacing-size40) var(--ash-spacing-size20) var(--ash-spacing-size80);
@@ -141,7 +117,6 @@
   outline-offset: 2px;
 }
 
-[data-color-scheme^="high-contrast"] .ash-bulk-edit-entry,
-[data-color-scheme^="high-contrast"] .ash-bulk-edit-toolbar button {
+[data-color-scheme^="high-contrast"] .ash-bulk-edit-entry {
   border-color: var(--ash-contrast-border);
 }

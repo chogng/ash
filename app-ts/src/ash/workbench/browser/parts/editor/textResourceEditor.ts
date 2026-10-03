@@ -1,3 +1,4 @@
+import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
 import type { IModelContentChangedEvent } from '../../../../editor/common/textModelEvents.js';
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { type IDimension } from "../../../../base/browser/dom.js";
@@ -126,7 +127,7 @@ export interface EditorPaneOptions {
 	readonly onOpenLink?: (target: string) => void | Promise<void>;
 	readonly onExecuteEditorCommand?: CodeEditorWidgetOptions["onExecuteEditorCommand"];
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
-	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
+	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>;
 	readonly placeholder?: string;
 	readonly showUnicodeHighlights?: boolean;
 	readonly insertFinalNewLine?: boolean;

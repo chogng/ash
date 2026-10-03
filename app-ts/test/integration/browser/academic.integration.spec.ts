@@ -41,7 +41,7 @@ test("TextModel API and Academic code-block editing run in real browsers", async
 	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(["Title", "Body"]);
 });
 
-test('Academic bundle activates document contributions without Code editor UI and releases them', async ({ page }) => {
+test('Document contributions mount the rich editor and release its views', async ({ page }) => {
 	await page.goto('/academic.html');
 	const ids = await page.evaluate(() => window.ashAcademicIntegration.getBundleIds());
 	expect(ids).toContain('editor.contrib.documentFormatting');

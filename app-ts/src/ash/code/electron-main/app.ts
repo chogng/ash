@@ -68,7 +68,7 @@ import { LOCAL_FILE_SYSTEM_CHANGED_CHANNEL } from "../../platform/files/common/d
 import { IWindowsMainService, WindowControlsOverlay } from "../../platform/windows/electron-main/windows.js";
 import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
-import { WindowsMainService, trackWindowResourceChanges, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
+import { WindowsMainService, trackWindowResourceChanges, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from "../../platform/windows/electron-main/windowsMainService.js";
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
 import { defaultWindowState, focusWindow, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
 import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState } from "../../platform/workspace/common/workspace.js";
@@ -398,6 +398,8 @@ export class AshApplication extends Disposable {
 		this.activeLanguagePack = catalog;
 		const storage = this.storageMainService = this._register(new StorageMainService(join(app.getPath('userData'), 'workbench-state.json')));
 		await storage.initialize();
+		const academicStateConflicts = await storage.migrateApplicationStorage('academic', 'code');
+		if (academicStateConflicts.length > 0) { this.logService.warn('storage', 'Academic state migration retained conflicting entries', { keys: academicStateConflicts }); }
 		this.mainProcessIpcServer.registerChannel('storage', new StorageDatabaseChannel(storage));
 		const launchServices = this._register(new InstantiationService());
 		launchServices.registerInstance(IStateService, this.services.state);
@@ -1331,6 +1333,7 @@ export class AshApplication extends Disposable {
 			...workbenchModeIpcRoutes(modeId => this.scheduleWorkbenchModeSwitch(record, modeId)),
 			...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
 			...workspaceContextIpcRoutes(workspaceContext),
+			workspaceRecoveryIpcRoute(identifiers => this.windowsMainService.restoreWorkspaces(identifiers, async identifier => (await this.openWorkspace(identifier, workspaces))?.window)),
 			...updateIpcRoutes(this.updateMainService),
 		];
 		await watchProfileThemeFiles(this.profileRoot, window, windowDisposables);

@@ -1,3 +1,4 @@
+import type { IBulkEditOptions } from '../../services/bulkEditService.js';
 import { IMarkerDecorationsService } from '../../../common/services/markerDecorations.js';
 import { getClientArea, h, isHTMLElement, scheduleAtNextAnimationFrame } from "../../../../base/browser/dom.js";
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
@@ -70,7 +71,7 @@ export interface CodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly onOpenLink?: (target: string) => void | Promise<void>;
 	readonly onExecuteEditorCommand?: (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
-	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
+	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>;
 	readonly registerBeforeSave?: (hook: () => void | Promise<void>) => IDisposable;
 	readonly onContributionError?: (error: unknown) => void;
 	/** Omit to use the registered set; an array selects exactly those contributions. */

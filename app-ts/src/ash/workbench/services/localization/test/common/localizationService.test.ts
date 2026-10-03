@@ -65,6 +65,11 @@ suite('Workbench localization', () => {
 		assert.equal(localization.translate('ash', 'git.worktreeNameInvalid', ''), '请使用 1–64 个英文字母、数字、连字符或下划线。');
 	});
 
+	test('document editor name uses the selected Chinese catalog', () => {
+		initializeTestLocalization('zh-CN');
+		assert.equal(localize('editor.document.name', 'Stanza Document'), 'Stanza 文档');
+	});
+
 	test('Tree settings use Chinese titles and guide options', () => {
 		initializeTestLocalization('zh-CN');
 		const settings = new DefaultSettings();

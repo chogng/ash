@@ -1457,7 +1457,7 @@ test('Agent document requests preserve unsaved editor content, undo, BOM and CRL
 	const snapshot = await request('textDocument/read', { path }) as { kind: string; snapshot: string; text: string };
 	expect(snapshot).toMatchObject({ kind: 'document', text: 'unsaved first\r\nsecond' });
 	expect(await request('textDocument/list', { root: testWorkspace.directory })).toEqual({ kind: 'documents', documents: [{ relativePath: name, text: 'unsaved first\r\nsecond' }] });
-	expect(await request('textDocument/apply', { changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: 'agent first\nsecond' }] })).toEqual({ kind: 'applied' });
+	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: 'agent first\nsecond' }] })).toEqual({ kind: 'applied' });
 	await expect(group.editor.lines).toHaveText(['agent first', 'second']);
 	expect(await readFile(path)).toEqual(Buffer.from('\uFEFFagent first\r\nsecond'));
 	expect(await request('textDocument/list', { root: testWorkspace.directory })).toEqual({ kind: 'documents', documents: [] });
@@ -1469,7 +1469,7 @@ test('Agent document requests preserve unsaved editor content, undo, BOM and CRL
 	const stale = await request('textDocument/read', { path }) as { snapshot: string };
 	await input.press('ControlOrMeta+Home');
 	await input.type('user ');
-	expect(await request('textDocument/apply', { changes: [{ kind: 'update', snapshot: stale.snapshot, text: 'stale agent' }] })).toEqual({ kind: 'conflict' });
+	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: stale.snapshot, text: 'stale agent' }] })).toEqual({ kind: 'conflict' });
 	await expect(group.editor.lines).toHaveText(['user unsaved first', 'second']);
 });
 
@@ -1485,10 +1485,10 @@ test('Agent document requests use the Agents window model and save closed files 
 	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown> }).documentRequest(method, params), { method, params });
 	const snapshot = await request('textDocument/read', { path }) as { kind: string; snapshot: string; text: string };
 	expect(snapshot).toMatchObject({ kind: 'document', text: 'original\r\nsecond' });
-	expect(await request('textDocument/apply', { changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: 'agent\nsecond' }] })).toEqual({ kind: 'applied' });
+	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: 'agent\nsecond' }] })).toEqual({ kind: 'applied' });
 	await expect.poll(() => readFile(path)).toEqual(Buffer.from('\uFEFFagent\r\nsecond'));
 	const created = join(testWorkspace.directory, 'nested', 'agents-created.txt');
-	expect(await request('textDocument/apply', { changes: [{ kind: 'create', path: created, text: 'created\ntext' }] })).toEqual({ kind: 'applied' });
+	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'create', path: created, text: 'created\ntext' }] })).toEqual({ kind: 'applied' });
 	await expect.poll(() => readFile(created, 'utf8')).toBe('created\ntext');
 });
 
@@ -1527,7 +1527,7 @@ test('Agent review accepts individual hunks and rejects the remainder without lo
 	const input = group.content.getByRole('textbox', { name, exact: true });
 	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown> }).documentRequest(method, params), { method, params });
 	const snapshot = await request('textDocument/read', { path }) as { snapshot: string };
-	expect(await request('textDocument/apply', { changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: original.replace('first', 'agent first').replace('last', 'agent last') }] })).toEqual({ kind: 'applied' });
+	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: original.replace('first', 'agent first').replace('last', 'agent last') }] })).toEqual({ kind: 'applied' });
 	const review = group.content.locator('.ash-chat-editing-overlay');
 	await expect(review).toBeVisible();
 	await workbench.quickaccess.runCommand('workbench.action.splitEditorRight');
@@ -1585,11 +1585,11 @@ test('Agent review accepts individual hunks and rejects the remainder without lo
 	const closed = join(testWorkspace.directory, 'agent-review-closed.txt');
 	await writeFile(closed, 'closed original');
 	const closedSnapshot = await request('textDocument/read', { path: closed }) as { snapshot: string };
-	expect(await request('textDocument/apply', { changes: [{ kind: 'update', snapshot: closedSnapshot.snapshot, text: 'closed agent' }] })).toEqual({ kind: 'applied' });
+	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: closedSnapshot.snapshot, text: 'closed agent' }] })).toEqual({ kind: 'applied' });
 	await workbench.quickaccess.runCommand('chatEditing.rejectAll');
 	await expect.poll(() => readFile(closed, 'utf8')).toBe('closed original');
 	const created = join(testWorkspace.directory, 'agent-review-created.txt');
-	expect(await request('textDocument/apply', { changes: [{ kind: 'create', path: created, text: 'new file' }] })).toEqual({ kind: 'applied' });
+	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'create', path: created, text: 'new file' }] })).toEqual({ kind: 'applied' });
 	await workbench.quickaccess.runCommand('chatEditing.reviewChanges');
 	const picker = page.getByRole('dialog', { name: 'Review Agent changes', exact: true });
 	await expect(picker.getByRole('option')).toContainText('agent-review-created.txt');
@@ -1646,5 +1646,98 @@ async function installDocumentProtocolProbe(page: Page): Promise<void> {
 			} finally { injecting = false; }
 			return result;
 		};
+		(window as Window & { documentTurnFinished?: (turnId: string) => void }).documentTurnFinished = turnId => {
+			const frame = JSON.stringify({ jsonrpc: '2.0', method: 'textDocument/turnFinished', params: { threadId: 'review-thread', turnId, outcome: 'completed' } });
+			injecting = true;
+			try {
+				if (port) { port.dispatchEvent(new MessageEvent('message', { data: { frame } })); }
+				else if (socket) { socket.dispatchEvent(new MessageEvent('message', { data: frame })); }
+				else { throw new Error('Product document transport was not initialized'); }
+			} finally { injecting = false; }
+		};
 	});
 }
+
+
+async function setAutoAcceptDelay(workbench: import('../../../automation/workbench.js').Workbench, seconds: number): Promise<void> {
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	const settings = workbench.page.locator('.ash-settings-editor');
+	await settings.locator('[data-settings-group-id="agents"]').click();
+	await settings.locator('[data-settings-category-id="agent-defaults"]').click();
+	const setting = settings.getByRole('spinbutton', { name: 'Automatically accept Agent changes', exact: true });
+	await expect(setting).toBeVisible();
+	await setting.fill(String(seconds));
+	await setting.press('Tab');
+	await workbench.page.locator('.ash-modal-editor-close').click();
+}
+
+test('Agent automatic acceptance setting persists across window reload', async ({ workbench }) => {
+	await setAutoAcceptDelay(workbench, 7);
+	await workbench.reloadWindow();
+	await workbench.waitForReady();
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	const settings = workbench.page.locator('.ash-settings-editor');
+	await settings.locator('[data-settings-group-id="agents"]').click();
+	await settings.locator('[data-settings-category-id="agent-defaults"]').click();
+	await expect(settings.getByRole('spinbutton', { name: 'Automatically accept Agent changes', exact: true })).toHaveValue('7');
+	await workbench.page.locator('.ash-modal-editor-close').click();
+});
+
+test('Agent automatic acceptance setting has Chinese metadata', async ({ target, workbench, restartWorkbench }) => {
+	test.skip(target.appServerMode === 'required', 'Locale restart is covered by the Web and Electron UI hosts');
+	await setAutoAcceptDelay(workbench, 7);
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+	await language.fill('简体中文');
+	await language.press('Enter');
+	({ workbench } = await restartWorkbench());
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	const localized = workbench.page.locator('.ash-settings-editor');
+	await localized.locator('[data-settings-group-id="agents"]').click();
+	await localized.locator('[data-settings-category-id="agent-defaults"]').click();
+	await expect(localized.getByRole('spinbutton', { name: '自动接受 Agent 修改', exact: true })).toHaveValue('7');
+	await expect(localized).toContainText('回复完成后，等待多少秒自动接受修改');
+});
+
+test('Agent countdown preserves keyboard focus, can be cancelled, and accepts a subsequent reply', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires the document host connection');
+	const page = workbench.page;
+	await installDocumentProtocolProbe(page);
+	await workbench.reloadWindow();
+	await workbench.waitForReady();
+	await setAutoAcceptDelay(workbench, 3);
+	const name = 'automatic-review.txt';
+	const path = join(testWorkspace.directory, name);
+	await writeFile(path, 'original');
+	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: name }).dblclick();
+	const group = workbench.editors.groupAt(0);
+	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown> }).documentRequest(method, params), { method, params });
+	const finish = (turnId: string): Promise<void> => page.evaluate(turnId => (window as unknown as Window & { documentTurnFinished: (turnId: string) => void }).documentTurnFinished(turnId), turnId);
+	const first = await request('textDocument/read', { path }) as { snapshot: string };
+	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'first-turn', changes: [{ kind: 'update', snapshot: first.snapshot, text: 'agent first' }] })).toEqual({ kind: 'applied' });
+	const review = group.content.locator('.ash-chat-editing-overlay');
+	await expect(review).toBeVisible();
+	await page.clock.install();
+	await page.clock.pauseAt(new Date());
+	await finish('another-turn');
+	await expect(review.getByRole('button', { name: 'Cancel automatic acceptance' })).toHaveCount(0);
+	await finish('first-turn');
+	const cancel = review.getByRole('button', { name: 'Cancel automatic acceptance', exact: true });
+	await expect(cancel).toBeVisible();
+	await cancel.focus();
+	await page.clock.runFor(1000);
+	await expect(cancel).toBeFocused();
+	await expect(review.locator('.ash-chat-editing-auto-accept')).toHaveText('Accepting in 2s');
+	await cancel.press('Enter');
+	await page.clock.runFor(5000);
+	await expect(review).toBeVisible();
+	await expect(cancel).toHaveCount(0);
+	const next = await request('textDocument/read', { path }) as { snapshot: string };
+	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'next-turn', changes: [{ kind: 'update', snapshot: next.snapshot, text: 'agent next' }] })).toEqual({ kind: 'applied' });
+	await finish('next-turn');
+	await expect(review.locator('.ash-chat-editing-auto-accept')).toHaveText('Accepting in 3s');
+	await page.clock.runFor(3000);
+	await expect(review).toBeHidden();
+	await expect(group.editor.lines).toHaveText(['agent next']);
+	expect(await readFile(path, 'utf8')).toBe('agent next');
+});

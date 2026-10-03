@@ -18,7 +18,7 @@ const DATABASE_NAME = "ash-working-copy-backups";
 const DATABASE_VERSION = 1;
 const STORE_NAME = "backups";
 
-/** IndexedDB-backed working-copy backups shared by browser and Electron renderers. */
+/** IndexedDB-backed backups for browser and disconnected UI runtimes. */
 export class IndexedDbWorkingCopyBackupService extends Disposable implements IWorkingCopyBackupService {
 	private readonly database: Promise<IDBDatabase | undefined>;
 	private readonly fallback = new Map<string, StoredBackup>();
@@ -62,6 +62,27 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 		if (!workspaceId.trim()) throw new TypeError("Working-copy backup service requires a workspace id");
 		this.workspaceId = workspaceId;
 	}
+
+	/** Migration may remove only the source version acknowledged by the new storage owner. */
+	async deleteIfUnchanged(backup: WorkingCopyBackup): Promise<void> {
+		const key = backupKey(this.workspaceId, backup.resource);
+		const database = await this.database;
+		if (!database) {
+			const record = this.fallback.get(key);
+			if (record && matchesBackup(record, backup)) this.fallback.delete(key);
+			return;
+		}
+		const transaction = database.transaction(STORE_NAME, 'readwrite');
+		const store = transaction.objectStore(STORE_NAME);
+		const reading = store.get(key) as IDBRequest<StoredBackup | undefined>;
+		reading.onsuccess = () => { if (reading.result && matchesBackup(reading.result, backup)) store.delete(key); };
+		await transactionDone(transaction);
+	}
+}
+
+function matchesBackup(record: StoredBackup, backup: WorkingCopyBackup): boolean {
+	return record.kind === backup.kind && record.content === backup.content && record.updatedAt === backup.updatedAt
+		&& record.languageId === backup.languageId && record.contentType === backup.contentType && record.label === backup.label;
 }
 
 function backupKey(workspaceId: string, resource: URI): string {

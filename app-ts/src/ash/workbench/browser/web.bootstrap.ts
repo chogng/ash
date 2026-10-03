@@ -17,7 +17,7 @@ export async function startBrowserWorkbench(modeId: WorkbenchModeId, rendererCap
 		connectedHost = await connectBrowserWorkbenchHost([...rendererCapabilities, client => { documentClient = client; return {}; }], modeId === WorkbenchModeId.Code);
 		await startWebWorkbench(modeId, connectedHost, documentClient && modeId === WorkbenchModeId.Code ? services => {
 			const editing = services.get(IChatEditingService);
-			return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
+			return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 		} : undefined);
 	} catch (error) {
 		connectedHost?.dispose();

@@ -26,7 +26,7 @@
 		"chatEditing.stale": "修改内容已变化，请重新审核。",
 		"chatEditing.verbosity": "Agent 修改无障碍帮助",
 		"chatEditing.verbosityDescription": "审核 Agent 修改时提示如何打开无障碍帮助。",
-		"chatEditing.help": "审核 Agent 修改\n使用左右方向键切换工具栏操作。上一处和下一处会显示对应修改。可以接受或拒绝当前修改块或整个文件。文件操作按一个原子批次审核。按 Escape 返回编辑器。通过“审核 Agent 修改”命令可以审核已关闭或已删除的文件。",
+		"chatEditing.help": "审核 Agent 修改\n使用左右方向键切换工具栏操作。上一处和下一处可定位各处修改。可以接受或拒绝当前修改或整个文件。文件操作作为一个完整修改集审核。出现倒计时时，可取消自动接受继续审核。按 Escape 返回编辑器。使用“审核 Agent 修改”命令审核已关闭或已删除的文件。",
 		"network.http.title": "HTTP 兼容模式",
 		"network.verbosity": "网络设置无障碍帮助",
 		"network.verbosityDescription": "在网络设置中提示如何打开无障碍帮助。",
@@ -267,7 +267,15 @@
 		"memories.source": "由 {0} 保存，修订版本 {1}。编辑后，该记忆归你维护。",
 		"color.chat.tabBackground": "非活动聊天会话标签页的背景色。",
 		"slash.permission.description": "选择下一轮的权限",
-		"slash.guardian.description": "准备和检查 Guardian 的项目背景"
+		"slash.guardian.description": "准备和检查 Guardian 的项目背景",
+		"chatEditing.autoAcceptTitle": "自动接受 Agent 修改",
+		"chatEditing.autoAcceptDescription": "回复完成后，等待多少秒自动接受修改。设为 0 时手动审核；可取消倒计时继续审核。",
+		"chatEditing.autoAcceptCountdown": "将在 {0} 秒后接受",
+		"chatEditing.cancelAutoAccept": "取消自动接受",
+		"chatEditing.autoAcceptCancelled": "已取消自动接受，修改仍可继续审核。",
+		"chatEditing.autoAcceptStarted": "Agent 修改将在 {0} 秒后接受。可取消自动接受继续审核。",
+		"chatEditing.autoAccepted": "已自动接受 Agent 修改。",
+		"chatEditing.autoAcceptPending": "等待自动接受。{0}"
 	},
 	"ash.workbench": {
 		"command.OpenAutomations": "打开自动化",

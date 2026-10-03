@@ -1,11 +1,16 @@
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { TestDialogService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { BulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
+import { IBulkEditService } from '../../../../../editor/browser/services/bulkEditService.js';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Range } from '../../../../../editor/common/core/range.js';
-import { IBulkEditService } from '../../../../../editor/browser/services/bulkEditService.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { AppServerProtocolClient } from '../../../../../platform/app-server/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../../../platform/app-server/common/appServerTransport.js';
@@ -13,8 +18,6 @@ import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_
 import { FileKind, FileNotFoundError, FileRevisionConflictError, type IFileService, type IFileWriteRequest, type FileExistingTargetBehavior } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserTextResourceStore } from '../../../../contrib/codeEditor/browser/browserTextResourceStore.js';
-import { BulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
-import { BrowserWorkspaceEditService } from '../../../language/browser/browserWorkspaceEditService.js';
 import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
 import { ITextModelResourceService } from '../../../textmodelResolver/common/textModelResourceService.js';
 import { TextModelResolverService } from '../../../textmodelResolver/common/textModelResolverService.js';
@@ -38,6 +41,9 @@ class Transport implements AppServerTransport {
 	}
 	public off(event: string, listener: (value: unknown) => void): void { this.listeners.get(event)?.delete(listener); }
 	private emit(event: string, value: unknown): void { for (const listener of this.listeners.get(event) ?? []) { listener(value); } }
+	public finishTurn(threadId: string, turnId: string, outcome: 'completed' | 'failed' | 'interrupted' = 'completed'): void {
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: 'textDocument/turnFinished', params: { threadId, turnId, outcome } }) });
+	}
 	public call<M extends AppServerServerRequestMethod>(method: M, params: ServerRequestParams<M>): Promise<ServerRequestResult<M>> {
 		const id = `client-host:7:${++this.sequence}`;
 		const reply = new Promise<ServerRequestResult<M>>(resolve => this.replies.set(id, result => resolve(result as ServerRequestResult<M>)));
@@ -131,20 +137,22 @@ async function fixture() {
 	const files = lifetime.add(new Files());
 	const models = lifetime.add(new BrowserTextModelService(new BrowserTextResourceStore(new TextFileService(files))));
 	const workingCopies = lifetime.add(new BrowserWorkingCopyService());
-	const edits = lifetime.add(new BrowserWorkspaceEditService(models, workingCopies, files));
-	const bulk = lifetime.add(new BulkEditService(edits));
+	const configuration = lifetime.add(new InMemoryConfigurationService());
+	const dialogs = new TestDialogService();
+	const bulk = lifetime.add(new BulkEditService(models, workingCopies, files, configuration, dialogs));
 	const services = lifetime.add(new InstantiationService());
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerInstance(IBulkEditService, bulk);
+	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	const editing = lifetime.add(services.createInstance(ChatEditingService));
 	const transport = new Transport();
 	const client = new AppServerProtocolClient(transport);
 	lifetime.add(toDisposable(() => client.dispose()));
-	lifetime.add(services.createInstance(AppServerTextDocumentHost, client, editing.applyEdits.bind(editing)));
+	lifetime.add(services.createInstance(AppServerTextDocumentHost, client, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) }));
 	await client.connect();
-	return { files, models, workingCopies, services, transport, client, editing, bulk, ...toDisposable(() => lifetime.dispose()) };
+	return { files, models, workingCopies, services, transport, client, editing, bulk, configuration, ...toDisposable(() => lifetime.dispose()) };
 }
 
 async function snapshot(transport: Transport, resource: URI): Promise<string> {
@@ -166,7 +174,7 @@ test('Agent review rejects one hunk, accepts another, saves the baseline and ret
 	using copy = workingCopy(reference);
 	using registration = host.workingCopies.register(copy);
 	const id = await snapshot(host.transport, resource);
-	assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'agent first\nseparator\nagent last' }] }), { kind: 'applied' });
+	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: 'agent first\nseparator\nagent last' }] }), { kind: 'applied' });
 	const entry = host.editing.entries[0]!;
 	assert.equal(entry.hunks.length, 2);
 	await entry.accept(entry.hunks[0]);
@@ -183,7 +191,7 @@ test('Agent review keeps a user replacement inside a pending change', async () =
 	host.files.contents.set(resource.toString(), 'first\nseparator\nlast');
 	using reference = await host.models.acquire({ resource }, new AbortController().signal);
 	const id = await snapshot(host.transport, resource);
-	await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'agent first\nseparator\nagent last' }] });
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: 'agent first\nseparator\nagent last' }] });
 	reference.model.applyOperations([{ range: new Range(1, 1, 1, 12), text: 'user first' }]);
 	await host.editing.reject();
 	assert.equal(reference.model.getText(), 'user first\nseparator\nlast');
@@ -195,7 +203,7 @@ test('consecutive Agent edits keep one review baseline and accepting releases it
 	host.files.contents.set(resource.toString(), 'original');
 	for (const text of ['first agent', 'second agent']) {
 		const id = await snapshot(host.transport, resource);
-		assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text }] }), { kind: 'applied' });
+		assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text }] }), { kind: 'applied' });
 	}
 	assert.equal(host.editing.entries.length, 1);
 	assert.equal(host.editing.entries[0]!.hunks[0]!.originalText, 'original');
@@ -211,7 +219,7 @@ for (const [before, after] of [['first\nlast', 'first'], ['first', 'first\nlast'
 		const resource = URI.file('c:/workspace/eof.txt');
 		host.files.contents.set(resource.toString(), before);
 		const id = await snapshot(host.transport, resource);
-		assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: after }] }), { kind: 'applied' });
+		assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: after }] }), { kind: 'applied' });
 		await host.editing.reject();
 		assert.equal(host.files.contents.get(resource.toString()), before);
 	});
@@ -227,7 +235,7 @@ test('Agent review rejects an atomic create, move and delete batch', async () =>
 	host.files.contents.set(moved.toString(), 'moved');
 	const a = await snapshot(host.transport, deleted);
 	const b = await snapshot(host.transport, moved);
-	assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'delete', snapshot: a }, { kind: 'move', snapshot: b, target: target.fsPath, text: 'agent moved' }, { kind: 'create', path: created.fsPath, text: 'created' }] }), { kind: 'applied' });
+	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'delete', snapshot: a }, { kind: 'move', snapshot: b, target: target.fsPath, text: 'agent moved' }, { kind: 'create', path: created.fsPath, text: 'created' }] }), { kind: 'applied' });
 	assert.equal(host.editing.entries.length, 1);
 	await host.editing.reject();
 	assert.deepEqual([...host.files.contents].sort(), [[deleted.toString(), '\uFEFFdeleted\r\n'], [moved.toString(), 'moved']].sort());
@@ -236,9 +244,9 @@ test('Agent review rejects an atomic create, move and delete batch', async () =>
 test('Agent review combines creating and subsequently editing the same file', async () => {
 	using host = await fixture();
 	const resource = URI.file('c:/workspace/new-review.txt');
-	assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'create', path: resource.fsPath, text: 'created' }] }), { kind: 'applied' });
+	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'create', path: resource.fsPath, text: 'created' }] }), { kind: 'applied' });
 	const id = await snapshot(host.transport, resource);
-	assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'updated' }] }), { kind: 'applied' });
+	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: 'updated' }] }), { kind: 'applied' });
 	assert.equal(host.editing.entries.length, 1);
 	await host.editing.reject();
 	assert.equal(host.files.contents.has(resource.toString()), false);
@@ -250,9 +258,9 @@ test('Agent review combines modifying and subsequently moving the same file', as
 	const target = URI.file('c:/workspace/after-move.txt');
 	host.files.contents.set(resource.toString(), 'original');
 	const first = await snapshot(host.transport, resource);
-	await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: first, text: 'updated' }] });
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: first, text: 'updated' }] });
 	const second = await snapshot(host.transport, resource);
-	assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'move', snapshot: second, target: target.fsPath, text: 'moved' }] }), { kind: 'applied' });
+	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'move', snapshot: second, target: target.fsPath, text: 'moved' }] }), { kind: 'applied' });
 	await host.editing.reject();
 	assert.deepEqual([...host.files.contents], [[resource.toString(), 'original']]);
 });
@@ -262,13 +270,13 @@ test('review decisions wait for an in-flight Agent write', async () => {
 	const resource = URI.file('c:/workspace/queued-review.txt');
 	host.files.contents.set(resource.toString(), 'original');
 	const id = await snapshot(host.transport, resource);
-	await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'first' }] });
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: 'first' }] });
 	const entry = host.editing.entries[0]!;
 	const gate = new DeferredPromise<void>();
 	const started = new DeferredPromise<void>();
 	const apply = host.bulk.apply.bind(host.bulk);
 	host.bulk.apply = async (edit, options) => { void started.complete(); await gate.p; return apply(edit, options); };
-	const write = host.editing.applyEdits({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 6), text: 'second' }] }] }, new AbortController().signal);
+	const write = host.editing.applyEdits({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 6), text: 'second' }] }] }, new AbortController().signal, { threadId: 'review-thread', turnId: 'review-turn' });
 	await started.p;
 	const reject = host.editing.rejectEntry(entry);
 	assert.equal(entry.isBusy, true);
@@ -283,7 +291,7 @@ test('a failed rejection save keeps the review available for retry', async () =>
 	const resource = URI.file('c:/workspace/retry-review.txt');
 	host.files.contents.set(resource.toString(), 'original');
 	const id = await snapshot(host.transport, resource);
-	await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'agent' }] });
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: 'agent' }] });
 	const entry = host.editing.entries[0]!;
 	const save = host.files.writeFile.bind(host.files);
 	host.files.writeFile = async () => { throw new Error('Injected review save failure'); };
@@ -323,7 +331,7 @@ test('a failed save reports a committed edit without losing the model or undo hi
 	copy.save = async () => { throw new Error('Save failed'); };
 	using registration = host.workingCopies.register(copy);
 	const id = await snapshot(host.transport, resource);
-	const result = await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'agent' }] });
+	const result = await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: 'agent' }] });
 	assert.equal(result.kind, 'outcomeUnknown');
 	assert.equal(reference.model.getText(), 'agent');
 	assert.equal(reference.isDirty, true);
@@ -345,7 +353,7 @@ for (const eol of ['\n', '\r\n']) {
 		assert.equal(read.kind, 'document', JSON.stringify(read));
 		if (read.kind !== 'document') { throw new Error('Expected document'); }
 		assert.equal(read.text, 'unsaved' + eol);
-		assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: read.snapshot, text: 'agent\n' }] }), { kind: 'applied' });
+		assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: read.snapshot, text: 'agent\n' }] }), { kind: 'applied' });
 		assert.equal(reference.model.getText(), 'agent' + eol);
 		assert.equal(reference.isDirty, false);
 		assert.equal(host.files.contents.get(resource.toString()), '\uFEFFagent' + eol);
@@ -359,7 +367,7 @@ for (const eol of ['\n', '\r\n']) {
 		const resource = URI.file('c:/workspace/closed.txt');
 		host.files.contents.set(resource.toString(), '\uFEFFdisk' + eol);
 		const id = await snapshot(host.transport, resource);
-		assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'agent\n' }] }), { kind: 'applied' });
+		assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: 'agent\n' }] }), { kind: 'applied' });
 		assert.equal(host.files.contents.get(resource.toString()), '\uFEFFagent' + eol);
 		assert.equal(host.editing.entries.length, 1);
 		await host.editing.accept(resource);
@@ -377,10 +385,10 @@ test('stale documents reject the entire transaction and consume its snapshots', 
 	using reference = await host.models.acquire({ resource: second }, new AbortController().signal);
 	reference.model.applyOperations([{ range: new Range(1, 1, 1, 1), text: 'user ' }]);
 	const changes = [{ kind: 'update' as const, snapshot: a, text: 'agent' }, { kind: 'update' as const, snapshot: b, text: 'agent' }];
-	assert.deepEqual(await host.transport.call('textDocument/apply', { changes }), { kind: 'conflict' });
+	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes }), { kind: 'conflict' });
 	assert.equal(host.files.contents.get(first.toString()), 'original');
 	assert.equal(reference.model.getText(), 'user original');
-	assert.deepEqual(await host.transport.call('textDocument/apply', { changes }), { kind: 'conflict' });
+	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes }), { kind: 'conflict' });
 	assert.equal(host.models.getModel(first), null);
 });
 
@@ -404,10 +412,10 @@ test('new file contents retain exact LF and BOM and roll back on a later move fa
 	host.files.contents.set(existing.toString(), 'original');
 	const id = await snapshot(host.transport, existing);
 	host.files.failRename = true;
-	const failed = await host.transport.call('textDocument/apply', { changes: [{ kind: 'create', path: resource.fsPath, text: '\uFEFFnew\n' }, { kind: 'move', snapshot: id, target: 'c:/workspace/moved.txt', text: 'original' }] });
+	const failed = await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'create', path: resource.fsPath, text: '\uFEFFnew\n' }, { kind: 'move', snapshot: id, target: 'c:/workspace/moved.txt', text: 'original' }] });
 	assert.equal(failed.kind, 'failed');
 	assert.equal(host.files.contents.has(resource.toString()), false);
-	assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'create', path: resource.fsPath, text: '\uFEFFnew\n' }] }), { kind: 'applied' });
+	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'create', path: resource.fsPath, text: '\uFEFFnew\n' }] }), { kind: 'applied' });
 	assert.equal(host.files.contents.get(resource.toString()), '\uFEFFnew\n');
 });
 
@@ -421,7 +429,7 @@ test('deleting a BOM document restores its original bytes when a later operation
 	const a = await snapshot(host.transport, first);
 	const b = await snapshot(host.transport, second);
 	host.files.failRename = true;
-	const result = await host.transport.call('textDocument/apply', { changes: [
+	const result = await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [
 		{ kind: 'delete', snapshot: a },
 		{ kind: 'move', snapshot: b, target: 'c:/workspace/new.txt', text: 'other' },
 	] });
@@ -435,7 +443,7 @@ test('a changed BOM document moves with its serialized format', async () => {
 	const target = URI.file('c:/workspace/target.txt');
 	host.files.contents.set(source.toString(), '\uFEFForiginal\r\n');
 	const id = await snapshot(host.transport, source);
-	const result = await host.transport.call('textDocument/apply', { changes: [
+	const result = await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [
 		{ kind: 'move', snapshot: id, target: target.fsPath, text: 'moved\n' },
 	] });
 	assert.deepEqual(result, { kind: 'applied' });
@@ -463,4 +471,150 @@ test('closing during model resolution releases the late model reference', async 
 	allowRead();
 	await removed;
 	assert.equal(host.models.getModel(resource), null);
+});
+
+
+async function createReview(host: Awaited<ReturnType<typeof fixture>>, name: string, turnId = 'review-turn') {
+	const resource = URI.file('c:/workspace/' + name);
+	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId, changes: [{ kind: 'create', path: resource.fsPath, text: 'agent' }] }), { kind: 'applied' });
+	return host.editing.entries.find(entry => entry.resources.some(uri => uri.toString() === resource.toString()))!;
+}
+
+async function flushReviews(host: Awaited<ReturnType<typeof fixture>>) {
+	await host.editing.finishTurn({ threadId: 'unrelated', turnId: 'unrelated' }, 'completed');
+}
+
+test('automatic acceptance defaults to manual and validates the complete supported range', async () => {
+	using host = await fixture();
+	assert.equal(host.configuration.getValue('chat.editing.autoAcceptDelay'), 0);
+	for (const value of [-1, 101, NaN, Infinity, '5']) {
+		await assert.rejects(host.configuration.updateValue('chat.editing.autoAcceptDelay', value));
+	}
+	await host.configuration.updateValue('chat.editing.autoAcceptDelay', 100);
+	await host.configuration.updateValue('chat.editing.autoAcceptDelay', 0);
+	const entry = await createReview(host, 'manual.txt');
+	host.transport.finishTurn('review-thread', 'review-turn');
+	await flushReviews(host);
+	assert.equal(host.editing.getAutoAcceptCountdown(entry), undefined);
+	assert.equal(host.editing.entries.length, 1);
+});
+
+test('automatic acceptance waits for its exact reply and accepts the entire atomic operation', async () => {
+	mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+	try {
+		using host = await fixture();
+		await host.configuration.updateValue('chat.editing.autoAcceptDelay', 2);
+		const entry = await createReview(host, 'automatic.txt');
+		mock.timers.tick(10000);
+		host.transport.finishTurn('other-thread', 'review-turn');
+		await flushReviews(host);
+		assert.equal(host.editing.getAutoAcceptCountdown(entry), undefined);
+		host.transport.finishTurn('review-thread', 'review-turn');
+		await flushReviews(host);
+		assert.equal(host.editing.getAutoAcceptCountdown(entry), 2);
+		mock.timers.tick(1000);
+		assert.equal(host.editing.getAutoAcceptCountdown(entry), 1);
+		host.transport.finishTurn('review-thread', 'review-turn');
+		await flushReviews(host);
+		assert.equal(host.editing.getAutoAcceptCountdown(entry), 1);
+		mock.timers.tick(1000);
+		await flushReviews(host);
+		assert.equal(host.editing.entries.length, 0);
+		assert.equal([...host.files.contents.values()][0], 'agent');
+	} finally { mock.timers.reset(); }
+});
+
+test('cancelling automatic acceptance retains review and a later tool starts a fresh reply lifecycle', async () => {
+	mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+	try {
+		using host = await fixture();
+		await host.configuration.updateValue('chat.editing.autoAcceptDelay', 1);
+		const entry = await createReview(host, 'cancel.txt');
+		host.transport.finishTurn('review-thread', 'review-turn');
+		await flushReviews(host);
+		host.editing.cancelAutoAccept(entry);
+		await host.configuration.updateValue('chat.editing.autoAcceptDelay', 2);
+		mock.timers.tick(5000);
+		await flushReviews(host);
+		assert.equal(host.editing.entries.length, 1);
+		const resource = entry.modifiedURI;
+		const id = await snapshot(host.transport, resource);
+		await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'next-turn', changes: [{ kind: 'update', snapshot: id, text: 'next agent' }] });
+		const nextEntry = host.editing.entries[0]!;
+		assert.equal(host.editing.getAutoAcceptCountdown(nextEntry), undefined);
+		host.transport.finishTurn('review-thread', 'next-turn');
+		await flushReviews(host);
+		assert.equal(host.editing.getAutoAcceptCountdown(nextEntry), 2);
+		await host.editing.rejectEntry(nextEntry);
+		assert.equal(host.files.contents.has(resource.toString()), false);
+	} finally { mock.timers.reset(); }
+});
+
+for (const outcome of ['failed', 'interrupted'] as const) {
+	test('a ' + outcome + ' reply leaves edits available for manual review', async () => {
+		using host = await fixture();
+		await host.configuration.updateValue('chat.editing.autoAcceptDelay', 1);
+		const entry = await createReview(host, outcome + '.txt');
+		host.transport.finishTurn('review-thread', 'review-turn', outcome);
+		await flushReviews(host);
+		assert.equal(host.editing.getAutoAcceptCountdown(entry), undefined);
+		await host.editing.rejectEntry(entry);
+		assert.equal(host.editing.entries.length, 0);
+	});
+}
+
+test('an atomic review waits for every contributing reply while unrelated files remain independent', async () => {
+	using host = await fixture();
+	await host.configuration.updateValue('chat.editing.autoAcceptDelay', 5);
+	const original = await createReview(host, 'shared.txt', 'first-turn');
+	const independent = await createReview(host, 'independent.txt', 'other-turn');
+	const id = await snapshot(host.transport, original.modifiedURI);
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'second-turn', changes: [{ kind: 'update', snapshot: id, text: 'second' }] });
+	const shared = host.editing.entries.find(entry => entry.modifiedURI.toString() === original.modifiedURI.toString())!;
+	host.transport.finishTurn('review-thread', 'second-turn');
+	host.transport.finishTurn('review-thread', 'other-turn');
+	await flushReviews(host);
+	assert.equal(host.editing.getAutoAcceptCountdown(shared), undefined);
+	assert.equal(host.editing.getAutoAcceptCountdown(independent), 5);
+	host.transport.finishTurn('review-thread', 'first-turn');
+	await flushReviews(host);
+	assert.equal(host.editing.getAutoAcceptCountdown(shared), 5);
+});
+
+test('disabling automatic acceptance wins over a timer already queued behind another operation', async () => {
+	mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+	try {
+		using host = await fixture();
+		await host.configuration.updateValue('chat.editing.autoAcceptDelay', 1);
+		const entry = await createReview(host, 'disable.txt');
+		host.transport.finishTurn('review-thread', 'review-turn');
+		await flushReviews(host);
+		const gate = new DeferredPromise<void>();
+		const started = new DeferredPromise<void>();
+		const apply = host.bulk.apply.bind(host.bulk);
+		host.bulk.apply = async (edit, options) => { void started.complete(); await gate.p; return apply(edit, options); };
+		const write = createReview(host, 'other-write.txt', 'other-turn');
+		await started.p;
+		mock.timers.tick(1000);
+		await host.configuration.updateValue('chat.editing.autoAcceptDelay', 0);
+		void gate.complete();
+		await write;
+		await flushReviews(host);
+		assert.equal(host.editing.entries.includes(entry), true);
+		assert.equal(host.editing.getAutoAcceptCountdown(entry), undefined);
+	} finally { mock.timers.reset(); }
+});
+
+test('closing the review service disposes its scheduled countdown', async () => {
+	mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+	try {
+		const host = await fixture();
+		await host.configuration.updateValue('chat.editing.autoAcceptDelay', 1);
+		await createReview(host, 'dispose.txt');
+		host.transport.finishTurn('review-thread', 'review-turn');
+		await flushReviews(host);
+		host.dispose();
+		mock.timers.tick(5000);
+		assert.equal(host.editing.entries.length, 0);
+	} finally { mock.timers.reset(); }
 });

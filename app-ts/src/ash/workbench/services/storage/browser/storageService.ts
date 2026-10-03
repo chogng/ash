@@ -15,6 +15,33 @@ interface StoredDocument {
 	readonly entries: Readonly<Record<string, StoredEntry>>;
 }
 
+/** Completes namespace retirement before opening the target storage adapter. */
+export function migrateBrowserStorage(backend: Storage, sourceApplicationId: string, targetApplicationId: string): readonly string[] {
+	const sourcePrefix = `ash.${encodeURIComponent(sourceApplicationId)}.storage.`;
+	const targetPrefix = `ash.${encodeURIComponent(targetApplicationId)}.storage.`;
+	const keys = Array.from({ length: backend.length }, (_, index) => backend.key(index)!).filter(key => key.startsWith(sourcePrefix));
+	const conflicts: string[] = [];
+	for (const sourceKey of keys) {
+		const source = parseStoredDocument(backend.getItem(sourceKey)!);
+		const targetKey = targetPrefix + sourceKey.slice(sourcePrefix.length);
+		const targetSource = backend.getItem(targetKey);
+		const target = targetSource === null ? new Map<string, StoredEntry>() : parseStoredDocument(targetSource);
+		const remaining = new Map<string, StoredEntry>();
+		for (const [key, entry] of source) {
+			const existing = target.get(key);
+			if (existing && (existing.value !== entry.value || existing.target !== entry.target)) {
+				remaining.set(key, entry);
+				conflicts.push(`${sourceKey}/${key}`);
+			} else { target.set(key, entry); }
+		}
+		// Persist the destination first so an interrupted cleanup can safely run again.
+		backend.setItem(targetKey, serializeStoredDocument(target));
+		if (remaining.size > 0) { backend.setItem(sourceKey, serializeStoredDocument(remaining)); }
+		else { backend.removeItem(sourceKey); }
+	}
+	return conflicts;
+}
+
 export interface BrowserStorageServiceOptions {
 	readonly ownerWindow: Window;
 	readonly applicationId: string;

@@ -118,6 +118,7 @@ export class StandaloneBulkEditService implements IBulkEditService {
 		return {
 			ariaSummary: `${edits.length} edits applied`,
 			isApplied: true,
+			resources: [...byModel.keys()].map(model => model.uri),
 			undo: async () => {
 				for (const [model, state] of applied) {
 					if (model.getValue() !== state.text || model.getAlternativeVersionId() !== state.alternativeVersionId) {

@@ -3,6 +3,34 @@ use ash_async_utils::CancellationSource;
 
 struct UnserializableParams;
 
+#[test]
+fn document_turn_finished_goes_only_to_its_owner_and_only_once() {
+    let host = ClientHost::default();
+    let owner = NotificationQueue::default();
+    let other = NotificationQueue::default();
+    host.register(7, true, owner.clone());
+    host.register(8, true, other.clone());
+    let thread = ash_protocol::ThreadId::new("thread").unwrap();
+    let turn = ash_protocol::TurnId::new("turn").unwrap();
+    host.submit_turn(&thread, Some(7), TextDocumentMode::Client, || {
+        Ok(TurnReceipt {
+            turn_id: turn.clone(),
+            sequence: 1,
+        })
+    })
+    .unwrap();
+    host.finish_turn(&thread, &turn, TextDocumentTurnOutcome::Completed);
+    host.finish_turn(&thread, &turn, TextDocumentTurnOutcome::Completed);
+    assert_eq!(
+        owner.listener().drain(),
+        vec![serde_json::json!({
+            "jsonrpc": "2.0", "method": "textDocument/turnFinished",
+            "params": { "threadId": "thread", "turnId": "turn", "outcome": "completed" }
+        })]
+    );
+    assert!(other.listener().drain().is_empty());
+}
+
 impl Serialize for UnserializableParams {
     fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
         Err(serde::ser::Error::custom("invalid browser params"))
@@ -60,7 +88,11 @@ fn child_binding_survives_parent_completion_and_isolated_children_use_disk() {
             (7, mode == TextDocumentMode::Client)
         );
     }
-    host.finish_turn(&parent, &parent_turn);
+    host.finish_turn(
+        &parent,
+        &parent_turn,
+        ash_app_server_protocol::protocol::text_document::TextDocumentTurnOutcome::Completed,
+    );
     let child = ash_protocol::ThreadId::new("child-Client").unwrap();
     let turn = ash_protocol::TurnId::new("turn-Client").unwrap();
     host.submit_agent_turn(

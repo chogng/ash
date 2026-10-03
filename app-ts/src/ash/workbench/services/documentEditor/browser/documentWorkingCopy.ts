@@ -4,21 +4,21 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type DocumentNode } from "../../../../editor/common/model/document.js";
 import { TextModel } from "../../../../editor/common/model/textModel.js";
-import { documentFromPlainText, DocumentSerializationError, deserializeDocument, serializeDocument } from "../../../../editor/common/model/documentSerialization.js";
+import { deserializeDocument, serializeDocument } from "../../../../editor/common/model/documentSerialization.js";
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../editor/common/model/documentSchema.js";
 import { TextFileSaveConflictError } from "../../textfile/common/textFileService.js";
 import type { ITextFileService } from "../../textfile/common/textFileService.js";
 import type { IWorkingCopy } from "../../workingCopy/common/workingCopyService.js";
 import type { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
-import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../common/documentTypes.js";
 
 export interface DocumentWorkingCopyOptions {
+	readonly contentType: string;
 	readonly resource: URI;
 	readonly model: TextModel;
 	readonly initialDocument: DocumentNode;
 	readonly initialRevision: string | undefined;
 	readonly textFiles: ITextFileService;
-	readonly workingCopyService?: IWorkingCopyService;
+	readonly workingCopyService: IWorkingCopyService;
 	readonly onSave?: () => Promise<void | boolean>;
 	/** Creates the canonical document when the persisted resource is empty. */
 	readonly createEmptyDocument?: () => DocumentNode;
@@ -35,10 +35,11 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 	private revision: string | undefined;
 	private dirty = false;
 	private externalChange = false;
+	private saveQueue: Promise<void> = Promise.resolve();
 
 	readonly resource: URI;
 	readonly backupKind = "structuredDocument" as const;
-	readonly backupContentType = ACADEMIC_DOCUMENT_CONTENT_TYPE;
+	readonly backupContentType: string;
 	readonly onDidChangeDirty = this.dirtyEmitter.event;
 	readonly onDidChangeExternalChange = this.externalChangeEmitter.event;
 	readonly onDidChangeContent = (listener: () => void) => this.options.model.onDidChangeBlocks(() => listener());
@@ -46,6 +47,7 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 	constructor(private readonly options: DocumentWorkingCopyOptions) {
 		super();
 		this.resource = options.resource;
+		this.backupContentType = options.contentType;
 		this.schema = options.model.schema;
 		this.initialDocument = options.initialDocument;
 		this.initialContent = serializeDocument(options.initialDocument, this.schema);
@@ -60,7 +62,7 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 			}
 			void this.reloadCleanDocument();
 		}));
-		if (options.workingCopyService) this._register(options.workingCopyService.register(this));
+		this._register(options.workingCopyService.register(this));
 	}
 
 	get isDirty(): boolean {
@@ -79,7 +81,13 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 		this.options.model.resetBlocks(parseDocument(content, this.schema, this.options.createEmptyDocument));
 	}
 
-	async save(signal: AbortSignal): Promise<void> {
+	save(signal: AbortSignal): Promise<void> {
+		const operation = this.saveQueue.then(() => this.saveContent(signal));
+		this.saveQueue = operation.catch(() => undefined);
+		return operation;
+	}
+
+	private async saveContent(signal: AbortSignal): Promise<void> {
 		throwIfCancelled(signal, "Document save was cancelled");
 		if (this.resource.scheme === "untitled") {
 			if (!this.options.onSave) throw new Error("Untitled document has no save handler");
@@ -161,18 +169,12 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 	}
 }
 
-/** Parses Stanza's versioned format and migrates plain text into paragraphs. */
+/** Structured resources accept only their versioned document format. */
 export function parseDocument(text: string, schema: DocumentSchema = createDefaultDocumentSchema(), createEmptyDocument?: () => DocumentNode): DocumentNode {
 	if (text.trim().length === 0) {
 		const document = createEmptyDocument?.() ?? schema.createDocument([]);
 		schema.validate(document);
 		return document;
 	}
-	if (text.trimStart().startsWith("{")) return deserializeDocument(text, schema);
-	try {
-		return deserializeDocument(text, schema);
-	} catch (error) {
-		if (!(error instanceof DocumentSerializationError)) throw error;
-		return documentFromPlainText(schema, text);
-	}
+	return deserializeDocument(text, schema);
 }

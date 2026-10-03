@@ -19,7 +19,7 @@ Ash 有三个独立 UI 宿主，共享 `ash-rs` 的 Rust 后端契约。仓库�
 | `ash` | Electron Desktop | `app-ts` 的 Renderer、Preload 与 Electron Main | Electron Main 连接 Rust App Server | 当前 Renderer 用 xterm；Rust/App Server 管理 `ash-utils-pty` |
 | `app` | Rust Desktop 工作台 | `app-rs` 的 Rust 窗口与 UI | Agent 能力通过 App Server；外部 AI CLI 由 Terminal host 启动 | `ash-terminal` 负责终端语义，`ash-utils-pty` 负责 AI CLI 的 PTY/进程 |
 
-产品线与 Electron 的内部 Workbench 模式不是同一个维度。Desktop 在同一个 `ash` 安装包中提供 `code`、`academic` 两个内置模式；它们不代表 `ash code` TUI，也不构成额外的公开产品线。用户可以在设置中选择模式，当前 Workbench 窗口在 reload 边界重新装配；开发和测试可以用 `ASH_WORKBENCH_MODE` 覆盖初始模式。具体说明见 [`workbench-modes.md`](workbench-modes.md)。
+产品线与 Electron 的内部 Workbench 模式不是同一个维度。Desktop 当前使用 `code` 工作台，Academic 作为论文文档贡献接入同一窗口；打开论文不需要切换模式。它们不代表 `ash code` TUI，也不构成额外的公开产品线。具体说明见 [`workbench-modes.md`](workbench-modes.md)。
 
 ## 当前调用关系
 
@@ -67,7 +67,7 @@ flowchart LR
 | 公开产品线 | 当前代码入口 | 当前状态 |
 | --- | --- | --- |
 | `ash code` | `ash-cli` 的 `ash` binary → `code/tui` | TUI 产品路径已存在；TUI 通过 App Server Client 工作 |
-| `ash` | `app-ts` Electron client | Electron Desktop 已存在；统一 Renderer 包含 Code 与 Academic，默认模式为最近保存的选择 |
+| `ash` | `app-ts` Electron client | Electron Desktop 已存在；统一 Renderer 使用 Code 工作台，并装配 Academic 文档贡献 |
 | `app` | `app-rs/` 的 `app` binary | 终端宿主已存在，并直接组合 `ash-terminal` 与 `ash-utils-pty`；Agent 能力通过 App Server 使用 |
 
 ## Canonical `just` 命令

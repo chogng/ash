@@ -6,14 +6,14 @@
 
 Stanza 是 Ash 唯一的可组装编辑器内核。所有文档都由 `TextModel` 作为唯一同步权威，并原生遵循 `TextModel → LineSequence → ModelLine`；Code 使用只有行与 metadata 的受限 profile，Academic 通过 mark、atom、facet、region 与 relation 附着富语义。字符和逻辑行由 TextModel-owned `TextBuffer` 唯一保存，PieceTree 只是当前私有实现。
 
-| 使用场景 | 模式加载入口 | 编辑能力 |
+| 使用场景 | 装配入口 | 编辑能力 |
 | --- | --- | --- |
 | Code | `editor.code.all.ts` + `workbench/contrib/codeEditor` | 独立的文件级行式功能实现 + code/diff pane/input 与文件服务接线；共享 Workbench 另行加载 multi-diff |
-| Academic | `editor.academic.all.ts` + `workbench/contrib/academic` | 独立的富文档功能实现；在同一 TextModel 上使用 line-first 语义与 Academic projection |
-| Code 行式能力全集 | `editor.all.ts` | Code 使用的完整行式 contribution 集合；Academic 不加载它 |
+| Academic 文档 | `editor.all.ts` + `workbench/contrib/documentEditor` + `workbench/contrib/academic` | 通用富文档 pane 加论文配置；资源类型决定视图 |
+| 编辑能力全集 | `editor.all.ts` | 共同装配行式与富文档 contribution；不注册 Workbench pane |
 | DOM-free 调用 | `editor.api.ts` | `editor`、`languages`、TextModel、LineDocumentSnapshot、五类语义 store、schema、transaction、serialization 和坐标 API；不注册 pane |
 
-Stanza 是整个内核的品牌，不是某一个 mode 的别名。Code 与 Academic 拥有不同的 feature implementation、projection 和 bundle，但共享唯一 `TextModel`。结构化能力是 TextModel 的显式可选状态，不是第二个万能接口或平行模型；复用底层文本能力不代表复用 Code pane 或 Code contribution 集合。
+Stanza 是整个内核的品牌，不是某一个 mode 的别名。代码与富文档使用不同视图，Academic 是文档配置；Code 工作台共同装配这些贡献。每个打开资源的内容、版本和撤销由唯一 `TextModel` 保存。结构化能力是 TextModel 的显式可选状态，不是第二个万能接口或平行模型；复用底层文本能力不代表复用 Code pane 或 Code contribution 集合。
 
 Stanza 是当前唯一的 Ash editor runtime。不保留旧 editor ID、DOM class、目录或兼容 pane；架构与测试不得再以兼容为理由重新引入第二套编辑状态。
 
@@ -24,8 +24,8 @@ Stanza 是当前唯一的 Ash editor runtime。不保留旧 editor ID、DOM clas
 | `editor/common` | 单一同步内核与纯投影状态已具备 | `TextModel`、`TextBuffer`、LineId、mark/atom/facet/region/relation、坐标、selection、transaction、history、schema、serialization、cursor、纯 viewport，以及相互独立的语言身份、语言配置和 provider registry；不得引用 Workbench、Electron 或 generated DTO |
 | `editor/browser` | Code 与 Academic 的 widget 和 DOM projection 已具备 | code/document/diff/multi-diff widget、DOM input、viewport、editor contribution registry 与 frontend-contract adapter；不得引用 Workbench 或选择 Workbench 模式 |
 | `editor/contrib` | 行式与结构化 feature 已按能力组织 | 命令、controller、可移除投影、schema、citation 和 collaboration；不得注册 pane、拥有第二套 model 或读取产品 ID |
-| `editor.*.all.ts` | editor 能力按模式装配已具备 | Code、Academic 与完整 editor contribution 清单；不得注册 Workbench pane/input |
-| `workbench/contrib/{codeEditor,multiDiffEditor,documentEditor,academic}` | 模式宿主适配已具备 | pane/input、文件与 working-copy 接线、Academic profile 和模式注册；不得实现编辑事务或视图内部行为 |
+| `editor.*.all.ts` | 共同编辑能力装配已具备 | 行式与富文档贡献清单；不得注册 Workbench pane/input |
+| `workbench/contrib/{codeEditor,multiDiffEditor,documentEditor,academic}` | 编辑器宿主适配已具备 | pane/input、文件与 working-copy 接线及 Academic profile 注册；文档模型服务按资源共享模型和保存状态；不得实现编辑事务或视图内部行为 |
 | `workbench/services/textMate` | 已具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Stanza provider/module adapter、版本化 catalog/theme wire、独立 browser Worker、声明式扩展资源、活动主题 token color、embedded language 与 bracket metadata 均已接通 |
 | Document service | 已具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Stanza 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载、脏模型外改状态与 expected-revision/CAS；Workbench 提供 workspace-scoped IndexedDB working-copy 恢复 |
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
@@ -67,7 +67,6 @@ editor/
   contrib/<feature>/{common,browser}
   test/{common,browser}
   editor.code.all.ts
-  editor.academic.all.ts
   editor.all.ts
   editor.api.ts
   editor.main.ts

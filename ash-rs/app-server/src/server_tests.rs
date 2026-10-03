@@ -17,6 +17,8 @@ mod memories_live_tests;
 mod automation_tests;
 #[path = "infrastructure_tests.rs"]
 mod infrastructure_tests;
+#[path = "backup_tests.rs"]
+mod backup_tests;
 #[path = "memory_tests.rs"]
 mod memory_tests;
 use ash_action_policy::ActionDigest;

@@ -74,6 +74,7 @@ mod asset_operations_tests;
 mod attachment_operations;
 mod automation_execution;
 mod automation_operations;
+mod backup_operations;
 mod call_adapters;
 mod call_operations;
 mod call_runtime;
@@ -193,6 +194,7 @@ use update_broker::UpdateBroker;
 pub use ash_codebase::CodebaseModels;
 
 pub struct AppServer {
+    backups: Option<Arc<ash_state::SqliteBackupStore>>,
     queue: Option<Arc<queue::QueueStore>>,
     queue_directory: Option<String>,
     diagnostics: diagnostics::Diagnostics,
@@ -453,6 +455,11 @@ impl ConnectionNotifications {
 }
 
 impl AppServer {
+    pub(crate) fn with_backup_store(mut self, backups: Arc<ash_state::SqliteBackupStore>) -> Self {
+        self.backups = Some(backups);
+        self
+    }
+
     pub(crate) fn agent_extension_registry(&self) -> Arc<ExtensionRegistry> {
         self.agent_extensions.clone()
     }
@@ -545,6 +552,7 @@ impl AppServer {
             request_cancellations: RequestCancellationRegistry::default(),
             resources,
             assets: None,
+            backups: None,
             memory_diagnostics: ash_memory_diagnostics::MemoryDiagnostics::default(),
             memories: None,
             approval_environment: None,
@@ -2704,6 +2712,12 @@ impl AppServer {
             Some(ClientMethod::FsGetMetadata) => self.fs_get_metadata(&request.params),
             Some(ClientMethod::FsReadDirectory) => self.fs_read_directory(&request.params),
             Some(ClientMethod::FsReadFile) => self.fs_read_file(&request.params),
+            Some(ClientMethod::BackupWorkspaces) => {
+                self.backup_workspaces(connection, &request.params)
+            }
+            Some(ClientMethod::BackupList) => self.backup_list(connection, &request.params),
+            Some(ClientMethod::BackupWrite) => self.backup_write(connection, &request.params),
+            Some(ClientMethod::BackupDiscard) => self.backup_discard(connection, &request.params),
             Some(ClientMethod::FsReadBinaryFile) => {
                 self.fs_read_binary_file(connection, &request.params)
             }
@@ -2926,11 +2940,9 @@ impl ThreadUpdateSink for AppServerThreadUpdates {
     fn publish(&self, update: ThreadUpdateEnvelope) {
         if let ash_protocol::ThreadUpdate::Committed { event } = &update.update {
             match event {
-                ash_protocol::ThreadEvent::TurnCompleted { turn_id, .. }
-                | ash_protocol::ThreadEvent::TurnFailed { turn_id, .. }
-                | ash_protocol::ThreadEvent::TurnInterrupted { turn_id, .. } => {
-                    self.client_host.finish_turn(&update.thread_id, turn_id)
-                }
+                ash_protocol::ThreadEvent::TurnCompleted { turn_id, .. } => self.client_host.finish_turn(&update.thread_id, turn_id, ash_app_server_protocol::protocol::text_document::TextDocumentTurnOutcome::Completed),
+                ash_protocol::ThreadEvent::TurnFailed { turn_id, .. } => self.client_host.finish_turn(&update.thread_id, turn_id, ash_app_server_protocol::protocol::text_document::TextDocumentTurnOutcome::Failed),
+                ash_protocol::ThreadEvent::TurnInterrupted { turn_id, .. } => self.client_host.finish_turn(&update.thread_id, turn_id, ash_app_server_protocol::protocol::text_document::TextDocumentTurnOutcome::Interrupted),
                 _ => {}
             }
         }

@@ -4,7 +4,24 @@ import { JSDOM } from "jsdom";
 import { DisposableStore } from "../../../../../base/common/lifecycle.js";
 import { StorageScope, StorageTarget, WillSaveStateReason } from "../../../../../platform/storage/common/storage.js";
 import { Memento } from "../../../../../workbench/common/memento.js";
-import { BrowserStorageService } from "../../../../../workbench/services/storage/browser/storageService.js";
+import { BrowserStorageService, migrateBrowserStorage } from "../../../../../workbench/services/storage/browser/storageService.js";
+
+test('retiring browser storage preserves both sides of conflicts and completes after interrupted cleanup', () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	try {
+		const storage = dom.window.localStorage;
+		const entry = (value: string) => ({ value, target: StorageTarget.MACHINE });
+		storage.setItem('ash.academic.storage.workspace.research', JSON.stringify({ version: 1, entries: { editors: entry('paper'), layout: entry('old') } }));
+		storage.setItem('ash.code.storage.workspace.research', JSON.stringify({ version: 1, entries: { layout: entry('new') } }));
+		assert.deepEqual(migrateBrowserStorage(storage, 'academic', 'code'), ['ash.academic.storage.workspace.research/layout']);
+		assert.deepEqual(JSON.parse(storage.getItem('ash.code.storage.workspace.research')!).entries, { editors: entry('paper'), layout: entry('new') });
+		assert.deepEqual(JSON.parse(storage.getItem('ash.academic.storage.workspace.research')!).entries, { layout: entry('old') });
+		storage.setItem('ash.academic.storage.workspace.research', storage.getItem('ash.code.storage.workspace.research')!);
+		assert.deepEqual(migrateBrowserStorage(storage, 'academic', 'code'), []);
+		assert.equal(storage.getItem('ash.academic.storage.workspace.research'), null);
+		assert.deepEqual(migrateBrowserStorage(storage, 'academic', 'code'), []);
+	} finally { dom.window.close(); }
+});
 
 test("Browser storage persists scoped values and target metadata", () => {
 	const dom = new JSDOM("<!doctype html><body></body>", {

@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "../../../automation/test.js";
 
-test("Academic opens the document engine and saves its structured document through the Workbench", async ({ target, testWorkspace, workbench }) => {
+test("Code opens Academic through the document contribution and saves its structured document through the Workbench", async ({ target, testWorkspace, workbench }) => {
 	test.skip(
-		target.kind !== "electron" || target.appServerMode !== "required" || target.workbenchMode !== "academic",
-		"This scenario requires the Academic Electron App Server product",
+		target.kind !== "electron" || target.appServerMode !== "required",
+		"This scenario requires the Electron App Server product",
 	);
 
 	const page = workbench.page;
@@ -16,8 +16,9 @@ test("Academic opens the document engine and saves its structured document throu
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	await expect(group.tabs).toHaveCount(1);
-	await expect(group.tabs.first()).toContainText("paper.ash-academic");
+	const paperTab = group.tabs.filter({ hasText: 'paper.ash-academic' });
+	await expect(paperTab).toHaveCount(1);
+	await expect(paperTab).toHaveAttribute('aria-selected', 'true');
 	await expect(group.content.locator(".stanza-structured-editor-pane")).toBeVisible();
 
 	const formatting = group.content.locator(".stanza-structured-format-toolbar");
@@ -34,7 +35,7 @@ test("Academic opens the document engine and saves its structured document throu
 	await fontSize.selectOption("18");
 	await expect(fontSize).toHaveValue("18");
 
-	const input = group.content.locator(".stanza-document-code-block .stanza-editor-input");
+	const input = group.content.locator(".stanza-document-code-block textarea.stanza-document-text-input");
 	await expect(input).toBeAttached();
 	await input.focus();
 	await input.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
@@ -49,4 +50,10 @@ test("Academic opens the document engine and saves its structured document throu
 		() => readFile(testWorkspace.academicFile, "utf8"),
 		{ timeout: 15_000, message: "Document engine code codeBlock save reaches the App Server workspace" },
 	).toContain("const paper = 2;");
+	await explorer.getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-selected', 'true');
+	await expect(group.content.locator('.stanza-editor')).toBeVisible();
+	await paperTab.click();
+	await expect(group.content.locator('.stanza-structured-editor-pane')).toBeVisible();
+	await expect(group.content.locator('.stanza-document-code-block textarea.stanza-document-text-input')).toHaveValue('const paper = 2;');
 });

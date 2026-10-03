@@ -2155,6 +2155,9 @@
         "InvalidParams",
         "AdvisorDisabled",
         "InternalError",
+        "BackupUnavailable",
+        "BackupRevisionConflict",
+        "BackupOperationFailed",
         "AssetsUnavailable",
         "AssetInvalid",
         "AssetInvalidImage",
@@ -3574,6 +3577,188 @@
         "expectedRevision",
         "definition",
         "status"
+      ],
+      "type": "object"
+    },
+    "BackupContentDto": {
+      "additionalProperties": false,
+      "description": "Opaque UTF-8 content is serialized and interpreted by its format owner.",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "resource": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource",
+        "format",
+        "content"
+      ],
+      "type": "object"
+    },
+    "BackupDiscardParams": {
+      "additionalProperties": false,
+      "description": "Saving or reverting removes only the version previously observed by that writer.",
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "type": "string"
+        },
+        "resource": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "clientId",
+        "workspaceId",
+        "resource",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "BackupListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "clientId",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "BackupListResult": {
+      "properties": {
+        "backups": {
+          "items": {
+            "$ref": "#/$defs/BackupRecordDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "backups"
+      ],
+      "type": "object"
+    },
+    "BackupRecordDto": {
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/BackupContentDto"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "content",
+        "revision",
+        "updatedAt"
+      ],
+      "type": "object"
+    },
+    "BackupWorkspaceDto": {
+      "additionalProperties": false,
+      "description": "Reopening URIs identify a workspace; they do not grant filesystem access.",
+      "properties": {
+        "configuration": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "folders": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "remoteAuthority": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "folders"
+      ],
+      "type": "object"
+    },
+    "BackupWorkspacesParams": {
+      "additionalProperties": false,
+      "description": "Recovery namespaces are stable across restarts, independent of connection or window IDs.",
+      "properties": {
+        "clientId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "clientId"
+      ],
+      "type": "object"
+    },
+    "BackupWorkspacesResult": {
+      "properties": {
+        "workspaces": {
+          "items": {
+            "$ref": "#/$defs/BackupWorkspaceDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "workspaces"
+      ],
+      "type": "object"
+    },
+    "BackupWriteParams": {
+      "additionalProperties": false,
+      "description": "Null creates a record; updates require the observed revision. Identical retries are safe.",
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "content": {
+          "$ref": "#/$defs/BackupContentDto"
+        },
+        "expectedRevision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "workspace": {
+          "$ref": "#/$defs/BackupWorkspaceDto"
+        }
+      },
+      "required": [
+        "clientId",
+        "workspace",
+        "content"
       ],
       "type": "object"
     },
@@ -8208,6 +8393,70 @@
             },
             "params": {
               "$ref": "#/$defs/FsReadFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "backup/workspaces",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/BackupWorkspacesParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "backup/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/BackupListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "backup/write",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/BackupWriteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "backup/discard",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/BackupDiscardParams"
             }
           },
           "required": [
@@ -13668,6 +13917,70 @@
             },
             "result": {
               "$ref": "#/$defs/FsReadFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "backup/workspaces",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/BackupWorkspacesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "backup/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/BackupListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "backup/write",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/BackupRecordDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "backup/discard",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [
@@ -34743,6 +35056,22 @@
         {
           "properties": {
             "method": {
+              "const": "textDocument/turnFinished",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TextDocumentTurnFinished"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "testing/updated",
               "type": "string"
             },
@@ -39431,9 +39760,17 @@
           "maxItems": 128,
           "minItems": 1,
           "type": "array"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "turnId": {
+          "$ref": "#/$defs/TurnId"
         }
       },
       "required": [
+        "threadId",
+        "turnId",
         "changes"
       ],
       "type": "object"
@@ -39755,6 +40092,35 @@
         "snapshots"
       ],
       "type": "object"
+    },
+    "TextDocumentTurnFinished": {
+      "additionalProperties": false,
+      "description": "Sent only to the document connection that owns this Turn, after its tools finish.",
+      "properties": {
+        "outcome": {
+          "$ref": "#/$defs/TextDocumentTurnOutcome"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "turnId": {
+          "$ref": "#/$defs/TurnId"
+        }
+      },
+      "required": [
+        "threadId",
+        "turnId",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "TextDocumentTurnOutcome": {
+      "enum": [
+        "completed",
+        "failed",
+        "interrupted"
+      ],
+      "type": "string"
     },
     "TextDocumentsCapability": {
       "description": "This connection can edit its live text models through the generated host requests.",

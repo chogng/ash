@@ -38,11 +38,30 @@
 
 `memory/changed` 只向产品 host 发布作用域和新 catalog revision；客户端随后重新读取。`queue/changed` 是无内容的失效通知。Config 的 Feature 来源由 `ash-features` 解释。反馈待审阅包在 connection 关闭时释放，持久队列由 profile 后台调度器恢复。
 
+## 未保存内容备份
+
+`backup/workspaces`、`backup/list`、`backup/write` 和 `backup/discard` 仅接受产品 host 连接。
+Rust 在 profile 的 SQLite 中原子保存工作区重开信息和正文，连接关闭不删除记录。
+`clientId` 是稳定的客户端恢复命名空间，与 connection/window ID 无关；它用于隔离内容格式，并非权限凭证。
+资源使用完整 URI，`format` 和 UTF-8 `content` 由客户端解释。正文最多 8 MiB，工作区最多 128 个目录。
+
+创建时 `expectedRevision` 为 `null`；更新和删除使用上次看到的不透明 revision。
+相同正文的写入重试返回同一记录，不同正文遇到旧 revision 返回 `BackupRevisionConflict`，不自动覆盖。
+查询不消费备份；保存或放弃修改后显式删除，最后一份内容删除时一并清理工作区目录记录。
+服务不可用与存储失败分别返回 `BackupUnavailable`、`BackupOperationFailed`。
+
+Electron 编辑器使用 `ash-editor` 和 `ash.working-copy.v1`，生成备份和重建编辑器由前端负责。
+启动时 renderer 查询待恢复工作区，再交给 Main 打开窗口；Main 不读取备份协议或正文。
+旧 IndexedDB 内容仅在后端确认保存后删除，有冲突的旧内容保留。
+浏览器及无后端的 UI 运行模式仍由 IndexedDB 持久化。Rust Desktop 和 TUI 可以使用共享协议，尚未接入各自的恢复入口。
+
 ## 编辑器文档宿主
 
-Code Workbench 与 Agents 连接在 `initialize` 声明 `textDocuments: { version: 1 }`。
+Code Workbench 与 Agents 连接在 `initialize` 声明 `textDocuments: { version: 2 }`。
 服务端向发起产品 Turn 的连接发送 `textDocument/read`、`textDocument/list`、`textDocument/apply` 和
 `textDocument/release`。路径是该 App Server 环境中的绝对文件路径；工具在发出请求前检查目录授权。
+
+`apply` 必须携带产生修改的 `threadId` 和 `turnId`。Turn 终止后，服务端仅向它所属的文档连接发送 `textDocument/turnFinished`，包含同一标识及 `completed`、`failed` 或 `interrupted` 结果；其他连接不会收到。前端依此结束该回复的审阅等待，自动接受策略与计时留在前端配置和 Chat Editing 服务。断线不转发给其他窗口，也不重放修改或结束通知。
 
 `read` 返回当前模型正文与不透明 snapshot，正文包含未保存内容，不包含编码 BOM。
 `list` 返回请求根目录内未保存的文本工作副本，以 `relativePath` 标识文件，供搜索替换对应磁盘内容；不创建编辑 lease。根目录的文件身份由后端确定，不受编辑器 URI 的 Windows 盘符写法影响。

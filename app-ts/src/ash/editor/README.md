@@ -4,15 +4,14 @@
 
 ## 快速理解
 
-Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有编辑器公共契约与内核，`browser` 拥有浏览器编辑器实现，`contrib` 拥有可装配功能，`test` 保存内核级回归测试。运行环境不代替职责判断：功能自己的纯算法可以留在其 `browser` 目录，不要求每个 contribution 建立 `common`。当前代码的归属缺口见[对齐台账](./api-alignment-status.md)。Stanza 只有一个源码域、一套公开入口和一个同步权威：按行存储的 `TextModel`。Code 与 Academic 是建立在同一模型上的两套功能实现。
+Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有编辑器公共契约与内核，`browser` 拥有浏览器编辑器实现，`contrib` 拥有可装配功能，`test` 保存内核级回归测试。运行环境不代替职责判断：功能自己的纯算法可以留在其 `browser` 目录，不要求每个 contribution 建立 `common`。当前代码的归属缺口见[对齐台账](./api-alignment-status.md)。Stanza 只有一个源码域、一套公开入口和一个同步权威：按行存储的 `TextModel`。代码与富文档使用同一模型，Academic 是富文档的一种配置。
 
 | 产品或调用方式 | 加载入口 | 得到的能力 |
 | --- | --- | --- |
-| 完整行式实现 | `editor.all.ts` | Code 使用的完整行式 contribution 集合；不注册 Workbench pane |
+| 完整编辑能力 | `editor.all.ts` | 行式与富文档 contribution 集合；不注册 Workbench pane |
 | Code 功能实现 | `editor.code.all.ts` | 加载完整行式实现，由 Code Workbench 注册 code/diff pane |
-| Academic 功能实现 | `editor.academic.all.ts` | 只加载 Academic 富文档 contribution；不加载 Code bundle 或 Code pane |
 | 程序化调用 | `editor.api.ts` | `editor.create/createModel`、`editor.addCommand/addEditorAction/addKeybindingRule/addKeybindingRules`、`languages.register/registerLanguages/registerProviderBatch/registerLanguage*Provider`、命名主题、standalone model registry、`TextModel`、schema、transaction 和坐标值对象；不注册 pane |
-| 完整 standalone 入口 | `editor.main.ts` | 先加载 `editor.all.ts` 的完整行式 contribution，再导出 `editor.api.ts` |
+| 完整 standalone 入口 | `editor.main.ts` | 先加载 `editor.all.ts` 的完整编辑 contribution，再导出 `editor.api.ts` |
 
 Code Action、Hover、Sticky Scroll 分别通过 `codeActionContributions.ts`、`hoverContribution.ts`、`stickyScrollContribution.ts` 注册。注册入口负责装配；Code Action 控制器拥有请求取消、解析和编辑提交，动作菜单的 DOM、键盘导航与关闭生命周期由 `platform/actionWidget` 统一管理。Hover 与 Sticky Scroll 控制器继续拥有各自的界面状态和释放逻辑。独立注册文件是否保留取决于对应职责，不统一套用 `.contribution.ts` 后缀。
 
@@ -28,7 +27,7 @@ Editor 维护以下核心入口。实现 README 可以补充局部细节，但�
 
 | 文档 | Canonical responsibility | 不负责 |
 | --- | --- | --- |
-| [`README.md`](./README.md) | 扁平目录、单一 TextModel、依赖方向和 Workbench 模式装配 | 单套功能实现的完整行为和实现台账 |
+| [`README.md`](./README.md) | 扁平目录、单一 TextModel、依赖方向和 Workbench 贡献装配 | 单套功能实现的完整行为和实现台账 |
 | [`text-engine.md`](./text-engine.md) | 行式文本内核、view 架构、input、Contribution、当前状态和演进 | Workbench pane、文件协议和 App Server transport |
 | [`text-engine-geometry.md`](./text-engine-geometry.md) | 文本几何、浏览器渲染后端、测量、输入坐标和长期目标契约；中文翻译见 [`text-engine-geometry.zh-CN.md`](./text-engine-geometry.zh-CN.md) | 不拥有完整行式 engine、Workbench pane 或文件协议 |
 | [`document-engine.md`](./document-engine.md) | Schema-backed Block、transaction、browser projection、profile 和 collaboration | TextBuffer 语义和产品 pane 生命周期 |
@@ -57,9 +56,9 @@ Editor 维护以下核心入口。实现 README 可以补充局部细节，但�
 
 内容主轴只有 `TextModel → LineSequence → ModelLine`。持久语义通过互相正交的 `RangeStore`、`PointStore`、`LineFacetStore`、`RegionStore` 与 `RelationStore` 引用 `LineId`；字符仍由 TextModel 私有拥有的 `ITextBuffer` 保存。buffer 当前由 Builder 构建的红黑树 `PieceTreeTextBuffer` 实现，PieceTree 不属于公开模型拓扑。
 
-## 一个品牌，两套功能实现
+## 代码与文档在同一工作台
 
-Stanza 是整个编辑器的名称，但 Code 与 Academic 是两套独立的 feature implementation：Code 组合文件级行式命令、语言能力、diff 与 Code Workbench pane；Academic 组合 group、typed block、document transaction、citation、formatting 与 Academic Workbench pane。二者都使用 `TextModel`，但不复用对方的 pane、controller 集合或 mode bundle。
+Stanza 是整个编辑器的名称。代码编辑器组合行式命令、语言能力与 diff；通用文档编辑器组合 group、typed block、document transaction 和 formatting。Academic 通过文档配置添加论文结构、citation、节点视图与工具栏。Code 工作台同时注册代码和文档 pane，资源类型决定使用哪个视图。
 
  Academic 代码区域是当前 `TextModel` 中一个带类型和连续行范围的 projection。`RichTextEditorWidget` 直接编辑这段行范围；它不创建嵌套 `TextModel`，也不启动 Code pane 或 Code contribution bundle。
 
@@ -88,8 +87,8 @@ Contribution 必须满足以下条件：
 - 移除后对应 engine 仍能保持模型有效性和基本编辑正确性；
 - 依赖 engine contract，而不是读取产品 ID；
 - schema-bearing 能力通过 `EditorProfile` 稳定组合，不能在打开文档后任意开关；
-- 不隐式 import 另一个模式 bundle；跨 engine 适配只能 import 所需实现。
-- 正式产品只承诺 `editor.code.all.ts` 与 `editor.academic.all.ts` 两个完整模式入口，不承诺任意 contribution 子集都能组成受支持的产品。
+- 贡献只依赖所需实现，不读取工作台模式决定编辑规则。
+- 完整入口 `editor.all.ts` 装配代码与文档贡献；Academic 配置由 Workbench 贡献注册，不再拥有独立编辑器 bundle。
 
 因此 transaction、selection mapping、IME commit、schema validation 和 model lifecycle 属于 engine；find、folding、suggest、citation toolbar 与 collaboration projection 等属于 contribution 或 profile composition。
 
@@ -99,8 +98,8 @@ Contribution 必须满足以下条件：
 Shared Workbench ─────────→ workbench/contrib/multiDiffEditor ─────────→ multi-diff pane/controller/action registration
 Code build mode ───────┬→ editor.code.all.ts → editor.all.ts ─────────→ Code feature implementation
                        └→ workbench/contrib/codeEditor ────────────────→ code/diff pane + input registration
-Academic build mode ───┬→ editor.academic.all.ts → document contribution only
-                       └→ workbench/contrib/academic ──────→ profile + document pane registration
+Code Workbench ───────┬→ workbench/contrib/documentEditor ─→ one document pane registration
+                       └→ workbench/contrib/academic ──────→ Academic profile registration
 
 editor.api.ts ─────────────→ editor.create/createModel + languages.register/registerLanguage*Provider + TextModel/document APIs
 editor.main.ts ────────────→ editor.all.ts + editor.api.ts
@@ -118,7 +117,7 @@ standalone/{common,browser} ─→ window services + model/editor/language/theme
 - `format.ts` 拥有请求选择、交叠处理、取消和 worker 调用，`formattingEdit.ts` 提交编辑；不再构造格式化控制器。`formatActions.ts` 注册命令、当前键盘入口和保存钩子。Widget 将既有 worker 客户端注册到模型作用域，模型解绑时释放；格式化选项读取当前模型。资源级 worker-service 与完整上游格式化调度 API 仍待对齐，`formatEditor` 是当前模型绑定调用入口。
 - 输入格式化要求提供者声明触发字符；Standalone 支持显式注册，`formatOnType` 自动触发链仍未接通。扩展注册协议尚未提供触发字符，因此扩展桥接只注册文档和范围格式化。
 
-Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各自加载一个功能实现 bundle，并与对应 Workbench contribution 配对；Academic 不以 `editor.all.ts` 为基底。共享入口在窗口启动时只加载一个 bundle；切换模式通过 reload 创建新的 Renderer 生命周期。新增模式必须先登记 `WorkbenchModeId` 并补齐 Browser/Electron 的穷尽 loader 映射；不得在共享 Workbench、widget 或 model 内增加模式分支。
+Workbench 启动装配共同编辑能力。`documentEditor.contribution.ts` 只注册一次文档 pane，`academicEditor.contribution.ts` 只登记 Academic 配置。`DocumentTypes` 保存文档内容类型和扩展名，代码 pane 排除这些资源；文档 pane 使用同一配置集合匹配与实例化。Workbench 范围的 `DocumentEditorTextModelService` 管理资源引用，多视图共享模型和保存状态，最后一个引用释放时才销毁模型。
 
 ## 关键实现符号
 

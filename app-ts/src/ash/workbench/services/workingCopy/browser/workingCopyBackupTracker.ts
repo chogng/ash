@@ -10,6 +10,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 	private readonly tracked = this._register(new DisposableMap<IWorkingCopy, DisposableStore>());
 	private readonly timers = new Map<IWorkingCopy, MutableDisposable<IDisposable>>();
 	private readonly queues = new Map<string, Promise<void>>();
+	private readonly edited = new Set<IWorkingCopy>();
 
 	constructor(private readonly workingCopies: IWorkingCopyService, private readonly backups: IWorkingCopyBackupService, private readonly ownerWindow: Window, private readonly onError: (error: unknown) => void = error => console.error("Failed to update working-copy backup", error)) {
 		super();
@@ -18,6 +19,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 		for (const copy of workingCopies.getAll()) this.track(copy);
 		this._register(toDisposable(() => {
 			this.timers.clear();
+			this.edited.clear();
 		}));
 	}
 
@@ -31,16 +33,18 @@ export class WorkingCopyBackupTracker extends Disposable {
 		const listeners = new DisposableStore();
 		this.timers.set(copy, listeners.add(new MutableDisposable<IDisposable>()));
 		listeners.add(copy.onDidChangeContent(() => this.schedule(copy)));
-		listeners.add(copy.onDidChangeDirty(() => this.schedule(copy)));
+		listeners.add(copy.onDidChangeDirty(() => { if (copy.isDirty) this.edited.add(copy); this.schedule(copy); }));
 		this.tracked.set(copy, listeners);
 		// A clean editor may be opening for crash restoration; its saved backup remains until restoration finishes.
-		if (copy.isDirty) this.schedule(copy);
+		if (copy.isDirty) { this.edited.add(copy); this.schedule(copy); }
 	}
 
 	private untrack(copy: IWorkingCopy): void {
 		this.cancel(copy);
 		this.tracked.deleteAndDispose(copy);
 		this.timers.delete(copy);
+		// A failed recovery can unregister a clean copy. Its durable content still needs recovery.
+		if (!this.edited.delete(copy)) return;
 		const remaining = this.workingCopies.get(copy.resource);
 		void this.persist(copy.resource, remaining.find(candidate => candidate.isDirty) ?? remaining[0]).catch(this.onError);
 	}

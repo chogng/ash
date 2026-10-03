@@ -6,11 +6,11 @@ import { findDesktopRoot } from "./testPaths.js";
 
 const editorRoot = resolve(findDesktopRoot(import.meta.dirname), "src/ash/editor");
 
-test("flat Stanza domain exposes public entrypoints and mode bundles", () => {
-	for (const entrypoint of ["editor.api.ts", "editor.code.all.ts", "editor.academic.all.ts", "editor.all.ts", "editor.main.ts", "editor.worker.start.ts"]) {
+test("flat Stanza domain exposes public entrypoints and shared contributions", () => {
+	for (const entrypoint of ["editor.api.ts", "editor.code.all.ts", "editor.all.ts", "editor.main.ts", "editor.worker.start.ts"]) {
 		assert.equal(exists(join(editorRoot, entrypoint)), true, entrypoint);
 	}
-	for (const retiredEntrypoint of ["stanza.api.ts", "stanza.code.all.ts", "stanza.academic.all.ts", "stanza.all.ts", "stanza.main.ts", "stanza.worker.start.ts"]) {
+	for (const retiredEntrypoint of ["editor.academic.all.ts", "stanza.api.ts", "stanza.code.all.ts", "stanza.academic.all.ts", "stanza.all.ts", "stanza.main.ts", "stanza.worker.start.ts"]) {
 		assert.equal(exists(join(editorRoot, retiredEntrypoint)), false, retiredEntrypoint);
 	}
 	for (const standaloneOwner of ["standalone/browser/standaloneServices.ts", "standalone/browser/standaloneEditor.ts", "standalone/browser/standaloneCodeEditor.ts", "standalone/browser/standaloneLanguages.ts"]) {
@@ -22,7 +22,6 @@ test("flat Stanza domain exposes public entrypoints and mode bundles", () => {
 test("public Stanza entrypoints retain distinct API, contribution, main, and worker roles", () => {
 	const api = readFileSync(join(editorRoot, "editor.api.ts"), "utf8");
 	const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
-	const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
 	const all = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
 	const main = readFileSync(join(editorRoot, "editor.main.ts"), "utf8");
 	const worker = readFileSync(join(editorRoot, "editor.worker.start.ts"), "utf8");
@@ -66,9 +65,8 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	assert.match(codeBundle, /editor\.all/u);
 	assert.doesNotMatch(codeBundle, /contrib\//u);
 	assert.doesNotMatch(codeBundle, /contrib\/academic/u);
-	assert.doesNotMatch(academicBundle, /editor\.all/u);
-	assert.match(academicBundle, /contrib\/documentEditor\.contribution/u);
-	assert.doesNotMatch(academicBundle, /workbench|academicEditor\.contribution/u);
+	assert.match(all, /contrib\/documentEditor\.contribution/u);
+	assert.doesNotMatch(all, /workbench|academicEditor\.contribution/u);
 	assert.match(all, /browser\/coreCommands/u);
 	assert.match(all, /quickAccess\/browser\/quickAccessController/u);
 	assert.doesNotMatch(all, /editor\.(?:code|academic)\.all/u);

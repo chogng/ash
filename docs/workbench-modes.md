@@ -1,117 +1,46 @@
-# `ash` Electron Desktop Workbench 模式与切换边界
+# Ash Desktop 工作台与文档贡献
 
-> 本文是 Electron Desktop 内部 `code` 与 `academic` Workbench 模式、窗口重载和能力装配的 canonical 说明。它们不等同于公开产品线；公开宿主边界见 [`product-lines.md`](product-lines.md)。
-> Work / Code 两种模式及文档编辑器的未来目标见 [`app-ts/docs/design/work-code-workbench.md`](../app-ts/docs/design/work-code-workbench.md)；本文继续描述当前实现。
+> 本文描述当前实现。未来 Work / Code 设计见 [目标设计](../app-ts/docs/design/work-code-workbench.md)，公开产品线见 [产品线说明](product-lines.md)。
 
-## 快速理解
+Ash Desktop 当前只有 Code 工作台。Academic 是可在同一窗口打开的论文文档类型；用户不需要切换工作台或重载窗口。代码、差异、论文、Tasks、Testing、Debug、Chat 和 Agents 窗口使用同一安装包与后端。
 
-Code 与 Academic 是同一个 Ash Desktop 安装包中的两种内置 Workbench 模式。用户在“设置 → General → Workbench Mode”中选择模式，当前窗口完成状态保存后重载，并以目标模式重新装配 editor、Tasks、Testing、Debug 等 contribution；运行中的 Workbench 不热卸载或热替换 contribution。
+## 装配与所有权
 
-| 用户操作 | 可观察结果 | 生效边界 | 其他窗口 |
-| --- | --- | --- | --- |
-| 选择 `Code` | 当前窗口重载为代码工作台 | 当前 Renderer 生命周期结束后 | 已打开窗口保持原模式 |
-| 选择 `Academic` | 当前窗口重载为学术工作台 | 当前 Renderer 生命周期结束后 | 已打开窗口保持原模式 |
-| 重新启动 Ash | 使用最近成功保存的 `workbench.mode` | 应用启动 | 作为后续窗口的默认模式 |
-| 开发或测试设置 `ASH_WORKBENCH_MODE` | 覆盖该次启动的初始模式 | 仅非打包启动 | 不改变统一发布包结构 |
+| 入口或服务 | 负责什么 |
+| --- | --- |
+| `WorkbenchModeRegistry` | 当前唯一模式 `code` 的名称、存储命名空间与 Sessions 入口 |
+| `code/browser/workbench/modes/code.contribution.ts` | 装配代码、通用文档、Academic 配置及工作台工具 |
+| `editor.all.ts` | 装配行式与富文档编辑贡献；不注册 Workbench pane |
+| `workbench/contrib/documentEditor` | 唯一文档 pane 注册、按文档配置匹配输入、视图与保存交互 |
+| `workbench/contrib/academic` | Academic 文档内容类型、扩展名、schema、引用、节点视图及工具栏配置 |
+| `editor/contrib/academic` | 论文结构和编辑能力；不决定工作台模式 |
+| `DocumentEditorTextModelService` | 按规范化资源地址共享一个模型及工作副本，最后一个视图关闭时释放 |
 
-模式切换是运行时可选、窗口生命周期内固定：设置控件属于正在运行的应用，但一次 Workbench 实例只加载一组模式 contribution。这保留了内置切换体验，也避免动态注销命令、菜单、服务和编辑器状态。
+Browser 与 Electron 各保留一个 Workbench 启动入口，只加载 Code。模式定义仍由中央注册表拥有，loader 使用完整的类型映射；未知模式明确报错。通用代码编辑器排除已注册的结构化文档，文档编辑器按相同配置完成匹配与实例化。Academic 匹配 `.ash-academic`、`.ash-paper` 或其内容类型。
 
-## 当前模式
+`TextModel` 是内容、版本与撤销的唯一来源。多个论文视图共享编辑内容、脏状态、保存修订和备份身份；关闭一个视图不销毁其他视图。结构化文件只接受版本化文档格式，损坏 JSON 或纯文本不会被隐式当成论文正文。普通文档类型、转换命令和 Work 模式仍属于后续设计。
 
-两个模式共享 Electron Main、Preload、Workbench runtime、布局 profile、Rust App Server、应用身份和用户数据根。发布构建同时包含两个模式的 Renderer chunk，统一输出到 `.build/app-ts/renderer/ash`；模式仍使用独立的 renderer storage namespace，避免布局与视图状态互相覆盖。
+## 旧 Academic 模式迁移
 
-| Workbench 模式 | 模式 ID | Editor 装配 | 模式能力 | Dedicated Sessions |
-| --- | --- | --- | --- | --- |
-| Code | `code` | `editor.code.all.ts` + `workbench/contrib/codeEditor` | Code/Diff、Tasks、Testing、Debug | `sessions-code` |
-| Academic | `academic` | `editor.academic.all.ts` + `workbench/contrib/academic` | Document、Academic profile、父 TextModel 上的连续 code-region projection | 尚未提供 |
+| 旧数据 | 当前处理 |
+| --- | --- |
+| profile 的 `settings.json` 中 `workbench.mode: academic` | 启动时用 JSONC 编辑改为 `code`，保留其他配置及注释 |
+| 浏览器或 Electron 入口 URL 的 `ash-workbench-mode=academic` | 进入注册表前转换为 `code`，更新 URL 并保留其他参数 |
+| Main 持久存储与浏览器存储的 Academic 命名空间 | 按 scope、工作区与 key 补入 Code；同名不同值保留目标值及旧源项，并报告冲突 |
+| working-copy 备份 | 继续使用原工作区身份与 Academic 内容类型，不复制备份数据库 |
 
-同一 workspace 可以被不同模式的窗口打开，但它仍是共享文件场景，需要文件级协调。模式隔离不代表源文件复制，也不建立第二套 App Server 领域模型。
+迁移可以重复执行。写入目标成功后才清除已迁移源项，存在冲突的源项继续保留。已有 Code 偏好与状态不被覆盖。旧 `configuration.json` 到 `settings.json` 的 profile 迁移仍由现有配置迁移负责，Academic 值转换随后执行。
 
-## 一次切换的流程
+开发与测试不再使用 `ASH_WORKBENCH_MODE=academic`；直接打开论文文件即可。内部模式值只有 `code`。
 
-```mermaid
-flowchart TD
-    Select[设置中选择 Code 或 Academic] --> Persist[保存 workbench.mode]
-    Persist --> Flush[Workbench lifecycle 以 reload 原因保存 working copy 与窗口状态]
-    Flush --> Request[可信 IPC 请求 Main 切换当前窗口]
-    Request --> Load[同一 BrowserWindow 加载目标模式 URL]
-    Load --> Assemble[入口只导入目标模式 contribution]
-    Assemble --> Restore[按目标 storage namespace 恢复 Workbench]
-```
+## 窗口与状态
 
-配置写入失败时不进入 shutdown；shutdown participant 失败时不请求 Main 重载。目标 Renderer 加载失败时，Main 恢复旧模式配置并重新加载旧入口，然后用原生错误对话框报告失败。
+Workbench、独立编辑器窗口和 Code Sessions 使用共享应用身份及用户数据根。窗口标题由各自的 `WindowTitle` 根据当前文件、未保存状态、工作区和 Code 产品名称更新，监听随窗口释放。
 
-## 窗口、配置与状态所有权
-
-| 状态 | Owner | 语义 |
-| --- | --- | --- |
-| 最近选择的默认模式 | 共享 profile `configuration.json` 中的 `workbench.mode` | 应用启动和后续新窗口的默认值 |
-| 当前窗口模式 | Electron Main 的 Workbench window record 与 Renderer URL | 一个 Renderer 生命周期内 immutable |
-| 模式定义 | `WorkbenchModeRegistry` | 唯一拥有模式 ID、显示名、存储命名空间和可选独立入口 |
-| 普通 Workbench 与独立编辑器窗口的标题 | 每个窗口自己的 `WindowTitle` | 读取该窗口的当前编辑器、Working Copy 未保存状态、工作区与模式定义，统一更新 `document.title` |
-| 模式能力 | `modes/code` 或 `modes/academic` | 只在入口启动时注册，不支持运行中卸载 |
-| Workbench 布局与视图状态 | mode-specific `storageNamespace` | Code 与 Academic 分开恢复 |
-| 应用身份与 Chromium 数据 | `code/common/application.ts` 与 Electron Main 应用路径 | 两个模式共享同一个安装和用户数据根 |
-
-URL 查询参数 `ash-workbench-mode` 把 Main 已选择的窗口模式 ID 交给共享 Workbench 入口。入口根据它动态导入一个模式 bundle；查询参数不是用户配置的第二份 authority，持久默认值仍由配置服务拥有。
-
-窗口标题按“当前文件 — 工作区 — 模式产品名”显示，未保存的当前文件带 `●` 标记。关闭当前文件后标题移除文件段，空工作区只显示模式产品名。命令中心的悬浮提示和辅助描述读取同一个标题控制器。命令服务随焦点切换编辑器窗口；标题控制器绑定各自窗口的 EditorPart，不随另一个窗口的焦点变化。Browser 与 Electron 启动入口、独立窗口服务不再写运行中的标题，标题订阅随对应窗口 UI 一起释放。
-
-除 `WorkbenchModeRegistry` 外，各层只传递 `WorkbenchModeId`，不缓存或复制完整定义。Settings、构建输入、可信入口 URL 和可选 Sessions 页面从注册表派生；Browser 与 Electron 的模式 loader 使用以 `WorkbenchModeId` 为键的完整映射。新增 ID 但没有补齐任一模式定义或 loader 时，TypeScript 编译失败，而不是在运行时落入默认分支。
-
-## Dedicated Sessions
-
-Code Sessions 是独立页面，不是给 `workbench/browser/layout*` 增加模式分支。Code 的普通 Workbench 只注册一个 Titlebar action，Electron Main 创建 sibling Sessions 窗口，并把对应 HTML 加入可信 IPC allowlist。
-
-`app-ts/src/ash/platform/windows/electron-main/windowsMainService.ts` 持有窗口创建、重复打开时的复用和窗口资源释放；`platform/lifecycle/electron-main/lifecycleMainService.ts` 在关闭窗口前等待 Renderer 保存完成。打开 Agents 窗口通过窗口宿主能力请求；返回 Workbench 是 Sessions 自己的操作。`code/electron-main/app.ts` 根据当前模式提供 Sessions 入口、连接和可信 IPC 装配；浏览器页面切换直接使用平台导航。Electron 进程只保留一个 Sessions 窗口；从另一个 workspace 打开时会聚焦该窗口，并在会话交接前更新其工作区上下文。Agents 的 App Server 连接保持不变，每个 Session 保存自己的本机目录或 SSH 主机与目录，由 profile 网关选择执行连接。关闭 Workbench 或切换模式不会关闭 Sessions。关闭 Sessions 时释放其资源；从 Sessions 返回 Workbench 时，若当前 workspace 的 Workbench 已关闭，就重新打开它。
-
-```text
-regular Code Workbench titlebar
-        │ Open Code Sessions
-        ▼
-sessions-code page
-        │ Return to Workbench
-        ▼
-regular Code Workbench
-```
-
-`sessions/` 可以依赖 `workbench/` 的可复用 Chat、Markdown 和 renderer capability；`workbench/` 不得反向导入 `sessions/`。从 Code 切换到 Academic 时，已打开的 Code Sessions 窗口继续运行。Academic 当前不得注册 Sessions action，也不得把未来研究工作台描述为现有能力。
-
-Code Sessions 的 Renderer 实现、状态 owner、执行路径、失败语义和扩展点见 [`app-ts/src/ash/sessions/README.md`](../app-ts/src/ash/sessions/README.md)。Academic 若增加专用研究工作台，必须先新增明确的模式 capability 与独立 renderer 入口；PDF、文献库、Zotero 同步和引用索引等领域能力不得提前放进通用 Workbench layout 或 generic Session storage。
-
-## 编辑器与默认 Workbench
-
-普通 Workbench 使用唯一的 immutable `defaultWorkbenchSession`：两个模式具有相同初始区域、默认 view container 和可持久化布局语义。Dedicated Sessions 自己构造固定页面，不读取或更改 `WorkbenchLayout`。
-
-Browser 与 Electron 各自只有一个 `workbench.ts` 入口。入口读取 Main 写入的窗口模式后加载 `modes/code` 或 `modes/academic`；模式 contribution 分别静态装配 `editor.code.all.ts` 与 `editor.academic.all.ts`，但不得拥有布局、Part topology 或第二套 Workbench runtime。两个 editor bundle 都来自同一个扁平的 `src/ash/editor` 模块；Stanza 是统一内核品牌，两种模式共享按行存储的唯一 `TextModel`，并装配不同的功能与视图实现。
+Code Sessions 保持独立页面。Workbench 通过 Titlebar action 请求打开 Agents 窗口；Main 持有窗口创建、复用与关闭，Sessions 使用自己的会话状态。`sessions` 可以复用 `workbench` 能力，`workbench` 不反向导入 `sessions`。详情见 [Sessions 说明](../app-ts/src/ash/sessions/README.md)。
 
 ## 构建与验证
 
-日常开发和构建只使用统一命令；一次 Renderer 构建包含两个模式和 Code Sessions 入口。
+统一 Renderer 输出在 `.build/app-ts/renderer/ash`，包含 Workbench 与 Code Sessions 入口。Academic 不再拥有独立模式入口或 `editor.academic.all.ts`。
 
-```bash
-pnpm build:desktop
-pnpm dev:desktop
-pnpm dev:web
-pnpm dev:web:full
-pnpm test:desktop:app
-```
-
-`ASH_WORKBENCH_MODE` 只覆盖非打包开发或测试进程的初始模式，不选择发布包内容或输出目录：
-
-```bash
-ASH_WORKBENCH_MODE=code pnpm dev:desktop
-ASH_WORKBENCH_MODE=academic pnpm dev:desktop
-```
-
-每次构建必须产生共享命名的 Browser 与 Electron `workbench.html`、Code Sessions HTML，以及能够从运行时入口到达的 Code 和 Academic chunk。发布包只收录统一的 `renderer/ash` 目录；Main 在创建窗口前验证 Workbench 与 Code Sessions 入口完整。
-
-## 长期不变量
-
-- Code 与 Academic 是 `ash` Desktop 的内置模式，不是额外公开产品线或独立安装身份。
-- `WorkbenchModeRegistry` 是模式定义的唯一 owner，运行层只保存和传递 `WorkbenchModeId`。
-- 新增模式必须同时补齐中央定义以及 Browser/Electron 的穷尽 loader 映射；不得添加兜底分支吞掉未知 ID。
-- 模式由应用内设置选择，但只在窗口重载边界改变。
-- 一个 Renderer 生命周期只装配一个模式，不能热卸载 contribution。
-- Workbench、布局和 App Server 契约保持共享，模式入口只拥有差异化能力装配。
-- Stanza 仍是唯一 editor runtime；模式不得复制 editor、model 或文件状态。
+验证覆盖文档类型匹配、共享模型与释放、保存冲突、旧配置与存储迁移、浏览器富文档输入以及 Electron 实际文件打开和保存。用户流程使用 Playwright 的内容、焦点和持久状态断言。

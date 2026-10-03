@@ -2,16 +2,17 @@ import { showStartupError } from '../../../workbench/browser/startupError.js';
 import { IndexedDbConfigurationApi } from '../../../platform/configuration/browser/indexedDbConfigurationApi.js';
 import { BrowserLanguagePackStore } from '../../../platform/languagePacks/browser/languagePackStore.js';
 import { initializeBrowserLocalization } from '../../../workbench/services/localization/browser/localizationBootstrap.js';
-import { resolveWorkbenchModeIdFromUrl, WorkbenchModeId } from "../../../workbench/common/workbenchMode.js";
+import { migrateAcademicWorkbenchUrl, resolveWorkbenchModeIdFromUrl, WorkbenchModeId } from "../../../workbench/common/workbenchMode.js";
 
 declare const __ASH_WORKBENCH_MODE__: WorkbenchModeId;
 
 const modeLoaders = {
 	[WorkbenchModeId.Code]: () => import("./modes/code.js"),
-	[WorkbenchModeId.Academic]: () => import("./modes/academic.js"),
 } satisfies Record<WorkbenchModeId, () => Promise<unknown>>;
 
-const modeId = resolveWorkbenchModeIdFromUrl(window.location.href, __ASH_WORKBENCH_MODE__);
+const migratedUrl = migrateAcademicWorkbenchUrl(window.location.href);
+if (migratedUrl !== window.location.href) { window.history.replaceState(null, '', migratedUrl); }
+const modeId = resolveWorkbenchModeIdFromUrl(migratedUrl, __ASH_WORKBENCH_MODE__);
 try {
 	{
 		using configuration = new IndexedDbConfigurationApi();

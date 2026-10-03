@@ -9,7 +9,8 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
 import { IBulkEditService } from '../../../../browser/services/bulkEditService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { BulkEditService } from '../../../../../workbench/contrib/bulkEdit/browser/bulkEditService.js';
+import { BulkEditTestServices } from '../../../../../workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { URI } from '../../../../../base/common/uri.js';
 
 await import('../../browser/codeActionContributions.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
@@ -108,7 +109,8 @@ for (const outcome of ['complete', 'error'] as const) {
 		using editor = createTestCodeEditor({
 			container, model, ariaLabel: 'test.ts',
 			languageFeaturesService: features, dimension: { width: 320, height: 80 }, onLanguageError: error => errors.push(error),
-			onApplyWorkspaceEdit: async () => {
+			onApplyWorkspaceEdit: async (_edit, options) => {
+				assert.deepEqual({ autoSave: options?.respectAutoSaveConfig, preview: options?.showPreview, label: options?.label, source: options?.reason?.metadata.source }, { autoSave: true, preview: false, label: 'Workspace edit', source: 'codeAction' });
 				calls++;
 				await pending;
 				if (outcome === 'error') throw new Error('Workspace edit failed after dispatch');
@@ -176,20 +178,17 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 		const dom = new JSDOM('<body><main></main></body>');
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		try {
-			using model = new TextModel('value', { languageId: 'typescript' });
+			using fixture = new BulkEditTestServices([[URI.file('/workspace/preview.ts'), 'value']]);
+			using reference = await fixture.models.acquire({ resource: URI.file('/workspace/preview.ts'), languageId: 'typescript' }, new AbortController().signal);
+			const model = reference.model;
 			using features = new LanguageFeaturesService();
 			using provider = features.codeActionProvider.register('typescript', {
 				provideCodeActions: () => [{ title: 'Replace value', kind: 'refactor.rewrite', edit: { entries: [{ kind: 'textDocument', resource: model.uri, version: model.getVersionId(), edits: [{ range: model.getFullModelRange(), text: 'result' }] }] } }],
 			});
-			let applied = 0;
-			using bulkEdits = new BulkEditService({ apply: async () => {
-				applied++;
-				if (outcome === 'commit error') {
-					model.setValue('result');
-					throw new Error('Approved edit failed after retiring its request');
-				}
-				return { resources: [model.uri], undo: async () => {} };
-			} });
+			const bulkEdits = fixture.service;
+			if (outcome === 'commit error') {
+				fixture.store.failNextSave = new Error('Approved edit failed after retiring its request');
+			}
 			let finish!: (accepted: boolean) => void;
 			let previewSignal: AbortSignal | undefined;
 			using handler = bulkEdits.setPreviewHandler((edits, options) => {
@@ -207,7 +206,7 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 			const action = dom.window.document.querySelector<HTMLButtonElement>('[role=menuitem]')!;
 			action.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', ctrlKey: true }));
 			await flushPromises();
-			assert.equal(applied, 0);
+			assert.deepEqual(fixture.store.saved, []);
 			assert.equal(previewSignal?.aborted, false);
 			assert.equal(dom.window.document.querySelector('.ash-action-widget'), null);
 			if (outcome === 'change') model.setValue('changed');
@@ -215,7 +214,8 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 			finish(outcome !== 'cancel');
 			await flushPromises();
 			await flushPromises();
-			assert.equal(applied, outcome === 'accept' || outcome === 'commit error' ? 1 : 0);
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(fixture.store.saved.length, outcome === 'accept' || outcome === 'commit error' ? 1 : 0);
 			assert.equal(previewSignal!.aborted, true);
 			assert.deepEqual(errors.map(error => (error as Error).message), outcome === 'commit error' ? ['Approved edit failed after retiring its request'] : []);
 		} finally {

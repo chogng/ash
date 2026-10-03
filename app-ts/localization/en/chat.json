@@ -26,7 +26,7 @@
 		"chatEditing.stale": "The change has changed. Review it again.",
 		"chatEditing.verbosity": "Agent changes accessibility help",
 		"chatEditing.verbosityDescription": "Announce how to open accessibility help when reviewing Agent changes.",
-		"chatEditing.help": "Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Press Escape to return to the editor. Use the Review Agent changes command to review closed or deleted files.",
+		"chatEditing.help": "Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Cancel automatic acceptance to keep reviewing when a countdown appears. Press Escape to return to the editor. Use the Review Agent changes command to review closed or deleted files.",
 		"network.disconnected": "App Server is disconnected.",
 		"network.loading": "Reading network configuration…",
 		"network.empty": "No service hosts are configured.",
@@ -54,6 +54,14 @@
 		"chat.providerKeys.aria": "Model provider API keys",
 		"chat.providerKeys.select": "Choose a provider to enter or replace its API key",
 		"slash.permission.description": "choose permissions for the next Turn",
-		"slash.guardian.description": "prepare and review project background for Guardian"
+		"slash.guardian.description": "prepare and review project background for Guardian",
+		"chatEditing.autoAcceptTitle": "Automatically accept Agent changes",
+		"chatEditing.autoAcceptDescription": "Seconds to wait before accepting edits after the reply completes. Set to 0 to review changes manually. You can cancel the countdown to keep reviewing.",
+		"chatEditing.autoAcceptCountdown": "Accepting in {0}s",
+		"chatEditing.cancelAutoAccept": "Cancel automatic acceptance",
+		"chatEditing.autoAcceptCancelled": "Automatic acceptance cancelled. Changes remain available for review.",
+		"chatEditing.autoAcceptStarted": "Agent changes will be accepted in {0} seconds. Cancel automatic acceptance to keep reviewing.",
+		"chatEditing.autoAccepted": "Agent changes accepted automatically.",
+		"chatEditing.autoAcceptPending": "Automatic acceptance pending. {0}"
 	}
 }

@@ -1,182 +1,240 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { URI } from "../../../../../base/common/uri.js";
-import { BulkEditService, toLanguageWorkspaceEdit } from "../../browser/bulkEditService.js";
-import { ResourceEdit, ResourceTextEdit, ResourceFileEdit } from '../../../../../editor/browser/services/bulkEditService.js';
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { URI } from '../../../../../base/common/uri.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
+import { Range } from '../../../../../editor/common/core/range.js';
+import { ResourceEdit, ResourceFileEdit, ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
+import type { LanguageWorkspaceEdit } from '../../../../../editor/common/languages.js';
+import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { IWorkspaceEditService } from '../../../../services/language/common/workspaceEditService.js';
-import { type WorkspaceEditResult } from "../../../../services/language/common/workspaceEditService.js";
-import { Position } from "../../../../../editor/common/core/position.js";
-import { Range } from "../../../../../editor/common/core/range.js";
-import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages.js";
+import { BulkEditService, toLanguageWorkspaceEdit } from '../../browser/bulkEditService.js';
+import { BulkEditTestServices } from './bulkEditTestServices.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { Event } from '../../../../../base/common/event.js';
+import { EditSources } from '../../../../../editor/common/textModelEditSource.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
+const first = URI.file('/workspace/one.ts');
+const second = URI.file('/workspace/two.ts');
 
-test("bulk edits apply directly for a single entry", async () => {
-	const applier = new RecordingWorkspaceEditService();
-	using service = new BulkEditService(applier);
-	const edit = textEdit("one.ts", "one");
-
-	const result = await service.apply(edit);
-
-	assert.equal(result.isApplied, true);
-	assert.equal(applier.calls.length, 1);
-	assert.deepEqual(applier.calls[0], edit);
-});
-
-test("multi-entry edits fall back to direct apply when preview is unavailable", async () => {
-	const applier = new RecordingWorkspaceEditService();
-	using service = new BulkEditService(applier);
-	const first = textEdit("one.ts", "one");
-	const second = textEdit("two.ts", "two");
-
-	const result = await service.apply({ entries: [first.entries[0]!, second.entries[0]!] });
-
-	assert.equal(result.isApplied, true);
-	assert.equal(applier.calls.length, 1);
-});
-
-test("multi-entry edits preview by default and apply the accepted subset", async () => {
-	const applier = new RecordingWorkspaceEditService();
-	using service = new BulkEditService(applier);
-	const first = textEdit("one.ts", "one");
-	const second = textEdit("two.ts", "two");
-	const edit: LanguageWorkspaceEdit = { entries: [...first.entries, ...second.entries] };
-	using handler = service.setPreviewHandler(async value => [value[1]!]);
-
-	const result = await service.apply(edit);
-
-	assert.equal(result.isApplied, true);
-	assert.deepEqual(applier.calls[0]?.entries, [second.entries[0]]);
-});
-
-test("cancelling the preview does not mutate through the lower-level applier", async () => {
-	const applier = new RecordingWorkspaceEditService();
-	using service = new BulkEditService(applier);
-	using handler = service.setPreviewHandler(async () => []);
-
-	const result = await service.apply({ entries: [textEdit("one.ts", "one").entries[0]!, textEdit("two.ts", "two").entries[0]!] });
-
-	assert.equal(result.isApplied, false);
-	assert.equal(applier.calls.length, 0);
-});
-
-test("a caller can force preview for a single entry", async () => {
-	const applier = new RecordingWorkspaceEditService();
-	using service = new BulkEditService(applier);
-	let previewed = false;
-	using handler = service.setPreviewHandler(async value => {
-		previewed = true;
-		return value;
-	});
-
-	const result = await service.apply(textEdit("one.ts", "one"), { showPreview: true });
-
-	assert.equal(result.isApplied, true);
-	assert.equal(previewed, true);
-	assert.equal(applier.calls.length, 1);
-});
-
-class RecordingWorkspaceEditService implements IWorkspaceEditService {
-	readonly calls: LanguageWorkspaceEdit[] = [];
-
-	async apply(edit: LanguageWorkspaceEdit): Promise<WorkspaceEditResult> {
-		this.calls.push(edit);
-		return { resources: Object.freeze(edit.entries.map(entry => entry.kind === 'rename' ? entry.target : entry.resource)), undo: async () => {} };
-	}
+function textEdit(resource: URI, text: string): LanguageWorkspaceEdit {
+	return { entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 1), text }] }] };
 }
 
-function textEdit(name: string, text: string): LanguageWorkspaceEdit {
-	return {
-		entries: [{
-			kind: "textDocument",
-			resource: URI.file(`C:\\workspace\\${name}`),
-			edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text }],
-		}],
-	};
-}
+test('bulk edits apply a single entry through the shared model', async () => {
+	using fixture = new BulkEditTestServices([[first, '']]);
+	const result = await fixture.service.apply(textEdit(first, 'one'));
+	assert.deepEqual({ applied: result.isApplied, text: fixture.store.text(first), saved: fixture.store.saved }, { applied: true, text: 'one', saved: [first.toString()] });
+});
 
-test('approval commits every resource when its first mutation retires the originating request', async () => {
+test('multi-entry edits apply directly when no preview handler is installed', async () => {
+	using fixture = new BulkEditTestServices([[first, ''], [second, '']]);
+	await fixture.service.apply({ entries: [...textEdit(first, 'one').entries, ...textEdit(second, 'two').entries] });
+	assert.deepEqual([fixture.store.text(first), fixture.store.text(second)], ['one', 'two']);
+});
+
+test('multi-entry edits preview by default and apply the accepted subset', async () => {
+	using fixture = new BulkEditTestServices([[first, ''], [second, '']]);
+	using handler = fixture.service.setPreviewHandler(async edits => [edits[1]!]);
+	await fixture.service.apply({ entries: [...textEdit(first, 'one').entries, ...textEdit(second, 'two').entries] });
+	assert.deepEqual([fixture.store.text(first), fixture.store.text(second)], ['', 'two']);
+});
+
+test('cancelling preview leaves every resource unchanged', async () => {
+	using fixture = new BulkEditTestServices([[first, ''], [second, '']]);
+	using handler = fixture.service.setPreviewHandler(async () => []);
+	const result = await fixture.service.apply({ entries: [...textEdit(first, 'one').entries, ...textEdit(second, 'two').entries] });
+	assert.deepEqual({ applied: result.isApplied, saved: fixture.store.saved }, { applied: false, saved: [] });
+});
+
+test('a caller can force preview for a single entry', async () => {
+	using fixture = new BulkEditTestServices([[first, '']]);
+	let previews = 0;
+	using handler = fixture.service.setPreviewHandler(async edits => { previews++; return edits; });
+	await fixture.service.apply(textEdit(first, 'one'), { showPreview: true });
+	assert.deepEqual({ previews, text: fixture.store.text(first) }, { previews: 1, text: 'one' });
+});
+
+test('approval commits every resource when the first mutation retires the originating request', async () => {
+	using fixture = new BulkEditTestServices([[first, ''], [second, '']]);
+	using reference = await fixture.models.acquire({ resource: first }, new AbortController().signal);
 	const controller = new AbortController();
-	const committed: string[] = [];
-	using service = new BulkEditService({ apply: async (edit, signal) => {
-		for (const entry of edit.entries) {
-			if (signal?.aborted) throw new Error('Transaction was cancelled by its own mutation');
-			committed.push(entry.kind);
-			controller.abort();
-		}
-		return { resources: [], undo: async () => {} };
-	} });
-	using handler = service.setPreviewHandler(async edits => edits);
-	const first = textEdit('one.ts', 'one');
-	const second = textEdit('two.ts', 'two');
-	await service.apply({ entries: [...first.entries, ...second.entries] }, { showPreview: true, token: controller.signal });
-	assert.deepEqual(committed, ['textDocument', 'textDocument']);
+	using listener = reference.model.onDidChangeContent(() => controller.abort());
+	using handler = fixture.service.setPreviewHandler(async edits => edits);
+	await fixture.service.apply({ entries: [...textEdit(first, 'one').entries, ...textEdit(second, 'two').entries] }, { showPreview: true, token: controller.signal });
+	assert.deepEqual([fixture.store.text(first), fixture.store.text(second)], ['one', 'two']);
 });
 
-test('preview selection retains the source content checks and sequential snapshot boundaries', async () => {
-	const applier = new RecordingWorkspaceEditService();
-	using service = new BulkEditService(applier);
-	const resource = URI.file('/workspace/one.ts');
+test('preview preserves content checks and sequential snapshots', async () => {
+	using fixture = new BulkEditTestServices([[first, 'a']]);
 	const edit: LanguageWorkspaceEdit = { entries: [
-		{ kind: 'textDocument', resource, expectedText: 'a', edits: [{ range: new Range(1, 1, 1, 2), text: 'long' }] },
-		{ kind: 'textDocument', resource, expectedText: 'long', edits: [{ range: new Range(1, 5, 1, 5), text: '!' }] },
+		{ kind: 'textDocument', resource: first, expectedText: 'a', edits: [{ range: new Range(1, 1, 1, 2), text: 'long' }] },
+		{ kind: 'textDocument', resource: first, expectedText: 'long', edits: [{ range: new Range(1, 5, 1, 5), text: '!' }] },
 	] };
-	using handler = service.setPreviewHandler(async edits => {
+	using handler = fixture.service.setPreviewHandler(async edits => {
 		const preview = await toLanguageWorkspaceEdit(edits);
 		assert.deepEqual(preview, edit);
 		return ResourceEdit.convert(preview);
 	});
-	await service.apply(edit, { showPreview: true });
-	assert.deepEqual(applier.calls, [edit]);
+	await fixture.service.apply(edit, { showPreview: true });
+	assert.equal(fixture.store.text(first), 'long!');
 });
 
-test('disposing replaced preview registrations does not resurrect a released handler', () => {
-	using service = new BulkEditService(new RecordingWorkspaceEditService());
-	const first = service.setPreviewHandler(async edits => edits);
-	const second = service.setPreviewHandler(async edits => edits);
-	first.dispose();
-	second.dispose();
-	assert.equal(service.hasPreviewHandler(), false);
+test('preview retains distinct sequential snapshots when steps reuse a text edit payload', async () => {
+	using fixture = new BulkEditTestServices([[first, 'ab']]);
+	const payload = { range: new Range(1, 1, 1, 1), text: '!' };
+	using handler = fixture.service.setPreviewHandler(async edits => edits);
+	await fixture.service.apply({ entries: [
+		{ kind: 'textDocument', resource: first, expectedText: 'ab', edits: [payload] },
+		{ kind: 'textDocument', resource: first, expectedText: '!ab', edits: [payload] },
+	] }, { showPreview: true });
+	assert.equal(fixture.store.text(first), '!!ab');
 });
 
-test('cancelled requests cannot start a preview', async () => {
-	const applier = new RecordingWorkspaceEditService();
-	using service = new BulkEditService(applier);
-	using handler = service.setPreviewHandler(async () => { throw new Error('Preview must not run'); });
+test('disposing replaced preview registrations does not restore a released handler', () => {
+	using fixture = new BulkEditTestServices([]);
+	const firstHandler = fixture.service.setPreviewHandler(async edits => edits);
+	const secondHandler = fixture.service.setPreviewHandler(async edits => edits);
+	firstHandler.dispose();
+	secondHandler.dispose();
+	assert.equal(fixture.service.hasPreviewHandler(), false);
+});
+
+test('cancelled requests cannot start preview or mutate files', async () => {
+	using fixture = new BulkEditTestServices([[first, '']]);
+	using handler = fixture.service.setPreviewHandler(async () => { throw new Error('Preview must not run'); });
 	const controller = new AbortController();
 	controller.abort();
-	await assert.rejects(service.apply(textEdit('one.ts', 'one'), { showPreview: true, token: controller.signal }), isCancellationError);
-	assert.deepEqual(applier.calls, []);
+	await assert.rejects(fixture.service.apply(textEdit(first, 'one'), { showPreview: true, token: controller.signal }), isCancellationError);
+	assert.deepEqual(fixture.store.saved, []);
 });
 
 test('cancellation while file contents resolve prevents the transaction from starting', async () => {
-	const applier = new RecordingWorkspaceEditService();
-	using service = new BulkEditService(applier);
+	using fixture = new BulkEditTestServices([]);
 	const controller = new AbortController();
 	const contents = Promise.resolve().then(() => { controller.abort(); return VSBuffer.fromString('file'); });
-	await assert.rejects(service.apply([new ResourceFileEdit(undefined, URI.file('/workspace/new.ts'), { contents })], { token: controller.signal }), isCancellationError);
-	assert.deepEqual(applier.calls, []);
+	await assert.rejects(fixture.service.apply([new ResourceFileEdit(undefined, first, { contents })], { token: controller.signal }), isCancellationError);
+	assert.equal(fixture.files.has(first), false);
 });
 
-test('an edit marked for confirmation previews even when ordinary preview is disabled', async () => {
-	const applier = new RecordingWorkspaceEditService();
-	using service = new BulkEditService(applier);
+test('confirmation metadata requests preview even when ordinary preview is disabled', async () => {
+	using fixture = new BulkEditTestServices([[first, '']]);
 	let previews = 0;
-	using handler = service.setPreviewHandler(async edits => { previews++; return edits; });
-	await service.apply([new ResourceTextEdit(URI.file('/workspace/one.ts'), { range: new Range(1, 1, 1, 1), text: 'one' }, undefined, { needsConfirmation: true })], { showPreview: false });
-	assert.equal(previews, 1);
+	using handler = fixture.service.setPreviewHandler(async edits => { previews++; return edits; });
+	await fixture.service.apply([new ResourceTextEdit(first, { range: new Range(1, 1, 1, 1), text: 'one' }, undefined, { needsConfirmation: true })], { showPreview: false });
+	assert.deepEqual({ previews, text: fixture.store.text(first) }, { previews: 1, text: 'one' });
 });
 
-test('bulk edit assembly resolves the workspace transaction through the registered owner', async () => {
+test('bulk edit assembly requires its registered model, working copy and file owners', async () => {
+	using fixture = new BulkEditTestServices([[first, '']]);
 	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(BulkEditService), /workspaceEditService/);
-	const applier = new RecordingWorkspaceEditService();
-	services.registerInstance(IWorkspaceEditService, applier);
+	assert.throws(() => services.createInstance(BulkEditService), /textModelResourceService/);
+	services.registerInstance(ITextModelResourceService, fixture.models);
+	services.registerInstance(IWorkingCopyService, fixture.workingCopies);
+	services.registerInstance(IFileService, fixture.files);
+	services.registerInstance(IConfigurationService, fixture.configuration);
+	services.registerInstance(IDialogService, fixture.dialogs);
 	using service = services.createInstance(BulkEditService);
-	await service.apply(textEdit('one.ts', 'one'));
-	assert.equal(applier.calls.length, 1);
+	await service.apply(textEdit(first, 'one'));
+	assert.equal(fixture.store.text(first), 'one');
+});
+
+test('standard workspace edits use original coordinates and expose an exact inverse', async () => {
+	using fixture = new BulkEditTestServices([[first, 'abc def']]);
+	const result = await fixture.service.apply({ edits: [
+		{ resource: first, textEdit: { range: new Range(1, 1, 1, 4), text: 'long' } },
+		{ resource: first, textEdit: { range: new Range(1, 5, 1, 8), text: 'XYZ' } },
+	] });
+	assert.equal(fixture.store.text(first), 'long XYZ');
+	assert.ok(result.isApplied);
+	await result.undo();
+	assert.equal(fixture.store.text(first), 'abc def');
+});
+
+test('one undo group reverses sequential edits to the same document and every touched resource', async () => {
+	using fixture = new BulkEditTestServices([[first, 'a'], [second, 'b']]);
+	const one = await fixture.service.apply(textEdit(first, '1'), { undoRedoGroupId: 42 });
+	const two = await fixture.service.apply({ entries: [...textEdit(first, '2').entries, ...textEdit(second, '3').entries] }, { undoRedoGroupId: 42 });
+	assert.deepEqual([fixture.store.text(first), fixture.store.text(second)], ['21a', '3b']);
+	assert.ok(one.isApplied && two.isApplied);
+	await one.undo();
+	assert.deepEqual([fixture.store.text(first), fixture.store.text(second)], ['a', 'b']);
+	await assert.rejects(two.undo(), /already reverted/);
+});
+
+test('group undo checks every latest snapshot before changing any resource', async () => {
+	using fixture = new BulkEditTestServices([[first, 'a'], [second, 'b']]);
+	const one = await fixture.service.apply(textEdit(first, '1'), { undoRedoGroupId: 7 });
+	await fixture.service.apply(textEdit(second, '2'), { undoRedoGroupId: 7 });
+	using reference = await fixture.models.acquire({ resource: second }, new AbortController().signal);
+	reference.model.setValue('user edit');
+	assert.ok(one.isApplied);
+	await assert.rejects(one.undo(), /changed before replacement/);
+	assert.equal(fixture.store.text(first), '1a');
+});
+
+test('declining undo confirmation preserves the transaction and permits a later undo', async () => {
+	using fixture = new BulkEditTestServices([[first, 'a']]);
+	const result = await fixture.service.apply(textEdit(first, '1'), { label: 'Rename symbol', confirmBeforeUndo: true });
+	assert.ok(result.isApplied);
+	fixture.dialogs.confirmed = false;
+	await result.undo();
+	assert.equal(fixture.store.text(first), '1a');
+	assert.equal(fixture.dialogs.confirmations[0]!.message, 'Undo Rename symbol?');
+	fixture.dialogs.confirmed = true;
+	await result.undo();
+	assert.equal(fixture.store.text(first), 'a');
+});
+
+for (const autoSave of [true, false, 'failure'] as const) {
+	test(`refactoring autosave ${autoSave === 'failure' ? 'reports a save failure after commit' : autoSave ? 'saves' : 'keeps dirty'} open working copies according to configuration`, async () => {
+		using fixture = new BulkEditTestServices([[first, 'a'], [second, 'b']]);
+		await fixture.configuration.updateValue('files.refactoring.autoSave', autoSave !== false);
+		using references = await fixture.models.acquire({ resource: first }, new AbortController().signal);
+		using secondReference = await fixture.models.acquire({ resource: second }, new AbortController().signal);
+		using saveListener = references.onDidChangeDirty(() => {
+			if (autoSave === 'failure' && !references.isDirty && fixture.store.saved.length === 1) {
+				fixture.store.failNextSave = new Error('injected autosave failure');
+			}
+		});
+		const registrations = [references, secondReference].map(reference => fixture.workingCopies.register({
+			resource: reference.resource, backupKind: 'text',
+			get isDirty() { return reference.isDirty; },
+			get hasExternalChange() { return reference.hasExternalChange; },
+			onDidChangeDirty: reference.onDidChangeDirty, onDidChangeExternalChange: reference.onDidChangeExternalChange,
+			onDidChangeContent: Event.None,
+			backup: () => reference.model.getText(), restoreBackup: value => reference.model.setValue(value),
+			save: signal => reference.save(signal), revert: signal => reference.revert(signal),
+			saveAs: async () => { throw new Error('Save As is outside this scenario'); },
+			dispose: () => {}, [Symbol.dispose]: () => {},
+		}));
+		try {
+			const result = await fixture.service.apply({ entries: [...textEdit(first, '1').entries, ...textEdit(second, '2').entries] }, { respectAutoSaveConfig: true });
+			assert.ok(result.isApplied);
+			assert.deepEqual(fixture.store.saved, autoSave === 'failure' ? [first.toString()] : autoSave ? [first.toString(), second.toString()] : []);
+			assert.deepEqual([references.isDirty, secondReference.isDirty], autoSave === 'failure' ? [false, true] : [!autoSave, !autoSave]);
+			if (autoSave === 'failure') {
+				assert.match(fixture.dialogs.errors[0]!, /changes were applied.*automatic saving failed/);
+				await result.undo();
+				assert.deepEqual([references.model.getText(), secondReference.model.getText()], ['a', 'b']);
+			}
+		} finally {
+			for (const registration of registrations) { registration.dispose(); }
+		}
+	});
+}
+
+test('bulk text mutations retain the originating edit reason', async () => {
+	using fixture = new BulkEditTestServices([[first, 'a']]);
+	using reference = await fixture.models.acquire({ resource: first }, new AbortController().signal);
+	const reason = EditSources.rename('a', 'newName');
+	const reasons: unknown[] = [];
+	using listener = reference.model.onDidChangeContent(event => reasons.push(...event.detailedReasons));
+	await fixture.service.apply(textEdit(first, 'newName'), { reason });
+	assert.ok(reasons.includes(reason));
 });

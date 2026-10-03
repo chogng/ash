@@ -67,6 +67,8 @@ fn document_reads_and_commits_use_the_exact_initiating_connection() {
     });
     let request = next_request(&outbound);
     assert_eq!(request["method"], "textDocument/apply");
+    assert_eq!(request["params"]["threadId"], "document-thread");
+    assert_eq!(request["params"]["turnId"], "document-turn");
     clients
         .handle_response(
             7,
@@ -99,7 +101,11 @@ fn disconnect_preserves_editor_selection_and_lost_commit_is_uncertain() {
         host.for_turn(&thread_id, &turn),
         Err(TextDocumentError::Unavailable)
     ));
-    clients.finish_turn(&thread_id, &turn);
+    clients.finish_turn(
+        &thread_id,
+        &turn,
+        ash_app_server_protocol::protocol::text_document::TextDocumentTurnOutcome::Completed,
+    );
     assert!(matches!(
         host.for_turn(&thread_id, &turn),
         Err(TextDocumentError::Unavailable)

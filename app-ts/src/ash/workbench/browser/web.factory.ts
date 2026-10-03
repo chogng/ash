@@ -1,4 +1,5 @@
 import type { IStartWorkbenchOptions } from './workbench.js';
+import { IndexedDbWorkingCopyBackupService } from '../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import {
@@ -25,7 +26,7 @@ import type {
 	IWebWorkbenchHost,
 } from "./web.api.js";
 import { startWorkbench } from "./workbench.js";
-import { BrowserStorageService } from '../services/storage/browser/storageService.js';
+import { BrowserStorageService, migrateBrowserStorage } from '../services/storage/browser/storageService.js';
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
 import { switchBrowserWorkbenchMode } from "../services/workbenchMode/browser/browserWorkbenchModeHost.js";
@@ -34,6 +35,7 @@ import { BrowserLifecycleService } from '../services/lifecycle/browser/lifecycle
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { EMPTY_WORKSPACE_ID_KEY } from '../services/host/browser/browserHostService.js';
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
+import { migrateAcademicWorkbenchSettings } from '../common/workbenchMode.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
 export async function createWebWorkbench(
@@ -43,10 +45,13 @@ export async function createWebWorkbench(
 	installBaseUiStyles();
 	const ownerWindow = options.container.ownerDocument.defaultView;
 	if (!ownerWindow) throw new Error('Workbench requires an owner window');
+	const conflicts = migrateBrowserStorage(ownerWindow.localStorage, 'academic', 'code');
+	if (conflicts.length > 0) { console.warn('Academic state migration retained conflicting entries', conflicts); }
 	return startWorkbench({
 		modeId,
 		createTextDocumentHost: options.createTextDocumentHost,
 		createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
+		createWorkingCopyBackupService: (_services, workspaceId) => new IndexedDbWorkingCopyBackupService(workspaceId),
 		createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 		configurationApi: options.configurationApi,
 		initialConfigurationSnapshot: options.initialConfigurationSnapshot,
@@ -88,7 +93,11 @@ export async function startWebWorkbench(
 	workbench.add(hostLifetime);
 	try {
 		const configurationApi = workbench.add(new IndexedDbConfigurationApi());
-		const initialConfigurationSnapshot = await configurationApi.read();
+		let initialConfigurationSnapshot = await configurationApi.read();
+		const migratedSource = migrateAcademicWorkbenchSettings(initialConfigurationSnapshot.document.source);
+		if (migratedSource !== undefined) {
+			initialConfigurationSnapshot = await configurationApi.update({ expectedRevision: initialConfigurationSnapshot.revision, document: { version: 1, source: migratedSource } });
+		}
 		const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> };
 		const browserFileSystemProvider = !host && picker.showDirectoryPicker && globalThis.indexedDB
 			? new HTMLFileSystemProvider(globalThis.indexedDB)

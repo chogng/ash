@@ -8,11 +8,48 @@ import { LifecycleMainService } from '../../../lifecycle/electron-main/lifecycle
 import { WindowMode, type IWindowBounds } from '../../../window/electron-main/window.js';
 import type { IAnyWorkspaceIdentifier } from '../../../workspace/common/workspace.js';
 import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } from '../../../workspaces/node/workspaces.js';
-import { WindowsMainService, windowOperationIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
+import { WindowsMainService, windowOperationIpcRoute, workspaceRecoveryIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
 import type { IOpenConfiguration } from '../../electron-main/windows.js';
 import { WINDOW_OPEN_FILES_CHANNEL, validateWindowFilesRequest, validateWindowFilesResponse } from '../../../window/common/window.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
+
+test('backup window IPC validates ordinary workspace identities before opening windows', async () => {
+	let restored: readonly IAnyWorkspaceIdentifier[] = [];
+	const route = workspaceRecoveryIpcRoute(async workspaces => { restored = workspaces; });
+	const identities = [{ id: 'empty' }, { id: 'folder', uri: 'file:///project' }, { id: 'multi', configPath: 'file:///project/test.ash-workspace' }];
+	await route.invoke(route.validate(identities));
+	assert.deepEqual(restored.map(workspace => workspace.id), ['empty', 'folder', 'multi']);
+	assert.throws(() => route.validate({ workspaces: identities }), TypeError);
+	assert.throws(() => route.validate([{ id: 'empty', content: 'must not enter Main' }]), /workspace identifier must contain exactly: id/);
+	assert.throws(() => route.validate([{ id: 'folder', uri: 'https://example.com/project' }]), /workspace folder uri/);
+});
+
+test('backup recovery opens each workspace once even when restored renderers request it again', async () => {
+	using service = createWindowsService(() => [], async () => undefined);
+	const identities = [{ id: 'empty-with-draft' }, getSingleFolderWorkspaceIdentifier(URI.file('C:\\project'))];
+	const opened: string[] = [];
+	const open = async (workspace: IAnyWorkspaceIdentifier) => {
+		opened.push(workspace.id);
+		await service.restoreWorkspaces(identities, open);
+		return new TestWindow(opened.length, workspace.id);
+	};
+	await service.restoreWorkspaces(identities, open);
+	await service.restoreWorkspaces(identities, open);
+	assert.deepEqual(opened.sort(), identities.map(workspace => workspace.id).sort());
+});
+
+test('failed backup window recovery retains other workspaces and permits a later attempt', async () => {
+	using service = createWindowsService(() => [], async () => undefined);
+	const opened: string[] = [];
+	const open = async (workspace: IAnyWorkspaceIdentifier) => { opened.push(workspace.id); return new TestWindow(opened.length, workspace.id); };
+	await assert.rejects(service.restoreWorkspaces([{ id: 'failed' }, { id: 'ready' }], async workspace => {
+		if (workspace.id === 'failed') throw new Error('injected window failure');
+		return open(workspace);
+	}), AggregateError);
+	await service.restoreWorkspaces([{ id: 'failed' }, { id: 'ready' }], open);
+	assert.deepEqual(opened, ['ready', 'failed']);
+});
 
 test('window restoration selection respects the setting, explicit target, and update restart', () => {
 	using service = createWindowsService(() => [], async () => undefined);

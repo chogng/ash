@@ -36,7 +36,7 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 	let closing: Promise<void> | undefined;
 	const close = (): Promise<void> => closing ??= (async () => {
 		const exited = electronProcess.exitCode !== null || electronProcess.signalCode !== null
-			? Promise.resolve() : new Promise<void>(resolveExit => electronProcess.once('close', () => resolveExit()));
+			? Promise.resolve() : new Promise<void>(resolveExit => electronProcess.once('exit', () => resolveExit()));
 		let termination: Promise<void> | undefined;
 		const shutdownTimer = setTimeout(() => { termination = terminateElectronProcess(electronProcess); }, 10_000);
 		try {
@@ -46,22 +46,21 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 					for (const window of BrowserWindow.getAllWindows()) window.destroy();
 				});
 			} finally {
-				await application.close();
+				// A daemon can retain inherited stdio after Electron exits. Stop it once
+				// renderers are gone instead of waiting for Node's pipe-close event first.
+				const stopDaemon = async (): Promise<void> => {
+					if (options.appServerMode !== 'required' || options.profileDirectory !== undefined) return;
+					const daemon = appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: options.packagedBundle !== undefined, platform: process.platform, resourcesPath: configuration.resourcesPath });
+					await promisify(execFile)(daemon, ['stop'], { env: { ...configuration.env, ASH_HOME: resolve(options.userDataDirectory, 'profile') }, windowsHide: true, timeout: 30_000 });
+				};
+				await Promise.all([application.close(), stopDaemon()]);
 			}
 		} catch (error) {
 			if (termination) throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated', { cause: error });
 			throw error;
 		} finally {
 			try { await exited; await termination; }
-			finally {
-				clearTimeout(shutdownTimer);
-				// The daemon stop command owns its own process-exit deadline. Run it
-				// after renderer exit and keep explicit shared profiles caller-owned.
-				if (options.appServerMode === 'required' && options.profileDirectory === undefined) {
-					const daemon = appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: options.packagedBundle !== undefined, platform: process.platform, resourcesPath: configuration.resourcesPath });
-					await promisify(execFile)(daemon, ['stop'], { env: { ...configuration.env, ASH_HOME: resolve(options.userDataDirectory, 'profile') }, windowsHide: true, timeout: 30_000 });
-				}
-			}
+			finally { clearTimeout(shutdownTimer); }
 		}
 		if (termination) throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
 	})();

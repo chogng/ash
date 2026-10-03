@@ -115,7 +115,7 @@ fn workflow_commands_run_dedicated_agents_through_rpc_and_require_user_acceptanc
         &server,
         &mut connection,
         "initialize",
-        serde_json::json!({"clientInfo":{"name":"workflow-test","version":"1"},"capabilities":{"textDocuments":{"version":1}}}),
+        serde_json::json!({"clientInfo":{"name":"workflow-test","version":"1"},"capabilities":{"textDocuments":{"version":2}}}),
     );
     let rejected = call(
         &server,

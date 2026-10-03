@@ -22,7 +22,7 @@ export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly
 		const connected = await connectWebRendererApi(transport, {
 			openerService: new BrowserOpenerService(window),
 			clipboardService: new BrowserClipboardService(window.navigator.clipboard),
-		}, { capabilities: textDocuments ? { textDocuments: { version: 1 } } : {} }, rendererCapabilities);
+		}, { capabilities: textDocuments ? { textDocuments: { version: 2 } } : {} }, rendererCapabilities);
 		globalThis.ashWebWorkbenchHost = {
 			api: connected.api,
 			webWorkspaceClient: new AppServerWebWorkspaceClient(endpoint, transport.sessionToken, window),

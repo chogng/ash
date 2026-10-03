@@ -143,7 +143,7 @@ test("Editor synchronous layers do not import Electron or generated DTOs", () =>
 	}
 });
 
-test("Flat editor layout keeps one TextModel owner and both mode bundles", () => {
+test("Flat editor layout keeps one TextModel owner and shared contributions", () => {
 	const requiredFiles = [
 		"browser/controller/dragScrolling.ts",
 		"browser/view/dynamicViewOverlay.ts",
@@ -296,7 +296,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/model/documentTransaction.ts",
 		"contrib/academic/common/schema.ts",
 		"editor.code.all.ts",
-		"editor.academic.all.ts",
 		"editor.all.ts",
 		"editor.api.ts",
 		"editor.main.ts",
@@ -604,7 +603,7 @@ test("Frontend lexical tokens stay independent of App Server syntax facts", () =
 	const syntaxAdapter = readFileSync(join(workbenchRoot, "services/language/browser/appServerSyntaxProviders.ts"), "utf8");
 	const sharedWorkbench = readFileSync(join(workbenchRoot, "browser/workbench.ts"), "utf8");
 	const codeContribution = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/code.contribution.ts"), "utf8");
-	const academicContribution = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/academic.contribution.ts"), "utf8");
+	const academicContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
 	const styling = readFileSync(join(editorRoot, "common/services/semanticTokensProviderStyling.ts"), "utf8");
 	assert.doesNotMatch(packageManifest, /tree-sitter/u);
 	assert.equal(existsSync(join(editorRoot, "common/services/treeSitter")), false);
@@ -624,16 +623,13 @@ test("Frontend lexical tokens stay independent of App Server syntax facts", () =
 	}
 });
 
-test("Window modes select independent Stanza feature implementations behind the shared Workbench entry", () => {
+test("Code Workbench composes code and Academic document contributions", () => {
 	const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
-	const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
 	const standardBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
 	assert.match(codeBundle, /editor\.all/u);
 	assert.doesNotMatch(codeBundle, /contrib\//u);
 	assert.doesNotMatch(codeBundle, /contrib\/academic/u);
-	assert.doesNotMatch(academicBundle, /editor\.all/u);
-	assert.match(academicBundle, /contrib\/documentEditor\.contribution/u);
-	assert.doesNotMatch(academicBundle, /workbench|academicEditor\.contribution/u);
+	assert.match(standardBundle, /contrib\/documentEditor\.contribution/u);
 	assert.match(standardBundle, /browser\/coreCommands/u);
 	assert.doesNotMatch(standardBundle, /codeEditorPart\.contribution/u);
 	assert.doesNotMatch(standardBundle, /editor\.(?:code|academic)\.all/u);
@@ -641,15 +637,14 @@ test("Window modes select independent Stanza feature implementations behind the 
 	const browserEntry = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench.ts"), "utf8");
 	const electronEntry = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench.ts"), "utf8");
 	const codeContribution = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/code.contribution.ts"), "utf8");
-	const academicContribution = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/academic.contribution.ts"), "utf8");
+	const academicContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
 	const electronCodeMode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/code.ts"), "utf8");
-	const electronAcademicMode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/academic.ts"), "utf8");
 	for (const entry of [browserEntry, electronEntry]) {
 		assert.match(entry, /__ASH_WORKBENCH_MODE__/u);
 		assert.match(entry, /resolveWorkbenchModeIdFromUrl/u);
 		assert.match(entry, /satisfies Record<WorkbenchModeId/u);
 		assert.match(entry, /modes\/code/u);
-		assert.match(entry, /modes\/academic/u);
+		assert.doesNotMatch(entry, /modes\/academic/u);
 		assert.doesNotMatch(entry, /if\s*\([^)]*(?:code|academic)/u);
 		assert.doesNotMatch(entry, /editor\/editor\.(?:code|academic)\.all/u);
 	}
@@ -661,13 +656,13 @@ test("Window modes select independent Stanza feature implementations behind the 
 	assert.match(codeContribution, /workbench\/contrib\/debug\/browser\/debug\.contribution/u);
 	assert.match(codeContribution, /codeWorkbenchServices/u);
 	assert.doesNotMatch(codeContribution, /editor\/editor\.academic\.all/u);
-	assert.match(academicContribution, /editor\/editor\.academic\.all/u);
-	assert.match(academicContribution, /workbench\/contrib\/academic\/browser\/academicEditor\.contribution/u);
+	assert.match(academicContribution, /registerEditorProfile/u);
+	assert.match(codeContribution, /workbench\/contrib\/academic\/browser\/academicEditor\.contribution/u);
+	assert.match(codeContribution, /workbench\/contrib\/documentEditor\/browser\/documentEditor\.contribution/u);
 	assert.doesNotMatch(academicContribution, /workbench\/contrib\/(?:tasks|testing|debug)/u);
 	assert.doesNotMatch(academicContribution, /workbench\/contrib\/extensionHost/u);
 	assert.doesNotMatch(academicContribution, /editor\/editor\.code\.all/u);
 	assert.match(electronCodeMode, /browser\/workbench\/modes\/code\.contribution/u);
-	assert.match(electronAcademicMode, /browser\/workbench\/modes\/academic\.contribution/u);
 });
 
 test("Code services are installed by mode-selected service registrations rather than UI contributions", () => {
@@ -690,18 +685,14 @@ test("Code services are installed by mode-selected service registrations rather 
 
 test("Code renderers select App Server debug transport without Electron debug IPC", () => {
 	const browserCode = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/code.ts"), "utf8");
-	const browserAcademic = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/academic.ts"), "utf8");
 	const electronCode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/code.ts"), "utf8");
-	const electronAcademic = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/academic.ts"), "utf8");
 	const main = readFileSync(resolve(editorRoot, "../code/electron-main/main.ts"), "utf8");
 	const sharedElectronRenderer = readFileSync(resolve(editorRoot, "../platform/native/electron-browser/rendererApi.ts"), "utf8");
 	const sharedDisconnectedRenderer = readFileSync(resolve(editorRoot, "../platform/app-server/browser/rendererApi.ts"), "utf8");
 	const sharedConnectedRenderer = readFileSync(resolve(editorRoot, "../platform/app-server/browser/webRendererApi.ts"), "utf8");
 	const sharedElectronMain = readFileSync(resolve(editorRoot, "../code/electron-main/app.ts"), "utf8");
 	assert.match(browserCode, /createAppServerDebugAdapterCapability/u);
-	assert.doesNotMatch(browserAcademic, /DebugAdapter|debugAdapter/u);
 	assert.match(electronCode, /createAppServerDebugAdapterCapability/u);
-	assert.doesNotMatch(electronAcademic, /DebugAdapter|debugAdapter/u);
 	assert.doesNotMatch(main, /debugAdapterIpcRoutes/u);
 	const debugAdapter = readFileSync(resolve(editorRoot, "../platform/debug/browser/appServerDebugAdapterProcessService.ts"), "utf8");
 	assert.match(debugAdapter, /implements IDebugAdapterProcessService/u);
@@ -709,7 +700,7 @@ test("Code renderers select App Server debug transport without Electron debug IP
 	for (const sharedHost of [sharedElectronRenderer, sharedDisconnectedRenderer, sharedConnectedRenderer, sharedElectronMain]) assert.doesNotMatch(sharedHost, /new (?:Electron|Disconnected|ViteDev)DebugAdapterProcessService|debugAdapterIpcRoutes/u);
 });
 
-test("Editor engines delegate optional feature composition to mode bundles", () => {
+test("Editor widgets delegate optional feature composition to contributions", () => {
 	const textHost = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
 	const coreCommands = readFileSync(join(editorRoot, "browser/coreCommands.ts"), "utf8");
 	const findContribution = readFileSync(join(editorRoot, "contrib/find/browser/findController.ts"), "utf8");
@@ -720,7 +711,6 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	const academicPaneContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
 	const textModel = readFileSync(join(editorRoot, "common/model/textModel.ts"), "utf8");
 	const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
-	const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
 	const standardBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
 	const editorExtensionRegistry = readFileSync(join(editorRoot, "browser/editorExtensions.ts"), "utf8");
 	const codeEditorContributions = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorContributions.ts"), "utf8");
@@ -764,7 +754,6 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.match(standardBundle, /contrib\/clipboard\/browser\/clipboard\.js/u);
 	assert.match(standardBundle, /contrib\/folding\/browser\/folding\.js/u);
 	assert.doesNotMatch(codeBundle, /contrib\//u);
-	assert.match(academicBundle, /documentEditor\.contribution/u);
 	assert.doesNotMatch(codePaneContribution, /codeEditorPart\.contribution/u);
 	assert.doesNotMatch(documentHost, /from\s+["'][^"']*\/contrib\/(?:formatting|collaboration)\/browser\//u);
 	assert.match(documentHost, /getEditorContributions/u);
@@ -784,7 +773,6 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.match(documentHost, /case "codeBlock":[\s\S]*appendEditableText/u);
 	assert.doesNotMatch(documentHost, /new TextModel|TextModel\.createStructured/u);
 	assert.doesNotMatch(standardBundle, /codeEditorPart\.contribution/u);
-	assert.match(academicBundle, /documentEditor\.contribution/u);
 });
 
 test("Multi-diff keeps generic projection in Editor and product integration in Workbench", () => {

@@ -1,4 +1,5 @@
 import { EDIT_USER_HOOKS_CONFIGURATION_CHANNEL } from '../../hooks/common/hooksIpc.js';
+import { AppServerBackupService } from '../../backup/browser/appServerBackupService.js';
 import { AppServerCallService } from '../../call/browser/appServerCallService.js';
 import { AppServerDictationService } from '../../dictation/browser/appServerDictationService.js';
 import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
@@ -53,7 +54,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		void connecting.catch(error => console.error('App Server reconnect failed', error));
 	}));
 	// Initialization includes the local daemon's cold start, which can take 15 seconds.
-	const client = new AppServerProtocolClient(transport, { clientName: 'ash-desktop', initializeTimeoutMs: 30_000, capabilities: { ...(hostCapabilities.browser ? { browser: { version: 1, observe: true, input: true } } : {}), ...(hostCapabilities.textDocuments ? { textDocuments: { version: 1 } } : {}), dirPermissionsHost: { version: 1 } } });
+	const client = new AppServerProtocolClient(transport, { clientName: 'ash-desktop', initializeTimeoutMs: 30_000, capabilities: { ...(hostCapabilities.browser ? { browser: { version: 1, observe: true, input: true } } : {}), ...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}), dirPermissionsHost: { version: 1 } } });
 	resources.add(toDisposable(() => client.dispose()));
 	if (hostCapabilities.browser) { resources.add(registerAppServerBrowserHost(client)); }
 	resources.add(registerAppServerWorkspaceHost(client, () => connecting, workspaceTrust));
@@ -111,6 +112,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				},
 				clipboardService: new ElectronRendererClipboardService(),
 			}, contributions);
+			backend = { ...backend, backup: new AppServerBackupService(client, 'ash-editor') };
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }
 			if (client.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(client)) }; }

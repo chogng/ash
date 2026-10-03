@@ -3,6 +3,15 @@ import type { IConfigurationService } from '../../configuration/common/configura
 import { createSshRemoteAuthority } from '../../remote/common/remote.js';
 import { isRecord } from '../../../base/common/types.js';
 import { URI } from '../../../base/common/uri.js';
+import { parseWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../workspace/common/workspace.js';
+
+export const WORKSPACE_RECOVERY_CHANNEL = 'ash:window:restoreWorkspaces';
+
+/** Backend catalog readers request windows using ordinary workspace identities only. */
+export function validateWorkspaceRecovery(value: unknown): readonly IAnyWorkspaceIdentifier[] {
+	if (!Array.isArray(value)) throw new TypeError('Invalid workspace recovery request');
+	return value.map(parseWorkspaceIdentifier);
+}
 
 export interface IColorScheme { readonly dark: boolean; readonly highContrast: boolean; }
 export const HOST_RESTART_CHANNEL = 'ash:host:restart';

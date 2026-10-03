@@ -1,3 +1,4 @@
+import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import { CancellationError, isCancellationError } from "../../../../base/common/errors.js";
@@ -78,7 +79,7 @@ export interface EditorGroupOptions {
 	readonly onSave?: (group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
 	readonly onWillCloseEditor?: (group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
-	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
+	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>;
 	readonly titleActions?: EditorHeaderActions;
 	readonly showBreadcrumbPicker?: (element: FileElement, openFile: (resource: URI) => Promise<void>) => void;
 	readonly breadcrumbsService?: IBreadcrumbsService;
@@ -143,7 +144,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private readonly onSave: ((group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
 	private readonly onWillCloseEditor: ((group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
 	private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
-	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined;
+	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>) | undefined;
 	private readonly titleActions: EditorHeaderActions | undefined;
 	private readonly resolveOpenError: EditorGroupOptions["resolveOpenError"];
 	private readonly onWillOpenEditor: EditorGroupOptions["onWillOpenEditor"];

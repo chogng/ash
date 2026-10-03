@@ -1,3 +1,6 @@
+import type { IBulkEditOptions } from '../../../browser/services/bulkEditService.js';
+import { EditSources } from '../../../common/textModelEditSource.js';
+import { localize } from '../../../../nls.js';
 import './renameWidget.css';
 import { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand, registerEditorContribution, type ServicesAccessor, type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
 import { addDisposableListener, getActiveElement, isNode, stopEvent, h } from '../../../../base/browser/dom.js';
@@ -38,7 +41,7 @@ class RenameController extends Disposable {
 		private readonly editorInput: HTMLElement,
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
-		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit) => void | Promise<void>) | undefined,
+		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>) | undefined,
 		private readonly onError: (error: unknown) => void,
 		private readonly executeCommand: EditorCommandExecutor,
 		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
@@ -191,7 +194,13 @@ class RenameController extends Disposable {
 				if (!languages.isLanguageFeatureRequestCurrent(context)) return;
 				if (this.applyWorkspaceEdit) {
 					editDispatched = true;
-					await this.applyWorkspaceEdit(edit);
+					await this.applyWorkspaceEdit(edit, {
+						editor: this.editor,
+						label: localize('bulkEdit.renameLabel', 'Rename to {0}', newName),
+						code: 'undoredo.rename',
+						respectAutoSaveConfig: true,
+						reason: EditSources.rename(undefined, newName),
+					});
 					return;
 				}
 				if (edit.entries.length === 0) return;

@@ -1,5 +1,8 @@
 use crate::server::notification_queue::NotificationQueue;
 use ash_app_server_protocol::protocol::registry::HostMethod;
+use ash_app_server_protocol::protocol::registry::ServerNotificationMethod;
+use ash_app_server_protocol::protocol::text_document::TextDocumentTurnFinished;
+use ash_app_server_protocol::protocol::text_document::TextDocumentTurnOutcome;
 use ash_app_server_protocol::rpc::JsonRpcError;
 use ash_app_server_protocol::rpc::JsonRpcId;
 use ash_app_server_protocol::rpc::JsonRpcNotification;
@@ -185,11 +188,40 @@ impl ClientHost {
         Ok(receipt)
     }
 
-    pub(crate) fn finish_turn(&self, thread: &ash_protocol::ThreadId, turn: &ash_protocol::TurnId) {
-        self.turns
+    pub(crate) fn finish_turn(
+        &self,
+        thread: &ash_protocol::ThreadId,
+        turn: &ash_protocol::TurnId,
+        outcome: TextDocumentTurnOutcome,
+    ) {
+        let binding = self
+            .turns
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&(thread.clone(), turn.clone()));
+            .remove(&(thread.clone(), turn.clone()))
+            .flatten();
+        if let Some(binding) = binding.filter(|binding| binding.text_documents) {
+            let state = self
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(owner) = state.owners.get(&binding.connection_id) {
+                let notification = JsonRpcNotification::new(
+                    ServerNotificationMethod::TextDocumentTurnFinished
+                        .as_str()
+                        .to_owned(),
+                    serde_json::to_value(TextDocumentTurnFinished {
+                        thread_id: thread.clone(),
+                        turn_id: turn.clone(),
+                        outcome,
+                    })
+                    .expect("text document Turn result serializes"),
+                );
+                owner
+                    .outbound
+                    .push(serde_json::to_value(notification).expect("notification serializes"));
+            }
+        }
     }
 
     pub(crate) fn binding(

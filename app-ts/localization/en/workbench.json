@@ -72,7 +72,7 @@
 		"bulkEdit.existingOverwrite": "overwrite",
 		"bulkEdit.groupByFile": "Group by file",
 		"bulkEdit.groupByType": "Group by type",
-		"bulkEdit.help": "Refactor preview\nUse Tab and Shift+Tab to move between changes and actions. Press Space to select a change. File operations and dependent text changes are selected together. Expand Show text change to review the selected replacements. Group by file or type to organize the changes. Press Ctrl or Command+Enter to apply selected changes. Press Escape to cancel. Changes to the source files disable Apply; cancel and run the refactoring again. Press Alt+F2 to read the full changes.",
+		"bulkEdit.help": "Refactor preview\nUse Tab and Shift+Tab to move between changes and actions. Press Space to select a change. File operations and dependent text changes are selected together. Choose Open changes to review the selected replacements in a diff editor, or expand Show text change. Group by file or type to organize the changes. Press Ctrl or Command+Enter to apply selected changes. Press Escape to cancel. Changes to the source files disable Apply; cancel and run the refactoring again. Press Alt+F2 to read the full changes.",
 		"bulkEdit.helpHint": "Press Alt+F1 for refactor preview help. Press Alt+F2 to read all changes.",
 		"bulkEdit.invalidRange": "The edit range is outside the document.",
 		"bulkEdit.lineChanges": "{0} → {1} lines",
@@ -107,7 +107,10 @@
 		"bulkEdit.textEditSummary": "{0} text edits · {1}",
 		"bulkEdit.title": "Refactor Preview",
 		"bulkEdit.verbosityDescription": "Announce how to open accessibility help in the refactor preview.",
-		"bulkEdit.verbosityTitle": "Refactor preview accessibility help"
+		"bulkEdit.verbosityTitle": "Refactor preview accessibility help",
+		"editor.document.name": "Stanza Document",
+		"settings.chatEditing.label": "Editing",
+		"settings.chatEditing.description": "Choose how Agent edits are reviewed."
 	},
 	"ash.views": {
 		"explorer": "Explorer",

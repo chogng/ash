@@ -14,7 +14,8 @@
 
 .ash-chat-editing-overlay[hidden] { display: none; }
 
-.ash-chat-editing-count {
+.ash-chat-editing-count,
+.ash-chat-editing-auto-accept {
 	flex-shrink: 0;
 	font-variant-numeric: tabular-nums;
 }

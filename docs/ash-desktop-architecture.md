@@ -342,6 +342,13 @@ Workbench 的 `workbench.editor.restoreEditors` 默认开启。`WorkbenchLayout`
 `EditorParts` 将主编辑器与独立编辑器窗口的标签页、分组、激活项和视图状态保存在各自工作区的状态中，并在窗口重新打开时恢复。
 关闭该选项只跳过常规编辑器状态；未保存内容仍从工作副本备份恢复。
 
+连接共享 Rust 后端的 Electron 编辑器把未保存内容写入 profile SQLite，使用稳定的工作区 ID
+和完整资源 URI。Renderer 负责序列化、恢复编辑器及旧 IndexedDB 内容迁移，Rust 负责原子保存、
+版本冲突和备份目录。启动时 Renderer 查询待恢复的工作区，Main 只负责打开窗口，因此
+`window.restoreWindows: none` 仍会恢复含未保存内容的工作区。保存或放弃修改按已观察的版本删除备份，
+恢复失败不消费正文。浏览器和无后端 UI 模式仍使用 IndexedDB。
+共享协议及其他客户端的接入状态见 [备份约定](../ash-rs/app-server-protocol/README.md#未保存内容备份)。
+
 Renderer 通过受信 IPC route 和 `workspace.getWorkspace()` 读取该身份，并在
 `parseWorkspaceIdentifier()` 校验和恢复 URI。`WorkspaceContextService` 根据该标识构造当前
 `IWorkspace`，并从 `configuration` 或单根 `folders` 推导 `WorkbenchState`。Workbench
@@ -376,8 +383,8 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
   Renderer 尚未接入保存、自动刷新、选择模型或键盘导航。Search contrib 已能展示单根
   workspace 内容结果，但尚不能打开文件；
 - 最近项目和 workspace 配置管理尚未实现；
-- 空窗口 backup service 尚未实现，因此当前启动路径没有可传给 `WindowsStateHandler` 的
-  `backupPath`，无备份的空窗口只能使用 last-active fallback；
+- 空窗口的未保存内容已由共享 Rust 备份服务保存和恢复；恢复身份使用工作区 ID，
+  不依赖磁盘 `backupPath`；
 - 启动目标无效时记录错误并安全回退到空窗口。
 
 ## 5. 沙箱桥接与 Renderer API

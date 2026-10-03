@@ -7,7 +7,7 @@ import { WorkbenchConfiguration } from '../../../../common/configuration.js';
 import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
 import { WorkbenchModeService } from '../../browser/workbenchModeService.js';
 
-test('Workbench mode switch persists the id before shutdown and host reload', async () => {
+test('selecting Code keeps the current window and configuration', async () => {
 	using configuration = new WorkbenchConfigurationService();
 	const actions: string[] = [];
 	const lifecycle = lifecycleService(reason => actions.push(`shutdown:${reason}`));
@@ -18,10 +18,10 @@ test('Workbench mode switch persists the id before shutdown and host reload', as
 		switchHostMode: async modeId => { actions.push(`host:${modeId}`); },
 	});
 
-	await service.switchMode(WorkbenchModeId.Academic);
+	await service.switchMode(WorkbenchModeId.Code);
 
-	assert.equal(configuration.getValue(WorkbenchConfiguration.mode), WorkbenchModeId.Academic);
-	assert.deepEqual(actions, ['shutdown:reload', 'host:academic']);
+	assert.equal(configuration.getValue(WorkbenchConfiguration.mode), WorkbenchModeId.Code);
+	assert.deepEqual(actions, []);
 });
 
 test('Workbench mode options come from the canonical registry', () => {
@@ -35,7 +35,6 @@ test('Workbench mode options come from the canonical registry', () => {
 
 	assert.deepEqual(service.availableModes, [
 		{ id: WorkbenchModeId.Code, label: 'Code' },
-		{ id: WorkbenchModeId.Academic, label: 'Academic' },
 	]);
 });
 
@@ -43,23 +42,23 @@ test('selecting the active Workbench mode is a no-op', async () => {
 	using configuration = new WorkbenchConfigurationService();
 	const actions: string[] = [];
 	using service = new WorkbenchModeService({
-		currentModeId: WorkbenchModeId.Academic,
+		currentModeId: WorkbenchModeId.Code,
 		configurationService: configuration,
 		lifecycleService: lifecycleService(reason => actions.push(`shutdown:${reason}`)),
 		switchHostMode: async modeId => { actions.push(`host:${modeId}`); },
 	});
 
-	await service.switchMode(WorkbenchModeId.Academic);
+	await service.switchMode(WorkbenchModeId.Code);
 
 	assert.deepEqual(actions, []);
 });
 
-test('resetting Workbench mode removes the override before reloading the default mode', async () => {
+test('resetting the only mode removes its override without reloading', async () => {
 	using configuration = new WorkbenchConfigurationService();
-	await configuration.updateValue(WorkbenchConfiguration.mode, WorkbenchModeId.Academic);
+	await configuration.updateValue(WorkbenchConfiguration.mode, WorkbenchModeId.Code);
 	const actions: string[] = [];
 	using service = new WorkbenchModeService({
-		currentModeId: WorkbenchModeId.Academic,
+		currentModeId: WorkbenchModeId.Code,
 		configurationService: configuration,
 		lifecycleService: lifecycleService(reason => actions.push(`shutdown:${reason}`)),
 		switchHostMode: async modeId => { actions.push(`host:${modeId}`); },
@@ -68,7 +67,7 @@ test('resetting Workbench mode removes the override before reloading the default
 	await service.resetMode();
 
 	assert.equal(configuration.getValue(WorkbenchConfiguration.mode), WorkbenchModeId.Code);
-	assert.deepEqual(actions, ['shutdown:reload', 'host:code']);
+	assert.deepEqual(actions, []);
 });
 
 function lifecycleService(onShutdown: (reason: ShutdownReason) => void): ILifecycleService {

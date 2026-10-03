@@ -50,6 +50,13 @@ import type { AutomationRunsParams } from './types/AutomationRunsParams.js';
 import type { AutomationRunsResult } from './types/AutomationRunsResult.js';
 import type { AutomationStopParams } from './types/AutomationStopParams.js';
 import type { AutomationWriteParams } from './types/AutomationWriteParams.js';
+import type { BackupDiscardParams } from './types/BackupDiscardParams.js';
+import type { BackupListParams } from './types/BackupListParams.js';
+import type { BackupListResult } from './types/BackupListResult.js';
+import type { BackupRecordDto } from './types/BackupRecordDto.js';
+import type { BackupWorkspacesParams } from './types/BackupWorkspacesParams.js';
+import type { BackupWorkspacesResult } from './types/BackupWorkspacesResult.js';
+import type { BackupWriteParams } from './types/BackupWriteParams.js';
 import type { CallControlParams } from './types/CallControlParams.js';
 import type { CallEndParams } from './types/CallEndParams.js';
 import type { CallInvitation } from './types/CallInvitation.js';
@@ -703,6 +710,10 @@ export interface AppServerRequestMap {
   "fs/getMetadata": { params: FsGetMetadataParams; response: FsGetMetadataResult };
   "fs/readDirectory": { params: FsReadDirectoryParams; response: FsReadDirectoryResult };
   "fs/readFile": { params: FsReadFileParams; response: FsReadFileResult };
+  "backup/workspaces": { params: BackupWorkspacesParams; response: BackupWorkspacesResult };
+  "backup/list": { params: BackupListParams; response: BackupListResult };
+  "backup/write": { params: BackupWriteParams; response: BackupRecordDto };
+  "backup/discard": { params: BackupDiscardParams; response: null };
   "fs/readBinaryFile": { params: FsReadBinaryFileParams; response: FsReadBinaryFileResult };
   "diff/compute": { params: DiffComputeParams; response: DiffComputeResult };
   "syntax/open": { params: SyntaxOpenParams; response: null };
@@ -1056,6 +1067,10 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "fs/getMetadata": { method: "fs/getMetadata" },
   "fs/readDirectory": { method: "fs/readDirectory" },
   "fs/readFile": { method: "fs/readFile" },
+  "backup/workspaces": { method: "backup/workspaces" },
+  "backup/list": { method: "backup/list" },
+  "backup/write": { method: "backup/write" },
+  "backup/discard": { method: "backup/discard" },
   "fs/readBinaryFile": { method: "fs/readBinaryFile" },
   "diff/compute": { method: "diff/compute" },
   "syntax/open": { method: "syntax/open" },

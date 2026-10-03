@@ -1,5 +1,51 @@
 # Editor API 对齐状态
 
+## Chat 编辑自动接受
+
+`chat.editing.autoAcceptDelay` 使用上游设置键与 0–100 秒范围，WINDOW 作用域，默认 0（手动审核）。对应 `chat/browser/chat.shared.contribution.ts` 注册真实配置，现有设置页 Chat → Defaults 展示并保存到 settings.json。Chat Editing 服务管理审阅、计时与取消，编辑器工具栏显示剩余秒数；审核列表支持取消已关闭文件和整批文件操作的自动接受。计时更新不重建差异区域和已聚焦的工具栏操作。
+
+Ash 文档宿主按修改来源的 Thread／Turn 标识等待回复完成；多个回复共同产生的原子文件操作须全部完成后才计时。失败、中断和用户取消计时保留手动审核，新工具修改重新等待对应回复。后端只传递来源与结束状态，向发起该 Turn 的唯一文档连接通知；设置与接受策略留在窗口的 Chat Editing 服务。这是用户确认的 Ash 宿主接入扩展，服务接口没有虚报成上游 observable AutoAcceptController 的完整签名。
+
+
+## 批量编辑执行与预览归属（2026-10-03）
+
+当前文本和文件批量编辑链已经归到 `workbench/contrib/bulkEdit`：Rename / Code Action → 编辑器宿主回调 → `IBulkEditService.apply` → `BulkEditService` → 共享文本模型、工作副本及文件服务。Workbench 和 Sessions 通过实例化服务创建同一个执行实现。App Server 文档审阅继续管理自己的审阅基线，复用批量事务；没有另设编辑事务服务。
+
+| 文件与契约 | 状态及实际行为 |
+| --- | --- |
+| `editor/browser/services/bulkEditService.ts` | 接受标准 `WorkspaceEdit`、`ResourceEdit[]` 及已有语言服务的顺序编辑；`ResourceEdit.convert` 保留每一步快照。成功结果保留 Ash 的资源清单和精确撤销闭包。快照字段是为保留已确认的 Ash 顺序编辑语义而增加的扩展，不计为上游同签名契约 |
+| `workbench/contrib/bulkEdit/browser/bulkEditService.ts` | 唯一事务 owner；先校验全部资源，再按顺序执行，失败时反向回滚。保留版本与内容快照、原始坐标、BOM / EOL、关闭文档保存、取消、进度及撤销冲突检查 |
+| `bulkTextEdits.ts`、`bulkFileEdits.ts` | 对应路径已补齐，生产事务直接消费；分别执行共享模型步骤和文件创建、移动、删除步骤，并记录逆操作。目录和二进制文件不在当前语言事务契约内 |
+| `preview/bulkEditPreview.ts` | `BulkFileOperations` 唯一管理预览快照、`CheckedStates`、依赖选择与冲突生命周期。旧公开预览模型退出；面板不再保存另一份选择状态 |
+| `preview/bulkEditPane.ts`、`bulkEdit.contribution.ts` | `setInput` 和确认结果使用 `ResourceEdit[]`；注册应用、取消、选择和分组命令及上下文键。共享 Button 管理按钮样式，保留键盘、焦点恢复、无障碍帮助、英文及中文文案 |
+| 预览差异 | 通过既有 `IEditorService` 打开 MultiDiff 的只读前后快照，内容反映打开时的选择。已打开的差异不会随之后的勾选变化更新；尚未对齐上游树形分类和实时预览模型提供者 |
+| 自动保存与编辑来源 | Rename / Code Action 沿宿主回调传入 `respectAutoSaveConfig`、标签和编辑来源。`files.refactoring.autoSave` 默认开启，由现有配置 registry、作用域及 `settings.json` 管理；保存失败单独报告，已应用的编辑与撤销仍保留 |
+| 撤销组 | 同一 `undoRedoGroupId` 的事务可以合并撤销；先检查所有最终快照，再逆序恢复。支持 `confirmBeforeUndo`。尚未接入平台统一的 UndoRedoService / UndoRedoSource，不能据此声称完整撤销 API 已对齐 |
+
+用户明确确认迁移职责并删除以下两个仅 Ash 旧文件，生产和测试调用同步迁移，Git 保留历史：
+
+- `app-ts/src/ash/workbench/services/language/browser/browserWorkspaceEditService.ts`
+- `app-ts/src/ash/workbench/services/language/common/workspaceEditService.ts`
+
+旧服务、旧导入及旧公开预览模型已无调用方。`toLanguageWorkspaceEdit` 仍是批量事务与预览共用的内部步骤准备函数，用于保存现有语言服务的顺序快照；它不是上游标准转换 API。没有为无生产调用边的 Notebook、opaque edit 或树形组件提前建文件，整个目录仍不计为完整 VS Code API 对齐。
+
+验证：7 个文件共 101 项定向单测通过，覆盖实际服务装配、事务、回滚、撤销、预览、命令、配置、Rename / Code Action 及 App Server 文档审阅；36 项相关 Chromium 场景通过，包括部分选择、键盘焦点与真实 MultiDiff 只读差异。完整测试与浏览器测试编译、Renderer 生产构建、Host 构建和语言目录检查通过；Web 与 Electron UI 各 1 项输入撤销冒烟通过。连接 App Server 的 Electron 冒烟两次都在进程及临时目录清理阶段失败，出现 teardown 超时和 EBUSY，未计为通过。
+
+## Academic 文档贡献归属（2026-10-03）
+
+Academic 已退出顶层工作台模式。通用 `workbench/contrib/documentEditor/browser/documentEditor.contribution.ts` 唯一注册文档 pane；`workbench/contrib/academic/browser/academicEditor.contribution.ts` 只登记论文配置。Academic 内容类型归 `workbench/contrib/academic/common/documentTypes.ts`，通用类型注册及文档模型服务契约归 `workbench/services/documentEditor/common/documentTypes.ts`。这些职责是 Ash 专属文档能力，不计为 VS Code API 对齐。
+
+用户已确认删除以下无上游对应的旧模式文件，调用方同批迁移，Git 保留历史：
+
+- `code/browser/workbench/modes/academic.ts`
+- `code/browser/workbench/modes/academic.contribution.ts`
+- `code/electron-browser/workbench/modes/academic.ts`
+- `editor/editor.academic.all.ts`
+
+上述路径均相对于 `app-ts/src/ash`。共同入口 `editor.all.ts` 装配富文档贡献。文档模型服务由 Workbench 注入，按资源共享模型、工作副本和保存修订；Pane 仅持有引用，最后一个视图关闭才释放模型。旧模式配置、URL 及存储在启动边界一次性迁移到 Code，冲突值保留。
+
+验证：103 项文档、路由、模式、标题、存储及本地化单测，33 项 Editor 架构测试，2 项窗口测试与 3 项启动构建工具测试通过；完整测试 TypeScript 编译、Stanza 类型检查与正常 Host/Renderer 构建通过。Playwright 的 6 项富文档 Chromium 用例、2 项 Web 工作台用例和 5 项 Electron UI/启动迁移用例通过。Electron 后端论文打开、编辑、保存及代码标签切换断言通过，但整项因关闭应用超时及临时工作区锁定失败；只启动不打开论文的后端场景同样在退出阶段失败，未计为通过。最终结构检查、CSS 所有权检查及 diff 检查通过，无新增品牌或样式问题。
+
 ## Code Action 共享动作菜单（2026-10-02）
 
 Quick Fix 的生产调用已经接入 `platform/actionWidget/browser/actionWidget.ts` 与 `actionList.ts`。`ActionWidgetService` 管理当前菜单，复用现有 `ContextView` 的定位、视口裁剪与外部点击关闭；`ActionList` 管理类型化动作及异步执行的忙碌状态，复用 `Menu` 的按钮、禁用态和键盘导航。Code Action 控制器继续管理提供者、原始 action、快照、取消与编辑提交，滚动或布局变化会关闭菜单。
@@ -1980,7 +2026,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/wordHighlighter/browser/wordHighlighter.contribution.ts` | 1 / 1 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
 | `contrib/wordWrap/browser/wordWrapController.ts` | 1 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
 | `contrib/zoneWidget/browser/zoneWidget.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
-| `editor.academic.all.ts` | 1 / 1 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `editor.academic.all.ts` | 已退场 | 2026-10-03 经用户确认删除；文档贡献由 `editor.all.ts` 装配。 |
 | `editor.all.ts` | 2 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `editor.api.ts` | 1 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `editor.code.all.ts` | 1 / 4 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
