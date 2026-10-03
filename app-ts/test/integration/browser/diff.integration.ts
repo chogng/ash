@@ -101,6 +101,14 @@ const harness = {
 	selectModified(range: [number, number, number, number]): void {
 		single.modifiedEditor.setSelection(new Range(...range));
 	},
+	editModified(range: [number, number, number, number], text: string): void {
+		single.modifiedEditor.pushUndoStop();
+		single.modifiedEditor.executeEdits('integration', [{ range: new Range(...range), text }]);
+		single.modifiedEditor.pushUndoStop();
+	},
+	exitCompareMove(): void {
+		single.exitCompareMove();
+	},
 	undo(): void { modified.undo(); },
 	scrollModified(top: number): void { single.modifiedEditor.setScrollTop(top); },
 	setViewMode(renderSideBySide: boolean, useInlineViewWhenSpaceIsLimited: boolean, inlineBreakpoint: number): void {

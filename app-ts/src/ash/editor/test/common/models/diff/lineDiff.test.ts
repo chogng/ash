@@ -36,6 +36,47 @@ suite('Frontend line diff', () => {
 		]);
 	});
 
+	test('detects moved code with edits and added lines using document coordinates', () => {
+		const block = ['function load(input) {', '  const value = parse(input);', '  return value;', '}'];
+		const edited = ['function load(input) {', '  const value = parse(updated);', '  log(value);', '  return value;', '}'];
+		const stay = Array.from({ length: 6 }, (_, index) => `stay ${index}`);
+		const original = ['head', ...block, ...stay, 'tail'];
+		const modified = ['head', ...stay, ...edited, 'tail'];
+		const options = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: true };
+		const diff = new DefaultLinesDiffComputer().computeDiff(original, modified, options);
+		assert.deepEqual(diff.moves.map(move => ({
+			original: [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.original.endLineNumberExclusive],
+			modified: [move.lineRangeMapping.modified.startLineNumber, move.lineRangeMapping.modified.endLineNumberExclusive],
+			changes: move.changes.map(change => [change.original.startLineNumber, change.original.endLineNumberExclusive, change.modified.startLineNumber, change.modified.endLineNumberExclusive]),
+		})), [{ original: [2, 6], modified: [8, 13], changes: [[3, 4, 9, 11]] }]);
+		const inner = diff.moves[0]!.changes[0]!.innerChanges!;
+		assert.ok(inner.length > 0 && inner.every(change => change.originalRange.startLineNumber === 3 && change.modifiedRange.startLineNumber === 9));
+		const move = diff.moves[0]!;
+		const displayed = toLineDiff({ changes: move.changes, moves: [move] }, original.length, modified.length, move.lineRangeMapping);
+		assert.deepEqual(displayed.rows.map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
+			['unchanged', 1, 7], ['modified', 2, 8], ['added', undefined, 9], ['unchanged', 3, 10], ['unchanged', 4, 11],
+		]);
+		assert.deepEqual(new DefaultLinesDiffComputer().computeDiff(original, modified, { ...options, computeMoves: false }).moves, []);
+	});
+
+	test('does not infer moves from in-place edits or shared punctuation', () => {
+		const computer = new DefaultLinesDiffComputer();
+		const options = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: true };
+		assert.deepEqual(computer.computeDiff(['const before = 1;', '}'], ['const after = 2;', '}'], options).moves, []);
+		assert.deepEqual(computer.computeDiff(['aaa();', '{', '}', 'keep 1', 'keep 2', 'keep 3'], ['keep 1', 'keep 2', 'keep 3', 'bbb();', '{', '}'], options).moves, []);
+	});
+
+	test('keeps multiple moved blocks disjoint and honors whitespace comparison', () => {
+		const first = ['alpha one', 'alpha two'];
+		const second = ['beta one', 'beta two'];
+		const middle = Array.from({ length: 8 }, (_, index) => `stable ${index}`);
+		const options = { ignoreTrimWhitespace: true, maxComputationTimeMs: 0, computeMoves: true };
+		const diff = new DefaultLinesDiffComputer().computeDiff([...first, 'separator', ...second, ...middle], ['separator', ...middle, ...first.map(line => `  ${line}`), 'new separator', ...second], options);
+		assert.equal(diff.moves.length, 2);
+		assert.deepEqual(diff.moves.map(move => move.changes), [[], []]);
+		assert.ok(diff.moves[0]!.lineRangeMapping.original.endLineNumberExclusive <= diff.moves[1]!.lineRangeMapping.original.startLineNumber);
+	});
+
 	test('preserves empty documents and trailing empty lines', async () => {
 		for (const [original, modified, kinds] of [
 			['', '', ['unchanged']],

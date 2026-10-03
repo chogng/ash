@@ -13,6 +13,8 @@ export class OverviewRulerFeature extends Disposable {
 	public static readonly ENTIRE_DIFF_OVERVIEW_WIDTH = OverviewRulerFeature.ONE_OVERVIEW_WIDTH * 2;
 	private enabled = true;
 	private rows: readonly LineDiffRow[] = [];
+	private originalVersion = 0;
+	private modifiedVersion = 0;
 	public get width(): number {
 		return this.enabled ? OverviewRulerFeature.ENTIRE_DIFF_OVERVIEW_WIDTH : 0;
 	}
@@ -45,7 +47,7 @@ export class OverviewRulerFeature extends Disposable {
 		this.rootElement.append(this.domNode);
 		for (const editor of [original, modified]) {
 			this._register(editor.onDidLayoutChange(() => {
-				this.setRows(this.rows);
+				this.renderRows();
 				this.updateViewport(this.modified.getContentHeight(), this.modified.getScrollTop());
 			}));
 		}
@@ -62,6 +64,15 @@ export class OverviewRulerFeature extends Disposable {
 
 	public setRows(rows: readonly LineDiffRow[]): void {
 		this.rows = rows;
+		this.originalVersion = this.original.getModel()!.getVersionId();
+		this.modifiedVersion = this.modified.getModel()!.getVersionId();
+		this.renderRows();
+	}
+
+	private renderRows(): void {
+		// Text layout changes before the new diff arrives; old rows belong to the old versions.
+		const rows = this.originalVersion === this.original.getModel()!.getVersionId()
+			&& this.modifiedVersion === this.modified.getModel()!.getVersionId() ? this.rows : [];
 		reset(this.originalLane, createMarkers(this.domNode.ownerDocument, rows, 'original', this.original));
 		reset(this.modifiedLane, createMarkers(this.domNode.ownerDocument, rows, 'modified', this.modified));
 	}
@@ -75,12 +86,11 @@ export class OverviewRulerFeature extends Disposable {
 	public layout(size: IDimension): void {
 		this.viewportWidth = size.width;
 		this.viewportHeight = size.height;
-		this.setRows(this.rows);
+		this.renderRows();
 	}
 
 	public updateViewport(contentHeight: number, scrollTop: number): void {
 		this.root.setLeft(Math.max(0, this.viewportWidth - this.width));
-		this.root.setTop(0);
 		this.root.setHeight(this.viewportHeight);
 		const metrics = createScrollbarAxisMetrics(this.viewportHeight, contentHeight, scrollTop, this.viewportHeight, 2);
 		this.viewportNode.setHeight(metrics.thumbSize);

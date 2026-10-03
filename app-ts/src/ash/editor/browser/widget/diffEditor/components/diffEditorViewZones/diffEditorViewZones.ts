@@ -7,7 +7,8 @@ import { EditorSemanticHighlightingConfiguration } from '../../../../../common/c
 import { resolveSemanticTokenPresentation } from '../../../../../common/services/semanticTokensStyling.js';
 import { InlineDecoration, InlineDecorationType } from '../../../../../common/viewModel/inlineDecorations.js';
 import { type DiffModel } from '../../../../../common/diff/diffModel.js';
-import { LineDiffKind } from '../../../../../common/diff/lineDiff.js';
+import { LineDiffKind, type LineDiffRow } from '../../../../../common/diff/lineDiff.js';
+import type { LineRangeMapping } from '../../../../../common/diff/rangeMapping.js';
 import { type IViewZoneChangeAccessor } from '../../../../editorBrowser.js';
 import { projectStanzaSemanticTokenLine } from '../../../../viewParts/viewLines/viewLine.js';
 import { CodeEditorWidget } from '../../../codeEditor/codeEditorWidget.js';
@@ -44,9 +45,8 @@ export class DiffEditorViewZones extends Disposable {
 		this._register(toDisposable(() => this.clear()));
 	}
 
-	public update(inlineView: boolean, wordWrap: boolean): void {
+	public update(inlineView: boolean, wordWrap: boolean, rows: readonly LineDiffRow[], comparison?: LineRangeMapping): void {
 		this.inlineOriginalLines = undefined;
-		const rows = this.model.diff?.rows ?? [];
 		if (inlineView) {
 			const lines: { readonly element: HTMLElement; readonly lineNumber: number }[] = [];
 			this.inlineOriginalLines = { version: this.model.original.version, lines };
@@ -82,17 +82,31 @@ export class DiffEditorViewZones extends Disposable {
 
 		const original: DiffViewZone[] = [];
 		const modified: DiffViewZone[] = [];
-		let originalAfterLineNumber = 0;
-		let modifiedAfterLineNumber = 0;
+		let originalAfterLineNumber = comparison ? comparison.original.startLineNumber - 1 : 0;
+		let modifiedAfterLineNumber = comparison ? comparison.modified.startLineNumber - 1 : 0;
+		if (comparison) {
+			this.clear();
+			const originalTop = this.originalEditor.getTopForLineNumber(comparison.original.startLineNumber);
+			const modifiedTop = this.modifiedEditor.getTopForLineNumber(comparison.modified.startLineNumber);
+			this.appendViewZone(original, originalAfterLineNumber, modifiedTop - originalTop, -1);
+			this.appendViewZone(modified, modifiedAfterLineNumber, originalTop - modifiedTop, -1);
+		}
 		for (const [rowIndex, row] of rows.entries()) {
 			if (row.originalLineIndex !== undefined) originalAfterLineNumber = row.originalLineIndex + 1;
 			if (row.modifiedLineIndex !== undefined) modifiedAfterLineNumber = row.modifiedLineIndex + 1;
-			if (row.kind === LineDiffKind.Unchanged) continue;
+			if (row.kind === LineDiffKind.Unchanged && !comparison) continue;
 			const originalHeight = row.originalLineIndex === undefined ? 0 : this.lineHeightFor(this.originalEditor, row.originalLineIndex + 1, wordWrap);
 			const modifiedHeight = row.modifiedLineIndex === undefined ? 0 : this.lineHeightFor(this.modifiedEditor, row.modifiedLineIndex + 1, wordWrap);
 			const rowHeight = Math.max(originalHeight, modifiedHeight);
 			this.appendViewZone(original, originalAfterLineNumber, rowHeight - originalHeight, rowIndex);
 			this.appendViewZone(modified, modifiedAfterLineNumber, rowHeight - modifiedHeight, rowIndex);
+		}
+		if (comparison) {
+			// Equal scroll extents keep the aligned block together when one document ends sooner.
+			const originalHeight = this.originalEditor.getContentHeight() + original.reduce((height, zone) => height + zone.heightInPx, 0);
+			const modifiedHeight = this.modifiedEditor.getContentHeight() + modified.reduce((height, zone) => height + zone.heightInPx, 0);
+			this.appendViewZone(original, this.model.original.getLineCount(), modifiedHeight - originalHeight, rows.length);
+			this.appendViewZone(modified, this.model.modified.getLineCount(), originalHeight - modifiedHeight, rows.length);
 		}
 		this.originalEditor.changeViewZones(accessor => {
 			for (const id of this.originalZones) accessor.removeZone(id);

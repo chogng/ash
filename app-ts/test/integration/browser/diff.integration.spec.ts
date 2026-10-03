@@ -107,6 +107,111 @@ test('diff feature moved links follow editor geometry, options, locale and dispo
 	await expect(page.locator('.stanza-diff-editor')).toHaveCount(0);
 });
 
+test('edited moved code compares only block changes and stays aligned through edits and undo', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(async () => {
+		const block = ['function load(input) {', '  const value = parse(input);', '  return value;', '}'];
+		const edited = ['function load(input) {', '  const value = parse(updated);', '  log(value);', '  return value;', '}'];
+		const stay = Array.from({ length: 6 }, (_, index) => `stay ${index}`);
+		window.ashDiffIntegration.setComparisonText(['head', ...block, ...stay, 'tail'].join('\n'), ['head', ...stay, ...edited, 'tail'].join('\n'));
+		await window.ashDiffIntegration.setMoves(true);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(1);
+	const editor = page.locator('#single .stanza-diff-editor');
+	await editor.locator('.ash-diff-moved-links').getByRole('button').click();
+	const toolbar = editor.getByRole('toolbar', { name: 'Moved code comparison' });
+	await expect(toolbar).toContainText('Comparing original lines 2–5 with modified lines 8–12');
+	await expect(editor.locator('.ash-diff-revert')).toHaveCount(0);
+	await expect(editor.locator('.modified .stanza-diff-line-added')).toHaveCount(2);
+	await expect(editor.locator('.original .stanza-diff-line-removed')).toHaveCount(1);
+	await expect.poll(() => page.evaluate(() => {
+		const position = window.ashDiffIntegration.linePositions(2, 8);
+		return position.originalTop - position.originalScrollTop - position.modifiedTop + position.modifiedScrollTop;
+	})).toBe(0);
+	await expect.poll(() => page.evaluate(() => {
+		const position = window.ashDiffIntegration.linePositions(5, 12);
+		return position.originalTop - position.originalScrollTop - position.modifiedTop + position.modifiedScrollTop;
+	})).toBe(0);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent)).toContain('Original line 3:');
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent)).not.toContain('Original line 2:');
+	await page.evaluate(() => window.ashDiffIntegration.editModified([1, 1, 1, 1], 'prefix\n'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await expect(toolbar).toContainText('modified lines 9–13');
+	await page.evaluate(() => window.ashDiffIntegration.editModified([10, 23, 10, 30], 'changed'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toContain('parse(changed)');
+	await expect(toolbar).toContainText('modified lines 9–13');
+	await page.evaluate(() => window.ashDiffIntegration.undo());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toContain('parse(updated)');
+	await expect(toolbar).toBeVisible();
+	await page.evaluate(() => window.ashDiffIntegration.setChineseLocale());
+	await expect(editor.getByRole('toolbar', { name: '移动代码比较' })).toContainText('正在比较原始第 2–5 行与修改后第 9–13 行');
+	const stop = editor.getByRole('button', { name: '停止比较移动代码', exact: true });
+	await stop.focus();
+	await stop.press('Space');
+	await expect(toolbar).toBeHidden();
+	await expect(editor.locator('.modified .stanza-editor-input')).toBeFocused();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent)).toContain('原始文件第 2 行');
+});
+
+test('moved comparison supports keyboard exit, read-only views, wrapping and disappearing moves', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(async () => {
+		const longLine = '  return compute(input, configuration); '.repeat(12);
+		const block = ['function load(input) {', longLine, '}'];
+		const stay = Array.from({ length: 12 }, (_, index) => `stay ${index}`);
+		window.ashDiffIntegration.setComparisonText(['head', ...block, ...stay, 'tail'].join('\n'), ['head', ...stay, ...block, 'tail'].join('\n'));
+		await window.ashDiffIntegration.setMoves(true);
+		window.ashDiffIntegration.setEditorFeatures({ readOnly: true });
+		window.ashDiffIntegration.toggleWordWrap();
+	});
+	const editor = page.locator('#single .stanza-diff-editor');
+	const move = editor.locator('.ash-diff-moved-links').getByRole('button');
+	const revealMove = async () => {
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(1);
+		await page.evaluate(() => window.ashDiffIntegration.scrollModified(window.ashDiffIntegration.linePositions(2, 14).modifiedTop));
+		await expect(move).toBeVisible();
+	};
+	await revealMove();
+	await expect(move).toBeVisible();
+	await move.focus();
+	await move.press('Enter');
+	const toolbar = editor.getByRole('toolbar', { name: 'Moved code comparison' });
+	await expect(toolbar).toBeVisible();
+	await expect.poll(() => page.evaluate(() => {
+		const position = window.ashDiffIntegration.linePositions(3, 15);
+		return position.originalBottom - position.originalTop - position.modifiedBottom + position.modifiedTop;
+	})).toBe(0);
+	await editor.getByRole('separator').press('ArrowLeft');
+	await editor.getByRole('separator').press('ArrowLeft');
+	await expect.poll(() => page.evaluate(() => {
+		const position = window.ashDiffIntegration.linePositions(4, 16);
+		return position.originalTop - position.originalScrollTop - position.modifiedTop + position.modifiedScrollTop;
+	})).toBe(0);
+	await page.locator('#single .modified .stanza-editor-input').press('Escape');
+	await expect(toolbar).toBeHidden();
+	await revealMove();
+	await move.click();
+	await expect(toolbar).toBeVisible();
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
+	await expect(toolbar).toBeHidden();
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
+	await revealMove();
+	await move.click();
+	await expect(toolbar).toBeVisible();
+	await editor.getByRole('button', { name: 'Stop comparing moved code', exact: true }).focus();
+	await page.evaluate(() => window.ashDiffIntegration.setMoves(false));
+	await expect(toolbar).toBeHidden();
+	await expect(editor.locator('.modified .stanza-editor-input')).toBeFocused();
+	await page.evaluate(() => window.ashDiffIntegration.setMoves(true));
+	await revealMove();
+	await move.click();
+	await expect(toolbar).toBeVisible();
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('head\nnew\ntail', 'head\nnew\ntail'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await expect(toolbar).toBeHidden();
+	await expect(move).toHaveCount(0);
+});
+
 test('diff feature overview delegates pointer and wheel input to editor scrolling', async ({ page }) => {
 	await openDiffPage(page);
 	await page.evaluate(() => {

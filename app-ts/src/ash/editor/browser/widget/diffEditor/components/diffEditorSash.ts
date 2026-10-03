@@ -53,13 +53,13 @@ export class DiffEditorSash extends Disposable {
 		return Math.max(MINIMUM_EDITOR_WIDTH, Math.min(this.width - MINIMUM_EDITOR_WIDTH, desired));
 	}
 
-	public layout(width: number, height: number, inlineView: boolean): number {
+	public layout(width: number, height: number, inlineView: boolean, top: number): number {
 		this.width = width;
 		const left = this.left;
 		const visible = !inlineView && this.options.enableSplitViewResizing && width > MINIMUM_EDITOR_WIDTH * 2;
 		this.element.hidden = !visible;
 		this.element.style.left = `${left}px`;
-		this.element.style.top = '0';
+		this.element.style.top = `${top}px`;
 		this.element.style.height = `${height}px`;
 		this.sash.state = !visible ? SashState.Disabled
 			: left <= MINIMUM_EDITOR_WIDTH ? SashState.AtMinimum

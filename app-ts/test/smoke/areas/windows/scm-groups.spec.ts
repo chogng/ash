@@ -17,6 +17,48 @@ test.describe('SCM editor groups', () => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
 	});
 
+	test('SCM compares edits inside a moved block and exits through the keyboard in a read-only view', async ({ testWorkspace, workbench }) => {
+		const block = ['function load(input) {', '  const value = parse(input);', '  return value;', '}'];
+		const edited = ['function load(input) {', '  const value = parse(updated);', '  log(value);', '  return value;', '}'];
+		const stay = Array.from({ length: 6 }, (_, index) => `stay ${index}`);
+		await writeFile(testWorkspace.file, ['head', ...block, ...stay, 'tail'].join('\n'));
+		await run('git', ['add', 'main.ts'], { cwd: testWorkspace.directory });
+		await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'Moved block baseline'], { cwd: testWorkspace.directory });
+		await writeFile(testWorkspace.file, ['head', ...stay, ...edited, 'tail'].join('\n'));
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+		const settingsEditor = workbench.editors.groupAt(0).editor;
+		await settingsEditor.waitForEditorFocus();
+		await settingsEditor.input.press('ControlOrMeta+A');
+		await settingsEditor.input.evaluate(element => {
+			const clipboardData = new DataTransfer();
+			clipboardData.setData('text/plain', '{ "diffEditor.experimental.showMoves": true, "diffEditor.useInlineViewWhenSpaceIsLimited": false }');
+			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+		});
+		await settingsEditor.waitForEditorContents(contents => contents === '{ "diffEditor.experimental.showMoves": true, "diffEditor.useInlineViewWhenSpaceIsLimited": false }');
+		await settingsEditor.input.press('ControlOrMeta+S');
+		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		await page.getByRole('button', { name: 'Open changes for main.ts', exact: true }).click();
+		const diff = page.locator('.stanza-diff-editor');
+		await diff.locator('.ash-diff-moved-links').getByRole('button').click();
+		const comparison = diff.getByRole('toolbar', { name: 'Moved code comparison' });
+		await expect(comparison).toContainText('Comparing original lines 2–5 with modified lines 8–12');
+		await expect(diff.locator('.ash-diff-revert')).toHaveCount(0);
+		await expect(diff.locator('.original .stanza-diff-line-removed')).toHaveCount(1);
+		const input = diff.locator('.modified .stanza-editor-input');
+		await expect(input).toHaveAttribute('aria-readonly', 'true');
+		await input.press('F7');
+		const content = diff.getByRole('textbox', { name: 'Difference content' });
+		await expect(content).toHaveValue(/Original line 3:.*parse\(input\)/u);
+		await content.press('Escape');
+		await expect(comparison).toBeVisible();
+		await input.press('Escape');
+		await expect(comparison).toBeHidden();
+		await expect(input).toBeFocused();
+		await expect(diff.locator('.original .stanza-diff-line-removed')).toHaveCount(4);
+	});
+
 	test('SCM filenames keep priority over long directories when the sidebar resizes', async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
 		const directory = 'app-ts/src/ash/workbench/contrib/scm/browser';

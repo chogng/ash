@@ -72,6 +72,19 @@ suite('Frontend diff Worker', () => {
 		assert.equal(next.changes.length, 1);
 	});
 
+	test('restores edited move mappings and their document coordinates across the Worker boundary', async () => {
+		using service = new WorkerDiffComputationService(() => new DiffTestPort());
+		const block = ['function load(input) {', '  return parse(input);', '}'];
+		const stay = Array.from({ length: 5 }, (_, index) => `stay ${index}`);
+		const result = await compute(service, ['head', ...block, ...stay, 'tail'].join('\n'), ['head', ...stay, ...block.map(line => line.replace('parse(input)', 'parse(updated)')), 'tail'].join('\n'), { ...options, computeMoves: true });
+		assert.deepEqual(result.moves.map(move => ({
+			original: [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.original.endLineNumberExclusive],
+			modified: [move.lineRangeMapping.modified.startLineNumber, move.lineRangeMapping.modified.endLineNumberExclusive],
+			changes: move.changes.map(change => [change.original.startLineNumber, change.modified.startLineNumber]),
+		})), [{ original: [2, 5], modified: [7, 10], changes: [[3, 8]] }]);
+		assert.ok(result.moves[0]!.changes[0] instanceof DetailedLineRangeMapping);
+	});
+
 	test('disposal settles pending calls and terminates the owned port', async () => {
 		const port = new DiffTestPort();
 		using service = new WorkerDiffComputationService(() => port);

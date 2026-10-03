@@ -67,7 +67,8 @@ function* diffLines(original: readonly string[], modified: readonly string[], op
 		originalIndex = originalMatch + 1;
 		modifiedIndex = modifiedMatch + 1;
 	}
-	return new LinesDiff(changes, options.computeMoves ? findExactMoves(changes, original, modified) : [], false);
+	const moves = options.computeMoves ? yield* findMoves(changes, original, modified, options) : [];
+	return new LinesDiff(changes, moves, false);
 }
 
 function* diffCharacters(original: string, modified: string, originalLineNumber: number, modifiedLineNumber: number): Generator<void, RangeMapping[]> {
@@ -93,21 +94,135 @@ function* diffCharacters(original: string, modified: string, originalLineNumber:
 	return changes;
 }
 
-function findExactMoves(changes: readonly DetailedLineRangeMapping[], original: readonly string[], modified: readonly string[]): MovedText[] {
-	const removed = changes.filter(change => !change.original.isEmpty && change.modified.isEmpty);
-	const added = changes.filter(change => change.original.isEmpty && !change.modified.isEmpty);
-	const moves: MovedText[] = [];
-	const used = new Set<DetailedLineRangeMapping>();
-	for (const source of removed) {
-		const text = original.slice(source.original.startLineNumber - 1, source.original.endLineNumberExclusive - 1);
-		const destination = added.find(change => !used.has(change)
-			&& change.modified.length === text.length
-			&& text.every((line, index) => line === modified[change.modified.startLineNumber - 1 + index]));
-		if (!destination) continue;
-		used.add(destination);
-		moves.push(new MovedText(new LineRangeMapping(source.original, destination.modified), []));
+interface MoveSpan {
+	readonly change: DetailedLineRangeMapping;
+	readonly range: LineRange;
+	readonly lines: string[];
+	readonly text: string;
+	readonly words: ReadonlyMap<string, number>;
+	readonly weight: number;
+}
+
+/** Match displaced spans by shared content, then compute their edits with the same line algorithm. */
+function* findMoves(changes: readonly DetailedLineRangeMapping[], original: readonly string[], modified: readonly string[], options: ILinesDiffComputerOptions): Generator<void, MovedText[]> {
+	const sources: MoveSpan[] = [];
+	const destinations: MoveSpan[] = [];
+	const destinationWords = new Map<string, Set<MoveSpan>>();
+	let work = 0;
+	for (const [lines, side, spans] of [[original, 'original', sources], [modified, 'modified', destinations]] as const) {
+		for (const change of changes) {
+			const range = change[side];
+			if (range.isEmpty) {
+				continue;
+			}
+			const content = lines.slice(range.startLineNumber - 1, range.endLineNumberExclusive - 1);
+			const words = new Map<string, number>();
+			let weight = 0;
+			for (const line of content) {
+				for (const match of line.matchAll(/[\p{L}\p{N}_$]+/gu)) {
+					const word = match[0];
+					words.set(word, (words.get(word) ?? 0) + 1);
+					weight += word.length;
+					if (++work % 256 === 0) {
+						yield;
+					}
+				}
+				if (++work % 256 === 0) {
+					yield;
+				}
+			}
+			const span: MoveSpan = {
+				change, range, lines: content, words, weight,
+				text: (options.ignoreTrimWhitespace ? content.map(line => line.trim()) : content).join('\n'),
+			};
+			spans.push(span);
+			if (side === 'modified') {
+				for (const word of words.keys()) {
+					let entries = destinationWords.get(word);
+					if (!entries) {
+						entries = new Set();
+						destinationWords.set(word, entries);
+					}
+					entries.add(span);
+				}
+			}
+		}
 	}
-	return moves;
+	const candidates: { source: MoveSpan; destination: MoveSpan; score: number }[] = [];
+	for (const source of sources) {
+		const overlaps = new Map<MoveSpan, { weight: number; words: number }>();
+		for (const [word, count] of source.words) {
+			for (const destination of destinationWords.get(word) ?? []) {
+				if (source.change === destination.change) {
+					continue;
+				}
+				const overlap = overlaps.get(destination) ?? { weight: 0, words: 0 };
+				overlap.weight += Math.min(count, destination.words.get(word)!) * word.length;
+				overlap.words++;
+				overlaps.set(destination, overlap);
+				if (++work % 256 === 0) {
+					yield;
+				}
+			}
+		}
+		for (const [destination, overlap] of overlaps) {
+			// An insertion hunk can contain several separately removed blocks.
+			for (let start = 0; start + source.lines.length <= destination.lines.length; start++) {
+				let equal = true;
+				for (let offset = 0; offset < source.lines.length; offset++) {
+					const left = source.lines[offset]!;
+					const right = destination.lines[start + offset]!;
+					if (++work % 256 === 0) {
+						yield;
+					}
+					if (options.ignoreTrimWhitespace ? left.trim() !== right.trim() : left !== right) {
+						equal = false;
+						break;
+					}
+				}
+				if (equal) {
+					const lineNumber = destination.range.startLineNumber + start;
+					candidates.push({ source, destination: {
+						...destination,
+						range: new LineRange(lineNumber, lineNumber + source.lines.length),
+						lines: destination.lines.slice(start, start + source.lines.length),
+					}, score: 2 });
+				}
+			}
+			const exact = source.text === destination.text;
+			const similarity = 2 * overlap.weight / (source.weight + destination.weight);
+			// Punctuation and a single shared keyword cannot establish an edited move.
+			if (exact || overlap.words >= 2 && overlap.weight >= 8 && similarity >= 0.7) {
+				candidates.push({ source, destination, score: exact ? 2 : similarity });
+			}
+		}
+		yield;
+	}
+	candidates.sort((left, right) => right.score - left.score
+		|| Math.abs(left.source.range.startLineNumber - left.destination.range.startLineNumber) - Math.abs(right.source.range.startLineNumber - right.destination.range.startLineNumber));
+	const usedSources = new Set<MoveSpan>();
+	const usedDestinations: LineRange[] = [];
+	const moves: MovedText[] = [];
+	for (const { source, destination } of candidates) {
+		if (usedSources.has(source) || usedDestinations.some(range => range.intersect(destination.range)?.isEmpty === false)) {
+			continue;
+		}
+		usedSources.add(source);
+		usedDestinations.push(destination.range);
+		const result = yield* diffLines(source.lines, destination.lines, { ...options, computeMoves: false });
+		const originalOffset = source.range.startLineNumber - 1;
+		const modifiedOffset = destination.range.startLineNumber - 1;
+		const moveChanges = result.changes.map(change => new DetailedLineRangeMapping(
+			change.original.delta(originalOffset),
+			change.modified.delta(modifiedOffset),
+			change.innerChanges?.map(inner => new RangeMapping(
+				new Range(inner.originalRange.startLineNumber + originalOffset, inner.originalRange.startColumn, inner.originalRange.endLineNumber + originalOffset, inner.originalRange.endColumn),
+				new Range(inner.modifiedRange.startLineNumber + modifiedOffset, inner.modifiedRange.startColumn, inner.modifiedRange.endLineNumber + modifiedOffset, inner.modifiedRange.endColumn),
+			)),
+		));
+		moves.push(new MovedText(new LineRangeMapping(source.range, destination.range), moveChanges));
+	}
+	return moves.sort((left, right) => left.lineRangeMapping.original.startLineNumber - right.lineRangeMapping.original.startLineNumber);
 }
 
 function timedOutDiff(originalLineCount: number, modifiedLineCount: number): LinesDiff {

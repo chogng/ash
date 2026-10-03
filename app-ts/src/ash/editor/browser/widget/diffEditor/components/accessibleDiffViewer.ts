@@ -3,7 +3,7 @@ import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize, onDidChangeNls } from '../../../../../nls.js';
 import { type DiffModel } from '../../../../common/diff/diffModel.js';
-import { LineDiffKind, type LineDiffHunk, type LineDiffRow } from '../../../../common/diff/lineDiff.js';
+import { LineDiffKind, type LineDiff, type LineDiffHunk, type LineDiffRow } from '../../../../common/diff/lineDiff.js';
 
 /** Reads one changed hunk at a time from the current versioned comparison. */
 export class AccessibleDiffViewer extends Disposable {
@@ -19,6 +19,7 @@ export class AccessibleDiffViewer extends Disposable {
 	constructor(
 		container: HTMLElement,
 		private readonly model: DiffModel,
+		private readonly getDiff: () => LineDiff | undefined,
 		private readonly navigate: (direction: -1 | 1) => number | undefined,
 		private readonly setVisible: (visible: boolean) => void,
 		private readonly restoreEditorFocus: () => void,
@@ -86,9 +87,12 @@ export class AccessibleDiffViewer extends Disposable {
 		const state = this.model.state;
 		if (state.kind === 'loading') return localize('diffEditor.computing', 'Computing differences');
 		if (state.kind === 'error') return localize('diffEditor.error', 'Could not compute differences: {0}', state.error.message);
-		if (state.diff.hunks.length === 0) return localize('diffEditor.noChanges', 'No differences');
-		const content = state.diff.hunks.map((hunk, index) => this.hunkContent(hunk, index, state.diff.hunks.length));
-		for (const move of state.diff.moves) {
+		const diff = this.getDiff()!;
+		const content = diff.hunks.map((hunk, index) => this.hunkContent(hunk, index, diff.hunks.length));
+		if (content.length === 0) {
+			content.push(localize('diffEditor.noChanges', 'No differences'));
+		}
+		for (const move of diff.moves) {
 			const mapping = move.lineRangeMapping;
 			content.push(localize('diffEditor.movedLines', 'Moved original lines {0}–{1} to modified lines {2}–{3}',
 				mapping.original.startLineNumber, mapping.original.endLineNumberExclusive - 1,
@@ -118,7 +122,7 @@ export class AccessibleDiffViewer extends Disposable {
 		this.previousDomNode.textContent = localize('diffEditor.accessibleViewer.previous', 'Previous difference');
 		this.nextDomNode.textContent = localize('diffEditor.accessibleViewer.next', 'Next difference');
 		this.closeDomNode.textContent = localize('diffEditor.accessibleViewer.close', 'Close');
-		const diff = this.model.diff;
+		const diff = this.getDiff();
 		const changedRows = diff?.rows.flatMap((row, index) => row.kind === LineDiffKind.Unchanged ? [] : [index]) ?? [];
 		if (!diff || changedRows.length === 0) {
 			this.currentRow = -1;
@@ -136,7 +140,7 @@ export class AccessibleDiffViewer extends Disposable {
 	}
 
 	private hunkContent(hunk: LineDiffHunk, index: number, count: number): string {
-		const rows = this.model.diff!.rows.slice(hunk.rowStart, hunk.rowEnd);
+		const rows = this.getDiff()!.rows.slice(hunk.rowStart, hunk.rowEnd);
 		const lines = rows.flatMap(row => this.rowContent(row));
 		return [localize('diffEditor.accessibleViewer.position', 'Difference {0} of {1}', index + 1, count), ...lines].join('\n');
 	}

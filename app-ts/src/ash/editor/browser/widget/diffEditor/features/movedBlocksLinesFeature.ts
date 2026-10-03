@@ -4,7 +4,6 @@ import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize, onDidChangeNls } from '../../../../../nls.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
-import { Range } from '../../../../common/core/range.js';
 import type { DiffModel } from '../../../../common/diff/diffModel.js';
 import type { MovedText } from '../../../../common/diff/linesDiffComputer.js';
 import type { CodeEditorWidget } from '../../codeEditor/codeEditorWidget.js';
@@ -13,14 +12,18 @@ import type { CodeEditorWidget } from '../../codeEditor/codeEditorWidget.js';
 export class MovedBlocksLinesFeature extends Disposable {
 	private readonly domNode: HTMLDivElement;
 	private readonly svgNode: SVGSVGElement;
+	private readonly comparisonDomNode: HTMLDivElement;
+	private readonly comparisonLabel: HTMLSpanElement;
+	private readonly closeButton: Button;
 	private readonly controls = this._register(new DisposableStore());
 	private readonly links: { move: MovedText; path: SVGPathElement; button: HTMLElement }[] = [];
 	private readonly originalDecorations;
 	private readonly modifiedDecorations;
 	private enabled = false;
 	private height = 0;
+	private selectedMove: MovedText | undefined;
 
-	constructor(container: HTMLElement, private readonly model: DiffModel, private readonly original: CodeEditorWidget, private readonly modified: CodeEditorWidget) {
+	constructor(container: HTMLElement, private readonly model: DiffModel, private readonly original: CodeEditorWidget, private readonly modified: CodeEditorWidget, private readonly compare: (move: MovedText | undefined) => void) {
 		super();
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'ash-diff-moved-links';
@@ -29,6 +32,15 @@ export class MovedBlocksLinesFeature extends Disposable {
 		this.domNode.append(this.svgNode);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
+		this.comparisonDomNode = h(container.ownerDocument, 'div');
+		this.comparisonDomNode.className = 'ash-diff-moved-comparison';
+		this.comparisonDomNode.setAttribute('role', 'toolbar');
+		this.comparisonDomNode.hidden = true;
+		this.comparisonLabel = h(container.ownerDocument, 'span');
+		this.comparisonDomNode.append(this.comparisonLabel);
+		container.append(this.comparisonDomNode);
+		this._register(toDisposable(() => this.comparisonDomNode.remove()));
+		this.closeButton = this._register(new Button(this.comparisonDomNode, { label: '', size: 'small', onClick: () => this.compare(undefined) }));
 		this.originalDecorations = original.createDecorationsCollection();
 		this.modifiedDecorations = modified.createDecorationsCollection();
 		this._register(toDisposable(() => { this.originalDecorations.clear(); this.modifiedDecorations.clear(); }));
@@ -36,15 +48,31 @@ export class MovedBlocksLinesFeature extends Disposable {
 			this._register(editor.onDidScrollChange(() => this.positionLinks()));
 			this._register(editor.onDidLayoutChange(() => this.positionLinks()));
 		}
-		this._register(onDidChangeNls(() => this.update(this.enabled)));
+		this._register(onDidChangeNls(() => this.update(this.enabled, this.selectedMove)));
 	}
 
 	public get width(): number {
 		return this.links.length > 0 ? 24 : 0;
 	}
 
-	public update(enabled: boolean): void {
+	public get headerHeight(): number {
+		return this.selectedMove ? 32 : 0;
+	}
+
+	public update(enabled: boolean, selectedMove?: MovedText): void {
+		const lostHeaderFocus = !selectedMove && this.comparisonDomNode.contains(this.domNode.ownerDocument.activeElement);
 		this.enabled = enabled;
+		this.selectedMove = selectedMove;
+		this.comparisonDomNode.hidden = !selectedMove;
+		this.closeButton.label = localize('diffEditor.stopComparingMovedCode', 'Stop comparing moved code');
+		this.comparisonDomNode.setAttribute('aria-label', localize('diffEditor.movedComparison', 'Moved code comparison'));
+		if (selectedMove) {
+			const mapping = selectedMove.lineRangeMapping;
+			this.comparisonLabel.textContent = localize('diffEditor.comparingMovedCode', 'Comparing original lines {0}–{1} with modified lines {2}–{3}',
+				mapping.original.startLineNumber, mapping.original.endLineNumberExclusive - 1,
+				mapping.modified.startLineNumber, mapping.modified.endLineNumberExclusive - 1);
+			this.comparisonLabel.title = this.comparisonLabel.textContent;
+		}
 		const hadFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
 		this.controls.clear();
 		this.links.length = 0;
@@ -66,21 +94,21 @@ export class MovedBlocksLinesFeature extends Disposable {
 				mapping.original.startLineNumber, mapping.original.endLineNumberExclusive - 1,
 				mapping.modified.startLineNumber, mapping.modified.endLineNumberExclusive - 1);
 			const path = svg(this.domNode.ownerDocument, 'path');
+			path.classList.toggle('compared', move === selectedMove);
 			this.svgNode.append(path);
 			const host = h(this.domNode.ownerDocument, 'div');
 			host.className = 'ash-diff-moved-action';
 			this.domNode.append(host);
 			this.controls.add(toDisposable(() => host.remove()));
 			this.controls.add(new Button(host, { label, icon: Lxicon.arrowRight, iconOnly: true, size: 'small', onClick: () => {
-				const line = mapping.modified.startLineNumber;
-				this.modified.revealRange(new Range(line, 1, line, 1));
-				this.modified.focus();
-				this.modified.announceAccessibilityStatus(label);
+				this.compare(move === this.selectedMove ? undefined : move);
 			} }));
 			this.links.push({ move, path, button: host });
 		}
 		this.positionLinks();
-		if (hadFocus) this.modified.focus();
+		if (hadFocus || lostHeaderFocus) {
+			this.modified.focus();
+		}
 	}
 
 	public layout(left: number, height: number): void {

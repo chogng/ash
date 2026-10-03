@@ -1,5 +1,5 @@
 import { type IDocumentDiff } from './documentDiffProvider.js';
-import type { RangeMapping, DetailedLineRangeMapping } from './rangeMapping.js';
+import type { RangeMapping, DetailedLineRangeMapping, LineRangeMapping } from './rangeMapping.js';
 import type { MovedText } from './linesDiffComputer.js';
 
 export enum LineDiffKind {
@@ -41,11 +41,13 @@ export interface LineDiff {
 }
 
 /** Builds aligned display rows while retaining the current result's mapping identities for edit and move controls. */
-export function toLineDiff(diff: Pick<IDocumentDiff, 'changes' | 'moves'>, originalLineCount: number, modifiedLineCount: number): LineDiff {
+export function toLineDiff(diff: Pick<IDocumentDiff, 'changes' | 'moves'>, originalLineCount: number, modifiedLineCount: number, range?: LineRangeMapping): LineDiff {
 	const rows: LineDiffRow[] = [];
 	const hunks: LineDiffHunk[] = [];
-	let originalIndex = 0;
-	let modifiedIndex = 0;
+	let originalIndex = (range?.original.startLineNumber ?? 1) - 1;
+	let modifiedIndex = (range?.modified.startLineNumber ?? 1) - 1;
+	const originalEnd = range ? range.original.endLineNumberExclusive - 1 : originalLineCount;
+	const modifiedEnd = range ? range.modified.endLineNumberExclusive - 1 : modifiedLineCount;
 	for (const change of diff.changes) {
 		const originalStart = change.original.startLineNumber - 1;
 		const modifiedStart = change.modified.startLineNumber - 1;
@@ -77,7 +79,7 @@ export function toLineDiff(diff: Pick<IDocumentDiff, 'changes' | 'moves'>, origi
 		originalIndex = originalStart + originalCount;
 		modifiedIndex = modifiedStart + modifiedCount;
 	}
-	while (originalIndex < originalLineCount && modifiedIndex < modifiedLineCount) {
+	while (originalIndex < originalEnd && modifiedIndex < modifiedEnd) {
 		rows.push({ kind: LineDiffKind.Unchanged, originalLineIndex: originalIndex++, modifiedLineIndex: modifiedIndex++, originalChanges: [], modifiedChanges: [] });
 	}
 	return { rows, hunks, changes: diff.changes, moves: diff.moves };
