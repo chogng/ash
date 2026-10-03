@@ -178,68 +178,42 @@
 
 .ash-scm-graph-label-container {
   display: flex;
-  min-width: 0;
-  max-width: 48%;
-  flex: 0 1 auto;
-  gap: 4px;
+  flex: 0 0 auto;
+  gap: var(--ash-spacing-size40);
   align-items: center;
-  overflow: hidden;
 }
 
 .ash-scm-graph-label {
   display: inline-flex;
-  min-width: 0;
-  max-width: 180px;
+  height: 18px;
   align-items: center;
-  border: 0;
+  gap: var(--ash-spacing-size20);
+  padding: 0 var(--ash-spacing-size40);
   border-radius: var(--ash-corner-radius-circle);
-  gap: 2px;
-  padding: 0 6px 0 4px;
-  overflow: hidden;
-  color: var(--scm-graph-ref-color);
-  background: color-mix(in srgb, var(--scm-graph-ref-color) 14%, transparent);
-  font-size: var(--ash-font-size-label2);
+  outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+  outline-offset: -1px;
+  color: var(--ash-badge-foreground);
+  background: var(--ash-badge-background);
+  font-size: var(--ash-font-size-label1);
   line-height: 18px;
+}
+
+.ash-scm-graph-label > .ash-icon {
+  width: var(--ash-lxicon-font-size-compact);
+  height: var(--ash-lxicon-font-size-compact);
+  flex: 0 0 auto;
+}
+
+.ash-scm-graph-label-name {
+  max-width: 100px;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-
-.ash-scm-graph-label > .ash-icon-label,
-.ash-scm-graph-remote > .ash-icon-label {
-  flex: 1 1 auto;
-}
-
 .ash-scm-graph-label.head {
-  --scm-graph-ref-color: var(--scm-graph-accent);
   color: var(--ash-list-active-selection-foreground);
-  background: var(--scm-graph-accent);
-}
-
-.ash-scm-graph-label.local {
-  --scm-graph-ref-color: var(--scm-graph-lane-0);
-}
-
-.ash-scm-graph-label.remote {
-  --scm-graph-ref-color: var(--scm-graph-lane-2);
-}
-
-.ash-scm-graph-remotes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 0 8px 6px;
-  color: var(--ash-muted-foreground);
-  font-size: var(--ash-font-size-label2);
-}
-
-.ash-scm-graph-remote {
-  display: inline-flex;
-  min-width: 0;
-  max-width: 100%;
-  border: var(--ash-stroke-thickness) solid color-mix(in srgb, currentColor 28%, transparent);
-  border-radius: var(--ash-corner-radius-small);
-  padding: 2px 6px;
+  background: var(--ash-list-active-selection-background);
 }
 
 .ash-scm-graph-metadata {
@@ -332,10 +306,6 @@
 @container ash-scm-graph (max-width: 360px) {
   .ash-scm-graph-metadata {
     display: none;
-  }
-
-  .ash-scm-graph-label-container {
-    max-width: 35%;
   }
 }
 

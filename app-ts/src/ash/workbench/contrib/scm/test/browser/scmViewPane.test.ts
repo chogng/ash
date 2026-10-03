@@ -27,7 +27,7 @@ import { InstantiationService } from "../../../../../platform/instantiation/comm
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
-import { IResourceLabelService, ResourceLabels, DEFAULT_LABELS_CONTAINER, type IResourceIconRenderer } from "../../../../browser/labels.js";
+import { IResourceLabelService, ResourceLabels, DEFAULT_LABELS_CONTAINER, IResourceIconRenderer } from "../../../../browser/labels.js";
 import { GitWorkspaceError, IGitService, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
 import { IEditorService, type EditorInput, type EditorOpenOptions, type EditorOpenTarget } from "../../../../../workbench/services/editor/common/editorService.js";
 import type { IViewsService } from '../../../../../workbench/services/views/browser/viewsService.js';
@@ -196,7 +196,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 	let workspaceError: GitWorkspaceError | undefined;
 	let readySubscriptions = 0;
 	const hoverService: IHoverService = {
-		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
+		setupDelayedHover: () => testManagedHover(),
 		setupHover: (options) => {
 			hoverOptions.push(options);
 			return testManagedHover();
@@ -234,6 +234,9 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 					references: [
 						{ name: "main", objectId: "1234567890abcdef", kind: "localBranch", remoteName: undefined, current: true },
 						{ name: "origin/main", objectId: "abcdef1234567890", kind: "remoteBranch", remoteName: "origin", current: false },
+						{ name: "origin/release", objectId: "abcdef1234567890", kind: "remoteBranch", remoteName: "origin", current: false },
+						{ name: "topic", objectId: "abcdef1234567890", kind: "localBranch", remoteName: undefined, current: false },
+						{ name: "feature", objectId: "abcdef1234567890", kind: "localBranch", remoteName: undefined, current: false },
 						{ name: "reviewed", objectId: "abcdef1234567890", kind: "tag", remoteName: undefined, current: false },
 					],
 					remotes: [{ name: "origin", identity: { provider: "github", host: "github.com", owner: "chogng", repository: "ash" } }],
@@ -279,10 +282,15 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		assert.ok(pane.element.querySelector(".ash-scm-graph-commit.head.merge"));
 		assert.equal(pane.element.querySelector(".ash-scm-graph-label.head")?.textContent, "main");
 		assert.ok(pane.element.querySelector(".ash-scm-graph-label.head .ash-icon"));
-		assert.equal(pane.element.querySelector(".ash-scm-graph-label.remote")?.textContent, "origin/main");
+		assert.equal(pane.element.querySelector(".ash-scm-graph-label.remote")?.textContent, "2");
+		assert.equal(pane.element.querySelector(".ash-scm-graph-label.remote")?.getAttribute('aria-label'), 'origin/main, origin/release');
+		assert.equal(pane.element.querySelectorAll('.ash-scm-graph-label.remote').length, 1);
+		assert.equal(pane.element.querySelector('.ash-scm-graph-label.local[data-icon="git-branch"]')?.textContent, '2');
+		assert.equal(pane.element.querySelector('.ash-scm-graph-label.local[data-icon="git-branch"]')?.getAttribute('aria-label'), 'feature, topic');
 		assert.equal(pane.element.querySelector<HTMLElement>(".ash-scm-graph-label.remote")?.dataset.icon, "cloud");
-		assert.equal(pane.element.querySelector<HTMLElement>('.ash-scm-graph-label:has([aria-label="reviewed"])')?.dataset.icon, 'tag');
-		assert.match(pane.element.querySelector(".ash-scm-graph-remote")?.textContent ?? "", /^GitHub · chogng\/ash · origin$/);
+		assert.equal(pane.element.querySelector<HTMLElement>('.ash-scm-graph-label[aria-label="reviewed"]')?.dataset.icon, 'tag');
+		assert.equal(pane.element.querySelector('.ash-scm-graph-remotes'), null);
+		assert.equal(pane.element.querySelector('.ash-scm-graph')?.firstElementChild?.className, 'ash-scm-graph-list');
 		assert.equal(hoverOptions.length, 4);
 		assert.ok(hoverOptions.every((options) => options.target.classList.contains("ash-scm-graph-commit")));
 		assert.ok(hoverOptions.every((options) => options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal));
@@ -337,7 +345,7 @@ test("SCMHistoryViewPane loads the complete history across graph pages", async (
 	using contextKeyService = new ContextKeyService();
 	const menuService = new MenuService(new CommandService(new InstantiationService()), contextKeyService);
 	const hoverService: IHoverService = {
-		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
+		setupDelayedHover: () => testManagedHover(),
 		setupHover: () => testManagedHover(),
 		showHover: () => testManagedHover(),
 		hideHover() {},
@@ -438,7 +446,7 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		graph: async (_query: GraphQuery) => ({ commits, references: [], remotes: [], hasMore: false, nextCursor: undefined }),
 	} as unknown as IGitService;
 	const hoverService: IHoverService = {
-		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
+		setupDelayedHover: () => testManagedHover(),
 		setupHover: () => testManagedHover(),
 		showHover: () => testManagedHover(),
 		hideHover() {},
@@ -525,7 +533,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 	const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget }> = [];
 	const editorService = testEditorService(opened);
 	const hoverService: IHoverService = {
-		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
+		setupDelayedHover: () => testManagedHover(),
 		setupHover: () => testManagedHover(),
 		showHover: () => testManagedHover(),
 		hideHover() {},
@@ -624,8 +632,11 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 	using changes = new Emitter<void>();
 	using iconChanges = new Emitter<void>();
 	let iconTheme = "first";
+	let hasFileIcons = true;
+	let hasFolderIcons = false;
 	const icons: IResourceIconRenderer = {
 		...testFileIconThemeService(),
+		getFileIconTheme: () => ({ ...noFileIconTheme, hasFileIcons, hasFolderIcons }),
 		onDidChangeResourceIcons: iconChanges.event,
 		renderFileIcon: (_resource, container) => { container.dataset.fileIcon = iconTheme; },
 	};
@@ -666,6 +677,7 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		services.registerInstance(ISCMService, scm);
 		services.registerInstance(ISCMViewService, views);
 		services.registerInstance(IResourceLabelService, testResourceLabelService(icons));
+		services.registerInstance(IResourceIconRenderer, icons);
 		services.registerInstance(IContextMenuService, testContextMenuProvider);
 		services.registerInstance(IWorkspaceContextService, testWorkspaceContext());
 		services.registerInstance(IConfigurationService, configuration);
@@ -682,6 +694,22 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		iconChanges.fire();
 		assert.equal(tree.querySelector('[aria-label="Open first.ts"]'), retainedFile, 'Icon theme changes update shared labels without rebuilding tree rows');
 		assert.equal(retainedFile.querySelector<HTMLElement>('[data-file-icon]')?.dataset.fileIcon, 'second');
+		const fileTwistie = retainedFile.closest('.ash-tree-row')!.querySelector('.ash-tree-twistie')!;
+		assert.ok(fileTwistie.classList.contains('ash-tree-twistie-hidden'));
+		hasFolderIcons = true;
+		iconChanges.fire();
+		assert.ok(fileTwistie.classList.contains('ash-tree-twistie-hidden'), 'Flat changes lists align file icons with arrows even when folder icons exist');
+		hasFileIcons = false;
+		iconChanges.fire();
+		assert.ok(fileTwistie.classList.contains('ash-tree-twistie-with-icon-gap'));
+		hasFileIcons = true;
+		iconChanges.fire();
+		assert.ok(fileTwistie.classList.contains('ash-tree-twistie-hidden'));
+		assert.equal(tree.querySelector('[aria-label="Open first.ts"]'), retainedFile);
+		await configuration.updateValue('workbench.tree.indent', 16);
+		assert.equal(tree.style.getPropertyValue('--ash-tree-indent'), '16px');
+		await configuration.updateValue('workbench.tree.renderIndentGuides', 'none');
+		assert.ok(tree.classList.contains('ash-tree-indent-guides-none'));
 		assert.equal(group().getAttribute('aria-expanded'), 'true');
 		group().querySelector<HTMLElement>('.ash-scm-section-label')!.click();
 		assert.equal(group().getAttribute('aria-expanded'), 'false');
@@ -863,7 +891,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git",
 			title: "Changes",
-		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, testWorkspaceContext(), configuration);
+		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, testWorkspaceContext(), configuration, testFileIconThemeService());
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "4 changed files");
 
@@ -1086,7 +1114,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git.restart",
 			title: "Changes",
-		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, testWorkspaceContext(), configuration);
+		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, testWorkspaceContext(), configuration, testFileIconThemeService());
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);
 		assert.equal(pane.element.querySelector(".ash-scm-branch"), null);

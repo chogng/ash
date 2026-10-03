@@ -1,7 +1,7 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { observeElementSize } from "../../../../base/browser/observer.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
-import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
+import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { localize } from '../../../../nls.js';
 import { DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -44,8 +44,6 @@ export class SCMHistoryViewPane extends ViewPane {
 	private readonly providerIdContext: IContextKey<string>;
 	private readonly graphElement: HTMLDivElement;
 	private readonly hovers = this._register(new DisposableStore());
-	// Repository labels outlive virtual commit rows and are released with the graph.
-	private readonly remoteLabels = this._register(new DisposableStore());
 	private readonly resourceLabels: ResourceLabels;
 	private readonly more = this._register(new DisposableStore());
 	private readonly providerListener = this._register(new MutableDisposable());
@@ -118,27 +116,23 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.list = undefined;
 		this.expanded.clear();
 		this.hovers.clear();
-		this.remoteLabels.clear();
 		this.more.clear();
 		this.graphElement.textContent = "Loading commit graph…";
 		this.graphElement.setAttribute('role', 'status');
 		this.graphElement.setAttribute('aria-live', 'polite');
 		this.graphElement.setAttribute("aria-busy", "true");
 		if (!provider) {
-			this.renderGraph({ items: [], hasMore: false }, []);
+			this.renderGraph({ items: [], hasMore: false });
 			return;
 		}
 		try {
-			const [loaded, remoteLabels] = await Promise.all([
-				provider.provideHistoryItems({ skip: 0, limit: PageSize + 1 }),
-				provider.provideRemoteLabels(),
-			]);
+			const loaded = await provider.provideHistoryItems({ skip: 0, limit: PageSize + 1 });
 			if (this.isDisposed || generation !== this.generation) return;
 			const items = loaded ?? [];
 			const page = { items: items.slice(0, PageSize), hasMore: items.length > PageSize };
 			this.page = page;
 			this.head = provider.historyItemRef.get();
-			this.renderGraph(page, remoteLabels);
+			this.renderGraph(page);
 			if (page.hasMore) void this.loadMore();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
@@ -160,15 +154,13 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 	}
 
-	private renderGraph(page: HistoryPage, remoteLabels: readonly string[]): void {
+	private renderGraph(page: HistoryPage): void {
 		this.graphElement.removeAttribute('role');
 		this.graphElement.removeAttribute('aria-live');
 		this.hovers.clear();
-		this.remoteLabels.clear();
 		this.more.clear();
 		this.rows = toISCMHistoryItemViewModelArray(page.items, new Map(), this.head);
-		const remotes = this.renderRemotes(remoteLabels);
-		const children: HTMLElement[] = remotes ? [remotes] : [];
+		const children: HTMLElement[] = [];
 		this.list = undefined;
 		if (page.items.length === 0) {
 			const empty = h(this.graphElement.ownerDocument, "p");
@@ -381,35 +373,55 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	private renderReferenceLabels(references: readonly ISCMHistoryItemRef[]): HTMLSpanElement {
-		const container = h(this.graphElement.ownerDocument, "span");
+		const document = this.graphElement.ownerDocument;
+		const container = h(document, "span");
 		container.className = "ash-scm-graph-label-container";
 		container.setAttribute("aria-label", localize('scm.history.references', 'History references'));
+		const groups = new Map<string, ISCMHistoryItemRef[]>();
+		// Keep HEAD distinct; other refs share a badge so branch names cannot crowd out the subject.
 		for (const reference of references) {
-			const label = h(this.graphElement.ownerDocument, "span");
-			const isCurrent = reference.id === this.head?.id;
-			const isRemote = reference.category === 'remoteBranch';
-			const icon = reference.category === 'tag' ? Lxicon.tag : isRemote ? Lxicon.cloud : Lxicon.gitBranch;
-			label.className = `ash-scm-graph-label ${isCurrent ? "head" : isRemote ? "remote" : "local"}`;
-			label.dataset.icon = icon.id;
-			this.hovers.add(new IconLabel(label, {
-				label: reference.name,
-				icon,
-				title: reference.description ?? reference.name,
-			}));
-			container.append(label);
+			const key = reference.id === this.head?.id ? 'head' : reference.category ?? 'localBranch';
+			const group = groups.get(key);
+			if (group) {
+				group.push(reference);
+			} else {
+				groups.set(key, [reference]);
+			}
 		}
-		return container;
-	}
-
-	private renderRemotes(remoteLabels: readonly string[]): HTMLDivElement | undefined {
-		if (remoteLabels.length === 0) return undefined;
-		const container = h(this.graphElement.ownerDocument, "div");
-		container.className = "ash-scm-graph-remotes";
-		container.setAttribute("aria-label", localize('scm.history.remotes', 'Repository remotes'));
-		for (const remote of remoteLabels) {
-			const label = h(this.graphElement.ownerDocument, "span");
-			label.className = "ash-scm-graph-remote";
-			this.remoteLabels.add(new IconLabel(label, { label: remote, title: remote }));
+		for (const [category, group] of groups) {
+			const reference = group[0];
+			const isCurrent = category === 'head';
+			let icon = Lxicon.gitBranch;
+			let kind = 'local';
+			if (isCurrent) {
+				kind = 'head';
+			} else if (category === 'remoteBranch') {
+				kind = 'remote';
+				icon = Lxicon.cloud;
+			} else if (category === 'tag') {
+				icon = Lxicon.tag;
+			}
+			const names = group.map(reference => reference.name).join(', ');
+			const label = h(document, "span");
+			label.className = `ash-scm-graph-label ${kind}`;
+			label.dataset.icon = icon.id;
+			label.setAttribute('role', 'img');
+			label.setAttribute('aria-label', names);
+			if (group.length > 1) {
+				const count = h(document, 'span');
+				count.className = 'ash-scm-graph-label-count';
+				count.textContent = String(group.length);
+				count.setAttribute('aria-hidden', 'true');
+				label.append(count);
+			}
+			appendIcon(icon, label);
+			if (isCurrent) {
+				const name = h(document, 'span');
+				name.className = 'ash-scm-graph-label-name';
+				name.textContent = reference.name;
+				label.append(name);
+			}
+			this.hovers.add(this.hoverService.setupDelayedHover(label, { content: names }));
 			container.append(label);
 		}
 		return container;

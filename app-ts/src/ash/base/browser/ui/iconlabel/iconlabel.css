@@ -34,6 +34,8 @@
 
 .ash-icon-label-text {
   min-width: 0;
+  max-width: 100%;
+  flex: 0 0 auto;
   overflow: hidden;
   text-overflow: var(--ash-icon-label-text-overflow, ellipsis);
   white-space: nowrap;
@@ -64,15 +66,12 @@
 
 .ash-icon-label-description {
   min-width: 0;
+  flex: 0 1 auto;
+  margin-left: var(--ash-spacing-size80);
   overflow: hidden;
   color: var(--ash-description-foreground);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.ash-icon-label-description::before {
-  margin: 0 4px;
-  content: "—";
 }
 
 .ash-icon-label-suffix {

@@ -3,7 +3,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { observableFromEvent } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { SCMHistoryUnavailableError, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemChangeContents, type ISCMHistoryItemRef, type ISCMHistoryOptions, type ISCMHistoryProvider } from '../../scm/common/history.js';
-import { GitWorkspaceError, type GitCommitSummary, type GitHead, type GitReference, type GitRemote, type GitStatus, type GraphPage, type IGitService } from '../common/gitService.js';
+import { GitWorkspaceError, type GitCommitSummary, type GitHead, type GitReference, type GitStatus, type GraphPage, type IGitService } from '../common/gitService.js';
 import { gitErrorMessage } from '../common/gitError.js';
 
 const PageSize = 50;
@@ -20,7 +20,6 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	public readonly historyItemRef = observableFromEvent(this, this.historyRefChanged.event, () => this.currentHistoryRef);
 	private readonly commits: GitCommitSummary[] = [];
 	private readonly references = new Map<string, ISCMHistoryItemRef[]>();
-	private remoteLabels: readonly string[] = [];
 	private nextCursor: string | undefined;
 	private hasMore = true;
 	private generation = 0;
@@ -63,11 +62,6 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 			timestamp: commit.timestampSeconds * 1000,
 			references: this.references.get(commit.objectId) ?? [],
 		} satisfies ISCMHistoryItem));
-	}
-
-	public async provideRemoteLabels(): Promise<readonly string[]> {
-		await this.loadUntil(1);
-		return this.remoteLabels;
 	}
 
 	public async provideHistoryItemChanges(historyItemId: string, _historyItemParentId: string | undefined): Promise<readonly ISCMHistoryItemChange[]> {
@@ -151,7 +145,6 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 			if (!items.some(item => item.id === referenceId(reference))) items.push(toHistoryRef(reference));
 			this.references.set(reference.objectId, items);
 		}
-		this.remoteLabels = page.remotes.map(remoteLabel);
 		this.nextCursor = page.nextCursor;
 		this.hasMore = page.hasMore && page.nextCursor !== undefined && page.commits.length > 0;
 	}
@@ -160,7 +153,6 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 		this.generation += 1;
 		this.commits.length = 0;
 		this.references.clear();
-		this.remoteLabels = [];
 		this.parents.clear();
 		this.nextCursor = undefined;
 		this.hasMore = true;
@@ -193,13 +185,6 @@ function toHistoryRef(reference: GitReference): ISCMHistoryItemRef {
 		category: reference.kind,
 		...(reference.remoteName ? { description: reference.remoteName } : {}),
 	};
-}
-
-function remoteLabel(remote: GitRemote): string {
-	const identity = remote.identity;
-	if (!identity) return remote.name;
-	const provider = identity.provider === 'github' ? 'GitHub' : identity.provider === 'gitlab' ? 'GitLab' : identity.provider === 'bitbucket' ? 'Bitbucket' : 'Remote';
-	return `${provider} · ${identity.owner}/${identity.repository} · ${remote.name}`;
 }
 
 function commitFileUri(repositoryId: string, objectId: string, path: string, side: 'original' | 'modified'): URI {

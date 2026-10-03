@@ -402,3 +402,35 @@ test('standard product icon fonts load into mounted icons and unload with their 
 	await expect(page.locator('style[data-ash-icon-fonts]')).toBeEmpty();
 	expect(errors).toEqual([]);
 });
+
+
+test('resource labels keep the filename readable before truncating its directory', async ({ page }) => {
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const host = page.locator('#path-label');
+	const name = host.locator('.ash-icon-label-text');
+	const description = host.locator('.ash-icon-label-description');
+	await expect(name).toHaveText('gitHistoryProvider.ts');
+	await expect(description).toHaveText('app-ts/src/ash/workbench/contrib/git/browser');
+	const layout = async () => host.evaluate(element => {
+		const container = element.querySelector('.ash-icon-label-container')!;
+		const name = element.querySelector('.ash-icon-label-text')!;
+		const description = element.querySelector('.ash-icon-label-description')!;
+		const bounds = container.getBoundingClientRect();
+		return {
+			nameFits: name.clientWidth >= name.scrollWidth,
+			directoryFits: description.clientWidth >= description.scrollWidth,
+			nameContained: name.getBoundingClientRect().right <= bounds.right + 1,
+			directoryVisible: description.clientWidth > 0,
+		};
+	});
+	await expect.poll(layout).toEqual({ nameFits: true, directoryFits: false, nameContained: true, directoryVisible: true });
+	await expect.poll(() => description.evaluate(element => getComputedStyle(element, '::before').content)).toBe('none');
+	await host.evaluate(element => { element.style.width = '100px'; });
+	await expect.poll(layout).toEqual({ nameFits: false, directoryFits: false, nameContained: true, directoryVisible: false });
+	await expect(name).toHaveCSS('text-overflow', 'ellipsis');
+	await host.evaluate(element => { element.style.width = '600px'; });
+	await expect.poll(layout).toEqual({ nameFits: true, directoryFits: true, nameContained: true, directoryVisible: true });
+	await page.evaluate(() => window.disposeIconLabels());
+	await expect(host.locator('.ash-icon-label')).toHaveCount(0);
+});

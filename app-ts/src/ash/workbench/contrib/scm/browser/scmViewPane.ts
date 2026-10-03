@@ -13,7 +13,7 @@ import { WorkbenchObjectTree } from '../../../../platform/list/browser/listServi
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
-import { IResourceLabelService, type ResourceLabels } from '../../../browser/labels.js';
+import { IResourceIconRenderer, IResourceLabelService, type ResourceLabels } from '../../../browser/labels.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ISCMService, ISCMViewService, type ISCMProvider, type ISCMResource, type ISCMResourceGroup } from '../common/scm.js';
 
@@ -49,6 +49,7 @@ export class ScmViewPane extends ViewPane {
 		@IContextMenuService private readonly contextMenuProvider: IContextMenuProvider,
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 		@IConfigurationService configurationService: IConfigurationService,
+		@IResourceIconRenderer resourceIconRenderer: IResourceIconRenderer,
 	) {
 		super(container, options);
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
@@ -100,6 +101,15 @@ export class ScmViewPane extends ViewPane {
 			},
 			renderElement: element => 'group' in element ? this.renderGroup(element.group) : this.renderResource(element),
 		}));
+		const updateTwistieLayout = () => {
+			const theme = resourceIconRenderer.getFileIconTheme();
+			// In a flat changes list, file icons occupy the empty arrow column even when the theme supplies folder icons.
+			this.tree.updateOptions({ twistieAdditionalCssClass: element => 'resource' in element && theme.hasFileIcons
+				? 'ash-tree-twistie-hidden'
+				: 'ash-tree-twistie-with-icon-gap' });
+		};
+		updateTwistieLayout();
+		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
 		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use Up and Down to preview files, Left to collapse, and Right to expand a group. Press Enter to open and pin a file, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.'));
 		this._register(this.tree.onDidOpen(event => {
 			if ('resource' in event.element) {

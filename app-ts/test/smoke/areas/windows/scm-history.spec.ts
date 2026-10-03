@@ -8,21 +8,72 @@ const run = promisify(execFile);
 
 test.use({ gitRepository: true });
 
-test('SCM history shows Git commits and opens a changed file', async ({ target, workbench }) => {
+test('SCM history shows Git commits and opens a changed file', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
 
+	const cwd = testWorkspace.directory;
+	await run('git', ['remote', 'add', 'origin', 'https://github.com/ash-test/history.git'], { cwd });
+	await run('git', ['branch', 'topic'], { cwd });
+	await run('git', ['branch', 'feature'], { cwd });
+	await run('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd });
+	await run('git', ['update-ref', 'refs/remotes/origin/release', 'HEAD'], { cwd });
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await expect(history).toBeVisible();
 	await history.locator('.ash-pane-view-header').click();
+	await history.locator('[data-action-id="ash.git.graph.refresh"] > button').click();
 	const commit = history.getByRole('treeitem', { name: /Initial/ });
 	await expect(commit).toBeVisible();
-	await expect(commit.locator('.ash-scm-graph-label > .ash-icon-label')).not.toHaveCount(0);
-	await expect(commit.locator('.ash-scm-graph-label .ash-icon').first()).toHaveCSS('width', '16px');
+	await expect(history.locator('.ash-scm-graph-remotes')).toHaveCount(0);
+	const head = commit.locator('.ash-scm-graph-label.head');
+	await expect(head).toHaveText('main');
+	await expect(head).toHaveAttribute('aria-label', 'main');
+	await expect(head).toHaveCSS('height', '18px');
+	await expect(head).toHaveCSS('border-radius', '9999px');
+	await expect(head.locator('.ash-scm-graph-label-name')).toHaveCSS('max-width', '100px');
+	await expect(commit.locator('.ash-scm-graph-label.remote')).toHaveText('2');
+	await expect(commit.locator('.ash-scm-graph-label.remote')).toHaveAttribute('aria-label', 'origin/main, origin/release');
+	await expect(commit.locator('.ash-scm-graph-label.local')).toHaveText('2');
+	await expect(commit.locator('.ash-scm-graph-label-container')).toHaveCSS('flex-shrink', '0');
+	await expect(commit.locator('.ash-scm-graph-label .ash-icon').first()).toHaveCSS('width', '12px');
+	const geometry = await commit.evaluate(element => {
+		const subject = element.querySelector('.ash-scm-graph-subject')!.getBoundingClientRect();
+		const badges = element.querySelector('.ash-scm-graph-label-container')!.getBoundingClientRect();
+		return { subjectVisible: subject.width > 0, separated: subject.right <= badges.left };
+	});
+	expect(geometry).toEqual({ subjectVisible: true, separated: true });
 	await expect(commit.locator('.ash-scm-graph-label .ash-icon').first()).toHaveAttribute('aria-hidden', 'true');
 	await expect(commit).toHaveAttribute('aria-current', 'true');
-	await commit.click();
+	for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		await workbench.quickaccess.select(theme);
+		const colors = await commit.locator('.ash-scm-graph-label').evaluateAll(elements => elements.map(element => {
+			const style = getComputedStyle(element);
+			return { foreground: style.color, background: style.backgroundColor, outline: style.outlineStyle };
+		}));
+		for (const badge of colors) {
+			expect(badge.foreground).not.toBe(badge.background);
+			expect(badge.background).not.toBe('rgba(0, 0, 0, 0)');
+			if (theme.includes('High Contrast')) {
+				expect(badge.outline).toBe('solid');
+			}
+		}
+	}
+	await run('git', ['update-ref', '-d', 'refs/remotes/origin/release'], { cwd });
+	const branchName = 'work/a-long-current-branch-name';
+	await run('git', ['branch', '-m', branchName], { cwd });
+	await history.locator('[data-action-id="ash.git.graph.refresh"] > button').click();
+	await expect(head).toHaveText(branchName);
+	await expect(head).toHaveAttribute('aria-label', branchName);
+	await expect(head.locator('.ash-scm-graph-label-name')).toHaveCSS('width', '100px');
+	await expect(head.locator('.ash-scm-graph-label-name')).toHaveCSS('text-overflow', 'ellipsis');
+	await expect(commit.locator('.ash-scm-graph-label.remote')).toHaveText('');
+	await expect(commit.locator('.ash-scm-graph-label.remote')).toHaveAttribute('aria-label', 'origin/main');
+	await head.hover();
+	await expect(page.locator('.ash-hover')).toContainText(branchName);
+	await commit.focus();
+	await page.keyboard.press('Enter');
 	const changedFile = commit.getByRole('button', { name: /main\.ts/ });
 	await expect(changedFile).toBeVisible();
 	await changedFile.click();

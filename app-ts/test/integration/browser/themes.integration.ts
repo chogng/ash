@@ -230,6 +230,18 @@ for (const [id, resource] of [['model-icon', URI.file('/workspace/no-extension')
 }
 window.changeIconModelLanguage = id => { for (const reference of modelReferences) reference.model.setLanguage(languages.createById(id)); };
 window.releaseIconModels = () => { for (const reference of modelReferences) reference.dispose(); };
+const pathHost = document.createElement('button');
+pathHost.id = 'path-label';
+pathHost.style.display = 'flex';
+pathHost.style.width = '240px';
+document.querySelector('#root')!.append(pathHost);
+const pathLabel = labels.create(pathHost);
+pathLabel.element.style.width = '100%';
+pathLabel.setResource({
+	resource: URI.file('/workspace/app-ts/src/ash/workbench/contrib/git/browser/gitHistoryProvider.ts'),
+	name: 'gitHistoryProvider.ts',
+	description: 'app-ts/src/ash/workbench/contrib/git/browser',
+}, { reserveIconSpace: true });
 window.disposeIconLabels = () => labels.dispose();
 document.body.dataset.ready = 'true';
 
