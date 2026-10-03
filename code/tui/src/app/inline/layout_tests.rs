@@ -4,13 +4,21 @@ use ratatui::layout::Rect;
 
 #[test]
 fn short_query_uses_history_space_before_clipping_its_choices() {
-    let areas = session_areas(Rect::new(3, 5, 42, 12), 0, 0, 0, 6, 3, 2, 0, 0, 4);
+    let areas = session_areas(Rect::new(3, 5, 42, 12), 0, 0, 0, 6, 3, 2, 0, 4);
     assert_eq!(areas.request, Rect::new(3, 5, 42, 6));
     assert_eq!(areas.transcript.height, 0);
     assert_eq!(areas.composer.height, 3);
-    assert_eq!(areas.top_tip.height, 1);
-    assert_eq!(areas.bottom.height, 2);
-    assert_eq!(areas.bottom.bottom(), 17);
+    assert_eq!(areas.tipline.height, 1);
+    assert_eq!(areas.statusline.height, 1);
+    assert_eq!(areas.hintline.height, 1);
+    assert_eq!(areas.hintline.bottom(), 17);
+
+    let short = session_areas(Rect::new(3, 5, 42, 11), 0, 0, 0, 6, 3, 2, 0, 4);
+    assert_eq!(short.request.height, 6);
+    assert_eq!(short.composer.height, 3);
+    assert_eq!(short.tipline.height, 0);
+    assert_eq!(short.statusline.height, 1);
+    assert_eq!(short.hintline.height, 1);
 }
 
 #[test]
@@ -20,143 +28,13 @@ fn command_panels_use_available_height_and_keep_hints_visible() {
         let layout = super::command_panel_areas(area, 100, 2);
         assert_eq!(layout.composer.height, height.saturating_sub(2));
         assert_eq!(layout.transcript.height, 0);
-        assert_eq!(layout.bottom.bottom(), area.bottom());
-        assert_eq!(layout.composer.bottom(), layout.bottom.y);
-        assert_eq!(layout.top_tip.height, 0);
+        assert_eq!(layout.hintline.bottom(), area.bottom());
+        assert_eq!(layout.composer.bottom(), layout.hintline.y);
+        assert_eq!(layout.tipline.height, 0);
     }
     let layout = super::command_panel_areas(Rect::new(0, 0, 80, 40), 8, 2);
     assert_eq!(layout.composer.height, 8);
     assert_eq!(layout.transcript.height, 30);
-}
-
-#[test]
-fn session_layout_bounds_queue_and_preserves_transcript() {
-    let areas = session_areas(
-        Rect::new(0, 0, 80, 20),
-        1,
-        1,
-        12,
-        0,
-        3,
-        2,
-        4,
-        0,
-        super::MIN_TRANSCRIPT_ROWS,
-    );
-
-    assert_eq!(areas.transcript.height, 4);
-    assert_eq!(areas.goal.height, 0);
-    assert_eq!(areas.plan.height, 0);
-    assert_eq!(areas.queue.height, 5);
-    assert_eq!(areas.top_tip.height, 1);
-    assert_eq!(areas.composer.height, 3);
-    assert_eq!(areas.bottom.height, 2);
-    assert_eq!(areas.agent_thread_switcher.height, 4);
-}
-
-#[test]
-fn session_layout_uses_zero_height_for_absent_rows() {
-    let areas = session_areas(
-        Rect::new(0, 0, 80, 20),
-        0,
-        0,
-        0,
-        0,
-        3,
-        1,
-        0,
-        0,
-        super::MIN_TRANSCRIPT_ROWS,
-    );
-
-    assert_eq!(areas.queue.height, 0);
-    assert_eq!(areas.top_tip.y, areas.transcript.height);
-    assert_eq!(areas.composer.y, areas.top_tip.y + areas.top_tip.height);
-}
-
-#[test]
-fn session_layout_places_goal_plan_and_queue_above_input() {
-    let areas = session_areas(
-        Rect::new(0, 0, 80, 20),
-        1,
-        1,
-        2,
-        0,
-        3,
-        1,
-        2,
-        0,
-        super::MIN_TRANSCRIPT_ROWS,
-    );
-
-    assert_eq!(areas.goal.y, areas.transcript.height);
-    assert_eq!(areas.plan.y, areas.goal.y + areas.goal.height);
-    assert_eq!(areas.queue.y, areas.plan.y + areas.plan.height);
-    assert_eq!(areas.top_tip.y, areas.queue.y + areas.queue.height);
-    assert_eq!(areas.composer.y, areas.top_tip.y + areas.top_tip.height);
-    assert_eq!(areas.bottom.y, areas.composer.y + areas.composer.height);
-    assert_eq!(
-        areas.agent_thread_switcher.y,
-        areas.bottom.y + areas.bottom.height + 1
-    );
-}
-
-#[test]
-fn session_layout_does_not_reserve_an_agent_thread_gap_without_both_surfaces() {
-    let without_switcher = session_areas(
-        Rect::new(0, 0, 80, 20),
-        0,
-        0,
-        0,
-        0,
-        3,
-        1,
-        0,
-        0,
-        super::MIN_TRANSCRIPT_ROWS,
-    );
-    let without_bottom = session_areas(
-        Rect::new(0, 0, 80, 20),
-        0,
-        0,
-        0,
-        0,
-        3,
-        0,
-        2,
-        0,
-        super::MIN_TRANSCRIPT_ROWS,
-    );
-
-    assert_eq!(
-        without_switcher.agent_thread_switcher.y,
-        without_switcher.bottom.y + without_switcher.bottom.height
-    );
-    assert_eq!(
-        without_bottom.agent_thread_switcher.y,
-        without_bottom.bottom.y + without_bottom.bottom.height
-    );
-}
-
-#[test]
-fn session_layout_places_query_above_the_fixed_top_tip_row() {
-    let areas = session_areas(
-        Rect::new(0, 0, 80, 20),
-        0,
-        0,
-        0,
-        1,
-        3,
-        1,
-        0,
-        0,
-        super::MIN_TRANSCRIPT_ROWS,
-    );
-
-    assert_eq!(areas.request.height, 1);
-    assert_eq!(areas.top_tip.y, areas.request.y + areas.request.height);
-    assert_eq!(areas.top_tip.height, 1);
-    assert_eq!(areas.composer.y, areas.top_tip.y + areas.top_tip.height);
 }
 
 #[test]
@@ -173,30 +51,4 @@ fn manager_layout_shrinks_welcome_before_the_session_list() {
 
     assert_eq!(areas.welcome.height, 3);
     assert_eq!(areas.sessions, Rect::new(0, 4, 40, 4));
-}
-
-#[test]
-fn status_indicator_layout_stays_bounded_on_short_terminals() {
-    for status_rows in [1, 2] {
-        for height in 0..40 {
-            let area = Rect::new(3, 5, 40, height);
-            let areas = session_areas(
-                area,
-                0,
-                0,
-                0,
-                0,
-                3,
-                2,
-                0,
-                status_rows,
-                super::MIN_TRANSCRIPT_ROWS,
-            );
-            assert!(areas.status_indicator.bottom() <= area.bottom());
-            assert!(areas.status_indicator.y >= area.y);
-            assert_eq!(areas.status_indicator.bottom(), areas.top_tip.y);
-            assert!(areas.status_indicator.height <= status_rows);
-            assert_eq!(areas.top_tip.bottom(), areas.composer.y);
-        }
-    }
 }

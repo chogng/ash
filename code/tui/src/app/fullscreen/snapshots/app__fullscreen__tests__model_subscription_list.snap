@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 100, 18)"
 ---
-  .                                                                               [— / —] [仪 表 盘 ]  
+  .                                                                                       [仪 表 盘 ]  
                                                                                                     
             ┌── 模 型  ─────────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             

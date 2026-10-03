@@ -2,7 +2,7 @@
 source: code/tui/src/app/usage_tests.rs
 expression: "render(&app, 48, 28)"
 ---
-  .                        [— / —] [Dashboard]
+  .                                [Dashboard]
 
 > /usage
   ┌── Usage ─────────────────────────────[✗]─┐

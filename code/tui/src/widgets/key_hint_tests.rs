@@ -1,5 +1,5 @@
 use super::KeyHints;
-use super::draw;
+use super::draw_content;
 use super::draw_right;
 use crate::config::KeyHintStyle;
 use crate::render::test_context;
@@ -54,9 +54,9 @@ fn key_hint_uses_two_character_horizontal_insets() {
 
     terminal
         .draw(|frame| {
-            draw(
+            draw_content(
                 frame,
-                frame.area(),
+                crate::render::horizontal_margin(frame.area(), 2),
                 &KeyHints::new().with_action("Enter", "apply"),
                 KeyHintStyle::Contrast,
                 test_context(),
@@ -76,9 +76,9 @@ fn key_hint_styles_preserve_key_and_description_hierarchy() {
     let mut contrast = Terminal::new(TestBackend::new(30, 1)).unwrap();
     contrast
         .draw(|frame| {
-            draw(
+            draw_content(
                 frame,
-                frame.area(),
+                crate::render::horizontal_margin(frame.area(), 2),
                 &hints,
                 KeyHintStyle::Contrast,
                 test_context(),
@@ -94,9 +94,9 @@ fn key_hint_styles_preserve_key_and_description_hierarchy() {
     let mut muted = Terminal::new(TestBackend::new(30, 1)).unwrap();
     muted
         .draw(|frame| {
-            draw(
+            draw_content(
                 frame,
-                frame.area(),
+                crate::render::horizontal_margin(frame.area(), 2),
                 &hints,
                 KeyHintStyle::Muted,
                 test_context(),

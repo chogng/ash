@@ -2,7 +2,7 @@
 source: code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
-  .                          [— / —] [Dashboard]  
+  .                                  [Dashboard]  
                                                   
   ╭────────────────────────────────────────────╮  
   │                                            │  
@@ -12,9 +12,9 @@ expression: render(&app)
   │  Settings                                  │  
   │  Help and shortcuts                        │  
   ╰────────────────────────────────────────────╯  
-  ⏸ Manual                                        
+      Type a new task · Tab actions · Esc return  
   ──────────────────────────────────────────────  
   >                                               
   ───────────────────────────── Automatic model   
-                                                  
-  Enter send  ·  Tab actions  ·  / commands
+  ⏸ Manual                                        
+       Enter send  ·  Tab actions  ·  / commands

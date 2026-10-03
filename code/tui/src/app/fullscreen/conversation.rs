@@ -17,6 +17,7 @@ pub(super) fn draw(
     if let Some(preview) = app.session_preview() {
         let messages = preview.messages();
         ChatHistoryView {
+            progress: None,
             jump_label: super::JUMP_LABEL,
             header: None,
             messages: &messages,
@@ -38,10 +39,10 @@ pub(super) fn draw(
         if let Some(notice) = preview.notice() {
             frame.render_widget(
                 Paragraph::new(notice).style(Style::default().fg(context.muted())),
-                areas.session.top_tip,
+                areas.session.tipline,
             );
         }
-        super::footer::draw(frame, areas.session.bottom, app, context);
+        super::footer::draw(frame, areas, app, context);
     } else if let Some(manager) = app.issue_manager() {
         let hovered = match app.fullscreen.pointer.hovered() {
             Some(super::pointer::PointerTarget::Issues(target)) => Some(target),
@@ -72,6 +73,7 @@ pub(super) fn draw(
     } else {
         let messages = app.visible_transcript_views();
         ChatHistoryView {
+            progress: app.turn_progress(),
             jump_label: super::JUMP_LABEL,
             header: None,
             messages: &messages,

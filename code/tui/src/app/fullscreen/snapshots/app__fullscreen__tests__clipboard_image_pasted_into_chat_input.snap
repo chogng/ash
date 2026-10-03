@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: rendered_after_paste
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
                                                                                 
                                                                                 
@@ -16,9 +16,9 @@ expression: rendered_after_paste
                                                                                 
                                                                                 
                                                                                 
-  ⏸ Manual                                                                      
+                                                                                
   ────────────────────────────────────────────────────────────────────────────  
   > [Image #1]                                                                  
   ─────────────────────────────────────────────────────────── Automatic model   
-                                                                                
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual                                                                      
+                            Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

@@ -2,7 +2,7 @@
 source: code/tui/src/app/guardian_tests.rs
 expression: frame
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
         ┌── Guardian ──────────────────────────────────────────────[✗]─┐        
         │                                                              │        

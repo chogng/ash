@@ -2,7 +2,7 @@
 source: code/tui/src/app/state_tests.rs
 expression: render_dictation_frame(&app)
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
                                                                                 
                                                                                 
@@ -20,9 +20,9 @@ expression: render_dictation_frame(&app)
                                                                                 
                                                                                 
                                                                                 
-                                              Listening. Press /voice to stop.  
+  Dictation · listening · ctrl+c to stop dictation                              
   ────────────────────────────────────────────────────────────────────────────  
   > Draft hello                                                                 
   ─────────────────────────────────────────────────────────── Automatic model   
-                                                                                
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual                                                                      
+                            Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

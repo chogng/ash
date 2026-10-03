@@ -1,0 +1,97 @@
+---
+source: code/tui/src/app/inline/frame_tests.rs
+expression: "format!(\"Normal\\n{normal_text}\\nQuestion\\n{question_text}\\nWaiting\\n{waiting}\\nPanel\\n{panel}\\nRestored\\n{}\",\ntext(&restored))"
+---
+Normal
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+> keep this draft                                                               
+────────────────────────────────────────────────────────────────────────────────
+  Fixture model                                                                 
+  ⏸ Manual                                                                      
+Question
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+┌Next step  (1/1)──────────────────────────────────────────────────────────────┐
+│How should the work continue?                                                 │
+│> Continue  Use the proposed approach                                         │
+│  Type your own answer  Answer in the input below                             │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+> keep this draft                                                               
+────────────────────────────────────────────────────────────────────────────────
+  Fixture model                                                                 
+                                                               Enter to answer  
+Waiting
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+┌Next step  (1/1)──────────────────────────────────────────────────────────────┐
+│How should the work continue?                                                 │
+│> Continue  Use the proposed approach                                         │
+│  Type your own answer  Answer in the input below                             │
+│Submitting…                                                                   │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+> keep this draft                                                               
+────────────────────────────────────────────────────────────────────────────────
+  Fixture model                                                                 
+                                                Waiting for the request result  
+Panel
+                                                                                
+    ▄  ▄     Ash Code v0.1.0                                                    
+  ▗█▛██▜█▖   Automatic model                                                    
+  ▝▜████▛▘   .                                                                  
+    ▝  ▘                                                                        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+─ Help ─────────────────────────────────────────────────────────────────────────
+                                                                                
+   Commands                                                                     
+> First                                                                         
+  Second                                                                        
+                                                                                
+  Tab/Shift+Tab to switch  ·  Esc to close                                      
+Restored
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+> keep this draft                                                               
+────────────────────────────────────────────────────────────────────────────────
+  Fixture model                                                                 
+  ⏸ Manual

@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: scrolled_to_start
 ---
-  /work/ash                                                [— / —] [Dashboard]  
+  /work/ash                                                        [Dashboard]  
                                                                                 
 ● Conversation started.                                                         
                                                                                 
@@ -16,9 +16,9 @@ expression: scrolled_to_start
                                                                                 
 ● Model invocation failed 4                                                     
                             Jump to bottom (click) ↓                            
-  ⏸ Manual                                                                      
+                                                                                
   ────────────────────────────────────────────────────────────────────────────  
   >                                                                             
   ─────────────────────────────────────────────────────────── Automatic model   
-                                                                                
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual                                                                      
+                            Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

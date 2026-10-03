@@ -5,8 +5,6 @@ use crate::render::horizontal_margin;
 use crate::widgets::key_hint;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::text::Line;
-use ratatui::widgets::Paragraph;
 use std::time::Duration;
 use std::time::Instant;
 use unicode_width::UnicodeWidthStr;
@@ -187,32 +185,18 @@ impl TopTip {
         frame: &mut Frame<'_>,
         area: Rect,
         navigation: Option<&str>,
-        policy: Line<'_>,
         context: RenderContext<'_>,
     ) {
         let opacity = self.opacity();
         if area.is_empty() || opacity == 0.0 {
             return;
         }
-        let mut hint_area = area;
-        if self.notice.is_none() && self.clipboard_image_expires_at.is_none() {
-            let content = horizontal_margin(area, 2);
-            let policy_width = policy.width() as u16;
-            frame.render_widget(Paragraph::new(policy), content);
-            let occupied = if policy_width == 0 {
-                0
-            } else {
-                policy_width.saturating_add(3).min(area.width)
-            };
-            hint_area.x += occupied;
-            hint_area.width -= occupied;
-        }
         if let Some(text) = self.localized_text(navigation, context.language())
             && (self.notice.is_some()
                 || self.clipboard_image_expires_at.is_some()
-                || text.width() <= usize::from(horizontal_margin(hint_area, 2).width))
+                || text.width() <= usize::from(horizontal_margin(area, 2).width))
         {
-            key_hint::draw_right(frame, hint_area, &text, context);
+            key_hint::draw_right(frame, area, &text, context);
         }
         for y in area.y..area.bottom() {
             for x in area.x..area.right() {

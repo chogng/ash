@@ -1,14 +1,6 @@
 use super::layout::Layout;
 use crate::app::App;
-use crate::render::Renderable;
 use crate::thread::composer as chat_input;
-use crate::thread::composer::ChatComposerSurface;
-use crate::thread::goal;
-use crate::thread::interaction::approval;
-use crate::thread::interaction::query;
-use crate::thread::plan;
-use crate::thread::queue;
-use ash_protocol::CollaborationMode;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -20,122 +12,55 @@ pub(super) fn draw(
     areas: &Layout,
     context: crate::render::RenderContext<'_>,
 ) {
-    let hovered = app.fullscreen.pointer.hovered();
-    let pressed = app.fullscreen.pointer.pressed();
-    let cursor = if app.accepts_input() && app.chat_input_focused() {
-        chat_input::ChatInputCursor::Visible
-    } else {
-        chat_input::ChatInputCursor::Hidden
-    };
-    let focus = if app.chat_input_focused() {
-        chat_input::ChatInputFocus::Focused
-    } else {
-        chat_input::ChatInputFocus::Blurred
-    };
-    let input_view = app.chat_composer_view();
-    if let Some(approval) = app.approval_view() {
-        let hovered = match hovered {
-            Some(super::pointer::PointerTarget::Approval(index)) => Some(*index),
+    fn pointer_target(
+        target: Option<&super::pointer::PointerTarget>,
+    ) -> Option<crate::app::chat_view::Target<'_>> {
+        match target {
+            Some(super::pointer::PointerTarget::Approval(index)) => {
+                Some(crate::app::chat_view::Target::Approval(*index))
+            }
+            Some(super::pointer::PointerTarget::Query(index)) => {
+                Some(crate::app::chat_view::Target::Query(*index))
+            }
+            Some(super::pointer::PointerTarget::Queue(id)) => {
+                Some(crate::app::chat_view::Target::Queue(*id))
+            }
+            Some(super::pointer::PointerTarget::AgentThread(id)) => {
+                Some(crate::app::chat_view::Target::AgentThread(id))
+            }
             _ => None,
-        };
-        let pressed = match pressed {
-            Some(super::pointer::PointerTarget::Approval(index)) => Some(*index),
-            _ => None,
-        };
-        approval::draw(
-            frame,
-            areas.session.composer,
-            approval,
-            hovered,
-            pressed,
-            context,
-        );
-    } else {
-        ChatComposerSurface {
-            chrome: chat_input::ChatInputChrome::Mode(app.collaboration_mode()),
-            view: &input_view,
-            cursor,
-            focus,
-            placeholder: Some("Build anything"),
-        }
-        .render(frame, areas.input, context);
-        if let Some(labels) = labels(app, areas.input, context) {
-            frame.render_widget(
-                Paragraph::new(labels.model).style(Style::default().fg(context.muted())),
-                labels.model_area,
-            );
-            let interaction = app.fullscreen.pointer.interaction_state(
-                &super::pointer::PointerTarget::ComposerSetting(Target::Mode),
-            );
-            let style = Style::default()
-                .fg(context.mode_color(app.collaboration_mode()))
-                .patch(crate::render::interaction_style(context, interaction));
-            frame.render_widget(Paragraph::new(labels.mode).style(style), labels.mode_area);
         }
     }
-    if let Some(query) = app.query_view() {
-        let hovered = match hovered {
-            Some(super::pointer::PointerTarget::Query(index)) => Some(*index),
-            _ => None,
-        };
-        let pressed = match pressed {
-            Some(super::pointer::PointerTarget::Query(index)) => Some(*index),
-            _ => None,
-        };
-        query::draw(
-            frame,
-            areas.session.request,
-            query,
-            hovered,
-            pressed,
-            context,
-        );
-    }
-    if !app.fullscreen.home_visible() && app.session_manager_view().is_none() {
-        goal::draw(frame, areas.session.goal, app.goal_view(), context);
-        plan::draw(frame, areas.session.plan, app.plan_view(), context);
-        let queue_view = app.queue_view();
-        queue::draw(
-            frame,
-            areas.session.queue,
-            &queue_view,
-            queue::DEFAULT_MAX_VISIBLE_ITEMS,
-            match hovered {
-                Some(super::pointer::PointerTarget::Queue(id)) => Some(*id),
-                _ => None,
-            },
-            match pressed {
-                Some(super::pointer::PointerTarget::Queue(id)) => Some(*id),
-                _ => None,
-            },
-            context,
-        );
-    }
-    super::footer::draw(frame, areas.session.bottom, app, context);
-    if !app.fullscreen.home_visible()
-        && let Some(agent_thread_switcher) = app.agent_thread_switcher_view()
+    crate::app::chat_view::draw(
+        frame,
+        app,
+        &areas.session,
+        areas.input,
+        chat_input::ChatInputChrome::Mode(app.collaboration_mode()),
+        Some("Build anything"),
+        crate::app::chat_view::Pointer {
+            hovered: pointer_target(app.fullscreen.pointer.hovered()),
+            pressed: pointer_target(app.fullscreen.pointer.pressed()),
+        },
+        context,
+    );
+    if app.approval_view().is_none()
+        && let Some(labels) = labels(app, areas.input, context)
     {
-        crate::thread::draw_agent_thread_switcher(
-            frame,
-            chat_input::content_area(areas.session.agent_thread_switcher),
-            agent_thread_switcher,
-            match hovered {
-                Some(super::pointer::PointerTarget::AgentThread(thread_id)) => Some(thread_id),
-                _ => None,
-            },
-            match pressed {
-                Some(super::pointer::PointerTarget::AgentThread(thread_id)) => Some(thread_id),
-                _ => None,
-            },
-            context,
+        frame.render_widget(
+            Paragraph::new(labels.model).style(Style::default().fg(context.muted())),
+            labels.model_area,
         );
+        let interaction = app.fullscreen.pointer.interaction_state(
+            &super::pointer::PointerTarget::ComposerSetting(Target::Mode),
+        );
+        let style = Style::default()
+            .fg(context.mode_color(app.collaboration_mode()))
+            .patch(crate::render::interaction_style(context, interaction));
+        frame.render_widget(Paragraph::new(labels.mode).style(style), labels.mode_area);
     }
-    if !app.fullscreen.home_visible()
-        && let Some(indicator) = app.status_indicator()
-    {
-        indicator.draw(frame, areas.session.status_indicator, context);
-    }
-    super::footer::draw_tip(frame, areas.session.top_tip, app, context);
+    super::footer::draw(frame, areas, app, context);
+    super::footer::draw_tip(frame, areas.session.tipline, app, context);
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -155,26 +80,25 @@ fn labels(app: &App, input: Rect, context: crate::render::RenderContext<'_>) -> 
     if input.height < 3 || input.width < 8 {
         return None;
     }
-    let mode = match app.collaboration_mode() {
-        CollaborationMode::Agent => String::new(),
-        mode @ (CollaborationMode::Plan
-        | CollaborationMode::Debug
-        | CollaborationMode::Multitask
-        | CollaborationMode::Ask) => {
-            format!(
-                " {} ",
-                context.localize(chat_input::options::mode_label(mode))
-            )
-        }
-    };
+    let mode = app
+        .status_line()
+        .mode_label(app.collaboration_mode())
+        .map(|label| format!(" {} ", context.localize(label)))
+        .unwrap_or_default();
     let mode_width = crate::render::display_width(&mode) as u16;
     if mode_width + 4 > input.width {
         return None;
     }
-    let model = crate::render::truncate_with_ellipsis(
-        &context.localize(app.status_line().model_label()),
-        usize::from(input.width.saturating_sub(mode_width + 6)),
-    );
+    let model = app
+        .status_line()
+        .composer_model_label()
+        .map(|label| {
+            crate::render::truncate_with_ellipsis(
+                &context.localize(label),
+                usize::from(input.width.saturating_sub(mode_width + 6)),
+            )
+        })
+        .unwrap_or_default();
     let model = if model.is_empty() {
         String::new()
     } else if mode.is_empty() {

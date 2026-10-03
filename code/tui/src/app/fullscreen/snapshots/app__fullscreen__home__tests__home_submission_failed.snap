@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/home_tests.rs
 expression: "text(&render(&app, 80, 24))"
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
                                                                                 
                                                                                 
@@ -24,5 +24,5 @@ expression: "text(&render(&app, 80, 24))"
   ────────────────────────────────────────────────────────────────────────────  
   > [Pasted Content 1500 chars]                                                 
   ─────────────────────────────────────────────────────────── Automatic model   
-                                                                                
-  Enter send  ·  / commands
+  ⏸ Manual                                                                      
+                                                     Enter send  ·  / commands

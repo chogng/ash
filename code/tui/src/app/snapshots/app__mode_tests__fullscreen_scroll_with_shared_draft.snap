@@ -2,7 +2,7 @@
 source: code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
-  .                          [— / —] [Dashboard]  
+  .                                  [Dashboard]  
                                                   
 ● message 10                                      
                                                   
@@ -12,9 +12,9 @@ expression: render(&app)
                                                   
              Jump to bottom (click) ↓             
   Queue 1: queued message · next                  
-  ⏸ Manual                                        
+                                                  
   ──────────────────────────────────────────────  
   > shared draft                                  
   ───────────────────────────── Automatic model   
-                                                  
-  Enter send · shift+tab mode
+  ⏸ Manual                                        
+                     Enter send · shift+tab mode

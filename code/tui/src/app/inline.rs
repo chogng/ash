@@ -17,12 +17,6 @@ use crate::render::Renderable;
 use crate::sessions;
 use crate::thread::composer as chat_composer;
 use crate::thread::composer as chat_input;
-use crate::thread::composer::ChatComposerSurface;
-use crate::thread::goal;
-use crate::thread::interaction::approval;
-use crate::thread::interaction::query;
-use crate::thread::plan;
-use crate::thread::queue;
 use crate::thread::transcript::ChatHistoryPointerState;
 use crate::thread::transcript::ChatHistoryView;
 use ratatui::Frame;
@@ -109,6 +103,7 @@ fn draw_content(
             context,
         );
         ChatHistoryView {
+            progress: None,
             jump_label: JUMP_LABEL,
             header: Some(&header),
             messages: &messages,
@@ -130,10 +125,10 @@ fn draw_content(
         if let Some(notice) = preview.notice() {
             frame.render_widget(
                 Paragraph::new(notice).style(Style::default().fg(context.muted())),
-                areas.session.top_tip,
+                areas.session.tipline,
             );
         }
-        footer::draw(frame, areas.session.bottom, app, context);
+        footer::draw(frame, &areas, app, context);
         if let Some(overlay) = app.overlay() {
             context.clear_hyperlinks(overlay.surface(areas.transient_area()));
             crate::widgets::overlay::draw(frame, areas.transient_area(), overlay, context);
@@ -163,6 +158,7 @@ fn draw_content(
             Transcript::Tail(messages) => (messages, None),
         };
         ChatHistoryView {
+            progress: app.turn_progress(),
             jump_label: JUMP_LABEL,
             header: header.as_ref(),
             messages: &messages,
@@ -174,68 +170,25 @@ fn draw_content(
     }
     if let Some(panel) = app.command_panel() {
         panel::draw(panel, frame, areas.session.composer, context);
-        footer::draw(frame, areas.session.bottom, app, context);
+        footer::draw(frame, &areas, app, context);
         if let Some(overlay) = app.overlay() {
             context.clear_hyperlinks(overlay.surface(areas.transient_area()));
             crate::widgets::overlay::draw(frame, areas.transient_area(), overlay, context);
         }
         return;
     }
-    let cursor = if app.accepts_input() && app.chat_input_focused() {
-        chat_input::ChatInputCursor::Visible
-    } else {
-        chat_input::ChatInputCursor::Hidden
-    };
-    let focus = if app.chat_input_focused() {
-        chat_input::ChatInputFocus::Focused
-    } else {
-        chat_input::ChatInputFocus::Blurred
-    };
-    let input_view = app.chat_composer_view();
-    if let Some(approval) = app.approval_view() {
-        approval::draw(frame, areas.session.composer, approval, None, None, context);
-    } else {
-        ChatComposerSurface {
-            chrome: chat_input::ChatInputChrome::Standard,
-            view: &input_view,
-            cursor,
-            focus,
-            placeholder: None,
-        }
-        .render(frame, areas.input, context);
-    }
-    if let Some(query) = app.query_view() {
-        query::draw(frame, areas.session.request, query, None, None, context);
-    }
-    if app.session_manager_view().is_none() {
-        goal::draw(frame, areas.session.goal, app.goal_view(), context);
-        plan::draw(frame, areas.session.plan, app.plan_view(), context);
-        let queue_view = app.queue_view();
-        queue::draw(
-            frame,
-            areas.session.queue,
-            &queue_view,
-            queue::DEFAULT_MAX_VISIBLE_ITEMS,
-            None,
-            None,
-            context,
-        );
-    }
-    footer::draw(frame, areas.session.bottom, app, context);
-    if let Some(agent_thread_switcher) = app.agent_thread_switcher_view() {
-        crate::thread::draw_agent_thread_switcher(
-            frame,
-            chat_input::content_area(areas.session.agent_thread_switcher),
-            agent_thread_switcher,
-            None,
-            None,
-            context,
-        );
-    }
-    if let Some(indicator) = app.status_indicator() {
-        indicator.draw(frame, areas.session.status_indicator, context);
-    }
-    footer::draw_tip(frame, areas.session.top_tip, app, context);
+    crate::app::chat_view::draw(
+        frame,
+        app,
+        &areas.session,
+        areas.input,
+        chat_input::ChatInputChrome::Standard,
+        None,
+        crate::app::chat_view::Pointer::default(),
+        context,
+    );
+    footer::draw(frame, &areas, app, context);
+    footer::draw_tip(frame, areas.session.tipline, app, context);
     if let Some(overlay) = app.overlay() {
         context.clear_hyperlinks(overlay.surface(areas.transient_area()));
         crate::widgets::overlay::draw(frame, areas.transient_area(), overlay, context);
@@ -244,7 +197,7 @@ fn draw_content(
         chat_composer::draw_completion_layer(
             frame,
             areas.completion_area(),
-            &input_view,
+            &app.chat_composer_view(),
             None,
             None,
             context,

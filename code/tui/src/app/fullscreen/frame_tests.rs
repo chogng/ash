@@ -170,15 +170,19 @@ fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() 
             .nth(usize::from(
                 layout(&App::new(), Rect::new(0, 0, 80, 20))
                     .session
-                    .top_tip
+                    .statusline
                     .y
             ))
             .unwrap()
             .contains("Manual")
     );
-    assert_eq!(
-        rendered.lines().last().unwrap().trim_end(),
-        "  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort"
+    assert!(
+        rendered
+            .lines()
+            .last()
+            .unwrap()
+            .trim_end()
+            .ends_with("Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort")
     );
 }
 
@@ -200,9 +204,15 @@ fn effort_hint_shares_arrow_modifiers_only_when_both_bindings_match() {
         .unwrap();
         app.app_keymap.replace_user_bindings(bindings).unwrap();
         let rendered = render(&app, 80, 20);
-        assert_eq!(
-            rendered.lines().last().unwrap().trim_end(),
-            format!("  Enter send  ·  shift+tab mode  ·  {expected} effort")
+        assert!(
+            rendered
+                .lines()
+                .last()
+                .unwrap()
+                .trim_end()
+                .ends_with(&format!(
+                    "Enter send  ·  shift+tab mode  ·  {expected} effort"
+                ))
         );
     }
 }
@@ -220,11 +230,11 @@ fn top_tip_notice_uses_the_fixed_row_above_chat_input_without_changing_layout() 
     let areas_after = layout(&app, terminal_area).session;
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
-    let notice_row = usize::from(areas_after.top_tip.y);
+    let notice_row = usize::from(areas_after.tipline.y);
 
     assert_eq!(areas_after, areas_before);
-    assert_eq!(areas_after.top_tip.height, 1);
-    assert_eq!(areas_after.top_tip.bottom(), areas_after.composer.y);
+    assert_eq!(areas_after.tipline.height, 1);
+    assert_eq!(areas_after.tipline.bottom(), areas_after.composer.y);
     assert!(
         rows[notice_row]
             .trim_end()
@@ -257,10 +267,10 @@ fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
     let areas_after = layout(&app, terminal_area).session;
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
-    let tip_row = usize::from(areas_after.top_tip.y);
+    let tip_row = usize::from(areas_after.tipline.y);
 
     assert_eq!(areas_after, areas_before);
-    assert_eq!(areas_after.top_tip.height, 1);
+    assert_eq!(areas_after.tipline.height, 1);
     assert!(
         rows[tip_row]
             .trim_end()
@@ -471,6 +481,10 @@ fn process_resource_demand_follows_the_content_that_is_actually_visible() {
         process_resource_demand(&app, Rect::new(0, 0, 1, 20)),
         ProcessResourceDemand::Disabled
     );
+    assert_eq!(
+        process_resource_demand(&app, Rect::new(0, 0, 80, 1)),
+        ProcessResourceDemand::Disabled
+    );
 
     let usage = ash_protocol::ModelUsageSummary::default();
     let reference_cost = ash_protocol::ModelReferenceCostSummary::default();
@@ -612,8 +626,8 @@ fn manager_keeps_overflow_text_out_of_the_fixed_top_tip_row() {
     let areas = layout(&app, terminal_area).session;
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
-    let notice_row = rows[usize::from(areas.top_tip.y)];
-    let manager_last_row = rows[usize::from(areas.top_tip.y.saturating_sub(1))];
+    let notice_row = rows[usize::from(areas.tipline.y)];
+    let manager_last_row = rows[usize::from(areas.tipline.y.saturating_sub(1))];
 
     assert!(manager_last_row.contains("more below"));
     assert!(!notice_row.contains("more below"));
@@ -634,7 +648,7 @@ fn empty_session_input_offers_manager_navigation() {
     );
 
     let terminal_area = Rect::new(0, 0, 80, 20);
-    let top_tip_row = usize::from(layout(&app, terminal_area).session.top_tip.y);
+    let top_tip_row = usize::from(layout(&app, terminal_area).session.tipline.y);
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
@@ -642,7 +656,7 @@ fn empty_session_input_offers_manager_navigation() {
     assert!(!rows[top_tip_row].contains("shift+tab"));
     assert!(!rows[19].contains("permissions on"));
     assert!(
-        rows[usize::from(layout(&app, Rect::new(0, 0, 80, 20)).session.top_tip.y)]
+        rows[usize::from(layout(&app, Rect::new(0, 0, 80, 20)).session.statusline.y)]
             .contains("⏸ Manual")
     );
 
@@ -664,7 +678,7 @@ fn empty_session_input_offers_manager_navigation() {
 }
 
 #[test]
-fn narrow_session_prioritizes_policy_above_input_and_keeps_shortcuts_below() {
+fn narrow_session_prioritizes_permission_in_the_statusline() {
     let mut app = App::new();
     enter_session(
         &mut app,
@@ -673,13 +687,14 @@ fn narrow_session_prioritizes_policy_above_input_and_keeps_shortcuts_below() {
     );
 
     let terminal_area = Rect::new(0, 0, 24, 20);
-    let top_tip_row = usize::from(layout(&app, terminal_area).session.top_tip.y);
+    let top_tip_row = usize::from(layout(&app, terminal_area).session.tipline.y);
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert_eq!(rows[top_tip_row].trim(), "⏸ Manual");
+    assert!(!rows[top_tip_row].contains("Manual"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
-    assert_eq!(rows[19].trim_end(), "  Enter send");
+    assert!(rows[18].contains("⏸ Manual"));
+    assert!(!rows[19].contains("Manual"));
 }
 
 #[test]
@@ -783,7 +798,7 @@ fn pending_steer_is_shown_once_in_chat_history() {
 }
 
 #[test]
-fn top_tip_shows_permission_modes_above_input_shortcuts() {
+fn statusline_shows_permission_modes_above_input_shortcuts() {
     let mut app = App::new();
     for (mode, label) in [
         (ash_protocol::ApprovalMode::Manual, "⏸ Manual"),
@@ -796,17 +811,17 @@ fn top_tip_shows_permission_modes_above_input_shortcuts() {
         app.set_next_approval_mode(mode);
         let screen = render(&app, 100, 20);
         let hints = screen.lines().last().unwrap().trim_end();
-        assert!(hints.starts_with("  Enter send"));
-        assert!(!hints.contains("permissions on") && !hints.contains("Auto"));
-        let top_tip = layout(&app, Rect::new(0, 0, 100, 20)).session.top_tip;
+        assert!(hints.contains("Enter send"));
+        assert!(!hints.contains(label));
+        let top_tip = layout(&app, Rect::new(0, 0, 100, 20)).session.tipline;
         assert!(
-            screen
+            !screen
                 .lines()
                 .nth(usize::from(top_tip.y))
                 .unwrap()
                 .contains(label)
         );
-        assert!(screen.lines().nth(18).unwrap().trim().is_empty());
+        assert!(screen.lines().nth(18).unwrap().contains(label));
     }
 }
 
@@ -815,21 +830,24 @@ fn key_hint_style_applies_to_fullscreen_without_changing_hint_text() {
     let mut app = App::new();
     let contrast = render_buffer(&app, 100, 20);
     let row = 19;
-    assert_eq!(contrast[(2, row)].symbol(), "E");
-    assert_eq!(contrast[(2, row)].fg, test_context().foreground());
-    assert!(contrast[(2, row)].modifier.contains(Modifier::BOLD));
-    assert_eq!(contrast[(7, row)].fg, test_context().muted());
-    assert!(!contrast[(7, row)].modifier.contains(Modifier::BOLD));
+    let x = (0..100)
+        .find(|x| contrast[(*x, row)].symbol() == "E")
+        .unwrap();
+    assert_eq!(contrast[(x, row)].symbol(), "E");
+    assert_eq!(contrast[(x, row)].fg, test_context().foreground());
+    assert!(contrast[(x, row)].modifier.contains(Modifier::BOLD));
+    assert_eq!(contrast[(x + 5, row)].fg, test_context().muted());
+    assert!(!contrast[(x + 5, row)].modifier.contains(Modifier::BOLD));
 
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_key_hint_style(crate::config::KeyHintStyle::Muted);
     app.update(crate::config::Event::SettingsReceived(settings));
     let muted = render_buffer(&app, 100, 20);
-    assert_eq!(muted[(2, row)].symbol(), "E");
-    assert_eq!(muted[(2, row)].fg, test_context().muted());
-    assert!(muted[(2, row)].modifier.contains(Modifier::ITALIC));
-    assert_eq!(muted[(7, row)].fg, test_context().muted());
-    assert!(muted[(7, row)].modifier.contains(Modifier::ITALIC));
+    assert_eq!(muted[(x, row)].symbol(), "E");
+    assert_eq!(muted[(x, row)].fg, test_context().muted());
+    assert!(muted[(x, row)].modifier.contains(Modifier::ITALIC));
+    assert_eq!(muted[(x + 5, row)].fg, test_context().muted());
+    assert!(muted[(x + 5, row)].modifier.contains(Modifier::ITALIC));
 }
 
 #[test]
@@ -842,7 +860,18 @@ fn turn_activity_does_not_enter_status_line() {
 
     let rendered = render(&app, 80, 20);
 
-    assert!(!rendered.contains("working"));
+    let areas = layout(&app, Rect::new(0, 0, 80, 20)).session;
+    let rows = rendered.lines().collect::<Vec<_>>();
+    let progress_row = rows
+        .iter()
+        .position(|row| row.contains("Starting"))
+        .unwrap() as u16;
+    assert!(
+        areas
+            .transcript
+            .contains(ratatui::layout::Position::new(0, progress_row))
+    );
+    assert!(rows[usize::from(areas.statusline.y)].contains("Manual"));
 }
 
 #[test]
@@ -888,7 +917,7 @@ fn queue_focus_and_pointer_target_share_the_visible_row_identity() {
 }
 
 #[test]
-fn top_tip_uses_a_distinct_color_for_each_approval_mode_symbol() {
+fn statusline_uses_a_distinct_color_for_each_approval_mode_symbol() {
     let mut app = App::new();
     for (mode, icon, color) in [
         (
@@ -909,7 +938,7 @@ fn top_tip_uses_a_distinct_color_for_each_approval_mode_symbol() {
     ] {
         app.set_next_approval_mode(mode);
         let buffer = render_buffer(&app, 100, 20);
-        let row = layout(&app, buffer.area).session.top_tip.y;
+        let row = layout(&app, buffer.area).session.statusline.y;
         let column = (0..100)
             .find(|x| buffer[(*x, row)].symbol() == icon)
             .unwrap();
@@ -922,12 +951,12 @@ fn top_tip_uses_a_distinct_color_for_each_approval_mode_symbol() {
 }
 
 #[test]
-fn top_tip_colors_current_and_next_modes_independently() {
+fn statusline_colors_current_and_next_modes_independently() {
     let mut app = App::new();
     app.set_current_approval_mode(Some(ash_protocol::ApprovalMode::Manual));
     app.set_next_approval_mode(ash_protocol::ApprovalMode::Auto);
     let buffer = render_buffer(&app, 120, 20);
-    let row = layout(&app, buffer.area).session.top_tip.y;
+    let row = layout(&app, buffer.area).session.statusline.y;
     let current = (0..120)
         .find(|x| buffer[(*x, row)].symbol() == "⏸")
         .unwrap();
@@ -981,7 +1010,7 @@ fn composer_shows_the_configured_model_once_at_wide_and_narrow_widths() {
             .contains(" Claude Sonnet (high) ")
     );
     assert!(!wide.contains("anthropic"));
-    assert!(wide.lines().nth(18).unwrap().trim().is_empty());
+    assert!(wide.lines().nth(18).unwrap().contains("Manual"));
 
     let narrow = render(&app, 24, 20);
     let narrow_input = layout(&app, Rect::new(0, 0, 24, 20)).input;
@@ -993,7 +1022,7 @@ fn composer_shows_the_configured_model_once_at_wide_and_narrow_widths() {
             .contains(" Claude Sonnet… ")
     );
     assert!(!narrow.contains("anthropic"));
-    assert!(narrow.lines().nth(18).unwrap().trim().is_empty());
+    assert!(narrow.lines().nth(18).unwrap().contains("Manual"));
 }
 
 #[test]
@@ -1030,7 +1059,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     let terminal_area = Rect::new(0, 0, 80, 20);
     let areas = layout(&app, terminal_area).session;
     let composer = areas.composer;
-    let top_tip_row = areas.top_tip.y;
+    let top_tip_row = areas.tipline.y;
 
     let before = render(&app, 80, 20);
     assert!(
@@ -1048,15 +1077,15 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     ));
 
     let buffer = render_buffer(&app, 80, 20);
-    let bottom_row = layout(&app, terminal_area).session.bottom.bottom() - 1;
+    let bottom_row = layout(&app, terminal_area).session.statusline.y;
     let hint_column = 78 - "/permission to change permissions".width() as u16;
     let hint = &buffer[(hint_column, top_tip_row)];
 
     assert_eq!(hint.symbol(), "/");
     assert_eq!(hint.fg, test_context().muted());
     assert!(hint.modifier.contains(Modifier::ITALIC));
-    assert_eq!(buffer[(2, top_tip_row)].symbol(), "⏸");
-    assert_eq!(buffer[(2, top_tip_row)].fg, test_context().warning());
+    assert_eq!(buffer[(2, bottom_row)].symbol(), "⏸");
+    assert_eq!(buffer[(2, bottom_row)].fg, test_context().warning());
     assert!(
         !(0..80)
             .map(|x| buffer[(x, bottom_row)].symbol())
@@ -1115,10 +1144,11 @@ fn entire_top_tip_holds_then_fades_without_moving_the_composer() {
         let area = Rect::new(0, 0, 80, 20);
         let areas = layout(&app, area).session;
         let before = render_buffer(&app, 80, 20);
-        assert_eq!(before[(2, areas.top_tip.y)].symbol(), "⏸");
+        let hint_x = 78 - "/permission to change permissions".width() as u16;
+        assert_eq!(before[(hint_x, areas.tipline.y)].symbol(), "/");
         assert_eq!(
-            before[(2, areas.top_tip.y)].fg,
-            app.render_context().warning()
+            before[(hint_x, areas.tipline.y)].fg,
+            app.render_context().muted()
         );
         assert!(!app.handle_tick(started + Duration::from_secs(3)));
         assert_eq!(before, render_buffer(&app, 80, 20));
@@ -1131,10 +1161,10 @@ fn entire_top_tip_holds_then_fades_without_moving_the_composer() {
         for (full, faded) in before.content.iter().zip(&fading.content) {
             assert_eq!(full.symbol(), faded.symbol());
         }
-        // The mode icon, mode label and keyboard hint all lose contrast together.
-        for x in [2, 4, 54] {
-            let full = &before[(x, areas.top_tip.y)];
-            let faded = &fading[(x, areas.top_tip.y)];
+        // Only the transient hint fades; permission remains in the statusline.
+        for x in [hint_x, hint_x + 1, hint_x + 12] {
+            let full = &before[(x, areas.tipline.y)];
+            let faded = &fading[(x, areas.tipline.y)];
             let Color::Rgb(r, g, b) = full.fg else {
                 unreachable!()
             };
@@ -1148,7 +1178,7 @@ fn entire_top_tip_holds_then_fades_without_moving_the_composer() {
             }
         }
         for y in 0..20 {
-            if y != areas.top_tip.y {
+            if y != areas.tipline.y {
                 for x in 0..80 {
                     assert_eq!(before[(x, y)], fading[(x, y)]);
                 }
@@ -1156,7 +1186,7 @@ fn entire_top_tip_holds_then_fades_without_moving_the_composer() {
         }
         assert!(app.handle_tick(started + Duration::from_secs(5)));
         let hidden = render_buffer(&app, 80, 20);
-        assert!(!(0..80).any(|x| hidden[(x, areas.top_tip.y)].symbol() != " "));
+        assert!(!(0..80).any(|x| hidden[(x, areas.tipline.y)].symbol() != " "));
         assert_eq!(layout(&app, area).session, areas);
         assert!(!app.handle_tick(started + Duration::from_secs(6)));
     }
@@ -1180,7 +1210,7 @@ fn policy_changes_restart_the_fade_and_keep_current_and_next_modes_visible() {
         ash_protocol::ApprovalMode::BypassPermissions
     );
     let restarted = render_buffer(&app, 120, 20);
-    let row = layout(&app, Rect::new(0, 0, 120, 20)).session.top_tip.y;
+    let row = layout(&app, Rect::new(0, 0, 120, 20)).session.statusline.y;
     assert_eq!(restarted[(2, row)].fg, test_context().warning());
     assert!(render(&app, 120, 20).contains("next: Bypass permissions"));
     assert!(!app.handle_tick(started + Duration::from_secs(7)));
@@ -1200,7 +1230,7 @@ fn notices_and_clipboard_tips_share_the_fullscreen_fade_and_refresh() {
                 .show_clipboard_image(ClipboardImageFingerprint(1), started);
         }
         let area = Rect::new(0, 0, 80, 20);
-        let row = layout(&app, area).session.top_tip.y;
+        let row = layout(&app, area).session.tipline.y;
         let x = 78 - text.width() as u16;
         assert_eq!(
             render_buffer(&app, 80, 20)[(x, row)].fg,
@@ -1251,8 +1281,13 @@ fn auto_theme_fades_to_the_reported_terminal_background_without_painting_it() {
     app.show_policy_tip(started);
     assert!(app.handle_tick(started + Duration::from_secs(4)));
     let buffer = render_buffer(&app, 80, 20);
-    let cell = &buffer[(2, layout(&app, buffer.area).session.top_tip.y)];
-    assert_eq!(cell.fg, Color::Rgb(128, 83, 44));
+    let x = 78 - "/permission to change permissions".width() as u16;
+    let cell = &buffer[(x, layout(&app, buffer.area).session.tipline.y)];
+    let expected = app.render_context().fade_style(
+        ratatui::style::Style::default().fg(app.render_context().muted()),
+        0.5,
+    );
+    assert_eq!(cell.fg, expected.fg.unwrap());
     assert_eq!(cell.bg, Color::Reset);
     assert!(!cell.modifier.contains(Modifier::DIM));
 }
@@ -1275,13 +1310,14 @@ fn fullscreen_tip_respects_terminal_color_capabilities() {
         app.show_policy_tip(started);
         app.handle_tick(started + Duration::from_millis(4500));
         let buffer = render_buffer(&app, 80, 20);
-        let row = layout(&app, buffer.area).session.top_tip.y;
-        let cell = &buffer[(2, row)];
+        let row = layout(&app, buffer.area).session.tipline.y;
+        let x = 78 - "/permission to change permissions".width() as u16;
+        let cell = &buffer[(x, row)];
         if capability == ColorLevel::Ansi256 {
             assert!(matches!(cell.fg, Color::Indexed(_)));
             assert_ne!(cell.fg, app.render_context().warning());
         } else {
-            assert_eq!(cell.fg, app.render_context().warning());
+            assert_eq!(cell.fg, app.render_context().muted());
             assert!(cell.modifier.contains(Modifier::DIM));
         }
     }
@@ -1366,30 +1402,23 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
     assert!(rows[usize::from(input.y + 3)].contains("third"));
     assert!(!rows[19].contains("permissions on"));
     assert!(
-        rows[usize::from(layout(&app, Rect::new(0, 0, 80, 20)).session.top_tip.y)]
+        rows[usize::from(layout(&app, Rect::new(0, 0, 80, 20)).session.statusline.y)]
             .contains("⏸ Manual")
     );
 }
 
 #[test]
-fn turn_activity_does_not_replace_the_permission_mode_in_top_tip() {
+fn turn_activity_does_not_replace_the_permission_mode_in_statusline() {
     let mut app = App::new();
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
-
     let rendered = render(&app, 80, 20);
-    let status_line = rendered.lines().last().unwrap();
-
-    assert!(!status_line.contains("permissions on"));
-    let top_tip = layout(&app, Rect::new(0, 0, 80, 20)).session.top_tip;
-    assert!(
-        rendered
-            .lines()
-            .nth(usize::from(top_tip.y))
-            .unwrap()
-            .contains("⏸ Manual")
-    );
-    assert!(status_line.starts_with("  Enter send"));
-    assert!(!status_line.contains("Working"));
+    let rows = rendered.lines().collect::<Vec<_>>();
+    let areas = layout(&app, Rect::new(0, 0, 80, 20)).session;
+    let statusline = rows[usize::from(areas.statusline.y)];
+    assert!(statusline.starts_with("  ⏸ Manual"));
+    assert!(!statusline.contains("Working"));
+    assert!(rows[usize::from(areas.hintline.y)].contains("Enter send"));
+    assert!(!rows[usize::from(areas.hintline.y)].contains("Manual"));
 }
 
 #[test]
@@ -1505,7 +1534,7 @@ fn completed_error_remains_visible_in_the_scrollable_transcript() {
     assert!(!rows.iter().any(|line| line.trim() == "error"));
     assert!(!rows[19].contains("permissions on"));
     assert!(
-        rows[usize::from(layout(&app, Rect::new(0, 0, 80, 20)).session.top_tip.y)]
+        rows[usize::from(layout(&app, Rect::new(0, 0, 80, 20)).session.statusline.y)]
             .contains("⏸ Manual")
     );
     assert!(!rendered.contains("ready to retry"));
@@ -2684,7 +2713,7 @@ fn issue_manager_reserves_page_height_when_the_transcript_is_empty() {
     ));
     for (width, height) in [(100, 32), (60, 16)] {
         let screen = ratatui::layout::Rect::new(0, 0, width, height);
-        assert_eq!(layout(&app, screen).session.bottom.bottom(), height);
+        assert_eq!(layout(&app, screen).session.hintline.bottom(), height);
         assert!(layout(&app, screen).session.transcript.height >= 7);
     }
 }
@@ -3362,19 +3391,29 @@ fn model_pointer_single_click_previews_and_double_click_confirms() {
 }
 
 #[test]
-fn status_indicator_tracks_turn_events_without_hiding_top_tip() {
+fn chat_progress_follows_messages_without_hiding_top_tip() {
     let mut app = App::new();
     app.set_active_turn(ash_protocol::TurnId::new("status-test").unwrap());
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.update(HostEvent::TopTipNoticeShown("Copied 42 chars".into()));
     let areas = layout(&app, Rect::new(0, 0, 80, 20)).session;
-    assert_eq!(areas.status_indicator.height, 1);
-    assert_eq!(areas.status_indicator.bottom(), areas.top_tip.y);
+    assert_eq!(areas.hintline.height, 1);
+    assert_eq!(areas.statusline.y, areas.composer.bottom());
+    assert_eq!(areas.statusline.bottom(), areas.hintline.y);
+    assert_eq!(areas.hintline.height, 1);
     let working = render(&app, 80, 20);
+    let rows = working.lines().collect::<Vec<_>>();
+    let progress_row = rows.iter().position(|row| row.contains("Working")).unwrap() as u16;
+    assert!(
+        areas
+            .transcript
+            .contains(ratatui::layout::Position::new(0, progress_row))
+    );
+    assert!(rows[usize::from(areas.statusline.y)].contains("Manual"));
     assert!(working.contains("Working"));
     assert!(working.contains("ctrl+c to interrupt"));
     assert!(working.contains("Copied 42 chars"));
-    crate::tui_assert_snapshot!("status_indicator_with_notice", working);
+    crate::tui_assert_snapshot!("chat_progress_with_notice", working);
     app.update(ThreadEvent::TurnActivityChanged(
         TurnActivity::WaitingForUserInput,
     ));
@@ -3388,36 +3427,38 @@ fn status_indicator_tracks_turn_events_without_hiding_top_tip() {
     assert!(cancelling.contains("Cancelling"));
     assert!(!cancelling.contains("to interrupt"));
     app.update(ThreadEvent::TurnCompleted);
-    assert!(app.status_indicator().is_none());
+    assert!(app.turn_progress().is_none());
     assert_eq!(
         layout(&app, Rect::new(0, 0, 80, 20))
             .session
-            .status_indicator
+            .hintline
             .height,
-        0
+        1
     );
 }
 
 #[test]
-fn running_tip_appears_below_spinner_and_leaves_when_waiting() {
+fn running_tip_follows_chat_progress() {
     let mut app = App::new();
     app.set_active_turn(ash_protocol::TurnId::new("tip-test").unwrap());
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.handle_tick(Instant::now() + Duration::from_secs(9));
 
     let areas = layout(&app, Rect::new(0, 0, 80, 20)).session;
-    assert_eq!(areas.status_indicator.height, 2);
+    assert_eq!(areas.hintline.height, 1);
     let rendered = render(&app, 80, 20);
     assert!(rendered.contains("Working"));
-    assert!(rendered.contains("└ Tip: Ask Ash to list steps for complex tasks"));
-    assert_eq!(areas.status_indicator.bottom(), areas.top_tip.y);
+    assert!(rendered.contains("Tip: Ask Ash to list steps for complex tasks"));
+    assert_eq!(areas.statusline.y, areas.composer.bottom());
+    assert_eq!(areas.statusline.bottom(), areas.hintline.y);
+    assert_eq!(areas.hintline.height, 1);
 
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_language(crate::nls::Language::Chinese);
     app.update(crate::config::Event::SettingsReceived(settings));
     let localized = render_visible_text(&app, 80, 20);
     assert!(localized.contains("正在处理"));
-    assert!(localized.contains("└ 技巧：复杂任务可以请 Ash 先列出步骤"));
+    assert!(localized.contains("技巧：复杂任务可以请 Ash 先列出步骤"));
     assert!(!localized.contains("Working"));
     crate::tui_assert_snapshot!("running_tip_after_language_change", localized);
 
@@ -3427,7 +3468,7 @@ fn running_tip_appears_below_spinner_and_leaves_when_waiting() {
     assert_eq!(
         layout(&app, Rect::new(0, 0, 80, 20))
             .session
-            .status_indicator
+            .hintline
             .height,
         1
     );
@@ -3484,7 +3525,26 @@ fn dictation_model_preparation_shows_real_download_bytes_in_chinese() {
     );
     assert_eq!(
         app.dictation_status().unwrap(),
-        "听写 · 正在下载 encoder.onnx：2.0 MiB · ctrl+c 停止"
+        "听写 · 正在下载 encoder.onnx：2.0 MiB"
+    );
+    let rendered = render_visible_text(&app, 80, 20);
+    let areas = layout(&app, Rect::new(0, 0, 80, 20));
+    let status_row = rendered
+        .lines()
+        .position(|line| line.contains("听写 · 正在下载"))
+        .expect("download status is visible");
+    assert_eq!(status_row as u16, areas.session.tipline.y);
+    assert_eq!(status_row as u16 + 1, areas.input.y);
+    assert!(
+        rendered
+            .lines()
+            .nth(usize::from(areas.session.tipline.y))
+            .unwrap()
+            .contains("ctrl+c 停止听写")
+    );
+    assert_eq!(
+        render_buffer(&app, 80, 20)[(2, status_row as u16)].fg,
+        app.render_context().muted()
     );
     crate::tui_assert_snapshot!("dictation_model_downloading_zh", render(&app, 80, 20));
 }

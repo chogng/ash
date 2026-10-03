@@ -108,6 +108,9 @@ fn composer_collaboration_modes_color_both_rules_prompt_and_selector() {
     ] {
         let mut app = App::new();
         app.set_collaboration_mode(mode);
+        let mut status = crate::status::StatusLineSettings::default();
+        status.set(crate::status::StatusLineItem::Mode, true);
+        app.update(crate::status::Event::LineSettingsReceived(status));
         let (buffer, _) = render(&app, 80);
         let input = super::super::layout(&app, Rect::new(0, 0, 80, 20)).input;
         assert_eq!(buffer[(2, input.y)].fg, expected);

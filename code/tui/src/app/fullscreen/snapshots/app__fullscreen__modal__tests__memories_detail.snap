@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/modal_tests.rs
 expression: frame_text(&app)
 ---
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                                    [Dashboard]  
                                                                                                     
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │         ┌── Memories › Rust decision 0 ───────────────────────────────────────[✗]─┐          │  
@@ -26,7 +26,7 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-            │                                                                         │ Esc return  
+            │                                                                         │             
   ──────────│  e edit · Delete delete · ↑/↓ scroll · Esc back                         │───────────  
   > Build an└─────────────────────────────────────────────────────────────────────────┘             
   ─────────────────────────────────────────────────────────────────────────────── Automatic model

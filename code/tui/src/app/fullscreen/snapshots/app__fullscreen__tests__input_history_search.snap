@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 100, 20)"
 ---
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                                    [Dashboard]  
                                                                                                     
                                                                                                     
                                                                                                     
@@ -16,9 +16,9 @@ expression: "render(&app, 100, 20)"
                                                                                                     
                                                                                                     
                                                                                                     
-  ⏸ Manual                                                                                          
+                                                                                                    
   ──History search: find · ↑/↓ browse · Enter edit · Esc cancel───────────────────────────────────  
   > find the input history owner                                                                    
   ─────────────────────────────────────────────────────────────────────────────── Automatic model   
-                                                                                                    
-  Enter send
+  ⏸ Manual                                                                                          
+                                                                                        Enter send

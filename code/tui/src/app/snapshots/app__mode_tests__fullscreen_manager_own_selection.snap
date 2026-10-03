@@ -2,7 +2,7 @@
 source: code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
-  .                          [— / —] [Dashboard]  
+  .                                  [Dashboard]  
                                                   
   Idle (2)                                        
   ○ first session                                 

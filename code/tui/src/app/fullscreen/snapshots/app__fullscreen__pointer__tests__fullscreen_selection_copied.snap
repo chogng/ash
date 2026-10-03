@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/pointer_tests.rs
 expression: text
 ---
-  .                                    [— / —] [Dashboard]  
+  .                                            [Dashboard]  
                                                             
                                                             
                                                             
@@ -16,5 +16,5 @@ expression: text
   ────────────────────────────────────────────────────────  
   > copy me                                                 
   ─────────────────────────────────────── Automatic model   
-                                                            
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual                                                  
+        Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

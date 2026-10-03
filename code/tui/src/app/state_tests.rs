@@ -114,19 +114,20 @@ fn show_tips_setting_controls_running_task_tips() {
     app.set_terminal_settings(settings);
     app.set_status(Status::Working);
     app.handle_tick(Instant::now() + Duration::from_secs(10));
-    assert_eq!(app.status_indicator().unwrap().desired_height(), 1);
+    assert!(app.turn_progress().is_some());
+    assert_eq!(app.turn_progress().unwrap().tip(), None);
 
     settings.set_show_tips(true);
     app.set_terminal_settings(settings);
     app.handle_tick(Instant::now() + Duration::from_secs(10));
-    assert_eq!(app.status_indicator().unwrap().desired_height(), 2);
+    assert!(app.turn_progress().is_some());
     assert_eq!(
-        app.status_indicator().unwrap().tip(),
+        app.turn_progress().unwrap().tip(),
         Some(crate::nls::Message::TipPlan)
     );
 
     app.set_status(Status::Ready);
-    assert!(app.status_indicator().is_none());
+    assert!(app.turn_progress().is_none());
 }
 
 #[test]
@@ -811,6 +812,15 @@ fn voice_command_adds_recognized_text_to_the_draft_and_stops() {
         resource_id: resource_id.clone(),
         error: None,
     });
+    assert_eq!(app.dictation_status(), None);
+    app.dictation_model_progress(
+        &resource_id,
+        ash_app_server_protocol::protocol::dictation::DictationModelStage::Ready,
+    );
+    assert_eq!(
+        app.dictation_status().as_deref(),
+        Some("Dictation · listening")
+    );
     crate::tui_assert_snapshot!("dictation_listening", render_dictation_frame(&app));
     app.dictation_transcript("other", "ignored", false);
     app.dictation_transcript(&resource_id, "recognized text", false);
@@ -934,7 +944,13 @@ fn dictation_preparation_hint_and_stop_use_the_configured_interrupt_binding() {
     );
     assert_eq!(
         app.dictation_status().as_deref(),
-        Some("Dictation · checking model files · ctrl+y to stop")
+        Some("Dictation · checking model files")
+    );
+    assert_eq!(
+        app.dictation_key_hints()
+            .unwrap()
+            .localized_text(app.language()),
+        "ctrl+y to stop dictation"
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL)),
@@ -1006,15 +1022,51 @@ fn interrupt_stops_dictation_preparation_before_a_running_chat_turn() {
         error: None,
     });
     app.set_status(Status::Working);
+    app.set_active_turn(ash_protocol::TurnId::new("dictation-with-turn").unwrap());
+    app.dictation_model_progress(
+        &resource_id,
+        ash_app_server_protocol::protocol::dictation::DictationModelStage::Loading,
+    );
+    assert!(app.turn_progress().is_some());
+    let rendered = render_dictation_frame(&app);
+    assert!(rendered.contains("Working"));
+    assert!(rendered.contains("Dictation · loading model"));
+    let rows = rendered.lines().collect::<Vec<_>>();
+    let progress_row = rows.iter().position(|row| row.contains("Working")).unwrap();
+    let speech_row = rows
+        .iter()
+        .position(|row| row.contains("Dictation · loading model"))
+        .unwrap();
+    let input_row = rows
+        .iter()
+        .position(|row| row.trim_start().starts_with('>'))
+        .unwrap();
+    assert!(progress_row < input_row);
+    assert!(speech_row < input_row);
+    assert!(!rendered.contains("to interrupt"));
+    crate::tui_assert_snapshot!("dictation_preparation_with_running_turn", rendered);
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
-        Some(AppCommand::DictationStop { resource_id })
+        Some(AppCommand::DictationStop {
+            resource_id: resource_id.clone()
+        })
+    );
+    assert!(app.dictation_key_hints().is_none());
+    crate::tui_assert_snapshot!(
+        "dictation_stopping_with_running_turn",
+        render_dictation_frame(&app)
     );
     assert_eq!(app.status(), &Status::Working);
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
         None
     );
+    app.update(AppEvent::DictationStopped {
+        resource_id,
+        result: Ok(None),
+    });
+    assert!(app.turn_progress().is_some());
+    assert!(render_dictation_frame(&app).contains("to interrupt"));
 }
 
 #[test]
@@ -1258,6 +1310,10 @@ fn dictation_replaces_partial_text_and_commits_final_once() {
         resource_id: resource_id.clone(),
         error: None,
     });
+    app.dictation_model_progress(
+        &resource_id,
+        ash_app_server_protocol::protocol::dictation::DictationModelStage::Ready,
+    );
 
     app.dictation_transcript(&resource_id, "hel", false);
     assert_eq!(app.input(), "Draft hel");

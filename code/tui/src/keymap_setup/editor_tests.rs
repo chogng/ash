@@ -97,6 +97,7 @@ fn keymap_choices_lists_keys_before_responsibilities() {
             "/",
             "Tab/Shift+Tab",
             "Esc",
+            "→/Esc",
         ]
     );
 }

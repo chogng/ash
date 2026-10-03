@@ -2,7 +2,7 @@
 source: code/tui/src/app/collaboration_modes_tests.rs
 expression: render(&app)
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
         ┌── Thinking effort ───────────────────────────────────────[✗]─┐        
         │                                                              │        

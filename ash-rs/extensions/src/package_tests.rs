@@ -6,6 +6,18 @@ use ash_file_identity::FileInformation;
 use std::fs;
 
 #[test]
+fn package_digest_preserves_domain_and_length_framing() {
+    let files = std::collections::BTreeMap::from([
+        ("a.json".to_owned(), b"abc".to_vec()),
+        ("b.txt".to_owned(), vec![0, 255]),
+    ]);
+    assert_eq!(
+        super::package_digest(&files),
+        "sha256:9770d9dc2662a280bda0d812132817d0e84dd53f59d626b87d4d237b411949ff"
+    );
+}
+
+#[test]
 fn rejects_hard_linked_package_files() {
     let directory = tempfile::tempdir().expect("temporary directory");
     let package = directory.path().join("package");

@@ -14,7 +14,41 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 
-pub(crate) fn draw(
+pub(crate) fn draw_info(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    status_line: &StatusLineModel,
+    runtime: StatusLineRuntime,
+    context: RenderContext<'_>,
+) {
+    frame.render_widget(
+        Paragraph::new(top_line(
+            status_line.top_segments_for_width(area.width.into(), runtime),
+            context,
+        )),
+        area,
+    );
+}
+
+pub(crate) fn draw_policy(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    status_line: &StatusLineModel,
+    approval: TurnApprovalModes,
+    context: RenderContext<'_>,
+) {
+    frame.render_widget(
+        Paragraph::new(policy_line(
+            status_line,
+            area.width.into(),
+            approval,
+            context,
+        )),
+        area,
+    );
+}
+
+pub(crate) fn draw_fullscreen_info(
     frame: &mut Frame<'_>,
     area: Rect,
     status_line: &StatusLineModel,
@@ -22,26 +56,38 @@ pub(crate) fn draw(
     runtime: StatusLineRuntime,
     context: RenderContext<'_>,
 ) {
-    if area.is_empty() {
-        return;
-    }
-
-    let top = status_line.top_segments_for_width(usize::from(area.width), runtime);
-    let policy_width = usize::from(area.width);
-    let policy = status_line.policy_text_for_width(policy_width, approval);
-    let lines = if area.height == 1 {
-        if policy.is_empty() {
-            vec![top_line(top, context)]
-        } else {
-            vec![styled_policy_line(policy, approval, context)]
+    let mut line = policy_line(status_line, area.width.into(), approval, context);
+    let information = top_line(
+        status_line.fullscreen_footer_segments_for_width(
+            information_width(&line, area.width.into()),
+            runtime,
+        ),
+        context,
+    );
+    if !information.spans.is_empty() {
+        if line.width() > 0 {
+            line.spans.push(Span::styled(
+                " · ",
+                Style::default().fg(context.chat_input_chrome()),
+            ));
         }
-    } else {
-        vec![
-            top_line(top, context),
-            styled_policy_line(policy, approval, context),
-        ]
-    };
-    frame.render_widget(Paragraph::new(lines), area);
+        line.spans.extend(information.spans);
+    }
+    frame.render_widget(Paragraph::new(line), area);
+}
+
+/// Resource sampling uses the same width left after permission as the rendered statistics.
+pub(crate) fn fullscreen_info_width(
+    status_line: &StatusLineModel,
+    width: usize,
+    approval: TurnApprovalModes,
+    context: RenderContext<'_>,
+) -> usize {
+    information_width(&policy_line(status_line, width, approval, context), width)
+}
+
+fn information_width(policy: &Line<'_>, width: usize) -> usize {
+    width.saturating_sub(policy.width() + usize::from(policy.width() > 0) * 3)
 }
 
 fn top_line(segments: Vec<StatusLineSegment>, context: RenderContext<'_>) -> Line<'static> {
@@ -96,7 +142,7 @@ pub(crate) fn header_line(
     )
 }
 
-pub(crate) fn policy_line(
+fn policy_line(
     status_line: &StatusLineModel,
     width: usize,
     approval: TurnApprovalModes,

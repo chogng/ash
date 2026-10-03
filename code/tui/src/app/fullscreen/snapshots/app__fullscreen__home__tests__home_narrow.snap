@@ -12,9 +12,9 @@ expression: "text(&render(&app, 40, 16))"
   │  Help and shortcuts              │  
   │> Quit                            │  
   ╰──────────────────────────────────╯  
-  ⏸ Manual   Type a task · Tab actions  
+             Type a task · Tab actions  
   ────────────────────────────────────  
   > Build anything                      
   ─────────────────── Automatic model   
-                                        
-  Enter select · Esc input
+  ⏸ Manual                              
+              Enter select · Esc input

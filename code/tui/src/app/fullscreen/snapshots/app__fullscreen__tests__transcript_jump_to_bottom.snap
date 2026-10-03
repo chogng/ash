@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 50, 16)"
 ---
-  .                          [— / —] [Dashboard]  
+  .                                  [Dashboard]  
                                                   
 ● Model invocation failed 2                       
                                                   
@@ -12,9 +12,9 @@ expression: "render(&app, 50, 16)"
                                                   
 ● Model invocation failed 5                       
              Jump to bottom (click) ↓             
-  ⏸ Manual                                        
+                                                  
   ──────────────────────────────────────────────  
   >                                               
   ───────────────────────────── Automatic model   
-                                                  
-  Enter send · shift+tab mode
+  ⏸ Manual                                        
+                     Enter send · shift+tab mode

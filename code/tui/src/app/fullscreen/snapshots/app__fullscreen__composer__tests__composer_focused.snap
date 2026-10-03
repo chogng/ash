@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/composer_tests.rs
 expression: text(&buffer)
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
                                                                                 
                                                                                 
@@ -16,9 +16,9 @@ expression: text(&buffer)
                                                                                 
                                                                                 
                                                                                 
-  ⏸ Manual                                                                      
+                                                                                
   ────────────────────────────────────────────────────────────────────────────  
   >                                                                             
   ─────────────────────────────────────────────────────────── Automatic model   
-                                                                                
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual                                                                      
+                            Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

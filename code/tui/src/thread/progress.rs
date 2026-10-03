@@ -20,15 +20,15 @@ const TIPS: [Message; 4] = [
     Message::TipShortcuts,
 ];
 
-/// The current turn's status surface; execution and keyboard routing remain with the caller.
-pub(crate) struct StatusIndicator<'a> {
+/// Transient feedback following the current chat turn; never written to terminal history.
+pub(crate) struct TurnProgress<'a> {
     pub(crate) activity: TurnActivity,
     pub(crate) timer: &'a StatusTimer,
     pub(crate) interrupt_hint: Option<String>,
     pub(crate) show_tips: bool,
 }
 
-impl StatusIndicator<'_> {
+impl TurnProgress<'_> {
     fn label(&self) -> (&'static str, bool) {
         match self.activity {
             TurnActivity::Starting => ("Starting", true),
@@ -65,6 +65,16 @@ impl StatusIndicator<'_> {
     }
 
     pub(crate) fn draw(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
-        view::draw(frame, area, self, context);
+        self.draw_rows(frame, area, 0, context);
+    }
+
+    pub(crate) fn draw_rows(
+        &self,
+        frame: &mut Frame<'_>,
+        area: Rect,
+        offset: u16,
+        context: RenderContext<'_>,
+    ) {
+        view::draw(frame, area, self, offset, context);
     }
 }

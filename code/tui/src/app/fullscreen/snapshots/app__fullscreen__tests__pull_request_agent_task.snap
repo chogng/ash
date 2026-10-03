@@ -2,23 +2,23 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 100, 20)"
 ---
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                                    [Dashboard]  
                                                                                                     
 > /pr                                                                                               
                                                                                                     
 > Prepare and create a pull request for the current changes using the connected GitHub tools. Verify
 the target branch and checks, and report the pull request link.                                     
                                                                                                     
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
 ⠋ Starting · 0m 00s total                                                                           
-  ⏸ Manual                                                       /permission to change permissions  
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                 /permission to change permissions  
   ────────────────────────────────────────────────────────────────────────────────────────────────  
   >                                                                                                 
   ─────────────────────────────────────────────────────────────────────────────── Automatic model   
-                                                                                                    
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual                                                                                          
+                                                Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

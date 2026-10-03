@@ -175,7 +175,7 @@ pub(crate) fn target_at(
     }
     if app.approval_view().is_none()
         && app.query_view().is_none()
-        && let Some(target) = super::header::target_at(app, areas.header, position)
+        && let Some(target) = super::header::target_at(app, areas.top_statusline, position)
     {
         return Some(PointerTarget::Header(target));
     }
@@ -268,6 +268,7 @@ pub(crate) fn target_at(
         (app.transcript_scroll(), app.transcript_render_cache())
     };
     let target = ChatHistoryView {
+        progress: app.turn_progress(),
         jump_label: super::JUMP_LABEL,
         header: None,
         messages: &messages,

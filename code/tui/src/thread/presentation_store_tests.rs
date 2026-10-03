@@ -90,7 +90,7 @@ fn thread_id(value: &str) -> ThreadId {
 }
 
 #[test]
-fn status_indicator_timer_survives_thread_switching() {
+fn chat_progress_timer_survives_thread_switching() {
     let now = std::time::Instant::now();
     let main = thread_id("timer-main");
     let mut store = ThreadPresentationStore::new(main.clone());

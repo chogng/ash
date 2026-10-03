@@ -312,7 +312,7 @@ pub(super) fn text(buffer: &Buffer) -> String {
 }
 
 #[test]
-fn dictation_preparation_status_is_visible_below_the_inline_input() {
+fn dictation_preparation_uses_the_input_tip_and_preserves_the_statusline() {
     let mut app = app();
     app.insert_text("/voice");
     let Some(AppCommand::DictationStart { resource_id }) =
@@ -329,12 +329,26 @@ fn dictation_preparation_status_is_visible_below_the_inline_input() {
         ash_app_server_protocol::protocol::dictation::DictationModelStage::Checking,
     );
     let buffer = render(&app, 80, 20);
-    crate::tui_assert_snapshot!("dictation_preparation", text(&buffer));
-    let status = "Dictation · checking model files · ctrl+c to stop";
+
+    let status = "Dictation · checking model files";
     let row = text(&buffer)
         .lines()
         .position(|line| line.contains(status))
         .expect("dictation status is visible");
+    let areas = super::layout(&app, buffer.area);
+    assert_eq!(row as u16, areas.session.tipline.y);
+    assert!(row < usize::from(areas.input.y));
+    let rendered = text(&buffer);
+    assert!(
+        rendered
+            .lines()
+            .nth(row)
+            .unwrap()
+            .contains("ctrl+c to stop dictation")
+    );
+    crate::tui_assert_snapshot!("dictation_preparation", text(&buffer));
+    assert!(!rendered.contains("Listening"));
+    assert!(rendered.contains("⏸ Manual"));
     assert_eq!(buffer[(2, row as u16)].fg, app.render_context().muted());
 }
 
@@ -365,7 +379,7 @@ fn dictation_model_preparation_shows_real_download_bytes_in_chinese() {
     );
     assert_eq!(
         app.dictation_status().unwrap(),
-        "听写 · 正在下载 encoder.onnx：2.0 MiB · ctrl+c 停止"
+        "听写 · 正在下载 encoder.onnx：2.0 MiB"
     );
     crate::tui_assert_snapshot!(
         "dictation_model_downloading_zh",
@@ -374,7 +388,7 @@ fn dictation_model_preparation_shows_real_download_bytes_in_chinese() {
 }
 
 #[test]
-fn running_tip_appears_below_the_inline_spinner() {
+fn running_tip_follows_inline_chat_progress() {
     let mut app = app();
     app.set_active_turn(ash_protocol::TurnId::new("inline-tip").unwrap());
     app.update(crate::thread::Event::TurnActivityChanged(
@@ -382,17 +396,31 @@ fn running_tip_appears_below_the_inline_spinner() {
     ));
     app.handle_tick(std::time::Instant::now() + std::time::Duration::from_secs(9));
 
-    let rendered = text(&render(&app, 80, 20));
+    let rendered = text(&render(&app, 140, 20));
     assert!(rendered.contains("Working"));
-    assert!(rendered.contains("└ Tip: Ask Ash to list steps for complex tasks"));
+    let rows = rendered.lines().collect::<Vec<_>>();
+    let progress_row = rows.iter().position(|row| row.contains("Working")).unwrap();
+    let tip_row = rows
+        .iter()
+        .position(|row| row.contains("Tip: Ask Ash"))
+        .unwrap();
+    let areas = super::layout(
+        &app,
+        Rect::new(0, 0, 140, render(&app, 140, 20).area.height),
+    )
+    .session;
+    assert_eq!(tip_row, progress_row + 1);
+    assert!(progress_row < usize::from(areas.tipline.y));
+    assert!(!rows[usize::from(areas.tipline.y)].contains("Working"));
+    assert!(rendered.contains("Tip: Ask Ash to list steps for complex tasks"));
 
     let mut settings = TerminalSettings::default();
     settings.set_screen_mode(ScreenMode::Inline);
     settings.set_language(crate::nls::Language::Chinese);
     app.update(ConfigEvent::SettingsReceived(settings));
-    let localized = text(&render(&app, 80, 20));
+    let localized = text(&render(&app, 140, 20));
     assert!(localized.contains("正在处理"));
-    assert!(localized.contains("└ 技巧：复杂任务可以请 Ash 先列出步骤"));
+    assert!(localized.contains("技巧：复杂任务可以请 Ash 先列出步骤"));
     assert!(!localized.contains("Working"));
     crate::tui_assert_snapshot!("inline_running_tip_after_language_change", localized);
 }
@@ -673,6 +701,87 @@ fn key_hint_style_applies_to_inline_panels_without_changing_hint_text() {
 }
 
 #[test]
+fn context_hints_replace_the_second_statusline_and_restore_permission() {
+    let mut app = app();
+    app.insert_text("keep this draft");
+    app.chat_panel
+        .status_line_mut()
+        .apply_model_label("Fixture model");
+    let normal = render(&app, 80, 20);
+    let regions = super::layout(&app, normal.area).session;
+    assert_eq!(regions.statusline.height, 2);
+    assert_eq!(regions.hintline.y, regions.statusline.y + 1);
+    assert_eq!(regions.hintline.bottom(), regions.statusline.bottom());
+    assert_eq!(regions.composer.bottom(), regions.statusline.y);
+    let normal_text = text(&normal);
+    assert!(
+        normal_text
+            .lines()
+            .nth(usize::from(regions.statusline.y))
+            .unwrap()
+            .contains("Fixture model")
+    );
+    assert!(normal_text.lines().last().unwrap().contains("⏸ Manual"));
+    assert!(!normal_text.contains("Enter send"));
+    assert_eq!(
+        normal[(2, regions.hintline.y)].fg,
+        app.render_context().warning()
+    );
+
+    app.update(ThreadEvent::QueryRequested(pending_query()));
+    assert!(app.query_view().is_some());
+    let question = render(&app, 80, 20);
+    let question_text = text(&question);
+    assert!(
+        question_text
+            .lines()
+            .last()
+            .unwrap()
+            .contains("Enter to answer")
+    );
+    assert!(!question_text.contains("Manual"));
+    assert!(question_text.contains("Fixture model"));
+    let Some(AppCommand::Thread(ThreadCommand::ResolveRequest(response))) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("query answer must resolve the active request");
+    };
+    assert_eq!(response.kind, ThreadRequestKind::Query);
+    assert!(app.query_view().unwrap().submitting);
+    let waiting = text(&render(&app, 80, 20));
+    assert!(
+        waiting
+            .lines()
+            .last()
+            .unwrap()
+            .contains("Waiting for the request result")
+    );
+    assert!(!waiting.contains("Manual"));
+    app.update(ThreadEvent::RequestResolved(response.identity()));
+    assert!(app.query_view().is_none());
+    assert_eq!(app.input(), "keep this draft");
+    let restored = render(&app, 80, 20);
+    assert_eq!(restored, normal);
+
+    open_help(&mut app);
+    assert!(app.command_panel().is_some());
+    let panel = text(&render(&app, 80, 20));
+    assert!(panel.lines().last().unwrap().contains("Esc"));
+    assert!(!panel.contains("Manual"));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+    assert_eq!(app.input(), "keep this draft");
+    assert_eq!(render(&app, 80, 20), normal);
+    crate::tui_assert_snapshot!(
+        "second_statusline_context_hints",
+        format!(
+            "Normal\n{normal_text}\nQuestion\n{question_text}\nWaiting\n{waiting}\nPanel\n{panel}\nRestored\n{}",
+            text(&restored)
+        )
+    );
+}
+
+#[test]
 fn policy_stays_below_input_and_inline_tips_do_not_fade() {
     use std::time::Duration;
     use std::time::Instant;
@@ -681,7 +790,13 @@ fn policy_stays_below_input_and_inline_tips_do_not_fade() {
     app.show_policy_tip(started);
     let before = render(&app, 80, 32);
     let areas = super::layout(&app, before.area).session;
-    assert!(text(&before).lines().last().unwrap().contains("⏸ Manual"));
+    assert!(
+        text(&before)
+            .lines()
+            .nth(usize::from(areas.statusline.bottom() - 1))
+            .unwrap()
+            .contains("⏸ Manual")
+    );
     assert!(!app.handle_tick(started + Duration::from_secs(4)));
     assert_eq!(render(&app, 80, 32), before);
     assert!(app.handle_tick(started + Duration::from_secs(5)));
@@ -689,12 +804,18 @@ fn policy_stays_below_input_and_inline_tips_do_not_fade() {
     assert!(
         text(&after)
             .lines()
-            .nth(usize::from(areas.top_tip.y))
+            .nth(usize::from(areas.tipline.y))
             .unwrap()
             .trim()
             .is_empty()
     );
-    assert!(text(&after).lines().last().unwrap().contains("⏸ Manual"));
+    assert!(
+        text(&after)
+            .lines()
+            .nth(usize::from(areas.statusline.bottom() - 1))
+            .unwrap()
+            .contains("⏸ Manual")
+    );
 }
 
 #[test]

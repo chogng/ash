@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, terminal_area.width, terminal_area.height)"
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
 ● Model invocation failed 8 underlying transcript content underlying transcript 
 content underlying transcript content underlying transcript content             
@@ -20,5 +20,5 @@ content underlying transcript content underlying transcript content
   ────────────────────────────────────────────────────────────────────────────  
   > /                                                                           
   ────────────────────────────────────────────────────── Claude Sonnet (high)   
-                                                                                
-  Enter send
+  ⏸ Manual                                                                      
+                                                                    Enter send

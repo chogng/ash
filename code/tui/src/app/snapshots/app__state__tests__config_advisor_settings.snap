@@ -2,7 +2,7 @@
 source: code/tui/src/app/state_tests.rs
 expression: rendered
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
         ┌── Config › Advisor ──────────────────────────────────────[✗]─┐        
         │                                                              │        

@@ -2,7 +2,7 @@
 source: code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
-  .                          [— / —] [Dashboard]  
+  .                                  [Dashboard]  
                                                   
                                                   
 ● focus message 05                                
@@ -12,9 +12,9 @@ expression: render(&app)
 ● focus message 07                                
                                                   
              Jump to bottom (click) ↓             
-  ⏸ Manual                                        
+                                                  
   ──────────────────────────────────────────────  
   > x                                             
   ───────────────────────────── Automatic model   
-                                                  
-  Enter send · shift+tab mode
+  ⏸ Manual                                        
+                     Enter send · shift+tab mode

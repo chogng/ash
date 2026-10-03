@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: next
 ---
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                                    [Dashboard]  
                                                                                                     
             ┌── Config › Custom provider ─────────────────────────────────────────[✗]─┐             
             │                                                                         │             

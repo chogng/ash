@@ -1,5 +1,5 @@
 ---
-source: code/tui/src/thread/status_indicator/view_tests.rs
+source: code/tui/src/thread/progress/view_tests.rs
 expression: text
 ---
 ⠋ 正在处理 · 0m 00s 总计

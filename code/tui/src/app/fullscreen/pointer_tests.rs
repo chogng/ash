@@ -47,6 +47,9 @@ fn collaboration_mode_label_opens_the_keyboard_selector_without_hover_changing_m
         settings.set_language(language);
         app.update(crate::config::Event::SettingsReceived(settings));
         app.set_collaboration_mode(CollaborationMode::Multitask);
+        let mut status = crate::status::StatusLineSettings::default();
+        status.set(crate::status::StatusLineItem::Mode, true);
+        app.update(crate::status::Event::LineSettingsReceived(status));
         let area = Rect::new(0, 0, width, 20);
         let input = crate::app::fullscreen::layout(&app, area).input;
         let position = Position::new(input.right() - 2, input.bottom() - 1);

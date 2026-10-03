@@ -60,14 +60,21 @@ fn expressive_status_line_renders_emoji_bars_and_permission_text() {
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(48, 2)).unwrap();
     terminal
         .draw(|frame| {
-            super::draw(
+            let context = crate::render::test_context();
+            super::draw_info(
                 frame,
-                frame.area(),
+                ratatui::layout::Rect::new(0, 0, 48, 1),
+                &model,
+                runtime,
+                context,
+            );
+            super::draw_policy(
+                frame,
+                ratatui::layout::Rect::new(0, 1, 48, 1),
                 &model,
                 ash_protocol::ApprovalMode::Manual.into(),
-                runtime,
-                crate::render::test_context(),
-            )
+                context,
+            );
         })
         .unwrap();
     let buffer = terminal.backend().buffer();

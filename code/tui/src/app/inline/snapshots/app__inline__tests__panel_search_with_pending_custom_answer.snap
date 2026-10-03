@@ -11,7 +11,7 @@ expression: "text(&render(&app, 50, 16))"
                                                   
 ─ Config ─────────────────────────────────────────
                                                   
-   General    Providers    Issues                 
+   General    Providers    Issues    Network      
   ╭────────────────────────────────────────────╮  
   │ Screen mode                                │  
   ╰────────────────────────────────────────────╯  

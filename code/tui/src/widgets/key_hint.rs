@@ -111,17 +111,6 @@ impl KeyHints {
     }
 }
 
-pub(crate) fn draw(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    hints: &KeyHints,
-    style: KeyHintStyle,
-    context: RenderContext<'_>,
-) {
-    let content = horizontal_margin(area, 2);
-    draw_content(frame, content, hints, style, context);
-}
-
 pub(crate) fn draw_content(
     frame: &mut Frame<'_>,
     content: Rect,
@@ -135,7 +124,7 @@ pub(crate) fn draw_content(
     );
 }
 
-fn line(
+pub(crate) fn line(
     hints: &KeyHints,
     width: usize,
     style: KeyHintStyle,

@@ -145,6 +145,7 @@ fn grouped_history_failure_names_the_failed_call_and_command_completion_stays_ne
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
+        progress: None,
         jump_label: "Jump to bottom",
         header: None,
         messages: &views,

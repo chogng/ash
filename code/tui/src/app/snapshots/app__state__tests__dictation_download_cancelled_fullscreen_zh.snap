@@ -2,7 +2,7 @@
 source: code/tui/src/app/state_tests.rs
 expression: render_dictation_frame(&app)
 ---
-  .                                                           [— / —] [仪 表 盘 ]  
+  .                                                                   [仪 表 盘 ]  
                                                                                 
 > /voice                                                                        
                                                                                 
@@ -24,5 +24,5 @@ expression: render_dictation_frame(&app)
   ────────────────────────────────────────────────────────────────────────────  
   > keep draft                                                                  
   ────────────────────────────────────────────────────────────────── 自 动 模 型    
-                                                                                
-  Enter 发 送   ·  shift+tab 模 式   ·  shift+↓/↑ 思 考
+  ⏸ 手 动                                                                         
+                              Enter 发 送   ·  shift+tab 模 式   ·  shift+↓/↑ 思 考

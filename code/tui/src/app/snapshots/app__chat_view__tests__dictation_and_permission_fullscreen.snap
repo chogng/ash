@@ -1,0 +1,22 @@
+---
+source: code/tui/src/app/chat_view_tests.rs
+expression: text(&buffer)
+---
+   branch-layo… /work/ash                                 [— / —] [Dashboard]  
+                                                                                
+> /voice                                                                        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  Dictation · loading model · ctrl+c to stop dictation                          
+  ────────────────────────────────────────────────────────────────────────────  
+  >                                                                             
+  ──────────────────────────────────────────────── Shared model (high) · Plan   
+  ⏸ Manual                                                                      
+                            Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

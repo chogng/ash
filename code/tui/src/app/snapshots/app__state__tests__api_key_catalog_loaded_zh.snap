@@ -2,7 +2,7 @@
 source: code/tui/src/app/state_tests.rs
 expression: "crate::app::usage_tests::render(&app, 96, 24)"
 ---
-  .                                                                           [— / —] [仪表盘]
+  .                                                                                   [仪表盘]
 
 ● 已保存 openai 的 API Key，加载了 2 个模型
 
@@ -20,9 +20,9 @@ expression: "crate::app::usage_tests::render(&app, 96, 24)"
 
 
 
-  ⏸ 手动
+
   ────────────────────────────────────────────────────────────────────────────────────────────
   >
   ────────────────────────────────────────────────────────────────────────────────── 自动模型
-
-  Enter 发送  ·  shift+tab 模式  ·  shift+↓/↑ 思考
+  ⏸ 手动
+                                              Enter 发送  ·  shift+tab 模式  ·  shift+↓/↑ 思考

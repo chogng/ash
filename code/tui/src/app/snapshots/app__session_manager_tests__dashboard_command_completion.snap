@@ -2,7 +2,7 @@
 source: code/tui/src/app/session_manager_tests.rs
 expression: render(&app)
 ---
-  .                                                                            [— / —] [Dashboard]
+  .                                                                                    [Dashboard]
 
 
 
@@ -32,5 +32,5 @@ expression: render(&app)
   ────────────────────────────────────────────────────────────────────────────────────────────────
   > /dashboard
   ─────────────────────────────────────────────────────────────────────────────── Automatic model
-
-  Enter send
+  ⏸ Manual
+                                                                                        Enter send

@@ -2,7 +2,7 @@
 source: code/tui/src/app/guardian_tests.rs
 expression: frame
 ---
-  .                                                           [— / —] [仪 表 盘 ]  
+  .                                                                   [仪 表 盘 ]  
                                                                                 
         ┌── Guardian ──────────────────────────────────────────────[✗]─┐        
         │                                                              │        

@@ -100,7 +100,7 @@ fn network_config_required_domains_stay_read_only_and_localize_chinese_inline() 
         matches!(&command, ConfigCommand::Network(request) if request.operation == Operation::Domains)
     );
     let mut client = AppServerClient::new(Transport {
-        response: json!({"result":{"targets":report()["network"]["targets"]}}),
+        response: json!({"result":report()["network"]}),
     });
     app.update(config::execute(&mut client, command).unwrap());
     let screen = render(&app, 100, 24);
@@ -148,7 +148,7 @@ fn open_config(language: Language, mode: ScreenMode) -> App {
 
 pub(super) fn report() -> Value {
     json!({
-        "network":{"targets":[
+        "network":{"revision":1,"httpMode":"http2","targets":[
             {"id":"model","connection":"Example","displayName":"Example","host":"api.example.test","port":443,"purpose":"model","route":{"type":"proxy","host":"proxy.example.test","port":8080}},
             {"id":"usage","connection":"Example","displayName":"Example","host":"usage.example.test","port":443,"purpose":"usage","route":{"type":"direct"}}
         ]},

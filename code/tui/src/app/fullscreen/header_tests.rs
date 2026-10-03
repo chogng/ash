@@ -14,6 +14,9 @@ use unicode_width::UnicodeWidthStr;
 
 fn app_with_branch() -> App {
     let mut app = App::for_dir(std::path::Path::new("/work/ash"));
+    let mut status = crate::status::StatusLineSettings::default();
+    status.set(crate::status::StatusLineItem::Context, true);
+    app.update(crate::status::Event::LineSettingsReceived(status));
     app.update(crate::status::Event::GitStatusReceived(GitStatusResult {
         repository_id: "repository".into(),
         stream_instance_id: ash_protocol::StreamInstanceId::new("git-stream").unwrap(),
@@ -71,7 +74,7 @@ fn header_places_branch_and_path_without_repeating_them_below() {
     crate::tui_assert_snapshot!("workspace_header_and_hintbar", text);
 
     let area = Rect::new(0, 0, 80, 20);
-    let header = super::super::layout(&app, area).header;
+    let header = super::super::layout(&app, area).top_statusline;
     assert_eq!(
         super::target_at(&app, header, Position::new(2, 0)),
         Some(super::Target::Branch)
@@ -111,7 +114,7 @@ fn plain_glyph_set_updates_the_header_and_its_hit_targets() {
     );
     crate::tui_assert_snapshot!("workspace_header_plain_marker", text);
 
-    let header = super::super::layout(&app, Rect::new(0, 0, 80, 20)).header;
+    let header = super::super::layout(&app, Rect::new(0, 0, 80, 20)).top_statusline;
     assert_eq!(
         super::target_at(&app, header, Position::new(2, 0)),
         Some(super::Target::Branch)
@@ -126,7 +129,7 @@ fn plain_glyph_set_updates_the_header_and_its_hit_targets() {
 fn every_header_action_has_its_own_hit_target_and_activation() {
     let area = Rect::new(0, 0, 100, 20);
     let positions = |app: &App| {
-        let header = super::super::layout(app, area).header;
+        let header = super::super::layout(app, area).top_statusline;
         (0..area.width)
             .filter_map(|column| {
                 let position = Position::new(column, header.y);
@@ -180,7 +183,7 @@ fn clicking_dashboard_twice_returns_to_the_active_session() {
         thread_id: ash_protocol::ThreadId::new("current").unwrap(),
     });
     let area = Rect::new(0, 0, 100, 20);
-    let header = super::super::layout(&app, area).header;
+    let header = super::super::layout(&app, area).top_statusline;
     let position = (0..area.width)
         .map(|column| Position::new(column, header.y))
         .find(|position| {
@@ -254,7 +257,7 @@ fn keyboard_focus_reaches_header_and_context_uses_the_existing_progress_bar() {
         .map(|cell| cell.symbol())
         .collect::<String>();
     assert!(row.contains("[████░░░░░░ 40%] [Dashboard]"));
-    let header = super::super::layout(&app, Rect::new(0, 0, 100, 20)).header;
+    let header = super::super::layout(&app, Rect::new(0, 0, 100, 20)).top_statusline;
     let context_position = (0..100)
         .map(|column| Position::new(column, header.y))
         .find(|position| super::target_at(&app, header, *position) == Some(super::Target::Context))
@@ -269,6 +272,35 @@ fn keyboard_focus_reaches_header_and_context_uses_the_existing_progress_bar() {
 }
 
 #[test]
+fn hiding_a_focused_status_item_returns_to_input_and_removes_its_targets() {
+    let mut app = app_with_branch();
+    app.handle_key(KeyEvent::new(KeyCode::F(6), KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    assert_eq!(
+        app.fullscreen.header.selected(),
+        Some(super::Target::Context)
+    );
+
+    let mut settings = crate::status::StatusLineSettings::default();
+    settings.set(crate::status::StatusLineItem::GitBranch, false);
+    app.update(crate::status::Event::LineSettingsReceived(settings));
+    assert!(app.fullscreen.input_focused());
+    assert_eq!(app.fullscreen.header.selected(), None);
+    for target in [super::Target::Branch, super::Target::Context] {
+        assert!(!super::keyboard_targets(&app).contains(&target));
+        let header = super::super::layout(&app, Rect::new(0, 0, 100, 20)).top_statusline;
+        assert!(
+            !(0..100).any(
+                |x| super::target_at(&app, header, Position::new(x, header.y)) == Some(target)
+            )
+        );
+    }
+    assert_eq!(app.status_line().branch_label(), Some("main"));
+    app.insert_text("still editing");
+    assert_eq!(app.input(), "still editing");
+}
+
+#[test]
 fn header_hovers_underline_only_the_target_without_background_or_keyboard_selection() {
     let area = Rect::new(0, 0, 100, 20);
     let mut identity_hover_style = None;
@@ -279,7 +311,7 @@ fn header_hovers_underline_only_the_target_without_background_or_keyboard_select
         super::Target::Dashboard,
     ] {
         let mut app = app_with_branch();
-        let header = super::super::layout(&app, area).header;
+        let header = super::super::layout(&app, area).top_statusline;
         let position = (0..area.width)
             .map(|column| Position::new(column, header.y))
             .find(|position| super::target_at(&app, header, *position) == Some(target))
@@ -351,7 +383,7 @@ fn branch_and_workspace_keyboard_focus_keep_the_same_underline_color_as_hover() 
     for target in [super::Target::Branch, super::Target::Workspace] {
         let mut app = app_with_branch();
         app.fullscreen.focus_header(target);
-        let header = super::super::layout(&app, area).header;
+        let header = super::super::layout(&app, area).top_statusline;
         let position = (0..area.width)
             .map(|column| Position::new(column, header.y))
             .find(|position| super::target_at(&app, header, *position) == Some(target))
@@ -386,7 +418,7 @@ fn workspace_mutations_are_not_pointer_targets_while_a_turn_is_starting() {
         ))
     ));
     let area = Rect::new(0, 0, 100, 20);
-    let header = super::super::layout(&app, area).header;
+    let header = super::super::layout(&app, area).top_statusline;
     let visible = (0..area.width)
         .filter_map(|column| super::target_at(&app, header, Position::new(column, header.y)))
         .collect::<std::collections::BTreeSet<_>>();
@@ -411,7 +443,7 @@ fn workspace_path_truncates_with_ellipsis_when_exceeding_width() {
     assert!(row.contains("…"));
     assert!(!row.contains("[+]"));
     let area = Rect::new(0, 0, 80, 20);
-    let header = super::super::layout(&app, area).header;
+    let header = super::super::layout(&app, area).top_statusline;
     let workspace_pos = (0..80)
         .map(|col| Position::new(col, header.y))
         .find(|pos| super::target_at(&app, header, *pos) == Some(super::Target::Workspace));
@@ -422,7 +454,7 @@ fn workspace_path_truncates_with_ellipsis_when_exceeding_width() {
 fn dashboard_action_has_depth_contrast_on_hover_and_no_bold_on_press_or_selection() {
     let app = app_with_branch();
     let area = Rect::new(0, 0, 100, 20);
-    let header = super::super::layout(&app, area).header;
+    let header = super::super::layout(&app, area).top_statusline;
     let dashboard_pos = (0..area.width)
         .map(|col| Position::new(col, header.y))
         .find(|pos| super::target_at(&app, header, *pos) == Some(super::Target::Dashboard))

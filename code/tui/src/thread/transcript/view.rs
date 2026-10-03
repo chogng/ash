@@ -23,6 +23,7 @@ use unicode_width::UnicodeWidthStr;
 
 pub(crate) struct ChatHistoryView<'a> {
     pub(crate) jump_label: &'a str,
+    pub(crate) progress: Option<crate::thread::progress::TurnProgress<'a>>,
     pub(crate) header: Option<&'a Buffer>,
     pub(crate) messages: &'a [CellView<'a>],
     pub(crate) scroll: &'a ChatHistoryScroll,
@@ -49,7 +50,8 @@ pub(crate) struct ChatHistoryPointerState<'a> {
 
 impl Renderable for ChatHistoryView<'_> {
     fn desired_height(&self, width: u16, context: RenderContext<'_>) -> u16 {
-        let message_rows = measured_heights(self.messages, self.render_cache, width, context)
+        let message_rows = self
+            .measured_heights(width, context)
             .into_iter()
             .sum::<usize>();
         header_rows(self.header)
@@ -58,7 +60,7 @@ impl Renderable for ChatHistoryView<'_> {
     }
 
     fn render(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
-        let heights = measured_heights(self.messages, self.render_cache, area.width, context);
+        let heights = self.measured_heights(area.width, context);
         let header_rows = header_rows(self.header);
         let (content_area, _) = scroll_areas(area, header_rows, &heights, self.scroll);
         let total_rows = header_rows.saturating_add(heights.iter().sum::<usize>());
@@ -87,6 +89,25 @@ impl Renderable for ChatHistoryView<'_> {
             self.pointer,
             context,
         );
+        if let Some(progress) = &self.progress {
+            let progress_start =
+                header_rows + heights.iter().take(self.messages.len()).sum::<usize>();
+            let skipped = viewport_start.saturating_sub(progress_start);
+            let row = progress_start.saturating_sub(viewport_start);
+            if row < usize::from(content_area.height) {
+                let progress_area = Rect::new(
+                    content_area.x,
+                    content_area.y + row as u16,
+                    content_area.width,
+                    content_area.height - row as u16,
+                );
+                if skipped == 0 {
+                    progress.draw(frame, progress_area, context);
+                } else {
+                    progress.draw_rows(frame, progress_area, skipped as u16, context);
+                }
+            }
+        }
         render_jump_to_bottom(
             frame,
             self.jump_area(area, context),
@@ -98,8 +119,36 @@ impl Renderable for ChatHistoryView<'_> {
 }
 
 impl ChatHistoryView<'_> {
+    // Progress participates in scrolling, but has no cell identity or cached history entry.
+    fn measured_heights(&self, width: u16, context: RenderContext<'_>) -> Vec<usize> {
+        let mut heights = measured_heights(self.messages, self.render_cache, width, context);
+        if let Some(progress) = &self.progress {
+            heights.push(usize::from(progress.desired_height()));
+        }
+        heights
+    }
+
+    pub(crate) fn scroll_target(
+        &self,
+        area: Rect,
+        context: RenderContext<'_>,
+        direction: TranscriptScrollDirection,
+        rows: usize,
+    ) -> Option<TranscriptScrollTarget> {
+        let heights = self.measured_heights(area.width, context);
+        scroll_target_from_heights(
+            area,
+            header_rows(self.header),
+            self.messages,
+            self.scroll,
+            &heights,
+            direction,
+            rows,
+        )
+    }
+
     pub(crate) fn jump_area(&self, area: Rect, context: RenderContext<'_>) -> Option<Rect> {
-        let heights = measured_heights(self.messages, self.render_cache, area.width, context);
+        let heights = self.measured_heights(area.width, context);
         let mut target =
             jump_to_bottom_area(area, header_rows(self.header), &heights, self.scroll)?;
         let width = self.jump_label.width().min(usize::from(area.width)) as u16;
@@ -120,7 +169,7 @@ impl ChatHistoryView<'_> {
         {
             return Some(ChatHistoryPointerTarget::JumpToBottom);
         }
-        let heights = measured_heights(self.messages, self.render_cache, area.width, context);
+        let heights = self.measured_heights(area.width, context);
         let header_rows = header_rows(self.header);
         let (content_area, _) = scroll_areas(area, header_rows, &heights, self.scroll);
         if !content_area.contains(position) {
@@ -180,11 +229,31 @@ pub(crate) fn scroll_target(
     rows: usize,
 ) -> Option<TranscriptScrollTarget> {
     let heights = measured_heights(messages, render_cache, area.width, context);
-    let (content_area, _) = scroll_areas(area, header_rows, &heights, scroll);
+    scroll_target_from_heights(
+        area,
+        header_rows,
+        messages,
+        scroll,
+        &heights,
+        direction,
+        rows,
+    )
+}
+
+fn scroll_target_from_heights(
+    area: Rect,
+    header_rows: usize,
+    messages: &[CellView<'_>],
+    scroll: &ChatHistoryScroll,
+    heights: &[usize],
+    direction: TranscriptScrollDirection,
+    rows: usize,
+) -> Option<TranscriptScrollTarget> {
+    let (content_area, _) = scroll_areas(area, header_rows, heights, scroll);
     let bottom_offset = header_rows
         .saturating_add(heights.iter().sum::<usize>())
         .saturating_sub(usize::from(content_area.height));
-    let current = viewport_offset(messages, header_rows, &heights, scroll, bottom_offset);
+    let current = viewport_offset(messages, header_rows, heights, scroll, bottom_offset);
     let target = match direction {
         TranscriptScrollDirection::Up => current.saturating_sub(rows),
         TranscriptScrollDirection::Down => current.saturating_add(rows),
@@ -198,7 +267,7 @@ pub(crate) fn scroll_target(
     if target == current {
         return None;
     }
-    anchor_at(messages, header_rows, &heights, target).map(TranscriptScrollTarget::Anchor)
+    anchor_at(messages, header_rows, heights, target).map(TranscriptScrollTarget::Anchor)
 }
 
 pub(crate) fn first_scroll_target(

@@ -153,6 +153,9 @@ fn inline_history_commits_final_blocks_once_and_keeps_the_active_turn_live() {
         current.clone(),
     ])));
     app.set_active_turn(TurnId::new("current").unwrap());
+    app.update(ThreadEvent::TurnActivityChanged(
+        crate::thread::TurnActivity::Working,
+    ));
     let mut output = Output::default();
     output.select_thread(app.screen_thread_id());
     let pending = output.pending(&app);
@@ -164,7 +167,22 @@ fn inline_history_commits_final_blocks_once_and_keeps_the_active_turn_live() {
     let rendered = text(&render(&app, 60, 24));
     assert!(!rendered.contains("Earlier completed answer"));
     assert!(rendered.contains("当前回复"));
+    let rows = rendered.lines().collect::<Vec<_>>();
+    let reply_row = rows
+        .iter()
+        .position(|row| row.contains("当前回复"))
+        .unwrap();
+    let progress_row = rows.iter().position(|row| row.contains("Working")).unwrap();
+    let input_row = rows
+        .iter()
+        .position(|row| row.trim_start().starts_with('>'))
+        .unwrap();
+    assert!(reply_row < progress_row && progress_row < input_row);
+    assert_eq!(output.tail(&app).len(), 1);
+    assert!(!output.tail(&app)[0].text().contains("Working"));
     crate::tui_assert_snapshot!("current_reply", rendered);
+    app.update(ThreadEvent::TurnCompleted);
+    assert!(!text(&render(&app, 60, 24)).contains("Working"));
     app.clear_active_turn();
     app.update(ThreadEvent::TranscriptSnapshotReceived(snapshot(vec![
         old, current,

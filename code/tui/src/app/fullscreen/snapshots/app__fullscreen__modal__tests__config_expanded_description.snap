@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/modal_tests.rs
 expression: frame_text(&app)
 ---
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                                    [Dashboard]  
                                                                                                     
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │         ┌── Config ───────────────────────────────────────────────────────────[✗]─┐          │  
@@ -26,7 +26,7 @@ expression: frame_text(&app)
             │  Automatic Git fetch                                              Off + │             
             │  Git fetch interval                                              180s   │             
             │  Git branch marker                                          Powerline   │             
-            │  3 more below                                                           │ Esc return  
+            │  3 more below                                                           │             
   ──────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │───────────  
   > Build an└─────────────────────────────────────────────────────────────────────────┘             
   ─────────────────────────────────────────────────────────────────────────────── Automatic model

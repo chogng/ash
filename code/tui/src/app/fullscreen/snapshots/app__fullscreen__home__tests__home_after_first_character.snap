@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/home_tests.rs
 expression: rendered
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
                                                                                 
                                                                                 
@@ -20,9 +20,9 @@ expression: rendered
                                                                                 
                                                                                 
                                                                                 
-  ⏸ Manual                                                                      
+                                                                                
   ────────────────────────────────────────────────────────────────────────────  
   > x                                                                           
   ─────────────────────────────────────────────────────────── Automatic model   
-                                                                                
-  Enter send  ·  / commands
+  ⏸ Manual                                                                      
+                                                     Enter send  ·  / commands

@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/state_tests.rs
+expression: render_dictation_frame(&app)
+---
+  .                                                                [Dashboard]  
+                                                                                
+⠋ Working · 0m 00s total                                                        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  Dictation · stopping                                                          
+  ────────────────────────────────────────────────────────────────────────────  
+  >                                                                             
+  ─────────────────────────────────────────────────────────── Automatic model   
+  ⏸ Manual                                                                      
+                           Enter queue  ·  shift+tab mode  ·  shift+↓/↑ effort

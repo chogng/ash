@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/pointer_tests.rs
 expression: terminal.backend().to_string()
 ---
-"  .                                                        [— / —] [Dashboard]  "
+"  .                                                                [Dashboard]  "
 "                                                                                "
 "        ┌── Providers ─────────────────────────────────────────────[✗]─┐        "
 "        │                                                              │        "

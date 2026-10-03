@@ -3,7 +3,7 @@ source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: "snapshots.join(\"\\n\\n\")"
 ---
 fourth pinned=true
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                                    [Dashboard]  
                                                                                                     
             ┌── Model ────────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
@@ -23,7 +23,7 @@ fourth pinned=true
                                                                                                     
 
 third pinned=true
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                                    [Dashboard]  
                                                                                                     
             ┌── Model ────────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
@@ -43,7 +43,7 @@ third pinned=true
                                                                                                     
 
 third pinned=false
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                                    [Dashboard]  
                                                                                                     
             ┌── Model ────────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
@@ -63,7 +63,7 @@ third pinned=false
                                                                                                     
 
 fourth pinned=false
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                                    [Dashboard]  
                                                                                                     
             ┌── Model ────────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             

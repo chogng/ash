@@ -1,7 +1,7 @@
 use super::*;
 use crate::render::test_context;
 use crate::thread::TurnActivity;
-use crate::thread::status_indicator::StatusTimer;
+use crate::thread::progress::StatusTimer;
 use ash_protocol::TurnId;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -9,7 +9,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[test]
-fn status_indicator_renders_waiting_and_deterministic_activity() {
+fn progress_renders_waiting_and_deterministic_activity() {
     let now = Instant::now();
     let mut timer = StatusTimer::default();
     timer.start(now);
@@ -25,7 +25,7 @@ fn status_indicator_renders_waiting_and_deterministic_activity() {
             .into_iter()
             .enumerate()
             {
-                StatusIndicator {
+                TurnProgress {
                     activity,
                     timer: &timer,
                     interrupt_hint: (activity != TurnActivity::Cancelling).then(|| "ctrl+c".into()),
@@ -51,11 +51,11 @@ fn status_indicator_renders_waiting_and_deterministic_activity() {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    crate::tui_assert_snapshot!("status_indicator_phases", text);
+    crate::tui_assert_snapshot!("progress_phases", text);
 }
 
 #[test]
-fn status_indicator_localizes_every_activity() {
+fn progress_localizes_every_activity() {
     let mut terminal = Terminal::new(TestBackend::new(80, 6)).unwrap();
     let timer = StatusTimer::default();
     terminal
@@ -71,7 +71,7 @@ fn status_indicator_localizes_every_activity() {
             .into_iter()
             .enumerate()
             {
-                StatusIndicator {
+                TurnProgress {
                     activity,
                     timer: &timer,
                     interrupt_hint: None,
@@ -103,7 +103,7 @@ fn status_indicator_localizes_every_activity() {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    crate::tui_assert_snapshot!("status_indicator_chinese_activities", text);
+    crate::tui_assert_snapshot!("progress_chinese_activities", text);
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn spinner_verb_changes_between_turns_and_stays_fixed_during_a_turn() {
                 let expected = crate::nls::spinner_verb(row);
                 let started = now + Duration::from_secs(row as u64 * 90);
                 timer.bind_turn(&TurnId::new(format!("word-{row}")).unwrap(), started);
-                let indicator = StatusIndicator {
+                let indicator = TurnProgress {
                     activity: TurnActivity::Working,
                     timer: &timer,
                     interrupt_hint: None,
@@ -139,7 +139,7 @@ fn spinner_verb_changes_between_turns_and_stays_fixed_during_a_turn() {
                 );
                 timer.tick(started + Duration::from_secs(65));
                 assert_eq!(
-                    StatusIndicator {
+                    TurnProgress {
                         activity: TurnActivity::Working,
                         timer: &timer,
                         interrupt_hint: None,
@@ -174,12 +174,12 @@ fn spinner_verb_changes_between_turns_and_stays_fixed_during_a_turn() {
 }
 
 #[test]
-fn status_indicator_narrow_row_preserves_interrupt_hint() {
+fn progress_narrow_row_preserves_interrupt_hint() {
     let timer = StatusTimer::default();
     let mut terminal = Terminal::new(TestBackend::new(32, 1)).unwrap();
     terminal
         .draw(|frame| {
-            StatusIndicator {
+            TurnProgress {
                 activity: TurnActivity::Working,
                 timer: &timer,
                 interrupt_hint: Some("ctrl+c".into()),
@@ -208,7 +208,7 @@ fn long_spinner_verb_keeps_interrupt_hint_visible() {
     let mut terminal = Terminal::new(TestBackend::new(32, 1)).unwrap();
     terminal
         .draw(|frame| {
-            StatusIndicator {
+            TurnProgress {
                 activity: TurnActivity::Working,
                 timer: &timer,
                 interrupt_hint: Some("ctrl+c".into()),
@@ -230,8 +230,8 @@ fn tips_appear_below_the_running_indicator_and_stop_while_waiting() {
     let mut timer = StatusTimer::default();
     timer.start(started);
     timer.tick(started + Duration::from_secs(7));
-    fn working(timer: &StatusTimer) -> StatusIndicator<'_> {
-        StatusIndicator {
+    fn working(timer: &StatusTimer) -> TurnProgress<'_> {
+        TurnProgress {
             activity: TurnActivity::Working,
             timer,
             interrupt_hint: Some("ctrl+c".into()),
@@ -253,7 +253,7 @@ fn tips_appear_below_the_running_indicator_and_stop_while_waiting() {
 
     timer.tick(started + Duration::from_secs(120));
     assert_eq!(working(&timer).tip(), Some(crate::nls::Message::TipPlan));
-    let waiting = StatusIndicator {
+    let waiting = TurnProgress {
         activity: TurnActivity::WaitingForApproval,
         timer: &timer,
         interrupt_hint: None,
@@ -261,7 +261,7 @@ fn tips_appear_below_the_running_indicator_and_stop_while_waiting() {
     };
     assert_eq!(waiting.desired_height(), 1);
     assert_eq!(waiting.tip(), None);
-    let disabled = StatusIndicator {
+    let disabled = TurnProgress {
         show_tips: false,
         ..working(&timer)
     };

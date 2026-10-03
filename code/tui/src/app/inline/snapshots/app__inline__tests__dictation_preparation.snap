@@ -10,9 +10,9 @@ expression: text(&buffer)
                                                                                 
                                                                                 
                                                                                 
-                                              Listening. Press /voice to stop.  
+  Dictation · checking model files · ctrl+c to stop dictation                   
 ────────────────────────────────────────────────────────────────────────────────
 >                                                                               
 ────────────────────────────────────────────────────────────────────────────────
                                                                                 
-  Dictation · checking model files · ctrl+c to stop
+  ⏸ Manual

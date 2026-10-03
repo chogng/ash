@@ -15,7 +15,7 @@ const MAX_THREAD_PRESENTATIONS: usize = 32;
 #[derive(Debug)]
 pub(crate) struct ThreadPresentationState {
     pub(crate) input: ChatInput,
-    pub(crate) status_timer: super::status_indicator::StatusTimer,
+    pub(crate) status_timer: super::progress::StatusTimer,
     pub(crate) goal: Option<ThreadGoal>,
     pub(crate) plan: PlanState,
     pub(crate) queue: Queue,
@@ -31,7 +31,7 @@ impl ThreadPresentationState {
     fn with_input_catalog(catalog: ChatInputCatalog) -> Self {
         Self {
             input: ChatInput::with_catalog(catalog),
-            status_timer: super::status_indicator::StatusTimer::default(),
+            status_timer: super::progress::StatusTimer::default(),
             goal: None,
             plan: PlanState::default(),
             queue: Queue::default(),

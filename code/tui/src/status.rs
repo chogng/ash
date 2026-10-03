@@ -69,6 +69,8 @@ pub(crate) use setup::StatusLineSelectionAction;
 #[cfg(test)]
 pub(crate) use setup::list_selection as status_line_choices;
 pub(crate) use view::context_header_line;
-pub(crate) use view::draw;
+pub(crate) use view::draw_fullscreen_info;
+pub(crate) use view::draw_info;
+pub(crate) use view::draw_policy;
+pub(crate) use view::fullscreen_info_width;
 pub(crate) use view::header_line;
-pub(crate) use view::policy_line;

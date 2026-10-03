@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/modal_tests.rs
 expression: frame_text(&app)
 ---
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                                    [Dashboard]  
                                                                                                     
                                                                                                     
                                                                                                     
@@ -26,9 +26,9 @@ expression: frame_text(&app)
                                                                                                     
                                                                                                     
                                                                                                     
-  ⏸ ask permissions on                                                                              
+                                                                                                    
   ────────────────────────────────────────────────────────────────────────────────────────────────  
   > preserved draft                                                                                 
   ─────────────────────────────────────────────────────────────────────────────── Automatic model   
-                                                                                                    
-  Enter send  ·  / commands
+  ⏸ Manual                                                                                          
+                                                                         Enter send  ·  / commands

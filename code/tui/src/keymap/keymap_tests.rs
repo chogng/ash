@@ -518,7 +518,7 @@ fn captured_terminal_keys_use_portable_keybinding_syntax() {
 }
 
 #[test]
-fn status_indicator_hint_respects_remapping_and_blocking() {
+fn chat_progress_hint_respects_remapping_and_blocking() {
     let mut keymap = AppKeymap::default();
     let action = AppKeymapAction::InterruptOrQuit;
     assert_eq!(

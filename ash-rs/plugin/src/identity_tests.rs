@@ -51,8 +51,10 @@ fn plugin_versions_are_strict_semver() {
 #[test]
 fn package_digests_are_self_describing_and_canonical() {
     let digest = PluginPackageDigest::sha256(b"package");
-    assert!(digest.as_str().starts_with("sha256:"));
-    assert_eq!(digest.as_str().len(), 7 + 64);
+    assert_eq!(
+        digest.as_str(),
+        "sha256:bc4a71180870f7945155fbb02f4b0a2e3faa2a62d6d31b7039013055ed19869a"
+    );
     assert_eq!(
         PluginPackageDigest::new(digest.to_string()).unwrap(),
         digest

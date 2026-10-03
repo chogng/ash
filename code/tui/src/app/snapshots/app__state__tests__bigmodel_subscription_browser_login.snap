@@ -2,7 +2,7 @@
 source: code/tui/src/app/state_tests.rs
 expression: screen
 ---
-  .                                                                        [— / —] [Dashboard]
+  .                                                                                [Dashboard]
 
             ┌── Config › BigModel ─────────────────────────────────────────────[✗]─┐
             │                                                                      │

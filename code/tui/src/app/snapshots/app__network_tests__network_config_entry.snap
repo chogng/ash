@@ -2,7 +2,7 @@
 source: code/tui/src/app/network_tests.rs
 expression: "render(&app, 100, 24)"
 ---
-  .                                                                            [— / —] [Dashboard]
+  .                                                                                    [Dashboard]
 
             ┌── Config ───────────────────────────────────────────────────────────[✗]─┐
             │                                                                         │

@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 80, 20)"
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
         ┌── Hooks › user:hook:review ──────────────────────────────[✗]─┐        
         │                                                              │        

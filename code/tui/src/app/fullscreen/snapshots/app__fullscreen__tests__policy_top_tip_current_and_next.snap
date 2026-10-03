@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: visible
 ---
-  .                                                                                                [— / —] [Dashboard]  
+  .                                                                                                        [Dashboard]  
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -16,9 +16,9 @@ expression: visible
                                                                                                                         
                                                                                                                         
                                                                                                                         
-  ⏸ current: Manual · ⏩  next: Auto                                                  /permission to change permissions  
+                                                                                     /permission to change permissions  
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
   >                                                                                                                     
   ─────────────────────────────────────────────────────────────────────────────────────────────────── Automatic model   
-                                                                                                                        
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ current: Manual · ⏩  next: Auto                                                                                     
+                                                                    Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

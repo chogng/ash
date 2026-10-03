@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/home_tests.rs
 expression: "text(&render(&app, 80, 24))"
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
   ╭─────┌── Project worktrees › New worktree ──────────────────────[✗]─┐─────╮  
   │     │                                                              │     │  
@@ -20,7 +20,7 @@ expression: "text(&render(&app, 80, 24))"
         │                                                              │        
         │                                                              │        
         │                                                              │        
-        │                                                              │ction.  
+        │                                                              │        
   ──────│  Enter to create  ·  Esc to back                             │──────  
   > Buil└──────────────────────────────────────────────────────────────┘        
   ─────────────────────────────────────────────────────────── Automatic model

@@ -37,6 +37,7 @@ pub(crate) struct StatusLineRuntime {
 enum StatusLineLocation {
     Footer,
     Header,
+    FullscreenFooter,
 }
 
 impl StatusLineRuntime {
@@ -179,6 +180,20 @@ impl StatusLineModel {
             Some(value) => &value.full[0].text,
             None => "Automatic model",
         }
+    }
+
+    pub(crate) fn item_enabled(&self, item: StatusLineItem) -> bool {
+        self.settings.enabled(item)
+    }
+
+    pub(crate) fn composer_model_label(&self) -> Option<&str> {
+        self.item_enabled(StatusLineItem::Model)
+            .then(|| self.model_label())
+    }
+
+    pub(crate) fn mode_label(&self, mode: ash_protocol::CollaborationMode) -> Option<&'static str> {
+        (self.item_enabled(StatusLineItem::Mode) && mode != ash_protocol::CollaborationMode::Agent)
+            .then(|| crate::thread::composer::options::mode_label(mode))
     }
 
     pub(crate) fn branch_label(&self) -> Option<&str> {
@@ -345,12 +360,21 @@ impl StatusLineModel {
             .segments
     }
 
-    pub(crate) fn header_process_resources(
+    pub(super) fn fullscreen_footer_segments_for_width(
+        &self,
+        width: usize,
+        runtime: StatusLineRuntime,
+    ) -> Vec<StatusLineSegment> {
+        self.top_layout_for_width(width, runtime, StatusLineLocation::FullscreenFooter)
+            .segments
+    }
+
+    pub(crate) fn fullscreen_footer_process_resources(
         &self,
         width: usize,
         runtime: StatusLineRuntime,
     ) -> Option<ProcessResourceMetrics> {
-        self.top_layout_for_width(width, runtime, StatusLineLocation::Header)
+        self.top_layout_for_width(width, runtime, StatusLineLocation::FullscreenFooter)
             .process_resources
     }
 
@@ -361,26 +385,28 @@ impl StatusLineModel {
         location: StatusLineLocation,
     ) -> StatusLineLayout {
         let mut values = Vec::new();
-        if self.settings.style() == StatusLineStyle::Rich {
-            if let Some((completed, total)) = runtime.plan {
-                values.push(progress_value(
-                    "📋",
-                    "plan",
-                    &format!("{completed}/{total}"),
-                    (total > 0)
-                        .then(|| (completed as u128 * 100 / total as u128).min(100) as usize),
-                ));
-            }
-            if runtime.subagents > 0 {
-                values.push(DisplayValue::plain(
-                    format!("👥 subagents {}", runtime.subagents),
-                    format!("subagents {}", runtime.subagents),
-                ));
-            }
-        } else {
-            let text = runtime.text();
-            if !text.is_empty() {
-                values.push(DisplayValue::plain(text.clone(), text));
+        if !matches!(location, StatusLineLocation::Header) {
+            if self.settings.style() == StatusLineStyle::Rich {
+                if let Some((completed, total)) = runtime.plan {
+                    values.push(progress_value(
+                        "📋",
+                        "plan",
+                        &format!("{completed}/{total}"),
+                        (total > 0)
+                            .then(|| (completed as u128 * 100 / total as u128).min(100) as usize),
+                    ));
+                }
+                if runtime.subagents > 0 {
+                    values.push(DisplayValue::plain(
+                        format!("👥 subagents {}", runtime.subagents),
+                        format!("subagents {}", runtime.subagents),
+                    ));
+                }
+            } else {
+                let text = runtime.text();
+                if !text.is_empty() {
+                    values.push(DisplayValue::plain(text.clone(), text));
+                }
             }
         }
         values.extend(self.configured_values(runtime, location));
@@ -414,15 +440,18 @@ impl StatusLineModel {
         let resources = runtime.process_resources;
         let mut values = Vec::new();
         for item in self.settings.items() {
-            if matches!(location, StatusLineLocation::Header)
-                && matches!(
+            let visible_here = match location {
+                StatusLineLocation::Footer => true,
+                StatusLineLocation::Header => matches!(item, StatusLineItem::GitChanges),
+                StatusLineLocation::FullscreenFooter => matches!(
                     item,
-                    StatusLineItem::Model
-                        | StatusLineItem::Mode
-                        | StatusLineItem::GitBranch
-                        | StatusLineItem::Context
-                )
-            {
+                    StatusLineItem::CacheHitRate
+                        | StatusLineItem::ReferenceCost
+                        | StatusLineItem::Memory
+                        | StatusLineItem::Cpu
+                ),
+            };
+            if !visible_here {
                 continue;
             }
             let start = values.len();
@@ -431,15 +460,11 @@ impl StatusLineModel {
                 StatusLineItem::Permissions => {}
                 StatusLineItem::Model => values.extend(self.model.iter().cloned()),
                 StatusLineItem::Mode => {
-                    if runtime.mode == ash_protocol::CollaborationMode::Agent {
+                    let Some(label) = self.mode_label(runtime.mode) else {
                         continue;
-                    }
+                    };
                     let segment = StatusLineSegment {
-                        text: crate::nls::localize(
-                            runtime.language,
-                            crate::thread::composer::options::mode_label(runtime.mode),
-                        )
-                        .into_owned(),
+                        text: crate::nls::localize(runtime.language, label).into_owned(),
                         kind: StatusLineSegmentKind::Mode(runtime.mode),
                     };
                     values.push(DisplayValue {

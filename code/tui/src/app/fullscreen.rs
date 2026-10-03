@@ -131,6 +131,16 @@ impl Fullscreen {
     }
 }
 
+pub(super) fn reconcile_status_line_focus(app: &mut App) {
+    // Settings can remove a focused header action while its page is inactive.
+    app.fullscreen.pointer.clear();
+    if let Some(target) = app.fullscreen.header.selected()
+        && !header::keyboard_targets(app).contains(&target)
+    {
+        app.fullscreen.focus_input();
+    }
+}
+
 pub(super) fn draw(
     frame: &mut Frame<'_>,
     app: &App,
@@ -146,7 +156,7 @@ pub(super) fn draw(
         frame.area(),
     );
     let areas = layout(app, frame.area());
-    header::draw(frame, areas.header, app, context);
+    header::draw(frame, areas.top_statusline, app, context);
     let hovered = app.fullscreen.pointer.hovered();
     let pressed = app.fullscreen.pointer.pressed();
     if app.fullscreen.welcome_visible() {
@@ -215,5 +225,25 @@ pub(super) fn process_resource_demand(
             ash_memory_diagnostics::ProcessResourceDemand::Disabled
         };
     }
-    header::process_resource_demand(app, layout(app, area).header)
+    if !crate::app::footer::chat_visible(app) {
+        return ash_memory_diagnostics::ProcessResourceDemand::Disabled;
+    }
+    let statusline = crate::render::horizontal_margin(layout(app, area).session.statusline, 2);
+    if statusline.is_empty() {
+        return ash_memory_diagnostics::ProcessResourceDemand::Disabled;
+    }
+    app.status_line()
+        .fullscreen_footer_process_resources(
+            crate::status::fullscreen_info_width(
+                app.status_line(),
+                statusline.width.into(),
+                app.approval_mode_status(),
+                app.render_context(),
+            ),
+            app.status_line_runtime(),
+        )
+        .map_or(
+            ash_memory_diagnostics::ProcessResourceDemand::Disabled,
+            ash_memory_diagnostics::ProcessResourceDemand::Summary,
+        )
 }

@@ -2,7 +2,7 @@
 source: code/tui/src/app/interaction_flow_tests.rs
 expression: "render(&app, 80, 20)"
 ---
-  .                                                        [— / —] [Dashboard]
+  .                                                                [Dashboard]
 
 ● Unknown command: /confg. Did you mean /config?
 
@@ -16,9 +16,9 @@ expression: "render(&app, 80, 20)"
 
 
 
-  ⏸ Manual
+
   ────────────────────────────────────────────────────────────────────────────
   >
   ─────────────────────────────────────────────────────────── Automatic model
-
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual
+                            Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

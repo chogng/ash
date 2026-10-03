@@ -1042,29 +1042,19 @@ impl App {
         }
         self.dictation_model_progress
             .as_ref()
-            .and_then(|progress| self.model_preparation_status(progress))
+            .and_then(|progress| model_progress_text(self.language(), progress))
     }
 
-    fn model_preparation_status(
-        &self,
-        progress: &ash_app_server_protocol::protocol::dictation::DictationModelStage,
-    ) -> Option<String> {
-        let status = model_progress_text(self.language(), progress)?;
-        if let Some(key) = self.app_keymap.action_hint(
+    pub(crate) fn dictation_key_hints(&self) -> Option<crate::widgets::key_hint::KeyHints> {
+        self.dictation_resource_id.as_ref()?;
+        if self.dictation_stop_requested || self.dictation_request == DictationRequest::Stopping {
+            return None;
+        }
+        let key = self.app_keymap.action_hint(
             AppKeymapAction::InterruptOrQuit,
             self.app_keymap_context(true),
-        ) {
-            let mut text = crate::nls::Text::template(
-                "{0} · {1} to stop",
-                vec![
-                    crate::nls::Text::literal(status),
-                    crate::nls::Text::literal(key),
-                ],
-            );
-            text.localize(self.language());
-            return Some(text.to_string());
-        }
-        Some(status)
+        )?;
+        Some(crate::widgets::key_hint::KeyHints::new().with_action(key, "stop dictation"))
     }
 
     pub(crate) fn dictation_model_progress(
@@ -2061,10 +2051,9 @@ impl App {
         self.status = status;
     }
 
-    pub(crate) fn status_indicator(
-        &self,
-    ) -> Option<crate::thread::status_indicator::StatusIndicator<'_>> {
-        if self.session_manager_view().is_some()
+    pub(super) fn turn_progress(&self) -> Option<crate::thread::progress::TurnProgress<'_>> {
+        if self.fullscreen_home_visible()
+            || self.session_manager_view().is_some()
             || self.issue_manager().is_some()
             || self.session_preview().is_some()
             || self.command_panel().is_some()
@@ -2080,7 +2069,11 @@ impl App {
             Status::WaitingForCapability => TurnActivity::WaitingForCapability,
             Status::Cancelling => TurnActivity::Cancelling,
         };
-        let interrupt_hint = if self.active_turn().is_some() && self.status != Status::Cancelling {
+        // Ctrl+C stops dictation first; do not advertise turn interruption during speech input.
+        let interrupt_hint = if self.active_turn().is_some()
+            && self.status != Status::Cancelling
+            && self.dictation_resource_id.is_none()
+        {
             self.app_keymap.action_hint(
                 AppKeymapAction::InterruptOrQuit,
                 self.app_keymap_context(true),
@@ -2088,7 +2081,7 @@ impl App {
         } else {
             None
         };
-        Some(crate::thread::status_indicator::StatusIndicator {
+        Some(crate::thread::progress::TurnProgress {
             activity,
             timer: &self.thread_presentations.active().status_timer,
             interrupt_hint,
@@ -2480,23 +2473,6 @@ impl App {
                             "{} {error}",
                             crate::nls::localize(self.language(), "Dictation failed:")
                         ),
-                        Instant::now(),
-                    );
-                } else {
-                    self.chat_panel.show_notice(
-                        {
-                            let key = if self.dictation_shortcut_settings.enabled {
-                                self.dictation_shortcut_settings.shortcut.as_str()
-                            } else {
-                                "/voice"
-                            };
-                            let mut text = crate::nls::Text::template(
-                                "Listening. Press {0} to stop.",
-                                vec![crate::nls::Text::literal(key)],
-                            );
-                            text.localize(self.language());
-                            text.to_string()
-                        },
                         Instant::now(),
                     );
                 }
@@ -3308,17 +3284,20 @@ impl App {
         match event {
             StatusEvent::LineSettingsReceived(settings) => {
                 self.chat_panel.status_line_mut().apply_settings(settings);
+                super::fullscreen::reconcile_status_line_focus(self);
             }
             StatusEvent::LineEditorOpened(update) => {
                 self.chat_panel
                     .status_line_mut()
                     .apply_settings(update.settings);
+                super::fullscreen::reconcile_status_line_focus(self);
                 self.show_status_line_editor(update.choices);
             }
             StatusEvent::LineEditorUpdated(update) => {
                 self.chat_panel
                     .status_line_mut()
                     .apply_settings(update.settings);
+                super::fullscreen::reconcile_status_line_focus(self);
                 self.update_status_line_editor(update.choices);
             }
             StatusEvent::PanelOpened(panel) => self.show_status_panel(panel),
@@ -3856,9 +3835,8 @@ fn model_progress_text(
                 )),
             ],
         ),
-        DictationModelStage::Ready
-        | DictationModelStage::Cancelled
-        | DictationModelStage::Failed { .. } => {
+        DictationModelStage::Ready => crate::nls::Text::from("Dictation · listening"),
+        DictationModelStage::Cancelled | DictationModelStage::Failed { .. } => {
             return None;
         }
     };

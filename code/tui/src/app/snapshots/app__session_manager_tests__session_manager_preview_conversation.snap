@@ -2,7 +2,7 @@
 source: code/tui/src/app/session_manager_tests.rs
 expression: render(&app)
 ---
-  .                                                                            [— / —] [Dashboard]
+  .                                                                                    [Dashboard]
 
 
 ● Conversation message 22: content stays readable in preview.

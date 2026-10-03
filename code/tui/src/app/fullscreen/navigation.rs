@@ -12,7 +12,6 @@ use crate::thread::composer::ChatComposerOutcome;
 use crate::thread::queue::QueueKeyOutcome;
 use crate::thread::transcript::TranscriptScrollDirection;
 use crate::thread::transcript::first_scroll_target;
-use crate::thread::transcript::scroll_target;
 use crate::widgets::detail_list::DetailList;
 use crate::widgets::navigation::Navigation;
 use crate::widgets::overlay::DetailOverlay;
@@ -620,16 +619,16 @@ pub(in crate::app) fn scroll_transcript(
 ) -> bool {
     let transcript_area = super::layout(app, terminal_area).session.transcript;
     let messages = app.visible_transcript_views();
-    let target = scroll_target(
-        transcript_area,
-        0,
-        &messages,
-        app.transcript_scroll(),
-        app.transcript_render_cache(),
-        app.render_context(),
-        direction,
-        5,
-    );
+    let target = crate::thread::transcript::ChatHistoryView {
+        progress: app.turn_progress(),
+        jump_label: super::JUMP_LABEL,
+        header: None,
+        messages: &messages,
+        scroll: app.transcript_scroll(),
+        render_cache: app.transcript_render_cache(),
+        pointer: Default::default(),
+    }
+    .scroll_target(transcript_area, app.render_context(), direction, 5);
     target.is_some_and(|target| app.fullscreen.viewports.active_mut().scroll.apply(target))
 }
 

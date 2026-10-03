@@ -2,7 +2,7 @@
 source: code/tui/src/app/collaboration_modes_tests.rs
 expression: render(&app)
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
                                                                                 
                                                                                 
@@ -20,9 +20,9 @@ expression: render(&app)
                                                                                 
                                                                                 
                                                                                 
-  ⏸ Manual                                                                      
+                                                                                
   ────────────────────────────────────────────────────────────────────────────  
   > draft behind selector                                                       
-  ─────────────────────────────────────────────── Automatic model · Multitask   
-                                                                                
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ─────────────────────────────────────────────────────────── Automatic model   
+  ⏸ Manual                                                                      
+                            Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

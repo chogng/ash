@@ -1,0 +1,7 @@
+---
+source: code/tui/src/thread/transcript/view/render_tests.rs
+expression: "(0..8).map(|y|\n{\n    (0..80).map(|x|\n    buffer[(x, y)].symbol()).collect::<String>().trim_end().to_owned()\n}).collect::<Vec<_>>().join(\"\\n\")"
+---
+● current reply
+
+⠋ Working · 0m 00s total · ctrl+c to interrupt

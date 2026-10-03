@@ -48,6 +48,10 @@ fn skill_refs_bind_catalog_identity_without_a_filesystem_path() {
         SkillName::new("review").unwrap(),
     );
     let digest = ContentDigest::sha256(b"exact skill");
+    assert_eq!(
+        digest.as_str(),
+        "sha256:3789a16c174696ad966e7d8162789b627d3c95a4c7767d5e3165bf7938866bc6"
+    );
     let selected = SkillRef::pinned(id, digest.clone());
     let encoded = serde_json::to_value(&selected).unwrap();
 

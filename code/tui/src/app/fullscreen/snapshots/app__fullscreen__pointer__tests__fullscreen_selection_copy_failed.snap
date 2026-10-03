@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/pointer_tests.rs
 expression: text
 ---
-  .                                    [— / —] [Dashboard]  
+  .                                            [Dashboard]  
                                                             
 ● clipboard unavailable                                     
                                                             
@@ -12,9 +12,9 @@ expression: text
                                                             
                                                             
                                                             
-  ⏸ Manual                                                  
+                                                            
   ────────────────────────────────────────────────────────  
   > copy me                                                 
   ─────────────────────────────────────── Automatic model   
-                                                            
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual                                                  
+        Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

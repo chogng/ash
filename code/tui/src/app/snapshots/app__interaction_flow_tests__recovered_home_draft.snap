@@ -2,7 +2,7 @@
 source: code/tui/src/app/interaction_flow_tests.rs
 expression: "render(&restored, 80, 20)"
 ---
-  .                                                        [— / —] [Dashboard]
+  .                                                                [Dashboard]
 
 
 
@@ -16,9 +16,9 @@ expression: "render(&restored, 80, 20)"
 
 
 
-  ⏸ Manual
+
   ────────────────────────────────────────────────────────────────────────────
   > new task draft
   ─────────────────────────────────────────────────────────── Automatic model
-
-  Enter send  ·  / commands
+  ⏸ Manual
+                                                     Enter send  ·  / commands

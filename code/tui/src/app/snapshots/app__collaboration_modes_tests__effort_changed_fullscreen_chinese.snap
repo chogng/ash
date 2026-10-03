@@ -2,7 +2,7 @@
 source: code/tui/src/app/collaboration_modes_tests.rs
 expression: render(&app)
 ---
-  .                                                           [— / —] [仪 表 盘 ]  
+  .                                                                   [仪 表 盘 ]  
                                                                                 
                                                                                 
                                                                                 
@@ -20,9 +20,9 @@ expression: render(&app)
                                                                                 
                                                                                 
                                                                                 
-  ⏸ 手 动                                                                         
+                                                                                
   ────────────────────────────────────────────────────────────────────────────  
   > keep this draft                                                             
   ────────────────────────────────────────────────────────── test-model (max)   
-                                                                                
-  Enter 发 送   ·  shift+tab 模 式   ·  shift+↓/↑ 思 考
+  ⏸ 手 动                                                                         
+                              Enter 发 送   ·  shift+tab 模 式   ·  shift+↓/↑ 思 考

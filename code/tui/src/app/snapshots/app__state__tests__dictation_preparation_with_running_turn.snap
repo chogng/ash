@@ -1,8 +1,10 @@
 ---
-source: code/tui/src/app/fullscreen/frame_tests.rs
-expression: working
+source: code/tui/src/app/state_tests.rs
+expression: rendered
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
+                                                                                
+⠋ Working · 0m 00s total                                                        
                                                                                 
                                                                                 
                                                                                 
@@ -15,10 +17,12 @@ expression: working
                                                                                 
                                                                                 
                                                                                 
-⠋ Working · 0m 00s total · ctrl+c to interrupt                                  
-                                                               Copied 42 chars  
+                                                                                
+                                                                                
+                                                                                
+  Dictation · loading model · ctrl+c to stop dictation                          
   ────────────────────────────────────────────────────────────────────────────  
   >                                                                             
   ─────────────────────────────────────────────────────────── Automatic model   
-                                                                                
-  Enter queue  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual                                                                      
+                           Enter queue  ·  shift+tab mode  ·  shift+↓/↑ effort

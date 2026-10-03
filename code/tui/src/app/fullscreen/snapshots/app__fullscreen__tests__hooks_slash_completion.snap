@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: rendered
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
                                                                                 
                                                                                 
@@ -20,5 +20,5 @@ expression: rendered
   ────────────────────────────────────────────────────────────────────────────  
   > /hooks                                                                      
   ─────────────────────────────────────────────────────────── Automatic model   
-                                                                                
-  Enter send
+  ⏸ Manual                                                                      
+                                                                    Enter send

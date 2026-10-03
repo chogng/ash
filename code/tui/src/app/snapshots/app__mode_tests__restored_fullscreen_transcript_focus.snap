@@ -2,7 +2,7 @@
 source: code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
-  .                          [— / —] [Dashboard]  
+  .                                  [Dashboard]  
                                                   
 ● focus message 05                                
                                                   
@@ -16,5 +16,5 @@ expression: render(&app)
   ──────────────────────────────────────────────  
   > Build anything                                
   ───────────────────────────── Automatic model   
-                                                  
-  Space to expand · Esc to return to input
+  ⏸ Manual                                        
+        Space to expand · Esc to return to input

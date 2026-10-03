@@ -2,8 +2,9 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 80, 20)"
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
+⠋ Starting · 0m 00s total                                                       
                                                                                 
                                                                                 
                                                                                 
@@ -15,10 +16,9 @@ expression: "render(&app, 80, 20)"
                                                                                 
   Queue 1: Run the focused tests · next                                         
   Queue 2: Review the result · paused                                           
-⠋ Starting · 0m 00s total                                                       
-  ⏸ Manual                                                                      
+                                                                                
   ────────────────────────────────────────────────────────────────────────────  
   >                                                                             
   ─────────────────────────────────────────────────────────── Automatic model   
-                                                                                
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual                                                                      
+                            Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

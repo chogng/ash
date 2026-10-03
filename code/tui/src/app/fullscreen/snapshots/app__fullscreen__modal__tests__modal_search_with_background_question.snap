@@ -2,12 +2,12 @@
 source: code/tui/src/app/fullscreen/modal_tests.rs
 expression: frame_text(&app)
 ---
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                                    [Dashboard]  
                                                                                                     
                                                                                                     
             ┌── Config ───────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │   General    Providers    Issues                                        │             
+            │   General    Providers    Issues    Network                             │             
             │                                                                         │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ Screen mode                                                        │ │             

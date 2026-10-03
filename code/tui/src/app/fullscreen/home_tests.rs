@@ -76,7 +76,7 @@ fn home_dashboard_header_opens_the_session_manager() {
             app.handle_key(key(KeyCode::Enter))
         } else {
             let area = ratatui::layout::Rect::new(0, 0, 80, 24);
-            let header = super::super::layout(&app, area).header;
+            let header = super::super::layout(&app, area).top_statusline;
             let position = (0..area.width)
                 .map(|column| ratatui::layout::Position::new(column, header.y))
                 .find(|position| {

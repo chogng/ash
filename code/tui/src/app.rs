@@ -2,6 +2,7 @@ mod chat_panel;
 #[cfg(test)]
 #[path = "app/chat_panel_tests.rs"]
 mod chat_panel_tests;
+mod chat_view;
 #[cfg(test)]
 #[path = "app/collaboration_modes_tests.rs"]
 mod collaboration_modes_tests;
@@ -17,6 +18,7 @@ mod escape;
 mod event;
 mod event_loop;
 mod event_pump;
+mod footer;
 mod frame;
 mod fullscreen;
 #[cfg(test)]

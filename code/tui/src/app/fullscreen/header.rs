@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::render::RenderContext;
-use ash_memory_diagnostics::ProcessResourceDemand;
+use crate::status::StatusLineItem;
 use ratatui::Frame;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
@@ -194,7 +194,7 @@ pub(super) fn target_at(app: &App, area: Rect, position: Position) -> Option<Tar
     [
         (Target::Branch, areas.branch, branch_enabled(app)),
         (Target::Workspace, areas.workspace, workspace_enabled(app)),
-        (Target::Context, areas.context, true),
+        (Target::Context, areas.context, context_enabled(app)),
         (Target::Dashboard, areas.dashboard, true),
     ]
     .into_iter()
@@ -205,7 +205,7 @@ pub(super) fn keyboard_targets(app: &App) -> Vec<Target> {
     [
         (Target::Branch, branch_enabled(app)),
         (Target::Workspace, workspace_enabled(app)),
-        (Target::Context, true),
+        (Target::Context, context_enabled(app)),
         (Target::Dashboard, true),
     ]
     .into_iter()
@@ -214,7 +214,13 @@ pub(super) fn keyboard_targets(app: &App) -> Vec<Target> {
 }
 
 fn branch_enabled(app: &App) -> bool {
-    app.workspace_mutation_available() && app.status_line().branch_label().is_some()
+    app.workspace_mutation_available()
+        && app.status_line().item_enabled(StatusLineItem::GitBranch)
+        && app.status_line().branch_label().is_some()
+}
+
+fn context_enabled(app: &App) -> bool {
+    app.status_line().item_enabled(StatusLineItem::Context)
 }
 
 fn workspace_enabled(app: &App) -> bool {
@@ -248,8 +254,9 @@ fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLay
     let progress =
         crate::status::context_header_line(app.status_line(), true, context, Style::default());
     let context_slot_width = ratio.width().max(progress.width()) as u16;
-    let show_context =
-        show_dashboard && right_before_dashboard.saturating_sub(area.x) >= context_slot_width + 18;
+    let show_context = context_enabled(app)
+        && show_dashboard
+        && right_before_dashboard.saturating_sub(area.x) >= context_slot_width + 18;
     let context_width = if show_context
         && (app.fullscreen.header.selected() == Some(Target::Context)
             || app.fullscreen.pointer.hovered()
@@ -297,7 +304,11 @@ fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLay
     let workspace_start = area.x;
     let available_identity = workspace_right.saturating_sub(workspace_start);
     let content_budget = available_identity;
-    let branch_text = app.status_line().branch_label().unwrap_or_default();
+    let branch_text = if app.status_line().item_enabled(StatusLineItem::GitBranch) {
+        app.status_line().branch_label().unwrap_or_default()
+    } else {
+        ""
+    };
     let branch_width = if branch_text.is_empty() {
         0
     } else {
@@ -317,16 +328,6 @@ fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLay
         context,
         dashboard,
     }
-}
-
-pub(super) fn process_resource_demand(app: &App, area: Rect) -> ProcessResourceDemand {
-    let status = header_layout(area, app, app.render_context()).status;
-    app.status_line()
-        .header_process_resources(usize::from(status.width), app.status_line_runtime())
-        .map_or(
-            ProcessResourceDemand::Disabled,
-            ProcessResourceDemand::Summary,
-        )
 }
 
 #[cfg(test)]

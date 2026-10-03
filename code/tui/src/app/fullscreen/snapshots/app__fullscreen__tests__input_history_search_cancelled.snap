@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 100, 20)"
 ---
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                                    [Dashboard]  
                                                                                                     
                                                                                                     
                                                                                                     
@@ -16,9 +16,9 @@ expression: "render(&app, 100, 20)"
                                                                                                     
                                                                                                     
                                                                                                     
-  ⏸ Manual                                                                                          
+                                                                                                    
   ────────────────────────────────────────────────────────────────────────────────────────────────  
   >                                                                                                 
   ─────────────────────────────────────────────────────────────────────────────── Automatic model   
-                                                                                                    
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual                                                                                          
+                                                Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

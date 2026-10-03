@@ -2,7 +2,7 @@
 source: code/tui/src/app/fullscreen/home_tests.rs
 expression: "text(&render(&app, 80, 24))"
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                                [Dashboard]  
                                                                                 
   Archived (0)                                                                  
                                                                                 
