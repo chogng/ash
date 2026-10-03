@@ -282,6 +282,9 @@ export class Workbench extends Disposable {
 			if (id === IHostService || id === ILanguagePackStore) serviceCollection.set(id, descriptor);
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
+		// Bulk edits and their consumers resolve dialogs before the UI handler is mounted.
+		const dialogs = this._register(new DialogService());
+		services.registerInstance(IDialogService, dialogs);
 		services.registerInstance(IAssetService, options.api.assets);
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);
@@ -396,8 +399,6 @@ export class Workbench extends Disposable {
 		this.domNode.className = "ash-sessions-window ash-code-sessions-window";
 		options.container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		const dialogs = this._register(new DialogService());
-		services.registerInstance(IDialogService, dialogs);
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
 		this._register(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(this.domNode)));
 

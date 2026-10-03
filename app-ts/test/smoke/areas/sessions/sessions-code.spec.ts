@@ -7,6 +7,30 @@ import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
 
+test('Code Sessions starts with dialog dependencies and confirms closing a dirty editor', async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+	const commands = new QuickAccess(page);
+	await commands.runCommand('workbench.action.files.newUntitledFile');
+	const editors = page.locator('[data-part="editor"]');
+	const input = editors.locator('.stanza-editor-input');
+	await expect(input).toBeVisible();
+	await input.focus();
+	await input.pressSequentially('Keep this unsaved draft');
+	const tab = editors.getByRole('tab', { name: /^Untitled-1(?:,|$)/u });
+	await tab.press('Delete');
+	const dialog = page.getByRole('dialog', { name: 'Save Changes', exact: true });
+	await expect(dialog).toBeVisible();
+	await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	await expect(tab).toBeVisible();
+	await expect(editors.locator('.stanza-editor-line-text').first()).toHaveText('Keep this unsaved draft');
+	await tab.press('Delete');
+	await dialog.getByRole('button', { name: "Don't Save", exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	await expect(tab).toHaveCount(0);
+});
+
 test('Code sessions restore editor tabs through Back, Forward and reopening without focusing the editor', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
