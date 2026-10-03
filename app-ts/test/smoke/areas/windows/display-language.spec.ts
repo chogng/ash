@@ -2,92 +2,83 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
-test('Settings changes the display language with the keyboard and keeps it after reload', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
-	const page = workbench.page;
-	const settings = page.locator('.ash-settings-editor');
-	const languageRow = settings.locator('[data-settings-item-id="workbench.locale"]');
+test('display language stays unchanged until restart and initializes Chinese command titles', async ({ target, workbench, restartWorkbench, deferRestart, restartMessage }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
+	let page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');
-	await expect(settings).toBeVisible();
+	let settings = page.locator('.ash-settings-editor');
 	await settings.locator('[data-settings-category-id="general"]').click();
-	await expect(settings.getByRole('heading', { name: 'Display Language', exact: true })).toBeVisible();
-	const language = languageRow.getByRole('combobox', { name: 'Interface language', exact: true });
-	await expect(language).toHaveText('English');
+	const language = settings.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox', { name: 'Interface language', exact: true });
 	await language.focus();
 	await language.press('Enter');
 	await expect(page.getByRole('option')).toHaveText(['English', '简体中文']);
 	await page.keyboard.press('ArrowDown');
 	await page.keyboard.press('Enter');
-	const chineseLanguage = languageRow.getByRole('combobox', { name: '界面语言', exact: true });
-	await expect(chineseLanguage).toHaveText('简体中文');
-	await expect(chineseLanguage).toBeFocused();
-	await expect(chineseLanguage).toBeEnabled();
-	await expect(languageRow).toContainText('选择 Ash 界面使用的语言。');
-	await expect(settings.getByRole('heading', { name: '显示语言', exact: true })).toBeVisible();
+	await expect.poll(restartMessage).toBe('Restart Ash to use 简体中文?');
+	await expect(settings.getByRole('heading', { name: 'Display Language', exact: true })).toBeVisible();
+	await expect(language).toHaveText('简体中文');
+	await deferRestart();
+	await expect(language).toBeFocused();
+	await expect(language).toBeEnabled();
+	await expect(settings).toContainText('Choose the language used by the Ash interface.');
 	await page.locator('.ash-modal-editor-close').click();
-	await page.reload();
-	await workbench.waitForReady();
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
+	await picker.getByRole('combobox').fill('简体中文');
+	await picker.getByRole('combobox').press('Enter');
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
+	await expect(page.getByRole('button', { name: '搜索命令', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: '管理', exact: true })).toBeVisible();
+	await page.keyboard.press('F1');
+	const commands = page.locator('.ash-quick-pick');
+	await commands.getByRole('combobox').fill('创建分支');
+	await expect(commands.locator('.ash-quick-pick-row-label', { hasText: 'Git: 创建分支' })).toBeVisible();
+	await commands.getByRole('combobox').fill('Preferences: Change Keyboard Layout');
+	await expect(commands.locator('.ash-quick-pick-row-label', { hasText: '首选项：更改键盘布局' })).toBeVisible();
+	await commands.getByRole('combobox').press('Enter');
+	const layouts = page.getByRole('dialog', { name: '选择键盘布局' });
+	await expect(layouts).toBeVisible();
+	await expect(layouts.locator('.ash-quick-pick-row-label', { hasText: '自动检测' })).toBeVisible();
+	await page.keyboard.press('Escape');
 	await page.keyboard.press('ControlOrMeta+,');
-	await expect(chineseLanguage).toHaveText('简体中文');
+	settings = page.getByRole('dialog', { name: 'Ash 设置' });
+	await settings.locator('[data-settings-category-id="general"]').click();
+	const chinese = settings.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox', { name: '界面语言', exact: true });
+	await expect(chinese).toHaveText('简体中文');
 	const search = settings.getByRole('searchbox');
 	for (const query of ['language', 'locale', '语言']) {
 		await search.fill(query);
-		await expect(chineseLanguage).toBeVisible();
+		await expect(chinese).toBeVisible();
 	}
-	await search.fill('');
-	if (target.kind === 'browser') {
-		const actions = languageRow.getByRole('button', { name: 'More actions for 界面语言' });
-		await actions.focus();
-		await actions.press('Enter');
-		await page.getByRole('menuitem', { name: 'Reset Setting', exact: true }).click();
-	} else {
-		await chineseLanguage.focus();
-		await chineseLanguage.press('Enter');
-		await page.keyboard.press('Home');
-		await page.keyboard.press('Enter');
-	}
-	await expect(language).toHaveText('English');
-	await expect(language).toBeEnabled();
 	await page.locator('.ash-modal-editor-close').click();
-	await page.reload();
-	await workbench.waitForReady();
-	await page.keyboard.press('ControlOrMeta+,');
-	await expect(language).toHaveText('English');
+	await workbench.quickaccess.runCommand('workbench.action.clearLocalePreference');
+	await expect.poll(restartMessage).toBe('重启 Ash 以使用English？');
+	({ workbench } = await restartWorkbench());
+	await workbench.page.keyboard.press('ControlOrMeta+,');
+	await expect(workbench.page.getByRole('dialog', { name: 'Ash Settings' })).toBeVisible();
 });
 
-test('command palette changes and clears the display language with the keyboard', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('command palette saves and clears a pending display language without changing current commands', async ({ target, workbench, deferRestart }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
 	const page = workbench.page;
-
-	await page.keyboard.press('F1');
-	let picker = page.locator('.ash-quick-pick');
-	await picker.getByRole('combobox').fill('Configure Display Language');
-	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: 'Configure Display Language' })).toBeVisible();
-	await picker.getByRole('combobox').press('Enter');
-
-	picker = page.getByRole('dialog', { name: 'Select Display Language' });
-	await expect(picker.getByRole('combobox')).toBeFocused();
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
 	await picker.getByRole('combobox').fill('简体中文');
-	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: '简体中文' })).toBeVisible();
 	await picker.getByRole('combobox').press('Enter');
-	await expect(picker).toHaveCount(0);
-
-	await page.keyboard.press('F1');
-	picker = page.locator('.ash-quick-pick');
-	await picker.getByRole('combobox').fill('清除显示语言偏好');
-	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: '清除显示语言偏好' })).toBeVisible();
-	await picker.getByRole('combobox').press('Enter');
-	await expect(picker).toHaveCount(0);
-
-	await page.keyboard.press('F1');
-	picker = page.locator('.ash-quick-pick');
-	await picker.getByRole('combobox').fill('Configure Display Language');
-	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: 'Configure Display Language' })).toBeVisible();
+	await deferRestart();
+	await workbench.quickaccess.runCommand('workbench.action.clearLocalePreference');
+	await page.keyboard.press('ControlOrMeta+,');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-category-id="general"]').click();
+	await expect(settings.getByRole('combobox', { name: 'Interface language', exact: true })).toHaveText('English');
 });
 
 test('display language picker opens Marketplace with language packs selected', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
+	await expect(page.getByRole('button', { name: 'Search commands', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Manage', exact: true })).toBeVisible();
 	await page.keyboard.press('F1');
 	let picker = page.locator('.ash-quick-pick');
 	await picker.getByRole('combobox').fill('Configure Display Language');

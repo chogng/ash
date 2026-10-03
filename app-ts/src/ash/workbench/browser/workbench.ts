@@ -659,11 +659,9 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		const ownerDocument = workbenchWindow.ownerDocument;
 
-		const languagePackService = this._register(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
+		const languagePackService = this._register(services.createInstance(MarketplaceLanguagePackService, builtinLanguagePackCatalogs));
 		services.registerInstance(ILanguagePackService, languagePackService);
-		const localeService = this._register(new WorkbenchLocaleService(configuration, languagePackService));
-		services.registerInstance(ILocaleService, localeService);
-		const localizationService = this._register(new WorkbenchLocalizationService(localeService, languagePackService));
+		const localizationService = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localizationService);
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) {
@@ -688,6 +686,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IStorageService, storage);
 		const lifecycleService = this.lifecycleService = this._register(createLifecycleService(services));
 		services.registerInstance(ILifecycleService, lifecycleService);
+		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
 		services.registerInstance(IWorkbenchModeService, this._register(new WorkbenchModeService({
 			currentModeId: modeId,
 			configurationService: configuration,

@@ -1,7 +1,7 @@
 import { Color, RGBA } from "../../../base/common/color.js";
 import { Emitter } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
-import { localize, onDidChangeNls } from "../../../nls.js";
+import { localize } from "../../../nls.js";
 import { ColorScheme } from "./theme.js";
 
 export type ColorIdentifier = string;
@@ -47,7 +47,6 @@ export class ColorRegistry extends Disposable {
 
 	constructor() {
 		super();
-		this._register(onDidChangeNls(() => this.publishCatalog()));
 	}
 
 	registerColor(id: ColorIdentifier, defaults: ColorDefaults, metadata: ColorRegistrationMetadata): ColorIdentifier {
@@ -82,7 +81,7 @@ export class ColorRegistry extends Disposable {
 		this.changed.fire();
 	}
 
-	/** Color modules load before the locale service, so descriptions are resolved again when the language changes. */
+	/** Bootstrap fixes the language before theme modules register their descriptions. */
 	private publishCatalog(): void {
 		this.catalog = Object.freeze([...this.colors.values()].map(contribution => Object.freeze({
 			...contribution,

@@ -1,3 +1,4 @@
+import { localize2, localize } from '../../../nls.js';
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import { Action2, registerAction2 } from "../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../platform/instantiation/common/instantiation.js";
@@ -6,13 +7,12 @@ import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../work
 import type { SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
-import { localizedString } from '../../../platform/action/common/action.js';
 import { approvalModeDefinitions } from '../../../platform/sessions/common/approvalModes.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ModelReasoningEffort } from '../../../workbench/services/chat/common/modelCatalog.js';
-import { localize } from '../../../nls.js';
+
 
 for (const definition of approvalModeDefinitions) {
 	const mode = definition.id;
@@ -20,7 +20,7 @@ for (const definition of approvalModeDefinitions) {
 		constructor() {
 			super({
 				id: `sessions.chat.permission.${mode}`,
-				title: localizedString('ash', definition.label.key, definition.label.text),
+				title: localize2({ bundle: 'ash', key: definition.label.key }, definition.label.text),
 			});
 		}
 
@@ -41,7 +41,7 @@ for (const definition of approvalModeDefinitions) {
 
 registerAction2(class SelectApprovalReviewModel extends Action2 {
 	constructor() {
-		super({ id: 'sessions.chat.permission.reviewModel', title: localizedString('ash', 'sessions.chat.permission.reviewModel', 'Review model…') });
+		super({ id: 'sessions.chat.permission.reviewModel', title: localize2({ bundle: 'ash', key: 'sessions.chat.permission.reviewModel' }, 'Review model…') });
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
@@ -95,7 +95,7 @@ function selectReviewItem(input: IQuickInputService, title: string, items: reado
 // ChatWidget shares these command IDs with the regular Workbench; this window owns their Sessions behavior.
 registerAction2(class NewSessionsChatAction extends Action2 {
 	constructor() {
-		super({ id: NEW_CHAT_COMMAND_ID, title: "New Session" });
+		super({ id: NEW_CHAT_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'chat.sessions.new' }, "New Session") });
 	}
 
 	override run(accessor: ServicesAccessor): void {
@@ -110,7 +110,7 @@ interface SessionsHistoryQuickPickItem extends IQuickPickItem {
 
 registerAction2(class ShowSessionsChatHistoryAction extends Action2 {
 	constructor() {
-		super({ id: SHOW_CHAT_HISTORY_COMMAND_ID, title: "Show Session History" });
+		super({ id: SHOW_CHAT_HISTORY_COMMAND_ID, title: localize2({ bundle: 'ash.sessions', key: 'command.ShowSessionsChatHistoryAction' }, "Show Session History") });
 	}
 
 	override run(accessor: ServicesAccessor): void {

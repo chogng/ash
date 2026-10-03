@@ -1,6 +1,6 @@
+import { localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { localizedString } from '../../../../platform/action/common/action.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
@@ -10,8 +10,8 @@ registerAction2(class OpenSettingsAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenSettingsCommandId,
-			title: localizedString('ash', 'workbench.settings', 'Ash Settings'),
-			tooltip: localizedString('ash', 'workbench.settings', 'Ash Settings'),
+			title: localize2({ bundle: 'ash', key: 'workbench.settings' }, 'Ash Settings'),
+			tooltip: localize2({ bundle: 'ash', key: 'workbench.settings' }, 'Ash Settings'),
 			icon: Lxicon.gear,
 			menu: [
 				{
@@ -39,7 +39,7 @@ registerAction2(class OpenSettingsAction extends Action2 {
 });
 
 MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
-	command: { id: OpenSettingsCommandId, title: localizedString('ash', 'workbench.manageSettings', 'Settings') },
+	command: { id: OpenSettingsCommandId, title: localize2({ bundle: 'ash', key: 'workbench.manageSettings' }, 'Settings') },
 	group: '2_configuration',
 	order: 2,
 });
@@ -48,7 +48,7 @@ registerAction2(class OpenKeyboardShortcutsAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenKeyboardShortcutsCommandId,
-			title: localizedString('ash', 'workbench.openKeyboardShortcuts', 'Preferences: Open Keyboard Shortcuts'),
+			title: localize2({ bundle: 'ash', key: 'workbench.openKeyboardShortcuts' }, 'Preferences: Open Keyboard Shortcuts'),
 			f1: true,
 			menu: { id: MenuId.MenubarHelpMenu, group: '2_reference', order: 1 },
 		});
@@ -60,7 +60,7 @@ registerAction2(class OpenKeyboardShortcutsAction extends Action2 {
 });
 
 MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
-	command: { id: OpenKeyboardShortcutsCommandId, title: localizedString('ash', 'workbench.manageKeyboardShortcuts', 'Keyboard Shortcuts') },
+	command: { id: OpenKeyboardShortcutsCommandId, title: localize2({ bundle: 'ash', key: 'workbench.manageKeyboardShortcuts' }, 'Keyboard Shortcuts') },
 	group: '2_configuration',
 	order: 4,
 });
@@ -69,7 +69,7 @@ registerAction2(class OpenSettingsJsonAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenSettingsJsonCommandId,
-			title: localizedString('ash.settings', 'json.openCommand', 'Preferences: Open User Settings (JSON)'),
+			title: localize2({ bundle: 'ash.settings', key: 'json.openCommand' }, 'Preferences: Open User Settings (JSON)'),
 			f1: true,
 		});
 	}

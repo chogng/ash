@@ -1,3 +1,4 @@
+import { createTestLocaleService } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import '../../../chat/common/languageModelsConfiguration.js';
 import { ILanguageModelsService } from '../../../../contrib/chat/common/languageModels.js';
 import type { SettingsContentItem } from '../../browser/settingsTreeModels.js';
@@ -134,7 +135,6 @@ await import('../../../../browser/workbench.contribution.js');
 await import('../../../../electron-browser/desktop.contribution.js');
 
 const localizationService: ILocalizationService = {
-	onDidChange: Event.None,
 	whenReady: Promise.resolve(),
 	translate: (_bundle, _key, fallback) => fallback,
 };
@@ -491,16 +491,16 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const languagePacks: ILanguagePackService = {
 		onDidChange: languagePacksChanged.event,
 		whenReady: Promise.resolve(),
-		catalogs: builtinLanguagePackCatalogs,
+		catalogs: [...builtinLanguagePackCatalogs, { ...builtinLanguagePackCatalogs[0], locale: "fr", languageName: "French", localizedLanguageName: "Français" }],
 		availableLocales,
 		installedPackages: [],
 		search: async () => [],
 		install: async () => {},
 		refresh: async () => {},
 	};
-	const locale = disposables.add(new WorkbenchLocaleService(configuration, languagePacks));
+	const locale = disposables.add(createTestLocaleService(configuration, languagePacks));
 	await locale.whenReady;
-	const workbenchLocalization = disposables.add(new WorkbenchLocalizationService(locale, languagePacks));
+	const workbenchLocalization = disposables.add(new WorkbenchLocalizationService());
 	disposables.add(toDisposable(() => resetNlsResolver()));
 	const autoFetchChanged = disposables.add(new Emitter<void>());
 	let autoFetch: false | true | 'all' = false;
@@ -699,10 +699,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(languageControl.textContent, 'Français');
 	availableLocales.pop();
 	languagePacksChanged.fire();
-	assert.equal(languageControl.textContent, 'English');
+	assert.equal(languageControl.textContent, 'fr');
+	assert.equal(configuration.getValue(LocalizationConfiguration.locale), 'fr');
 	await configuration.updateValue(LocalizationConfiguration.locale, 'zh-CN');
 	assert.equal(languageControl.textContent, '简体中文');
-	assert.equal(languageControl.getAttribute('aria-label'), '界面语言');
+	assert.equal(languageControl.getAttribute('aria-label'), 'Interface language');
 	root.querySelector<HTMLButtonElement>('[data-settings-item-id="workbench.locale"] .ash-setting-item-actions-trigger')!.click();
 	await menuActions.find(action => action.id === 'settings.resetSetting')!.run();
 	hideMenu?.(false);
@@ -830,7 +831,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(hooksRoot.querySelector('[data-hook-event="preToolUse"] > summary')?.textContent, 'PreToolUse · 1 configured');
 	assert.equal(root.querySelectorAll('input[type="search"]').length, 1);
 	await configuration.updateValue(LocalizationConfiguration.locale, 'zh-CN');
-	assert.equal(hooksRoot.querySelector('[data-hook-action="edit-scope"]')?.textContent, '编辑 TOML');
+	assert.equal(hooksRoot.querySelector('[data-hook-action="edit-scope"]')?.textContent, 'Edit TOML');
 	await configuration.updateValue(LocalizationConfiguration.locale, 'en');
 	assert.match(hooksRoot.querySelector('[data-hook-id="user:hook:check"]')?.textContent ?? '', /Disabled.*Source file.*\/profile\/config.toml.*two words/s);
 	const hookSearch = root.querySelector<HTMLInputElement>('.ash-settings-search input');
@@ -897,9 +898,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-target-id]'), null);
 	assert.equal(root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent, 'Voice input');
 	await configuration.updateValue(LocalizationConfiguration.locale, 'zh-CN');
-	assert.equal(root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent, '语音输入');
+	assert.equal(root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent, 'Voice input');
 	const dictationSearch = root.querySelector<HTMLInputElement>('.ash-settings-search input')!;
-	dictationSearch.value = '听写';
+	dictationSearch.value = 'dictation';
 	dictationSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.ok(root.querySelector('[role="grid"][aria-label="Local dictation models"]'));
 	assert.ok(root.querySelector('[data-settings-category-id="general"]'));

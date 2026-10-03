@@ -98,10 +98,6 @@ export class PaneCompositePart extends CompositePart {
 			storageService: options.storageService,
 			containerFilter: options.compositeBarContainerFilter,
 		}));
-		if (options.localizationService) this._register(options.localizationService.onDidChange(() => {
-			this.domNode.setAttribute("aria-label", localize(options.localizationService, options.ariaLabelKey, options.ariaLabel));
-			this.compositeBar.setAriaLabel(localize(options.localizationService, options.viewsAriaLabelKey, options.viewsAriaLabel));
-		}));
 		this.onDidSelectComposite = this.compositeBar.onDidSelectComposite;
 		this.titleActionsSlotDomNode = h(ownerDocument, "div");
 		this.titleActionsSlotDomNode.className = "ash-pane-composite-title-actions";

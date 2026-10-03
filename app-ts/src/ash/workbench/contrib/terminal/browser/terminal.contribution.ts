@@ -1,5 +1,5 @@
+import { localize2 } from '../../../../nls.js';
 import '../../terminalContrib/voice/browser/terminal.voice.contribution.js';
-import { localizedString } from "../../../../platform/action/common/action.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
@@ -14,7 +14,7 @@ registerAction2(class FocusTerminalAction extends Action2 {
 	constructor() {
 		super({
 			id: "workbench.action.terminal.focus",
-			title: localizedString("ash", "workbench.focusTerminal", "Focus Terminal"),
+			title: localize2({ bundle: "ash", key: "workbench.focusTerminal" }, "Focus Terminal"),
 			f1: true,
 			menu: { id: MenuId.MenubarTerminalMenu, group: "1_terminal", order: 1 },
 		});

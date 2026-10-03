@@ -1,9 +1,9 @@
 import { createServer } from 'node:http';
 import { expect, test } from '../../../automation/test.js';
 
-test('Models Settings puts enabled models first and restores catalog order when disabled', async ({ target, workbench }) => {
+test('Models Settings puts enabled models first and restores catalog order when disabled', async ({ target, workbench, restartWorkbench }) => {
 	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Uses the product model catalog.');
-	const page = workbench.page;
+	let page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	await settings.locator('[data-settings-group-id="agents"]').click();
@@ -51,6 +51,9 @@ test('Models Settings puts enabled models first and restores catalog order when 
 	await settings.locator('[data-settings-category-id="general"]').click();
 	await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
 	await page.getByRole('option', { name: '简体中文', exact: true }).click();
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+,');
 	await page.locator('.ash-modal-editor-close').click();
 	await page.reload();
 	await workbench.waitForReady();
@@ -63,9 +66,6 @@ test('Models Settings puts enabled models first and restores catalog order when 
 	await chineseSearch.press('Alt+F1');
 	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/已开启的模型排在前面，两组内部保持目录原序/);
 	await page.keyboard.press('Escape');
-	await chineseSettings.locator('[data-settings-category-id="general"]').click();
-	await chineseSettings.getByRole('combobox', { name: '界面语言', exact: true }).click();
-	await page.getByRole('option', { name: 'English', exact: true }).click();
 });
 
 test('Models Settings offers provider creation with compact fields and keyboard navigation', async ({ target, workbench }) => {

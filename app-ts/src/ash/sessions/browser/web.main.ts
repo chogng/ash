@@ -26,6 +26,14 @@ import { BrowserStorageService } from '../../workbench/services/storage/browser/
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
 import { selectionFromWorkspace } from './workspaceSelection.js';
+import { IHostService } from '../../workbench/services/host/browser/host.js';
+import { BrowserHostService } from '../../workbench/services/host/browser/browserHostService.js';
+import { ILanguagePackStore } from '../../platform/languagePacks/common/languagePackStore.js';
+import { BrowserLanguagePackStore } from '../../platform/languagePacks/browser/languagePackStore.js';
+import { InstantiationType, registerSingleton } from '../../platform/instantiation/common/extensions.js';
+
+registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);
+registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
 
 /** Starts a browser-hosted Sessions page with the optional renderer host. */
 export function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile): void {

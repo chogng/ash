@@ -1,8 +1,7 @@
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { localize } from '../../../nls.js';
+import { localize, localize2 } from '../../../nls.js';
 import { Action2, registerAction2 } from '../../../platform/actions/common/actions.js';
-import { localizedString } from '../../../platform/action/common/action.js';
 import { IApprovalEnvironmentService, type ReviewEnvironmentEntry, type ReviewEnvironmentScanOptions, type ReviewEnvironmentScope } from '../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
@@ -15,7 +14,7 @@ interface Item extends IQuickPickItem { readonly id: string }
 
 registerAction2(class PrepareApprovalEnvironment extends Action2 {
 	constructor() {
-		super({ id: 'sessions.chat.permission.environment', title: localizedString('ash', 'approvalEnvironment.title', 'Prepare review environment…') });
+		super({ id: 'sessions.chat.permission.environment', title: localize2('approvalEnvironment.title', 'Prepare review environment…') });
 	}
 	override async run(accessor: ServicesAccessor, model: IChatWidgetModel): Promise<void> {
 		const input = accessor.get(IQuickInputService);

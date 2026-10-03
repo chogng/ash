@@ -1,6 +1,6 @@
+import { localize2 } from '../../../../nls.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
-import { localizedString } from '../../../../platform/action/common/action.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -49,7 +49,7 @@ registerAction2(class FocusOpenEditorsViewAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.files.action.focusOpenEditorsView',
-			title: localizedString('ash', 'files.openEditors.focus', 'Focus Open Editors'),
+			title: localize2({ bundle: 'ash', key: 'files.openEditors.focus' }, 'Focus Open Editors'),
 			f1: true,
 			keybinding: { primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('e')) },
 		});

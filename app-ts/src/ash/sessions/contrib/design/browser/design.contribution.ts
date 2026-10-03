@@ -1,9 +1,9 @@
+import { localize2, localize } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
-import { localizedString } from '../../../../platform/action/common/action.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { getActiveElement } from '../../../../base/browser/dom.js';
-import { localize } from '../../../../nls.js';
+
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -47,14 +47,14 @@ EditorPanes.registerStatic({
 // Tool commands receive the originating pane so dropdown focus cannot redirect them to another tab.
 for (const [tool, key, title, icon] of designToolActions) {
 	registerAction2(class SelectDesignTool extends Action2 {
-		constructor() { super({ id: `sessions.design.tool.${tool}`, title: localizedString('ash', key, title), icon }); }
+		constructor() { super({ id: `sessions.design.tool.${tool}`, title: localize2({ bundle: 'ash', key: key }, title), icon }); }
 		public override run(_accessor: ServicesAccessor, editor: DesignEditorWidget): void { editor.setTool(tool); }
 	});
 }
 
 for (const [id, key, title] of [['addFrame', 'sessions.design.addFrame', 'Add frame (F)'], ['importImage', 'sessions.design.importImage', 'Import image']] as const) {
 	registerAction2(class EditDesignMedia extends Action2 {
-		constructor() { super({ id: `sessions.design.${id}`, title: localizedString('ash', key, title) }); }
+		constructor() { super({ id: `sessions.design.${id}`, title: localize2({ bundle: 'ash', key: key }, title) }); }
 		public override async run(_accessor: ServicesAccessor, editor: DesignEditorWidget): Promise<void> {
 			if (id === 'addFrame') { editor.addFrame(); }
 			else { await editor.importImage(); }
@@ -64,7 +64,7 @@ for (const [id, key, title] of [['addFrame', 'sessions.design.addFrame', 'Add fr
 
 for (const [mode, key, title, icon] of designModeActions) {
 	registerAction2(class SwitchDesignMode extends Action2 {
-		constructor() { super({ id: `sessions.design.mode.${mode}`, title: localizedString('ash', key, title), icon }); }
+		constructor() { super({ id: `sessions.design.mode.${mode}`, title: localize2({ bundle: 'ash', key: key }, title), icon }); }
 		public override run(_accessor: ServicesAccessor, editor: DesignEditorWidget): void { editor.setMode(mode); }
 	});
 }
@@ -173,7 +173,7 @@ AccessibleViewRegistry.register({
 
 registerAction2(class UndoDesign extends Action2 {
 	constructor() {
-		super({ id: 'sessions.design.undo', title: localizedString('ash', 'sessions.design.undo', 'Undo'), keybinding: { primary: Keybinding.single(logicalKey('z', { primaryKey: true })), when: ContextKeyExpr.has('sessionsDesignCanvasActive'), priority: 1000 } });
+		super({ id: 'sessions.design.undo', title: localize2({ bundle: 'ash', key: 'sessions.design.undo' }, 'Undo'), keybinding: { primary: Keybinding.single(logicalKey('z', { primaryKey: true })), when: ContextKeyExpr.has('sessionsDesignCanvasActive'), priority: 1000 } });
 	}
 	public override run(accessor: ServicesAccessor): void {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
@@ -183,7 +183,7 @@ registerAction2(class UndoDesign extends Action2 {
 
 registerAction2(class RedoDesign extends Action2 {
 	constructor() {
-		super({ id: 'sessions.design.redo', title: localizedString('ash', 'sessions.design.redo', 'Redo'), keybinding: { primary: Keybinding.single(logicalKey('z', { primaryKey: true, shiftKey: true })), secondary: [Keybinding.single(logicalKey('y', { primaryKey: true }))], when: ContextKeyExpr.has('sessionsDesignCanvasActive'), priority: 1000 } });
+		super({ id: 'sessions.design.redo', title: localize2({ bundle: 'ash', key: 'sessions.design.redo' }, 'Redo'), keybinding: { primary: Keybinding.single(logicalKey('z', { primaryKey: true, shiftKey: true })), secondary: [Keybinding.single(logicalKey('y', { primaryKey: true }))], when: ContextKeyExpr.has('sessionsDesignCanvasActive'), priority: 1000 } });
 	}
 	public override run(accessor: ServicesAccessor): void {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
@@ -194,7 +194,7 @@ registerAction2(class RedoDesign extends Action2 {
 // The shared text editor registers Select All globally; the focused canvas must resolve first.
 registerAction2(class SelectAllDesign extends Action2 {
 	constructor() {
-		super({ id: 'sessions.design.selectAll', title: localizedString('ash', 'sessions.design.selectAll', 'Select all'), keybinding: { primary: Keybinding.single(logicalKey('a', { primaryKey: true })), when: ContextKeyExpr.has('sessionsDesignCanvasActive'), priority: 1000 } });
+		super({ id: 'sessions.design.selectAll', title: localize2({ bundle: 'ash', key: 'sessions.design.selectAll' }, 'Select all'), keybinding: { primary: Keybinding.single(logicalKey('a', { primaryKey: true })), when: ContextKeyExpr.has('sessionsDesignCanvasActive'), priority: 1000 } });
 	}
 	public override run(accessor: ServicesAccessor): void {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
@@ -204,7 +204,7 @@ registerAction2(class SelectAllDesign extends Action2 {
 
 registerAction2(class SaveDesign extends Action2 {
 	constructor() {
-		super({ id: 'sessions.design.save', title: localizedString('ash', 'sessions.design.save', 'Save design'), keybinding: { primary: Keybinding.single(logicalKey('s', { primaryKey: true })), when: ContextKeyExpr.has('sessionsDesignCanvasActive'), priority: 1000 } });
+		super({ id: 'sessions.design.save', title: localize2({ bundle: 'ash', key: 'sessions.design.save' }, 'Save design'), keybinding: { primary: Keybinding.single(logicalKey('s', { primaryKey: true })), when: ContextKeyExpr.has('sessionsDesignCanvasActive'), priority: 1000 } });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;

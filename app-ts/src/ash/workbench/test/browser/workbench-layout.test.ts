@@ -1618,7 +1618,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	dom.window.close();
 });
 
-test("CompositeBar refreshes localized View Container labels", () => {
+test("CompositeBar retains the startup language of View Container labels", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const disposables = new DisposableStore();
 	const registry = new WorkbenchViewRegistry();
@@ -1633,7 +1633,6 @@ test("CompositeBar refreshes localized View Container labels", () => {
 	const localeChanges = new Emitter<string>();
 	let locale = "en";
 	const localization = {
-		onDidChange: localeChanges.event,
 		translate: (_bundle: string, key: string, fallback: string) => key === "terminal" && locale === "zh-CN" ? "终端" : fallback,
 	} as unknown as ILocalizationService;
 	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
@@ -1647,7 +1646,7 @@ test("CompositeBar refreshes localized View Container labels", () => {
 	assert.equal(compositeBar.domNode.querySelector("[role='tab']")?.textContent, "Terminal");
 	locale = "zh-CN";
 	localeChanges.fire(locale);
-	assert.equal(compositeBar.domNode.querySelector("[role='tab']")?.textContent, "终端");
+	assert.equal(compositeBar.domNode.querySelector("[role='tab']")?.textContent, "Terminal");
 
 	localeChanges.dispose();
 	disposables.dispose();

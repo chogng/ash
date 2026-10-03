@@ -45,6 +45,9 @@ test("TextModel renders semantic token names and modifiers", async () => {
 		startColumn: 0,
 		endColumn: 5,
 		presentation: SemanticTokenPresentation.Variable,
+		semanticType: 'variable',
+		semanticModifiers: ['readonly'],
+		semanticLanguage: 'typescript',
 		modifiers: [SemanticTokenModifier.Readonly],
 	}]);
 });
@@ -57,7 +60,14 @@ test('TextModel owns styled token caching, invalidation and disposal', async () 
 	using model = new TextModel('value', { languageId: 'typescript', tokenization: { documentSemanticTokensProvider: providers } });
 	const source = model.tokenization.renderedTokens;
 	await waitFor(() => source.getLineTokens(0).length === 1);
-	assert.deepEqual(source.getLineTokens(0), [{ startColumn: 0, endColumn: 5, presentation: SemanticTokenPresentation.Variable }]);
+	assert.deepEqual(source.getLineTokens(0), [{
+		startColumn: 0,
+		endColumn: 5,
+		presentation: SemanticTokenPresentation.Variable,
+		semanticType: 'variable',
+		semanticModifiers: [],
+		semanticLanguage: 'typescript',
+	}]);
 	let changes = 0;
 	using listener = source.onDidChange(() => { changes += 1; });
 	model.setValue('next');
@@ -86,6 +96,9 @@ test('model renders semantic tokens after provider replacement and clears them o
 		startColumn: 0,
 		endColumn: 4,
 		presentation: SemanticTokenPresentation.Variable,
+		semanticType: 'variable',
+		semanticModifiers: ['readonly'],
+		semanticLanguage: 'plaintext',
 		modifiers: [SemanticTokenModifier.Readonly],
 	}]);
 
@@ -95,6 +108,9 @@ test('model renders semantic tokens after provider replacement and clears them o
 		startColumn: 0,
 		endColumn: 4,
 		presentation: SemanticTokenPresentation.Function,
+		semanticType: 'function',
+		semanticModifiers: [],
+		semanticLanguage: 'plaintext',
 	}]);
 
 	second.dispose();
@@ -124,6 +140,9 @@ test('removed semantic provider cannot publish its delayed result', async () => 
 		startColumn: 0,
 		endColumn: 4,
 		presentation: SemanticTokenPresentation.Function,
+		semanticType: 'function',
+		semanticModifiers: [],
+		semanticLanguage: 'plaintext',
 	}]);
 });
 

@@ -24,18 +24,19 @@ const launchJson = `{
 
 test("DebugService persists workspace breakpoints and watch expressions", async () => {
 	const storage = new TestStorageService();
-	const root = URI.file("C:\\project");
+	const root = URI.parse('file:///C:/project');
+	const resource = URI.parse('file:///C:/project/main.ts');
 	const workspace = workspaceService(root);
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
 	using adapters = new DebugAdapterFactoryRegistry();
 	using first = new DebugService(new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
-	first.toggleBreakpoint(URI.file("C:\\project\\main.ts"), 7);
+	first.toggleBreakpoint(resource, 7);
 	first.addWatchExpression("value + 1");
 	await storage.flush();
 
 	using second = new DebugService(new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
-	assert.deepEqual(second.breakpoints.map(breakpoint => [breakpoint.resource.fsPath, breakpoint.lineNumber]), [["C:\\project\\main.ts", 7]]);
+	assert.deepEqual(second.breakpoints.map(breakpoint => [breakpoint.resource.toString(), breakpoint.lineNumber]), [[resource.toString(), 7]]);
 	assert.deepEqual(second.watchExpressions, ["value + 1"]);
 });
 

@@ -1,5 +1,5 @@
+import { localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
-import { localizedString } from "../../../../platform/action/common/action.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
@@ -16,7 +16,7 @@ registerAction2(class CloseActiveEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: CLOSE_EDITOR_COMMAND_ID,
-			title: localizedString("ash", "workbench.closeEditor", "Close Editor"),
+			title: localize2({ bundle: "ash", key: "workbench.closeEditor" }, "Close Editor"),
 			f1: true,
 			precondition: EditorsVisibleContext.isEqualTo(true),
 			menu: [
@@ -50,7 +50,7 @@ registerAction2(class ReopenWithAction extends Action2 {
 	constructor() {
 		super({
 			id: REOPEN_WITH_COMMAND_ID,
-			title: localizedString("ash", "workbench.reopenWithEditor", "Reopen Editor With..."),
+			title: localize2({ bundle: "ash", key: "workbench.reopenWithEditor" }, "Reopen Editor With..."),
 			f1: true,
 		});
 	}
@@ -69,7 +69,7 @@ registerAction2(class KeepEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: KEEP_EDITOR_COMMAND_ID,
-			title: localizedString('ash', 'workbench.keepEditor', 'Keep Open'),
+			title: localize2({ bundle: 'ash', key: 'workbench.keepEditor' }, 'Keep Open'),
 			f1: true,
 			precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), EditorPartModalVisibleContext.isEqualTo(false), ActiveEditorPinnedContext.isEqualTo(false)),
 			menu: { id: MenuId.EditorTitleContext, when: ActiveEditorPinnedContext.isEqualTo(false), group: '3_preview', order: 1 },
@@ -90,7 +90,7 @@ registerAction2(class PinEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: PIN_EDITOR_COMMAND_ID,
-			title: localizedString('ash', 'workbench.pinEditor', 'Pin Editor'),
+			title: localize2({ bundle: 'ash', key: 'workbench.pinEditor' }, 'Pin Editor'),
 			f1: true,
 			precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), EditorPartModalVisibleContext.isEqualTo(false), ActiveEditorStickyContext.isEqualTo(false)),
 			menu: { id: MenuId.EditorTitleContext, when: ActiveEditorStickyContext.isEqualTo(false), group: '3_preview', order: 2 },
@@ -114,7 +114,7 @@ registerAction2(class UnpinEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: UNPIN_EDITOR_COMMAND_ID,
-			title: localizedString('ash', 'workbench.unpinEditor', 'Unpin Editor'),
+			title: localize2({ bundle: 'ash', key: 'workbench.unpinEditor' }, 'Unpin Editor'),
 			f1: true,
 			precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), EditorPartModalVisibleContext.isEqualTo(false), ActiveEditorStickyContext.isEqualTo(true)),
 			menu: { id: MenuId.EditorTitleContext, when: ActiveEditorStickyContext.isEqualTo(true), group: '3_preview', order: 2 },
@@ -138,7 +138,7 @@ registerAction2(class CloseOtherEditorsAction extends Action2 {
 	constructor() {
 		super({
 			id: CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID,
-			title: localizedString('ash', 'workbench.closeOtherEditors', 'Close Other Editors'),
+			title: localize2({ bundle: 'ash', key: 'workbench.closeOtherEditors' }, 'Close Other Editors'),
 			f1: true,
 			precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ContextKeyExpr.notEquals(EditorGroupEditorsCountContext.key, 1)),
 			menu: { id: MenuId.EditorTitleContext, group: '1_close', order: 20 },
@@ -169,7 +169,7 @@ for (const definition of [
 		constructor() {
 			super({
 				id: definition.id,
-				title: localizedString('ash', definition.key, definition.title),
+				title: localize2({ bundle: 'ash', key: definition.key }, definition.title),
 				f1: true,
 				precondition: definition.precondition,
 				menu: { id: MenuId.EditorTitleContext, group: '1_close', order: definition.order },

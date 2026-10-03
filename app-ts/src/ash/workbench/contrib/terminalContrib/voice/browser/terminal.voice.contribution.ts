@@ -1,5 +1,5 @@
+import { localize2 } from '../../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
-import { localizedString } from '../../../../../platform/action/common/action.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -11,7 +11,7 @@ registerAction2(class TerminalStartVoiceAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.terminal.startVoice',
-			title: localizedString('ash', 'dictation.terminalStart', 'Terminal: Start dictation'),
+			title: localize2({ bundle: 'ash', key: 'dictation.terminalStart' }, 'Terminal: Start dictation'),
 			f1: true,
 			icon: Lxicon.mic,
 			menu: { id: MenuId.TerminalTitle, group: 'navigation', order: 15, when: ContextKeyExpr.equals('terminalActiveInstanceState', 'running') },
@@ -26,7 +26,7 @@ registerAction2(class TerminalStopVoiceAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.terminal.stopVoice',
-			title: localizedString('ash', 'dictation.terminalStop', 'Terminal: Stop dictation'),
+			title: localize2({ bundle: 'ash', key: 'dictation.terminalStop' }, 'Terminal: Stop dictation'),
 			f1: true,
 		});
 	}

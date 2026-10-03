@@ -3,7 +3,6 @@ import { getErrorMessage, isCancellationError, onUnexpectedError } from '../../.
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Action2, IMenuService, MenuId, MenuItemAction, MenusRegistry } from '../../../../platform/actions/common/actions.js';
-import { localizedString } from '../../../../platform/action/common/action.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -34,10 +33,12 @@ export class CommandsQuickAccessProvider implements IQuickAccessProvider {
 				.filter((action): action is MenuItemAction => action instanceof MenuItemAction && action.enabled)
 				.map(action => {
 					const keybinding = this.keybindingService.lookupKeybinding(action.id);
+					const original = typeof action.item.title === 'string' ? undefined : action.item.title.original;
 					return {
 						commandId: action.id,
 						label: action.label,
 						description: action.id,
+						detail: original !== action.label ? original : undefined,
 						keybinding: keybinding ? getKeybindingLabel(keybinding) : undefined,
 					};
 				});
@@ -62,7 +63,7 @@ export class CommandsQuickAccessProvider implements IQuickAccessProvider {
 }
 
 MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
-	command: { id: ShowAllCommandsCommandId, title: localizedString('ash', 'workbench.commandPalette', 'Command Palette...') },
+	command: { id: ShowAllCommandsCommandId, title: localize2({ bundle: 'ash', key: 'workbench.commandPalette' }, 'Command Palette...') },
 	group: '1_command',
 	order: 1,
 });

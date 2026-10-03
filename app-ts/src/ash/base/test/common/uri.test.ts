@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
+import { spawnSync } from 'node:child_process';
 import { isWindows } from '../../common/platform.js';
 import { URI } from "../../common/uri.js";
 
@@ -45,14 +46,14 @@ test('URI validates percent encoding and rejects credentials', () => {
 
 test("URI.file supports Windows drive paths and UNC paths", () => {
 	if (!isWindows) {
-		assert.throws(() => URI.file('C:\\Users\\Ash\\An item.txt'), TypeError);
+		assert.equal(URI.file('C:\\Users\\Ash\\An item.txt').toString(), 'file:///C:%5CUsers%5CAsh%5CAn%20item.txt');
 		return;
 	}
 	const drive = URI.file("C:\\Users\\Ash\\An item.txt");
 	const unc = URI.file("\\\\server\\share\\An item.txt");
 
 	assert.equal(drive.toString(), "file:///C:/Users/Ash/An%20item.txt");
-	assert.equal(drive.fsPath, isWindows ? "C:\\Users\\Ash\\An item.txt" : 'C:/Users/Ash/An item.txt');
+	assert.equal(drive.fsPath, "c:\\Users\\Ash\\An item.txt");
 	assert.equal(
 		unc.toString(),
 		"file://server/share/An%20item.txt",
@@ -66,7 +67,7 @@ test('URI.file preserves percent signs and Unicode in file paths', () => {
 	}
 	const resource = URI.file('C:\\project\\hello %中.txt');
 	assert.equal(resource.toString(), 'file:///C:/project/hello%20%25%E4%B8%AD.txt');
-	assert.equal(resource.fsPath, isWindows ? 'C:\\project\\hello %中.txt' : 'C:/project/hello %中.txt');
+	assert.equal(resource.fsPath, 'c:\\project\\hello %中.txt');
 	assert.equal(URI.parse(resource.toString()).fsPath, resource.fsPath);
 });
 
@@ -145,10 +146,51 @@ test('URI.joinPath resolves fragments and preserves query and fragment', () => {
 	assert.equal(URI.joinPath(URI.parse('ash://workspace/a%2Fb'), 'child').toString(), 'ash://workspace/a%2Fb/child');
 });
 
-test('URI.fsPath keeps slash-separated workspace paths', () => {
+test('URI.fsPath uses the host filesystem separators', () => {
 	const resource = URI.file('/workspace/a b.txt');
-	assert.equal(resource.fsPath, '/workspace/a b.txt');
+	assert.equal(resource.fsPath, isWindows ? '\\workspace\\a b.txt' : '/workspace/a b.txt');
 });
+
+for (const os of ['windows', 'mac', 'linux'] as const) {
+	test(`file URI operations respect ${os} roots and separators`, () => {
+		// Platform detection runs once at module load, so each host contract needs an isolated process.
+		const result = spawnSync(process.execPath, ['--input-type=module', '--eval', `
+			globalThis.ash = { environment: { runtime: 'node', os: ${JSON.stringify(os)} } };
+			const { URI } = await import(${JSON.stringify(new URL('../../common/uri.js', import.meta.url).href)});
+			const { dirname } = await import(${JSON.stringify(new URL('../../common/resources.js', import.meta.url).href)});
+			const drive = URI.parse('file:///C:/workspace?rev=1#anchor');
+			const share = URI.parse('file://server/share/workspace?rev=1#anchor');
+			process.stdout.write(JSON.stringify({
+				rootedPath: URI.file('/workspace/item.txt').fsPath,
+				drivePath: URI.parse('file:///C:/workspace/item.txt').fsPath,
+				sharePath: URI.parse('file://server/share/item.txt').fsPath,
+				driveParent: URI.joinPath(drive, '..', '..', 'item.txt').toString(),
+				shareParent: URI.joinPath(share, '..', '..', 'item.txt').toString(),
+				backslashChild: URI.joinPath(drive, 'nested\\\\item.txt').toString(),
+				driveRoot: dirname(URI.parse('file:///C:/item.txt')).toString(),
+				shareRoot: dirname(URI.parse('file://server/share/item.txt')).toString(),
+				shareRootParent: dirname(URI.parse('file://server/share/')).toString(),
+				singleNameParent: URI.parse('file://server/share/').joinPathSegment('..').toString(),
+				remoteChild: URI.joinPath(URI.parse('ash://workspace/root'), 'nested\\\\item.txt').toString(),
+			}));
+		`], { encoding: 'utf8' });
+		assert.equal(result.status, 0, result.stderr);
+		const windows = os === 'windows';
+		assert.deepEqual(JSON.parse(result.stdout), {
+			rootedPath: windows ? '\\workspace\\item.txt' : '/workspace/item.txt',
+			drivePath: windows ? 'c:\\workspace\\item.txt' : 'c:/workspace/item.txt',
+			sharePath: windows ? '\\\\server\\share\\item.txt' : '//server/share/item.txt',
+			driveParent: windows ? 'file:///C:/item.txt?rev=1#anchor' : 'file:///item.txt?rev=1#anchor',
+			shareParent: windows ? 'file://server/share/item.txt?rev=1#anchor' : 'file://server/item.txt?rev=1#anchor',
+			backslashChild: windows ? 'file:///C:/workspace/nested/item.txt?rev=1#anchor' : 'file:///C:/workspace/nested%5Citem.txt?rev=1#anchor',
+			driveRoot: windows ? 'file:///C:/' : 'file:///C:',
+			shareRoot: windows ? 'file://server/share/' : 'file://server/share',
+			shareRootParent: windows ? 'file://server/share/' : 'file://server/',
+			singleNameParent: windows ? 'file://server/share/' : 'file://server/',
+			remoteChild: 'ash://workspace/root/nested%5Citem.txt',
+		});
+	});
+}
 
 test("URI changes are immutable and fragments can be removed explicitly", () => {
 	const anchored = URI.parse("ash://workspace/item?rev=2#anchor=7");

@@ -1,3 +1,4 @@
+import { localize2 } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Action2, MenuId } from '../../../../platform/actions/common/actions.js';
@@ -20,7 +21,7 @@ export class MultiDiffGoToFileAction extends Action2 {
 	constructor() {
 		super({
 			id: MultiDiffGoToFileCommandId,
-			title: 'Open File',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffGoToFileAction' }, 'Open File'),
 			tooltip: 'Open File',
 			icon: Lxicon.linkExternal,
 			precondition: MultiDiffEditorActive,
@@ -38,7 +39,7 @@ export class MultiDiffGoToNextChangeAction extends Action2 {
 	constructor() {
 		super({
 			id: MultiDiffGoToNextChangeCommandId,
-			title: 'Go to Next Change',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.NextChangeAction' }, 'Go to Next Change'),
 			tooltip: 'Go to Next Change',
 			icon: Lxicon.arrowDown,
 			precondition: MultiDiffEditorActive,
@@ -57,7 +58,7 @@ export class MultiDiffGoToPreviousChangeAction extends Action2 {
 	constructor() {
 		super({
 			id: MultiDiffGoToPreviousChangeCommandId,
-			title: 'Go to Previous Change',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.PreviousChangeAction' }, 'Go to Previous Change'),
 			tooltip: 'Go to Previous Change',
 			icon: Lxicon.arrowUp,
 			precondition: MultiDiffEditorActive,
@@ -76,7 +77,7 @@ export class MultiDiffCollapseAllAction extends Action2 {
 	constructor() {
 		super({
 			id: MultiDiffCollapseAllCommandId,
-			title: 'Collapse All Diffs',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffCollapseAllAction' }, 'Collapse All Diffs'),
 			icon: Lxicon.fold,
 			precondition: MultiDiffEditorActive,
 			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: '4_collapse', order: 1 },
@@ -93,7 +94,7 @@ export class MultiDiffExpandAllAction extends Action2 {
 	constructor() {
 		super({
 			id: MultiDiffExpandAllCommandId,
-			title: 'Expand All Diffs',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffExpandAllAction' }, 'Expand All Diffs'),
 			icon: Lxicon.unfold,
 			precondition: MultiDiffEditorActive,
 			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: '4_collapse', order: 2 },

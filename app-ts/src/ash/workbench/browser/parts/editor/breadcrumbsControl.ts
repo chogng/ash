@@ -4,7 +4,7 @@ import { BreadcrumbsItem, BreadcrumbsWidget } from "../../../../base/browser/ui/
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { extUri } from "../../../../base/common/resources.js";
-import { localize, onDidChangeNls } from "../../../../nls.js";
+import { localize } from "../../../../nls.js";
 import { BreadcrumbsModel, FileElement, SymbolElement } from "./breadcrumbsModel.js";
 import type { BreadcrumbsPathMode } from "./breadcrumbs.js";
 import type { EditorInput } from "./editorInput.js";
@@ -50,9 +50,6 @@ export class EditorBreadcrumbsControl extends Disposable {
 			} else {
 				this.onSelectSymbol?.(element);
 			}
-		}));
-		this._register(onDidChangeNls(() => {
-			this.domNode.setAttribute("aria-label", localize('breadcrumbs.editorLabel', "Editor breadcrumbs"));
 		}));
 		this._register(this.workspaceContextService.onDidChangeWorkspace(() => this.render()));
 	}

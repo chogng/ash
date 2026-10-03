@@ -1,3 +1,4 @@
+import { localize2 } from '../../../../nls.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
@@ -93,7 +94,7 @@ registerWorkbenchContribution('workbench.contrib.browserView', WorkbenchPhase.Bl
 		void api.close({ targetId }).catch(error => console.error('Failed to close browser page', error));
 	}));
 	store.add(registerAction2(class OpenBrowser extends Action2 {
-		constructor() { super({ id: 'ash.browser.open', title: 'Browser: Open Browser', f1: true }); }
+		constructor() { super({ id: 'ash.browser.open', title: localize2({ bundle: 'ash.workbench', key: 'command.OpenBrowser' }, 'Browser: Open Browser'), f1: true }); }
 		override async run(): Promise<void> { await api.create({ url: 'about:blank' }); }
 	}));
 	return store;

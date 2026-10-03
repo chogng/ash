@@ -1,7 +1,7 @@
+import { localize2 } from '../../../../nls.js';
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../../platform/actions/common/actions.js";
-import { localizedString } from "../../../../platform/action/common/action.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
 import { ITaskService, type ITaskRun, type IWorkspaceTask } from "../../../services/tasks/common/taskService.js";
@@ -18,7 +18,7 @@ interface TaskRunQuickPickItem extends IQuickPickItem {
 }
 
 MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
-	command: { id: RUN_TASK_COMMAND_ID, title: localizedString("ash", "workbench.manageRunTask", "Run Task...") },
+	command: { id: RUN_TASK_COMMAND_ID, title: localize2({ bundle: "ash", key: "workbench.manageRunTask" }, "Run Task...") },
 	group: "2_configuration",
 	order: 6,
 });
@@ -27,7 +27,7 @@ registerAction2(class RunTaskAction extends Action2 {
 	constructor() {
 		super({
 			id: RUN_TASK_COMMAND_ID,
-			title: "Run Task",
+			title: localize2({ bundle: 'ash.workbench', key: 'command.RunTaskAction' }, "Run Task"),
 			f1: true,
 			menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 1 },
 			keybinding: { primary: Keybinding.chord(logicalKey("k", { primaryKey: true }), logicalKey("t", { primaryKey: true })) },
@@ -60,7 +60,7 @@ registerAction2(class RunTaskAction extends Action2 {
 
 registerAction2(class RerunLastTaskAction extends Action2 {
 	constructor() {
-		super({ id: RERUN_LAST_TASK_COMMAND_ID, title: "Rerun Last Task", f1: true, menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 2 } });
+		super({ id: RERUN_LAST_TASK_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.RerunLastTaskAction' }, "Rerun Last Task"), f1: true, menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 2 } });
 	}
 
 	override run(accessor: ServicesAccessor): void {
@@ -78,7 +78,7 @@ registerAction2(class RerunLastTaskAction extends Action2 {
 
 registerAction2(class TerminateTaskAction extends Action2 {
 	constructor() {
-		super({ id: TERMINATE_TASK_COMMAND_ID, title: "Terminate Task", f1: true, menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 3 } });
+		super({ id: TERMINATE_TASK_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.TerminateTaskAction' }, "Terminate Task"), f1: true, menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 3 } });
 	}
 
 	override run(accessor: ServicesAccessor): void {

@@ -185,7 +185,7 @@ interface StandaloneHarness {
 	toggleClosedFindOption(): void;
 	prepareCompletionGeometry(scrolled: boolean): void;
 	readCompletionGeometry(): { caret: { left: number; top: number; height: number }; api: { left: number; top: number; height: number }; widget: { left: number; top: number }; contentLeft: number; textLeft: number };
-	prepareContributionRequests(kind: ContributionRequestKind): void;
+	prepareContributionRequests(kind: ContributionRequestKind, triggerCharacters?: readonly string[]): void;
 	prepareLinkCandidates(): void;
 	readContributionRequests(): { languageId: string; aborted: boolean }[];
 	finishContributionRequest(index: number, empty?: boolean): Promise<void>;
@@ -880,7 +880,7 @@ window.ashStandaloneIntegration = {
 			textLeft: observableCodeEditor(callerEditor).getLeftOfPosition(position),
 		};
 	},
-	prepareContributionRequests: kind => {
+	prepareContributionRequests: (kind, triggerCharacters) => {
 		contributionProviders.clear();
 		callerModel.setLanguage('typescript');
 		callerEditor.setValue('alpha beta\n  gamma\nalpha');
@@ -890,6 +890,7 @@ window.ashStandaloneIntegration = {
 		if (kind === 'completion') {
 			contributionProviders.add(stanza.languages.registerCompletionItemProvider(selector, {
 				id: 'standalone.contribution',
+				triggerCharacters,
 				provideCompletions: (request, signal) => deferContributionRequest<stanza.LanguageCompletionProviderResult>(request.languageId, () => signal.aborted, {
 					items: [{ id: 'item', label: `completion: ${request.languageId}`, kind: stanza.languages.LanguageCompletionItemKind.Text, range: stanza.Range.fromPositions(request.position), insertText: 'result' }],
 					isIncomplete: true,

@@ -82,7 +82,7 @@ test('Close Workspace delegates an empty window to the host and follows workspac
 	const menus = new MenuService(commands, contextKeys);
 	const requests: unknown[] = [];
 	services.registerInstance(IWorkspaceContextService, workspace);
-	services.registerInstance(IHostService, { openWindow: async options => { requests.push(options); } });
+	services.registerInstance(IHostService, { restart: async () => {}, openWindow: async options => { requests.push(options); } });
 	const closeMenu = () => menus.getMenuActions(MenuId.MenubarFileMenu).flatMap(([, actions]) => actions).filter(action => action.id === CloseWorkspaceAction.ID).map(action => ({ label: action.label, enabled: action.enabled }));
 	assert.deepEqual(closeMenu(), [{ label: 'Close Folder', enabled: true }]);
 	await commands.executeCommand(CloseWorkspaceAction.ID);

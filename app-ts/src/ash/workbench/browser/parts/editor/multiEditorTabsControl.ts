@@ -174,8 +174,8 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				if (!closeAction) {
 					closeAction = {
 						id: TAB_CLOSE_ACTION_ID,
-						label: localize('workbench.closeEditor', 'Close editor'),
-						tooltip: localize('workbench.closeEditor', 'Close editor'),
+						label: localize('workbench.closeEditor', 'Close Editor'),
+						tooltip: localize('workbench.closeEditor', 'Close Editor'),
 						icon: Lxicon.close,
 						enabled: false,
 						run: () => this.delegate.close(editor.input),

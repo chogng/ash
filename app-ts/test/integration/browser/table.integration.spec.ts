@@ -93,7 +93,7 @@ test('table columns align through resizing and remain keyboard accessible in eve
 	expect(widths[1]).toEqual(widths[0]);
 	await page.evaluate(() => { document.getElementById('models')!.style.width = '340px'; });
 	await expect.poll(() => grid.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-	await page.evaluate(() => window.ashTableIntegration.locale());
+	await page.goto('/table.html?locale=zh-CN');
 	await expect(page.getByRole('grid', { name: '本地听写模型' }).getByRole('columnheader')).toHaveText(['模型', '大小', '状态', '操作']);
 	await page.evaluate(() => window.ashTableIntegration.dispose());
 	await expect(page.getByRole('grid')).toHaveCount(0);
@@ -124,8 +124,8 @@ test('ordinary editor dictation command replaces its selection, supports undo an
 });
 
 test('first dictation introduction keeps trial text out of drafts and saves microphone and language in Chinese', async ({ page }) => {
-	await page.goto('/table.html');
-	await page.evaluate(() => { window.ashTableIntegration.locale(); window.ashTableIntegration.freshIntroduction(); });
+	await page.goto('/table.html?locale=zh-CN');
+	await page.evaluate(() => window.ashTableIntegration.freshIntroduction());
 	const input = page.locator('#second-input');
 	await input.locator('[data-action-id="ash.chat.input.mic"] button').click();
 	const intro = page.getByRole('region', { name: '听写入门', exact: true });

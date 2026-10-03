@@ -128,7 +128,6 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 			if (state === 'connected' && this.visible) { void this.load(); }
 			else if (state !== 'connected') { this.invalidateConnection(); }
 		}));
-		this._register(localization.onDidChange(() => { this.updateLabels(); this.changed.fire(); }));
 		this._register(toDisposable(() => { this.generation++; this.domNode.remove(); }));
 		const scopedContext = this._register(contextKeys.createScoped(this.domNode));
 		scopedContext.createKey('languageServerSettingsFocused', true);

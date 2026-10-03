@@ -83,6 +83,9 @@ export class SuggestController extends Disposable {
 			this._register(view.onWillTextUpdate(event => this.handleTextUpdate(event)));
 			this._register(view.onWillKeydown(event => this.handleKeydown(event)));
 			this._register(view.onDidEdit(event => this.handleDidEdit(event)));
+			// Widget typing skips View.onDidEdit and publishes after the text/selection transaction.
+			// Composition and deletion still use the View event above.
+			this._register(editor.onDidType(text => this.requestAfterInsert(text, this.readIsIncomplete())));
 			this._register(service.textModel.onDidChangeLanguage(() => this.cancel()));
 			this._register(service.onDidChangeProviderCatalog(() => this.cancel()));
 			this._register(editor.onDidBlurEditorText(() => this.cancel()));

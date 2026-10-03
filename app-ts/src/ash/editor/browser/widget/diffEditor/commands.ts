@@ -1,4 +1,5 @@
-import { localizedString } from '../../../../platform/action/common/action.js';
+import { localize2 } from '../../../../nls.js';
+
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
@@ -8,7 +9,7 @@ export class AccessibleDiffViewerNext extends Action2 {
 	public static readonly id = 'editor.action.accessibleDiffViewer.next';
 
 	constructor() {
-		super({ id: AccessibleDiffViewerNext.id, title: localizedString('ash', 'diffEditor.accessibleViewer.next', 'Next difference'), f1: true });
+		super({ id: AccessibleDiffViewerNext.id, title: localize2({ bundle: 'ash', key: 'diffEditor.accessibleViewer.next' }, 'Next difference'), f1: true });
 	}
 
 	public override run(accessor: ServicesAccessor): void {
@@ -20,7 +21,7 @@ export class AccessibleDiffViewerPrev extends Action2 {
 	public static readonly id = 'editor.action.accessibleDiffViewer.prev';
 
 	constructor() {
-		super({ id: AccessibleDiffViewerPrev.id, title: localizedString('ash', 'diffEditor.accessibleViewer.previous', 'Previous difference'), f1: true });
+		super({ id: AccessibleDiffViewerPrev.id, title: localize2({ bundle: 'ash', key: 'diffEditor.accessibleViewer.previous' }, 'Previous difference'), f1: true });
 	}
 
 	public override run(accessor: ServicesAccessor): void {

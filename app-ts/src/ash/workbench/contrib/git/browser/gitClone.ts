@@ -4,7 +4,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { localize } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { IGitService } from '../common/gitService.js';
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
 import { GitCloneCommandId } from '../common/gitCommands.js';
@@ -13,7 +13,7 @@ registerAction2(class GitCloneAction extends Action2 {
 	constructor() {
 		super({
 			id: GitCloneCommandId,
-			title: localize({ bundle: 'ash', key: 'git.cloneCommandTitle' }, 'Git: Clone Repository'),
+			title: localize2({ bundle: 'ash', key: 'git.cloneCommandTitle' }, 'Git: Clone Repository'),
 			f1: true,
 			precondition: IsNativeContext.isEqualTo(true),
 		});

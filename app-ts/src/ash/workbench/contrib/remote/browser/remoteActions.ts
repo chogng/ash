@@ -1,3 +1,4 @@
+import { localize2 } from '../../../../nls.js';
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { Action2, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { DialogSeverity } from "../../../../platform/dialogs/common/dialogs.js";
@@ -27,7 +28,7 @@ registerAction2(class ConnectToRemoteAction extends Action2 {
 	constructor() {
 		super({
 			id: ConnectToRemoteCommandId,
-			title: "Remote: Connect to Saved SSH Host",
+			title: localize2({ bundle: 'ash.workbench', key: 'command.ConnectToRemoteAction' }, "Remote: Connect to Saved SSH Host"),
 			f1: true,
 			precondition: RemoteConnectionsAvailableContext.isEqualTo(true),
 		});
@@ -46,7 +47,7 @@ registerAction2(class RollbackRemoteRuntimeAction extends Action2 {
 	constructor() {
 		super({
 			id: RollbackRemoteRuntimeCommandId,
-			title: "Remote: Roll Back Remote Runtime",
+			title: localize2({ bundle: 'ash.workbench', key: 'command.RollbackRemoteRuntimeAction' }, "Remote: Roll Back Remote Runtime"),
 			f1: true,
 			precondition: RemoteConnectionKindContext.isEqualTo("ssh"),
 		});
@@ -61,7 +62,7 @@ registerAction2(class ReconnectRemoteAction extends Action2 {
 	constructor() {
 		super({
 			id: ReconnectRemoteCommandId,
-			title: "Remote: Reconnect to SSH Host",
+			title: localize2({ bundle: 'ash.workbench', key: 'command.ReconnectRemoteAction' }, "Remote: Reconnect to SSH Host"),
 			f1: true,
 			precondition: ContextKeyExpr.and(RemoteConnectionKindContext.isEqualTo("ssh"), RemoteConnectionStateContext.isEqualTo("disconnected")),
 		});
@@ -80,7 +81,7 @@ registerAction2(class ManageRemoteConnectionsAction extends Action2 {
 	constructor() {
 		super({
 			id: ManageRemoteConnectionsCommandId,
-			title: "Remote: Manage Saved SSH Hosts",
+			title: localize2({ bundle: 'ash.workbench', key: 'command.ManageRemoteConnectionsAction' }, "Remote: Manage Saved SSH Hosts"),
 			f1: true,
 			precondition: RemoteConnectionsAvailableContext.isEqualTo(true),
 		});

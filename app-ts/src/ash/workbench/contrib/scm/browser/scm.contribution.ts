@@ -18,7 +18,7 @@ import { SCMViewPaneContainer } from './scmViewPaneContainer.js';
 import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
 import "../common/scmConfiguration.js";
 import "./quickDiff.contribution.js";
-import { localize } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
 import type { EditorPanePartOptions } from '../../../browser/parts/editor/textResourceEditor.js';
@@ -44,7 +44,7 @@ registerAction2(class SCMHistoryRefreshAction extends Action2 {
 	constructor() {
 		super({
 			id: 'ash.git.graph.refresh',
-			title: 'Refresh',
+			title: localize2({ bundle: 'ash', key: 'library.refresh' }, 'Refresh'),
 			tooltip: 'Refresh SCM history',
 			icon: Lxicon.refresh,
 			precondition: SCMHistoryBusyContext.isEqualTo(false),

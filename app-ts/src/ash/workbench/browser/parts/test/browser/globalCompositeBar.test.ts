@@ -87,7 +87,6 @@ test('Activity Bar global actions open account and management menus', async () =
 	const localizationChanged = disposables.add(new Emitter<void>());
 	let manageLabel = 'Manage';
 	const localization: ILocalizationService = {
-		onDidChange: localizationChanged.event,
 		whenReady: Promise.resolve(),
 		translate: (_bundle, key, fallback, parameters) => key === 'workbench.manage' ? manageLabel : formatNlsMessage(fallback, parameters),
 	};
@@ -154,7 +153,7 @@ test('Activity Bar global actions open account and management menus', async () =
 	closeMenu(false);
 	manageLabel = '管理';
 	localizationChanged.fire();
-	assert.equal(bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.activityBar.manage"] button')?.getAttribute('aria-label'), '管理');
+	assert.equal(bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.activityBar.manage"] button')?.getAttribute('aria-label'), 'Manage');
 	const toggleAccounts = bar.getContextMenuActions()[0];
 	assert.equal(toggleAccounts?.checked, true);
 	toggleAccounts?.run();

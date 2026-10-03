@@ -139,7 +139,6 @@ export class CompositeBar extends Disposable {
 			}
 			this.render();
 		}));
-		if (this.localizationService) this._register(this.localizationService.onDidChange(() => this.render()));
 		if (this.storageService) this._register(this.storageService.onDidChangeValue(event => {
 			if (event.key === this.containerOrderKey && event.scope === StorageScope.PROFILE && event.external) {
 				this.restoreContainerOrder();

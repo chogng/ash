@@ -85,7 +85,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 			windowTitle: { value: 'Ash Code', onDidChange: Event.None },
 			menuService: menus,
 			contextMenuService: { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() {}, hideContextMenu() {} },
-			localizationService: { onDidChange: Event.None, whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
+			localizationService: { whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
 		};
 		services.registerInstance(IContextMenuService, options.contextMenuService);
 		using missingServices = new InstantiationService();

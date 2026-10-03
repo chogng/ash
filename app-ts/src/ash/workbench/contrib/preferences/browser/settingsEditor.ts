@@ -99,7 +99,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this.settingsModel = this._register(new SettingsEditorModel([
 			...new DefaultSettings().all.map(setting => {
 				if (setting.id === DESKTOP_UPDATE_POLICY_SETTING) return localUpdatePolicySetting(setting, configurationService);
-				if (setting.id === LocalizationConfiguration.locale) return displayLanguageSetting(setting, localeService, languagePackService, localizationService);
+				if (setting.id === LocalizationConfiguration.locale) return displayLanguageSetting(setting, localeService, languagePackService, localizationService, configurationService);
 				return setting;
 			}),
 			...gitSettings(gitService),
@@ -235,10 +235,6 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 			this.rebuildContent();
 		};
 		this._register(this.languagePackService.onDidChange(updateLanguageSetting));
-		this._register(this.localizationService.onDidChange(() => {
-			updateLanguageSetting();
-			this.updateLocalizedChrome();
-		}));
 		this._register(this.settingsModel.onDidChangeStatus(status => {
 			this.contentStatus.textContent = status.message;
 			this.contentStatus.classList.toggle('is-error', status.isError);
@@ -394,19 +390,25 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	}
 }
 
-function displayLanguageSetting(setting: ISetting, locale: ILocaleService, languagePacks: ILanguagePackService, localization: ILocalizationService): ISelectSetting {
+function displayLanguageSetting(setting: ISetting, locale: ILocaleService, languagePacks: ILanguagePackService, localization: ILocalizationService, configuration: IConfigurationService): ISelectSetting {
 	if (setting.valueType !== 'select') throw new TypeError('Display language requires a select setting');
 	return {
 		...setting,
 		get title() { return localization.translate('ash.settings', 'displayLanguage.select', 'Interface language'); },
 		get description() { return localization.translate('ash.settings', 'displayLanguage.description', 'Choose the language used by the Ash interface.'); },
-		get options() { return languagePacks.availableLocales.map(locale => ({ value: locale.locale, label: locale.localizedLanguageName })); },
-		// The control shows the resolved installed language, including changes made through commands or JSON.
+		get options() {
+			const options = languagePacks.availableLocales.map(locale => ({ value: locale.locale, label: locale.localizedLanguageName }));
+			const preference = configuration.getValue<string>(LocalizationConfiguration.locale);
+			// A selected local resource remains valid after its Marketplace package is removed.
+			if (!options.some(option => option.value === preference)) options.push({ value: preference, label: preference });
+			return options;
+		},
+		// The setting shows the next startup's preference while this UI keeps its active language.
 		binding: {
 			id: setting.id,
 			defaultValue: setting.configuration.defaultValue,
-			onDidChange: listener => locale.onDidChangeLocale(() => listener()),
-			getValue: () => locale.locale,
+			onDidChange: listener => configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(LocalizationConfiguration.locale)) { listener(); } }),
+			getValue: () => configuration.getValue(LocalizationConfiguration.locale),
 			updateValue: value => locale.setLocale({ id: String(value), label: String(value) }),
 			resetValue: () => locale.clearLocalePreference(),
 		},

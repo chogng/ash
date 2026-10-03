@@ -1,79 +1,53 @@
-import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { getNLSLanguage, localize } from '../../../../nls.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { normalizeLocale } from '../../../../platform/languagePacks/common/languagePackCatalog.js';
-import type { ILanguagePackItem, ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacksService.js';
-import { LocalizationConfiguration, type ILocaleService, type LocaleId } from '../common/locale.js';
+import { ILanguagePackStore } from '../../../../platform/languagePacks/common/languagePackStore.js';
+import { ILanguagePackService, type ILanguagePackItem } from '../../../../platform/languagePacks/common/languagePacksService.js';
+import { IHostService } from '../../host/browser/host.js';
+import { LocalizationConfiguration, type ILocaleService } from '../common/locale.js';
 
-/** Owns the Workbench display-language selection stored in the local profile. */
+/** Saves the next startup's language without changing the running UI. */
 export class WorkbenchLocaleService extends Disposable implements ILocaleService {
-	private readonly localeChanged = this._register(new Emitter<LocaleId>());
-	private currentLocale = 'en';
 	public readonly whenReady: Promise<void>;
 
 	constructor(
-		private readonly configuration: IConfigurationService,
-		private readonly languagePacks: ILanguagePackService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@ILanguagePackService private readonly languagePacks: ILanguagePackService,
+		@ILanguagePackStore private readonly store: ILanguagePackStore,
+		@IDialogService private readonly dialogs: IDialogService,
+		@IHostService private readonly host: IHostService,
 	) {
 		super();
-		this.whenReady = this.initialize();
-		this._register(configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(LocalizationConfiguration.locale)) {
-				this.applyLocale(configuration.getValue(LocalizationConfiguration.locale));
-			}
-		}));
-		this._register(languagePacks.onDidChange(() => {
-			this.applyLocale(configuration.getValue(LocalizationConfiguration.locale));
-		}));
+		this.whenReady = languagePacks.whenReady;
 	}
 
-	public get locale(): LocaleId {
-		return this.currentLocale;
-	}
+	public get locale(): string { return getNLSLanguage(); }
 
-	public get onDidChangeLocale(): Event<LocaleId> {
-		return this.localeChanged.event;
-	}
-
-	public async setLocale(languagePackItem: ILanguagePackItem): Promise<void> {
+	public async setLocale(item: ILanguagePackItem): Promise<void> {
 		await this.whenReady;
-		const requested = normalizeLocale(languagePackItem.id);
-		const installed = this.languagePacks.availableLocales.map(value => value.locale);
-		const resolved = resolveInstalledLocale(requested, installed);
-		if (!resolved) {
-			throw new RangeError(`Locale '${languagePackItem.id}' is not installed`);
-		}
-		await this.configuration.updateValue(LocalizationConfiguration.locale, resolved);
-		this.applyLocale(resolved);
+		const requested = normalizeLocale(item.id);
+		const catalog = this.languagePacks.catalogs.find(catalog => catalog.locale.toLowerCase() === requested.toLowerCase());
+		if (!catalog) { throw new RangeError(`Locale '${item.id}' is not installed`); }
+		// The resource must be durable before settings can select it at the next startup.
+		await this.store.write(catalog);
+		await this.configuration.updateValue(LocalizationConfiguration.locale, catalog.locale);
+		if (catalog.locale !== this.locale) { await this.promptRestart(catalog.localizedLanguageName); }
 	}
 
 	public async clearLocalePreference(): Promise<void> {
-		await this.whenReady;
 		await this.configuration.updateValue(LocalizationConfiguration.locale, undefined);
-		this.applyLocale(this.configuration.getValue(LocalizationConfiguration.locale));
+		if (this.locale !== 'en') { await this.promptRestart('English'); }
 	}
 
-	private async initialize(): Promise<void> {
-		await this.configuration.reloadConfiguration();
-		await this.languagePacks.whenReady;
-		this.applyLocale(this.configuration.getValue(LocalizationConfiguration.locale));
+	private async promptRestart(languageName: string): Promise<void> {
+		const { confirmed } = await this.dialogs.confirm({
+			message: localize({ bundle: 'ash.settings', key: 'displayLanguage.restartMessage' }, 'Restart Ash to use {0}?', languageName),
+			detail: localize({ bundle: 'ash.settings', key: 'displayLanguage.restartDetail' }, 'Your display language preference is saved. It will take effect after restarting the app or refreshing the page.'),
+			primaryButton: localize({ bundle: 'ash.settings', key: 'displayLanguage.restartNow' }, 'Restart now'),
+			cancelButton: localize({ bundle: 'ash.settings', key: 'displayLanguage.restartLater' }, 'Later'),
+		});
+		if (confirmed) { await this.host.restart(); }
 	}
-
-	private applyLocale(requested: LocaleId): void {
-		const installed = this.languagePacks.availableLocales.map(value => value.locale);
-		const resolved = resolveInstalledLocale(normalizeLocale(requested), installed)
-			?? installed.find(locale => locale === 'en')
-			?? 'en';
-		if (resolved === this.currentLocale) {
-			return;
-		}
-		this.currentLocale = resolved;
-		this.localeChanged.fire(resolved);
-	}
-}
-
-function resolveInstalledLocale(requested: LocaleId, available: readonly LocaleId[]): LocaleId | undefined {
-	return available.find(locale => locale === requested)
-		?? available.find(locale => locale.toLowerCase() === requested.toLowerCase())
-		?? (requested.includes('-') ? available.find(locale => locale === requested.split('-')[0]) : undefined);
 }

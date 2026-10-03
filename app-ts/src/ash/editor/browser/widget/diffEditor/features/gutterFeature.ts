@@ -2,7 +2,7 @@ import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { StandardWheelEvent } from '../../../../../base/browser/mouseEvent.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../base/common/uri.js';
-import { localize, onDidChangeNls } from '../../../../../nls.js';
+import { localize } from '../../../../../nls.js';
 import { MenuWorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { IMenuService, MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -57,7 +57,6 @@ export class DiffEditorGutter extends Disposable {
 		this._register(editor.onDidChangeCursorSelection(() => this.update(this.enabled)));
 		this._register(editor.onDidScrollChange(() => this.positionItems()));
 		this._register(editor.onDidLayoutChange(() => this.positionItems()));
-		this._register(onDidChangeNls(() => this.update(this.enabled)));
 		this._register(addDisposableListener(this.domNode, 'wheel', event => {
 			if (editor.getOption(EditorOption.scrollbar).handleMouseWheel) editor.delegateScrollFromMouseWheelEvent(new StandardWheelEvent(event));
 		}, { passive: false }));

@@ -1,5 +1,5 @@
 import './media/settingsWidgets.css';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { addDisposableListener, getActiveElement, h, stopEvent } from '../../../../base/browser/dom.js';
 import { isAncestorOfActiveElement } from '../../../../base/browser/focus.js';
@@ -61,7 +61,6 @@ export class SettingsSearchWidget extends Disposable {
 		this.onDidChange = this.inputBox.onDidChange;
 		this.onDidRequestFocusResults = this.focusResultsEmitter.event;
 		this._register(this.inputBox.onKeyDown(event => this.handleKeydown(event)));
-		this._register(options.localizationService.onDidChange(() => this.updateLocalizedChrome()));
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
@@ -608,9 +607,6 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 				onClick: () => {
 					void options.onOpenSettings!(this.descriptor.configuration.key).catch(error => options.onStatus(settingErrorMessage(error, 'Unable to open settings.json.'), true));
 				},
-			}));
-			this._register(onDidChangeNls(() => {
-				editButton.label = localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json');
 			}));
 		}
 		this.domNode.append(this.copyDomNode, this.rows, actions);

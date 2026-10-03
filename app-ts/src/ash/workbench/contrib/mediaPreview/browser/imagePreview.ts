@@ -5,7 +5,7 @@ import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { basename, extUri } from '../../../../base/common/resources.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -91,7 +91,6 @@ export class ImagePreview extends Disposable implements IEditorPane {
 		const observer = new (getWindow(this.domNode).ResizeObserver)(() => this.updateImageGeometry());
 		observer.observe(this.viewportDomNode);
 		this._register(toDisposable(() => observer.disconnect()));
-		this._register(onDidChangeNls(() => this.updateLabels()));
 		this._register(addDisposableListener(this.domNode, 'focusin', () => this.updateAriaLabel()));
 		this._register(this.files.onDidChangeFiles(event => {
 			const input = this.input;

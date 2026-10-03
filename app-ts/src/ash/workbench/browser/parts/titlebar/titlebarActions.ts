@@ -1,5 +1,5 @@
+import { localize2 } from '../../../../nls.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { localizedString } from "../../../../platform/action/common/action.js";
 import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { AuxiliaryBarVisibleContext, PanelMaximizedContext, PanelVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
@@ -14,13 +14,13 @@ registerAction2(class ToggleSideBarAction extends Action2 {
 	constructor() {
 		super({
 			id: ToggleSideBarCommandId,
-			title: localizedString("ash.actions", "showPrimarySidebar", "Show Primary Side Bar"),
-			tooltip: localizedString("ash.actions", "showPrimarySidebar", "Show Primary Side Bar"),
+			title: localize2({ bundle: "ash.actions", key: "showPrimarySidebar" }, "Show Primary Side Bar"),
+			tooltip: localize2({ bundle: "ash.actions", key: "showPrimarySidebar" }, "Show Primary Side Bar"),
 			icon: Lxicon.layoutSidebarLeftOff1,
 			toggled: {
 				condition: SideBarVisibleContext.isEqualTo(true),
-				title: localizedString("ash.actions", "hidePrimarySidebar", "Hide Primary Side Bar"),
-				tooltip: localizedString("ash.actions", "hidePrimarySidebar", "Hide Primary Side Bar"),
+				title: localize2({ bundle: "ash.actions", key: "hidePrimarySidebar" }, "Hide Primary Side Bar"),
+				tooltip: localize2({ bundle: "ash.actions", key: "hidePrimarySidebar" }, "Hide Primary Side Bar"),
 				icon: Lxicon.layoutSidebarLeft1,
 			},
 			menu: [
@@ -59,13 +59,13 @@ registerAction2(class ToggleAuxiliaryBarAction extends Action2 {
 	constructor() {
 		super({
 			id: ToggleAuxiliaryBarCommandId,
-			title: localizedString("ash.actions", "showSecondarySidebar", "Show Secondary Side Bar"),
-			tooltip: localizedString("ash.actions", "showSecondarySidebar", "Show Secondary Side Bar"),
+			title: localize2({ bundle: "ash.actions", key: "showSecondarySidebar" }, "Show Secondary Side Bar"),
+			tooltip: localize2({ bundle: "ash.actions", key: "showSecondarySidebar" }, "Show Secondary Side Bar"),
 			icon: Lxicon.layoutSidebarRightOff1,
 			toggled: {
 				condition: AuxiliaryBarVisibleContext.isEqualTo(true),
-				title: localizedString("ash.actions", "hideSecondarySidebar", "Hide Secondary Side Bar"),
-				tooltip: localizedString("ash.actions", "hideSecondarySidebar", "Hide Secondary Side Bar"),
+				title: localize2({ bundle: "ash.actions", key: "hideSecondarySidebar" }, "Hide Secondary Side Bar"),
+				tooltip: localize2({ bundle: "ash.actions", key: "hideSecondarySidebar" }, "Hide Secondary Side Bar"),
 				icon: Lxicon.layoutSidebarRight1,
 			},
 			menu: [
@@ -98,13 +98,13 @@ registerAction2(class TogglePanelAction extends Action2 {
 	constructor() {
 		super({
 			id: TogglePanelCommandId,
-			title: localizedString("ash.actions", "showPanel", "Show Panel"),
-			tooltip: localizedString("ash.actions", "showPanel", "Show Panel"),
+			title: localize2({ bundle: "ash.actions", key: "showPanel" }, "Show Panel"),
+			tooltip: localize2({ bundle: "ash.actions", key: "showPanel" }, "Show Panel"),
 			icon: Lxicon.layoutPanelOff1,
 			toggled: {
 				condition: PanelVisibleContext.isEqualTo(true),
-				title: localizedString("ash.actions", "hidePanel", "Hide Panel"),
-				tooltip: localizedString("ash.actions", "hidePanel", "Hide Panel"),
+				title: localize2({ bundle: "ash.actions", key: "hidePanel" }, "Hide Panel"),
+				tooltip: localize2({ bundle: "ash.actions", key: "hidePanel" }, "Hide Panel"),
 				icon: Lxicon.layoutPanel1,
 			},
 			menu: [
@@ -137,13 +137,13 @@ registerAction2(class ToggleMaximizedPanelAction extends Action2 {
 	constructor() {
 		super({
 			id: ToggleMaximizedPanelCommandId,
-			title: localizedString("ash.actions", "maximizePanel", "Maximize Panel"),
-			tooltip: localizedString("ash.actions", "maximizePanel", "Maximize Panel"),
+			title: localize2({ bundle: "ash.actions", key: "maximizePanel" }, "Maximize Panel"),
+			tooltip: localize2({ bundle: "ash.actions", key: "maximizePanel" }, "Maximize Panel"),
 			icon: Lxicon.screenFull,
 			toggled: {
 				condition: PanelMaximizedContext.isEqualTo(true),
-				title: localizedString("ash.actions", "restoreEditorArea", "Restore Editor Area"),
-				tooltip: localizedString("ash.actions", "restoreEditorArea", "Restore Editor Area"),
+				title: localize2({ bundle: "ash.actions", key: "restoreEditorArea" }, "Restore Editor Area"),
+				tooltip: localize2({ bundle: "ash.actions", key: "restoreEditorArea" }, "Restore Editor Area"),
 				icon: Lxicon.screenNormal,
 			},
 			menu: {
@@ -163,8 +163,8 @@ registerAction2(class ToggleMaximizedPanelAction extends Action2 {
 MenusRegistry.appendMenuItem(MenuId.PanelTitle, {
 	command: {
 		id: TogglePanelCommandId,
-		title: localizedString("ash.actions", "closePanel", "Close Panel"),
-		tooltip: localizedString("ash.actions", "closePanel", "Close Panel"),
+		title: localize2({ bundle: "ash.actions", key: "closePanel" }, "Close Panel"),
+		tooltip: localize2({ bundle: "ash.actions", key: "closePanel" }, "Close Panel"),
 		icon: Lxicon.close,
 	},
 	group: "navigation",

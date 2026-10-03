@@ -1,7 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
-async function openDiffPage(page: Page): Promise<void> {
-	await page.goto('/diff.html');
+type DiffTestLocale = 'en' | 'zh-CN';
+
+function localized(locale: DiffTestLocale, english: string, chinese: string): string {
+	return locale === 'zh-CN' ? chinese : english;
+}
+
+async function openDiffPage(page: Page, locale: DiffTestLocale = 'en'): Promise<void> {
+	await page.goto(`/diff.html?locale=${locale}`);
 	await page.waitForFunction(() => !!window.ashDiffIntegration);
 }
 
@@ -71,87 +77,116 @@ test('diff feature gutter menus receive hunk and selection edits and follow scro
 	await expect(page.locator('#single .ash-diff-revert')).toHaveCount(1);
 });
 
-test('diff feature moved links follow editor geometry, options, locale and disposal', async ({ page }) => {
-	await openDiffPage(page);
-	await page.evaluate(async () => {
-		window.ashDiffIntegration.setComparisonText('head\nmove A\nmove B\nkeep A\nkeep B\nkeep C\ntail', 'head\nkeep A\nkeep B\nkeep C\nmove A\nmove B\ntail');
-		await window.ashDiffIntegration.setMoves(true);
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`diff feature moved links follow editor geometry, options, locale and disposal (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(async () => {
+			window.ashDiffIntegration.setComparisonText('head\nmove A\nmove B\nkeep A\nkeep B\nkeep C\ntail', 'head\nkeep A\nkeep B\nkeep C\nmove A\nmove B\ntail');
+			await window.ashDiffIntegration.setMoves(true);
+		});
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(1);
+		const links = page.locator('#single .ash-diff-moved-links');
+		await expect(links).toBeVisible();
+		await expect(links.locator(':scope > svg > path')).toHaveCount(1);
+		const button = links.getByRole('button');
+		await expect(button).toHaveAccessibleName(localized(locale, 'Moved original lines 2–3 to modified lines 5–6', '原始第 2–3 行已移动到修改后的第 5–6 行'));
+		await expect.poll(() => page.evaluate(prefix => window.ashDiffIntegration.read().accessibleContent.includes(prefix), localized(locale, 'Moved original lines 2–3', '原始第 2–3 行'))).toBe(true);
+		const geometry = await links.locator(':scope > svg > path').getAttribute('d');
+		await page.evaluate(() => window.ashDiffIntegration.setHiddenRegions(true));
+		await expect(links.locator(':scope > svg > path')).toHaveAttribute('d', geometry!);
+		await page.evaluate(() => {
+			document.documentElement.style.setProperty('--ash-description-foreground', 'rgb(90, 110, 130)');
+			document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
+		});
+		await expect(button).toHaveAccessibleName(localized(locale, 'Moved original lines 2–3 to modified lines 5–6', '原始第 2–3 行已移动到修改后的第 5–6 行'));
+		await expect(links.locator(':scope > svg')).toHaveCSS('stroke', 'rgb(90, 110, 130)');
+		await button.focus();
+		await page.keyboard.press('Enter');
+		await expect(page.locator('#single .modified .stanza-editor-accessibility-status')).toContainText(localized(locale, 'Moved original lines 2–3', '原始第 2–3 行'));
+		await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
+		await expect(links).toBeHidden();
+		await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
+		await expect(links).toBeVisible();
+		await page.evaluate(async () => { await window.ashDiffIntegration.setMoves(false); });
+		await expect(links).toBeHidden();
+		await page.evaluate(() => window.ashDiffIntegration.dispose());
+		await expect(page.locator('.stanza-diff-editor')).toHaveCount(0);
 	});
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(1);
-	const links = page.locator('#single .ash-diff-moved-links');
-	await expect(links).toBeVisible();
-	await expect(links.locator(':scope > svg > path')).toHaveCount(1);
-	const button = links.getByRole('button');
-	await expect(button).toHaveAccessibleName('Moved original lines 2–3 to modified lines 5–6');
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent.includes('Moved original lines 2–3'))).toBe(true);
-	const geometry = await links.locator(':scope > svg > path').getAttribute('d');
-	await page.evaluate(() => window.ashDiffIntegration.setHiddenRegions(true));
-	await expect(links.locator(':scope > svg > path')).toHaveAttribute('d', geometry!);
-	await page.evaluate(() => {
-		document.documentElement.style.setProperty('--ash-description-foreground', 'rgb(90, 110, 130)');
-		document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
-		window.ashDiffIntegration.setChineseLocale();
-	});
-	await expect(button).toHaveAccessibleName('原始第 2–3 行已移动到修改后的第 5–6 行');
-	await expect(links.locator(':scope > svg')).toHaveCSS('stroke', 'rgb(90, 110, 130)');
-	await button.focus();
-	await page.keyboard.press('Enter');
-	await expect(page.locator('#single .modified .stanza-editor-accessibility-status')).toContainText('原始第 2–3 行');
-	await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
-	await expect(links).toBeHidden();
-	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
-	await expect(links).toBeVisible();
-	await page.evaluate(async () => { await window.ashDiffIntegration.setMoves(false); });
-	await expect(links).toBeHidden();
-	await page.evaluate(() => window.ashDiffIntegration.dispose());
-	await expect(page.locator('.stanza-diff-editor')).toHaveCount(0);
-});
+}
 
-test('edited moved code compares only block changes and stays aligned through edits and undo', async ({ page }) => {
+test('Worker comparison isolates edited moved code from a neighboring insertion', async ({ page }) => {
 	await openDiffPage(page);
+	await page.locator('#single').evaluate(element => { element.style.height = '600px'; });
 	await page.evaluate(async () => {
-		const block = ['function load(input) {', '  const value = parse(input);', '  return value;', '}'];
-		const edited = ['function load(input) {', '  const value = parse(updated);', '  log(value);', '  return value;', '}'];
-		const stay = Array.from({ length: 6 }, (_, index) => `stay ${index}`);
-		window.ashDiffIntegration.setComparisonText(['head', ...block, ...stay, 'tail'].join('\n'), ['head', ...stay, ...edited, 'tail'].join('\n'));
+		const block = ['function collectRecords(input) {', '  const pendingRecords = prepareRecords(input);', '  auditRecords(pendingRecords);', '  return pendingRecords;', '}'];
+		const edited = [...block];
+		edited[1] = '  const pendingRecords = prepareRecords(updatedInput);';
+		const stay = Array.from({ length: 12 }, (_, index) => `stable record ${index}`);
+		window.ashDiffIntegration.setComparisonText(['head', ...block, ...stay, 'tail'].join('\n'), ['head', ...stay, 'function other() {', '  return unrelated();', '}', ...edited, 'tail'].join('\n'));
 		await window.ashDiffIntegration.setMoves(true);
 	});
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(1);
 	const editor = page.locator('#single .stanza-diff-editor');
 	await editor.locator('.ash-diff-moved-links').getByRole('button').click();
-	const toolbar = editor.getByRole('toolbar', { name: 'Moved code comparison' });
-	await expect(toolbar).toContainText('Comparing original lines 2–5 with modified lines 8–12');
-	await expect(editor.locator('.ash-diff-revert')).toHaveCount(0);
-	await expect(editor.locator('.modified .stanza-diff-line-added')).toHaveCount(2);
+	await expect(editor.getByRole('toolbar', { name: 'Moved code comparison' })).toContainText('Comparing original lines 2–6 with modified lines 17–21');
+	await expect(editor.locator('.modified .stanza-diff-line-added')).toHaveCount(1);
 	await expect(editor.locator('.original .stanza-diff-line-removed')).toHaveCount(1);
 	await expect.poll(() => page.evaluate(() => {
-		const position = window.ashDiffIntegration.linePositions(2, 8);
+		const position = window.ashDiffIntegration.linePositions(6, 21);
 		return position.originalTop - position.originalScrollTop - position.modifiedTop + position.modifiedScrollTop;
 	})).toBe(0);
-	await expect.poll(() => page.evaluate(() => {
-		const position = window.ashDiffIntegration.linePositions(5, 12);
-		return position.originalTop - position.originalScrollTop - position.modifiedTop + position.modifiedScrollTop;
-	})).toBe(0);
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent)).toContain('Original line 3:');
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent)).not.toContain('Original line 2:');
-	await page.evaluate(() => window.ashDiffIntegration.editModified([1, 1, 1, 1], 'prefix\n'));
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
-	await expect(toolbar).toContainText('modified lines 9–13');
-	await page.evaluate(() => window.ashDiffIntegration.editModified([10, 23, 10, 30], 'changed'));
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toContain('parse(changed)');
-	await expect(toolbar).toContainText('modified lines 9–13');
-	await page.evaluate(() => window.ashDiffIntegration.undo());
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toContain('parse(updated)');
-	await expect(toolbar).toBeVisible();
-	await page.evaluate(() => window.ashDiffIntegration.setChineseLocale());
-	await expect(editor.getByRole('toolbar', { name: '移动代码比较' })).toContainText('正在比较原始第 2–5 行与修改后第 9–13 行');
-	const stop = editor.getByRole('button', { name: '停止比较移动代码', exact: true });
-	await stop.focus();
-	await stop.press('Space');
-	await expect(toolbar).toBeHidden();
-	await expect(editor.locator('.modified .stanza-editor-input')).toBeFocused();
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent)).toContain('原始文件第 2 行');
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent)).not.toContain('unrelated');
+	await page.keyboard.press('Escape');
+	await expect(editor.getByRole('toolbar', { name: 'Moved code comparison' })).toBeHidden();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent)).toContain('unrelated');
 });
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`edited moved code compares only block changes and stays aligned through edits and undo (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(async () => {
+			const block = ['function load(input) {', '  const value = parse(input);', '  return value;', '}'];
+			const edited = ['function load(input) {', '  const value = parse(updated);', '  log(value);', '  return value;', '}'];
+			const stay = Array.from({ length: 6 }, (_, index) => `stay ${index}`);
+			window.ashDiffIntegration.setComparisonText(['head', ...block, ...stay, 'tail'].join('\n'), ['head', ...stay, ...edited, 'tail'].join('\n'));
+			await window.ashDiffIntegration.setMoves(true);
+		});
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(1);
+		const editor = page.locator('#single .stanza-diff-editor');
+		await editor.locator('.ash-diff-moved-links').getByRole('button').click();
+		const toolbar = editor.getByRole('toolbar', { name: localized(locale, 'Moved code comparison', '移动代码比较') });
+		await expect(toolbar).toContainText(localized(locale, 'Comparing original lines 2–5 with modified lines 8–12', '正在比较原始第 2–5 行与修改后第 8–12 行'));
+		await expect(editor.locator('.ash-diff-revert')).toHaveCount(0);
+		await expect(editor.locator('.modified .stanza-diff-line-added')).toHaveCount(2);
+		await expect(editor.locator('.original .stanza-diff-line-removed')).toHaveCount(1);
+		await expect.poll(() => page.evaluate(() => {
+			const position = window.ashDiffIntegration.linePositions(2, 8);
+			return position.originalTop - position.originalScrollTop - position.modifiedTop + position.modifiedScrollTop;
+		})).toBe(0);
+		await expect.poll(() => page.evaluate(() => {
+			const position = window.ashDiffIntegration.linePositions(5, 12);
+			return position.originalTop - position.originalScrollTop - position.modifiedTop + position.modifiedScrollTop;
+		})).toBe(0);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent)).toContain(localized(locale, 'Original line 3:', '原始文件第 3 行：'));
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent)).not.toContain(localized(locale, 'Original line 2:', '原始文件第 2 行：'));
+		await page.evaluate(() => window.ashDiffIntegration.editModified([1, 1, 1, 1], 'prefix\n'));
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		await expect(toolbar).toContainText(localized(locale, 'modified lines 9–13', '修改后第 9–13 行'));
+		await page.evaluate(() => window.ashDiffIntegration.editModified([10, 23, 10, 30], 'changed'));
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toContain('parse(changed)');
+		await expect(toolbar).toContainText(localized(locale, 'modified lines 9–13', '修改后第 9–13 行'));
+		await page.evaluate(() => window.ashDiffIntegration.undo());
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toContain('parse(updated)');
+		await expect(toolbar).toBeVisible();
+		await expect(editor.getByRole('toolbar', { name: localized(locale, 'Moved code comparison', '移动代码比较') })).toContainText(localized(locale, 'Comparing original lines 2–5 with modified lines 9–13', '正在比较原始第 2–5 行与修改后第 9–13 行'));
+		const stop = editor.getByRole('button', { name: localized(locale, 'Stop comparing moved code', '停止比较移动代码'), exact: true });
+		await stop.focus();
+		await stop.press('Space');
+		await expect(toolbar).toBeHidden();
+		await expect(editor.locator('.modified .stanza-editor-input')).toBeFocused();
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().accessibleContent)).toContain(localized(locale, 'Original line 2', '原始文件第 2 行'));
+	});
+}
 
 test('moved comparison supports keyboard exit, read-only views, wrapping and disappearing moves', async ({ page }) => {
 	await openDiffPage(page);
@@ -306,28 +341,29 @@ test('both diff scroll viewports start after their fixed line-number gutter', as
 	}
 });
 
-test('editable diff renders Unicode changes and shares models with Multi Diff', async ({ page }) => {
-	const errors: string[] = [];
-	page.on('pageerror', error => errors.push(error.message));
-	await openDiffPage(page);
-	await expect(page.locator('#single .stanza-diff-inline-removed')).toHaveText('😀');
-	await expect(page.locator('#single .stanza-diff-inline-added')).toHaveText('🤖');
-	await expect(page.locator('#single .stanza-editor')).toHaveCount(2);
-	await expect(page.locator('#multi .stanza-multi-diff-editor-section')).toHaveCount(2);
-	await expect(page.locator('#multi .stanza-diff-editor')).toHaveCount(2);
-	await expect(page.locator('#multi .stanza-editor')).toHaveCount(4);
-	await expect(page.locator('#multi .stanza-diff-inline-removed')).toHaveText('😀');
-	await page.locator('#single .stanza-diff-editor').focus();
-	await page.keyboard.press('F7');
-	await expect(page.locator('#single .stanza-diff-line-active')).toHaveCount(2);
-	await expect(page.locator('#single .stanza-diff-editor-accessibility-status')).toContainText('2');
-	await page.evaluate(() => window.ashDiffIntegration.setChineseLocale());
-	await page.locator('#multi .stanza-multi-diff-editor').focus();
-	await page.keyboard.press('F7');
-	await expect(page.locator('#multi .stanza-multi-diff-editor-accessibility-status')).toContainText('第 1 处差异，共 2 处，first.ts');
-	await expect(page.locator('#multi .stanza-multi-diff-editor')).toHaveAttribute('aria-label', '多文件差异编辑器，共 2 个文件');
-	expect(errors).toEqual([]);
-});
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`editable diff renders Unicode changes and shares models with Multi Diff (${locale})`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await openDiffPage(page, locale);
+		await expect(page.locator('#single .stanza-diff-inline-removed')).toHaveText('😀');
+		await expect(page.locator('#single .stanza-diff-inline-added')).toHaveText('🤖');
+		await expect(page.locator('#single .stanza-editor')).toHaveCount(2);
+		await expect(page.locator('#multi .stanza-multi-diff-editor-section')).toHaveCount(2);
+		await expect(page.locator('#multi .stanza-diff-editor')).toHaveCount(2);
+		await expect(page.locator('#multi .stanza-editor')).toHaveCount(4);
+		await expect(page.locator('#multi .stanza-diff-inline-removed')).toHaveText('😀');
+		await page.locator('#single .stanza-diff-editor').focus();
+		await page.keyboard.press('F7');
+		await expect(page.locator('#single .stanza-diff-line-active')).toHaveCount(2);
+		await expect(page.locator('#single .stanza-diff-editor-accessibility-status')).toContainText('2');
+		await page.locator('#multi .stanza-multi-diff-editor').focus();
+		await page.keyboard.press('F7');
+		await expect(page.locator('#multi .stanza-multi-diff-editor-accessibility-status')).toContainText(localized(locale, 'Change 1 of 2, first.ts', '第 1 处差异，共 2 处，first.ts'));
+		await expect(page.locator('#multi .stanza-multi-diff-editor')).toHaveAttribute('aria-label', localized(locale, 'Multi-file diff editor with 2 files', '多文件差异编辑器，共 2 个文件'));
+		expect(errors).toEqual([]);
+	});
+}
 
 test('diff decorations render themed lines, gutter signs, and overview markers', async ({ page }) => {
 	await openDiffPage(page);
@@ -365,107 +401,109 @@ test('diff decorations render themed lines, gutter signs, and overview markers',
 	await expect(editor.locator('.stanza-diff-line-removed, .stanza-diff-line-added, .stanza-diff-remove-sign, .stanza-diff-insert-sign')).toHaveCount(0);
 });
 
-test('diff separator resizes both columns by pointer and keyboard, resets, and leaves focus in inline view', async ({ page }) => {
-	await openDiffPage(page);
-	const editor = page.locator('#single .stanza-diff-editor');
-	const sash = editor.getByRole('separator', { name: 'Resize diff editor columns' });
-	const original = editor.locator('.stanza-diff-editor-side.original');
-	const modified = editor.locator('.stanza-diff-editor-side.modified');
-	const widths = async () => ({
-		original: await original.evaluate(element => element.getBoundingClientRect().width),
-		modified: await modified.evaluate(element => element.getBoundingClientRect().width),
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`diff separator resizes both columns by pointer and keyboard, resets, and leaves focus in inline view (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		const editor = page.locator('#single .stanza-diff-editor');
+		const sash = editor.getByRole('separator', { name: localized(locale, 'Resize diff editor columns', '调整差异编辑器的分栏宽度') });
+		const original = editor.locator('.stanza-diff-editor-side.original');
+		const modified = editor.locator('.stanza-diff-editor-side.modified');
+		const widths = async () => ({
+			original: await original.evaluate(element => element.getBoundingClientRect().width),
+			modified: await modified.evaluate(element => element.getBoundingClientRect().width),
+		});
+		await expect(sash).toHaveAttribute('aria-valuenow', '50');
+		await expect(sash).toHaveAttribute('aria-controls', /ash-diff-editor-\d+-original ash-diff-editor-\d+-modified/);
+		const initial = await widths();
+		await sash.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect.poll(async () => (await widths()).original).toBe(initial.original + 10);
+		await page.keyboard.press('Alt+ArrowLeft');
+		await expect.poll(async () => (await widths()).original).toBe(initial.original + 9);
+		const bounds = await sash.boundingBox();
+		if (!bounds) throw new Error('Diff separator has no bounds');
+		await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(bounds.x + bounds.width / 2 + 80, bounds.y + bounds.height / 2);
+		await page.mouse.up();
+		await expect.poll(async () => (await widths()).original).toBe(initial.original + 89);
+		await expect.poll(async () => (await widths()).modified).toBe(initial.modified - 89);
+		await sash.dblclick();
+		await expect.poll(async () => (await widths()).original).toBe(initial.original);
+		await sash.focus();
+		await page.locator('#single').evaluate(element => { element.style.width = '200px'; });
+		await expect(sash).toBeHidden();
+		await expect.poll(() => modified.evaluate(element => element.contains(document.activeElement))).toBe(true);
+		await page.locator('#single').evaluate(element => { element.style.width = '800px'; });
+		await expect(sash).toBeVisible();
+		await sash.focus();
+		await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
+		await expect(sash).toBeHidden();
+		await expect.poll(() => modified.evaluate(element => element.contains(document.activeElement))).toBe(true);
+		await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
+		await expect.poll(async () => (await widths()).original).toBe(initial.original);
+		const localizedSash = editor.getByRole('separator', { name: localized(locale, 'Resize diff editor columns', '调整差异编辑器的分栏宽度') });
+		await expect(localizedSash).toHaveAttribute('aria-valuetext', localized(locale, 'Original 50%, modified 50%', '原始文件 50%，修改后文件 50%'));
+		await expect(localizedSash).toHaveAttribute('aria-description', locale === 'zh-CN' ? /左右方向键/ : /Left and Right Arrow keys/);
 	});
-	await expect(sash).toHaveAttribute('aria-valuenow', '50');
-	await expect(sash).toHaveAttribute('aria-controls', /ash-diff-editor-\d+-original ash-diff-editor-\d+-modified/);
-	const initial = await widths();
-	await sash.focus();
-	await page.keyboard.press('ArrowRight');
-	await expect.poll(async () => (await widths()).original).toBe(initial.original + 10);
-	await page.keyboard.press('Alt+ArrowLeft');
-	await expect.poll(async () => (await widths()).original).toBe(initial.original + 9);
-	const bounds = await sash.boundingBox();
-	if (!bounds) throw new Error('Diff separator has no bounds');
-	await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
-	await page.mouse.down();
-	await page.mouse.move(bounds.x + bounds.width / 2 + 80, bounds.y + bounds.height / 2);
-	await page.mouse.up();
-	await expect.poll(async () => (await widths()).original).toBe(initial.original + 89);
-	await expect.poll(async () => (await widths()).modified).toBe(initial.modified - 89);
-	await sash.dblclick();
-	await expect.poll(async () => (await widths()).original).toBe(initial.original);
-	await sash.focus();
-	await page.locator('#single').evaluate(element => { element.style.width = '200px'; });
-	await expect(sash).toBeHidden();
-	await expect.poll(() => modified.evaluate(element => element.contains(document.activeElement))).toBe(true);
-	await page.locator('#single').evaluate(element => { element.style.width = '800px'; });
-	await expect(sash).toBeVisible();
-	await sash.focus();
-	await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
-	await expect(sash).toBeHidden();
-	await expect.poll(() => modified.evaluate(element => element.contains(document.activeElement))).toBe(true);
-	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
-	await expect.poll(async () => (await widths()).original).toBe(initial.original);
-	await page.evaluate(() => window.ashDiffIntegration.setChineseLocale());
-	const localizedSash = editor.getByRole('separator', { name: '调整差异编辑器的分栏宽度' });
-	await expect(localizedSash).toHaveAttribute('aria-valuetext', '原始文件 50%，修改后文件 50%');
-	await expect(localizedSash).toHaveAttribute('aria-description', /左右方向键/);
-});
+}
 
-test('accessible diff viewer reads changed lines, follows navigation, and restores editor focus', async ({ page }) => {
-	await openDiffPage(page);
-	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('first\nold\nlast\nold end', 'first\nnew\nlast\nnew end'));
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
-	const editor = page.locator('#single .stanza-diff-editor');
-	const viewer = editor.locator('.stanza-accessible-diff-viewer');
-	await editor.focus();
-	await page.keyboard.press('F7');
-	await expect(viewer).toBeVisible();
-	await expect(viewer).toHaveAttribute('aria-label', 'Accessible Diff Viewer');
-	await expect(viewer.locator('textarea')).toBeFocused();
-	await expect(viewer.locator('[role="status"]')).toHaveText('Difference 1 of 2');
-	await expect(viewer.locator('textarea')).toHaveValue('Original line 2: old\nModified line 2: new');
-	await expect(editor.locator('.stanza-diff-editor-side.original')).toHaveAttribute('aria-hidden', 'true');
-	await expect(editor.locator('.stanza-diff-editor-side.original')).toHaveAttribute('inert', '');
-	await page.keyboard.press('F7');
-	await expect(viewer.locator('[role="status"]')).toHaveText('Difference 2 of 2');
-	await expect(viewer.locator('textarea')).toHaveValue('Original line 4: old end\nModified line 4: new end');
-	await page.keyboard.press('Shift+F7');
-	await expect(viewer.locator('[role="status"]')).toHaveText('Difference 1 of 2');
-	await viewer.getByRole('button', { name: 'Next difference' }).click();
-	await expect(viewer.locator('[role="status"]')).toHaveText('Difference 2 of 2');
-	await page.evaluate(() => {
-		document.documentElement.dataset.colorScheme = 'high-contrast-dark';
-		document.documentElement.style.setProperty('--ash-contrast-border', 'rgb(10, 20, 30)');
-		document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`accessible diff viewer reads changed lines, follows navigation, and restores editor focus (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.setComparisonText('first\nold\nlast\nold end', 'first\nnew\nlast\nnew end'));
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		const editor = page.locator('#single .stanza-diff-editor');
+		const viewer = editor.locator('.stanza-accessible-diff-viewer');
+		await editor.focus();
+		await page.keyboard.press('F7');
+		await expect(viewer).toBeVisible();
+		await expect(viewer).toHaveAttribute('aria-label', localized(locale, 'Accessible Diff Viewer', '无障碍差异查看器'));
+		await expect(viewer.locator('textarea')).toBeFocused();
+		await expect(viewer.locator('[role="status"]')).toHaveText(localized(locale, 'Difference 1 of 2', '第 1 处差异，共 2 处'));
+		await expect(viewer.locator('textarea')).toHaveValue(localized(locale, 'Original line 2: old\nModified line 2: new', '原始文件第 2 行：old\n修改后文件第 2 行：new'));
+		await expect(editor.locator('.stanza-diff-editor-side.original')).toHaveAttribute('aria-hidden', 'true');
+		await expect(editor.locator('.stanza-diff-editor-side.original')).toHaveAttribute('inert', '');
+		await page.keyboard.press('F7');
+		await expect(viewer.locator('[role="status"]')).toHaveText(localized(locale, 'Difference 2 of 2', '第 2 处差异，共 2 处'));
+		await expect(viewer.locator('textarea')).toHaveValue(localized(locale, 'Original line 4: old end\nModified line 4: new end', '原始文件第 4 行：old end\n修改后文件第 4 行：new end'));
+		await page.keyboard.press('Shift+F7');
+		await expect(viewer.locator('[role="status"]')).toHaveText(localized(locale, 'Difference 1 of 2', '第 1 处差异，共 2 处'));
+		await viewer.getByRole('button', { name: localized(locale, 'Next difference', '下一处差异') }).click();
+		await expect(viewer.locator('[role="status"]')).toHaveText(localized(locale, 'Difference 2 of 2', '第 2 处差异，共 2 处'));
+		await page.evaluate(() => {
+			document.documentElement.dataset.colorScheme = 'high-contrast-dark';
+			document.documentElement.style.setProperty('--ash-contrast-border', 'rgb(10, 20, 30)');
+			document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
+		});
+		await expect(viewer).toHaveCSS('border-top-color', 'rgb(10, 20, 30)');
+		await expect(viewer.getByRole('button', { name: localized(locale, 'Next difference', '下一处差异') })).toHaveCSS('border-top-color', 'rgb(10, 20, 30)');
+		await expect(editor.getByRole('region', { name: localized(locale, 'Accessible Diff Viewer', '无障碍差异查看器') }).locator('[role="status"]')).toHaveText(localized(locale, 'Difference 2 of 2', '第 2 处差异，共 2 处'));
+		await expect(viewer.locator('textarea')).toHaveValue(localized(locale, 'Original line 4: old end\nModified line 4: new end', '原始文件第 4 行：old end\n修改后文件第 4 行：new end'));
+		await page.keyboard.press('Escape');
+		await expect(viewer).toBeHidden();
+		await expect(editor).toBeFocused();
+		await expect(editor.locator('.stanza-diff-editor-side.original')).toHaveAttribute('aria-hidden', 'false');
+		await expect(editor.locator('.stanza-diff-editor-side.original')).not.toHaveAttribute('inert');
+		await page.evaluate(() => window.ashDiffIntegration.setComparisonText('same', 'same'));
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		await page.keyboard.press('F7');
+		await expect(viewer).toBeHidden();
+		await expect(editor.locator('.stanza-diff-editor-accessibility-status')).toHaveText(localized(locale, 'No differences', '没有差异'));
+		await page.evaluate(() => window.ashDiffIntegration.setComparisonText('head\nremoved\ntail', 'head\ntail'));
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		await page.keyboard.press('F7');
+		await expect(viewer.locator('textarea')).toHaveValue(localized(locale, 'Original line 2: removed', '原始文件第 2 行：removed'));
+		await page.keyboard.press('Escape');
+		await page.evaluate(() => window.ashDiffIntegration.setComparisonText('head\ntail', 'head\nadded\ntail'));
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		await page.keyboard.press('F7');
+		await expect(viewer.locator('textarea')).toHaveValue(localized(locale, 'Modified line 2: added', '修改后文件第 2 行：added'));
+		await page.evaluate(() => window.ashDiffIntegration.setComparisonText('head\ntail', 'head\nnew addition\ntail'));
+		await expect(viewer).toBeHidden();
+		await expect(editor.locator('.stanza-diff-editor-side.modified')).not.toHaveAttribute('inert');
 	});
-	await expect(viewer).toHaveCSS('border-top-color', 'rgb(10, 20, 30)');
-	await expect(viewer.getByRole('button', { name: 'Next difference' })).toHaveCSS('border-top-color', 'rgb(10, 20, 30)');
-	await page.evaluate(() => window.ashDiffIntegration.setChineseLocale());
-	await expect(editor.getByRole('region', { name: '无障碍差异查看器' }).locator('[role="status"]')).toHaveText('第 2 处差异，共 2 处');
-	await expect(viewer.locator('textarea')).toHaveValue('原始文件第 4 行：old end\n修改后文件第 4 行：new end');
-	await page.keyboard.press('Escape');
-	await expect(viewer).toBeHidden();
-	await expect(editor).toBeFocused();
-	await expect(editor.locator('.stanza-diff-editor-side.original')).toHaveAttribute('aria-hidden', 'false');
-	await expect(editor.locator('.stanza-diff-editor-side.original')).not.toHaveAttribute('inert');
-	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('same', 'same'));
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
-	await page.keyboard.press('F7');
-	await expect(viewer).toBeHidden();
-	await expect(editor.locator('.stanza-diff-editor-accessibility-status')).toHaveText('没有差异');
-	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('head\nremoved\ntail', 'head\ntail'));
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
-	await page.keyboard.press('F7');
-	await expect(viewer.locator('textarea')).toHaveValue('原始文件第 2 行：removed');
-	await page.keyboard.press('Escape');
-	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('head\ntail', 'head\nadded\ntail'));
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
-	await page.keyboard.press('F7');
-	await expect(viewer.locator('textarea')).toHaveValue('修改后文件第 2 行：added');
-	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('head\ntail', 'head\nnew addition\ntail'));
-	await expect(viewer).toBeHidden();
-	await expect(editor.locator('.stanza-diff-editor-side.modified')).not.toHaveAttribute('inert');
-});
+}
 
 test('inline changes mark the empty side of pure insertions and deletions', async ({ page }) => {
 	await openDiffPage(page);
@@ -532,60 +570,61 @@ test('diff view zones replace removed lines after a comparison changes', async (
 	await expect(removedLines).toHaveCount(0);
 });
 
-test('unchanged regions collapse on both sides and symbol navigation reveals the target', async ({ page }) => {
-	const errors: string[] = [];
-	page.on('pageerror', error => errors.push(error.message));
-	await openDiffPage(page);
-	const original = Array.from({ length: 36 }, (_, index) => `shared line ${index + 1}`);
-	const modified = [...original];
-	modified[35] = 'changed final line';
-	await page.evaluate(([left, right]) => {
-		window.ashDiffIntegration.setComparisonText(left, right);
-		window.ashDiffIntegration.setHiddenRegions(true);
-	}, [original.join('\n'), modified.join('\n')]);
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
-	const regions = page.locator('#single .ash-diff-hidden-region');
-	await expect(regions).toHaveCount(2);
-	await expect(regions.first().locator('.ash-diff-hidden-region-count')).toHaveText('33 hidden lines');
-	await expect(regions.first()).toBeVisible();
-	await expect(regions.first().locator('.ash-diff-hidden-region-content')).toHaveCSS('display', 'flex');
-	await expect(regions.first()).toHaveCSS('height', '32px');
-	const lineIsVisible = (ranges: number[][]) => ranges.some(([start, end]) => start <= 5 && 5 <= end);
-	expect(lineIsVisible((await page.evaluate(() => window.ashDiffIntegration.visibleDiffRanges())).original)).toBe(false);
-	expect(lineIsVisible((await page.evaluate(() => window.ashDiffIntegration.visibleDiffRanges())).modified)).toBe(false);
-	await expect(regions.last().locator('.ash-diff-hidden-region-symbol')).toHaveText('Shared section');
-	await page.evaluate(() => {
-		document.documentElement.dataset.colorScheme = 'high-contrast-dark';
-		document.documentElement.style.setProperty('--ash-contrast-border', 'rgb(10, 20, 30)');
-		document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
-		document.documentElement.style.setProperty('--ash-focus-border', 'rgb(100, 150, 200)');
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`unchanged regions collapse on both sides and symbol navigation reveals the target (${locale})`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await openDiffPage(page, locale);
+		const original = Array.from({ length: 36 }, (_, index) => `shared line ${index + 1}`);
+		const modified = [...original];
+		modified[35] = 'changed final line';
+		await page.evaluate(([left, right]) => {
+			window.ashDiffIntegration.setComparisonText(left, right);
+			window.ashDiffIntegration.setHiddenRegions(true);
+		}, [original.join('\n'), modified.join('\n')]);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		const regions = page.locator('#single .ash-diff-hidden-region');
+		await expect(regions).toHaveCount(2);
+		await expect(regions.first().locator('.ash-diff-hidden-region-count')).toHaveText(localized(locale, '33 hidden lines', '隐藏 33 行'));
+		await expect(regions.first()).toBeVisible();
+		await expect(regions.first().locator('.ash-diff-hidden-region-content')).toHaveCSS('display', 'flex');
+		await expect(regions.first()).toHaveCSS('height', '32px');
+		const lineIsVisible = (ranges: number[][]) => ranges.some(([start, end]) => start <= 5 && 5 <= end);
+		expect(lineIsVisible((await page.evaluate(() => window.ashDiffIntegration.visibleDiffRanges())).original)).toBe(false);
+		expect(lineIsVisible((await page.evaluate(() => window.ashDiffIntegration.visibleDiffRanges())).modified)).toBe(false);
+		await expect(regions.last().locator('.ash-diff-hidden-region-symbol')).toHaveText('Shared section');
+		await page.evaluate(() => {
+			document.documentElement.dataset.colorScheme = 'high-contrast-dark';
+			document.documentElement.style.setProperty('--ash-contrast-border', 'rgb(10, 20, 30)');
+			document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
+			document.documentElement.style.setProperty('--ash-focus-border', 'rgb(100, 150, 200)');
+		});
+		await expect(regions.first().locator('.ash-diff-hidden-region-content')).toHaveCSS('border-top-color', 'rgb(10, 20, 30)');
+		const showMore = regions.first().getByRole('button', { name: localized(locale, 'Show 2 more lines above', '向上显示更多 2 行') });
+		await showMore.focus();
+		await page.keyboard.press('Tab');
+		await page.keyboard.press('Shift+Tab');
+		await expect(showMore).toBeFocused();
+		await expect(showMore).toHaveCSS('outline-style', 'solid');
+		await page.keyboard.press('Enter');
+		await expect(regions.first().locator('.ash-diff-hidden-region-count')).toHaveText(localized(locale, '31 hidden lines', '隐藏 31 行'));
+		await regions.last().locator('.ash-diff-hidden-region-symbol').click();
+		await expect(regions).toHaveCount(0);
+		expect(lineIsVisible((await page.evaluate(() => window.ashDiffIntegration.visibleDiffRanges())).modified)).toBe(true);
+		await page.evaluate(() => {
+			window.ashDiffIntegration.setHiddenRegions(false);
+			window.ashDiffIntegration.setHiddenRegions(true);
+		});
+		await expect(regions.first().locator('.ash-diff-hidden-region-count')).toHaveText(localized(locale, '33 hidden lines', '隐藏 33 行'));
+		await expect(regions.last().locator('.ash-diff-hidden-region-symbol')).toHaveText('Shared section');
+		await page.evaluate(() => window.ashDiffIntegration.removeSymbolProvider());
+		await expect(regions.last().locator('.ash-diff-hidden-region-symbol')).toHaveCount(0);
+		await expect(regions.first().getByRole('button', { name: localized(locale, 'Show all unchanged lines', '显示全部未修改的行') })).toBeVisible();
+		await regions.first().getByRole('button', { name: localized(locale, 'Show all unchanged lines', '显示全部未修改的行') }).click();
+		await expect(regions).toHaveCount(0);
+		expect(errors).toEqual([]);
 	});
-	await expect(regions.first().locator('.ash-diff-hidden-region-content')).toHaveCSS('border-top-color', 'rgb(10, 20, 30)');
-	const showMore = regions.first().getByRole('button', { name: 'Show 2 more lines above' });
-	await showMore.focus();
-	await page.keyboard.press('Tab');
-	await page.keyboard.press('Shift+Tab');
-	await expect(showMore).toBeFocused();
-	await expect(showMore).toHaveCSS('outline-style', 'solid');
-	await page.keyboard.press('Enter');
-	await expect(regions.first().locator('.ash-diff-hidden-region-count')).toHaveText('31 hidden lines');
-	await regions.last().locator('.ash-diff-hidden-region-symbol').click();
-	await expect(regions).toHaveCount(0);
-	expect(lineIsVisible((await page.evaluate(() => window.ashDiffIntegration.visibleDiffRanges())).modified)).toBe(true);
-	await page.evaluate(() => {
-		window.ashDiffIntegration.setChineseLocale();
-		window.ashDiffIntegration.setHiddenRegions(false);
-		window.ashDiffIntegration.setHiddenRegions(true);
-	});
-	await expect(regions.first().locator('.ash-diff-hidden-region-count')).toHaveText('隐藏 33 行');
-	await expect(regions.last().locator('.ash-diff-hidden-region-symbol')).toHaveText('Shared section');
-	await page.evaluate(() => window.ashDiffIntegration.removeSymbolProvider());
-	await expect(regions.last().locator('.ash-diff-hidden-region-symbol')).toHaveCount(0);
-	await expect(regions.first().getByRole('button', { name: '显示全部未修改的行' })).toBeVisible();
-	await regions.first().getByRole('button', { name: '显示全部未修改的行' }).click();
-	await expect(regions).toHaveCount(0);
-	expect(errors).toEqual([]);
-});
+}
 
 test('word wrap updates both editable columns and keeps diff navigation available', async ({ page }) => {
 	await openDiffPage(page);
@@ -887,18 +926,19 @@ test('multi diff announces a deferred comparison and mounts it when ready', asyn
 	await expect(status).toHaveText('');
 });
 
-test('multi diff reports a comparison load failure without an unhandled error', async ({ page }) => {
-	const errors: string[] = [];
-	page.on('pageerror', error => errors.push(error.message));
-	await openDiffPage(page);
-	await page.evaluate(() => window.ashDiffIntegration.showFailedComparison());
-	const editor = page.locator('#many .stanza-multi-diff-editor');
-	await expect(editor.locator('.stanza-multi-diff-editor-incomplete-status')).toHaveText('Could not load failed.ts');
-	await expect(editor.locator('.stanza-diff-editor')).toHaveCount(0);
-	await page.evaluate(() => window.ashDiffIntegration.setChineseLocale());
-	await expect(editor.locator('.stanza-multi-diff-editor-incomplete-status')).toHaveText('无法加载 failed.ts');
-	expect(errors).toEqual([]);
-});
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`multi diff reports a comparison load failure without an unhandled error (${locale})`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.showFailedComparison());
+		const editor = page.locator('#many .stanza-multi-diff-editor');
+		await expect(editor.locator('.stanza-multi-diff-editor-incomplete-status')).toHaveText(localized(locale, 'Could not load failed.ts', '无法加载 failed.ts'));
+		await expect(editor.locator('.stanza-diff-editor')).toHaveCount(0);
+		await expect(editor.locator('.stanza-multi-diff-editor-incomplete-status')).toHaveText(localized(locale, 'Could not load failed.ts', '无法加载 failed.ts'));
+		expect(errors).toEqual([]);
+	});
+}
 
 test('unsaved input updates Diff and Quick Diff locally using the existing baseline', async ({ page }) => {
 	await openDiffPage(page);
@@ -952,35 +992,36 @@ test('the browser Worker compares text lines across CRLF and LF models', async (
 	});
 });
 
-test('a timed Worker result is marked incomplete in Diff and Multi Diff', async ({ page }) => {
-	await openDiffPage(page);
-	await page.evaluate(() => {
-		document.documentElement.style.setProperty('--ash-warning-foreground', 'rgb(150, 80, 0)');
-		document.documentElement.style.setProperty('--ash-editor-background', 'rgb(255, 255, 255)');
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`a timed Worker result is marked incomplete in Diff and Multi Diff (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => {
+			document.documentElement.style.setProperty('--ash-warning-foreground', 'rgb(150, 80, 0)');
+			document.documentElement.style.setProperty('--ash-editor-background', 'rgb(255, 255, 255)');
+		});
+		expect(await page.evaluate(() => window.ashDiffIntegration.showTimedComparison())).toBe(true);
+		const warning = page.locator('#timed-single .stanza-diff-editor-incomplete-status');
+		const multiWarning = page.locator('#timed-multi .stanza-multi-diff-editor-incomplete-status');
+		await expect(warning).toBeVisible();
+		await expect(warning).toContainText(localized(locale, 'Results may be incomplete', '结果可能不完整'));
+		await expect(warning).toHaveAttribute('role', 'status');
+		await expect(multiWarning).toBeVisible();
+		await expect(multiWarning).toHaveText(localized(locale, 'Diff may be incomplete', '差异结果可能不完整'));
+		await expect(warning).toHaveCSS('color', 'rgb(150, 80, 0)');
+		await page.locator('#timed-single .stanza-diff-editor').evaluate(element => { element.scrollTop = 400; element.dispatchEvent(new Event('scroll')); });
+		const positions = await page.evaluate(() => ({
+			editorTop: document.querySelector('#timed-single .stanza-diff-editor')!.getBoundingClientRect().top,
+			warningTop: document.querySelector('#timed-single .stanza-diff-editor-incomplete-status')!.getBoundingClientRect().top,
+		}));
+		expect(Math.abs(positions.warningTop - positions.editorTop)).toBeLessThan(2);
+		await page.evaluate(() => {
+			document.documentElement.style.setProperty('--ash-warning-foreground', 'rgb(255, 255, 255)');
+			document.documentElement.style.setProperty('--ash-editor-background', 'rgb(0, 0, 0)');
+		});
+		await expect(warning).toHaveCSS('color', 'rgb(255, 255, 255)');
+		await expect(warning).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+		await expect(warning).toHaveText(localized(locale, 'Diff computation stopped after the time limit. Results may be incomplete.', '差异计算已达到时间上限，结果可能不完整。'));
+		await expect(multiWarning).toHaveText(localized(locale, 'Diff may be incomplete', '差异结果可能不完整'));
+		await expect(page.locator('#timed-multi .stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-label', localized(locale, 'Collapse timed.ts', '折叠 timed.ts'));
 	});
-	expect(await page.evaluate(() => window.ashDiffIntegration.showTimedComparison())).toBe(true);
-	const warning = page.locator('#timed-single .stanza-diff-editor-incomplete-status');
-	const multiWarning = page.locator('#timed-multi .stanza-multi-diff-editor-incomplete-status');
-	await expect(warning).toBeVisible();
-	await expect(warning).toContainText('Results may be incomplete');
-	await expect(warning).toHaveAttribute('role', 'status');
-	await expect(multiWarning).toBeVisible();
-	await expect(multiWarning).toHaveText('Diff may be incomplete');
-	await expect(warning).toHaveCSS('color', 'rgb(150, 80, 0)');
-	await page.locator('#timed-single .stanza-diff-editor').evaluate(element => { element.scrollTop = 400; element.dispatchEvent(new Event('scroll')); });
-	const positions = await page.evaluate(() => ({
-		editorTop: document.querySelector('#timed-single .stanza-diff-editor')!.getBoundingClientRect().top,
-		warningTop: document.querySelector('#timed-single .stanza-diff-editor-incomplete-status')!.getBoundingClientRect().top,
-	}));
-	expect(Math.abs(positions.warningTop - positions.editorTop)).toBeLessThan(2);
-	await page.evaluate(() => {
-		document.documentElement.style.setProperty('--ash-warning-foreground', 'rgb(255, 255, 255)');
-		document.documentElement.style.setProperty('--ash-editor-background', 'rgb(0, 0, 0)');
-	});
-	await expect(warning).toHaveCSS('color', 'rgb(255, 255, 255)');
-	await expect(warning).toHaveCSS('background-color', 'rgb(0, 0, 0)');
-	await page.evaluate(() => window.ashDiffIntegration.setChineseLocale());
-	await expect(warning).toHaveText('差异计算已达到时间上限，结果可能不完整。');
-	await expect(multiWarning).toHaveText('差异结果可能不完整');
-	await expect(page.locator('#timed-multi .stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-label', '折叠 timed.ts');
-});
+}

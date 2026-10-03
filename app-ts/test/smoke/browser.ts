@@ -14,7 +14,7 @@ if (mode !== 'disconnected' && mode !== 'full') {
 	throw new Error('Usage: node test/smoke/browser.ts <disconnected|full>');
 }
 
-const port = mode === 'full' ? 5174 : 5173;
+const port = Number(process.env.ASH_SMOKE_BROWSER_PORT ?? (mode === 'full' ? 5174 : 5173));
 const serverUrl = `http://127.0.0.1:${port}/`;
 const workspaceDirectory = mode === 'full'
 	? await mkdtemp(join(tmpdir(), 'ash-playwright-browser-workspace-'))

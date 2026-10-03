@@ -249,8 +249,8 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 	assert.deepEqual(overviewCursorColors(minimapPaint), [darkColorTheme.getColor(editorCursorForeground)!.transparent(0.7).toString()]);
 	assert.equal(requiredElement(viewport.domNode.domNode, '.decorationsOverviewRuler').getAttribute('aria-hidden'), 'true');
 	assert.deepEqual(minimapMarkers(minimapPaint), [
-		{ fill: '#89d185', top: 20 },
-		{ fill: '#f48771', top: 60 },
+		{ fill: '#89d185', top: 2 },
+		{ fill: '#f48771', top: 6 },
 	]);
 	dom.window.close();
 });
@@ -518,6 +518,10 @@ function recordCanvasPaint(dom: JSDOM): CanvasPaint[] {
 			lineWidth: 1,
 			strokeStyle: '',
 			clearRect(): void { frame += 1; },
+			createImageData(width: number, height: number): ImageData {
+				return { width, height, data: new Uint8ClampedArray(width * height * 4), colorSpace: 'srgb' };
+			},
+			putImageData(): void {},
 			fillRect(left: number, top: number, width: number, height: number): void {
 					paint.push({ frame, kind, canvasHeight: canvas.height, fill: String(this.fillStyle), left, top, width, height });
 			},

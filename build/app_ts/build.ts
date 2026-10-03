@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { buildHost, prepareHostOutput } from './host.ts';
+import { generateLocalization } from '../resources/localization.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const sourceRoot = resolve(repositoryRoot, 'app-ts');
@@ -16,6 +17,7 @@ if (extra.length || !['all', 'host', 'renderer', 'prepare'].includes(command)) {
 if (command === 'prepare') {
   await prepareHostOutput();
 } else {
+  await generateLocalization();
   if (command === 'all' || command === 'host') await buildHost();
   if (command === 'all' || command === 'renderer') {
     await run(compiler, ['-p', 'tsconfig.renderer.json']);

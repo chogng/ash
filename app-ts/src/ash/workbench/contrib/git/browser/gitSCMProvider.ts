@@ -4,7 +4,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
 import { foreground } from '../../../../platform/theme/common/colors/baseColors.js';
 import { IDecorationsService, type IDecorationData, type IDecorationsProvider } from '../../../services/decorations/common/decorations.js';
@@ -93,12 +93,6 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 			if (status.repositoryId === this.id) this.acceptStatus(status);
 		}));
 		this._register(gitService.onDidBecomeReady(() => { void this.refresh(); }));
-		this._register(onDidChangeNls(() => {
-			if (!this.status) return;
-			this.resourceGroups = this.createGroups(this.status);
-			this.updateDecorations();
-			this.changeEmitter.fire();
-		}));
 		void this.refresh();
 	}
 

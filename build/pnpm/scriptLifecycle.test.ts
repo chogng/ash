@@ -16,6 +16,7 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
     "test:editor:unit": "editor",
     "prepare:output": "output",
     "prepare:extensions": "extensions",
+    "localization:generate": "localization",
     "typecheck:common": "common",
     "protocol:sync": "protocol",
     "icons:check": "icons",
@@ -32,11 +33,11 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
   const executable = script ? process.execPath : pnpm;
   const prefix = script ? [pnpm] : [];
   for (const [command, expected, failure] of [
-    ["test:main", ["tools", "output", "extensions", "protocol", "common", "icons", "unit"], ""],
-    ["test:unit", ["output", "extensions", "protocol", "common", "icons", "unit"], ""],
-    ["test:editor:unit", ["output", "extensions", "protocol", "common", "icons", "editor"], ""],
-    ["test:main", ["tools", "output", "extensions", "protocol", "common"], "common"],
-    ["test:main", ["tools", "output", "extensions", "protocol"], "protocol"],
+    ["test:main", ["tools", "output", "localization", "extensions", "protocol", "common", "icons", "unit"], ""],
+    ["test:unit", ["output", "localization", "extensions", "protocol", "common", "icons", "unit"], ""],
+    ["test:editor:unit", ["output", "localization", "extensions", "protocol", "common", "icons", "editor"], ""],
+    ["test:main", ["tools", "output", "localization", "extensions", "protocol", "common"], "common"],
+    ["test:main", ["tools", "output", "localization", "extensions", "protocol"], "protocol"],
   ] as const) {
     await writeFile(join(directory, "operations.jsonl"), "");
     const result = spawnSync(executable, [...prefix, "run", command], {

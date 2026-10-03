@@ -1,3 +1,4 @@
+import { localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -45,7 +46,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'scm.quickDiff.next',
-			title: 'Go to Next Quick Diff Change',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.next' }, 'Go to Next Quick Diff Change'),
 			f1: true,
 			precondition: CodeEditorActive,
 			keybinding: { primary: Keybinding.single(logicalKey('F3', { altKey: true })), when: CodeEditorActive },
@@ -60,7 +61,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'scm.quickDiff.previous',
-			title: 'Go to Previous Quick Diff Change',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.previous' }, 'Go to Previous Quick Diff Change'),
 			f1: true,
 			precondition: CodeEditorActive,
 			keybinding: { primary: Keybinding.single(logicalKey('F3', { altKey: true, shiftKey: true })), when: CodeEditorActive },
@@ -73,7 +74,7 @@ registerAction2(class extends Action2 {
 
 registerAction2(class extends Action2 {
 	constructor() {
-		super({ id: 'scm.quickDiff.close', title: 'Close Quick Diff', f1: true, precondition: CodeEditorActive });
+		super({ id: 'scm.quickDiff.close', title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.close' }, 'Close Quick Diff'), f1: true, precondition: CodeEditorActive });
 	}
 	override run(accessor: ServicesAccessor): void {
 		accessor.get(IQuickDiffEditorControllerService).activeController?.close();

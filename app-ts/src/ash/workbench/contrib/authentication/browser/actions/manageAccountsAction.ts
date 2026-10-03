@@ -1,6 +1,6 @@
+import { localize2, localize } from '../../../../../nls.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { localize } from '../../../../../nls.js';
-import { localizedString } from '../../../../../platform/action/common/action.js';
+
 import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { IAccountService, type Account, type AccountState, type AccountLoginMethod } from '../../../../../platform/accounts/common/accountService.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -23,7 +23,7 @@ export class ManageAccountsAction extends Action2 {
 	constructor() {
 		super({
 			id: ManageAccountsAction.ID,
-			title: localizedString('ash', 'workbench.manageAccounts', 'Manage Accounts'),
+			title: localize2({ bundle: 'ash', key: 'workbench.manageAccounts' }, 'Manage Accounts'),
 			f1: true,
 		});
 	}

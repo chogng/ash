@@ -1,5 +1,5 @@
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import { WorkbenchViewContainerId } from '../../../common/views.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
 import { NumberBadge, type IActivityService } from '../../../services/activity/common/activity.js';
@@ -18,7 +18,6 @@ export class DirtyFilesIndicator extends Disposable implements IWorkbenchContrib
 		this._register(workingCopyService.onDidChangeDirty(() => this.update()));
 		this._register(workingCopyService.onDidRegister(() => this.update()));
 		this._register(workingCopyService.onDidUnregister(() => this.update()));
-		this._register(onDidChangeNls(() => this.update()));
 		this.update();
 	}
 

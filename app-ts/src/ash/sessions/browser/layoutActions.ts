@@ -1,6 +1,6 @@
+import { localize2 } from '../../nls.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
-import { localizedString } from '../../platform/action/common/action.js';
 import { MenusRegistry, MenuId, Action2, registerAction2 } from '../../platform/actions/common/actions.js';
 import { CommandsRegistry } from '../../platform/commands/common/commands.js';
 import { RawContextKey, type IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
@@ -53,7 +53,7 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 		constructor() {
 			super({
 				id: 'ash.sessions.togglePanel',
-				title: localizedString('ash', 'sessions.layout.togglePanel', 'Toggle Code panel'),
+				title: localize2({ bundle: 'ash', key: 'sessions.layout.togglePanel' }, 'Toggle Code panel'),
 				icon: Lxicon.layoutPanel1,
 				f1: true,
 				precondition: codePage.isEqualTo(true),
@@ -83,12 +83,12 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 			item: {
 				command: {
 					id: 'ash.sessions.toggleSidebar',
-					title: localizedString('ash', 'sessions.navigation.showSidebar', 'Show sidebar'),
+					title: localize2({ bundle: 'ash', key: 'sessions.navigation.showSidebar' }, 'Show sidebar'),
 					icon: Lxicon.layoutSidebarLeftOff2,
 					toggled: {
 						condition: SideBarVisibleContext.isEqualTo(true),
-						title: localizedString('ash', 'sessions.navigation.hideSidebar', 'Hide sidebar'),
-						tooltip: localizedString('ash', 'sessions.navigation.hideSidebar', 'Hide sidebar'),
+						title: localize2({ bundle: 'ash', key: 'sessions.navigation.hideSidebar' }, 'Hide sidebar'),
+						tooltip: localize2({ bundle: 'ash', key: 'sessions.navigation.hideSidebar' }, 'Hide sidebar'),
 						icon: Lxicon.layoutSidebarLeft2,
 					},
 				},
@@ -101,7 +101,7 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 			item: {
 				command: {
 					id: 'ash.sessions.back',
-					title: localizedString('ash', 'sessions.navigation.back', 'Back'),
+					title: localize2({ bundle: 'ash', key: 'sessions.navigation.back' }, 'Back'),
 					icon: Lxicon.arrowLeft,
 					precondition: canNavigateBack.isEqualTo(true),
 				},
@@ -114,7 +114,7 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 			item: {
 				command: {
 					id: 'ash.sessions.forward',
-					title: localizedString('ash', 'sessions.navigation.forward', 'Forward'),
+					title: localize2({ bundle: 'ash', key: 'sessions.navigation.forward' }, 'Forward'),
 					icon: Lxicon.arrowRight,
 					precondition: canNavigateForward.isEqualTo(true),
 				},

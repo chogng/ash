@@ -1,3 +1,4 @@
+import { localize2 } from '../../../../nls.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Action2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -23,7 +24,7 @@ export class OpenScmMultiDiffEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenScmMultiDiffEditorCommandId,
-			title: 'Open Changes',
+			title: localize2({ bundle: 'ash', key: 'scm.history.openChanges' }, 'Open Changes'),
 			f1: false,
 		});
 	}

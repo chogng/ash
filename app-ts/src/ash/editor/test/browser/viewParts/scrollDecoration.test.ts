@@ -19,7 +19,8 @@ test('ScrollDecorationViewPart follows layout and scrollbar configuration', () =
 	scrollDecoration.render(renderingContext({ scrollLeft: 15, scrollTop: 0, scrollHeight: 300, viewportHeight: 100 }));
 	assert.equal(domNode.style.width, '500px');
 	assert.equal(domNode.style.height, '100px');
-	assert.equal(domNode.style.transform, 'translate3d(15px, 0px, 0)');
+	// Shadows stay on the viewport edges as document content scrolls horizontally.
+	assert.equal(domNode.style.transform, '');
 	assert.equal(shadow(scrollDecoration, 'top').classList.contains('visible'), false);
 	assert.equal(shadow(scrollDecoration, 'bottom').classList.contains('visible'), true);
 

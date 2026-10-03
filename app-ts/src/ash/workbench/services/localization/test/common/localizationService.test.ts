@@ -1,16 +1,16 @@
+import { createTestLanguagePacks, createTestLocaleService, initializeTestLocalization } from './localizationTestUtils.js';
+import { localize2, localize, resetNlsResolver } from '../../../../../nls.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import type { IMarketplaceService } from "../../../../../platform/marketplace/common/marketplaceService.js";
-import { MarketplaceLanguagePackService } from "../../../../../platform/languagePacks/browser/marketplaceLanguagePackService.js";
 import { builtinLanguagePackCatalogs } from "../../common/localizationCatalogs.js";
 import { normalizeLocale } from "../../../../../platform/languagePacks/common/languagePackCatalog.js";
 import { LocalizationConfiguration } from "../../common/locale.js";
-import { WorkbenchLocaleService } from "../../browser/localeService.js";
 import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizationService.js";
-import { localize, resetNlsResolver } from '../../../../../nls.js';
-import { commandActionLabel, localizedString } from '../../../../../platform/action/common/action.js';
+
+import { commandActionLabel } from '../../../../../platform/action/common/action.js';
 import { JSDOM } from 'jsdom';
 import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
@@ -25,12 +25,12 @@ import '../../../../contrib/git/browser/gitWorktrees.js';
 
 test('Code session layout errors and navigation help use the selected Chinese catalog', async () => {
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	using localeService = createTestLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService();
 	try {
 		await localization.whenReady;
-		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+		initializeTestLocalization('zh-CN');
 		assert.deepEqual([
 			localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'),
 			localize('sessions.layout.restoreFailed', 'Could not restore the editors for this session: {0}', 'Cancelled'),
@@ -48,14 +48,14 @@ test('Code session layout errors and navigation help use the selected Chinese ca
 	}
 });
 
-test('Git branch and worktree commands update their labels with the selected Chinese catalog', async () => {
+test('registered Git commands retain the startup language until restart', async () => {
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	using localeService = createTestLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService();
 	try {
 		await localization.whenReady;
-		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+		initializeTestLocalization('zh-CN');
 		const commands = MenusRegistry.getMenuItems(MenuId.CommandPalette);
 		const labels = ['git.branch', 'git.deleteBranch', 'git.createWorktree', 'git.openWorktree', 'git.deleteWorktree', 'git.stash', 'git.merge', 'git.continue', 'git.stageSelectedRanges', 'git.init'].map(id => {
 			const item = commands.find(candidate => 'command' in candidate && candidate.command.id === id)!;
@@ -63,8 +63,8 @@ test('Git branch and worktree commands update their labels with the selected Chi
 			return commandActionLabel(item.command.title);
 		});
 		assert.deepEqual(labels, [
-			'Git: 创建分支', 'Git: 删除分支', 'Git: 创建工作树', 'Git: 打开工作树', 'Git: 删除工作树',
-			'Git: 储藏更改', 'Git: 合并分支', 'Git: 继续合并、变基或拣选', 'Git: 暂存选中行', 'Git: 初始化仓库',
+			'Git: Create Branch', 'Git: Delete Branch', 'Git: Create Worktree', 'Git: Open Worktree', 'Git: Delete Worktree',
+			'Git: Stash Changes', 'Git: Merge Branch', 'Git: Continue Merge, Rebase or Cherry-Pick', 'Git: Stage Selected Lines', 'Git: Initialize Repository',
 		]);
 		assert.equal(localization.translate('ash', 'git.indexChanged', ''), '比较内容已变化。请从源代码管理重新打开当前比较，再选择更改。');
 		assert.equal(localization.translate('ash', 'git.deleteBranchConfirm', '', { '0': 'topic' }), '删除本地分支 topic？');
@@ -76,12 +76,12 @@ test('Git branch and worktree commands update their labels with the selected Chi
 
 test('Tree settings use Chinese titles and guide options', async () => {
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	using localeService = createTestLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService();
 	try {
 		await localization.whenReady;
-		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+		initializeTestLocalization('zh-CN');
 		const settings = new DefaultSettings();
 		assert.equal(settings.get(ListConfiguration.treeIndent).title, '树缩进');
 		const guides = settings.get(ListConfiguration.treeRenderIndentGuides);
@@ -93,46 +93,42 @@ test('Tree settings use Chinese titles and guide options', async () => {
 	}
 });
 
-test("locale selection resolves installed variants and falls back to English", async () => {
-	assert.equal(normalizeLocale("ZH_cn"), "zh-CN");
+test('language preference changes leave the active startup language unchanged', async () => {
+	initializeTestLocalization('en');
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	await localeService.whenReady;
-	await localeService.setLocale({ id: 'zh-cn', label: 'Chinese' });
-	assert.equal(localeService.locale, 'zh-CN');
-	await configuration.updateValue(LocalizationConfiguration.locale, 'de');
-	assert.equal(localeService.locale, 'en');
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	let restarted = false;
+	using localeService = createTestLocaleService(configuration, languagePacks, async () => { restarted = true; });
+	await localeService.setLocale({ id: 'zh_cn', label: 'Chinese' });
+	assert.deepEqual([localeService.locale, configuration.getValue(LocalizationConfiguration.locale), restarted], ['en', 'zh-CN', false]);
+	await localeService.clearLocalePreference();
+	assert.deepEqual([localeService.locale, configuration.getValue(LocalizationConfiguration.locale), configuration.inspect(LocalizationConfiguration.locale).userValue], ['en', 'en', undefined]);
+	await assert.rejects(localeService.setLocale({ id: 'fr', label: 'French' }), /not installed/);
+	assert.equal(normalizeLocale('ZH_cn'), 'zh-CN');
 });
 
-test("locale selection stores a configured value and only accepts installed packs", async () => {
+test('confirmed language changes request the host restart after saving the preference', async () => {
+	initializeTestLocalization('en');
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-
-	await localeService.whenReady;
-	await assert.rejects(localeService.setLocale({ id: 'fr', label: 'French' }), /not installed/);
-	await localeService.setLocale({ id: 'zh_cn', label: 'Chinese' });
-	assert.equal(localeService.locale, "zh-CN");
-	assert.equal(configuration.getValue(LocalizationConfiguration.locale), "zh-CN");
-	await localeService.clearLocalePreference();
-	assert.equal(localeService.locale, 'en');
-	assert.equal(configuration.getValue(LocalizationConfiguration.locale), 'en');
-	assert.equal(configuration.inspect(LocalizationConfiguration.locale).userValue, undefined);
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	let preferenceAtRestart: string | undefined;
+	using localeService = createTestLocaleService(configuration, languagePacks, async () => { preferenceAtRestart = configuration.getValue(LocalizationConfiguration.locale); }, async () => ({ confirmed: true }));
+	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+	assert.deepEqual([localeService.locale, preferenceAtRestart], ['en', 'zh-CN']);
 });
 
 test("localization lookup falls back to English and formats parameters", async () => {
 	using configuration = new InMemoryConfigurationService();
-	const languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	const languagePacks = createTestLanguagePacks(createMarketplace());
+	using localeService = createTestLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService();
 
 	await localization.whenReady;
 	assert.equal(localization.translate("ash.settings", "displayLanguage.title", "Fallback"), "Display Language");
 	assert.equal(localization.translate("ash.missing", "missing", "Hello {name}", { name: "Ada" }), "Hello Ada");
-	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+	initializeTestLocalization('zh-CN');
 	assert.equal(localization.translate('ash', 'sessions.chat.welcome', 'What can we work on?'), '今天想做些什么？');
-	assert.equal(commandActionLabel(localizedString('ash', 'files.revealInExplorer', 'Reveal in Explorer View')), '在资源管理器视图中显示');
+	assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View')), '在资源管理器视图中显示');
 	assert.equal(localization.translate('ash', 'workbench.colorCustomizations.title', 'Color Customizations'), '自定义颜色');
 	assert.equal(localization.translate('ash', 'color.editor.selectionForeground', 'Foreground'), '编辑器选中文字的颜色。未设置时保留语法高亮颜色。');
 	assert.equal(localization.translate('ash', 'color.sessions.inputShadow', 'Shadow around the Sessions input card.'), 'Sessions 输入卡片周围的阴影。');
@@ -150,21 +146,21 @@ test("localization lookup falls back to English and formats parameters", async (
 		localization.translate('ash', 'workbench.startupError.copyFailed', 'Could not copy. Select the details above to copy them manually.'),
 	], ['无法启动 Ash', '复制详情', '无法复制。请选中上方详情并手动复制。']);
 	assert.deepEqual([
-		commandActionLabel(localizedString('ash.menu', 'file', 'File')),
-		commandActionLabel(localizedString('ash.actions', 'showPanel', 'Show Panel')),
-		commandActionLabel(localizedString('ash.actions', 'openAgentsWindow', 'Open Agents Window')),
-		commandActionLabel(localizedString('ash.actions', 'openInAgents', 'Open in Agents')),
-		commandActionLabel(localizedString('ash.actions', 'openInAgentsWindow', 'Open in Agents Window')),
-		commandActionLabel(localizedString('ash', 'workbench.openFolder', 'Open Folder...')),
-		commandActionLabel(localizedString('ash', 'workbench.toggleDeveloperTools', 'Developer: Toggle Developer Tools')),
-		commandActionLabel(localizedString('ash', 'workbench.switchWindow', 'Switch Window...')),
-		commandActionLabel(localizedString('ash', 'workbench.navigateEditorBack', 'Go Back')),
-		commandActionLabel(localizedString('ash', 'workbench.navigateEditorForward', 'Go Forward')),
-		commandActionLabel(localizedString('ash', 'workbench.navigateBackInEditLocations', 'Go Back in Edit Locations')),
-		commandActionLabel(localizedString('ash', 'workbench.navigateForwardInEditLocations', 'Go Forward in Edit Locations')),
-		commandActionLabel(localizedString('ash', 'workbench.navigateBackInNavigationLocations', 'Go Back in Navigation Locations')),
-		commandActionLabel(localizedString('ash', 'workbench.navigateForwardInNavigationLocations', 'Go Forward in Navigation Locations')),
-		commandActionLabel(localizedString('ash', 'workbench.installShellCommand', 'Install ash Command in PATH')),
+		commandActionLabel(localize2({ bundle: 'ash.menu', key: 'file' }, 'File')),
+		commandActionLabel(localize2({ bundle: 'ash.actions', key: 'showPanel' }, 'Show Panel')),
+		commandActionLabel(localize2({ bundle: 'ash.actions', key: 'openAgentsWindow' }, 'Open Agents Window')),
+		commandActionLabel(localize2({ bundle: 'ash.actions', key: 'openInAgents' }, 'Open in Agents')),
+		commandActionLabel(localize2({ bundle: 'ash.actions', key: 'openInAgentsWindow' }, 'Open in Agents Window')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.openFolder' }, 'Open Folder...')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.toggleDeveloperTools' }, 'Developer: Toggle Developer Tools')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.switchWindow' }, 'Switch Window...')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateEditorBack' }, 'Go Back')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateEditorForward' }, 'Go Forward')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateBackInEditLocations' }, 'Go Back in Edit Locations')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateForwardInEditLocations' }, 'Go Forward in Edit Locations')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateBackInNavigationLocations' }, 'Go Back in Navigation Locations')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateForwardInNavigationLocations' }, 'Go Forward in Navigation Locations')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.installShellCommand' }, 'Install ash Command in PATH')),
 	], ['文件', '显示面板', '打开 Agents 窗口', '在 Agents 中打开', '在 Agents 窗口中打开', '打开文件夹...', '开发者：切换开发者工具', '切换窗口...', '后退', '前进', '返回上一编辑位置', '前往下一编辑位置', '返回上一跳转位置', '前往下一跳转位置', '在 PATH 中安装 ash 命令']);
 	assert.equal(localization.translate('ash', 'openAgentsWindow.systemWideFailed', 'Some system-wide shortcuts could not be registered ({0}); they may be used by another application.', { '0': 'Ctrl+A' }), '部分系统级快捷键无法注册（Ctrl+A）；它们可能已被其他应用占用。');
 	assert.equal(localization.translate('ash', 'sessions.list.search', 'Search sessions'), '搜索会话');
@@ -222,16 +218,16 @@ test("localization lookup falls back to English and formats parameters", async (
 	], ['活动栏全局操作', '标题栏全局操作', '活动栏位置', '默认', '顶部', '底部', '隐藏', '活动栏大小', '选择活动栏的显示位置。', '紧凑活动栏', '主侧栏位置', '将主侧栏移到右侧', '隐藏“资源管理器”', '保留“资源管理器”', '账户', 'Ada（GitHub）', '退出登录', '使用 ChatGPT 登录', '退出 Ada']);
 	assert.deepEqual([
 		localization.translate('ash', 'workbench.manage', 'Manage'),
-		commandActionLabel(localizedString('ash', 'workbench.commandPalette', 'Command Palette...')),
-		commandActionLabel(localizedString('ash', 'workbench.manageSettings', 'Settings')),
-		commandActionLabel(localizedString('ash', 'workbench.manageExtensions', 'Extensions')),
-		commandActionLabel(localizedString('ash', 'workbench.manageKeyboardShortcuts', 'Keyboard Shortcuts')),
-		commandActionLabel(localizedString('ash', 'workbench.manageRunTask', 'Run Task...')),
-		commandActionLabel(localizedString('ash', 'workbench.manageThemes', 'Themes')),
-		commandActionLabel(localizedString('ash', 'update.checkForUpdates', 'Check for Updates...')),
-		commandActionLabel(localizedString('ash', 'workbench.selectColorTheme', 'Color Theme')),
-		commandActionLabel(localizedString('ash', 'workbench.selectFileIconTheme', 'File Icon Theme')),
-		commandActionLabel(localizedString('ash', 'workbench.selectProductIconTheme', 'Product Icon Theme')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.commandPalette' }, 'Command Palette...')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.manageSettings' }, 'Settings')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.manageExtensions' }, 'Extensions')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.manageKeyboardShortcuts' }, 'Keyboard Shortcuts')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.manageRunTask' }, 'Run Task...')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.manageThemes' }, 'Themes')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'update.checkForUpdates' }, 'Check for Updates...')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.selectColorTheme' }, 'Color Theme')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.selectFileIconTheme' }, 'File Icon Theme')),
+		commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.selectProductIconTheme' }, 'Product Icon Theme')),
 	], ['管理', '命令面板...', '设置', '扩展', '键盘快捷方式', '运行任务...', '主题', '检查更新...', '颜色主题', '文件图标主题', '产品图标主题']);
 	assert.equal(localization.translate('ash', 'update.available', 'Ash {0} is available. You are using {1}.', { '0': '0.2.0', '1': '0.1.0' }), 'Ash 0.2.0 已可更新。当前版本为 0.1.0。');
 	assert.equal(localization.translate('ash', 'update.ready', 'Ash {0} is ready to install.', { '0': '0.2.0' }), 'Ash 0.2.0 已准备好安装。');
@@ -286,66 +282,34 @@ test("localization lookup falls back to English and formats parameters", async (
 
 test('minimap menu uses the selected Chinese language catalog', async () => {
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	using localeService = createTestLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService();
 	await localization.whenReady;
-	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+	initializeTestLocalization('zh-CN');
 	assert.equal(localization.translate('ash', 'context.minimap.enabled', 'Minimap'), '小地图');
 });
 
-test('theme color descriptions in the JSON schema follow locale changes', async () => {
+test('registered theme descriptions retain the startup language when a preference is saved', async () => {
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	using localeService = createTestLocaleService(configuration, languagePacks);
 	using schemaRegistration = registerColorThemeSchemas();
 	const schema = JsonSchemasRegistry.getSchema(colorThemeSchemaId)!;
 	const description = (id: string): string | undefined => schema.properties?.colors?.properties?.[id]?.description;
-	try {
-		await localization.whenReady;
-		assert.equal(description('input.background'), 'Input background.');
-		assert.equal(description('scrollbar.background'), 'Scrollbar track background.');
-		assert.equal(description('scrollbarSlider.background'), 'Scrollbar slider background.');
-		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
-		assert.deepEqual([
-			description('input.background'),
-			description('minimapSlider.background'),
-			description('minimap.shadow'),
-			description('scrollbar.background'),
-			description('scrollbarSlider.background'),
-			description('scrollbarSlider.hoverBackground'),
-			description('scrollbarSlider.activeBackground'),
-			description('charts.green'),
-			description('editorGroup.border'),
-			description('editorGroupHeader.tabsBackground'),
-		], [
-			'输入框背景色。',
-			'小地图视口滑块的背景色。',
-			'提示右侧还有内容的小地图阴影颜色。',
-			'滚动条轨道的背景色。',
-			'滚动条滑块的背景色。',
-			'鼠标悬停时滚动条滑块的背景色。',
-			'拖动滚动条滑块时的背景色。',
-			'图表中绿色数据系列的颜色。',
-			'编辑器分组之间的边框颜色。',
-			'编辑器标签栏的背景色。',
-		]);
-		await localeService.setLocale({ id: 'en', label: 'English' });
-		assert.equal(description('input.background'), 'Input background.');
-		assert.equal(description('scrollbar.background'), 'Scrollbar track background.');
-	} finally {
-		resetNlsResolver();
-	}
+	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+	assert.equal(configuration.getValue(LocalizationConfiguration.locale), 'zh-CN');
+	assert.equal(description('input.background'), 'Input background.');
+	assert.equal(description('scrollbar.background'), 'Scrollbar track background.');
 });
 
 test('paste and drop controls use the selected Chinese language catalog', async () => {
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	using localeService = createTestLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService();
 	await localization.whenReady;
-	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+	initializeTestLocalization('zh-CN');
 	assert.deepEqual([
 		localization.translate('ash', 'dropOrPaste.pasteAs', 'Paste As...'),
 		localization.translate('ash', 'dropOrPaste.selectPasteAction', 'Select Paste Action'),
@@ -358,7 +322,7 @@ test('paste and drop controls use the selected Chinese language catalog', async 
 		'选择性粘贴...',
 		'选择粘贴方式',
 		'粘贴选项',
-		'使用方向键选择编辑方式。按 Escape 返回编辑器。',
+		'按下方向键或 Enter 打开选项。Escape 关闭菜单；在此按钮上按 Escape 返回编辑器。',
 		'无法准备编辑：{0}',
 		'此编辑器无法使用代码片段占位符导航。',
 		'无法切换编辑：{0}',
@@ -367,12 +331,12 @@ test('paste and drop controls use the selected Chinese language catalog', async 
 
 test('folding command metadata uses the selected Chinese language catalog', async () => {
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	using localeService = createTestLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService();
 	try {
 		await localization.whenReady;
-		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+		initializeTestLocalization('zh-CN');
 		await import('../../../../../editor/contrib/folding/browser/folding.js');
 		const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
 		const actions = [...EditorExtensionsRegistry.getEditorActions()];
@@ -391,19 +355,19 @@ test('folding command metadata uses the selected Chinese language catalog', asyn
 
 test('editor action labels use the selected Chinese language catalog', async () => {
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	using localeService = createTestLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService();
 	try {
 		await localization.whenReady;
-		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
-		await import('../../../../../editor/contrib/tokenization/browser/tokenization.js');
+		initializeTestLocalization('zh-CN');
+		const { ForceRetokenizeAction } = await import('../../../../../editor/contrib/tokenization/browser/tokenization.js');
 		await import('../../../../../editor/contrib/caretOperations/browser/caretOperations.js');
 		await import('../../../../../editor/contrib/insertFinalNewLine/browser/insertFinalNewLine.js');
 		const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
 		const actions = [...EditorExtensionsRegistry.getEditorActions()];
 		assert.deepEqual([
-			actions.find(action => action.id === 'editor.action.forceRetokenize')?.label,
+			new ForceRetokenizeAction().label,
 			actions.find(action => action.id === 'editor.action.moveCarretLeftAction')?.label,
 			actions.find(action => action.id === 'editor.action.moveCarretRightAction')?.label,
 			actions.find(action => action.id === 'editor.action.insertFinalNewLine')?.label,
@@ -432,15 +396,15 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		assert.equal(localize('workspaceTrust.restrictedStatusDetail', 'Some workspace features are limited by directory permissions.'), '目录权限限制了部分工作区功能。');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'), '复制路径');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'), '复制相对路径');
-		assert.equal(commandActionLabel(localizedString('ash', 'workbench.closeEditorsToTheRight', 'Close to the Right')), '关闭右侧编辑器');
-		assert.equal(commandActionLabel(localizedString('ash', 'workbench.closeSavedEditors', 'Close Saved')), '关闭已保存的编辑器');
-		assert.equal(commandActionLabel(localizedString('ash', 'workbench.closeEditorsInGroup', 'Close All in Group')), '关闭组内所有编辑器');
-		assert.equal(commandActionLabel(localizedString('ash', 'workbench.splitEditorUp', 'Split Up')), '向上拆分');
-		assert.equal(commandActionLabel(localizedString('ash', 'workbench.splitEditorDown', 'Split Down')), '向下拆分');
-		assert.equal(commandActionLabel(localizedString('ash', 'workbench.splitEditorLeft', 'Split Left')), '向左拆分');
-		assert.equal(commandActionLabel(localizedString('ash', 'workbench.splitEditorRight', 'Split Right')), '向右拆分');
-		assert.equal(commandActionLabel(localizedString('ash', 'workbench.splitEditorHorizontal', 'Split Editor Horizontal')), '水平拆分编辑器');
-		assert.equal(commandActionLabel(localizedString('ash', 'workbench.splitEditorVertical', 'Split Editor Vertical')), '垂直拆分编辑器');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheRight' }, 'Close to the Right')), '关闭右侧编辑器');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeSavedEditors' }, 'Close Saved')), '关闭已保存的编辑器');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditorsInGroup' }, 'Close All in Group')), '关闭组内所有编辑器');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorUp' }, 'Split Up')), '向上拆分');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorDown' }, 'Split Down')), '向下拆分');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorLeft' }, 'Split Left')), '向左拆分');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorRight' }, 'Split Right')), '向右拆分');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorHorizontal' }, 'Split Editor Horizontal')), '水平拆分编辑器');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorVertical' }, 'Split Editor Vertical')), '垂直拆分编辑器');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.newFile' }, 'New File...'), '新建文件...');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.newFileName' }, 'New File Name'), '新建文件名称');
 		assert.equal(localize({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...'), '新建文件夹...');
@@ -455,13 +419,13 @@ test('editor action labels use the selected Chinese language catalog', async () 
 
 test('Quick Input uses Chinese labels from the selected catalog', async () => {
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	using localeService = createTestLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService();
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		await localization.whenReady;
-		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+		initializeTestLocalization('zh-CN');
 		using controller = new QuickInputController(dom.window.document.body);
 		using picker = controller.createQuickPick();
 		picker.show();
@@ -477,12 +441,12 @@ test('Quick Input uses Chinese labels from the selected catalog', async () => {
 
 test('Go to Offset uses the selected Chinese language catalog', async () => {
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	using localeService = createTestLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService();
 	try {
 		await localization.whenReady;
-		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+		initializeTestLocalization('zh-CN');
 		const { GotoOffsetAction } = await import('../../../../../editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess.js');
 		assert.equal(new GotoOffsetAction().label, '转到字符偏移量...');
 		assert.equal(localization.translate('ash', 'gotoOffset.input', 'Character offset'), '字符偏移量');
@@ -493,12 +457,12 @@ test('Go to Offset uses the selected Chinese language catalog', async () => {
 
 test('Source Control settings use the selected Chinese language catalog', async () => {
 	using configuration = new InMemoryConfigurationService();
-	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
-	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
-	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	using languagePacks = createTestLanguagePacks(createMarketplace());
+	using localeService = createTestLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService();
 	try {
 		await localization.whenReady;
-		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+		initializeTestLocalization('zh-CN');
 		const { localize } = await import('../../../../../nls.js');
 		assert.deepEqual([
 			localize('git.settings.groupDescription', 'Configure Git fetching and Source Control diff decorations.'),
@@ -563,3 +527,31 @@ function createMarketplace(): IMarketplaceService {
 		openResource: () => Promise.reject(new Error("unused")),
 	};
 }
+
+test('a failed language-resource write leaves the preference and running language unchanged', async () => {
+	initializeTestLocalization('en');
+	using configuration = new InMemoryConfigurationService();
+	using packs = createTestLanguagePacks(createMarketplace());
+	let prompted = false;
+	using locale = createTestLocaleService(configuration, packs, async () => {}, async () => { prompted = true; return { confirmed: true }; }, {
+		read: async () => undefined,
+		write: async () => { throw new Error('disk full'); },
+	});
+	await assert.rejects(locale.setLocale({ id: 'zh-CN', label: 'Chinese' }), /disk full/);
+	assert.deepEqual([configuration.inspect(LocalizationConfiguration.locale).userValue, locale.locale, prompted], [undefined, 'en', false]);
+});
+
+test('browser bootstrap reads the selected local pack before command titles are constructed', async () => {
+	const { initializeBrowserLocalization } = await import('../../browser/localizationBootstrap.js');
+	const catalog = { ...builtinLanguagePackCatalogs[0], locale: 'fr', bundles: { ash: { command: 'Bonjour {0}' } } };
+	try {
+		await initializeBrowserLocalization({
+			read: async () => ({ revision: 1, document: { version: 1, source: '{"workbench.locale":"fr"}' } }),
+			update: async () => { throw new Error('Bootstrap must not change settings'); },
+			onDidChange: () => { throw new Error('Bootstrap must not subscribe to live language changes'); },
+		}, { read: async locale => { assert.equal(locale, 'fr'); return catalog; }, write: async () => { throw new Error('Bootstrap must only read resources'); } });
+		const title = localize2('command', 'Hello {0}', 'Ash');
+		assert.deepEqual(title, { original: 'Hello Ash', value: 'Bonjour Ash' });
+		assert.equal(commandActionLabel(title), 'Bonjour Ash');
+	} finally { resetNlsResolver(); }
+});

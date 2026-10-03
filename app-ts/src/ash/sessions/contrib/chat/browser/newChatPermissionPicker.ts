@@ -4,7 +4,7 @@ import { ContextViewFocusRestore } from '../../../../base/browser/ui/contextview
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { createUuid } from '../../../../base/common/uuid.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IApprovalEnvironmentService } from '../../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -29,7 +29,6 @@ export class NewChatPermissionPicker extends Disposable {
 		@IInstantiationService private readonly services: IInstantiationService,
 	) {
 		super();
-		this._register(onDidChangeNls(() => { if (this.visible) this.views.hide(); }));
 		this._register(model.onDidChange(() => { if (this.visible) this.views.hide(); }));
 		this._register(addDisposableListener(button, 'click', () => this.visible ? this.views.hide() : this.show()));
 		this._register(addDisposableListener(button, 'keydown', event => {

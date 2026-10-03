@@ -1,11 +1,11 @@
+import { localize2, localize } from '../../../../../nls.js';
 import './inspectEditorTokens.css';
 import * as textMate from 'vscode-textmate';
 import { h } from '../../../../../base/browser/dom.js';
 import { Dialog } from '../../../../../base/browser/ui/dialog/dialog.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
-import { localize } from '../../../../../nls.js';
-import { localizedString } from '../../../../../platform/action/common/action.js';
+
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
@@ -21,7 +21,7 @@ const initialState = ((textMate as unknown as { default?: typeof textMate }).def
 
 class InspectEditorTokens extends Action2 {
 	constructor() {
-		super({ id: 'editor.action.inspectTMScopes', title: localizedString('ash', 'inspectEditorTokens.command', 'Developer: Inspect Editor Tokens and Scopes'), f1: true });
+		super({ id: 'editor.action.inspectTMScopes', title: localize2({ bundle: 'ash', key: 'inspectEditorTokens.command' }, 'Developer: Inspect Editor Tokens and Scopes'), f1: true });
 	}
 
 	public override async run(accessor: ServicesAccessor): Promise<void> {

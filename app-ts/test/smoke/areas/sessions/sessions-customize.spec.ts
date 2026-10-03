@@ -199,18 +199,22 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 	expect(failures).toEqual([]);
 });
 
-test('Sessions Customize uses Chinese labels and localized Skills controls', async ({ application, target, workbench }) => {
+test('Sessions Customize uses Chinese labels and localized Skills controls', async ({ application, target, workbench, restartWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	if (target.kind === 'electron' && process.platform === 'darwin') await useCustomMenus(workbench.page);
-	const originalPage = workbench.page;
+	let originalPage = workbench.page;
 	await originalPage.keyboard.press('ControlOrMeta+,');
-	const editor = originalPage.locator('.ash-settings-editor');
+	let editor = originalPage.locator('.ash-settings-editor');
 	await editor.locator('[data-settings-category-id="general"]').click();
 	const language = editor.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox');
 	await language.click();
 	await originalPage.keyboard.press('End');
 	await originalPage.keyboard.press('Enter');
 	await expect(language).toHaveText('简体中文');
+	({ workbench, application } = await restartWorkbench());
+	originalPage = workbench.page;
+	await originalPage.keyboard.press('ControlOrMeta+,');
+	editor = originalPage.locator('.ash-settings-editor');
 	const chatGroup = editor.locator('[data-settings-group-id="agents"]');
 	await expect(chatGroup).toHaveText('聊天');
 	await chatGroup.click();
@@ -228,6 +232,9 @@ test('Sessions Customize uses Chinese labels and localized Skills controls', asy
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
+	await page.waitForFunction(() => document.querySelector('.ash-sessions-activity-content') || document.querySelector('#app > section > textarea[readonly]'));
+	if (await page.locator('#app > section > textarea[readonly]').count()) throw new Error(await page.locator('#app > section > textarea[readonly]').inputValue());
+
 	const settings = await openSettings(page, '设置');
 	await settings.getByRole('button', { name: '智能体', exact: true }).click();
 	await expect(settings.getByRole('button', { name: '顾问模型', exact: true })).toBeVisible();

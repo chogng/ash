@@ -96,7 +96,7 @@ services.registerInstance(ILanguageServerService, {
 });
 services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
 services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(document.body)));
-services.registerInstance(ILocalizationService, { onDidChange: Event.None, whenReady: Promise.resolve(), translate: (_bundle, _key, text, parameters) => text.replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match)) });
+services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, text, parameters) => text.replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match)) });
 services.registerInstance(IRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IRemoteAgentService);
 services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
 services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ getModel: () => ({ getLanguageId: () => 'typescriptreact' }) }) } as unknown as ICodeEditorService);

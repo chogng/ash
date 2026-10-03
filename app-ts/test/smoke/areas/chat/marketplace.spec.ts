@@ -132,12 +132,12 @@ test('Marketplace slash commands open their Workbench owners without sending a c
 	}
 });
 
-test('Language server Settings replaces the sidebar and saves backend configuration', async ({ target, workbench }) => {
+test('Language server Settings replaces the sidebar and saves backend configuration', async ({ target, workbench, restartWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code');
-	const page = workbench.page;
+	let page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.languageServers.open');
-	const settings = page.locator('.ash-settings-editor');
-	const lsp = settings.locator('.ash-language-server-settings');
+	let settings = page.locator('.ash-settings-editor');
+	let lsp = settings.locator('.ash-language-server-settings');
 	await expect(lsp).toBeVisible();
 	await expect(settings.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'editor');
 	await expect(page.getByRole('tab', { name: 'Language servers', exact: true })).toHaveCount(0);
@@ -161,7 +161,10 @@ test('Language server Settings replaces the sidebar and saves backend configurat
 	const locale = settings.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox');
 	await locale.click();
 	await page.getByRole('option', { name: '简体中文', exact: true }).click();
-	await page.locator('.ash-modal-editor-close').click();
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
+	settings = page.locator('.ash-settings-editor');
+	lsp = settings.locator('.ash-language-server-settings');
 	await workbench.quickaccess.runCommand('ash.languageServers.open');
 	await expect(settings.getByRole('heading', { name: '语言服务器', exact: true })).toBeInViewport();
 	await expect(lsp).toHaveAttribute('aria-busy', 'false');

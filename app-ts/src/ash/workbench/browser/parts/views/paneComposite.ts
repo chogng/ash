@@ -37,11 +37,6 @@ export class PaneComposite extends ViewPaneContainer {
 		this.element.id = compositePanelId(options.viewContainer.location, options.viewContainer.id);
 		this.element.setAttribute("role", "tabpanel");
 		this.element.setAttribute("aria-labelledby", compositeTabId(options.viewContainer.location, options.viewContainer.id));
-		if (options.localizationService) this._register(options.localizationService.onDidChange(() => {
-			this.title = localize(options.localizationService, options.viewContainer.localizationKey, options.viewContainer.title);
-			this.element.setAttribute("aria-label", this.title);
-			this.titleChange.fire();
-		}));
 		if (options.mergeViewWithContainerWhenSingleView) {
 			this._register(options.model.onDidChangeVisibleViewDescriptors(() => this.updateMergedPane()));
 			this.updateMergedPane();

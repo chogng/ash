@@ -1,3 +1,4 @@
+import { localize2 } from '../../../../nls.js';
 import "./code.contribution.js";
 import "../../../../sessions/contrib/providers/appServer/browser/workbenchSessionsService.contribution.js";
 import "../../../../sessions/browser/workbenchChat.contribution.js";
@@ -15,7 +16,7 @@ registerAction2(class OpenCodeSessionsAction extends Action2 {
 	constructor() {
 		super({
 			id: codeSessionsProfile.titlebarActionId,
-			title: "Open Code Sessions",
+			title: localize2({ bundle: 'ash.workbench', key: 'command.OpenCodeSessionsAction' }, "Open Code Sessions"),
 			tooltip: "Open Code Sessions",
 			icon: ashTitlebarMark,
 			menu: { id: MenuId.TitleBarAdjacentCenter, group: "navigation", order: 1 },

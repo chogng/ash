@@ -8,6 +8,12 @@ export class BrowserHostService implements IHostService {
 	private readonly ownerWindow = window;
 	constructor(@ILifecycleService private readonly lifecycle: ILifecycleService) {}
 
+	public async restart(): Promise<void> {
+		try { await this.lifecycle.shutdown('load'); }
+		catch (error) { if (error instanceof ShutdownVetoError) { return; } throw error; }
+		this.ownerWindow.location.reload();
+	}
+
 	public async openWindow(options: IOpenEmptyWindowOptions = {}): Promise<void> {
 		if (options.remoteAuthority !== undefined) throw new Error('This browser host cannot open a Remote window');
 		if (!options.forceReuseWindow) {

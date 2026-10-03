@@ -28,7 +28,7 @@ import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContra
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { LocalTranscriptionModelControls } from '../../../src/ash/workbench/contrib/localTranscription/browser/localTranscriptionModelControls.js';
 import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
-import { setNlsResolver, formatNlsMessage } from '../../../src/ash/nls.js';
+import { setNlsMessages } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
@@ -41,10 +41,10 @@ import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ChatInputEditorOptions } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
-import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import type { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
+import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 
 declare global {
 	interface Window {
@@ -52,7 +52,6 @@ declare global {
 			progress(): void;
 			finish(): void;
 			theme(name: string): void;
-			locale(): void;
 			dispose(): void;
 			readonly operations: string[];
 			startDictation(): Promise<void>;
@@ -74,10 +73,25 @@ declare global {
 	}
 }
 
+if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
+	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsMessages(catalog.locale, catalog.bundles);
+}
+
 const resources = new DisposableStore();
 const configuration = resources.add(new WorkbenchConfigurationService());
 const services = resources.add(new InstantiationService());
 services.registerInstance(IConfigurationService, configuration);
+services.registerInstance(ILanguageModelsService, {
+	onDidChangeModels: Event.None,
+	listModels: async () => [], listModelCatalog: async () => [], refreshModels: async () => [],
+	listAdvisorModels: async () => [], listModelProviders: async () => [], listCustomModelProviders: async () => [],
+	getDefaultNewChatModel: () => undefined, rememberSelectedModel: () => {}, isModelVisible: () => true,
+	setModelVisible: async () => {}, setModelPreferences: async () => {},
+	readApprovalReviewModel: async () => ({ type: 'automatic' }), setApprovalReviewModel: async () => {},
+	saveCustomModelProvider: async () => {}, testProviderModel: async () => ({ type: 'passed' }),
+	setModelProviderApiKey: async () => {}, removeModelProviderApiKey: async () => {}, discoverProviderModels: async () => [],
+});
 const changed = resources.add(new Emitter<void>());
 let models: ILocalTranscriptionModelSnapshot[] = [
 	{ model: DEFAULT_LOCAL_DICTATION_MODEL, available: false, sizeBytes: 0 },
@@ -121,7 +135,7 @@ const root = document.getElementById('models')!;
 root.style.width = '760px';
 const theme = resources.add(new TestThemeService(lightColorTheme));
 resources.add(bindColorTheme(theme, document.body));
-let controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
+const controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
 controls.setVisible(true);
 registerCodeEditorServices(services);
 setARIAContainer(document.body);
@@ -156,8 +170,7 @@ codeEditor.layout({ width: 600, height: 220 });
 services.get(IKeybindingService);
 
 const dictationSession = resources.add(services.createInstance(DictationSession, editor, preview, () => true, async () => {}));
-const contextViews = resources.add(new BrowserContextViewService(document.body));
-services.registerInstance(IContextViewService, contextViews);
+const contextViews = services.get(IContextViewService);
 const notifications = resources.add(new NotificationService());
 const secondInput = resources.add(services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {
 	create: (options: ChatInputEditorOptions) => services.createInstance(ChatInputEditor, options),
@@ -188,13 +201,6 @@ window.ashTableIntegration = {
 		finish?.(LocalTranscriptionModelState.Ready);
 	},
 	theme: name => theme.setColorTheme(({ dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme })[name]!),
-	locale: () => {
-		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
-		controls.dispose();
-		controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
-		controls.setVisible(true);
-	},
 	dispose: () => resources.dispose(),
 };
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

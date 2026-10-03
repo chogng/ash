@@ -94,10 +94,13 @@ function* diffCharacters(original: string, modified: string, originalLineNumber:
 	return changes;
 }
 
-interface MoveSpan {
-	readonly change: DetailedLineRangeMapping;
+interface MoveFragment {
 	readonly range: LineRange;
 	readonly lines: string[];
+}
+
+interface MoveSpan extends MoveFragment {
+	readonly change: DetailedLineRangeMapping;
 	readonly text: string;
 	readonly words: ReadonlyMap<string, number>;
 	readonly weight: number;
@@ -148,7 +151,7 @@ function* findMoves(changes: readonly DetailedLineRangeMapping[], original: read
 			}
 		}
 	}
-	const candidates: { source: MoveSpan; destination: MoveSpan; score: number }[] = [];
+	const candidates: MoveCandidate[] = [];
 	for (const source of sources) {
 		const overlaps = new Map<MoveSpan, { weight: number; words: number }>();
 		for (const [word, count] of source.words) {
@@ -166,6 +169,7 @@ function* findMoves(changes: readonly DetailedLineRangeMapping[], original: read
 			}
 		}
 		for (const [destination, overlap] of overlaps) {
+			candidates.push(...(yield* anchoredMoveCandidates(source, destination)));
 			// An insertion hunk can contain several separately removed blocks.
 			for (let start = 0; start + source.lines.length <= destination.lines.length; start++) {
 				let equal = true;
@@ -181,33 +185,33 @@ function* findMoves(changes: readonly DetailedLineRangeMapping[], original: read
 					}
 				}
 				if (equal) {
-					const lineNumber = destination.range.startLineNumber + start;
-					candidates.push({ source, destination: {
-						...destination,
-						range: new LineRange(lineNumber, lineNumber + source.lines.length),
-						lines: destination.lines.slice(start, start + source.lines.length),
-					}, score: 2 });
+					candidates.push({ source, destination: moveFragment(destination, start, start + source.lines.length), score: 2 });
 				}
 			}
 			const exact = source.text === destination.text;
 			const similarity = 2 * overlap.weight / (source.weight + destination.weight);
+			// Renaming can replace entire words while retaining nearly all characters.
+			const characterSimilarity = source.change.modified.isEmpty && destination.change.original.isEmpty
+				&& source.lines.length >= 3 && destination.lines.length >= 3
+				? yield* moveCharacterSimilarity(source.text, destination.text) : 0;
 			// Punctuation and a single shared keyword cannot establish an edited move.
-			if (exact || overlap.words >= 2 && overlap.weight >= 8 && similarity >= 0.7) {
-				candidates.push({ source, destination, score: exact ? 2 : similarity });
+			if (exact || overlap.words >= 2 && overlap.weight >= 8 && (similarity >= 0.7 || characterSimilarity > 0.9)) {
+				candidates.push({ source, destination, score: exact ? 2 : Math.max(similarity, characterSimilarity) });
 			}
 		}
 		yield;
 	}
 	candidates.sort((left, right) => right.score - left.score
 		|| Math.abs(left.source.range.startLineNumber - left.destination.range.startLineNumber) - Math.abs(right.source.range.startLineNumber - right.destination.range.startLineNumber));
-	const usedSources = new Set<MoveSpan>();
+	const usedSources: LineRange[] = [];
 	const usedDestinations: LineRange[] = [];
 	const moves: MovedText[] = [];
 	for (const { source, destination } of candidates) {
-		if (usedSources.has(source) || usedDestinations.some(range => range.intersect(destination.range)?.isEmpty === false)) {
+		if (usedSources.some(range => range.intersect(source.range)?.isEmpty === false)
+			|| usedDestinations.some(range => range.intersect(destination.range)?.isEmpty === false)) {
 			continue;
 		}
-		usedSources.add(source);
+		usedSources.push(source.range);
 		usedDestinations.push(destination.range);
 		const result = yield* diffLines(source.lines, destination.lines, { ...options, computeMoves: false });
 		const originalOffset = source.range.startLineNumber - 1;
@@ -223,6 +227,101 @@ function* findMoves(changes: readonly DetailedLineRangeMapping[], original: read
 		moves.push(new MovedText(new LineRangeMapping(source.range, destination.range), moveChanges));
 	}
 	return moves.sort((left, right) => left.lineRangeMapping.original.startLineNumber - right.lineRangeMapping.original.startLineNumber);
+}
+
+interface MoveCandidate {
+	readonly source: MoveFragment;
+	readonly destination: MoveFragment;
+	readonly score: number;
+}
+
+/** Revisit unmatched lines so reordered blocks in the same two hunks remain discoverable. */
+function* anchoredMoveCandidates(source: MoveSpan, destination: MoveSpan): Generator<void, MoveCandidate[]> {
+	const original = source.lines.map(line => line.trim());
+	const modified = destination.lines.map(line => line.trim());
+	const remainingOriginal = new Set(original.map((_, index) => index));
+	const remainingModified = new Set(modified.map((_, index) => index));
+	const candidates: MoveCandidate[] = [];
+	for (;;) {
+		const originalIndexes = [...remainingOriginal];
+		const modifiedIndexes = [...remainingModified];
+		const matches = yield* matchingItems(originalIndexes.map(index => original[index]!), modifiedIndexes.map(index => modified[index]!));
+		const anchors = matches.map(([left, right]): Match => [originalIndexes[left]!, modifiedIndexes[right]!]);
+		let found = false;
+		// Line anchors identify the moved portion of a hunk containing other code.
+		// Short gaps may contain edits; unrelated neighboring lines end the fragment.
+		for (let first = 0; first < anchors.length;) {
+			let last = first;
+			while (last + 1 < anchors.length
+				&& anchors[last + 1]![0] - anchors[last]![0] <= 3
+				&& anchors[last + 1]![1] - anchors[last]![1] <= 3) {
+				last++;
+			}
+			const meaningful = anchors.slice(first, last + 1).filter(([line]) => original[line]!.length >= 2);
+			if (last - first >= 2 && meaningful.length >= 2
+				&& meaningful.reduce((length, [line]) => length + original[line]!.length, 0) >= 15) {
+				let [sourceStart, destinationStart] = anchors[first]!;
+				let [sourceEnd, destinationEnd] = anchors[last]!;
+				sourceEnd++;
+				destinationEnd++;
+				while (remainingOriginal.has(sourceStart - 1) && remainingModified.has(destinationStart - 1)
+					&& (yield* similarMoveLines(original[sourceStart - 1]!, modified[destinationStart - 1]!))) {
+					sourceStart--;
+					destinationStart--;
+				}
+				while (remainingOriginal.has(sourceEnd) && remainingModified.has(destinationEnd)
+					&& (yield* similarMoveLines(original[sourceEnd]!, modified[destinationEnd]!))) {
+					sourceEnd++;
+					destinationEnd++;
+				}
+				candidates.push({
+					source: moveFragment(source, sourceStart, sourceEnd),
+					destination: moveFragment(destination, destinationStart, destinationEnd),
+					score: 1 + (last - first + 1) / Math.max(sourceEnd - sourceStart, destinationEnd - destinationStart),
+				});
+				for (let line = sourceStart; line < sourceEnd; line++) remainingOriginal.delete(line);
+				for (let line = destinationStart; line < destinationEnd; line++) remainingModified.delete(line);
+				found = true;
+			}
+			first = last + 1;
+			yield;
+		}
+		if (!found) return candidates;
+	}
+}
+
+function moveFragment(span: MoveFragment, start: number, end: number): MoveFragment {
+	return {
+		range: new LineRange(span.range.startLineNumber + start, span.range.startLineNumber + end),
+		lines: span.lines.slice(start, end),
+	};
+}
+
+function* similarMoveLines(left: string, right: string): Generator<void, boolean> {
+	if (left === right) return true;
+	const original = Array.from(left.replace(/\s/gu, ''));
+	const modified = Array.from(right.replace(/\s/gu, ''));
+	const length = Math.max(original.length, modified.length);
+	if (length <= 10) return false;
+	const matches = yield* matchingItems(original, modified);
+	return matches.length / length > 0.6;
+}
+
+function* moveCharacterSimilarity(left: string, right: string): Generator<void, number> {
+	const counts = new Map<string, number>();
+	let length = 0;
+	let shared = 0;
+	for (const [text, direction] of [[left, 1], [right, -1]] as const) {
+		for (const character of text) {
+			if (/\s/u.test(character)) continue;
+			length++;
+			const count = counts.get(character) ?? 0;
+			if (direction === -1 && count > 0) shared++;
+			counts.set(character, count + direction);
+			if (length % 256 === 0) yield;
+		}
+	}
+	return length === 0 ? 0 : 2 * shared / length;
 }
 
 function timedOutDiff(originalLineCount: number, modifiedLineCount: number): LinesDiff {

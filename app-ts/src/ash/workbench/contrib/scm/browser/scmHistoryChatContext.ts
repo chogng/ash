@@ -1,3 +1,4 @@
+import { localize2 } from '../../../../nls.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -88,7 +89,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.scm.action.graph.addHistoryItemToChat',
-			title: 'Add to Chat',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.workbench.scm.action.graph.addHistoryItemToChat' }, 'Add to Chat'),
 			menu: { id: MenuId.SCMHistoryItemContext, group: 'z_chat', order: 1 },
 		});
 	}
@@ -104,7 +105,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.scm.action.graph.summarizeHistoryItem',
-			title: 'Explain Changes',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.workbench.scm.action.graph.summarizeHistoryItem' }, 'Explain Changes'),
 			menu: { id: MenuId.SCMHistoryItemContext, group: 'z_chat', order: 2 },
 		});
 	}
@@ -122,7 +123,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.scm.action.graph.addHistoryItemChangeToChat',
-			title: 'Add to Chat',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.workbench.scm.action.graph.addHistoryItemToChat' }, 'Add to Chat'),
 			menu: { id: MenuId.SCMHistoryItemChangeContext, group: 'z_chat', order: 1 },
 		});
 	}

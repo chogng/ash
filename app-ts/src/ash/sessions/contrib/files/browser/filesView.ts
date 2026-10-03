@@ -2,7 +2,7 @@ import './media/filesView.css';
 import { h } from '../../../../base/browser/dom.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../../workbench/browser/parts/views/viewPane.js';
 import { ExplorerView } from '../../../../workbench/contrib/files/browser/views/explorerView.js';
 
@@ -35,7 +35,6 @@ export class SessionsExplorerView extends ExplorerView {
 					run: () => this.commandService.executeCommand('sessions.files.action.collapseExplorerFolders'),
 				}]);
 			};
-			this._register(onDidChangeNls(updateActions));
 			updateActions();
 		}
 		super.setVisible(visible);
@@ -54,7 +53,6 @@ export class SessionsExplorerEmptyView extends ViewPane {
 		const updateMessage = (): void => {
 			message.textContent = localize('sessions.files.noFiles', 'Folders and files will appear here.');
 		};
-		this._register(onDidChangeNls(updateMessage));
 		updateMessage();
 	}
 }

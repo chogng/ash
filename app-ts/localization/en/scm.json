@@ -1,0 +1,25 @@
+{
+	"ash": {
+		"git.renameBranchTitle": "Git: Rename Branch",
+		"git.deleteRemoteBranchTitle": "Git: Delete Remote Branch",
+		"git.mergeBranchTitle": "Git: Merge Branch",
+		"git.rebaseTitle": "Git: Rebase Branch",
+		"git.cherryPickTitle": "Git: Cherry-Pick Commit",
+		"git.continueTitle": "Git: Continue Merge, Rebase or Cherry-Pick",
+		"git.abortTitle": "Git: Abort Merge, Rebase or Cherry-Pick",
+		"git.stashTitle": "Git: Stash Changes",
+		"git.stashApplyTitle": "Git: Apply Stash",
+		"git.stashPopTitle": "Git: Pop Stash",
+		"git.stashDropTitle": "Git: Delete Stash",
+		"git.createTagTitle": "Git: Create Tag",
+		"git.deleteTagTitle": "Git: Delete Tag",
+		"git.addRemoteTitle": "Git: Add Remote",
+		"git.removeRemoteTitle": "Git: Remove Remote",
+		"git.amendTitle": "Git: Amend Last Commit",
+		"git.undoCommitTitle": "Git: Undo Last Commit",
+		"git.stageHunkTitle": "Git: Stage Change Block",
+		"git.unstageHunkTitle": "Git: Unstage Change Block",
+		"git.stageSelectionTitle": "Git: Stage Selected Lines",
+		"git.unstageSelectionTitle": "Git: Unstage Selected Lines"
+	}
+}

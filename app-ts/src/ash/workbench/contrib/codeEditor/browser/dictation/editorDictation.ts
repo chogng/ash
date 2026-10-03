@@ -1,3 +1,4 @@
+import { localize2, localize } from '../../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../../base/common/keybindings.js';
 import { EditorContextKeys } from '../../../../../editor/common/editorContextKeys.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
@@ -15,8 +16,7 @@ import { IPreferencesService } from '../../../../services/preferences/common/pre
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { DictationSession, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationSession.js';
 import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
-import { localizedString } from '../../../../../platform/action/common/action.js';
-import { localize } from '../../../../../nls.js';
+
 
 /** Editing and undo remain with the target code editor, including asynchronous finalization. */
 export class EditorDictation extends Disposable {
@@ -113,7 +113,7 @@ registerAction2(class EditorDictationStartAction extends EditorAction2 {
 	constructor() {
 		super({
 			id: 'workbench.action.editorDictation.start',
-			title: localizedString('ash', 'dictation.editorStart', 'Editor: Start dictation'),
+			title: localize2({ bundle: 'ash', key: 'dictation.editorStart' }, 'Editor: Start dictation'),
 			f1: true,
 			precondition: EditorContextKeys.writable,
 			keybinding: {
@@ -129,7 +129,7 @@ registerAction2(class EditorDictationStopAction extends EditorAction2 {
 	constructor() {
 		super({
 			id: 'workbench.action.editorDictation.stop',
-			title: localizedString('ash', 'dictation.editorStop', 'Editor: Stop dictation'),
+			title: localize2({ bundle: 'ash', key: 'dictation.editorStop' }, 'Editor: Stop dictation'),
 			f1: true,
 		});
 	}

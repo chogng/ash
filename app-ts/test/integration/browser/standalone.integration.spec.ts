@@ -1089,6 +1089,30 @@ test.describe('contribution lifecycle', () => {
 		await expect(page.getByRole('menu')).toHaveCount(0);
 	});
 
+	for (const inputKind of ['EditContext', 'textarea'] as const) {
+		for (const trigger of ['.', '('] as const) {
+			test(`${inputKind} completion requests once after typing trigger ${trigger}`, async ({ page }) => {
+				if (inputKind === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+				await page.goto('/standalone.html');
+				await page.evaluate(trigger => window.ashStandaloneIntegration.prepareContributionRequests('completion', [trigger]), trigger);
+				await page.keyboard.type(trigger);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([{ languageId: 'typescript', aborted: false }]);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(`alpha${trigger === '(' ? '()' : '.'} beta\n  gamma\nalpha`);
+				await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
+				await expect(page.locator('#caller .stanza-editor-completion')).toContainText('completion: typescript');
+				await page.keyboard.type('z');
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(2);
+				await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(1));
+				await expect(page.locator('#caller .stanza-editor-completion')).toBeVisible();
+				await page.keyboard.press('Escape');
+				await page.keyboard.type('q');
+				await expect(page.locator('#caller .stanza-editor-completion')).toBeHidden();
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toHaveLength(2);
+				await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+			});
+		}
+	}
+
 	test('completion uses the new language and Escape stops incomplete refreshes', async ({ page }) => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('completion'));
@@ -5253,7 +5277,7 @@ test('color picker retains one widget, applies one undoable edit and releases it
 	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 	await page.keyboard.press('ControlOrMeta+z');
 	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000080;');
-	await page.keyboard.press('ControlOrMeta+Shift+c');
+	await page.locator('#caller .colorpicker-color-decoration').click();
 	await expect(picker).toBeVisible();
 	await expect(picker).toHaveAttribute('data-retained', 'true');
 	await page.keyboard.press('Escape');

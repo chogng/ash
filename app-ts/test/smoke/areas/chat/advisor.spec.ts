@@ -266,9 +266,9 @@ test('Model picker saves Fast and context settings separately from thinking effo
 	await expect(page.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'models');
 });
 
-test('Model picker details and keyboard help follow the Chinese display language', async ({ target, workbench }) => {
+test('Model picker details and keyboard help follow the Chinese display language', async ({ target, workbench, restartWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'The model catalog requires the product backend.');
-	const page = workbench.page;
+	let page = workbench.page;
 	await page.keyboard.press('F1');
 	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Configure Display Language');
 	await page.keyboard.press('Enter');
@@ -276,6 +276,8 @@ test('Model picker details and keyboard help follow the Chinese display language
 	await language.fill('简体中文');
 	await language.press('Enter');
 	await expect(language).toHaveCount(0);
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: '显示辅助侧栏', exact: true }).click();
 	}
@@ -415,9 +417,9 @@ test('Model provider key entry uses the App Server and shows only saved status',
 });
 
 
-test('Model connections support Chinese labels and keyboard navigation', async ({ target, workbench }) => {
+test('Model connections support Chinese labels and keyboard navigation', async ({ target, workbench, restartWorkbench }) => {
     test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Model connections require the product backend.');
-    const page = workbench.page;
+    let page = workbench.page;
     if (!await page.locator('.ash-chat-view-pane').isVisible()) {
         await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
     }
@@ -428,6 +430,9 @@ test('Model connections support Chinese labels and keyboard navigation', async (
     picker = page.getByRole('dialog', { name: 'Select Display Language' });
     await picker.getByRole('combobox').fill('简体中文');
     await picker.getByRole('combobox').press('Enter');
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
+	picker = page.locator('.ash-quick-pick');
     const input = page.locator('.ash-chat-input-editor .stanza-editor-input');
     await input.focus();
     await page.keyboard.insertText('/config');

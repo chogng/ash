@@ -3,14 +3,8 @@ import type {
 	ContextKeyExpression,
 } from "../../contextkey/common/contextkey.js";
 import type { ICommandMetadata } from "../../commands/common/commands.js";
-import { localize } from "../../../nls.js";
-
-export interface ILocalizedString {
-	readonly value: string;
-	readonly original: string;
-	readonly bundle?: string;
-	readonly key?: string;
-}
+import type { ILocalizedString } from '../../../nls.js';
+export type { ILocalizedString } from '../../../nls.js';
 
 export type CommandActionTitle = string | ILocalizedString;
 
@@ -38,16 +32,8 @@ export interface ICommandAction {
 	readonly toggled?: ContextKeyExpression | ICommandActionToggleInfo;
 }
 
-export function localizedString(bundle: string, key: string, original: string): ILocalizedString {
-	return Object.freeze({ value: original, original, bundle, key });
-}
-
 export function commandActionLabel(title: CommandActionTitle): string {
-	if (typeof title === "string") return title;
-	if (!title.key) return title.value;
-	return title.bundle !== undefined
-		? localize({ bundle: title.bundle, key: title.key }, title.original)
-		: localize(title.key, title.original);
+	return typeof title === 'string' ? title : title.value;
 }
 
 export function isCommandActionToggleInfo(

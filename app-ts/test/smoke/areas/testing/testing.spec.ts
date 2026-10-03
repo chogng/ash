@@ -120,13 +120,13 @@ test.describe('testing without a backend', () => {
 test.describe('Run and Debug sidebar layout', () => {
 	test.use({ openWorkspace: false });
 
-	test('debug sidebar has a compact launch row, keyboard collapsible sections and readable themes', async ({ target, workbench }) => {
+	test('debug sidebar has a compact launch row, keyboard collapsible sections and readable themes', async ({ target, workbench, restartWorkbench }) => {
 		test.skip(target.workbenchMode !== 'code', 'Requires the Code workbench.');
-		const page = workbench.page;
+		let page = workbench.page;
 		const tab = page.getByRole('tab', { name: 'Run and Debug', exact: true }).first();
 		await tab.click();
 		await expect(tab.locator('[data-ash-icon-id="debug-alt"]')).toBeVisible();
-		const pane = page.locator('[data-view-id="workbench.view.debug"]');
+		let pane = page.locator('[data-view-id="workbench.view.debug"]');
 		const start = pane.getByRole('button', { name: 'Start Debugging', exact: true });
 		const configuration = pane.getByRole('combobox', { name: 'Debug configuration', exact: true });
 		await expect(start).toBeDisabled();
@@ -180,9 +180,13 @@ test.describe('Run and Debug sidebar layout', () => {
 		await languagePicker.getByRole('combobox').fill('简体中文');
 		await languagePicker.getByRole('combobox').press('Enter');
 		await expect(languagePicker).toHaveCount(0);
+		({ workbench } = await restartWorkbench());
+		page = workbench.page;
+		pane = page.locator('[data-view-id="workbench.view.debug"]');
 		await expect(pane.getByRole('combobox', { name: '调试配置', exact: true })).toHaveText('没有调试配置');
 		await expect(pane.getByRole('button', { name: '启动调试', exact: true })).toBeDisabled();
-		await expect(pane.getByRole('textbox', { name: '添加监视表达式' })).toHaveValue('myValue');
+		// Unsubmitted input belongs to the previous window and resets on startup.
+		await expect(pane.getByRole('textbox', { name: '添加监视表达式' })).toHaveValue('');
 		await expect(pane.locator('summary', { hasText: '监视' })).toBeVisible();
 	});
 });

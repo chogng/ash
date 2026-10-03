@@ -1,6 +1,6 @@
+import { localize2 } from '../../../../nls.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
-import { localizedString } from "../../../../platform/action/common/action.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -27,7 +27,7 @@ registerAction2(class ToggleEditorGroupLockAction extends Action2 {
 	constructor() {
 		super({
 			id: ToggleEditorGroupLockCommandId,
-			title: localizedString("ash", "workbench.toggleEditorGroupLock", "Toggle Editor Group Lock"),
+			title: localize2({ bundle: "ash", key: "workbench.toggleEditorGroupLock" }, "Toggle Editor Group Lock"),
 			f1: true,
 		});
 	}
@@ -41,7 +41,7 @@ registerAction2(class FocusBreadcrumbsAction extends Action2 {
 	constructor() {
 		super({
 			id: FocusBreadcrumbsCommandId,
-			title: localizedString("ash", "workbench.focusBreadcrumbs", "Focus Breadcrumbs"),
+			title: localize2({ bundle: "ash", key: "workbench.focusBreadcrumbs" }, "Focus Breadcrumbs"),
 			f1: true,
 		});
 	}
@@ -59,8 +59,8 @@ registerAction2(class SplitEditorHorizontalAction extends Action2 {
 	constructor() {
 		super({
 			id: SplitEditorHorizontalCommandId,
-			title: localizedString('ash', 'workbench.splitEditorHorizontal', 'Split Editor Horizontal'),
-			tooltip: localizedString('ash', 'workbench.splitEditorHorizontal', 'Split Editor Horizontal'),
+			title: localize2({ bundle: 'ash', key: 'workbench.splitEditorHorizontal' }, 'Split Editor Horizontal'),
+			tooltip: localize2({ bundle: 'ash', key: 'workbench.splitEditorHorizontal' }, 'Split Editor Horizontal'),
 			icon: Lxicon.splitHorizontal,
 			f1: true,
 			menu: {
@@ -82,8 +82,8 @@ registerAction2(class SplitEditorVerticalAction extends Action2 {
 	constructor() {
 		super({
 			id: SplitEditorVerticalCommandId,
-			title: localizedString('ash', 'workbench.splitEditorVertical', 'Split Editor Vertical'),
-			tooltip: localizedString('ash', 'workbench.splitEditorVertical', 'Split Editor Vertical'),
+			title: localize2({ bundle: 'ash', key: 'workbench.splitEditorVertical' }, 'Split Editor Vertical'),
+			tooltip: localize2({ bundle: 'ash', key: 'workbench.splitEditorVertical' }, 'Split Editor Vertical'),
 			f1: true,
 		});
 	}
@@ -103,7 +103,7 @@ for (const definition of [
 		constructor() {
 			super({
 				id: definition.id,
-				title: localizedString('ash', definition.key, definition.title),
+				title: localize2({ bundle: 'ash', key: definition.key }, definition.title),
 				f1: true,
 				precondition: EditorsVisibleContext.isEqualTo(true),
 				menu: { id: MenuId.EditorTitleContext, group: '5_split', order: definition.order },
@@ -135,7 +135,7 @@ registerAction2(class CloseAllEditorsAction extends Action2 {
 	constructor() {
 		super({
 			id: CloseAllEditorsCommandId,
-			title: localizedString("ash", "workbench.closeAllEditors", "Close All Editors"),
+			title: localize2({ bundle: "ash", key: "workbench.closeAllEditors" }, "Close All Editors"),
 			f1: true,
 			precondition: EditorsVisibleContext.isEqualTo(true),
 			menu: { id: MenuId.MenubarFileMenu, group: "6_close", order: 1 },
@@ -154,7 +154,7 @@ registerAction2(class ReopenClosedEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: ReopenClosedEditorCommandId,
-			title: localizedString("ash", "workbench.reopenClosedEditor", "Reopen Closed Editor"),
+			title: localize2({ bundle: "ash", key: "workbench.reopenClosedEditor" }, "Reopen Closed Editor"),
 			f1: true,
 			menu: { id: MenuId.MenubarFileMenu, group: "4_close", order: 3 },
 			keybinding: { primary: Keybinding.single(logicalKey("t", { primaryKey: true, shiftKey: true })) },
@@ -175,7 +175,7 @@ registerAction2(class NavigateEditorBackAction extends Action2 {
 	constructor() {
 		super({
 			id: NavigateEditorBackCommandId,
-			title: localizedString("ash", "workbench.navigateEditorBack", "Go Back"),
+			title: localize2({ bundle: "ash", key: "workbench.navigateEditorBack" }, "Go Back"),
 			icon: Lxicon.arrowLeft,
 			precondition: ContextKeyExpr.has('canNavigateBack'),
 			f1: true,
@@ -201,7 +201,7 @@ registerAction2(class NavigateEditorForwardAction extends Action2 {
 	constructor() {
 		super({
 			id: NavigateEditorForwardCommandId,
-			title: localizedString("ash", "workbench.navigateEditorForward", "Go Forward"),
+			title: localize2({ bundle: "ash", key: "workbench.navigateEditorForward" }, "Go Forward"),
 			icon: Lxicon.arrowRight,
 			precondition: ContextKeyExpr.has('canNavigateForward'),
 			f1: true,
@@ -227,7 +227,7 @@ registerAction2(class NavigateBackwardsInEditsAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.navigateBackInEditLocations',
-			title: localizedString('ash', 'workbench.navigateBackInEditLocations', 'Go Back in Edit Locations'),
+			title: localize2({ bundle: 'ash', key: 'workbench.navigateBackInEditLocations' }, 'Go Back in Edit Locations'),
 			f1: true,
 		});
 	}
@@ -241,7 +241,7 @@ registerAction2(class NavigateForwardInEditsAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.navigateForwardInEditLocations',
-			title: localizedString('ash', 'workbench.navigateForwardInEditLocations', 'Go Forward in Edit Locations'),
+			title: localize2({ bundle: 'ash', key: 'workbench.navigateForwardInEditLocations' }, 'Go Forward in Edit Locations'),
 			f1: true,
 		});
 	}
@@ -255,7 +255,7 @@ registerAction2(class NavigateBackwardsInNavigationsAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.navigateBackInNavigationLocations',
-			title: localizedString('ash', 'workbench.navigateBackInNavigationLocations', 'Go Back in Navigation Locations'),
+			title: localize2({ bundle: 'ash', key: 'workbench.navigateBackInNavigationLocations' }, 'Go Back in Navigation Locations'),
 			f1: true,
 		});
 	}
@@ -269,7 +269,7 @@ registerAction2(class NavigateForwardInNavigationsAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.navigateForwardInNavigationLocations',
-			title: localizedString('ash', 'workbench.navigateForwardInNavigationLocations', 'Go Forward in Navigation Locations'),
+			title: localize2({ bundle: 'ash', key: 'workbench.navigateForwardInNavigationLocations' }, 'Go Forward in Navigation Locations'),
 			f1: true,
 		});
 	}
@@ -283,7 +283,7 @@ registerAction2(class NavigateEditorMruAction extends Action2 {
 	constructor() {
 		super({
 			id: NavigateEditorMruCommandId,
-			title: localizedString("ash", "workbench.nextRecentlyUsedEditor", "Open Next Recently Used Editor"),
+			title: localize2({ bundle: "ash", key: "workbench.nextRecentlyUsedEditor" }, "Open Next Recently Used Editor"),
 			f1: true,
 			menu: { id: MenuId.MenubarGoMenu, when: EditorsVisibleContext.isEqualTo(true), group: "1_editor", order: 1 },
 			keybinding: { primary: Keybinding.single(logicalKey("tab", { primaryKey: true })) },
@@ -299,7 +299,7 @@ registerAction2(class NavigateEditorMruBackwardsAction extends Action2 {
 	constructor() {
 		super({
 			id: NavigateEditorMruBackwardsCommandId,
-			title: localizedString("ash", "workbench.previousRecentlyUsedEditor", "Open Previous Recently Used Editor"),
+			title: localize2({ bundle: "ash", key: "workbench.previousRecentlyUsedEditor" }, "Open Previous Recently Used Editor"),
 			f1: true,
 			menu: { id: MenuId.MenubarGoMenu, when: EditorsVisibleContext.isEqualTo(true), group: "1_editor", order: 2 },
 			keybinding: { primary: Keybinding.single(logicalKey("tab", { primaryKey: true, shiftKey: true })) },
@@ -317,7 +317,7 @@ registerAction2(class ShowAllEditorsAction extends Action2 {
 	constructor() {
 		super({
 			id: ShowAllEditorsCommandId,
-			title: localizedString("ash", "workbench.showAllEditors", "Show All Editors"),
+			title: localize2({ bundle: "ash", key: "workbench.showAllEditors" }, "Show All Editors"),
 			f1: true,
 			menu: { id: MenuId.MenubarGoMenu, when: EditorsVisibleContext.isEqualTo(true), group: "1_editor", order: 3 },
 			keybinding: { primary: Keybinding.chord(logicalKey("k", { primaryKey: true }), logicalKey("p", { primaryKey: true })) },
@@ -335,7 +335,7 @@ registerAction2(class MoveEditorToNewWindowAction extends Action2 {
 	constructor() {
 		super({
 			id: MoveEditorToNewWindowCommandId,
-			title: "Move Editor into New Window",
+			title: localize2({ bundle: 'ash.workbench', key: 'command.MoveEditorToNewWindowAction' }, "Move Editor into New Window"),
 			f1: true,
 			menu: {
 				id: MenuId.EditorTitle,
@@ -360,8 +360,8 @@ registerAction2(class NewFileFromTemplateAction extends Action2 {
 	constructor() {
 		super({
 			id: NewFileFromTemplateCommandId,
-			title: localizedString("ash", "workbench.newFileFromTemplate", "New File from Template"),
-			tooltip: localizedString("ash", "workbench.newFileFromTemplate", "New File from Template"),
+			title: localize2({ bundle: "ash", key: "workbench.newFileFromTemplate" }, "New File from Template"),
+			tooltip: localize2({ bundle: "ash", key: "workbench.newFileFromTemplate" }, "New File from Template"),
 			f1: true,
 			menu: { id: MenuId.MenubarFileMenu, group: "1_file", order: 0 },
 		});

@@ -33,7 +33,7 @@ test("Remove matching brackets leaves non-bracket or range selections alone", as
 	using tokens = registerTestTokens(new Map([
 		['// ()', [{ offset: 0, type: 'comment' }]],
 	]));
-	await new Promise(resolve => setImmediate(resolve));
+	model.tokenization.forceTokenization(model.getLineCount());
 	const bracketPairs = model.bracketPairs;
 	const cursor = [Selection.fromPositions(new Position((0) + 1, (3) + 1))];
 	assert.equal(createRemoveMatchingBracketsCommand(bracketPairs, cursor), undefined);

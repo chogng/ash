@@ -1,7 +1,7 @@
-import { localize } from '../../../../nls.js';
+import { localize2, localize } from '../../../../nls.js';
+
 import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { localizedString } from '../../../../platform/action/common/action.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService, type NotificationHandle } from '../../../../platform/notification/common/notification.js';
@@ -14,7 +14,7 @@ class CheckForUpdatesAction extends Action2 {
 	constructor() {
 		super({
 			id: CHECK_FOR_UPDATES_COMMAND_ID,
-			title: localizedString('ash', 'update.checkForUpdates', 'Check for Updates...'),
+			title: localize2({ bundle: 'ash', key: 'update.checkForUpdates' }, 'Check for Updates...'),
 			f1: true,
 			menu: { id: MenuId.MenubarHelpMenu, group: '1_update', order: 1 },
 		});
@@ -100,7 +100,7 @@ if (isWindows || isMacintosh) {
 		return toDisposable(() => { disposed = true; clearTimeout(initial); if (interval) clearInterval(interval); });
 	});
 	MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
-		command: { id: CHECK_FOR_UPDATES_COMMAND_ID, title: localizedString('ash', 'update.checkForUpdates', 'Check for Updates...') },
+		command: { id: CHECK_FOR_UPDATES_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'update.checkForUpdates' }, 'Check for Updates...') },
 		group: '7_update',
 		order: 1,
 	});

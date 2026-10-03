@@ -1,7 +1,7 @@
 import './accessibleDiffViewer.css';
 import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { localize, onDidChangeNls } from '../../../../../nls.js';
+import { localize } from '../../../../../nls.js';
 import { type DiffModel } from '../../../../common/diff/diffModel.js';
 import { LineDiffKind, type LineDiff, type LineDiffHunk, type LineDiffRow } from '../../../../common/diff/lineDiff.js';
 
@@ -57,7 +57,6 @@ export class AccessibleDiffViewer extends Disposable {
 			this.close();
 		}));
 		this._register(model.onDidChange(() => { if (!this.domNode.hidden) this.close(); }));
-		this._register(onDidChangeNls(() => this.render()));
 		this.render();
 	}
 

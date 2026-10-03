@@ -24,7 +24,7 @@ test("Viewport projects tokens only for virtualized lines and preserves overlapp
 		token(10, 0, 4, "number"),
 	]);
 	using index = new LanguageTokenLineIndex(store);
-	using source = new StyledTokenSource(index);
+	using source = new StyledTokenSource(index, 'semantic');
 	using viewport = new View({
 		container,
 		model,
@@ -54,7 +54,7 @@ test("Same-version token replacement rerenders visible text and model edits clea
 	using store = createLanguageTokenStore(model);
 	acceptTokens(store, model, 1, [token(0, 0, 5, "string")]);
 	using index = new LanguageTokenLineIndex(store);
-	using source = new StyledTokenSource(index);
+	using source = new StyledTokenSource(index, 'semantic');
 	using viewport = new View({
 		container,
 		model,
@@ -101,7 +101,7 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
 		presentation: { foreground: "#123456", fontStyle: ["italic"] },
 	}]);
 	using index = new LanguageTokenLineIndex(store);
-	using source = new StyledTokenSource(index);
+	using source = new StyledTokenSource(index, 'semantic');
 	using viewport = new View({
 		container,
 		model,
@@ -142,8 +142,8 @@ test("Viewport rejects cross-model token sources and owns none of their common s
 	using otherStore = createLanguageTokenStore(otherModel);
 	using index = new LanguageTokenLineIndex(store);
 	using otherIndex = new LanguageTokenLineIndex(otherStore);
-	using source = new StyledTokenSource(index);
-	using otherSource = new StyledTokenSource(otherIndex);
+	using source = new StyledTokenSource(index, 'semantic');
+	using otherSource = new StyledTokenSource(otherIndex, 'semantic');
 
 	assert.throws(() => new View({
 		container,
@@ -187,7 +187,7 @@ test("Viewport resolves semantic tokens only for virtualized lines", () => {
 			requestedLines += 1;
 			return index.getLineTokens(lineIndex);
 		},
-	});
+	}, 'semantic');
 	using viewport = new View({
 		container,
 		model,
@@ -250,7 +250,7 @@ function lineTokenFragments(root: ParentNode): { readonly lineIndex: string | un
 }
 
 function requiredLine(root: ParentNode, lineIndex: number): HTMLElement {
-	return requiredElement(root, `[data-line-index="${lineIndex}"]`);
+	return requiredElement(root, `.view-line[data-line-index="${lineIndex}"]`);
 }
 
 function requiredElement<T extends Element = HTMLElement>(root: ParentNode, selector: string): T {

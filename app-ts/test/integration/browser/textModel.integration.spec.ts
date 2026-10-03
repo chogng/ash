@@ -1664,6 +1664,8 @@ test("glyph margin, line numbers, and folding controls keep VS Code gutter order
 	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollWidth - element.clientWidth)).toBeGreaterThan(0);
 	await page.evaluate(() => window.ashTextModelIntegration.setScrollLeft(160));
 	await expect.poll(async () => (await glyphMargin.boundingBox())?.x).toBe(glyphMarginBox.x);
+	// Text edits recompute folding asynchronously; a fixed gutter does not mean its controls are ready.
+	await expect(foldingControl).toBeVisible();
 	const editorBox = await editor.boundingBox();
 	const scrolledGlyphMarginBox = await glyphMargin.boundingBox();
 	const scrolledFoldingBox = await foldingControl.boundingBox();

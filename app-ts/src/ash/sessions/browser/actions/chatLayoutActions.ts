@@ -1,7 +1,7 @@
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { Lxicon } from "../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
-import { localize } from "../../../nls.js";
+import { localize, localize2 } from "../../../nls.js";
 import { Action2, MenuId, registerAction2 } from "../../../platform/actions/common/actions.js";
 import { ContextKeyExpr } from "../../../platform/contextkey/common/contextkey.js";
 import { DialogSeverity, IDialogService } from '../../../platform/dialogs/common/dialogs.js';
@@ -22,7 +22,7 @@ registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
 	constructor() {
 		super({
 			id: TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID,
-			title: localize('chat.sessions.showSidebar', 'Show Agent Sessions'),
+			title: localize2('chat.sessions.showSidebar', 'Show Agent Sessions'),
 			tooltip: localize('chat.sessions.showSidebar', 'Show Agent Sessions'),
 			icon: Lxicon.layoutSidebarRightOff1,
 			toggled: {
@@ -52,7 +52,7 @@ registerAction2(class OpenChatBrowserAction extends Action2 {
 	constructor() {
 		super({
 			id: OPEN_CHAT_BROWSER_COMMAND_ID,
-			title: "Open Browser",
+			title: localize2({ bundle: 'ash.sessions', key: 'command.OpenChatBrowserAction' }, "Open Browser"),
 			icon: Lxicon.browserWeb,
 			precondition: ChatBrowserAvailable,
 			menu: {
@@ -72,7 +72,7 @@ registerAction2(class MoveChatToEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
-			title: "Move Chat to Editor Area",
+			title: localize2({ bundle: 'ash.sessions', key: 'command.MoveChatToEditorAction' }, "Move Chat to Editor Area"),
 			icon: Lxicon.layoutPanel1,
 			precondition: ChatEditorAreaAvailable,
 			menu: {
@@ -92,7 +92,7 @@ registerAction2(class MoveChatToNewWindowAction extends Action2 {
 	constructor() {
 		super({
 			id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
-			title: "Move Chat to New Window",
+			title: localize2({ bundle: 'ash.sessions', key: 'command.MoveChatToNewWindowAction' }, "Move Chat to New Window"),
 			icon: Lxicon.linkExternal,
 			precondition: ChatNewWindowAvailable,
 			menu: {
@@ -112,7 +112,7 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 	constructor() {
 		super({
 			id: OPEN_CHAT_SETTINGS_COMMAND_ID,
-			title: "Chat Settings",
+			title: localize2({ bundle: 'ash.sessions', key: 'command.OpenChatSettingsAction' }, "Chat Settings"),
 			icon: Lxicon.settings,
 			menu: {
 				id: MenuId.ChatTitle,

@@ -1,3 +1,4 @@
+import { localize2, localize } from '../../../../nls.js';
 import '../../../../workbench/contrib/files/browser/files.contribution.js';
 import '../../../../workbench/contrib/files/browser/media/explorerviewlet.css';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
@@ -7,11 +8,10 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { localizedString } from '../../../../platform/action/common/action.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { localize } from '../../../../nls.js';
+
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -54,7 +54,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: SESSIONS_FILES_CONTAINER_ID,
-			title: localizedString('ash', 'sessions.files.title', 'Files'),
+			title: localize2({ bundle: 'ash', key: 'sessions.files.title' }, 'Files'),
 			precondition: IsSessionsWindowContext.isEqualTo(true),
 			f1: true,
 			keybinding: { primary: Keybinding.single(logicalKey('e', { primaryKey: true, shiftKey: true })) },
@@ -71,7 +71,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.files.action.collapseExplorerFolders',
-			title: localizedString('ash', 'sessions.files.collapseFolders', 'Collapse folders'),
+			title: localize2({ bundle: 'ash', key: 'sessions.files.collapseFolders' }, 'Collapse folders'),
 			precondition: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
 			f1: true,
 		});
@@ -92,7 +92,7 @@ export class DownloadRemoteFileAction extends Action2 {
 		const precondition = ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ResourceSchemeContext.isEqualTo(ASH_REMOTE_SCHEME));
 		super({
 			id: DownloadRemoteFileAction.ID,
-			title: localizedString('ash', 'workbench.downloadFile', 'Download File...'),
+			title: localize2({ bundle: 'ash', key: 'workbench.downloadFile' }, 'Download File...'),
 			icon: Lxicon.download,
 			precondition,
 			menu: { id: MenuId.EditorTitle, group: 'navigation', when: precondition },

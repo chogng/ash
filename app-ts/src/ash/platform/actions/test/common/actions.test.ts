@@ -1,3 +1,4 @@
+import { localize2, resetNlsResolver, setNlsResolver } from '../../../../nls.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import {
@@ -16,7 +17,6 @@ import {
 	registerAction2,
 	SubmenuItemAction,
 } from "../../../../platform/actions/common/actions.js";
-import { localizedString } from "../../../../platform/action/common/action.js";
 import {
 	MenuService,
 } from "../../../../platform/actions/common/menuService.js";
@@ -38,7 +38,7 @@ import {
 import {
 	CommandService,
 } from "../../../../workbench/services/commands/common/commandService.js";
-import { resetNlsResolver, setNlsResolver } from "../../../../nls.js";
+
 
 test("registerAction2 connects command execution and menu placement", async () => {
 	using registrations = new DisposableStore();
@@ -449,20 +449,20 @@ test("menu service does not read titles of actions hidden by context", () => {
 	assert.ok(hiddenTitleReads > 0);
 });
 
-test("menu actions refresh localized labels when the locale changes", () => {
+test("registered menu actions retain their startup labels without language-change events", () => {
 	using registrations = new DisposableStore();
 	const menuId = new MenuId("test.actions.localization");
 	const childMenuId = new MenuId("test.actions.localization.child");
 	const commandId = "test.actions.localization.command";
 	registrations.add(CommandsRegistry.register(commandId, () => undefined));
 	registrations.add(MenusRegistry.appendMenuItem(menuId, {
-		title: localizedString("ash.menu", "file", "File"),
+		title: localize2({ bundle: "ash.menu", key: "file" }, "File"),
 		submenu: childMenuId,
 	}));
 	registrations.add(MenusRegistry.appendMenuItem(childMenuId, {
 		command: {
 			id: commandId,
-			title: localizedString("ash.test", "command", "Open"),
+			title: localize2({ bundle: "ash.test", key: "command" }, "Open"),
 		},
 	}));
 	let locale = "en";
@@ -488,8 +488,9 @@ test("menu actions refresh localized labels when the locale changes", () => {
 		assert.deepEqual(labels(), ["File", "Open"]);
 		locale = "zh-CN";
 		setNlsResolver(resolve);
-		assert.deepEqual(changes, [false]);
-		assert.deepEqual(labels(), ["文件", "打开"]);
+		assert.deepEqual(changes, []);
+		assert.deepEqual(labels(), ["File", "Open"]);
+		assert.deepEqual(localize2({ bundle: "ash.test", key: "command" }, "Open"), { value: "打开", original: "Open" });
 	} finally {
 		resetNlsResolver();
 	}

@@ -1,7 +1,7 @@
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { autorun, type IReader } from '../../../../../base/common/observable.js';
-import { localize, onDidChangeNls } from '../../../../../nls.js';
+import { localize } from '../../../../../nls.js';
 import { type IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { type HideUnchangedRegionsOptions } from '../../../../common/config/diffEditor.js';
 import { LineRange } from '../../../../common/core/ranges/lineRange.js';
@@ -65,7 +65,6 @@ export class HideUnchangedRegionsFeature extends Disposable {
 				if (changed) this.render();
 			}));
 		}
-		this._register(onDidChangeNls(() => this.render()));
 		this._register(toDisposable(() => {
 			this.zones.clear();
 			this.original.setHiddenAreas([]);

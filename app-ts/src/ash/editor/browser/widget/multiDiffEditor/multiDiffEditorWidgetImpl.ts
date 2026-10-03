@@ -4,7 +4,7 @@ import { addDisposableListener, getClientArea, getWindow, h, stopEvent } from '.
 import { observeResize } from '../../../../base/browser/observer.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
-import { formatNlsMessage, localize, onDidChangeNls } from '../../../../nls.js';
+import { formatNlsMessage, localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { createBareFontInfoFromRawSettings } from '../../../common/config/fontInfoFromSettings.js';
@@ -155,10 +155,6 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			this.bindItems();
 			if (!options.ariaLabel) this.domNode.setAttribute('aria-label', formatNlsMessage(localize('multiDiffEditor.ariaLabel', 'Multi-file diff editor with {0} files'), { 0: items.length }));
 			this.refreshLayout();
-		}));
-		this._register(onDidChangeNls(() => {
-			if (!options.ariaLabel) this.domNode.setAttribute('aria-label', formatNlsMessage(localize('multiDiffEditor.ariaLabel', 'Multi-file diff editor with {0} files'), { 0: this.items.length }));
-			for (const section of this.sections.values()) section.updateStatus();
 		}));
 		this._register(observeResize(this.domNode, ([entry]) => {
 			if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });

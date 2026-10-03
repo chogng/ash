@@ -1,3 +1,4 @@
+import { localizationPlugin } from "../../resources/localization.ts";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import { AshRendererDirectory } from "../../../app-ts/src/ash/code/common/application.js";
@@ -44,6 +45,7 @@ export default defineConfig(() => {
     },
     plugins: [
       buildMetricsPlugin(),
+      localizationPlugin(),
       hotReloadPlugin({ desktopRoot }),
       workbenchEntryPlugin(),
       productIconsPlugin(),

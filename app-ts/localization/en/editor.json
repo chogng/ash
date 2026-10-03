@@ -1,0 +1,23 @@
+{
+	"ash": {
+		"settings.sessions.layout.group.label": "Sessions layout",
+		"settings.sessions.layout.group.description": "Configure the Sessions window layout.",
+		"editorWelcome.openFolder": "Open folder",
+		"editorWelcome.cloneRepo": "Clone repo",
+		"editorWelcome.connectViaSsh": "Connect via SSH",
+		"editorWelcome.connectGitHub": "Connect GitHub",
+		"account.githubConnected": "GitHub account connected.",
+		"account.githubAlreadyConnected": "GitHub is already connected.",
+		"account.githubConnectionFailed": "Could not connect GitHub. Try again.",
+		"account.githubUnavailable": "GitHub connection is unavailable. Check this build’s GitHub configuration.",
+		"account.githubAuthorizeInBrowser": "Authorize Ash in your browser to connect GitHub.",
+		"diffEditor.showMoves.description": "Detect and connect code blocks that moved between the original and modified documents.",
+		"diffEditor.showMoves.title": "Show moved code",
+		"diffEditor.overviewRuler.description": "Show differences and the current viewport in the diff overview ruler.",
+		"diffEditor.overviewRuler.title": "Diff overview ruler",
+		"diffEditor.gutterMenu.description": "Show contributed actions beside changed blocks and selected changes.",
+		"diffEditor.gutterMenu.title": "Change actions",
+		"diffEditor.revertIcon.description": "Show buttons to revert changes in the modified editor margin.",
+		"diffEditor.revertIcon.title": "Revert change buttons"
+	}
+}

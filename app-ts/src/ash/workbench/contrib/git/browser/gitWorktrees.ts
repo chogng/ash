@@ -1,6 +1,6 @@
+import { localize2, localize } from '../../../../nls.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { localize } from '../../../../nls.js';
-import { localizedString } from '../../../../platform/action/common/action.js';
+
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { AppServerRemoteError } from '../../../../platform/app-server/common/appServerError.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -18,7 +18,7 @@ interface WorktreeItem extends IQuickPickItem {
 
 registerAction2(class GitCreateWorktreeAction extends Action2 {
 	constructor() {
-		super({ id: GitCreateWorktreeCommandId, title: localizedString('ash', 'git.createWorktreeCommandTitle', 'Git: Create Worktree'), f1: true });
+		super({ id: GitCreateWorktreeCommandId, title: localize2({ bundle: 'ash', key: 'git.createWorktreeCommandTitle' }, 'Git: Create Worktree'), f1: true });
 	}
 
 	public override async run(accessor: ServicesAccessor, repositoryId?: string): Promise<void> {
@@ -52,7 +52,7 @@ registerAction2(class GitCreateWorktreeAction extends Action2 {
 
 registerAction2(class GitOpenWorktreeAction extends Action2 {
 	constructor() {
-		super({ id: GitOpenWorktreeCommandId, title: localizedString('ash', 'git.openWorktreeCommandTitle', 'Git: Open Worktree'), f1: true });
+		super({ id: GitOpenWorktreeCommandId, title: localize2({ bundle: 'ash', key: 'git.openWorktreeCommandTitle' }, 'Git: Open Worktree'), f1: true });
 	}
 
 	public override async run(accessor: ServicesAccessor, repositoryId?: string): Promise<void> {
@@ -74,7 +74,7 @@ registerAction2(class GitOpenWorktreeAction extends Action2 {
 
 registerAction2(class GitDeleteWorktreeAction extends Action2 {
 	constructor() {
-		super({ id: GitDeleteWorktreeCommandId, title: localizedString('ash', 'git.deleteWorktreeCommandTitle', 'Git: Delete Worktree'), f1: true });
+		super({ id: GitDeleteWorktreeCommandId, title: localize2({ bundle: 'ash', key: 'git.deleteWorktreeCommandTitle' }, 'Git: Delete Worktree'), f1: true });
 	}
 
 	public override async run(accessor: ServicesAccessor, repositoryId?: string): Promise<void> {

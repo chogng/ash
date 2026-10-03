@@ -108,7 +108,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 		windowTitle: { value: 'Ash Code', onDidChange: Event.None },
 		menuService,
 		contextMenuService,
-		localizationService: { onDidChange: Event.None, whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
+		localizationService: { whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
 	}, menubar));
 
 	const actionsContainer = titlebar.domNode.querySelector(
@@ -176,7 +176,6 @@ test("titlebar renders its product icon, command center, and application menu", 
 	const localeChanged = disposables.add(new Emitter<void>());
 	let commandCenterLabel = "Search commands";
 	const localizationService: ILocalizationService = {
-		onDidChange: localeChanged.event,
 		whenReady: Promise.resolve(),
 		translate: (_bundle, key, fallback) => key === "searchCommands" ? commandCenterLabel : fallback,
 	};
@@ -245,8 +244,8 @@ test("titlebar renders its product icon, command center, and application menu", 
 	assert.equal(commandCenter?.closest(".ash-titlebar-center")?.nextElementSibling?.className, "ash-workbench-part-content");
 	commandCenterLabel = "搜索命令";
 	localeChanged.fire();
-	assert.equal(commandCenter?.textContent, "搜索命令");
-	assert.equal(commandCenter?.getAttribute("aria-label"), "搜索命令");
+	assert.equal(commandCenter?.textContent, "Search commands");
+	assert.equal(commandCenter?.getAttribute("aria-label"), "Search commands");
 	titlebar.dispose();
 	assert.equal(titleChanged.hasListeners(), false);
 });
@@ -297,10 +296,8 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 		},
 		hideContextMenu() {},
 	};
-	const localeChanged = disposables.add(new Emitter<void>());
-	let applicationMenuLabel = "Application menu";
+	const applicationMenuLabel = "Application menu";
 	const localizationService: ILocalizationService = {
-		onDidChange: localeChanged.event,
 		whenReady: Promise.resolve(),
 		translate: (_bundle, key, fallback) => key === "applicationMenu" ? applicationMenuLabel : fallback,
 	};
@@ -343,9 +340,7 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 		cancelable: true,
 	}));
 	assert.equal(ownerDocument.activeElement, button);
-	applicationMenuLabel = "应用程序菜单";
-	localeChanged.fire();
-	assert.equal(button.getAttribute("aria-label"), applicationMenuLabel);
+	assert.equal(button.getAttribute("aria-label"), "Application menu");
 	const extraAction = disposables.add(MenusRegistry.appendMenuItem(MenuId.TitleBarLeft, {
 		command: { id: "test.titlebar.extra", title: "Extra action" },
 		group: "navigation",
@@ -353,7 +348,7 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 	}));
 	const updatedButton = menubar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button');
 	assert.ok(updatedButton);
-	assert.notEqual(updatedButton, button);
+	assert.equal(updatedButton, button);
 	assert.equal(ownerDocument.activeElement, updatedButton);
 	assert.equal(updatedButton.getAttribute("aria-label"), applicationMenuLabel);
 	updatedButton.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", {

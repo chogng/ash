@@ -7,7 +7,6 @@ import { Disposable } from "../../../base/common/lifecycle.js";
 import { isCommandActionToggleInfo } from "../../action/common/action.js";
 import { ICommandService } from "../../commands/common/commands.js";
 import { type ContextKeyExpression, IContextKeyService } from "../../contextkey/common/contextkey.js";
-import { onDidChangeNls } from "../../../nls.js";
 import {
 	type IMenuActionOptions,
 	type IMenu,
@@ -111,13 +110,6 @@ class Menu extends Disposable implements IMenu {
 				isStructuralChange,
 				isEnablementChange,
 				isToggleChange,
-			});
-		}));
-		this._register(onDidChangeNls(() => {
-			this._onDidChange.fire({
-				isStructuralChange: false,
-				isEnablementChange: false,
-				isToggleChange: false,
 			});
 		}));
 	}

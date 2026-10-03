@@ -9,7 +9,7 @@ import { IFileService } from "../../../../platform/files/common/files.js";
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import { BinaryEditorModel } from '../../../common/editor/binaryEditorModel.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import type { EditorInput } from "./editorInput.js";
 import { EditorPaneMatch, EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
 
@@ -39,7 +39,6 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 		container.className = "ash-binary-editor";
 		container.tabIndex = 0;
 		container.setAttribute("role", "region");
-		this._register(onDidChangeNls(() => this.updateAriaLabel()));
 		const summary = h(parent.ownerDocument, "div");
 		summary.className = "ash-binary-editor-summary";
 		const content = h(parent.ownerDocument, "pre");

@@ -1,3 +1,4 @@
+import { localize2 } from '../../../../nls.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -26,7 +27,7 @@ registerWorkbenchContribution('workbench.contrib.call', WorkbenchPhase.BlockStar
 		ctorDescriptor: new SyncDescriptor(CallViewPane),
 	}]));
 	registrations.add(registerAction2(class OpenCalls extends Action2 {
-		constructor() { super({ id: 'ash.call.open', title: 'Open Calls', f1: true }); }
+		constructor() { super({ id: 'ash.call.open', title: localize2({ bundle: 'ash.workbench', key: 'command.OpenCalls' }, 'Open Calls'), f1: true }); }
 		public override run(accessor: ServicesAccessor): void { accessor.get(IViewsService).focusView('ash.call.view'); }
 	}));
 	return registrations;

@@ -1,4 +1,5 @@
-import { localizedString } from '../../../../platform/action/common/action.js';
+import { localize2 } from '../../../../nls.js';
+
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -8,7 +9,7 @@ import { createSettingsEditorInput } from '../../../services/preferences/common/
 import { LanguageServerSettingsTarget } from './languageServerSettingsContent.js';
 
 registerAction2(class OpenLanguageServerSettings extends Action2 {
-	constructor() { super({ id: OPEN_LANGUAGE_SERVERS_COMMAND_ID, title: localizedString('ash.settings', 'lsp.open', 'Configure Language Servers'), f1: true }); }
+	constructor() { super({ id: OPEN_LANGUAGE_SERVERS_COMMAND_ID, title: localize2({ bundle: 'ash.settings', key: 'lsp.open' }, 'Configure Language Servers'), f1: true }); }
 
 	public override async run(accessor: ServicesAccessor, languageId?: string): Promise<void> {
 		const language = languageId ?? accessor.get(ICodeEditorService).getActiveCodeEditor()?.getModel()?.getLanguageId();

@@ -3,7 +3,8 @@ import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
+import { formatNlsMessage, localize2, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
+import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
 import { MenuId, MenusRegistry, IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { CommandRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -17,7 +18,7 @@ import { DialogService } from '../../../../services/dialogs/common/dialogService
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { CommandsQuickAccessProvider } from '../../browser/commandsQuickAccess.js';
 
-test('Command Palette shows a localized error dialog for a failed command', async () => {
+test('Command Palette finds localized commands by their English title and reports command errors', async () => {
 	using resources = new DisposableStore();
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 	assert.ok(chinese);
@@ -27,7 +28,7 @@ test('Command Palette shows a localized error dialog for a failed command', asyn
 		const registry = new CommandRegistry();
 		resources.add(registry.register('test.commandFailure', () => { throw new Error('Command failed'); }));
 		resources.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
-			command: { id: 'test.commandFailure', title: 'Failing command' },
+			command: { id: 'test.commandFailure', title: localize2('debug.start', 'Start Debugging') },
 		}));
 		using services = new InstantiationService();
 		const commands = resources.add(new CommandService(services, registry));
@@ -48,8 +49,10 @@ test('Command Palette shows a localized error dialog for a failed command', asyn
 			hide() {},
 		} as unknown as IQuickPick<IQuickPickItem>;
 		resources.add(provider.provide(picker));
-		const item = picker.items.find(candidate => candidate.label === 'Failing command');
+		const item = filterQuickPickItems(picker.items, 'Start Debugging').find(candidate => candidate.description === 'test.commandFailure');
 		assert.ok(item);
+		assert.deepEqual([item.label, item.detail], ['启动调试', 'Start Debugging']);
+		assert.ok(filterQuickPickItems(picker.items, '启动调试').includes(item));
 
 		accept.fire(item);
 		await Promise.resolve();
@@ -57,7 +60,7 @@ test('Command Palette shows a localized error dialog for a failed command', asyn
 		assert.deepEqual(dialog?.request, {
 			kind: 'message',
 			severity: DialogSeverity.Error,
-			message: '命令“Failing command”执行时发生错误',
+			message: '命令“启动调试”执行时发生错误',
 			detail: 'Command failed',
 			title: '错误',
 			primaryButton: '确定',

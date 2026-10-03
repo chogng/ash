@@ -3,7 +3,7 @@ import { addDisposableListener, getClientArea, h, stopEvent } from '../../../../
 import { observeResize } from '../../../../base/browser/observer.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { diffEditorDefaultOptions, type HideUnchangedRegionsOptions } from '../../../common/config/diffEditor.js';
@@ -194,10 +194,6 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 				this.updateFeatures();
 				this.layout({ width: this.viewportWidth, height: this.viewportHeight });
 			}
-		}));
-		this._register(onDidChangeNls(() => {
-			this.updateIncompleteStatus();
-			this.updateAccessibilityLabel();
 		}));
 		this._register(observeResize(this.element, ([entry]) => {
 			if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });

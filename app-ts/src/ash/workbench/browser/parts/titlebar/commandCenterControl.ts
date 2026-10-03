@@ -57,12 +57,5 @@ export class CommandCenterControl extends Disposable {
 			this.button.toggleClassName('active', visible);
 			setAriaAttribute(this.button.domNode, 'expanded', visible);
 		}));
-		if (localizationService) {
-			this._register(localizationService.onDidChange(() => {
-				const text = label();
-				this.button.label = text;
-				this.button.domNode.setAttribute('aria-label', text);
-			}));
-		}
 	}
 }

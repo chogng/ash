@@ -1,7 +1,7 @@
 import './media/editorquickaccess.css';
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { basename } from "../../../../base/common/resources.js";
-import { onDidChangeNls, localize } from "../../../../nls.js";
+import { localize } from "../../../../nls.js";
 import type { IQuickAccessProvider } from "../../../../platform/quickinput/common/quickAccess.js";
 import type { IQuickPick, IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
 import type { EditorIdentifier } from "../../../services/editor/common/editorState.js";
@@ -37,7 +37,6 @@ export class AllEditorsByMostRecentlyUsedQuickAccess implements IQuickAccessProv
 			}));
 		};
 		disposables.add(this.editorPart.onDidChangeEditors(update));
-		disposables.add(onDidChangeNls(update));
 		disposables.add(picker.onDidAccept(item => {
 			picker.hide();
 			this.editorPart.activateEditorIdentifier((item as EditorQuickPickItem).editor);

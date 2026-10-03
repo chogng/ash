@@ -1,0 +1,30 @@
+{
+	"ash": {
+		"network.disconnected": "App Server is disconnected.",
+		"network.loading": "Reading network configuration…",
+		"network.empty": "No service hosts are configured.",
+		"network.readFailed": "Could not read network configuration. Connect to App Server and refresh.",
+		"network.saving": "Saving HTTP compatibility mode…",
+		"network.saved": "HTTP compatibility mode saved. Subsequent requests use the selected mode.",
+		"network.saveFailed": "Could not save HTTP compatibility mode. Refresh the configuration before trying again.",
+		"network.running": "Checking service connectivity…",
+		"network.completed": "Network diagnostic completed.",
+		"network.runFailed": "Could not complete the network diagnostic.",
+		"network.copied": "Domains copied.",
+		"network.copyFailed": "Could not copy domains.",
+		"models.provider.test": "Test model",
+		"models.provider.failed": "Model test failed",
+		"models.provider.duplicateModel": "Each model ID must be unique.",
+		"models.provider.saveFailed": "Could not save provider: {0}",
+		"chat.modelPicker.contextWindow": "{0} context window",
+		"chat.connections.activated": "Current connection: {0}. Applies to the next turn.",
+		"chat.connections.activateFailed": "Could not activate the connection",
+		"chat.connections.current": "Current connection",
+		"chat.connections.inactive": "Inactive",
+		"chat.connections.activate": "Use {0}",
+		"chat.connections.ready": "Ready",
+		"chat.connections.notReady": "Sign in or save a key",
+		"chat.providerKeys.aria": "Model provider API keys",
+		"chat.providerKeys.select": "Choose a provider to enter or replace its API key"
+	}
+}

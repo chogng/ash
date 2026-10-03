@@ -1,4 +1,4 @@
-import { localize } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -49,7 +49,7 @@ registerWorkbenchContribution('workbench.contrib.startupPageRunner', WorkbenchPh
 
 registerAction2(class OpenWelcomeAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.openWelcome', title: localize('gettingStarted.openWelcome', 'Welcome'), f1: true });
+		super({ id: 'workbench.action.openWelcome', title: localize2('gettingStarted.openWelcome', 'Welcome'), f1: true });
 	}
 
 	public override run(accessor: ServicesAccessor): Promise<void> {

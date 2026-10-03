@@ -77,6 +77,74 @@ suite('Frontend line diff', () => {
 		assert.ok(diff.moves[0]!.lineRangeMapping.original.endLineNumberExclusive <= diff.moves[1]!.lineRangeMapping.original.startLineNumber);
 	});
 
+	test('isolates an edited move from new neighboring code on either side', async () => {
+		const block = ['function collectRecords(input) {', '  const pendingRecords = prepareRecords(input);', '  auditRecords(pendingRecords);', '  return pendingRecords;', '}'];
+		const edited = [...block];
+		edited[1] = '  const pendingRecords = prepareRecords(updatedInput);';
+		const stay = Array.from({ length: 12 }, (_, index) => `stable record ${index}`);
+		const other = ['function other() {', '  return unrelated();', '}'];
+		const options = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: true };
+		for (const reverse of [false, true]) {
+			const before = ['head', ...block, ...stay, 'tail'];
+			const after = ['head', ...stay, ...other, ...edited, 'tail'];
+			const original = reverse ? after : before;
+			const modified = reverse ? before : after;
+			const computer = new DefaultLinesDiffComputer();
+			const diff = computer.computeDiff(original, modified, options);
+			assert.deepEqual(diff.moves.map(move => ({
+				original: [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.original.endLineNumberExclusive],
+				modified: [move.lineRangeMapping.modified.startLineNumber, move.lineRangeMapping.modified.endLineNumberExclusive],
+				changes: move.changes.map(change => [change.original.startLineNumber, change.modified.startLineNumber]),
+			})), [{ original: reverse ? [17, 22] : [2, 7], modified: reverse ? [2, 7] : [17, 22], changes: [reverse ? [18, 3] : [3, 18]] }]);
+			assert.deepEqual(await computer.computeDiffAsync(original, modified, options, new AbortController().signal), diff);
+		}
+	});
+
+	test('recognizes repeated identifier renames without unchanged interior lines', () => {
+		const block = ['function collectRecords(input) {', '  const pendingRecords = prepareRecords(input);', '  auditRecords(pendingRecords);', '  return pendingRecords;', '}'];
+		const edited = block.map(line => line.replaceAll('pendingRecords', 'pendingRecords2').replace('collectRecords(', 'collectRecords2('));
+		const stay = Array.from({ length: 12 }, (_, index) => `stable record ${index}`);
+		const diff = new DefaultLinesDiffComputer().computeDiff(['head', ...block, ...stay, 'tail'], ['head', ...stay, ...edited, 'tail'], {
+			ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: true,
+		});
+		assert.deepEqual(diff.moves.map(move => ({
+			original: [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.original.endLineNumberExclusive],
+			modified: [move.lineRangeMapping.modified.startLineNumber, move.lineRangeMapping.modified.endLineNumberExclusive],
+			changedLines: move.changes[0]!.original.length,
+		})), [{ original: [2, 7], modified: [14, 19], changedLines: 4 }]);
+	});
+
+	test('does not label a completely rewritten function as a move', () => {
+		const block = ['function collectRecords(input) {', '  const pendingRecords = prepareRecords(input);', '  auditRecords(pendingRecords);', '  return pendingRecords;', '}'];
+		const rewritten = ['function generateResults(source) {', '  const values = compute(source);', '  print(values);', '  return values;', '}'];
+		const stay = Array.from({ length: 12 }, (_, index) => `stable record ${index}`);
+		const diff = new DefaultLinesDiffComputer().computeDiff(['head', ...block, ...stay, 'tail'], ['head', ...stay, ...rewritten, 'tail'], {
+			ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: true,
+		});
+		assert.deepEqual(diff.moves, []);
+	});
+
+	test('keeps edited moves separate when both hunks contain several blocks', () => {
+		const first = ['function first(input) {', '  audit(input);', '  save(input);', '  return input;', '}'];
+		const second = ['function second(value) {', '  validate(value);', '  publish(value);', '  return value;', '}'];
+		const stay = Array.from({ length: 16 }, (_, index) => `stable row ${index}`);
+		const editedFirst = first.map(line => line.replace('audit(input)', 'audit(updated)'));
+		const editedSecond = second.map(line => line.replace('validate(value)', 'validate(updated)'));
+		const diff = new DefaultLinesDiffComputer().computeDiff(['head', ...first, 'old boundary', ...second, ...stay, 'tail'], ['head', ...stay, ...editedSecond, 'new boundary', ...editedFirst, 'tail'], {
+			ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: true,
+		});
+		assert.deepEqual(diff.moves.map(move => [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.original.endLineNumberExclusive, move.lineRangeMapping.modified.startLineNumber, move.lineRangeMapping.modified.endLineNumberExclusive]), [[2, 7, 24, 29], [8, 13, 18, 23]]);
+	});
+
+	test('enforces the computation budget with move detection enabled', () => {
+		const original = Array.from({ length: 2_000 }, (_, index) => `source ${index}`);
+		const diff = new DefaultLinesDiffComputer().computeDiff(original, [...original].reverse(), {
+			ignoreTrimWhitespace: false, maxComputationTimeMs: Number.EPSILON, computeMoves: true,
+		});
+		assert.equal(diff.hitTimeout, true);
+		assert.deepEqual(diff.moves, []);
+	});
+
 	test('preserves empty documents and trailing empty lines', async () => {
 		for (const [original, modified, kinds] of [
 			['', '', ['unchanged']],

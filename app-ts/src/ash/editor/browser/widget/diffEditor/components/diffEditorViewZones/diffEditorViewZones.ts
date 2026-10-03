@@ -4,6 +4,7 @@ import { localize } from '../../../../../../nls.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { EditorSemanticHighlightingConfiguration } from '../../../../../common/config/editorConfigurationSchema.js';
+import { EditorOption } from '../../../../../common/config/editorOptions.js';
 import { resolveSemanticTokenPresentation } from '../../../../../common/services/semanticTokensStyling.js';
 import { InlineDecoration, InlineDecorationType } from '../../../../../common/viewModel/inlineDecorations.js';
 import { type DiffModel } from '../../../../../common/diff/diffModel.js';
@@ -102,9 +103,14 @@ export class DiffEditorViewZones extends Disposable {
 			this.appendViewZone(modified, modifiedAfterLineNumber, rowHeight - modifiedHeight, rowIndex);
 		}
 		if (comparison) {
-			// Equal scroll extents keep the aligned block together when one document ends sooner.
-			const originalHeight = this.originalEditor.getContentHeight() + original.reduce((height, zone) => height + zone.heightInPx, 0);
-			const modifiedHeight = this.modifiedEditor.getContentHeight() + modified.reduce((height, zone) => height + zone.heightInPx, 0);
+			// Content height is floored at the viewport height. Compare text extents instead,
+			// so a tall viewport does not turn unused space into unequal trailing zones.
+			const originalHeight = this.originalEditor.getBottomForLineNumber(this.model.original.getLineCount())
+				+ this.originalEditor.getOption(EditorOption.padding).bottom
+				+ original.reduce((height, zone) => height + zone.heightInPx, 0);
+			const modifiedHeight = this.modifiedEditor.getBottomForLineNumber(this.model.modified.getLineCount())
+				+ this.modifiedEditor.getOption(EditorOption.padding).bottom
+				+ modified.reduce((height, zone) => height + zone.heightInPx, 0);
 			this.appendViewZone(original, this.model.original.getLineCount(), modifiedHeight - originalHeight, rows.length);
 			this.appendViewZone(modified, this.model.modified.getLineCount(), originalHeight - modifiedHeight, rows.length);
 		}

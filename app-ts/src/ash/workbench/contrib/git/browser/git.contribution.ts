@@ -1,4 +1,5 @@
-import { localizedString } from '../../../../platform/action/common/action.js';
+import { localize2, localize } from '../../../../nls.js';
+
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -17,7 +18,7 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
@@ -66,7 +67,6 @@ class GitIgnoreDecorationProvider extends Disposable implements IDecorationsProv
 		this._register(gitService.onDidChangeRepositories(() => this.changed.fire([])));
 		this._register(gitService.onDidChangeRepositoryStatus(() => this.changed.fire([])));
 		this._register(fileService.onDidChangeFiles(() => this.changed.fire([])));
-		this._register(onDidChangeNls(() => this.changed.fire([])));
 		this._register(decorationsService.registerDecorationsProvider(this));
 	}
 
@@ -215,7 +215,7 @@ const repositoryCommands: readonly { readonly kind: GitCommand['kind']; readonly
 for (const definition of repositoryCommands) {
 	registerAction2(class extends Action2 {
 		constructor() {
-			super({ id: definition.id, title: localizedString('ash', definition.key, definition.title), f1: true });
+			super({ id: definition.id, title: localize2({ bundle: 'ash', key: definition.key }, definition.title), f1: true });
 		}
 
 		public override async run(accessor: ServicesAccessor, repositoryId?: string): Promise<void> {
@@ -364,7 +364,7 @@ async function pickGitItem<T extends IQuickPickItem>(input: IQuickInputService, 
 
 registerAction2(class GitInitAction extends Action2 {
 	constructor() {
-		super({ id: 'git.init', title: localizedString('ash', 'git.initTitle', 'Git: Initialize Repository'), f1: true });
+		super({ id: 'git.init', title: localize2({ bundle: 'ash', key: 'git.initTitle' }, 'Git: Initialize Repository'), f1: true });
 	}
 
 	public override async run(accessor: ServicesAccessor): Promise<void> {
@@ -391,7 +391,7 @@ for (const definition of [
 ] as const) {
 	registerAction2(class extends Action2 {
 		constructor() {
-			super({ id: definition.id, title: localizedString('ash', definition.key, definition.title), f1: true });
+			super({ id: definition.id, title: localize2({ bundle: 'ash', key: definition.key }, definition.title), f1: true });
 		}
 
 		public override async run(accessor: ServicesAccessor): Promise<void> {

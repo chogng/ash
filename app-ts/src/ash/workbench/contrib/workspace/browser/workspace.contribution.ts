@@ -1,5 +1,5 @@
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import { IWorkspaceTrustManagementService, type IWorkspaceTrustInfo } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { registerWorkbenchContribution, WorkbenchPhase, type IWorkbenchContribution } from '../../../common/contributions.js';
 import { StatusbarAlignment, IStatusbarService, type IStatusbarEntryAccessor } from '../../../services/statusbar/browser/statusbar.js';
@@ -15,7 +15,6 @@ class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribu
 	) {
 		super();
 		this._register(trust.onDidChangeTrust(() => { void this.refresh(); }));
-		this._register(onDidChangeNls(() => this.updateEntry()));
 		void this.refresh();
 	}
 

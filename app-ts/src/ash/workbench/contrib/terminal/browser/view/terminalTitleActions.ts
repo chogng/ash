@@ -1,3 +1,4 @@
+import { localize, localize2 } from '../../../../../nls.js';
 import { ActionViewItem, LabelActionViewItem } from "../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { Lxicon } from "../../../../../base/common/lxicons.js";
@@ -66,7 +67,7 @@ export class TerminalTitleActions extends Disposable {
 			options.contextMenuService,
 			MenuId.TerminalTitle,
 			{
-				ariaLabel: "Terminal actions",
+				ariaLabel: localize('terminal.title.actions', "Terminal actions"),
 				highlightToggledItems: true,
 				menuOptions: { shouldForwardArgs: true },
 				actionViewItemProvider: (action) => this.createActionViewItem(action, options.contextMenuService),
@@ -105,8 +106,8 @@ export class TerminalTitleActions extends Disposable {
 		this._register(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 			command: {
 				id: ACTIVE_TERMINAL_COMMAND_ID,
-				title: "Focus Active Terminal",
-				tooltip: "Focus Active Terminal",
+				title: localize2('terminal.title.focusActive', "Focus Active Terminal"),
+				tooltip: localize('terminal.title.focusActive', "Focus Active Terminal"),
 			},
 			when: TerminalActiveInstanceInTitleContext.isEqualTo(true),
 			group: "navigation",
@@ -115,8 +116,8 @@ export class TerminalTitleActions extends Disposable {
 		this._register(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 			command: {
 				id: NEW_TERMINAL_COMMAND_ID,
-				title: "New Terminal",
-				tooltip: "New Terminal",
+				title: localize2('terminal.title.new', "New Terminal"),
+				tooltip: localize('terminal.title.new', "New Terminal"),
 				icon: Lxicon.add,
 				precondition: TerminalCreatingContext.isEqualTo(false),
 			},
@@ -126,8 +127,8 @@ export class TerminalTitleActions extends Disposable {
 		this._register(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 			command: {
 				id: RELAUNCH_TERMINAL_COMMAND_ID,
-				title: "Relaunch Terminal",
-				tooltip: "Relaunch Terminal",
+				title: localize2('terminal.title.relaunch', "Relaunch Terminal"),
+				tooltip: localize('terminal.title.relaunch', "Relaunch Terminal"),
 				icon: Lxicon.history,
 			},
 			when: ContextKeyExpr.and(
@@ -140,8 +141,8 @@ export class TerminalTitleActions extends Disposable {
 		this._register(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 			command: {
 				id: KILL_TERMINAL_COMMAND_ID,
-				title: "Kill Terminal",
-				tooltip: "Kill Terminal",
+				title: localize2('terminal.title.kill', "Kill Terminal"),
+				tooltip: localize('terminal.title.kill', "Kill Terminal"),
 				icon: Lxicon.trash,
 			},
 			when: TerminalHasActiveInstanceContext.isEqualTo(true),
@@ -151,8 +152,8 @@ export class TerminalTitleActions extends Disposable {
 		this._register(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 			command: {
 				id: CLEAR_TERMINAL_COMMAND_ID,
-				title: "Clear Terminal",
-				tooltip: "Clear Terminal",
+				title: localize2('terminal.title.clear', "Clear Terminal"),
+				tooltip: localize('terminal.title.clear', "Clear Terminal"),
 			},
 			group: "1_terminal",
 			order: 10,
@@ -187,8 +188,8 @@ export class TerminalTitleActions extends Disposable {
 class ActiveTerminalActionViewItem extends LabelActionViewItem {
 	constructor(action: IAction, private readonly instance: ITerminalInstance) {
 		const tooltip = instance.title === instance.profile.title
-			? `Active terminal: ${instance.title}`
-			: `Active terminal: ${instance.title} (${instance.profile.title})`;
+			? localize('terminal.title.active', 'Active terminal: {0}', instance.title)
+			: localize('terminal.title.activeProfile', 'Active terminal: {0} ({1})', instance.title, instance.profile.title);
 		super(action, {
 			label: instance.title,
 			icon: terminalProfileIcon(instance.profile),
@@ -206,8 +207,8 @@ class ActiveTerminalActionViewItem extends LabelActionViewItem {
 
 class TerminalProfileSelectorAction implements IAction {
 	readonly id = NEW_TERMINAL_WITH_PROFILE_COMMAND_ID;
-	readonly label = "Select Terminal Profile";
-	readonly tooltip = "Select Terminal Profile";
+	readonly label = localize('terminal.title.selectProfile', "Select Terminal Profile");
+	readonly tooltip = localize('terminal.title.selectProfile', "Select Terminal Profile");
 	readonly checked = undefined;
 
 	constructor(readonly enabled: boolean, private readonly createTerminalWithProfile: (profileId: unknown) => unknown) {}
@@ -218,11 +219,11 @@ class TerminalProfileSelectorAction implements IAction {
 }
 
 function terminalProfileMenuAction(profile: ITerminalProfile, activeProfileId: () => string | undefined, createTerminalWithProfile: (profileId: unknown) => unknown): IAction {
-	const label = profile.isDefault ? `${profile.title} (Default)` : profile.title;
+	const label = profile.isDefault ? localize('terminal.title.defaultProfile', '{0} (Default)', profile.title) : profile.title;
 	return {
 		id: `${NEW_TERMINAL_WITH_PROFILE_COMMAND_ID}.${profile.profileId}`,
 		label,
-		tooltip: `Use ${profile.title}`,
+		tooltip: localize('terminal.title.useProfile', 'Use {0}', profile.title),
 		icon: terminalProfileIcon(profile),
 		enabled: true,
 		checked: profile.profileId === activeProfileId(),

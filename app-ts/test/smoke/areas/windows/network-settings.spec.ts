@@ -4,9 +4,9 @@ import { join } from 'node:path';
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
-test('Network Settings supports search, keyboard help and Chinese labels while disconnected', async ({ target, workbench }) => {
+test('Network Settings supports search, keyboard help and Chinese labels while disconnected', async ({ target, workbench, restartWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode === 'required', 'Exercises disconnected Workbench Settings.');
-	const page = workbench.page;
+	let page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');
 	const settings = page.locator('.ash-settings-editor');
 	await settings.locator('[data-settings-category-id="network"]').click();
@@ -29,6 +29,9 @@ test('Network Settings supports search, keyboard help and Chinese labels while d
 	await settings.locator('[data-settings-category-id="general"]').click();
 	await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
 	await page.getByRole('option', { name: '简体中文', exact: true }).click();
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+,');
 	await page.locator('.ash-modal-editor-close').click();
 	await page.reload();
 	await workbench.waitForReady();

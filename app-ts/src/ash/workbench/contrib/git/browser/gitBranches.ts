@@ -1,6 +1,6 @@
+import { localize2, localize } from '../../../../nls.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { localize } from '../../../../nls.js';
-import { localizedString } from '../../../../platform/action/common/action.js';
+
 import { AppServerRemoteError } from '../../../../platform/app-server/common/appServerError.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -19,7 +19,7 @@ registerAction2(class GitSwitchBranchAction extends Action2 {
 	constructor() {
 		super({
 			id: GitSwitchBranchCommandId,
-			title: localizedString('ash', 'git.switchBranchCommandTitle', 'Git: Switch Branch'),
+			title: localize2({ bundle: 'ash', key: 'git.switchBranchCommandTitle' }, 'Git: Switch Branch'),
 			f1: true,
 		});
 	}
@@ -48,7 +48,7 @@ registerAction2(class GitSwitchBranchAction extends Action2 {
 
 registerAction2(class GitCreateBranchAction extends Action2 {
 	constructor() {
-		super({ id: GitCreateBranchCommandId, title: localizedString('ash', 'git.createBranchCommandTitle', 'Git: Create Branch'), f1: true });
+		super({ id: GitCreateBranchCommandId, title: localize2({ bundle: 'ash', key: 'git.createBranchCommandTitle' }, 'Git: Create Branch'), f1: true });
 	}
 
 	public override async run(accessor: ServicesAccessor, repositoryId?: string): Promise<void> {
@@ -77,7 +77,7 @@ registerAction2(class GitCreateBranchAction extends Action2 {
 
 registerAction2(class GitDeleteBranchAction extends Action2 {
 	constructor() {
-		super({ id: GitDeleteBranchCommandId, title: localizedString('ash', 'git.deleteBranchCommandTitle', 'Git: Delete Branch'), f1: true });
+		super({ id: GitDeleteBranchCommandId, title: localize2({ bundle: 'ash', key: 'git.deleteBranchCommandTitle' }, 'Git: Delete Branch'), f1: true });
 	}
 
 	public override async run(accessor: ServicesAccessor, repositoryId?: string): Promise<void> {

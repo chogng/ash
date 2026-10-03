@@ -1,3 +1,4 @@
+import { localize2, localize } from '../../../../nls.js';
 import { BaseLayoutController } from './baseSessionLayoutController.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -17,11 +18,10 @@ import { DesktopDockedTabsCoordinator } from './desktop/desktopDockedTabsCoordin
 import { DesktopDetailPanelCoordinator } from './desktop/desktopDetailPanelCoordinator.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { MenusRegistry, MenuId } from '../../../../platform/actions/common/actions.js';
-import { localizedString } from '../../../../platform/action/common/action.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ContextKeyExpr, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { localize } from '../../../../nls.js';
+
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { Menus } from '../../../browser/menus.js';
@@ -175,37 +175,37 @@ export class DesktopLayoutController extends BaseLayoutController {
 			this._register(CommandsRegistry.register(id, () => this.isCodeActive() && this.enqueueDetails(run)));
 		}
 		this._register(MenusRegistry.appendMenuItems([
-			{ id: Menus.TitleBarLeftLayout, item: { command: { id: 'ash.sessions.toggleSidePane', title: localizedString('ash', 'sessions.layout.toggleSidePane', 'Toggle Code side panel'), icon: Lxicon.layoutSidebarRight2, toggled: ContextKeyExpr.or(editorVisibleContext.isEqualTo(true), detailsVisibleContext.isEqualTo(true)) }, when: codeContext.isEqualTo(true), group: 'navigation', order: 4 } },
-			{ id: MenuId.EditorTitle, item: { title: localizedString('ash', 'sessions.layout.addTab', 'Add tab'), submenu: Menus.CodeAddTab, when: codeContext.isEqualTo(true), group: 'navigation', order: 89 } },
-			{ id: Menus.CodeAddTab, item: { command: { id: 'ash.sessions.openFilesTab', title: localizedString('ash', 'sessions.layout.openFiles', 'Open Files tab'), icon: Lxicon.files }, order: 0 } },
-			{ id: Menus.CodeAddTab, item: { command: { id: 'ash.sessions.openChangesTab', title: localizedString('ash', 'sessions.layout.openChanges', 'Open Changes tab'), icon: Lxicon.diff }, order: 1 } },
-			{ id: MenuId.EditorTitle, item: { command: { id: 'ash.sessions.toggleDetails', title: localizedString('ash', 'sessions.layout.toggleDetails', 'Toggle details'), icon: Lxicon.files, toggled: detailsVisibleContext.isEqualTo(true), precondition: supportedDetailsContext.isEqualTo(true) }, when: codeContext.isEqualTo(true), group: 'navigation', order: 90 } },
-			{ id: MenuId.EditorTitle, item: { command: { id: 'ash.sessions.hideEditor', title: localizedString('ash', 'sessions.layout.hideEditor', 'Hide editor'), icon: Lxicon.layoutSidebarRightOff2 }, when: ContextKeyExpr.and(codeContext.isEqualTo(true), editorVisibleContext.isEqualTo(true)), group: 'navigation', order: 91 } },
-			{ id: MenuId.EditorTitle, item: { command: { id: 'ash.sessions.showEditor', title: localizedString('ash', 'sessions.layout.showEditor', 'Show editor'), icon: Lxicon.layoutSidebarRight2 }, when: ContextKeyExpr.and(codeContext.isEqualTo(true), editorVisibleContext.isEqualTo(false)), group: 'navigation', order: 91 } },
+			{ id: Menus.TitleBarLeftLayout, item: { command: { id: 'ash.sessions.toggleSidePane', title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleSidePane' }, 'Toggle Code side panel'), icon: Lxicon.layoutSidebarRight2, toggled: ContextKeyExpr.or(editorVisibleContext.isEqualTo(true), detailsVisibleContext.isEqualTo(true)) }, when: codeContext.isEqualTo(true), group: 'navigation', order: 4 } },
+			{ id: MenuId.EditorTitle, item: { title: localize2({ bundle: 'ash', key: 'sessions.layout.addTab' }, 'Add tab'), submenu: Menus.CodeAddTab, when: codeContext.isEqualTo(true), group: 'navigation', order: 89 } },
+			{ id: Menus.CodeAddTab, item: { command: { id: 'ash.sessions.openFilesTab', title: localize2({ bundle: 'ash', key: 'sessions.layout.openFiles' }, 'Open Files tab'), icon: Lxicon.files }, order: 0 } },
+			{ id: Menus.CodeAddTab, item: { command: { id: 'ash.sessions.openChangesTab', title: localize2({ bundle: 'ash', key: 'sessions.layout.openChanges' }, 'Open Changes tab'), icon: Lxicon.diff }, order: 1 } },
+			{ id: MenuId.EditorTitle, item: { command: { id: 'ash.sessions.toggleDetails', title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleDetails' }, 'Toggle details'), icon: Lxicon.files, toggled: detailsVisibleContext.isEqualTo(true), precondition: supportedDetailsContext.isEqualTo(true) }, when: codeContext.isEqualTo(true), group: 'navigation', order: 90 } },
+			{ id: MenuId.EditorTitle, item: { command: { id: 'ash.sessions.hideEditor', title: localize2({ bundle: 'ash', key: 'sessions.layout.hideEditor' }, 'Hide editor'), icon: Lxicon.layoutSidebarRightOff2 }, when: ContextKeyExpr.and(codeContext.isEqualTo(true), editorVisibleContext.isEqualTo(true)), group: 'navigation', order: 91 } },
+			{ id: MenuId.EditorTitle, item: { command: { id: 'ash.sessions.showEditor', title: localize2({ bundle: 'ash', key: 'sessions.layout.showEditor' }, 'Show editor'), icon: Lxicon.layoutSidebarRight2 }, when: ContextKeyExpr.and(codeContext.isEqualTo(true), editorVisibleContext.isEqualTo(false)), group: 'navigation', order: 91 } },
 		]));
 		const codeLayoutCommands = [
 			{
-				command: { id: 'ash.sessions.toggleSidePane', title: localizedString('ash', 'sessions.layout.toggleSidePane', 'Toggle Code side panel'), toggled: ContextKeyExpr.or(editorVisibleContext.isEqualTo(true), detailsVisibleContext.isEqualTo(true)) },
+				command: { id: 'ash.sessions.toggleSidePane', title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleSidePane' }, 'Toggle Code side panel'), toggled: ContextKeyExpr.or(editorVisibleContext.isEqualTo(true), detailsVisibleContext.isEqualTo(true)) },
 				when: codeContext.isEqualTo(true), order: 0,
 			},
 			{
-				command: { id: 'ash.sessions.toggleDetails', title: localizedString('ash', 'sessions.layout.toggleDetails', 'Toggle details'), toggled: detailsVisibleContext.isEqualTo(true), precondition: supportedDetailsContext.isEqualTo(true) },
+				command: { id: 'ash.sessions.toggleDetails', title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleDetails' }, 'Toggle details'), toggled: detailsVisibleContext.isEqualTo(true), precondition: supportedDetailsContext.isEqualTo(true) },
 				when: codeContext.isEqualTo(true), order: 1,
 			},
 			{
-				command: { id: 'ash.sessions.hideEditor', title: localizedString('ash', 'sessions.layout.hideEditor', 'Hide editor') },
+				command: { id: 'ash.sessions.hideEditor', title: localize2({ bundle: 'ash', key: 'sessions.layout.hideEditor' }, 'Hide editor') },
 				when: ContextKeyExpr.and(codeContext.isEqualTo(true), editorVisibleContext.isEqualTo(true)), order: 2,
 			},
 			{
-				command: { id: 'ash.sessions.showEditor', title: localizedString('ash', 'sessions.layout.showEditor', 'Show editor') },
+				command: { id: 'ash.sessions.showEditor', title: localize2({ bundle: 'ash', key: 'sessions.layout.showEditor' }, 'Show editor') },
 				when: ContextKeyExpr.and(codeContext.isEqualTo(true), editorVisibleContext.isEqualTo(false)), order: 2,
 			},
 			{
-				command: { id: 'ash.sessions.openFilesTab', title: localizedString('ash', 'sessions.layout.openFiles', 'Open Files tab') },
+				command: { id: 'ash.sessions.openFilesTab', title: localize2({ bundle: 'ash', key: 'sessions.layout.openFiles' }, 'Open Files tab') },
 				when: codeContext.isEqualTo(true), order: 4,
 			},
 			{
-				command: { id: 'ash.sessions.openChangesTab', title: localizedString('ash', 'sessions.layout.openChanges', 'Open Changes tab') },
+				command: { id: 'ash.sessions.openChangesTab', title: localize2({ bundle: 'ash', key: 'sessions.layout.openChanges' }, 'Open Changes tab') },
 				when: codeContext.isEqualTo(true), order: 5,
 			},
 		];

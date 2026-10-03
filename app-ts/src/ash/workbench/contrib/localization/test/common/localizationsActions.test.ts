@@ -1,3 +1,4 @@
+import { createTestLocaleService } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -27,12 +28,12 @@ test('display language commands select an installed catalog and clear the prefer
 		await environment.commands.executeCommand(ConfigureDisplayLanguageAction.ID);
 		const picker = environment.quickInput.picker!;
 		assert.equal(picker.ariaLabel, 'Select Display Language');
-		const changed = nextLocaleChange(environment.locale);
+		const changed = nextPreferenceChange(environment.configuration);
 		picker.accept(picker.items.find(item => item.label === '简体中文')!);
 		await changed;
 		assert.equal(environment.configuration.getValue(LocalizationConfiguration.locale), 'zh-CN');
-		assert.equal(environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'), '显示语言');
-		assert.equal(commandActionLabel(new ConfigureDisplayLanguageAction().desc.title), '配置显示语言');
+		assert.equal(environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'), 'Display Language');
+		assert.equal(commandActionLabel(new ConfigureDisplayLanguageAction().desc.title), 'Configure Display Language');
 
 		await environment.commands.executeCommand(ClearDisplayLanguageAction.ID);
 		assert.equal(environment.locale.locale, 'en');
@@ -51,12 +52,13 @@ test('display language command installs a Marketplace catalog before selecting i
 		const picker = environment.quickInput.picker!;
 		picker.setQuery('French');
 		const packageItem = await picker.waitForItem('French pack');
-		const changed = nextLocaleChange(environment.locale);
+		const changed = nextPreferenceChange(environment.configuration);
 		picker.accept(packageItem);
 		await changed;
 		assert.deepEqual(environment.languagePacks.installs, [['fr-pack', '1']]);
-		assert.equal(environment.locale.locale, 'fr');
-		assert.equal(environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'), 'Langue d’affichage');
+		assert.equal(environment.configuration.getValue(LocalizationConfiguration.locale), 'fr');
+		assert.equal(environment.locale.locale, 'en');
+		assert.equal(environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'), 'Display Language');
 		assert.deepEqual(environment.errors, []);
 	} finally {
 		resetNlsResolver();
@@ -66,8 +68,8 @@ test('display language command installs a Marketplace catalog before selecting i
 class LanguageActionEnvironment extends Disposable {
 	public readonly configuration = this._register(new InMemoryConfigurationService());
 	public readonly languagePacks = this._register(new TestLanguagePacks());
-	public readonly locale = this._register(new WorkbenchLocaleService(this.configuration, this.languagePacks));
-	public readonly localization = this._register(new WorkbenchLocalizationService(this.locale, this.languagePacks));
+	public readonly locale = this._register(createTestLocaleService(this.configuration, this.languagePacks));
+	public readonly localization = this._register(new WorkbenchLocalizationService());
 	public readonly quickInput = new TestQuickInputService();
 	public readonly errors: string[] = [];
 	public readonly commands: CommandService;
@@ -201,9 +203,9 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 	public hide(): void { this.hidden.fire(); }
 }
 
-function nextLocaleChange(locale: WorkbenchLocaleService): Promise<void> {
+function nextPreferenceChange(configuration: InMemoryConfigurationService): Promise<void> {
 	return new Promise(resolve => {
-		const listener = locale.onDidChangeLocale(() => {
+		const listener = configuration.onDidChangeConfiguration(() => {
 			listener.dispose();
 			resolve();
 		});

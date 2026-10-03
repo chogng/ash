@@ -1,7 +1,7 @@
 import '../../../../../base/browser/ui/sash/sash.css';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { Sash, SashState } from '../../../../../base/browser/ui/sash/sash.js';
-import { localize, onDidChangeNls } from '../../../../../nls.js';
+import { localize } from '../../../../../nls.js';
 import { type DiffEditorOptions } from '../diffEditorOptions.js';
 
 const MINIMUM_EDITOR_WIDTH = 100;
@@ -27,10 +27,6 @@ export class DiffEditorSash extends Disposable {
 		this.element.classList.add('stanza-diff-sash');
 		this.element.setAttribute('aria-controls', `${originalId} ${modifiedId}`);
 		this.updateLabel();
-		this._register(onDidChangeNls(() => {
-			this.updateLabel();
-			this.updateValue(this.left);
-		}));
 		this._register(this.sash.onDidStart(() => { this.startLeft = this.left; }));
 		this._register(this.sash.onDidChange(event => {
 			if (this.width <= MINIMUM_EDITOR_WIDTH * 2) return;

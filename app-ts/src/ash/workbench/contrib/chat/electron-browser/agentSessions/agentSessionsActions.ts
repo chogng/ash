@@ -1,5 +1,5 @@
+import { localize2 } from '../../../../../nls.js';
 import './media/openInAgents.css';
-import { localizedString } from '../../../../../platform/action/common/action.js';
 import { Action2, MenuId } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ashTitlebarMark } from '../../../../browser/parts/titlebar/titlebarMark.js';
@@ -8,9 +8,9 @@ import { validateOpenAgentsWindow } from '../../../../../platform/native/common/
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../common/constants.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 
-const openAgentsWindowTitle = localizedString('ash.actions', 'openAgentsWindow', 'Open Agents Window');
-const openInAgentsTitle = localizedString('ash.actions', 'openInAgents', 'Open in Agents');
-const openInAgentsTooltip = localizedString('ash.actions', 'openInAgentsWindow', 'Open in Agents Window');
+const openAgentsWindowTitle = localize2({ bundle: 'ash.actions', key: 'openAgentsWindow' }, 'Open Agents Window');
+const openInAgentsTitle = localize2({ bundle: 'ash.actions', key: 'openInAgents' }, 'Open in Agents');
+const openInAgentsTooltip = localize2({ bundle: 'ash.actions', key: 'openInAgentsWindow' }, 'Open in Agents Window');
 const openAgentsWindowTitleBarCommandId = 'workbench.action.chat.openAgentsWindow.titleBar';
 
 export class OpenAgentsWindowAction extends Action2 {

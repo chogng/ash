@@ -1,3 +1,7 @@
+import { IHostService } from '../../workbench/services/host/browser/host.js';
+import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
+import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
+import { ILanguagePackStore } from "../../platform/languagePacks/common/languagePackStore.js";
 import { IAssetService, type AssetVersion } from '../../platform/assets/common/assetService.js';
 import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { ActionWidgetService, IActionWidgetService } from '../../platform/actionWidget/browser/actionWidget.js';
@@ -264,7 +268,12 @@ export class Workbench extends Disposable {
 		if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
 
 		const configurationService = this.configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi, initialSnapshot: options.initialConfigurationSnapshot }));
-		const services = this._register(new InstantiationService());
+		const serviceCollection = new ServiceCollection();
+		// Sessions owns its editor services; the runtime registers host and local language storage.
+		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
+			if (id === IHostService || id === ILanguagePackStore) serviceCollection.set(id, descriptor);
+		}
+		const services = this._register(new InstantiationService(serviceCollection));
 		services.registerInstance(IAssetService, options.api.assets);
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);
@@ -356,11 +365,9 @@ export class Workbench extends Disposable {
 		services.registerInstance(IHooksService, options.api.hooks);
 		const marketplaceService = this._register(new AppServerMarketplaceService(options.api.marketplace, options.api.events));
 		services.registerInstance(IMarketplaceService, marketplaceService);
-		const languagePacks = this._register(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
+		const languagePacks = this._register(services.createInstance(MarketplaceLanguagePackService, builtinLanguagePackCatalogs));
 		services.registerInstance(ILanguagePackService, languagePacks);
-		const locale = this._register(new WorkbenchLocaleService(configurationService, languagePacks));
-		services.registerInstance(ILocaleService, locale);
-		const localization = this._register(new WorkbenchLocalizationService(locale, languagePacks));
+		const localization = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localization);
 		services.registerInstance(IRemoteAgentService, this._register(new AppServerRemoteAgentService({ api: options.api.appServer, remoteApi: options.api.remote })));
 		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
@@ -379,6 +386,7 @@ export class Workbench extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 		const dialogs = this._register(new DialogService());
 		services.registerInstance(IDialogService, dialogs);
+		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
 		this._register(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(this.domNode)));
 
 		let sessionsPart: SessionsPart | undefined;

@@ -44,7 +44,6 @@ export class AgentCapabilitiesSettings extends Disposable {
 				this.render();
 			}
 		}));
-		this._register(this.localization.onDidChange(() => this.render()));
 	}
 
 	public setView(view: View | undefined): void {

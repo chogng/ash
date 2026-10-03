@@ -1,4 +1,5 @@
-import { localizedString } from "../../../platform/action/common/action.js";
+import { localize2 } from '../../../nls.js';
+
 import {
 	Action2,
 	MenuId,
@@ -16,7 +17,7 @@ export class ToggleDevToolsAction extends Action2 {
 	constructor() {
 		super({
 			id: ToggleDeveloperToolsCommandId,
-			title: localizedString("ash", "workbench.toggleDeveloperTools", "Developer: Toggle Developer Tools"),
+			title: localize2({ bundle: "ash", key: "workbench.toggleDeveloperTools" }, "Developer: Toggle Developer Tools"),
 			f1: true,
 			menu: { id: MenuId.MenubarHelpMenu, group: "5_tools", order: 1 },
 		});

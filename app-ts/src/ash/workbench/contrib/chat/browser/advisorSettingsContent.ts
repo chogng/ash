@@ -103,11 +103,6 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.ChatModelConfiguration)) { updateHint(); }
 		}));
-		this._register(localization.onDidChange(() => {
-			this.updateLabels();
-			updateHint();
-			this.changed.fire();
-		}));
 		const scoped = this._register(contextKeys.createScoped(this.domNode));
 		scoped.createKey('advisorSettingsFocused', true);
 		this._register(AccessibleViewRegistry.register({

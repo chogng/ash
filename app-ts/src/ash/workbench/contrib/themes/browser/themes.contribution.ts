@@ -1,7 +1,8 @@
+import { localize2 } from '../../../../nls.js';
 import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { commandActionLabel, localizedString } from '../../../../platform/action/common/action.js';
+import { commandActionLabel } from '../../../../platform/action/common/action.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -16,7 +17,7 @@ interface ThemeQuickPickItem extends IQuickPickItem {
 
 const themesMenu = new MenuId('ThemesSubMenu');
 MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
-	title: localizedString('ash', 'workbench.manageThemes', 'Themes'),
+	title: localize2({ bundle: 'ash', key: 'workbench.manageThemes' }, 'Themes'),
 	submenu: themesMenu,
 	group: '2_configuration',
 	order: 7,
@@ -25,17 +26,17 @@ MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
 const themeActions = [
 	{
 		id: 'workbench.action.selectTheme',
-		title: localizedString('ash', 'workbench.selectColorTheme', 'Color Theme'),
+		title: localize2({ bundle: 'ash', key: 'workbench.selectColorTheme' }, 'Color Theme'),
 		setting: WorkbenchConfiguration.colorTheme,
 	},
 	{
 		id: 'workbench.action.selectIconTheme',
-		title: localizedString('ash', 'workbench.selectFileIconTheme', 'File Icon Theme'),
+		title: localize2({ bundle: 'ash', key: 'workbench.selectFileIconTheme' }, 'File Icon Theme'),
 		setting: WorkbenchConfiguration.iconTheme,
 	},
 	{
 		id: 'workbench.action.selectProductIconTheme',
-		title: localizedString('ash', 'workbench.selectProductIconTheme', 'Product Icon Theme'),
+		title: localize2({ bundle: 'ash', key: 'workbench.selectProductIconTheme' }, 'Product Icon Theme'),
 		setting: WorkbenchConfiguration.productIconTheme,
 	},
 ] as const;

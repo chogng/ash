@@ -1,5 +1,4 @@
 import { Disposable, MutableDisposable } from '../../../../../../base/common/lifecycle.js';
-import { onDidChangeNls } from '../../../../../../nls.js';
 import { IChatTipService } from '../../chatTipService.js';
 import { ChatTipContentPart } from '../chatContentParts/chatTipContentPart.js';
 
@@ -16,10 +15,6 @@ export class ChatInputTipPresenter extends Disposable {
 	constructor(private readonly options: IChatInputTipPresenterOptions, @IChatTipService private readonly tips: IChatTipService) {
 		super();
 		this._register(tips.onDidDismissTip(() => this.update()));
-		this._register(onDidChangeNls(() => {
-			this.part.clear();
-			this.update();
-		}));
 		this.update();
 	}
 

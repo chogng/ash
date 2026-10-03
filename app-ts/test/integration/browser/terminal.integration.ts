@@ -17,6 +17,13 @@ import { BrowserLayoutService } from '../../../src/ash/platform/layout/browser/l
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { TerminalInstanceWidget } from '../../../src/ash/workbench/contrib/terminal/browser/instance/terminalInstanceWidget.js';
 import type { ITerminalDimensions, ITerminalInstance } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
+import { setNlsMessages } from '../../../src/ash/nls.js';
+import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+
+if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
+	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsMessages(catalog.locale, catalog.bundles);
+}
 
 const store = new DisposableStore();
 const output = store.add(new Emitter<Uint8Array>());

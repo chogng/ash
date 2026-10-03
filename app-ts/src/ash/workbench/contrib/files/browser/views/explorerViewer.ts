@@ -1,6 +1,6 @@
 import { addDisposableListener, h, stopEvent } from '../../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { localize, onDidChangeNls } from '../../../../../nls.js';
+import { localize } from '../../../../../nls.js';
 import { FileKind, type IFileService } from '../../../../../platform/files/common/files.js';
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { IHoverService } from '../../../../../platform/hover/browser/hoverService.js';
@@ -32,7 +32,6 @@ export class ExplorerFindProvider extends Disposable {
 			this.input.placeholder = label;
 		};
 		updateLabel();
-		this._register(onDidChangeNls(updateLabel));
 		this.input.hidden = true;
 		host.append(this.input);
 		this._register(toDisposable(() => this.input.remove()));

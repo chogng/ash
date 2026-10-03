@@ -53,13 +53,15 @@ test('Markdown customization updates rendered styles and the token scope report'
 	await expect(heading).toHaveCSS('color', 'rgb(101, 67, 33)');
 });
 
-test('token inspection handles plaintext, Chinese labels, keyboard close and focus restoration', async ({ target, workbench }) => {
+test('token inspection handles plaintext, Chinese labels, keyboard close and focus restoration', async ({ target, workbench, restartWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
-	const page = workbench.page;
+	let page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
 	await picker.getByRole('combobox').fill('简体中文');
 	await picker.getByRole('combobox').press('Enter');
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
 	await editor.waitForEditorFocus();

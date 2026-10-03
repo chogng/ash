@@ -14,13 +14,13 @@ declare global {
 
 const opened: string[] = [];
 window.ashReleaseNotesIntegration = { get opened() { return opened; } };
-const locale = { locale: 'en', onDidChangeLocale: Event.None } as unknown as ILocaleService;
+const locale = { locale: 'en' } as unknown as ILocaleService;
 const tryouts = { async run(id: string) { opened.push(id); return 'completed' as const; } } as IOnboardingTryoutService;
 const opener = { async openExternal() {} } as IOpenerService;
 const editor = new ReleaseNotesEditor(locale, tryouts, opener);
 editor.create(document.querySelector('main')!);
 void editor.setInput({ resource: URI.parse(releaseNotesResource) }, new AbortController().signal);
-const chineseLocale = { locale: 'zh-CN', onDidChangeLocale: Event.None } as unknown as ILocaleService;
+const chineseLocale = { locale: 'zh-CN' } as unknown as ILocaleService;
 const chineseEditor = new ReleaseNotesEditor(chineseLocale, tryouts, opener);
 chineseEditor.create(document.querySelector('#chinese')!);
 void chineseEditor.setInput({ resource: URI.parse(releaseNotesResource) }, new AbortController().signal);

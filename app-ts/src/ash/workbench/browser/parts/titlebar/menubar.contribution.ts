@@ -1,18 +1,18 @@
+import { localize2 } from '../../../../nls.js';
 import {
 	MenuId,
 	MenusRegistry,
 } from "../../../../platform/actions/common/actions.js";
-import { localizedString } from "../../../../platform/action/common/action.js";
 
 const applicationMenus = [
-	[localizedString("ash.menu", "file", "File"), MenuId.MenubarFileMenu],
-	[localizedString("ash.menu", "edit", "Edit"), MenuId.MenubarEditMenu],
-	[localizedString("ash.menu", "selection", "Selection"), MenuId.MenubarSelectionMenu],
-	[localizedString("ash.menu", "view", "View"), MenuId.MenubarViewMenu],
-	[localizedString("ash.menu", "go", "Go"), MenuId.MenubarGoMenu],
-	[localizedString("ash.menu", "run", "Run"), MenuId.MenubarRunMenu],
-	[localizedString("ash.menu", "terminal", "Terminal"), MenuId.MenubarTerminalMenu],
-	[localizedString("ash.menu", "help", "Help"), MenuId.MenubarHelpMenu],
+	[localize2({ bundle: "ash.menu", key: "file" }, "File"), MenuId.MenubarFileMenu],
+	[localize2({ bundle: "ash.menu", key: "edit" }, "Edit"), MenuId.MenubarEditMenu],
+	[localize2({ bundle: "ash.menu", key: "selection" }, "Selection"), MenuId.MenubarSelectionMenu],
+	[localize2({ bundle: "ash.menu", key: "view" }, "View"), MenuId.MenubarViewMenu],
+	[localize2({ bundle: "ash.menu", key: "go" }, "Go"), MenuId.MenubarGoMenu],
+	[localize2({ bundle: "ash.menu", key: "run" }, "Run"), MenuId.MenubarRunMenu],
+	[localize2({ bundle: "ash.menu", key: "terminal" }, "Terminal"), MenuId.MenubarTerminalMenu],
+	[localize2({ bundle: "ash.menu", key: "help" }, "Help"), MenuId.MenubarHelpMenu],
 ] as const;
 
 MenusRegistry.appendMenuItems(applicationMenus.map(([title, submenu], index) => ({

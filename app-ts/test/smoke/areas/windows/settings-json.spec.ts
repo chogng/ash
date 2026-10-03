@@ -12,9 +12,9 @@ async function pasteJson(input: Locator, source: string): Promise<void> {
 	}, source);
 }
 
-test('Settings JSON opens a pinned tab, reveals a value, saves immediately and persists Chinese labels', async ({ target, workbench }) => {
+test('Settings JSON opens a pinned tab, reveals a value, saves immediately and persists Chinese labels', async ({ target, workbench, restartWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code settings editor');
-	const page = workbench.page;
+	let page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	if (target.kind === 'electron' && process.platform === 'darwin') {
@@ -33,7 +33,7 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 	await edit.focus();
 	await edit.press('Enter');
 	await expect(settings).toBeHidden();
-	const group = workbench.editors.groupAt(0);
+	let group = workbench.editors.groupAt(0);
 	const tab = group.tabs.filter({ hasText: 'User Settings (JSON)' });
 	await expect(tab).toHaveCount(1);
 	await expect(tab.locator('..')).not.toHaveClass(/preview/u);
@@ -60,6 +60,9 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
 	await picker.getByRole('combobox').fill('简体中文');
 	await picker.getByRole('combobox').press('Enter');
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
+	group = workbench.editors.groupAt(0);
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const chineseSettings = page.getByRole('dialog', { name: 'Ash 设置' });
 	await chineseSettings.locator('[data-settings-group-id="workbench"]').click();

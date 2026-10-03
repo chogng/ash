@@ -62,10 +62,6 @@ export class GlobalCompositeBar extends Disposable {
 			}),
 		}));
 		this.renderActions();
-		this._register(this.localizationService.onDidChange(() => {
-			this.actionBar.element.setAttribute('aria-label', this.label('workbench.activityBarGlobalActions', 'Activity Bar global actions'));
-			this.renderActions();
-		}));
 		this._register(this.storageService.onDidChangeValue(event => {
 			if (event.key !== GlobalCompositeBar.accountsVisibilityKey || event.scope !== StorageScope.PROFILE || !event.external) return;
 			this.accountsVisible = this.storageService.getBoolean(GlobalCompositeBar.accountsVisibilityKey, StorageScope.PROFILE, true);

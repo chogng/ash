@@ -6,9 +6,9 @@ if (browserServerMode === 'full' && !process.env.ASH_SMOKE_BROWSER_EXTERNAL_SERV
 }
 const workbenchMode = process.env.ASH_WORKBENCH_MODE === "academic" ? "academic" : "code";
 const browserProjects = browserServerMode === "disconnected"
-	? [{ name: "browser-ui", use: { baseURL: "http://127.0.0.1:5173" } }]
+	? [{ name: "browser-ui", use: { baseURL: `http://127.0.0.1:${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}` } }]
 	: browserServerMode === "full"
-		? [{ name: "browser-app-server", use: { baseURL: "http://127.0.0.1:5174" } }]
+		? [{ name: "browser-app-server", use: { baseURL: `http://127.0.0.1:${process.env.ASH_SMOKE_BROWSER_PORT ?? 5174}` } }]
 		: [];
 
 export default defineConfig({
@@ -35,8 +35,8 @@ export default defineConfig({
 		: browserServerMode === "disconnected"
 		? {
 				// The browser smoke preparation script builds the renderer before Playwright starts.
-				command: "node ../build/app_ts/launch/web.ts ../.build/app-ts/renderer/ash 5173",
-				url: "http://127.0.0.1:5173/",
+				command: `node ../build/app_ts/launch/web.ts ../.build/app-ts/renderer/ash ${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}`,
+				url: `http://127.0.0.1:${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}/`,
 				reuseExistingServer: false,
 				timeout: 120_000,
 			}

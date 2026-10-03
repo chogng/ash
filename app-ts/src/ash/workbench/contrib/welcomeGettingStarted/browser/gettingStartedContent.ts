@@ -4,7 +4,7 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 
 /** A host callback invoked by one welcome-page action. */
 type GettingStartedAction = () => void | Promise<void>;
@@ -67,10 +67,6 @@ export class GettingStarted extends Disposable {
 		content.append(this.createCards(ownerDocument, options.actions));
 		this.recentSection = this.createRecentProjects(ownerDocument);
 		content.append(this.recentSection);
-		this._register(onDidChangeNls(() => {
-			this.domNode.setAttribute('aria-label', localize('gettingStarted.title', 'Welcome'));
-			this.renderRecentProjects(this.recentSection);
-		}));
 	}
 
 	public setRecentProjects(projects: readonly IGettingStartedProject[]): void {
@@ -132,11 +128,6 @@ export class GettingStarted extends Disposable {
 		];
 		const renderedCards = cardOptions.map(card => this.createCard(ownerDocument, card));
 		cards.append(...renderedCards);
-		this._register(onDidChangeNls(() => {
-			for (let index = 0; index < cardOptions.length; index += 1) {
-				this.updateCardLabel(renderedCards[index], cardOptions[index]);
-			}
-		}));
 		return cards;
 	}
 

@@ -36,7 +36,6 @@ export class ReleaseNotesEditor extends Disposable implements IEditorPane {
 			title: localize('releaseNotes.title', 'Release Notes'),
 			openLink: href => this.openLink(href),
 		}));
-		this._register(this.locale.onDidChangeLocale(() => this.render()));
 	}
 
 	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {

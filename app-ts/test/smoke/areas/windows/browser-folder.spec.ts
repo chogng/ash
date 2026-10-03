@@ -94,10 +94,10 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 	await expect(fileTree).toBeFocused();
 	await fileRow.click();
 	await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-	await page.keyboard.press('Control+c');
+	await page.keyboard.press('ControlOrMeta+c');
 	await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.read())[0]?.types.includes('web application/x-ash-resources'))).toBe(true);
 	await explorer.getByRole('treeitem', { name: 'src', exact: true }).click();
-	await page.keyboard.press('Control+v');
+	await page.keyboard.press('ControlOrMeta+v');
 	await expect.poll(() => page.evaluate(async name => {
 		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
 		const source = await folder.getDirectoryHandle('src');
@@ -118,16 +118,16 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
 	await expect(input).toBeAttached();
 	await input.focus();
-	await input.press('Control+A');
+	await input.press('ControlOrMeta+A');
 	await input.type('second value');
 	await expect(page.getByRole('tab', { name: 'Explorer, 1 unsaved file' })).toBeVisible();
-	await input.press('Control+S');
+	await input.press('ControlOrMeta+S');
 	await expect(page.getByRole('tab', { name: 'Explorer', exact: true })).toBeVisible();
 	await expect.poll(() => page.evaluate(async name => {
 		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
 		return (await (await folder.getFileHandle('hello %中.txt')).getFile()).text();
 	}, folderName)).toBe('second value');
-	await page.keyboard.press('Control+k');
+	await page.keyboard.press('ControlOrMeta+k');
 	await page.keyboard.press('e');
 	const openEditors = page.locator('[data-view-id="workbench.explorer.openEditorsView"]');
 	await expect(openEditors).toBeVisible();

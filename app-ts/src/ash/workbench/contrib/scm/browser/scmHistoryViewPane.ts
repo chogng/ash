@@ -1,10 +1,10 @@
+import { localize2, localize } from '../../../../nls.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { observeElementSize } from "../../../../base/browser/observer.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
 import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { localize } from '../../../../nls.js';
-import { localizedString } from '../../../../platform/action/common/action.js';
+
 import { URI } from '../../../../base/common/uri.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -31,7 +31,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.scm.action.graph.viewChanges',
-			title: localizedString('ash', 'scm.history.openChanges', 'Open Changes'),
+			title: localize2({ bundle: 'ash', key: 'scm.history.openChanges' }, 'Open Changes'),
 			icon: Lxicon.diff,
 			f1: false,
 			menu: { id: MenuId.SCMHistoryItemContext, group: 'inline', order: 1 },

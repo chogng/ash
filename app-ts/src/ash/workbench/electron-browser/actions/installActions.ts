@@ -1,9 +1,9 @@
+import { localize2, localize } from '../../../nls.js';
 import { isMacintosh } from '../../../base/common/platform.js';
-import { localizedString } from '../../../platform/action/common/action.js';
 import { Action2 } from '../../../platform/actions/common/actions.js';
 import { DialogSeverity, IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
-import { localize } from '../../../nls.js';
+
 import { INativeHostService } from '../../common/services.js';
 
 async function changeShellCommand(accessor: ServicesAccessor, install: boolean): Promise<void> {
@@ -29,7 +29,7 @@ export class InstallShellCommandAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.installCommandLine',
-			title: localizedString('ash', 'workbench.installShellCommand', 'Install ash Command in PATH'),
+			title: localize2({ bundle: 'ash', key: 'workbench.installShellCommand' }, 'Install ash Command in PATH'),
 			f1: isMacintosh,
 		});
 	}
@@ -43,7 +43,7 @@ export class UninstallShellCommandAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.uninstallCommandLine',
-			title: localizedString('ash', 'workbench.uninstallShellCommand', 'Uninstall ash Command from PATH'),
+			title: localize2({ bundle: 'ash', key: 'workbench.uninstallShellCommand' }, 'Uninstall ash Command from PATH'),
 			f1: isMacintosh,
 		});
 	}

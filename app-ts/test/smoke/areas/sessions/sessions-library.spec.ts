@@ -172,17 +172,20 @@ test('Sessions Library keeps text and keyboard focus readable across themes', as
 	}
 });
 
-test('Sessions Library uses Chinese labels and localized keyboard help', async ({ application, target, workbench }) => {
+test('Sessions Library uses Chinese labels and localized keyboard help', async ({ application, target, workbench, restartWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');
-	const settings = page.locator('.ash-settings-editor');
+	let settings = page.locator('.ash-settings-editor');
 	await settings.locator('[data-settings-category-id="general"]').click();
 	const language = settings.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox');
 	await language.click();
 	await page.keyboard.press('End');
 	await page.keyboard.press('Enter');
 	await expect(language).toHaveText('简体中文');
+	({ workbench, application } = await restartWorkbench());
+	page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+,');
 	await page.locator('.ash-modal-editor-close').click();
 	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
 	else {
@@ -191,7 +194,10 @@ test('Sessions Library uses Chinese labels and localized keyboard help', async (
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Library', exact: true }).click();
+	await page.waitForFunction(() => document.querySelector('.ash-sessions-activity-content') || document.querySelector('#app > section > textarea[readonly]'));
+	if (await page.locator('#app > section > textarea[readonly]').count()) throw new Error(await page.locator('#app > section > textarea[readonly]').inputValue());
+
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '资料库', exact: true }).click();
 	const library = page.locator('.ash-library');
 	await expect(library.getByRole('heading', { name: '全部', exact: true })).toBeVisible();
 	await expect(library.getByRole('button', { name: '导入', exact: true })).toBeVisible();

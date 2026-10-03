@@ -119,7 +119,7 @@ export class URI {
 	}
 
 	/**
-	 * Creates a `file:` URI from an absolute POSIX, Windows drive, or UNC path.
+	 * Creates a `file:` URI from an absolute filesystem path using the current OS separator rules.
 	 */
 	static file(path: string): URI {
 		if (path.length === 0) {
@@ -259,8 +259,22 @@ export class URI {
 		if (!uri.path) {
 			throw new TypeError(`URI has no path: ${uri.toString()}`);
 		}
-		const encodedFragments = fragments.map(fragment => fragment.split('/').map(encodeURIComponent).join('/'));
-		return uri.withEncodedPath(paths.joinPath(uri.url.pathname, ...encodedFragments));
+		const windowsFile = isWindows && uri.scheme === 'file';
+		const encodedFragments = fragments.map(fragment => {
+			const path = windowsFile ? fragment.replaceAll('\\', '/') : fragment;
+			return path.split('/').map(encodeURIComponent).join('/');
+		});
+		if (!windowsFile) {
+			return uri.withEncodedPath(paths.joinPath(uri.url.pathname, ...encodedFragments));
+		}
+
+		// A drive or UNC share is the filesystem root; '..' must not remove that URI segment.
+		const firstSegment = uri.url.pathname.split('/')[1] ?? '';
+		const root = firstSegment && (uri.authority || /^[A-Za-z]:$/.test(decodeURIComponent(firstSegment))) ? `/${firstSegment}` : '';
+		const path = paths.joinPath(uri.url.pathname.slice(root.length) || '/', ...encodedFragments);
+		const lastFragment = encodedFragments.filter(fragment => fragment.length > 0).at(-1) ?? uri.url.pathname;
+		const joinedPath = path === '/' || lastFragment.endsWith('/') ? path : path.replace(/\/$/u, '');
+		return uri.withEncodedPath(`${root}${joinedPath}`);
 	}
 
 	/** Changes the encoded path without merging escaped separators with path boundaries. */
@@ -273,6 +287,9 @@ export class URI {
 
 	/** Appends one decoded child name to a hierarchical URI. */
 	joinPathSegment(name: string): URI {
+		if (isWindows && this.scheme === 'file' && (name === '.' || name === '..')) {
+			return URI.joinPath(this, name);
+		}
 		return this.withEncodedPath(paths.joinPath(this.url.pathname, name === '.' || name === '..' ? name : encodeURIComponent(name)));
 	}
 
@@ -312,8 +329,8 @@ function uriToFsPath(uri: URI): string {
 			|| (path.charCodeAt(1) >= CharCode.a && path.charCodeAt(1) <= CharCode.z))
 		&& path.charCodeAt(2) === CharCode.Colon;
 	if (!hasDriveLetter) {
-		return path;
+		return isWindows ? path.replaceAll('/', '\\') : path;
 	}
-	const filePath = path.slice(1);
+	const filePath = `${path[1].toLowerCase()}${path.slice(2)}`;
 	return isWindows ? filePath.replaceAll("/", "\\") : filePath;
 }

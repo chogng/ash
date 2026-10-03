@@ -1,4 +1,3 @@
-import type { Event } from "../../../../base/common/event.js";
 import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { normalizeLocale } from "../../../../platform/languagePacks/common/languagePackCatalog.js";
@@ -11,7 +10,6 @@ export type LocaleId = string;
 
 export interface ILocaleService {
 	readonly locale: LocaleId;
-	readonly onDidChangeLocale: Event<LocaleId>;
 	readonly whenReady: Promise<void>;
 	setLocale(languagePackItem: ILanguagePackItem): Promise<void>;
 	clearLocalePreference(): Promise<void>;

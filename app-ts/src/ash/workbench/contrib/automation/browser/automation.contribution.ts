@@ -1,3 +1,4 @@
+import { localize2 } from '../../../../nls.js';
 import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { IAutomationService } from '../../../../platform/automation/common/automationService.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -14,7 +15,7 @@ function registerAutomationView(): IDisposable {
 	registrations.add(ViewsRegistry.registerViewContainer({ id: 'ash.automation', title: 'Automations', location: ViewContainerLocation.Panel, order: 3 }));
 	registrations.add(ViewsRegistry.registerViews('ash.automation', [{ id: 'ash.automation.view', title: 'Automations', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(AutomationViewPane) }]));
 	registrations.add(registerAction2(class OpenAutomations extends Action2 {
-		constructor() { super({ id: 'ash.automation.open', title: 'Open Automations', f1: true }); }
+		constructor() { super({ id: 'ash.automation.open', title: localize2({ bundle: 'ash.workbench', key: 'command.OpenAutomations' }, 'Open Automations'), f1: true }); }
 		public override run(accessor: ServicesAccessor): void { accessor.get(IViewsService).focusView('ash.automation.view'); }
 	}));
 	return registrations;

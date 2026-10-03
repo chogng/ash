@@ -2,7 +2,7 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { CancellationError } from '../../../../base/common/errors.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ChatAttachmentModel } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentModel.js';
 
@@ -22,7 +22,6 @@ export class NewChatContextAttachments extends Disposable {
 		this.filePicker.multiple = true;
 		this.filePicker.hidden = true;
 		this.filePicker.setAttribute('aria-label', localize('chat.attach.files', 'Attach files'));
-		this._register(onDidChangeNls(() => this.filePicker.setAttribute('aria-label', localize('chat.attach.files', 'Attach files'))));
 		container.append(this.filePicker);
 		this._register(toDisposable(() => this.filePicker.remove()));
 		this._register(toDisposable(() => {

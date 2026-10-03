@@ -33,7 +33,7 @@ class SettingsFixture extends DisposableStore {
 	public readonly installed = this.add(new Emitter<void>());
 	public readonly connection = this.add(new Emitter<RemoteConnectionState>());
 	public readonly localeChanged = this.add(new Emitter<void>());
-	public locale = 'en';
+	public locale: string;
 	public snapshot: LanguageServerSnapshot = { revision: 7, configurations: {}, servers: [{ id: 'rust-analyzer', languageIds: ['rust'] }] };
 	public pending: Promise<LanguageServerSnapshot> | undefined;
 	public rejectWrites = false;
@@ -42,8 +42,9 @@ class SettingsFixture extends DisposableStore {
 	public readonly inputs: EditorInput[] = [];
 	public readonly content: LanguageServerSettingsContent;
 
-	constructor() {
+	constructor(locale = 'en') {
 		super();
+		this.locale = locale;
 		browserEnvironment.window.document.body.append(this.root);
 		this.add(toDisposable(() => this.root.remove()));
 		this.services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ getModel: () => ({ getLanguageId: () => 'rust' }) }) } as unknown as ICodeEditorService);
@@ -62,8 +63,7 @@ class SettingsFixture extends DisposableStore {
 		this.services.registerInstance(IMarketplaceService, { onDidChangeInstalled: this.installed.event } as IMarketplaceService);
 		this.services.registerInstance(ICommandService, { executeCommand: async (id: string, ...args: unknown[]) => { this.commands.push([id, ...args]); } } as unknown as ICommandService);
 		this.services.registerInstance(IWorkspaceContextService, this.add(new WorkspaceContextService({ id: 'test', folders: [] })));
-		this.services.registerInstance(ILocalizationService, {
-			onDidChange: this.localeChanged.event, whenReady: Promise.resolve(),
+		this.services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(),
 			translate: (bundle, key, text, parameters) => {
 				const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === this.locale)!;
 				return (catalog.bundles[bundle]?.[key] ?? text).replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match));
@@ -170,13 +170,11 @@ test('Installation changes and disconnects discard late language server reads', 
 });
 
 test('Language server Settings searches server metadata, localizes Chinese, and restores focus after help', async () => {
-	using fixture = new SettingsFixture();
+	using fixture = new SettingsFixture('zh-CN');
 	fixture.content.setVisible(true);
 	await settle();
 	const nodes = fixture.content.getNodes(new SettingsSearchQuery('rust-analyzer'));
 	assert.equal(new SettingsSearchQuery('rust-analyzer').matches(nodes[0]!.children![0]!.element), true);
-	fixture.locale = builtinLanguagePackCatalogs.find(catalog => catalog.locale !== 'en')!.locale;
-	fixture.localeChanged.fire();
 	const field = fixture.field('语言 ID');
 	assert.equal(field.value, 'rust');
 	assert.ok(fixture.button('保存服务器配置'));

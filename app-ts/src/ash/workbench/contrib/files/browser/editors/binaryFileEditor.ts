@@ -1,7 +1,7 @@
 import type { IEditorPaneDescriptor } from '../../../../browser/editor.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { type URI } from '../../../../../base/common/uri.js';
-import { localize, onDidChangeNls } from '../../../../../nls.js';
+import { localize } from '../../../../../nls.js';
 import { DialogSeverity, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -31,7 +31,6 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		button.className = 'ash-button ash-button-secondary ash-binary-open-as-text';
 		const updateLabel = () => { button.textContent = localize('files.openBinaryAsText', 'Open as Read-Only Text'); };
 		updateLabel();
-		this._register(onDidChangeNls(updateLabel));
 		this.container?.prepend(button);
 		this._register(addDisposableListener(button, 'click', () => { void this.openAsText(); }));
 	}

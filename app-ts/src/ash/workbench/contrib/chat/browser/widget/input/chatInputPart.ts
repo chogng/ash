@@ -11,7 +11,7 @@ import type { Icon } from "../../../../../../base/common/icon.js";
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
-import { localize, onDidChangeNls } from "../../../../../../nls.js";
+import { localize } from "../../../../../../nls.js";
 import { WorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
 import type { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { IInstantiationService } from "../../../../../../platform/instantiation/common/instantiation.js";
@@ -186,10 +186,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}));
 		this.renderToolbarActions();
 		this.renderAttachments();
-		this._register(onDidChangeNls(() => {
-			this.renderToolbarActions();
-			this.renderAttachments();
-		}));
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(toDisposable(() => { void this.stopDictation(); }));
 	}

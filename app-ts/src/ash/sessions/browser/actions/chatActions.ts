@@ -1,3 +1,4 @@
+import { localize2 } from '../../../nls.js';
 import { Lxicon } from "../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import { Action2, MenuId, registerAction2 } from "../../../platform/actions/common/actions.js";
@@ -12,7 +13,7 @@ registerAction2(class OpenChatAction extends Action2 {
 	constructor() {
 		super({
 			id: OPEN_CHAT_COMMAND_ID,
-			title: "Open Chat",
+			title: localize2({ bundle: 'ash.sessions', key: 'command.OpenChatAction' }, "Open Chat"),
 			icon: Lxicon.chat4,
 			f1: true,
 		});
@@ -27,7 +28,7 @@ registerAction2(class NewChatAction extends Action2 {
 	constructor() {
 		super({
 			id: NEW_CHAT_COMMAND_ID,
-			title: "New Chat",
+			title: localize2({ bundle: 'ash.sessions', key: 'command.NewChatAction' }, "New Chat"),
 			icon: Lxicon.add,
 			f1: true,
 			menu: {
@@ -55,7 +56,7 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
 	constructor() {
 		super({
 			id: SHOW_CHAT_HISTORY_COMMAND_ID,
-			title: "Show Chat History",
+			title: localize2({ bundle: 'ash.sessions', key: 'command.ShowChatHistoryAction' }, "Show Chat History"),
 			tooltip: "Show Chat History",
 			icon: Lxicon.history,
 			f1: true,

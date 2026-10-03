@@ -1,3 +1,4 @@
+import '../../contrib/library/browser/library.contribution.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -113,7 +114,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => {}, appendToActiveDraft: () => {} });
 	services.registerInstance(IEditorService, {} as IEditorService);
 	services.registerInstance(IFileService, {} as IFileService);
-	services.registerInstance(ILocalizationService, { onDidChange: Event.None, whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
+	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	const { IPreferencesService } = await import('../../../workbench/services/preferences/common/preferences.js');
 	services.registerInstance(IPreferencesService, { openSettings: category => preferences.open(category) } as import('../../../workbench/services/preferences/common/preferences.js').IPreferencesService);
 	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => {});

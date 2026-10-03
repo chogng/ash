@@ -1,6 +1,6 @@
 import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
 import { Schemas } from '../../../../base/common/network.js';
-import { localize } from '../../../../nls.js';
+import { localize2, type ILocalizedString } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -15,12 +15,12 @@ import { resolveFileResource } from '../browser/fileCommands.js';
 export const REVEAL_IN_OS_COMMAND_ID = 'revealFileInOS';
 export const REVEAL_ACTIVE_FILE_IN_OS_COMMAND_ID = 'workbench.action.files.revealActiveFileInWindows';
 
-function revealLabel(): string {
+function revealLabel(): ILocalizedString {
 	return isWindows
-		? localize({ bundle: 'ash', key: 'files.revealInWindows' }, 'Reveal in File Explorer')
+		? localize2({ bundle: 'ash', key: 'files.revealInWindows' }, 'Reveal in File Explorer')
 		: isMacintosh
-			? localize({ bundle: 'ash', key: 'files.revealInMac' }, 'Reveal in Finder')
-			: localize({ bundle: 'ash', key: 'files.revealInLinux' }, 'Open Containing Folder');
+			? localize2({ bundle: 'ash', key: 'files.revealInMac' }, 'Reveal in Finder')
+			: localize2({ bundle: 'ash', key: 'files.revealInLinux' }, 'Open Containing Folder');
 }
 
 registerAction2(class RevealFileInOSAction extends Action2 {

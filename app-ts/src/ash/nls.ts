@@ -1,5 +1,3 @@
-import { Emitter, type Event } from "./base/common/event.js";
-
 export type LocalizationParameters = Readonly<Record<string, string | number>>;
 
 /** Stable bundle/key metadata that can be consumed without Workbench services. */
@@ -27,13 +25,18 @@ export type NlsResolver = (
 	parameters?: LocalizationParameters,
 ) => string;
 
-const changes = new Emitter<void>();
+let language = 'en';
 const fallbackResolver: NlsResolver = (_bundle, _key, fallback, parameters) =>
 	formatNlsMessage(fallback, parameters);
 let resolver: NlsResolver = fallbackResolver;
 
-/** Fires when the active renderer-wide NLS projection changes. */
-export const onDidChangeNls: Event<void> = changes.event;
+export function getNLSLanguage(): string { return language; }
+
+/** Bootstrap must finish before importing modules that register translated metadata. */
+export function setNlsMessages(locale: string, bundles: Readonly<Record<string, Readonly<Record<string, string>>>>): void {
+	language = locale;
+	resolver = (bundle, key, original, parameters) => formatNlsMessage(bundles[bundle]?.[key] ?? original, parameters);
+}
 
 export function localize(info: ILocalizeInfo, message: string, ...args: LocalizeArgument[]): string;
 export function localize(info: LocalizationKey, message: string, ...args: LocalizeArgument[]): string;
@@ -46,8 +49,9 @@ export function localize(info: ILocalizeInfo | LocalizationKey | string, message
 }
 
 export function localize2(info: ILocalizeInfo, message: string, ...args: LocalizeArgument[]): ILocalizedString;
+export function localize2(info: LocalizationKey, message: string, ...args: LocalizeArgument[]): ILocalizedString;
 export function localize2(key: string, message: string, ...args: LocalizeArgument[]): ILocalizedString;
-export function localize2(info: ILocalizeInfo | string, message: string, ...args: LocalizeArgument[]): ILocalizedString {
+export function localize2(info: ILocalizeInfo | LocalizationKey | string, message: string, ...args: LocalizeArgument[]): ILocalizedString {
 	const original = formatNlsMessage(message, Object.fromEntries(args.map((value, index) => [String(index), String(value)])));
 	return {
 		original,
@@ -58,13 +62,12 @@ export function localize2(info: ILocalizeInfo | string, message: string, ...args
 /** Installs the resolver for the current renderer realm. */
 export function setNlsResolver(next: NlsResolver): void {
 	resolver = next;
-	changes.fire();
 }
 
 /** Restores source-language fallback behavior for isolated tests and hosts. */
 export function resetNlsResolver(): void {
 	resolver = fallbackResolver;
-	changes.fire();
+	language = 'en';
 }
 
 export function formatNlsMessage(

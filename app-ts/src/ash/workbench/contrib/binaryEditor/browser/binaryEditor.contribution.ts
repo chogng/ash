@@ -1,3 +1,4 @@
+import { localize2 } from '../../../../nls.js';
 import "./media/binaryEditorPane.css";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { basename } from "../../../../base/common/resources.js";
@@ -22,7 +23,7 @@ registerAction2(class CompareBinaryEditorsAction extends Action2 {
 	constructor() {
 		super({
 			id: "workbench.action.compareActiveFileAsBinary",
-			title: "Compare Active File as Binary With...",
+			title: localize2({ bundle: 'ash.workbench', key: 'command.CompareBinaryEditorsAction' }, "Compare Active File as Binary With..."),
 			f1: true,
 		});
 	}

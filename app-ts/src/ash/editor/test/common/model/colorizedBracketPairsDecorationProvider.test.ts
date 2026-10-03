@@ -14,7 +14,7 @@ test('Bracket colorization follows model nesting and excludes brackets in string
 	using tokens = registerTestTokens(new Map([
 		['  ("}")', [{ offset: 0, type: '' }, { offset: 3, type: 'string' }, { offset: 6, type: '' }]],
 	]));
-	await new Promise(resolve => setImmediate(resolve));
+	model.tokenization.forceTokenization(model.getLineCount());
 	const colors = {
 		getLineBrackets: (lineIndex: number) => model.getLineDecorations(lineIndex + 1).map(decoration => ({
 			startColumn: decoration.range.startColumn - 1,

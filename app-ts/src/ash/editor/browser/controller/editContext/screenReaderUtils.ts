@@ -75,12 +75,12 @@ export class SimplePagedScreenReaderStrategy implements IPagedScreenReaderStrate
 	}
 }
 
-export function ariaLabelForScreenReaderContent(options: IComputedEditorOptions, keybindingService: IKeybindingService) {
+export function ariaLabelForScreenReaderContent(options: IComputedEditorOptions, keybindingService: IKeybindingService): string {
 	if (options.get(EditorOption.accessibilitySupport) === AccessibilitySupport.Disabled) {
 		const hasToggleKeybinding = keybindingService.lookupKeybinding('editor.action.toggleScreenReaderAccessibilityMode') !== undefined;
-		return nls.localize('editor', 'accessibilityModeOff', hasToggleKeybinding
-			? 'The editor is not accessible at this time. Use the configured accessibility-mode shortcut to enable it.'
-			: 'The editor is not accessible at this time. Enable screen reader optimized mode from the command menu.');
+		return hasToggleKeybinding
+			? nls.localize('accessibilityModeOffWithShortcut', 'The editor is not accessible at this time. Use the configured accessibility-mode shortcut to enable it.')
+			: nls.localize('accessibilityModeOff', 'The editor is not accessible at this time. Enable screen reader optimized mode from the command menu.');
 	}
 	return options.get(EditorOption.ariaLabel);
 }

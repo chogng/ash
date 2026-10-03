@@ -9,5 +9,8 @@ import './services/workspaces/browser/workspacesService.js';
 import { BrowserHostService } from './services/host/browser/browserHostService.js';
 import { IHostService } from './services/host/browser/host.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
+import { ILanguagePackStore } from '../platform/languagePacks/common/languagePackStore.js';
+import { BrowserLanguagePackStore } from '../platform/languagePacks/browser/languagePackStore.js';
 
 registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);
+registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);

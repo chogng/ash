@@ -106,6 +106,11 @@ import { InstantiationService } from '../../platform/instantiation/common/instan
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
 import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
 import { normalizeLocale } from '../../platform/languagePacks/common/languagePackCatalog.js';
+import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
+import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePacksService.js';
+import { LanguagePackStore } from '../../platform/languagePacks/node/languagePackStore.js';
+import { LANGUAGE_PACK_READ_CHANNEL, LANGUAGE_PACK_WRITE_CHANNEL, NLS_CONFIGURATION_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
+import { HOST_RESTART_CHANNEL } from '../../platform/window/common/window.js';
 import { workbenchModeIpcRoutes } from "../../workbench/services/workbenchMode/electron-main/workbenchModeIpc.js";
 export type AppServerStartupMode = "required" | "disabled";
 
@@ -223,6 +228,8 @@ export class AshApplication extends Disposable {
 	private readonly globalKeybindings: GlobalKeybindingsMainService;
 	private readonly nativeMenubar: NativeMenubarMainService | undefined;
 	private readonly profileRoot: string;
+	private activeLanguagePack: LanguagePackCatalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!;
+	private restartRequested = false;
 	private readonly developmentAppServerReloader = this._register(new MutableDisposable<DevelopmentAppServerReloader>());
 	private readonly windowIconPath: string | undefined;
 
@@ -384,6 +391,11 @@ export class AshApplication extends Disposable {
 		this.mainProcessIpcServer.registerChannel('logger', new LoggerChannel(this.loggerService));
 		this.logService.info('lifecycle', 'Desktop startup', { mode: this.defaultModeId, appServer: this.appServerStartupMode });
 		await this.createPersistentServices();
+		const localeValue = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
+		const locale = typeof localeValue === 'string' ? normalizeLocale(localeValue) : 'en';
+		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale.toLowerCase() === locale.toLowerCase()) ?? await new LanguagePackStore(this.profileRoot).read(locale);
+		if (!catalog) { throw new Error(`Display language '${locale}' is not installed locally`); }
+		this.activeLanguagePack = catalog;
 		const storage = this.storageMainService = this._register(new StorageMainService(join(app.getPath('userData'), 'workbench-state.json')));
 		await storage.initialize();
 		this.mainProcessIpcServer.registerChannel('storage', new StorageDatabaseChannel(storage));
@@ -703,11 +715,7 @@ export class AshApplication extends Disposable {
 	}
 
 	private mainLocalizationMessages(): Readonly<Record<string, string>> {
-		const configuredLocale = this.persistentServices && configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
-		const locale = typeof configuredLocale === 'string' ? normalizeLocale(configuredLocale) : 'en';
-		const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === locale)
-			?? builtinLanguagePackCatalogs.find(candidate => candidate.locale === 'en')!;
-		return catalog.bundles.ash!;
+		return { ...builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!.bundles.ash, ...this.activeLanguagePack.bundles.ash };
 	}
 
 	/** Focuses a live window, or recreates an empty Workbench when none remains. */
@@ -840,6 +848,26 @@ export class AshApplication extends Disposable {
 
 	private mainProcessIpcRoutes(window: BrowserWindow): readonly IpcRoute<unknown, unknown>[] {
 		return [
+			{
+				channel: NLS_CONFIGURATION_CHANNEL,
+				validate: value => { if (value !== undefined) { throw new TypeError('Startup language takes no arguments'); } return undefined; },
+				invoke: () => this.activeLanguagePack,
+			},
+			{
+				channel: LANGUAGE_PACK_READ_CHANNEL,
+				validate: value => { if (typeof value !== 'string' || !value || normalizeLocale(value) !== value) { throw new TypeError('Invalid display language ID'); } return value; },
+				invoke: locale => new LanguagePackStore(this.profileRoot).read(locale as string),
+			},
+			{
+				channel: LANGUAGE_PACK_WRITE_CHANNEL,
+				validate: value => { const catalog = parseLanguagePackCatalog(value); if (!catalog) { throw new TypeError('Invalid display language resource'); } return catalog; },
+				invoke: catalog => new LanguagePackStore(this.profileRoot).write(catalog as LanguagePackCatalog),
+			},
+			{
+				channel: HOST_RESTART_CHANNEL,
+				validate: value => { if (value !== undefined) { throw new TypeError('Restart takes no arguments'); } return undefined; },
+				invoke: () => { this.restartRequested = true; app.quit(); },
+			},
 			{
 				channel: 'ash:workspaces:recent:read',
 				validate: value => {
@@ -1879,6 +1907,7 @@ export class AshApplication extends Disposable {
 			return;
 		}
 		this.quitRequested = false;
+		this.restartRequested = false;
 		this.quitSaveStarted = false;
 		this.quitAfterStateSaved = false;
 		this.windowSessionStateHandler.resumeAutomaticSaves();
@@ -1886,6 +1915,8 @@ export class AshApplication extends Disposable {
 
 	private readonly onWillQuit = (event: ElectronEvent): void => {
 		if (this.quitAfterServicesClosed) {
+			// Schedule the new process only after every window accepted shutdown and state was saved.
+			if (this.restartRequested) { app.relaunch(); }
 			this.dispose();
 			this.releaseDisposableTracker();
 			return;

@@ -1,8 +1,8 @@
+import { localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
-import { localizedString } from '../../../../platform/action/common/action.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
@@ -27,7 +27,7 @@ registerAction2(class OpenFileAction extends Action2 {
 	constructor() {
 		super({
 			id: OPEN_FILE_COMMAND_ID,
-			title: localizedString('ash', 'workbench.openFile', 'Open File...'),
+			title: localize2({ bundle: 'ash', key: 'workbench.openFile' }, 'Open File...'),
 			f1: true,
 			menu: { id: MenuId.MenubarFileMenu, group: '1_file', order: 0 },
 			keybinding: { primary: Keybinding.single(logicalKey('o', { primaryKey: true })) },
@@ -44,8 +44,8 @@ registerAction2(class NewUntitledTextEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: NEW_UNTITLED_FILE_COMMAND_ID,
-			title: localizedString('ash', 'workbench.newUntitledFile', 'New Untitled Text Editor'),
-			tooltip: localizedString('ash', 'workbench.newUntitledFile', 'New Untitled Text Editor'),
+			title: localize2({ bundle: 'ash', key: 'workbench.newUntitledFile' }, 'New Untitled Text Editor'),
+			tooltip: localize2({ bundle: 'ash', key: 'workbench.newUntitledFile' }, 'New Untitled Text Editor'),
 			icon: Lxicon.add,
 			f1: true,
 			menu: { id: MenuId.MenubarFileMenu, group: '1_file', order: -1 },
@@ -65,8 +65,8 @@ registerAction2(class SaveActiveEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: SAVE_FILE_COMMAND_ID,
-			title: localizedString('ash', 'workbench.save', 'Save'),
-			tooltip: localizedString('ash', 'workbench.save', 'Save'),
+			title: localize2({ bundle: 'ash', key: 'workbench.save' }, 'Save'),
+			tooltip: localize2({ bundle: 'ash', key: 'workbench.save' }, 'Save'),
 			f1: true,
 			menu: {
 				id: MenuId.MenubarFileMenu,
@@ -94,7 +94,7 @@ registerAction2(class RevealInExplorerAction extends Action2 {
 	constructor() {
 		super({
 			id: REVEAL_IN_EXPLORER_COMMAND_ID,
-			title: localizedString('ash', 'files.revealInExplorer', 'Reveal in Explorer View'),
+			title: localize2({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View'),
 			precondition: ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key),
 			menu: {
 				id: MenuId.EditorTitleContext,
@@ -132,83 +132,83 @@ CommandsRegistry.registerMany([
 	{ id: CANCEL_CUT_COMMAND_ID, handler: cancelExplorerCut },
 ]);
 
-MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: NEW_FILE_COMMAND_ID, title: localizedString('ash', 'workbench.newFile', 'New File...') }, when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0) });
-MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: NEW_FOLDER_COMMAND_ID, title: localizedString('ash', 'files.newFolder', 'New Folder...') }, when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0) });
-MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: COPY_PATH_COMMAND_ID, title: localizedString('ash', 'workbench.copyPath', 'Copy Path') }, when: fileResourceWhen });
-MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localizedString('ash', 'workbench.copyRelativePath', 'Copy Relative Path') }, when: fileResourceWhen });
+MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: NEW_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.newFile' }, 'New File...') }, when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0) });
+MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: NEW_FOLDER_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...') }, when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0) });
+MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: COPY_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path') }, when: fileResourceWhen });
+MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path') }, when: fileResourceWhen });
 
 MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
-	command: { id: COPY_PATH_COMMAND_ID, title: localizedString('ash', 'workbench.copyPath', 'Copy Path') },
+	command: { id: COPY_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path') },
 	when: fileResourceWhen,
 	group: '1_cutcopypaste',
 	order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
-	command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localizedString('ash', 'workbench.copyRelativePath', 'Copy Relative Path') },
+	command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path') },
 	when: fileResourceWhen,
 	group: '1_cutcopypaste',
 	order: 20,
 });
 
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: { id: NEW_FILE_COMMAND_ID, title: localizedString('ash', 'workbench.newFile', 'New File...') },
+	command: { id: NEW_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.newFile' }, 'New File...') },
 	when: canCreateWhen,
 	group: 'navigation',
 	order: 4,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: { id: NEW_FOLDER_COMMAND_ID, title: localizedString('ash', 'files.newFolder', 'New Folder...') },
+	command: { id: NEW_FOLDER_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...') },
 	when: canCreateWhen,
 	group: 'navigation',
 	order: 6,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: { id: OPEN_TO_SIDE_COMMAND_ID, title: localizedString('ash', 'files.openToSide', 'Open to the Side') },
+	command: { id: OPEN_TO_SIDE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.openToSide' }, 'Open to the Side') },
 	when: selectedFileWhen,
 	group: 'navigation',
 	order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: { id: DOWNLOAD_COMMAND_ID, title: localizedString('ash', 'workbench.downloadFile', 'Download File...') },
+	command: { id: DOWNLOAD_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.downloadFile' }, 'Download File...') },
 	when: downloadWhen,
 	group: '5b_importexport',
 	order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: { id: CUT_FILE_COMMAND_ID, title: localizedString('ash', 'files.cut', 'Cut') },
+	command: { id: CUT_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.cut' }, 'Cut') },
 	when: canModifyWhen,
 	group: '5_cutcopypaste', order: 8,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: { id: COPY_FILE_COMMAND_ID, title: localizedString('ash', 'files.copy', 'Copy') },
+	command: { id: COPY_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.copy' }, 'Copy') },
 	when: canModifyWhen,
 	group: '5_cutcopypaste', order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: { id: PASTE_FILE_COMMAND_ID, title: localizedString('ash', 'files.paste', 'Paste') },
+	command: { id: PASTE_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.paste' }, 'Paste') },
 	when: canCreateWhen,
 	group: '5_cutcopypaste', order: 20,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: { id: COPY_PATH_COMMAND_ID, title: localizedString('ash', 'workbench.copyPath', 'Copy Path') },
+	command: { id: COPY_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path') },
 	when: selectedResourceWhen,
 	group: '6_copypath',
 	order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localizedString('ash', 'workbench.copyRelativePath', 'Copy Relative Path') },
+	command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path') },
 	when: selectedResourceWhen,
 	group: '6_copypath',
 	order: 20,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: { id: RENAME_FILE_COMMAND_ID, title: localizedString('ash', 'files.rename', 'Rename'), precondition: canModifyWhen },
+	command: { id: RENAME_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.rename' }, 'Rename'), precondition: canModifyWhen },
 	when: canModifyWhen,
 	group: '7_modification',
 	order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: { id: DELETE_FILE_COMMAND_ID, title: localizedString('ash', 'files.deletePermanently', 'Delete Permanently'), precondition: canModifyWhen },
+	command: { id: DELETE_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.deletePermanently' }, 'Delete Permanently'), precondition: canModifyWhen },
 	when: canModifyWhen,
 	group: '7_modification',
 	order: 20,

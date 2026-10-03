@@ -29,7 +29,7 @@ import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { explorerFileContribRegistry } from '../explorerFileContrib.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import { localize, onDidChangeNls } from '../../../../../nls.js';
+import { localize } from '../../../../../nls.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { FileEditorInput } from '../editors/fileEditorInput.js';
 import { ResourceSchemeContext } from '../../../../common/contextkeys.js';
@@ -196,7 +196,6 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 				for (const root of roots) void this.refreshRoot(root);
 			}
 		}));
-		this._register(onDidChangeNls(updateAriaLabel));
 		this._register(this.tree.onDidError(({ element, error }) => {
 			this.treeError = true;
 			this.treeErrorElement = element;

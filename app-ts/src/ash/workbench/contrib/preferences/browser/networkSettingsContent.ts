@@ -120,7 +120,6 @@ export class NetworkSettingsContent extends Disposable implements SettingsConten
 			this.invalidate();
 			if (this.visible) { void this.refresh(); }
 		}));
-		this._register(localization.onDidChange(() => { this.render(); this.changed.fire(); }));
 		const updateHints = (): void => {
 			const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.NetworkSettings);
 			for (const element of [this.protocolControls, this.domains, this.diagnostics]) {

@@ -5,6 +5,7 @@ import { isRecord } from '../../../base/common/types.js';
 import { URI } from '../../../base/common/uri.js';
 
 export interface IColorScheme { readonly dark: boolean; readonly highContrast: boolean; }
+export const HOST_RESTART_CHANNEL = 'ash:host:restart';
 
 export interface IOpenEmptyWindowOptions {
 	readonly forceReuseWindow?: boolean;

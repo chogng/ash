@@ -1,4 +1,4 @@
-import { localize } from '../../../../nls.js';
+import { localize2 } from '../../../../nls.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
@@ -11,7 +11,7 @@ import { CLEAR_DEBUG_CONSOLE_COMMAND_ID, CONTINUE_DEBUG_COMMAND_ID, DEBUG_CONSOL
 
 registerAction2(class ToggleBreakpointAction extends Action2 {
 	constructor() {
-		super({ id: 'editor.debug.action.toggleBreakpoint', title: localize('debug.toggleBreakpoint', 'Toggle Breakpoint'), f1: true, keybinding: { primary: Keybinding.single(logicalKey('F9')), when: EditorContextKeys.editorTextFocus.isEqualTo(true) } });
+		super({ id: 'editor.debug.action.toggleBreakpoint', title: localize2('debug.toggleBreakpoint', 'Toggle Breakpoint'), f1: true, keybinding: { primary: Keybinding.single(logicalKey('F9')), when: EditorContextKeys.editorTextFocus.isEqualTo(true) } });
 	}
 	override run(accessor: ServicesAccessor): void {
 		const editors = accessor.get(ICodeEditorService);
@@ -23,7 +23,7 @@ registerAction2(class ToggleBreakpointAction extends Action2 {
 });
 
 registerAction2(class StartDebugAction extends Action2 {
-	constructor() { super({ id: START_DEBUG_COMMAND_ID, title: "Start Debugging", f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5")) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 1 } }); }
+	constructor() { super({ id: START_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'debug.start' }, "Start Debugging"), f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5")) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 1 } }); }
 	override run(accessor: ServicesAccessor): void {
 		const debug = accessor.get(IDebugService);
 		accessor.get(IViewsService).focusView(DEBUG_VIEW_ID);
@@ -37,27 +37,27 @@ registerAction2(class StartDebugAction extends Action2 {
 });
 
 registerAction2(class StopDebugAction extends Action2 {
-	constructor() { super({ id: STOP_DEBUG_COMMAND_ID, title: "Stop Debugging", f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5", { shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 2 } }); }
+	constructor() { super({ id: STOP_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.StopDebugAction' }, "Stop Debugging"), f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5", { shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 2 } }); }
 	override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).stop().catch(reportError); }
 });
 
 registerAction2(class RestartDebugAction extends Action2 {
-	constructor() { super({ id: RESTART_DEBUG_COMMAND_ID, title: "Restart Debugging", f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5", { ctrlKey: true, shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 3 } }); }
+	constructor() { super({ id: RESTART_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.RestartDebugAction' }, "Restart Debugging"), f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5", { ctrlKey: true, shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 3 } }); }
 	override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).restart().catch(reportError); }
 });
 
 registerAction2(class StopAllDebugAction extends Action2 {
-	constructor() { super({ id: STOP_ALL_DEBUG_COMMAND_ID, title: "Stop All Debugging", f1: true, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 4 } }); }
+	constructor() { super({ id: STOP_ALL_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.StopAllDebugAction' }, "Stop All Debugging"), f1: true, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 4 } }); }
 	override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).stopAll().catch(reportError); }
 });
 
 registerAction2(class FocusDebugConsoleAction extends Action2 {
-	constructor() { super({ id: FOCUS_DEBUG_CONSOLE_COMMAND_ID, title: "Focus on Debug Console View", f1: true }); }
+	constructor() { super({ id: FOCUS_DEBUG_CONSOLE_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.FocusDebugConsoleAction' }, "Focus on Debug Console View"), f1: true }); }
 	override run(accessor: ServicesAccessor): void { accessor.get(IViewsService).focusView(DEBUG_CONSOLE_VIEW_ID); }
 });
 
 registerAction2(class ClearDebugConsoleAction extends Action2 {
-	constructor() { super({ id: CLEAR_DEBUG_CONSOLE_COMMAND_ID, title: "Clear Console", f1: true }); }
+	constructor() { super({ id: CLEAR_DEBUG_CONSOLE_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ClearDebugConsoleAction' }, "Clear Console"), f1: true }); }
 	override run(accessor: ServicesAccessor): void { accessor.get(IDebugConsoleService).clear(); }
 });
 

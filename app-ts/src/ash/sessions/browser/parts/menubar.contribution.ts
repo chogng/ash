@@ -1,16 +1,17 @@
-import { localizedString } from '../../../platform/action/common/action.js';
+import { localize2 } from '../../../nls.js';
+
 import { MenuId, MenusRegistry } from '../../../platform/actions/common/actions.js';
 import { RETURN_TO_WORKBENCH_COMMAND_ID } from '../../common/windowNavigation.js';
 import { Menus } from '../menus.js';
 
 const sections = [
-	[localizedString('ash.menu', 'file', 'File'), Menus.MenubarFileMenu, 1],
-	[localizedString('ash.menu', 'edit', 'Edit'), MenuId.MenubarEditMenu, 2],
-	[localizedString('ash.menu', 'selection', 'Selection'), MenuId.MenubarSelectionMenu, 3],
-	[localizedString('ash.menu', 'view', 'View'), MenuId.MenubarViewMenu, 4],
-	[localizedString('ash.menu', 'go', 'Go'), MenuId.MenubarGoMenu, 5],
-	[localizedString('ash.menu', 'terminal', 'Terminal'), MenuId.MenubarTerminalMenu, 7],
-	[localizedString('ash.menu', 'help', 'Help'), MenuId.MenubarHelpMenu, 8],
+	[localize2({ bundle: 'ash.menu', key: 'file' }, 'File'), Menus.MenubarFileMenu, 1],
+	[localize2({ bundle: 'ash.menu', key: 'edit' }, 'Edit'), MenuId.MenubarEditMenu, 2],
+	[localize2({ bundle: 'ash.menu', key: 'selection' }, 'Selection'), MenuId.MenubarSelectionMenu, 3],
+	[localize2({ bundle: 'ash.menu', key: 'view' }, 'View'), MenuId.MenubarViewMenu, 4],
+	[localize2({ bundle: 'ash.menu', key: 'go' }, 'Go'), MenuId.MenubarGoMenu, 5],
+	[localize2({ bundle: 'ash.menu', key: 'terminal' }, 'Terminal'), MenuId.MenubarTerminalMenu, 7],
+	[localize2({ bundle: 'ash.menu', key: 'help' }, 'Help'), MenuId.MenubarHelpMenu, 8],
 ] as const;
 
 MenusRegistry.appendMenuItems(sections.map(([title, submenu, order]) => ({
@@ -22,7 +23,7 @@ MenusRegistry.appendMenuItems(sections.map(([title, submenu, order]) => ({
 MenusRegistry.appendMenuItem(Menus.MenubarFileMenu, {
 	command: {
 		id: RETURN_TO_WORKBENCH_COMMAND_ID,
-		title: localizedString('ash', 'sessions.menu.workbench', 'Return to Workbench'),
+		title: localize2({ bundle: 'ash', key: 'sessions.menu.workbench' }, 'Return to Workbench'),
 	},
 	group: '6_close',
 	order: 4,

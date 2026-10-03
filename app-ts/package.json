@@ -11,7 +11,7 @@
     "icons:check": "node ../build/resources/icons/generate.ts --check",
     "protocol:generate": "node ../build/protocol/generate.ts",
     "protocol:sync": "node ../build/protocol/sync.ts",
-    "prepare:generated": "pnpm run prepare:extensions && pnpm run typecheck:common && pnpm run icons:check",
+    "prepare:generated": "pnpm run localization:generate && pnpm run prepare:extensions && pnpm run typecheck:common && pnpm run icons:check",
     "prepare:extensions": "node ../build/resources/extensions.ts",
     "rebuild:native": "electron-rebuild -w native-keymap",
     "prepare:output": "node ../build/app_ts/build.ts prepare",
@@ -98,7 +98,9 @@
     "prestart": "pnpm run prepare:output && pnpm run prepare:desktop",
     "verify:protocol": "cargo test --manifest-path ../Cargo.toml -p ash-app-server-protocol",
     "start": "node ../build/app_ts/launch/electron.ts",
-    "typecheck:memories": "tsc -p tsconfig.memories-check.json --noEmit"
+    "typecheck:memories": "tsc -p tsconfig.memories-check.json --noEmit",
+    "localization:generate": "node ../build/resources/localization.ts",
+    "localization:check": "node ../build/resources/localization.ts --check"
   },
   "devDependencies": {
     "@electron/rebuild": "4.2.0",

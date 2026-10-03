@@ -6,7 +6,7 @@ import { Disposable, type IDisposable, toDisposable } from "../../../common/life
 import { Lxicon } from "../../../common/lxicons.js";
 import { SplitView, type ISplitViewView } from "./splitview.js";
 import "./paneview.css";
-import { localize, onDidChangeNls } from "../../../../nls.js";
+import { localize } from "../../../../nls.js";
 
 /** Construction inputs for a titled, collapsible pane. */
 export interface IPaneOptions {
@@ -214,7 +214,6 @@ export class PaneView extends Disposable {
 		this.onDidSashChange = this.splitView.onDidChangeViewSizes;
 		this.onDidSashReset = this.splitView.onDidSashReset;
 		this._register(this.onDidSashReset(index => this.splitView.resetSash(index)));
-		this._register(onDidChangeNls(() => this.updateSashLabels()));
 		this._register(addDisposableListener(this.element, "keydown", event => {
 			const index = this.panes.findIndex(pane => pane.element.querySelector(".ash-pane-view-header-button") === event.target);
 			if (index < 0 || !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;

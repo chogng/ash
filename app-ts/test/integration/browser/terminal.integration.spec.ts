@@ -1,5 +1,17 @@
 import { expect, test } from '@playwright/test';
 
+test('Chinese terminal actions create terminals while preserving shell names', async ({ page }) => {
+	await page.goto('/terminal.html?pane&locale=zh-CN');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 1, creates: 1 });
+	const actions = page.getByRole('toolbar', { name: '终端操作', exact: true });
+	await expect(actions.getByRole('button', { name: '选择终端配置', exact: true })).toBeEnabled();
+	await expect(actions.getByRole('button', { name: '当前终端：Shell', exact: true })).toBeVisible();
+	await actions.getByRole('button', { name: '新建终端', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(2);
+});
+
 test('terminal loads xterm on demand and preserves early output, exit and first input', async ({ page }) => {
 	const errors: string[] = [];
 	const requests: string[] = [];

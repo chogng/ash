@@ -17,13 +17,19 @@ import { QuickDiffModelService } from '../../../src/ash/workbench/contrib/scm/br
 import { ScmConfiguration } from '../../../src/ash/workbench/contrib/scm/common/scmConfiguration.js';
 import { WorkbenchQuickDiffService } from '../../../src/ash/workbench/contrib/scm/browser/workbenchQuickDiffService.js';
 import { CodeEditorConfiguration } from '../../../src/ash/workbench/contrib/codeEditor/common/editorConfiguration.js';
-import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../src/ash/nls.js';
+import { resetNlsResolver, setNlsMessages } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { MenusRegistry, MenuId } from '../../../src/ash/platform/actions/common/actions.js';
 import type { DiffEditorSelectionHunkToolbarContext } from '../../../src/ash/editor/browser/widget/diffEditor/features/gutterFeature.js';
 import type { IDiffEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
+
+// Display language is fixed before constructing widgets, as it is at product startup.
+if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
+	const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === 'zh-CN')!;
+	setNlsMessages(catalog.locale, catalog.bundles);
+}
 
 const resources = new DisposableStore();
 const editorServices = StandaloneServices.initialize();
@@ -314,10 +320,6 @@ const harness = {
 			});
 		}
 		return timedModel.state.kind === 'ready' && timedModel.state.quitEarly;
-	},
-	setChineseLocale(): void {
-		const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === 'zh-CN')!;
-		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 	},
 	async setQuickDiffWhitespace(setting: 'false' | 'inherit'): Promise<void> {
 		await configuration.updateValue(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace, setting);

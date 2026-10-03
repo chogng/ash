@@ -5,7 +5,7 @@ import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { localize, onDidChangeNls } from "../../../../nls.js";
+import { localize } from "../../../../nls.js";
 import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { basename } from "../../../../base/common/resources.js";
@@ -132,7 +132,6 @@ export class DebugViewPane extends ViewPane {
 		this._register(addDisposableListener(this.watchForm, "submit", event => this.addWatch(event)));
 		this._register(addDisposableListener(this.exceptionsElement, "change", () => { void this.changeExceptionBreakpoints(); }));
 		this._register(addDisposableListener(this.breakpointsElement, "click", event => this.activateBreakpoint(event)));
-		this._register(onDidChangeNls(() => this.render()));
 		this._register(debug.onDidChangeConfigurations(() => this.render()));
 		this._register(debug.onDidChangeBreakpoints(() => this.render()));
 		this._register(debug.onDidChangeWatchExpressions(() => { void this.refreshWatches(); this.render(); }));

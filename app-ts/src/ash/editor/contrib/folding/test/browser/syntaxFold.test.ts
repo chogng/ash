@@ -29,7 +29,7 @@ test('structural folding uses model brackets and grammar comments alongside regi
 	using model = new TextModel('{\n"}"\n}\n/* {\n */\n// region\nvalue\n// endregion\n(\nvalue\n)', {
 		languageId: 'typescript', languageConfigurationService: configurations,
 	});
-	await new Promise(resolve => setImmediate(resolve));
+	model.tokenization.forceTokenization(model.getLineCount());
 
 	const ranges = computeEditorLanguageFoldingRanges(model, 'typescript', configurations);
 	assert.deepEqual(ranges.map(range => [range.startLineIndex, range.endLineIndex]), [[0, 2], [3, 4], [5, 7]]);
@@ -43,7 +43,7 @@ test('structural folding follows newly registered tokens instead of retaining a 
 	assert.deepEqual(ranges(), [[0, 1]]);
 
 	using tokens = registerTestTokens(new Map([['"}"', [{ offset: 0, type: 'string' }]]]));
-	await new Promise(resolve => setImmediate(resolve));
+	model.tokenization.forceTokenization(model.getLineCount());
 	assert.deepEqual(ranges(), [[0, 2]]);
 });
 
@@ -52,7 +52,7 @@ test('token change listeners see bracket ranges for the edited text immediately'
 	using configuration = configurations.register('typescript', { brackets: [['{', '}']] });
 	using tokens = registerTestTokens(new Map());
 	using model = new TextModel('prefix {\n}', { languageId: 'typescript', languageConfigurationService: configurations });
-	await new Promise(resolve => setImmediate(resolve));
+	model.tokenization.forceTokenization(model.getLineCount());
 	model.bracketPairs.getBracketPairsInRange(model.getFullModelRange()).toArray();
 	const observations: number[][] = [];
 	using listener = model.onDidChangeTokens(() => {
@@ -60,7 +60,7 @@ test('token change listeners see bracket ranges for the edited text immediately'
 	});
 
 	model.applyEdits([{ range: new Range(1, 1, 1, 8), text: '' }]);
-	await new Promise(resolve => setImmediate(resolve));
+	model.tokenization.forceTokenization(model.getLineCount());
 	assert.ok(observations.length > 0);
 	assert.ok(observations.every(ranges => ranges.length === 1 && ranges[0] === 1));
 });

@@ -4,7 +4,7 @@ import { ButtonActionViewItem } from "../../../../base/browser/ui/actionbar/acti
 import { SubmenuAction, type IAction } from "../../../../base/common/actions.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { localize as resolveNls, onDidChangeNls, type LocalizationKey } from "../../../../nls.js";
+import { localize as resolveNls, type LocalizationKey } from "../../../../nls.js";
 import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { type IMenu, type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
@@ -103,11 +103,6 @@ export class BrowserMenubarControl extends Disposable
 		this.domNode.classList.add("ash-menubar", "ash-titlebar-left-actions");
 		this._register(this.toolbar.onDidChangeMenuItems(() => {
 			if (this.active) this.contextMenuService.hideContextMenu();
-		}));
-		this._register((localizationService?.onDidChange ?? onDidChangeNls)(() => {
-			if (this.active) this.contextMenuService.hideContextMenu();
-			this.domNode.setAttribute("aria-label", leftActionsLabel());
-			if (this.menuItem) this.menuItem.setLabel(applicationMenuLabel());
 		}));
 		this._register(this.menu.onDidChange(() => {
 			if (this.active) this.contextMenuService.hideContextMenu();

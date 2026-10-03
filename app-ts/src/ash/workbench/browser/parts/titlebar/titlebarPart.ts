@@ -88,9 +88,6 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 				},
 			),
 		);
-		this._register(options.localizationService.onDidChange(() => {
-			this.actions.element.setAttribute("aria-label", options.localizationService.translate("ash", "workbench.titleBarGlobalActions", "Title Bar global actions"));
-		}));
 		const isActivityAction = (target: EventTarget | null) =>
 			(target as Element | null)?.closest('[data-action-id="ash.activityBar.accounts"], [data-action-id="ash.activityBar.manage"]') !== null;
 		this._register(addDisposableListener(actionsDomNode, "contextmenu", event => {

@@ -90,7 +90,6 @@ export class ViewPaneContainer extends Disposable {
 		this._register(this.model.onDidChangeVisibleViewDescriptors(() => {
 			this.syncPanes();
 		}));
-		if (this.localizationService) this._register(this.localizationService.onDidChange(() => this.updateLocalizedTitles()));
 		this.syncPanes();
 		// The flex host resolves title slots and activity bars before publishing its content size.
 		this._register(observeElementSize(element, size => {

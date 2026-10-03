@@ -37,7 +37,6 @@ test('GitHub connection handles completion received before login start returns',
 		showMessage: async () => { throw new Error('Unexpected dialog'); },
 	} as unknown as IDialogService);
 	services.registerInstance(ILocalizationService, {
-		onDidChange: Event.None,
 		whenReady: Promise.resolve(),
 		translate: (_bundle: string, _key: string, fallback: string) => fallback,
 	});

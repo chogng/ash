@@ -37,6 +37,13 @@ import { REVEAL_IN_OS_COMMAND_ID } from '../../electron-browser/fileActions.cont
 import { NATIVE_HOST_REVEAL_FILE_CHANNEL } from '../../../../../platform/native/common/nativeHost.js';
 import { nativeHostIpcRoutes, type INativeHostMainService } from '../../../../../platform/native/electron-main/nativeHostIpc.js';
 
+// URI paths use '/' on every host; URI.file() interprets filesystem separators for the current OS.
+const fileCommandRoots = [
+	{ name: 'POSIX', uri: 'file:///project' },
+	{ name: 'Windows drive', uri: 'file:///C:/project' },
+	{ name: 'UNC', uri: 'file://fileserver/share/project' },
+] as const;
+
 test('Save File command saves the active editor', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
@@ -93,61 +100,63 @@ test('Open File command opens every file selected by the dialog', async () => {
 	}
 });
 
-test('New File command creates and opens a file in the active workspace folder', async () => {
-	const browser = new JSDOM('<!doctype html><body></body>');
-	const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
-	Object.defineProperty(globalThis, 'document', { configurable: true, value: browser.window.document });
-	try {
-		await import('../../browser/fileActions.contribution.js');
-		const root = URI.file('C:\\project');
-		const created: URI[] = [];
-		const opened: URI[] = [];
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
-		const services = new InstantiationService();
-		using explorerService = createExplorerService(workspace);
-		services.registerInstance(IWorkspaceContextService, workspace);
-		services.registerInstance(IExplorerService, explorerService);
-		services.registerInstance(IQuickInputService, {
-			input: async options => {
-				assert.equal(options.title, 'New File Name');
-				assert.equal(await options.validateInput?.('../escape'), 'Enter a file name without path separators.');
-				assert.equal(await options.validateInput?.('new %中.txt'), undefined);
-				return 'new %中.txt';
-			},
-		} as QuickInputServiceContract);
-		services.registerInstance(IFileService, {
-			onDidChangeFiles: Event.None,
-			createFile: async (resource, existing) => {
-				assert.equal(existing, 'error');
-				created.push(resource);
-				return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
-			},
-		} as FileServiceContract);
-		services.registerInstance(IEditorService, {
-			activeEditor: undefined,
-			openEditor: async input => { opened.push(input.resource); },
-		} as EditorServiceContract);
-		using commands = new CommandService(services);
+for (const fileRoot of fileCommandRoots) {
+	test(`New File command creates and opens a file in the active workspace folder (${fileRoot.name})`, async () => {
+		const browser = new JSDOM('<!doctype html><body></body>');
+		const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+		Object.defineProperty(globalThis, 'document', { configurable: true, value: browser.window.document });
+		try {
+			await import('../../browser/fileActions.contribution.js');
+			const root = URI.parse(fileRoot.uri);
+			const created: URI[] = [];
+			const opened: URI[] = [];
+			using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+			const services = new InstantiationService();
+			using explorerService = createExplorerService(workspace);
+			services.registerInstance(IWorkspaceContextService, workspace);
+			services.registerInstance(IExplorerService, explorerService);
+			services.registerInstance(IQuickInputService, {
+				input: async options => {
+					assert.equal(options.title, 'New File Name');
+					assert.equal(await options.validateInput?.('../escape'), 'Enter a file name without path separators.');
+					assert.equal(await options.validateInput?.('new %中.txt'), undefined);
+					return 'new %中.txt';
+				},
+			} as QuickInputServiceContract);
+			services.registerInstance(IFileService, {
+				onDidChangeFiles: Event.None,
+				createFile: async (resource, existing) => {
+					assert.equal(existing, 'error');
+					created.push(resource);
+					return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
+				},
+			} as FileServiceContract);
+			services.registerInstance(IEditorService, {
+				activeEditor: undefined,
+				openEditor: async input => { opened.push(input.resource); },
+			} as EditorServiceContract);
+			using commands = new CommandService(services);
 
-		await commands.executeCommand(NEW_FILE_COMMAND_ID);
+			await commands.executeCommand(NEW_FILE_COMMAND_ID);
 
-		assert.deepEqual(created.map(resource => resource.fsPath), ['C:\\project\\new %中.txt']);
-		assert.deepEqual(opened.map(resource => resource.toString()), created.map(resource => resource.toString()));
+			assert.deepEqual(created.map(resource => resource.toString()), [`${fileRoot.uri}/new%20%25%E4%B8%AD.txt`]);
+			assert.deepEqual(opened.map(resource => resource.toString()), created.map(resource => resource.toString()));
 
-		using viewRegistration = explorerService.registerView({
-			getContext: () => [new ExplorerItem(URI.file('C:\\project\\src'), 'src', FileKind.Directory)],
-			getAccessibleContent: () => '',
-			selectResource: async () => {},
-			focus() {},
-		});
-		await commands.executeCommand(NEW_FILE_COMMAND_ID);
-		assert.equal(created.at(-1)?.fsPath, 'C:\\project\\src\\new %中.txt');
-	} finally {
-		if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
-		else Reflect.deleteProperty(globalThis, 'document');
-		browser.window.close();
-	}
-});
+			using viewRegistration = explorerService.registerView({
+				getContext: () => [new ExplorerItem(URI.parse(`${fileRoot.uri}/src`), 'src', FileKind.Directory)],
+				getAccessibleContent: () => '',
+				selectResource: async () => {},
+				focus() {},
+			});
+			await commands.executeCommand(NEW_FILE_COMMAND_ID);
+			assert.equal(created.at(-1)?.toString(), `${fileRoot.uri}/src/new%20%25%E4%B8%AD.txt`);
+		} finally {
+			if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
+			else Reflect.deleteProperty(globalThis, 'document');
+			browser.window.close();
+		}
+	});
+}
 
 test('New Folder command creates a directory under the selected folder', async () => {
 	await import('../../browser/fileActions.contribution.js');
@@ -456,45 +465,47 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 	}
 });
 
-test('Download File command preserves the active file bytes and filename', async () => {
-	const browser = new JSDOM('<!doctype html><body></body>');
-	const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
-	Object.defineProperty(globalThis, 'document', { configurable: true, value: browser.window.document });
-	try {
-		await import('../../browser/fileActions.contribution.js');
-		const resource = URI.file('C:\\project\\100% payload.bin');
-		const reads: URI[] = [];
-		let downloadedName: string | undefined;
-		let downloadedBlob: Blob | undefined;
-		browser.window.URL.createObjectURL = (blob: Blob) => {
-			downloadedBlob = blob;
-			return 'blob:ash-download';
-		};
-		browser.window.URL.revokeObjectURL = () => {};
-		browser.window.HTMLAnchorElement.prototype.click = function () {
-			downloadedName = this.download;
-		};
-		const services = new InstantiationService();
-		services.registerInstance(IEditorService, { activeEditor: { resource } } as EditorServiceContract);
-		services.registerInstance(IFileService, {
-			readFileBytes: async requested => {
-				reads.push(requested);
-				return { resource: requested, bytes: new Uint8Array([0, 255, 42]), revision: 'r1' };
-			},
-		} as FileServiceContract);
-		using commands = new CommandService(services);
+for (const fileRoot of fileCommandRoots) {
+	test(`Download File command preserves the active file bytes and filename (${fileRoot.name})`, async () => {
+		const browser = new JSDOM('<!doctype html><body></body>');
+		const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+		Object.defineProperty(globalThis, 'document', { configurable: true, value: browser.window.document });
+		try {
+			await import('../../browser/fileActions.contribution.js');
+			const resource = URI.parse(`${fileRoot.uri}/100%25%20payload.bin`);
+			const reads: URI[] = [];
+			let downloadedName: string | undefined;
+			let downloadedBlob: Blob | undefined;
+			browser.window.URL.createObjectURL = (blob: Blob) => {
+				downloadedBlob = blob;
+				return 'blob:ash-download';
+			};
+			browser.window.URL.revokeObjectURL = () => {};
+			browser.window.HTMLAnchorElement.prototype.click = function () {
+				downloadedName = this.download;
+			};
+			const services = new InstantiationService();
+			services.registerInstance(IEditorService, { activeEditor: { resource } } as EditorServiceContract);
+			services.registerInstance(IFileService, {
+				readFileBytes: async requested => {
+					reads.push(requested);
+					return { resource: requested, bytes: new Uint8Array([0, 255, 42]), revision: 'r1' };
+				},
+			} as FileServiceContract);
+			using commands = new CommandService(services);
 
-		await commands.executeCommand(DOWNLOAD_COMMAND_ID);
+			await commands.executeCommand(DOWNLOAD_COMMAND_ID);
 
-		assert.equal(downloadedName, '100% payload.bin');
-		assert.deepEqual(reads, [resource]);
-		assert.deepEqual([...new Uint8Array(await downloadedBlob!.arrayBuffer())], [0, 255, 42]);
-	} finally {
-		if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
-		else Reflect.deleteProperty(globalThis, 'document');
-		browser.window.close();
-	}
-});
+			assert.equal(downloadedName, '100% payload.bin');
+			assert.deepEqual(reads, [resource]);
+			assert.deepEqual([...new Uint8Array(await downloadedBlob!.arrayBuffer())], [0, 255, 42]);
+		} finally {
+			if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
+			else Reflect.deleteProperty(globalThis, 'document');
+			browser.window.close();
+		}
+	});
+}
 
 test('Explorer menu commands rename, open beside the editor, and delete the selected file', async () => {
 	await import('../../browser/fileActions.contribution.js');
@@ -560,8 +571,9 @@ test('Reveal in OS command sends the selected local file to the desktop host', a
 	const locations = [MenuId.ExplorerContext, MenuId.EditorTitleContext, MenuId.EditorTitle, MenuId.CommandPalette].filter(menu =>
 		MenusRegistry.getMenuItems(menu).some(item => isMenuItem(item) && item.command.id === REVEAL_IN_OS_COMMAND_ID));
 	assert.deepEqual(locations, [MenuId.ExplorerContext, MenuId.EditorTitleContext, MenuId.CommandPalette]);
-	const root = URI.file('C:\\project');
-	const selected = URI.file('C:\\project\\src\\main.ts');
+	const root = URI.parse('file:///C:/project');
+	const selected = URI.parse('file:///C:/project/src/main.ts');
+	const other = URI.parse('file:///C:/project/other.ts');
 	const revealed: string[] = [];
 	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 	using explorer = createExplorerService(workspace);
@@ -582,8 +594,8 @@ test('Reveal in OS command sends the selected local file to the desktop host', a
 
 	await commands.executeCommand(REVEAL_IN_OS_COMMAND_ID);
 	assert.deepEqual(revealed, [selected.fsPath]);
-	await commands.executeCommand(REVEAL_IN_OS_COMMAND_ID, URI.file('C:\\project\\other.ts'));
-	assert.deepEqual(revealed, [selected.fsPath, 'C:\\project\\other.ts']);
+	await commands.executeCommand(REVEAL_IN_OS_COMMAND_ID, other);
+	assert.deepEqual(revealed, [selected.fsPath, other.fsPath]);
 });
 
 test('Reveal file IPC validates the requested path before calling the desktop host', async () => {

@@ -122,7 +122,6 @@ export class HooksSettingsContent extends Disposable implements SettingsContent 
 			else this.setStatus('disconnected', 'App Server is disconnected.');
 		}));
 		this._register(this.remote.onDidChangeConnection(() => this.changeSourceContext()));
-		this._register(this.localization.onDidChange(() => this.render()));
 		this._register(toDisposable(() => { this.loadVersion++; this.domNode.remove(); }));
 		const scopedContext = this._register(contextKeys.createScoped(container));
 		scopedContext.createKey('hooksSettingsFocused', true);

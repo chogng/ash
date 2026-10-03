@@ -3,7 +3,7 @@ import '../../../common/sessionsColors.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -164,10 +164,6 @@ export class NewChatInputWidget extends ChatInputPart {
 				this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
 				this.saveDraft();
 			}
-			this.updateConversation();
-		}));
-		this._register(onDidChangeNls(() => {
-			this.heading.textContent = localize('sessions.chat.welcome', 'What can we work on?');
 			this.updateConversation();
 		}));
 		this.updateConversation();

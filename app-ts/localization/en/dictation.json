@@ -1,0 +1,15 @@
+{
+	"ash": {
+		"dictation.model.voiceDescription": "Choose local or cloud transcription and manage local dictation models.",
+		"dictation.model.selected": "Selected",
+		"dictation.model.delete": "Delete model",
+		"dictation.model.confirmDelete": "Confirm delete",
+		"dictation.model.deleteDetail": "Delete {0} from Ash? The original import directory is kept.",
+		"dictation.model.removeApiKey": "Remove API key",
+		"dictation.model.confirmRemoveApiKey": "Confirm removal",
+		"dictation.model.removeApiKeyDetail": "This API key is shared by chat and dictation. Remove it?",
+		"dictation.model.removeApiKeyFailed": "Could not remove the API key",
+		"dictation.model.prepare": "Prepare model",
+		"dictation.model.installed": "Model package installed: {0}"
+	}
+}

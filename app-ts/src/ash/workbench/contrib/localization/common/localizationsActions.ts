@@ -1,6 +1,6 @@
+import { localize2, localize } from '../../../../nls.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { localize } from '../../../../nls.js';
-import { localizedString } from '../../../../platform/action/common/action.js';
+
 import { Action2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -33,7 +33,7 @@ export class ConfigureDisplayLanguageAction extends Action2 {
 	constructor() {
 		super({
 			id: ConfigureDisplayLanguageAction.ID,
-			title: localizedString('ash.settings', 'displayLanguage.configure', 'Configure Display Language'),
+			title: localize2({ bundle: 'ash.settings', key: 'displayLanguage.configure' }, 'Configure Display Language'),
 			f1: true,
 		});
 	}
@@ -139,7 +139,7 @@ export class ClearDisplayLanguageAction extends Action2 {
 	constructor() {
 		super({
 			id: ClearDisplayLanguageAction.ID,
-			title: localizedString('ash.settings', 'displayLanguage.clearPreference', 'Clear Display Language Preference'),
+			title: localize2({ bundle: 'ash.settings', key: 'displayLanguage.clearPreference' }, 'Clear Display Language Preference'),
 			f1: true,
 		});
 	}

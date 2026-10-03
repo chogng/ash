@@ -1,4 +1,5 @@
-import { localizedString } from '../../../platform/action/common/action.js';
+import { localize2 } from '../../../nls.js';
+
 import { Keybinding, logicalKey } from '../../../base/common/keybindings.js';
 import { Action2, MenuId, MenusRegistry } from '../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
@@ -23,7 +24,7 @@ export class CloseWorkspaceAction extends Action2 {
 	constructor() {
 		super({
 			id: CloseWorkspaceAction.ID,
-			title: localizedString('ash', 'workbench.closeWorkspace', 'Close Workspace'),
+			title: localize2({ bundle: 'ash', key: 'workbench.closeWorkspace' }, 'Close Workspace'),
 			f1: true,
 			precondition: CloseWorkspacePrecondition,
 			keybinding: { primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('f')) },
@@ -40,7 +41,7 @@ MenusRegistry.appendMenuItems([
 	{
 		id: MenuId.MenubarFileMenu,
 		item: {
-			command: { id: CloseWorkspaceAction.ID, title: localizedString('ash', 'workbench.closeFolder', 'Close Folder'), precondition: CloseWorkspacePrecondition },
+			command: { id: CloseWorkspaceAction.ID, title: localize2({ bundle: 'ash', key: 'workbench.closeFolder' }, 'Close Folder'), precondition: CloseWorkspacePrecondition },
 			when: ContextKeyExpr.and(EmptyWorkspaceSupport, WorkbenchStateContext.isEqualTo('folder')),
 			group: '6_close',
 			order: 3,
@@ -49,7 +50,7 @@ MenusRegistry.appendMenuItems([
 	{
 		id: MenuId.MenubarFileMenu,
 		item: {
-			command: { id: CloseWorkspaceAction.ID, title: localizedString('ash', 'workbench.closeWorkspace', 'Close Workspace'), precondition: CloseWorkspacePrecondition },
+			command: { id: CloseWorkspaceAction.ID, title: localize2({ bundle: 'ash', key: 'workbench.closeWorkspace' }, 'Close Workspace'), precondition: CloseWorkspacePrecondition },
 			when: ContextKeyExpr.and(EmptyWorkspaceSupport, WorkbenchStateContext.isEqualTo('workspace')),
 			group: '6_close',
 			order: 3,
@@ -62,7 +63,7 @@ export class OpenFolderAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenFolderCommandId,
-			title: localizedString('ash', 'workbench.openFolder', 'Open Folder...'),
+			title: localize2({ bundle: 'ash', key: 'workbench.openFolder' }, 'Open Folder...'),
 			f1: true,
 			precondition: OpenFolderWorkspaceSupportContext.isEqualTo(true),
 			menu: { id: MenuId.MenubarFileMenu, when: OpenFolderWorkspaceSupportContext.isEqualTo(true), group: '2_open', order: 1 },
@@ -79,7 +80,7 @@ export class OpenFolderViaWorkspaceAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.files.openFolderViaWorkspace',
-			title: localizedString('ash', 'workbench.openFolder', 'Open Folder...'),
+			title: localize2({ bundle: 'ash', key: 'workbench.openFolder' }, 'Open Folder...'),
 			f1: true,
 			precondition: OpenFolderViaWorkspaceWhen,
 			menu: { id: MenuId.MenubarFileMenu, when: OpenFolderViaWorkspaceWhen, group: '2_open', order: 1 },

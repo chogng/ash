@@ -2,7 +2,7 @@ import { h } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { localize, onDidChangeNls } from '../../../../../nls.js';
+import { localize } from '../../../../../nls.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { Range } from '../../../../common/core/range.js';
 import type { DiffModel } from '../../../../common/diff/diffModel.js';
@@ -19,7 +19,6 @@ export class RevertButtonsFeature extends Disposable {
 	constructor(private readonly editor: CodeEditorWidget, private readonly model: DiffModel, private readonly widget: DiffEditorWidget) {
 		super();
 		this._register(editor.onDidChangeCursorSelection(() => this.update(this.enabled)));
-		this._register(onDidChangeNls(() => this.update(this.enabled)));
 	}
 
 	public update(enabled: boolean): void {

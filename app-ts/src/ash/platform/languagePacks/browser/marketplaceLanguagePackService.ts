@@ -1,7 +1,8 @@
 import { Emitter } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
-import type { IMarketplaceService, MarketplaceInstalledPackage } from "../../marketplace/common/marketplaceService.js";
+import { IMarketplaceService, type MarketplaceInstalledPackage } from "../../marketplace/common/marketplaceService.js";
 import { decodeBase64, normalizeLocale, parseLanguagePackCatalog } from "../common/languagePackCatalog.js";
+import { ILanguagePackStore } from "../common/languagePackStore.js";
 import type { ILanguagePackService, LanguagePackCatalog, LanguagePackInfo, LanguagePackPackage } from "../common/languagePacksService.js";
 
 /** Browser client adapter that projects Marketplace localization capabilities. */
@@ -17,8 +18,9 @@ export class MarketplaceLanguagePackService extends Disposable implements ILangu
 	readonly whenReady: Promise<void>;
 
 	constructor(
-		private readonly marketplace: IMarketplaceService,
 		builtinCatalogs: readonly LanguagePackCatalog[],
+		@IMarketplaceService private readonly marketplace: IMarketplaceService,
+		@ILanguagePackStore private readonly store: ILanguagePackStore,
 	) {
 		super();
 		this.builtinLocales = new Set(builtinCatalogs.map(catalog => normalizeLocale(catalog.locale)));
@@ -87,7 +89,10 @@ export class MarketplaceLanguagePackService extends Disposable implements ILangu
 				description: "",
 				installed: true,
 			}));
-		const loaded = await loadInstalledCatalogs(this.marketplace, installed);
+		const loaded = (await loadInstalledCatalogs(this.marketplace, installed))
+			.filter(catalog => !this.builtinLocales.has(normalizeLocale(catalog.locale)));
+		// Only publish installed languages once their next-startup resources are saved.
+		for (const catalog of loaded) await this.store.write(catalog);
 		for (const locale of this.marketplaceLocales) this.catalogsByLocale.delete(locale);
 		this.marketplaceLocales.clear();
 		for (const catalog of loaded) {

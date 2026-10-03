@@ -5,7 +5,7 @@ import type { IAction } from "../../../../base/common/actions.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { basename } from "../../../../base/common/resources.js";
 import Severity from "../../../../base/common/severity.js";
-import { localize, onDidChangeNls } from "../../../../nls.js";
+import { localize } from "../../../../nls.js";
 import { isEditorOpenError } from "../../../common/editor.js";
 import type { EditorInput } from "./editorInput.js";
 import { EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
@@ -30,7 +30,6 @@ export class ErrorPlaceholderEditor extends Disposable implements IEditorPane {
 		private readonly onClose: () => Promise<unknown>,
 	) {
 		super();
-		this._register(onDidChangeNls(() => this.render()));
 	}
 
 	create(parent: HTMLElement): void {

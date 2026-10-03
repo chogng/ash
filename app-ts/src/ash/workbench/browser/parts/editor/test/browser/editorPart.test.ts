@@ -1828,9 +1828,11 @@ test('EditorParts restores main and auxiliary editor windows with their active p
 	using firstStorage = new BrowserStorageService({ ownerWindow: firstDom.window as unknown as Window, applicationId: 'editor-parts-test', workspaceId: 'workspace', flushInterval: 0 });
 	using firstParts = new EditorParts(firstMain, firstWindows, container => ({ part: createEditorPart(container, { registry }) }), accessibility, firstStorage);
 	await firstParts.restoreSavedState(true);
-	await firstMain.openEditor(input('C:\\project\\main.txt'));
+	const mainInput: EditorInput = { resource: URI.parse('file:///C:/project/main.txt') };
+	const detachedInput: EditorInput = { resource: URI.parse('file:///C:/project/detached.txt') };
+	await firstMain.openEditor(mainInput);
 	const detached = await firstParts.createAuxiliaryEditorPart();
-	await detached.openEditor(input('C:\\project\\detached.txt'));
+	await detached.openEditor(detachedInput);
 	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
 	const saved = firstStorage.get('editorparts.state', StorageScope.WORKSPACE);
 	assert.ok(saved);
@@ -1845,9 +1847,9 @@ test('EditorParts restores main and auxiliary editor windows with their active p
 	using restoredParts = new EditorParts(restoredMain, restoredWindows, container => ({ part: createEditorPart(container, { registry }) }), accessibility, restoredStorage);
 	restoredStorage.store('editorparts.state', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	await restoredParts.restoreSavedState(true);
-	assert.deepEqual(restoredParts.parts.map(part => part.groups.flatMap(group => group.inputs.map(editor => editor.resource.fsPath))), [
-		['C:\\project\\main.txt'],
-		['C:\\project\\detached.txt'],
+	assert.deepEqual(restoredParts.parts.map(part => part.groups.flatMap(group => group.inputs.map(editor => editor.resource.toString()))), [
+		[mainInput.resource.toString()],
+		[detachedInput.resource.toString()],
 	]);
 	assert.equal(restoredParts.activePart, restoredParts.parts[1]);
 	restoredParts.dispose();

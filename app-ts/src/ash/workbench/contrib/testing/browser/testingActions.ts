@@ -3,7 +3,7 @@ import { type ServicesAccessor } from '../../../../platform/instantiation/common
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { extUri } from '../../../../base/common/resources.js';
-import { localize } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import { ITestingService } from '../../../services/testing/common/testingService.js';
 import { IViewsService } from '../../../services/views/browser/viewsService.js';
@@ -11,7 +11,7 @@ import { REFRESH_TESTS_COMMAND_ID, RUN_ALL_TESTS_COMMAND_ID, TESTING_VIEW_ID } f
 
 registerAction2(class RunAllTestsAction extends Action2 {
 	constructor() {
-		super({ id: RUN_ALL_TESTS_COMMAND_ID, title: localize('testing.runAll', 'Run All Tests'), f1: true, menu: { id: MenuId.MenubarRunMenu, group: '3_testing', order: 1 } });
+		super({ id: RUN_ALL_TESTS_COMMAND_ID, title: localize2('testing.runAll', 'Run All Tests'), f1: true, menu: { id: MenuId.MenubarRunMenu, group: '3_testing', order: 1 } });
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
@@ -24,7 +24,7 @@ registerAction2(class RunAllTestsAction extends Action2 {
 });
 
 registerAction2(class RefreshTestsAction extends Action2 {
-	constructor() { super({ id: REFRESH_TESTS_COMMAND_ID, title: localize('testing.refresh', 'Refresh Tests'), f1: true }); }
+	constructor() { super({ id: REFRESH_TESTS_COMMAND_ID, title: localize2('testing.refresh', 'Refresh Tests'), f1: true }); }
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const service = accessor.get(ITestingService);
 		const notifications = accessor.get(INotificationService);
@@ -34,12 +34,12 @@ registerAction2(class RefreshTestsAction extends Action2 {
 });
 
 registerAction2(class RunTestAtCursorAction extends Action2 {
-	constructor() { super({ id: 'workbench.action.testing.runAtCursor', title: localize('testing.runAtCursor', 'Run Test on Current Line'), f1: true }); }
+	constructor() { super({ id: 'workbench.action.testing.runAtCursor', title: localize2('testing.runAtCursor', 'Run Test on Current Line'), f1: true }); }
 	override run(accessor: ServicesAccessor): Promise<void> { return executeTestOnCurrentLine(accessor, 'run'); }
 });
 
 registerAction2(class DebugTestAtCursorAction extends Action2 {
-	constructor() { super({ id: 'workbench.action.testing.debugAtCursor', title: localize('testing.debugAtCursor', 'Debug Test on Current Line'), f1: true }); }
+	constructor() { super({ id: 'workbench.action.testing.debugAtCursor', title: localize2('testing.debugAtCursor', 'Debug Test on Current Line'), f1: true }); }
 	override run(accessor: ServicesAccessor): Promise<void> { return executeTestOnCurrentLine(accessor, 'debug'); }
 });
 

@@ -1,3 +1,4 @@
+import { localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -19,7 +20,7 @@ export const DIFF_SWAP_SIDES = 'workbench.action.compareEditor.swapSides';
 
 export function registerDiffEditorCommands(): void {
 	registerAction2(class ToggleDiffLayoutAction extends Action2 {
-		constructor() { super({ id: TOGGLE_DIFF_SIDE_BY_SIDE, title: 'Toggle Inline Diff View', f1: true }); }
+		constructor() { super({ id: TOGGLE_DIFF_SIDE_BY_SIDE, title: localize2({ bundle: 'ash.workbench', key: 'command.ToggleDiffLayoutAction' }, 'Toggle Inline Diff View'), f1: true }); }
 		override run(accessor: ServicesAccessor): Promise<void> {
 			return accessor.get(IDiffEditorCommandsService).toggleRenderSideBySide();
 		}
@@ -41,7 +42,7 @@ export function registerDiffEditorCommands(): void {
 		constructor() {
 			super({
 				id: GOTO_NEXT_CHANGE,
-				title: 'Go to Next Change',
+				title: localize2({ bundle: 'ash.workbench', key: 'command.NextChangeAction' }, 'Go to Next Change'),
 				f1: true,
 				keybinding: { primary: Keybinding.single(logicalKey('f5', { altKey: true })) },
 			});
@@ -56,7 +57,7 @@ export function registerDiffEditorCommands(): void {
 		constructor() {
 			super({
 				id: GOTO_PREVIOUS_CHANGE,
-				title: 'Go to Previous Change',
+				title: localize2({ bundle: 'ash.workbench', key: 'command.PreviousChangeAction' }, 'Go to Previous Change'),
 				f1: true,
 				keybinding: { primary: Keybinding.single(logicalKey('f5', { altKey: true, shiftKey: true })) },
 			});

@@ -36,7 +36,11 @@ test('color picker decorates, edits, and undoes a CSS color as one operation', a
 	await waitFor(() => container.querySelector('.colorpicker-color-decoration') !== null);
 	const swatch = container.querySelector<HTMLElement>('.colorpicker-color-decoration')!;
 	assert.match(swatch.className, /dyn-rule-/u);
-	swatch.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+	editor.setPosition(new Position(1, 16));
+	editor.focus();
+	editor.view.controller.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+		key: 'c', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true,
+	}));
 
 	const dialog = container.querySelector<HTMLElement>('.stanza-editor-color-picker')!;
 	await waitFor(() => !dialog.hidden && dialog.querySelectorAll('option').length === 3);

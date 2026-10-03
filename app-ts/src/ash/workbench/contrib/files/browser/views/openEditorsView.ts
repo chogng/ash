@@ -4,7 +4,7 @@ import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { ObjectTree } from '../../../../../base/browser/ui/tree/objectTree.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { localize, onDidChangeNls } from '../../../../../nls.js';
+import { localize } from '../../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -69,7 +69,6 @@ export class OpenEditorsView extends ViewPane {
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.OpenEditors)) updateLabel();
 		}));
-		this._register(onDidChangeNls(updateLabel));
 		this._register(editorPart.onDidChangeEditors(() => this.refresh()));
 		this._register(this.tree.onPointer(({ element, browserEvent }) => {
 			if (browserEvent.button === 0 && element.kind === 'editor') this.activate(element.editor);

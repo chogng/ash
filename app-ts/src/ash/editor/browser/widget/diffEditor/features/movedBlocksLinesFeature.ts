@@ -2,7 +2,7 @@ import { h, svg } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { localize, onDidChangeNls } from '../../../../../nls.js';
+import { localize } from '../../../../../nls.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
 import type { DiffModel } from '../../../../common/diff/diffModel.js';
 import type { MovedText } from '../../../../common/diff/linesDiffComputer.js';
@@ -48,7 +48,6 @@ export class MovedBlocksLinesFeature extends Disposable {
 			this._register(editor.onDidScrollChange(() => this.positionLinks()));
 			this._register(editor.onDidLayoutChange(() => this.positionLinks()));
 		}
-		this._register(onDidChangeNls(() => this.update(this.enabled, this.selectedMove)));
 	}
 
 	public get width(): number {

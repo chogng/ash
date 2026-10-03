@@ -3,14 +3,14 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-test('Color settings suggest registered keys and descriptions with keyboard and mouse selection', async ({ target, workbench }) => {
+test('Color settings suggest registered keys and descriptions with keyboard and mouse selection', async ({ target, workbench, restartWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires Code Settings');
-	const page = workbench.page;
+	let page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	await settings.locator('[data-settings-group-id="workbench"]').click();
 	await settings.locator('[data-settings-category-id="appearance"]').click();
-	const colors = page.locator('[data-configuration-key="workbench.colorCustomizations"]');
+	let colors = page.locator('[data-configuration-key="workbench.colorCustomizations"]');
 	await colors.getByRole('button', { name: 'Add Color', exact: true }).click();
 	let row = colors.locator('.ash-string-map-row').last();
 	let key = row.getByRole('combobox');
@@ -81,6 +81,9 @@ test('Color settings suggest registered keys and descriptions with keyboard and 
 	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
 	await picker.getByRole('combobox').fill('简体中文');
 	await picker.getByRole('combobox').press('Enter');
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
+	colors = page.locator('[data-configuration-key="workbench.colorCustomizations"]');
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const chineseSettings = page.getByRole('dialog', { name: 'Ash 设置' });
 	await chineseSettings.locator('[data-settings-group-id="workbench"]').click();

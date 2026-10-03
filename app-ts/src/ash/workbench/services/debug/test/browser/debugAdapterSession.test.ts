@@ -11,14 +11,16 @@ import { type IDebugBreakpoint, type IDebugConfiguration } from "../../common/de
 test("DebugAdapterSession handles zero-sequence DAP messages, clears breakpoints, and resolves an omitted stopped thread", async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	let breakpoints: readonly IDebugBreakpoint[] = [breakpoint(4)];
+	const workspace = URI.file('C:\\workspace');
+	const breakpointPath = breakpoints[0]!.resource.fsPath;
 	const updates: Array<{ readonly id: string; readonly verified: boolean; readonly message?: string }> = [];
 	const terminalRequests: unknown[] = [];
-	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => breakpoints, workspace: URI.file("C:\\workspace"), runInTerminal: async value => { terminalRequests.push(value); return {}; }, updateBreakpoints: values => updates.push(...values) });
+	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => breakpoints, workspace, runInTerminal: async value => { terminalRequests.push(value); return {}; }, updateBreakpoints: values => updates.push(...values) });
 
 	assert.equal(session.state, "running");
-	assert.deepEqual(processes.started, { program: "C:\\workspace\\adapter", arguments: ["--stdio", "C:\\workspace"] });
-	assert.deepEqual(processes.request("launch").arguments, { program: "C:\\workspace\\bin\\app", cwd: "C:\\workspace" });
-	assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: "C:\\workspace\\main.ts" }, breakpoints: [{ line: 4 }] });
+	assert.deepEqual(processes.started, { program: `${workspace.fsPath}\\adapter`, arguments: ['--stdio', workspace.fsPath] });
+	assert.deepEqual(processes.request("launch").arguments, { program: `${workspace.fsPath}\\bin\\app`, cwd: workspace.fsPath });
+	assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: breakpointPath }, breakpoints: [{ line: 4 }] });
 	assert.deepEqual(processes.request("setExceptionBreakpoints").arguments, { filters: ["uncaught"] });
 	assert.deepEqual(updates, [{ id: "main:4", verified: true }]);
 	assert.deepEqual(session.capabilities, { supportsRestart: true, supportsTerminate: true, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions", default: false }] });
@@ -32,7 +34,7 @@ test("DebugAdapterSession handles zero-sequence DAP messages, clears breakpoints
 
 	breakpoints = [];
 	await session.syncBreakpoints();
-	assert.deepEqual(processes.requests("setBreakpoints").at(-1)?.arguments, { source: { path: "C:\\workspace\\main.ts" }, breakpoints: [] });
+	assert.deepEqual(processes.requests("setBreakpoints").at(-1)?.arguments, { source: { path: breakpointPath }, breakpoints: [] });
 
 	processes.event("stopped", { reason: "breakpoint", allThreadsStopped: true });
 	await waitFor(() => session.state === "stopped");

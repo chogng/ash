@@ -87,6 +87,9 @@ export class ExtUri implements IExtUri {
 	}
 
 	dirname(uri: URI): URI {
+		if (isWindows && uri.scheme === 'file') {
+			return URI.joinPath(uri, '..');
+		}
 		const path = uri.toEncodedComponents().path.replace(/\/+$/u, '');
 		if (!path) {
 			return uri;

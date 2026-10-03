@@ -1,6 +1,6 @@
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import { localize, onDidChangeNls } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import { WorkbenchViewContainerId } from '../../../common/views.js';
 import { IActivityService, NumberBadge } from '../../../services/activity/common/activity.js';
 import { ISCMViewService } from '../common/scm.js';
@@ -13,7 +13,6 @@ export class SCMActiveRepositoryController extends Disposable {
 	constructor(@ISCMViewService private readonly scmViewService: ISCMViewService, @IActivityService private readonly activityService: IActivityService) {
 		super();
 		this._register(scmViewService.onDidChangeActiveRepository(() => this.selectRepository()));
-		this._register(onDidChangeNls(() => this.update()));
 		this.selectRepository();
 	}
 
