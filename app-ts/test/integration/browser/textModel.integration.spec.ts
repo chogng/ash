@@ -497,10 +497,19 @@ for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
 		const line = page.locator('.view-lines .stanza-editor-line-text').first();
 		await expect(line).toHaveText('session rename > selected content');
 		const points = await line.evaluate(element => {
-			const node = element.firstChild!.firstChild!;
+			const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+			const nodes: Text[] = [];
+			while (walker.nextNode()) nodes.push(walker.currentNode as Text);
 			return [17, 33].map(offset => {
 				const range = document.createRange();
-				range.setStart(node, offset);
+				let remaining = offset;
+				const node = nodes.find(node => {
+					if (remaining <= node.length) return true;
+					remaining -= node.length;
+					return false;
+				});
+				if (!node) throw new Error(`Rendered line has no position at offset ${offset}`);
+				range.setStart(node, remaining);
 				range.collapse(true);
 				const rect = range.getBoundingClientRect();
 				return { x: rect.left - 0.25, y: rect.top + rect.height / 2 };

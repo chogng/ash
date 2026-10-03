@@ -139,7 +139,7 @@ export class ViewGpuContext extends Disposable {
 	}
 
 	public canRender(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number): boolean {
-		return this.canRenderDetailed(options, viewportData, lineNumber).length === 0;
+		return ViewGpuContext.deviceSync !== undefined && this.canRenderDetailed(options, viewportData, lineNumber).length === 0;
 	}
 
 	public canRenderDetailed(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number): string[] {

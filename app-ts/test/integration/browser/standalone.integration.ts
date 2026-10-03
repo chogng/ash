@@ -27,6 +27,7 @@ import { IVersionedEditorWorkerClient } from '../../../src/ash/editor/browser/se
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
 import { HierarchicalKind } from '../../../src/ash/base/common/hierarchicalKind.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { Color } from '../../../src/ash/base/common/color.js';
 import { type LanguageFeatureRequest, TokenizationRegistry } from '../../../src/ash/editor/common/languages.js';
 import * as stanza from '../../../src/ash/editor/editor.main.js';
@@ -402,6 +403,8 @@ const callerContainer = document.querySelector<HTMLElement>('#caller')!;
 const ownedContainer = document.querySelector<HTMLElement>('#owned')!;
 const callerResource = stanza.URI.parse('inmemory://stanza/caller.txt');
 const ownedResource = stanza.URI.parse('inmemory://stanza/owned.txt');
+// Empty models must use an explicit EOL so editing expectations are identical on every host.
+await StandaloneServices.get(IConfigurationService).updateValue('files.eol', new URL(location.href).searchParams.get('eol') === 'crlf' ? '\r\n' : '\n');
 const typescriptConfiguration = stanza.languages.setLanguageConfiguration('typescript', {
 	comments: { lineComment: '//', blockComment: ['/*', '*/'] },
 	brackets: [['{', '}'], ['[', ']'], ['(', ')']],

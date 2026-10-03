@@ -163,7 +163,7 @@ const secondInput = resources.add(services.createInstance(ChatInputPart, documen
 	create: (options: ChatInputEditorOptions) => services.createInstance(ChatInputEditor, options),
 }, []));
 secondInput.element.id = 'second-input';
-secondInput.render({ mode: 'agent', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+secondInput.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 window.ashTableIntegration = {
 	codeDictation: async () => { codeEditor.focus(); await services.get(ICommandService).executeCommand('workbench.action.editorDictation.start'); },
 	get codeText() { return codeModel.getValue(); },

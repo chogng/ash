@@ -1,6 +1,7 @@
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import * as stanza from '../../../src/ash/editor/editor.main.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { StandardTokenType } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
 import { resolveTextResourceLanguageId } from '../../../src/ash/platform/language/common/textResourceLanguage.js';
 import { createLanguageExtensions } from './languageExtensions.js';
@@ -10,6 +11,7 @@ import { BrowserTextMateService } from '../../../src/ash/workbench/services/text
 const store = new DisposableStore();
 const textMate = store.add(new BrowserTextMateService());
 const services = store.add(StandaloneServices.initialize({ syntaxWorkerFactory: textMate.syntaxWorkerFactory }));
+await services.get(IConfigurationService).updateValue('files.eol', '\n');
 const shellResource = stanza.URI.file('/project/main.sh');
 const initialLanguages = services.languageService.getRegisteredLanguageIds();
 const extensions = store.add(await createLanguageExtensions({

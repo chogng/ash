@@ -341,7 +341,11 @@ export class View extends ViewEventHandler {
 			viewGpuContext: this.viewGpuContext,
 		}));
 		this.viewLinesGpu = this.viewGpuContext
-			? this.registerViewPart(new ViewLinesGpu(this.viewContext, this.viewGpuContext, () => this.scheduleProjection()))
+			? this.registerViewPart(new ViewLinesGpu(this.viewContext, this.viewGpuContext, () => {
+				// GPU initialization changes which text rows the DOM renderer owns.
+				this.viewLines.forceShouldRender();
+				this.scheduleProjection();
+			}))
 			: undefined;
 		this.contentViewOverlays = this.registerViewPart(new ContentViewOverlays(this.viewContext, this.contentElement));
 		this.decorations = new DecorationsOverlay(this.viewContext, () => this.textLeft);

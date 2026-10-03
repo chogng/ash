@@ -1,4 +1,5 @@
 {
+	"files.eol": "\n",
 	"bazel.commandLine.queryExpression": "//...:*",
 	"bazel.queriesShareServer": false,
 	"terminal.integrated.env.windows": {

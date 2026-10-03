@@ -506,7 +506,8 @@ export class NativeEditContext extends AbstractEditContext {
 	syncState(state: EditContextState): void {
 		if (this.composing) return;
 		this.lastRenderPosition = state.position;
-		const text = normalizeTextLineEndings(state.text);
+		// Selection and window offsets address this exact model text, including both CRLF code units.
+		const text = state.text;
 		const selectionStart = clampOffset(Math.min(state.selectionStart, state.selectionEnd), text.length);
 		const selectionEnd = clampOffset(Math.max(state.selectionStart, state.selectionEnd), text.length);
 		const textWindow = createNativeTextWindow(text, selectionStart, selectionEnd);

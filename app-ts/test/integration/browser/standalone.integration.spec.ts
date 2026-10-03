@@ -1,5 +1,41 @@
 import { expect, test, type Page } from '@playwright/test';
 
+for (const inputKind of ['EditContext', 'textarea'] as const) {
+	for (const eolName of ['lf', 'crlf'] as const) {
+		test(`${inputKind} ${eolName} models retain EOL through input, paste, undo and existing text`, async ({ page }) => {
+			if (inputKind === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			await page.goto(`/standalone.html?eol=${eolName}`);
+			const eol = eolName === 'lf' ? '\n' : '\r\n';
+			const oppositeEol = eolName === 'lf' ? '\r\n' : '\n';
+			const input = page.locator('#caller .stanza-editor-input');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('alpha', [[1, 6, 1, 6]]));
+			await input.focus();
+			await page.keyboard.insertText('\nbeta');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe(`alpha${eol}beta`);
+			await input.press('ControlOrMeta+z');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha');
+			await input.press('ControlOrMeta+Shift+z');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe(`alpha${eol}beta`);
+
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('alpha', [[1, 6, 1, 6]]));
+			await input.evaluate((element, text) => {
+				const clipboardData = new DataTransfer();
+				clipboardData.setData('text/plain', text);
+				element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+			}, `${oppositeEol}beta`);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe(`alpha${eol}beta`);
+			await input.press('ControlOrMeta+z');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha');
+
+			// A file's existing line endings take precedence over the default for empty models.
+			await page.evaluate(text => window.ashStandaloneIntegration.prepareClipboard(text, [[2, 4, 2, 4]]), `one${oppositeEol}two`);
+			await page.keyboard.insertText('\nthree');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe(`one${oppositeEol}two${oppositeEol}three`);
+			await expect(input).toBeFocused();
+		});
+	}
+}
+
 test('standalone text preserves leading, internal, and trailing whitespace across themes', async ({ page }) => {
 	await page.goto('/standalone.html');
 	const lines = ['xxxxxxxxxx', '    xxxxxx', '\txxxxxx', '\t\txx', ' \t xxxxx', 'xx  xxxxxx', 'xxxxxxxxx '];
@@ -3162,11 +3198,12 @@ test('code action menu stays inside a narrow viewport and follows light and high
 		await expect(action).toBeFocused();
 		const style = await action.evaluate(button => {
 			const shell = button.closest('.ash-context-view')!;
+			const menu = button.closest('.ash-action-widget')!;
 			const bounds = shell.getBoundingClientRect();
 			return {
 				left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom,
-				background: getComputedStyle(shell).backgroundColor,
-				border: getComputedStyle(shell).borderTopStyle,
+				background: getComputedStyle(menu).backgroundColor,
+				border: getComputedStyle(menu).borderTopStyle,
 				outline: getComputedStyle(button).outlineStyle,
 				outlineColor: getComputedStyle(button).outlineColor,
 			};
@@ -3931,7 +3968,8 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 				};
 			});
 			const expected = { full: 'const <x>&\n\t"value"', partial: 'ns', line: 'const <x>&\n', multi: 'ns\n"va', disabled: 'const <x>&\n\t"value"', missingColors: 'const <x>&\n\t"value"' }[mode];
-			expect(copied.text).toBe(expected);
+			// Windows clipboard text uses CRLF; parsing HTML independently normalizes it to LF.
+			expect(copied.text).toBe(process.platform === 'win32' ? expected.replace(/\n/g, '\r\n') : expected);
 			if (mode === 'disabled') {
 				expect(copied.html).toBe('');
 			} else {
@@ -4070,13 +4108,13 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 				return { text, metadata };
 			}, mode);
 			if (mode === 'selections') {
-				expect(result.text).toBe('a\nb');
+				expect(result.text).toBe(process.platform === 'win32' ? 'a\r\nb' : 'a\nb');
 				expect(JSON.parse(result.metadata)).toMatchObject({ isFromEmptySelection: false, multicursorText: ['a', 'b'] });
 				await expect.poll(async () => (await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('a b');
 			} else if (mode === 'externalLines') {
 				await expect.poll(async () => (await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('Xa Yb');
 			} else if (mode === 'line') {
-				expect(result.text).toBe('alpha\n');
+				expect(result.text).toBe(process.platform === 'win32' ? 'alpha\r\n' : 'alpha\n');
 				expect(JSON.parse(result.metadata)).toMatchObject({ isFromEmptySelection: true });
 				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: 'alpha\nalpha\nbeta', selections: ['[2,3 -> 2,3]'] });
 			} else {

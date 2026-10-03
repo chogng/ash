@@ -187,11 +187,13 @@ export class ViewLines extends ViewPart implements IViewLines {
 		// Cursor and ViewModel reveal requests already use view coordinates, including wrapping and folding.
 		const layout = this._context.viewLayout;
 		const viewport = layout.getFutureViewport();
+		// Viewport rounds for painting; reveal decisions must preserve the precise scroll state.
+		const viewportTop = layout.getScrollable().getFutureScrollPosition().scrollTop;
 		const boxTop = layout.getVerticalOffsetForLineNumber(range.startLineNumber);
 		const boxBottom = layout.getVerticalOffsetAfterLineNumber(range.endLineNumber);
-		const viewportBottom = viewport.top + viewport.height;
-		const outside = boxTop < viewport.top || boxBottom > viewportBottom;
-		let scrollTop = viewport.top;
+		const viewportBottom = viewportTop + viewport.height;
+		const outside = boxTop < viewportTop || boxBottom > viewportBottom;
+		let scrollTop = viewportTop;
 		if (boxBottom - boxTop > viewport.height) {
 			scrollTop = boxTop;
 		} else {
@@ -200,7 +202,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 					scrollTop = (boxTop + boxBottom - viewport.height) / 2;
 					break;
 				case VerticalRevealType.CenterIfOutsideViewport:
-					scrollTop = outside ? (boxTop + boxBottom - viewport.height) / 2 : viewport.top;
+					scrollTop = outside ? (boxTop + boxBottom - viewport.height) / 2 : viewportTop;
 					break;
 				case VerticalRevealType.Top:
 					scrollTop = boxTop;
@@ -212,10 +214,10 @@ export class ViewLines extends ViewPart implements IViewLines {
 					scrollTop = boxTop - Math.max(5 * this._context.configuration.options.get(EditorOption.lineHeight), viewport.height * 0.2);
 					break;
 				case VerticalRevealType.NearTopIfOutsideViewport:
-					scrollTop = outside ? boxTop - Math.max(5 * this._context.configuration.options.get(EditorOption.lineHeight), viewport.height * 0.2) : viewport.top;
+					scrollTop = outside ? boxTop - Math.max(5 * this._context.configuration.options.get(EditorOption.lineHeight), viewport.height * 0.2) : viewportTop;
 					break;
 				default:
-					if (boxTop < viewport.top) scrollTop = boxTop;
+					if (boxTop < viewportTop) scrollTop = boxTop;
 					else if (boxBottom > viewportBottom) scrollTop = boxBottom - viewport.height;
 			}
 		}

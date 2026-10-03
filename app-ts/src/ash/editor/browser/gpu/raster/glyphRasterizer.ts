@@ -58,8 +58,9 @@ export class GlyphRasterizer extends Disposable implements IGlyphRasterizer {
 			};
 		}
 
-		const deviceFontSize = Math.ceil(this.fontSize * this.devicePixelRatio);
-		const dimension = Math.max(3, deviceFontSize * 3);
+		// Round the canvas allocation, not the font: fractional display scaling must retain CSS advances.
+		const deviceFontSize = this.fontSize * this.devicePixelRatio;
+		const dimension = Math.max(3, Math.ceil(deviceFontSize) * 3);
 		if (this._canvas.width !== dimension || this._canvas.height !== dimension) {
 			this._canvas.width = dimension;
 			this._canvas.height = dimension;
@@ -100,7 +101,7 @@ export class GlyphRasterizer extends Disposable implements IGlyphRasterizer {
 	}
 
 	public getTextMetrics(text: string): TextMetrics {
-		this._ctx.font = `${Math.ceil(this.fontSize * this.devicePixelRatio)}px ${this.fontFamily}`;
+		this._ctx.font = `${this.fontSize * this.devicePixelRatio}px ${this.fontFamily}`;
 		return this._ctx.measureText(text);
 	}
 }
