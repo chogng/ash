@@ -25,6 +25,7 @@ const CONTEXT_SAFETY_MARGIN_TOKENS: u32 = 1_024;
 /// Freezes cached model evidence alongside the configuration used by one Turn.
 /// Capturing a catalog never fetches an endpoint. Account-scoped observations override seeds
 /// in both the picker and execution; later refreshes cannot change a running Turn's capacity.
+#[derive(Clone)]
 pub(super) struct ModelContextCatalog {
     manager: ModelsManager,
     registry: ProviderConfigRegistry,

@@ -60,6 +60,13 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+const DIR_DENY_CONFIG: &str = r#"
+[[execPolicy.rules]]
+id = "dir-deny"
+selector = { kind = "any" }
+effect = { kind = "deny", reason = "directory restriction" }
+"#;
+
 fn config_path(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
         "ash-app-server-{label}-{}-{}.authority.json",
@@ -2040,86 +2047,93 @@ fn shared_profile_runtime_owns_exactly_one_marketplace_authority() {
 }
 
 #[test]
-fn live_plugin_authority_reconciles_connectors_despite_invalid_directory_config() {
-    let profile = tempfile::tempdir().unwrap();
-    let source = tempfile::tempdir().unwrap();
-    let plugin_root = profile.path().join("plugins");
-    let store = PluginPackageStore::open(&plugin_root).unwrap();
-    let installed = store
-        .install_local(&connector_plugin(source.path()))
-        .unwrap();
-    let authority = PluginActivationAuthority::open(&plugin_root).unwrap();
-    authority
-        .apply(plugin_request(
-            &authority,
-            "install-live",
-            PluginAuthorityCommand::Install {
-                package: installed.clone(),
-            },
-        ))
-        .unwrap();
-    let directory_config = profile.path().join("directory.toml");
-    std::fs::write(&directory_config, "").unwrap();
-    let options = AppServerOptions::new(profile.path())
-        .with_dir_config(LocalDirConfigOptions::new(
-            &directory_config,
-            Dir::open_local(profile.path()).unwrap().id(),
-        ))
-        .without_built_in_skills()
-        .with_session_state_mode(SessionStateMode::Ephemeral)
-        .with_plugin_authority(authority.clone(), Arc::new(MemorySecretStore::default()))
-        .unwrap();
-    let server = open_app_server(options).unwrap();
-    let mut connection = server.connection();
-    let initialize = server.handle_json(
+fn live_plugin_authority_reconciles_connectors_despite_invalid_configs() {
+    for invalid_source in ["directory", "user"] {
+        let profile = tempfile::tempdir().unwrap();
+        let source = tempfile::tempdir().unwrap();
+        let plugin_root = profile.path().join("plugins");
+        let store = PluginPackageStore::open(&plugin_root).unwrap();
+        let installed = store
+            .install_local(&connector_plugin(source.path()))
+            .unwrap();
+        let authority = PluginActivationAuthority::open(&plugin_root).unwrap();
+        authority
+            .apply(plugin_request(
+                &authority,
+                "install-live",
+                PluginAuthorityCommand::Install {
+                    package: installed.clone(),
+                },
+            ))
+            .unwrap();
+        let directory_config = profile.path().join("directory.toml");
+        std::fs::write(&directory_config, "").unwrap();
+        let options = AppServerOptions::new(profile.path())
+            .with_dir_config(LocalDirConfigOptions::new(
+                &directory_config,
+                Dir::open_local(profile.path()).unwrap().id(),
+            ))
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral)
+            .with_plugin_authority(authority.clone(), Arc::new(MemorySecretStore::default()))
+            .unwrap();
+        let server = open_app_server(options).unwrap();
+        let mut connection = server.connection();
+        let initialize = server.handle_json(
         &mut connection,
         r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}}"#,
     );
-    assert!(initialize.contains("\"result\""));
-    let mut request_id = 1;
-    wait_for_connector_count(&server, &mut connection, 0, &mut request_id);
+        assert!(initialize.contains("\"result\""));
+        let mut request_id = 1;
+        wait_for_connector_count(&server, &mut connection, 0, &mut request_id);
 
-    authority
-        .apply(plugin_request(
-            &authority,
-            "grant-live",
-            PluginAuthorityCommand::Grant {
-                package: installed.clone(),
-            },
-        ))
-        .unwrap();
-    authority
-        .apply(plugin_request(
-            &authority,
-            "enable-live",
-            PluginAuthorityCommand::Enable {
-                package: installed.clone(),
-            },
-        ))
-        .unwrap();
-    wait_for_connector_count(&server, &mut connection, 1, &mut request_id);
+        authority
+            .apply(plugin_request(
+                &authority,
+                "grant-live",
+                PluginAuthorityCommand::Grant {
+                    package: installed.clone(),
+                },
+            ))
+            .unwrap();
+        authority
+            .apply(plugin_request(
+                &authority,
+                "enable-live",
+                PluginAuthorityCommand::Enable {
+                    package: installed.clone(),
+                },
+            ))
+            .unwrap();
+        wait_for_connector_count(&server, &mut connection, 1, &mut request_id);
 
-    std::fs::write(&directory_config, "[broken").unwrap();
-    // Let the directory poll reject this edit before sending an independent authority change.
-    std::thread::sleep(Duration::from_millis(250));
-    authority
-        .apply(plugin_request(
-            &authority,
-            "disable-live",
-            PluginAuthorityCommand::Disable {
-                package: installed.clone(),
-            },
-        ))
-        .unwrap();
-    wait_for_connector_count(&server, &mut connection, 0, &mut request_id);
-    authority
-        .apply(plugin_request(
-            &authority,
-            "re-enable-live",
-            PluginAuthorityCommand::Enable { package: installed },
-        ))
-        .unwrap();
-    wait_for_connector_count(&server, &mut connection, 1, &mut request_id);
+        let invalid_path = match invalid_source {
+            "directory" => directory_config.clone(),
+            "user" => profile.path().join("config.toml"),
+            _ => unreachable!(),
+        };
+        std::fs::write(invalid_path, "[broken").unwrap();
+        // Let the configuration monitor reject the edit before an independent authority change.
+        std::thread::sleep(Duration::from_millis(250));
+        authority
+            .apply(plugin_request(
+                &authority,
+                "disable-live",
+                PluginAuthorityCommand::Disable {
+                    package: installed.clone(),
+                },
+            ))
+            .unwrap();
+        wait_for_connector_count(&server, &mut connection, 0, &mut request_id);
+        authority
+            .apply(plugin_request(
+                &authority,
+                "re-enable-live",
+                PluginAuthorityCommand::Enable { package: installed },
+            ))
+            .unwrap();
+        wait_for_connector_count(&server, &mut connection, 1, &mut request_id);
+    }
 }
 
 struct LocalSemanticEmbedding;
@@ -3045,10 +3059,13 @@ model = "dir-model"
 "#,
     )
     .unwrap();
-    let dir = Arc::new(DirConfigTracker::new(DirConfigStore::open(
-        &path,
-        DirConfigScope::new(Dir::open_local(path.parent().unwrap()).unwrap().id()),
-    )));
+    let dir = Arc::new(DirConfigTracker::new(
+        DirConfigStore::open(
+            &path,
+            DirConfigScope::new(Dir::open_local(path.parent().unwrap()).unwrap().id()),
+        ),
+        InitialDirPermissions::HostConfiguration,
+    ));
     let provider_configs = test_provider_registry();
     let catalog_provider = Arc::new(ModelProviderRuntime::new(provider_configs.clone()));
     let model = ConfigBackedModelService {
@@ -3081,6 +3098,222 @@ model = "dir-model"
 
     remove_config_files(&config_path);
     let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn local_model_resolution_rechecks_directory_config_permissions() {
+    let profile = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+    let configured = configure_test_provider(&config, ConfigRevision::INITIAL);
+    select_model(&config, "select-user", configured, "user-model");
+    let path = root.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "[agent.model]\nprovider = 'test'\nmodel = 'dir-model'\n",
+    )
+    .unwrap();
+    let dir_id = Dir::open_local(root.path()).unwrap().id();
+    let provider_configs = test_provider_registry();
+    let model = ConfigBackedModelService {
+        config: config.clone(),
+        dir_config: Some(Arc::new(DirConfigTracker::new(
+            DirConfigStore::open(&path, DirConfigScope::new(dir_id.clone())),
+            InitialDirPermissions::UserConfig,
+        ))),
+        provider_configs: provider_configs.clone(),
+        models_manager: ModelsManager::new(provider_configs.clone()),
+        catalog_provider: Arc::new(ModelProviderRuntime::new(provider_configs)),
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+        resolver: Arc::new(RecordingSnapshotResolver {
+            gate: Arc::new(ResponseGate::default()),
+        }),
+    };
+    let configured_model = || {
+        model
+            .config_for_selection(ModelSelection::ConfiguredDefault)
+            .map(|config| config.model.unwrap().model.as_str().to_owned())
+    };
+    assert_eq!(configured_model().unwrap(), "user-model");
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("grant-config").unwrap(),
+            expected_revision: config.read_snapshot().unwrap().revision,
+            command: UserConfigCommand::SetDirPermissions {
+                dir: dir_id.clone(),
+                permissions: ash_file_access::Permissions::new([DirPermission::LoadConfig]),
+                display_path: None,
+            },
+        })
+        .unwrap();
+    assert_eq!(configured_model().unwrap(), "dir-model");
+    std::fs::write(&path, "[broken").unwrap();
+    assert!(configured_model().is_err());
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("revoke-config").unwrap(),
+            expected_revision: config.read_snapshot().unwrap().revision,
+            command: UserConfigCommand::ForgetDirPermissions { dir: dir_id },
+        })
+        .unwrap();
+    // Revocation must not even parse the now-invalid directory file.
+    assert_eq!(configured_model().unwrap(), "user-model");
+}
+
+#[test]
+fn directory_config_watcher_applies_late_grants_and_revocation() {
+    let profile = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(
+        profile.path().join("config.toml"),
+        format!(
+            "schemaVersion = {}\n[grep]\nbackend = 'ripgrep'\n",
+            ash_config::CONFIG_FILE_SCHEMA_VERSION
+        ),
+    )
+    .unwrap();
+    std::fs::create_dir(root.path().join(".git")).unwrap();
+    std::fs::create_dir(root.path().join(".ash")).unwrap();
+    let directory = Dir::open_local(root.path()).unwrap();
+    std::fs::write(root.path().join(".ash/config.toml"), DIR_DENY_CONFIG).unwrap();
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    let mut permissions = ash_file_access::Permissions::new([
+        DirPermission::ReadFiles,
+        DirPermission::BrowseFiles,
+        DirPermission::SearchFiles,
+        DirPermission::InspectRepository,
+        DirPermission::MutateRepository,
+        DirPermission::ExecuteCommands,
+        DirPermission::WriteFiles,
+        DirPermission::WatchFiles,
+    ]);
+    let set_permissions = |id: &str, permissions| {
+        runtime
+            .config
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new(id).unwrap(),
+                expected_revision: runtime.config.read_snapshot().unwrap().revision,
+                command: UserConfigCommand::SetDirPermissions {
+                    dir: directory.id(),
+                    permissions,
+                    display_path: None,
+                },
+            })
+            .unwrap();
+    };
+    set_permissions("grant-execution", permissions.clone());
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .with_profile_runtime(runtime.clone())
+            .with_user_config_dir_root(root.path())
+            .without_built_in_skills(),
+    )
+    .unwrap();
+    let original = server.test_action_policy_revision();
+    permissions =
+        ash_file_access::Permissions::new(permissions.entries().chain([DirPermission::LoadConfig]));
+    set_permissions("grant-load-config", permissions);
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while server.test_action_policy_revision() == original {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "directory policy was not installed after grant"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    std::fs::write(root.path().join(".ash/config.toml"), "[broken").unwrap();
+    set_permissions(
+        "revoke-load-config",
+        ash_file_access::Permissions::new([
+            DirPermission::ReadFiles,
+            DirPermission::BrowseFiles,
+            DirPermission::SearchFiles,
+            DirPermission::InspectRepository,
+            DirPermission::MutateRepository,
+            DirPermission::ExecuteCommands,
+            DirPermission::WriteFiles,
+            DirPermission::WatchFiles,
+        ]),
+    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while server.test_action_policy_revision() != original {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "directory policy survived revocation"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn directory_edit_before_watcher_start_is_applied_without_another_event() {
+    let profile = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+    let user = config.read_snapshot().unwrap();
+    let path = root.path().join("directory.toml");
+    std::fs::write(&path, "").unwrap();
+    let tracker = Arc::new(DirConfigTracker::new(
+        DirConfigStore::open(
+            &path,
+            DirConfigScope::new(Dir::open_local(root.path()).unwrap().id()),
+        ),
+        InitialDirPermissions::HostConfiguration,
+    ));
+    let initial = resolve_local_config(&user, Some(&tracker)).unwrap();
+    let server = AppServer::new(
+        Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        ))),
+        Arc::new(ProviderModelService::new(Arc::new(
+            ash_model_provider::EchoModel,
+        ))),
+    )
+    .with_ephemeral_env_state()
+    .with_config_store(config.clone())
+    .with_env_config(&initial)
+    .with_local_env_host(
+        None,
+        crate::server::DirGrantPolicy::HostSelectedDirs(
+            ash_file_access::GrantSource::HostConfiguration,
+        ),
+    )
+    .unwrap();
+    server
+        .activate_host_configured_dir_root(root.path().to_path_buf())
+        .unwrap();
+    let original = server.test_action_policy_revision();
+    std::fs::write(&path, DIR_DENY_CONFIG).unwrap();
+    tracker.read().unwrap();
+    let network_policy = OutboundNetworkPolicy::new(NetworkAccess::Any);
+    let network = ash_http_client::OutboundNetworkSnapshot::with_policy(
+        ash_http_client::HttpClientConfig::default(),
+        network_policy.clone(),
+    )
+    .unwrap();
+    let mcp_updates = McpCatalogUpdates::default();
+    let intents = crate::mcp_runtime::McpRuntimeIntents::default();
+    let _watcher = ToolConfigWatcher::start(ToolConfigWatcherInputs {
+        config,
+        network,
+        network_policy,
+        dir_config: Some(tracker),
+        env_tools: server.local_env_tool_ports().unwrap(),
+        env_runtime: server.env_runtime_control().unwrap(),
+        connector_runtime: None,
+        mcp_changes: mcp_updates.subscribe(),
+        mcp_updates,
+        mcp_runtime_intent_changes: intents.subscribe(),
+        mcp_runtime_intents: intents,
+    });
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while server.test_action_policy_revision() == original {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "startup directory edit was not applied"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
 }
 
 #[test]

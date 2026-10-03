@@ -283,10 +283,13 @@ impl AppServer {
                 }),
             })
             .map_err(config_operation_error)?;
-        let snapshot = store.read_snapshot().map_err(config_error)?;
+        let backend = match store.committed_snapshot().values.grep_backend {
+            GrepBackend::Ripgrep => grep::Backend::Ripgrep,
+            GrepBackend::Tgrep => grep::Backend::Tgrep,
+        };
         self.env_runtime_control()
             .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?
-            .reconcile_env_config(&snapshot.values)
+            .reconcile_grep_backend(backend)
             .map_err(|_| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
         let deletion =
             match &self.env_state {
@@ -1102,11 +1105,15 @@ fn approval_review_model_dto(
 ) -> ApprovalReviewModelSelectionDto {
     match selection {
         ApprovalReviewModelSelection::Automatic => ApprovalReviewModelSelectionDto::Automatic,
-        ApprovalReviewModelSelection::Explicit { model } => {
-            ApprovalReviewModelSelectionDto::Explicit {
-                model: model_ref_dto(model),
-            }
-        }
+        ApprovalReviewModelSelection::Explicit {
+            model,
+            connection,
+            reasoning_effort,
+        } => ApprovalReviewModelSelectionDto::Explicit {
+            model: model_ref_dto(model),
+            connection: connection.map(|connection| connection.to_string()),
+            reasoning_effort,
+        },
     }
 }
 
@@ -1115,11 +1122,20 @@ fn approval_review_model_from_dto(
 ) -> Result<ApprovalReviewModelSelection, RpcError> {
     match selection {
         ApprovalReviewModelSelectionDto::Automatic => Ok(ApprovalReviewModelSelection::Automatic),
-        ApprovalReviewModelSelectionDto::Explicit { model } => {
-            Ok(ApprovalReviewModelSelection::Explicit {
-                model: model_ref_from_dto(model)?,
-            })
-        }
+        ApprovalReviewModelSelectionDto::Explicit {
+            model,
+            connection,
+            reasoning_effort,
+        } => Ok(ApprovalReviewModelSelection::Explicit {
+            model: model_ref_from_dto(model)?,
+            connection: connection
+                .map(|connection| {
+                    ash_protocol::ModelConnectionId::new(connection)
+                        .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))
+                })
+                .transpose()?,
+            reasoning_effort,
+        }),
     }
 }
 

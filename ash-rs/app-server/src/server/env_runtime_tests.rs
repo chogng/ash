@@ -1766,3 +1766,170 @@ fn directory_search_and_backend_configuration_do_not_require_agent_execution() {
     assert!(!grep.index_status(&root, &token).unwrap().enabled);
     assert!(Arc::ptr_eq(&grep, &server.grep_index_context().unwrap().0));
 }
+
+#[test]
+fn disabling_grep_index_preserves_directory_execution_policy_on_noop_and_replay() {
+    let profile = tempfile::tempdir().unwrap();
+    let dir = TestDir::new("grep-policy", "source.rs");
+    let config_path = profile.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        format!(
+            "schemaVersion = {}\n[grep]\nbackend = 'ripgrep'\n",
+            ash_config::CONFIG_FILE_SCHEMA_VERSION
+        ),
+    )
+    .unwrap();
+    let config = Arc::new(
+        ConfigStore::open_with_paths(profile.path().join("config.sqlite3"), config_path).unwrap(),
+    );
+    let document = ash_config::DirConfigDocument {
+        exec_policy: ash_config::DirExecPolicyConfig {
+            rules: vec![ash_execpolicy::ExecPolicyRule::new(
+                ash_execpolicy::ExecPolicyRuleId::new("dir-deny-shell"),
+                ash_execpolicy::ExecPolicySelector::Any,
+                ash_execpolicy::ExecPolicyEffect::Deny("directory restriction".into()),
+            )],
+        },
+        ..Default::default()
+    };
+    let user = config.read_snapshot().unwrap();
+    let scope = ash_config::DirConfigScope::new(dir.root().id());
+    let resolved = ash_config::resolve_scoped_config(
+        &user,
+        Some(ash_config::DirConfigInput::new(
+            &scope,
+            ash_config::DirConfigRevision::INITIAL,
+            &document,
+        )),
+    )
+    .unwrap();
+    let server = server()
+        .with_config_store(config.clone())
+        .with_env_config(&resolved.values)
+        .with_local_env_host(None, host_policy())
+        .unwrap();
+    server
+        .activate_host_configured_dir_root(dir.path.clone())
+        .unwrap();
+    let original_revision = server.turn_executor_snapshot().policy_revision();
+    let assert_denied = |id: &str| {
+        let registry = &server.local_env_host.as_ref().unwrap().tools.reloadable;
+        let call = ash_protocol::ToolCall {
+            id: ash_protocol::ToolCallId::new(id).unwrap(),
+            name: ash_protocol::ToolName::new("shell-command").unwrap(),
+            arguments: serde_json::json!({
+                "program": std::env::current_exe().unwrap(), "arguments": [], "working_directory": "."
+            }),
+        };
+        let review = registry.tools().prepare(&call).unwrap();
+        assert!(matches!(
+            registry
+                .policy()
+                .decide(&review, &ash_async_utils::CancellationSource::new().token())
+                .unwrap(),
+            ExecutionDecision::Block(ash_action_policy::BlockReason::DeterministicRule { reason, .. })
+                if reason.contains("directory restriction")
+        ));
+    };
+    assert_denied("before-disable");
+    let mut connection = server.connection();
+    let initialized = server.handle_json(&mut connection, r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}}"#);
+    assert!(initialized.contains("\"result\""));
+    for id in [2, 3] {
+        let result: serde_json::Value = serde_json::from_str(
+            &server.handle_json(
+                &mut connection,
+                &serde_json::json!({
+                    "jsonrpc": "2.0", "id": id, "method": "grep/index/disableAndDelete",
+                    "params": {"commandId": "disable-grep", "expectedRevision": user.revision.get()}
+                })
+                .to_string(),
+            ),
+        )
+        .unwrap();
+        assert!(result.get("error").is_none(), "{result}");
+        assert_eq!(result["result"]["config"]["revision"], user.revision.get());
+        assert_eq!(
+            server.turn_executor_snapshot().policy_revision(),
+            original_revision
+        );
+        assert_denied(&format!("after-disable-{id}"));
+    }
+    assert_eq!(config.read_snapshot().unwrap().revision, user.revision);
+}
+
+impl AppServer {
+    pub(crate) fn test_action_policy_revision(&self) -> String {
+        self.turn_executor_snapshot().policy_revision()
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn failed_semantic_rebuild_preserves_tools_watcher_and_indexing_job() {
+    let profile = tempfile::tempdir().unwrap();
+    let dir = TestDir::new("semantic-rebuild", "source.rs");
+    let models = crate::CodebaseModels::new(
+        ash_codebase::EmbeddingIndexKey::new("rebuild-test-v1").unwrap(),
+        Arc::new(PermissionBoundSemanticEmbedding),
+    );
+    let server = server()
+        .with_state_runtime(Arc::new(
+            ash_state::StateRuntime::open(profile.path()).unwrap(),
+        ))
+        .with_codebase_models(models)
+        .with_local_env_host(None, host_policy())
+        .unwrap();
+    server
+        .activate_host_configured_dir_root(dir.path.clone())
+        .unwrap();
+    let semantic = server.codebase_semantic_service().unwrap();
+    let job = server.codebase_semantic_job().unwrap();
+    let catalog = server.local_env_host.as_ref().unwrap().tools.definitions();
+    let policy = server.turn_executor_snapshot().policy_revision();
+    let codebase = server.codebase_service().unwrap();
+    let path = codebase.store().database_path().unwrap().to_path_buf();
+    let saved = path.with_extension("saved");
+    // Unix permits renaming an open database. Existing services keep their connection,
+    // while opening the replacement vector store fails against a directory at that path.
+    std::fs::rename(&path, &saved).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    let result = server
+        .env_runtime_control()
+        .unwrap()
+        .reconcile_codebase_runtime();
+    std::fs::remove_dir(&path).unwrap();
+    std::fs::rename(&saved, &path).unwrap();
+    assert!(
+        matches!(result, Err(EnvRuntimeError::Failed(message)) if message.contains("vector data"))
+    );
+    assert_eq!(
+        server.local_env_host.as_ref().unwrap().tools.definitions(),
+        catalog
+    );
+    assert_eq!(server.turn_executor_snapshot().policy_revision(), policy);
+    assert!(Arc::ptr_eq(
+        &semantic,
+        &server.codebase_semantic_service().unwrap()
+    ));
+    assert!(Arc::ptr_eq(&job, &server.codebase_semantic_job().unwrap()));
+    assert!(
+        server
+            .env_runtime
+            .read()
+            .unwrap()
+            .workspace
+            ._file_system_watcher
+            .is_some()
+    );
+    server
+        .env_runtime_control()
+        .unwrap()
+        .reconcile_codebase_runtime()
+        .unwrap();
+    assert!(!Arc::ptr_eq(
+        &semantic,
+        &server.codebase_semantic_service().unwrap()
+    ));
+}

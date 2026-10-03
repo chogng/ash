@@ -220,6 +220,33 @@ pub(crate) struct EnvRuntimeControl {
 }
 
 impl EnvRuntimeControl {
+    pub(crate) fn reconcile_grep_backend(
+        &self,
+        backend: grep::Backend,
+    ) -> Result<(), EnvRuntimeError> {
+        let _authority = self
+            .authority_gate
+            .lock()
+            .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
+        if let Some(grep) = &self
+            .runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .workspace
+            .grep
+        {
+            grep.configure(backend)
+                .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        }
+        // This operation owns grep only. Rebuilding from profile configuration here would
+        // discard the directory execution policy already installed in the environment.
+        self.env_config
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .grep_backend = backend;
+        Ok(())
+    }
+
     pub(crate) fn reconcile_env_config(
         &self,
         config: &ash_config::ResolvedConfig,
@@ -369,18 +396,10 @@ impl EnvRuntimeControl {
             .authority_gate
             .lock()
             .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
-        let (
-            authorization,
-            codebase,
-            symbol_index,
-            cloud,
-            customizations,
-            previous_watcher,
-            previous_job,
-        ) = {
-            let mut runtime = self
+        let (authorization, codebase, symbol_index, cloud, customizations) = {
+            let runtime = self
                 .runtime
-                .write()
+                .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             let Some(authorization) = runtime.selected_grant.as_ref().cloned() else {
                 return Ok(());
@@ -400,38 +419,27 @@ impl EnvRuntimeControl {
             let Some(customizations) = runtime._dir_contributions.clone() else {
                 return Ok(());
             };
-            let previous_watcher = runtime.workspace._file_system_watcher.take();
-            let previous_job = runtime.workspace.codebase_semantic_job.take();
-            runtime.workspace.codebase_semantic = None;
             (
                 authorization,
                 codebase,
                 symbol_index,
                 runtime.workspace.cloud_codebase.clone(),
                 customizations,
-                previous_watcher,
-                previous_job,
             )
         };
-        drop(previous_watcher);
-        drop(previous_job);
-        self.tools.replace_local(None)?;
-
+        // Prepare the complete replacement before retiring any active tools, indexing job,
+        // or file watcher. A storage or composition failure leaves the current generation intact.
         let semantic = open_codebase_semantic_runtime(
             &codebase,
             self.codebase_models.as_ref(),
             self.semantic_model_provider.as_ref(),
             self.config.as_ref(),
         )?;
-        let semantic_job = semantic.as_ref().and_then(|service| {
-            match SemanticIndexJobController::start(Arc::clone(service)) {
-                Ok(job) => Some(job),
-                Err(error) => {
-                    log::warn!("semantic codebase job is unavailable: {error}");
-                    None
-                }
-            }
-        });
+        let semantic_job = semantic
+            .as_ref()
+            .map(|service| SemanticIndexJobController::start(Arc::clone(service)))
+            .transpose()
+            .map_err(EnvRuntimeError::Failed)?;
         let execution = authorization
             .authorize(Permission::ExecuteCommands)
             .map_err(|_| EnvRuntimeError::PermissionRequired)?;
@@ -515,12 +523,17 @@ impl EnvRuntimeControl {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         runtime.workspace.codebase_semantic = semantic;
-        runtime.workspace.codebase_semantic_job = semantic_job;
-        runtime.workspace._file_system_watcher = Some(watcher);
+        let previous_job =
+            std::mem::replace(&mut runtime.workspace.codebase_semantic_job, semantic_job);
+        let previous_watcher = runtime.workspace._file_system_watcher.replace(watcher);
         runtime.turn_executor = runtime
             .turn_executor
             .clone()
             .with_context_source("codebase", context_source);
+        drop(runtime);
+        // Watcher shutdown joins its worker, which must not run under the runtime write lock.
+        drop(previous_watcher);
+        drop(previous_job);
         Ok(())
     }
 
@@ -2285,20 +2298,26 @@ impl AppServer {
                 })?,
             ),
         };
-        let debug_adapters = Arc::new(
-            crate::debug_service::DebugAdapterService::new(
-                authorization
-                    .authorize(Permission::LoadConfig)
-                    .map_err(|_| EnvRuntimeError::PermissionRequired)?,
-                authorization
-                    .authorize(Permission::ExecuteCommands)
-                    .map_err(|_| EnvRuntimeError::PermissionRequired)?,
-                exec_server::terminal::safe_process_environment(),
-            )
-            .map_err(|_| {
-                EnvRuntimeError::Failed("failed to initialize debug adapter runtime".into())
-            })?,
-        );
+        // Execution permission does not imply permission to read launch configuration.
+        // Optional services must not prevent an otherwise authorized directory from starting.
+        let debug_adapters = if authorization.permissions().allows(Permission::LoadConfig) {
+            Some(Arc::new(
+                crate::debug_service::DebugAdapterService::new(
+                    authorization
+                        .authorize(Permission::LoadConfig)
+                        .map_err(|_| EnvRuntimeError::PermissionRequired)?,
+                    authorization
+                        .authorize(Permission::ExecuteCommands)
+                        .map_err(|_| EnvRuntimeError::PermissionRequired)?,
+                    exec_server::terminal::safe_process_environment(),
+                )
+                .map_err(|_| {
+                    EnvRuntimeError::Failed("failed to initialize debug adapter runtime".into())
+                })?,
+            ))
+        } else {
+            None
+        };
         host.hooks
             .bind_dir(dir.clone())
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
@@ -2312,9 +2331,18 @@ impl AppServer {
             cloud_codebase.clone(),
             self.config.clone(),
         ));
-        let extension_authorization = authorization
-            .authorize(Permission::DiscoverPlugins)
-            .map_err(|_| EnvRuntimeError::PermissionRequired)?;
+        let extension_authorization = if authorization
+            .permissions()
+            .allows(Permission::DiscoverPlugins)
+        {
+            Some(
+                authorization
+                    .authorize(Permission::DiscoverPlugins)
+                    .map_err(|_| EnvRuntimeError::PermissionRequired)?,
+            )
+        } else {
+            None
+        };
         if let Some(extension_hosts) = &self.extension_hosts {
             extension_hosts.unbind_dir();
         }
@@ -2354,7 +2382,7 @@ impl AppServer {
             execution: ExecutionRuntime {
                 terminals: Some(Arc::clone(&terminals)),
                 dir_terminals: BTreeMap::new(),
-                debug_adapters: Some(Arc::clone(&debug_adapters)),
+                debug_adapters: debug_adapters.clone(),
                 dir_debug_adapters: BTreeMap::new(),
             },
         };
@@ -2364,9 +2392,10 @@ impl AppServer {
             previous,
             Some(&content_search),
             Some(&terminals),
-            Some(&debug_adapters),
+            debug_adapters.as_ref(),
         );
         if let Some(extension_hosts) = &self.extension_hosts
+            && let Some(extension_authorization) = extension_authorization
             && extension_hosts.bind_dir(extension_authorization).is_err()
         {
             log::warn!("failed to bind executable Editor Extensions to the new dir");
@@ -3157,7 +3186,7 @@ fn resolve_configured_codebase_models(
     provider: &Arc<dyn SemanticModelProvider>,
     config: &Arc<ConfigStore>,
 ) -> Option<CodebaseModels> {
-    let snapshot = config.read_snapshot().ok()?;
+    let snapshot = config.committed_snapshot();
     let models = snapshot.values.codebase.models.clone()?;
     let invokers =
         match resolve_semantic_model_invokers(provider, &models, &snapshot.values.providers) {

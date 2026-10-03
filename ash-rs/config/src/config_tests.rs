@@ -214,7 +214,7 @@ fn configuring_provider_selects_its_first_api_model_and_preserves_selection_afte
     let path = config_path("provider-default-model");
     let store = ConfigStore::open(&path).unwrap();
     let configured = configure_provider(&store, 0, "openai");
-    let expected = model_ref("openai", "gpt-6-astra");
+    let expected = model_ref("openai", "gpt-6.1-sol");
     assert_eq!(
         store.read_snapshot().unwrap().values.model,
         Some(expected.clone())
@@ -275,7 +275,7 @@ fn saving_existing_provider_restores_missing_model_but_preserves_explicit_choice
     let saved = configure_provider(&store, cleared.revision.get(), "anthropic");
     assert_eq!(
         store.read_snapshot().unwrap().values.model,
-        Some(model_ref("anthropic", "claude-fable-5-1"))
+        Some(model_ref("anthropic", "claude-sonnet-5-5"))
     );
     let explicit = model_ref("anthropic", "custom-deployment");
     let selected = store
@@ -1447,6 +1447,8 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 tui: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
+                    connection: None,
+                    reasoning_effort: Some(ash_protocol::ReasoningEffort::Low),
                 }),
             }),
         })
@@ -1454,7 +1456,9 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
     assert_eq!(
         store.read_snapshot().unwrap().values.approval_review_model,
         ApprovalReviewModelSelection::Explicit {
-            model: model_ref("openai", "codex-auto-review")
+            model: model_ref("openai", "codex-auto-review"),
+            connection: None,
+            reasoning_effort: Some(ash_protocol::ReasoningEffort::Low),
         }
     );
 
@@ -1501,6 +1505,76 @@ fn automatic_approval_review_follows_the_selected_model_provider() {
             .unwrap(),
         model_ref("anthropic", "claude-main")
     );
+}
+
+#[test]
+fn automatic_review_uses_connection_defaults_without_inheriting_agent_effort() {
+    for (connection, expected) in [
+        ("openai", "gpt-6-luna"),
+        ("chatgpt-subscription", "codex-auto-review"),
+    ] {
+        let provider = ModelProviderConfig::for_connection(connection_id(connection));
+        let resolved = ResolvedConfig {
+            model: Some(model_ref("openai", "gpt-6-astra")),
+            model_reasoning_effort: Some(ash_protocol::ReasoningEffort::High),
+            providers: BTreeMap::from([(provider_id("openai"), provider)]),
+            ..Default::default()
+        };
+        let review = resolved
+            .resolve_approval_review_config(&ProviderConfigRegistry::builtin())
+            .unwrap();
+        assert_eq!(review.model, Some(model_ref("openai", expected)));
+        assert_eq!(
+            review.model_reasoning_effort,
+            Some(ash_protocol::ReasoningEffort::Low)
+        );
+        assert_eq!(
+            review.selected_provider().unwrap().connection,
+            connection_id(connection)
+        );
+        assert_eq!(resolved.model, Some(model_ref("openai", "gpt-6-astra")));
+        assert_eq!(
+            resolved.model_reasoning_effort,
+            Some(ash_protocol::ReasoningEffort::High)
+        );
+    }
+}
+
+#[test]
+fn explicit_review_freezes_its_connection_and_effort_independently() {
+    let api = ModelProviderConfig::for_connection(connection_id("openai"));
+    let subscription = ModelProviderConfig::for_connection(connection_id("chatgpt-subscription"));
+    let resolved = ResolvedConfig {
+        model: Some(model_ref("openai", "gpt-6-astra")),
+        approval_review_model: ApprovalReviewModelSelection::Explicit {
+            model: model_ref("openai", "gpt-6-luna"),
+            connection: Some(connection_id("openai")),
+            reasoning_effort: Some(ash_protocol::ReasoningEffort::Medium),
+        },
+        providers: BTreeMap::from([(provider_id("openai"), subscription.clone())]),
+        connections: BTreeMap::from([
+            (api.connection.clone(), api),
+            (subscription.connection.clone(), subscription),
+        ]),
+        ..Default::default()
+    };
+    let review = resolved
+        .resolve_approval_review_config(&ProviderConfigRegistry::builtin())
+        .unwrap();
+    assert_eq!(
+        review.selected_provider().unwrap().connection,
+        connection_id("openai")
+    );
+    assert_eq!(review.model, Some(model_ref("openai", "gpt-6-luna")));
+    assert_eq!(
+        review.model_reasoning_effort,
+        Some(ash_protocol::ReasoningEffort::Medium)
+    );
+    assert_eq!(
+        resolved.selected_provider().unwrap().connection,
+        connection_id("chatgpt-subscription")
+    );
+    assert_eq!(serde_json::from_value::<ApprovalReviewModelSelection>(serde_json::json!({"type":"explicit", "model":{"provider":"openai","model":"gpt-6-luna"}})).unwrap(), ApprovalReviewModelSelection::Explicit { model: model_ref("openai", "gpt-6-luna"), connection: None, reasoning_effort: None });
 }
 
 #[test]
@@ -1621,6 +1695,10 @@ fn committed_changes_publish_after_the_sqlite_snapshot_advances() {
     assert_eq!(notification.revision, changed.revision);
     assert_eq!(notification.generation, changed.generation);
     assert_eq!(
+        store.committed_snapshot().values.model,
+        Some(model_ref("openai", "model"))
+    );
+    assert_eq!(
         store.read_snapshot().unwrap().values.model,
         Some(model_ref("openai", "model"))
     );
@@ -1642,12 +1720,7 @@ fn changes_committed_by_another_connection_publish_to_local_subscribers() {
     assert_eq!(notification.revision, changed.revision);
     assert_eq!(notification.generation, changed.generation);
     assert_eq!(
-        observing_store
-            .read_snapshot()
-            .unwrap()
-            .values
-            .providers
-            .len(),
+        observing_store.committed_snapshot().values.providers.len(),
         1
     );
     drop(writing_store);
@@ -1690,6 +1763,8 @@ fn invalid_external_toml_does_not_replace_the_last_valid_metadata() {
     let path = config_path("invalid-external-toml");
     let store = ConfigStore::open(&path).unwrap();
     let configured = configure_provider(&store, 0, "openai");
+    let accepted = store.committed_snapshot();
+    let changes = store.subscribe_changes();
     std::fs::write(store.config_path(), "unknown = true").unwrap();
 
     assert!(store.read_snapshot().is_err());
@@ -1702,6 +1777,13 @@ fn invalid_external_toml_does_not_replace_the_last_valid_metadata() {
         )
         .unwrap();
     assert_eq!(metadata_revision as u64, configured.revision.get());
+    assert_eq!(store.committed_snapshot(), accepted);
+    assert!(
+        changes
+            .recv_timeout(std::time::Duration::from_millis(250))
+            .is_err()
+    );
+    assert_eq!(store.committed_snapshot(), accepted);
     drop(store);
     remove_config_files(&path);
 }

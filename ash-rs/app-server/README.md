@@ -33,9 +33,14 @@ RPC trace 从请求接收开始计时，记录资源等待、执行队列等待�
 交互式 PTY、输出缓存和重连租约由 [`ash-exec-server`](../exec-server/README.md) 管理；
 `src/server/terminal_operations.rs` 负责协议转换和调用，环境装配负责传入有效授权。
 
-配置监听分别处理 profile 状态提交和目录配置更新。目录 `.ash/config.toml` 读取或校验失败时，
-记录配置错误，plugin、connector 与 MCP 的已提交状态继续刷新；有效目录配置恢复后再更新环境服务。
+配置监听分别处理 profile 状态提交和目录配置更新，订阅后先应用当前状态，覆盖初始装配与
+监听启动之间的变化。运行时使用 ConfigStore 已提交的 profile 快照；用户或目录文件的损坏编辑
+不会阻塞 plugin、connector 与 MCP 的独立状态更新。目录配置每次读取都检查当前 `LoadConfig`；
+首次授权与撤销无需重启。有效目录配置恢复后再更新环境服务。
+目录执行、调试配置读取和扩展发现分别检查自己的权限；缺少调试或扩展权限不阻止已获准的目录执行服务启动。
 会话目录 hooks 在全部获准配置读取成功后统一替换，读取失败不会提交空注册列表；授权撤销仍在调用时检查。
+语义索引重建先准备新资源，成功后替换工具和监听；失败保留当前服务。删除 grep 索引只更新
+grep 后端，不重建或移除目录执行规则。
 
 环境和目录授权语义见 [`docs/environment-access.md`](../../docs/environment-access.md)，wire contract 见
 [`docs/ash-app-server-api.md`](../../docs/ash-app-server-api.md)。

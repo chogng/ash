@@ -1180,23 +1180,15 @@ pub fn open_app_server_with_codebase_providers(
     let application_http: Arc<dyn ash_http_client::HttpClient> = Arc::new(
         ash_http_client::ReqwestHttpClient::with_network(network.clone()).map_err(open_error)?,
     );
+    let dir_config_access = if options.dir_config.is_some() {
+        InitialDirPermissions::HostConfiguration
+    } else {
+        options.initial_dir_permissions
+    };
     if options.dir_config.is_none()
         && let Some(dir_root) = &options.dir_root
     {
-        let load_dir_config = match options.initial_dir_permissions {
-            InitialDirPermissions::HostConfiguration => true,
-            InitialDirPermissions::UserConfig => {
-                let dir = Dir::open_local(dir_root).map_err(open_error)?;
-                user_config
-                    .values
-                    .dir_permissions
-                    .permissions_for(&dir.id())
-                    .allows(DirPermission::LoadConfig)
-            }
-        };
-        if load_dir_config {
-            options.dir_config = Some(default_dir_config(dir_root)?);
-        }
+        options.dir_config = Some(default_dir_config(dir_root)?);
     }
     let profile_secrets = match (&profile_runtime, options.connector_runtime.as_ref()) {
         (Some(runtime), Some(connectors)) => {
@@ -1329,14 +1321,17 @@ pub fn open_app_server_with_codebase_providers(
         )?;
     }
     let dir_config = options.dir_config.map(|dir_config| {
-        Arc::new(DirConfigTracker::new(DirConfigStore::open(
-            dir_config.config_path,
-            DirConfigScope::new(dir_config.dir_id),
-        )))
+        Arc::new(DirConfigTracker::new(
+            DirConfigStore::open(
+                dir_config.config_path,
+                DirConfigScope::new(dir_config.dir_id),
+            ),
+            dir_config_access,
+        ))
     });
     if let Some(dir_config) = &dir_config {
         dir_config
-            .read()
+            .read_authorized(&user_config)
             .map_err(|error| OpenAppServerError(error.0))?;
     }
     let tokenizer_downloader = Arc::new(HttpTokenizerAssetDownloader::with_policy(
@@ -1497,8 +1492,10 @@ pub fn open_app_server_with_codebase_providers(
         let Some((identity, runtime)) = model.approval_review_model()? else {
             return Ok(ash_extension_api::ApprovalReviewer::Unavailable);
         };
+        let reasoning = runtime.reasoning_config(ModelSelection::ConfiguredDefault)?;
         Ok(guardian_v2::reviewer(
-            guardian_v2::ProviderReviewModel::new(identity, Arc::new(ReviewModelInvoker(runtime))),
+            guardian_v2::ProviderReviewModel::new(identity, Arc::new(ReviewModelInvoker(runtime)))
+                .with_reasoning(reasoning),
         ))
     });
     let skill_config = Arc::new(LocalSkillConfigProvider {
@@ -1889,17 +1886,7 @@ impl ToolConfigWatcher {
             mcp_runtime_intent_changes,
         } = inputs;
         let changes = config.subscribe_changes();
-        if let Ok(snapshot) = config.read_snapshot() {
-            network_policy.update(network_access(&snapshot.values.network));
-            network.set_http_compatibility_mode(
-                crate::server::http_transport_mode(snapshot.values.network.http_mode),
-                snapshot.revision.get(),
-            );
-        }
-        let mut semantic_binding = config
-            .read_snapshot()
-            .ok()
-            .map(|snapshot| (snapshot.values.codebase, snapshot.values.providers));
+        let mut semantic_binding = None;
         let connector_changes = connector_runtime
             .as_ref()
             .map(|runtime| runtime.service.authority().subscribe());
@@ -1920,16 +1907,15 @@ impl ToolConfigWatcher {
             .name("ash-tool-config".into())
             .spawn(move || {
                 let mut catalog_generation = 1_u64;
-                let mut dir_revision = dir_config
-                    .as_ref()
-                    .and_then(|dir| dir.read().ok().map(|(_, revision)| revision));
-                let mut config_dirty = false;
-                let mut env_config_dirty = false;
-                let mut connector_dirty = false;
-                let mut mcp_dirty = false;
-                let mut mcp_runtime_intent_dirty = false;
-                let mut plugin_dirty = false;
-                let mut marketplace_dirty = false;
+                // Initial composition and watcher startup are separate moments. Apply the
+                // current snapshots once after subscribing; an observed version is not proof
+                // that initial composition installed that version.
+                let mut dir_revision = None;
+                let mut config_dirty = true;
+                let mut env_config_dirty = true;
+                let mut catalog_dirty = true;
+                let mut plugin_dirty = plugin_changes.is_some();
+                let mut marketplace_dirty = marketplace_changes.is_some();
                 loop {
                     if shutdown_receiver.try_recv().is_ok() {
                         break;
@@ -1944,36 +1930,38 @@ impl ToolConfigWatcher {
                     };
                     config_dirty |= config_changed;
                     env_config_dirty |= config_changed;
-                    let dir_document = if let Some(dir_config) = &dir_config {
-                        match dir_config.read() {
-                            Ok((document, revision)) => {
-                                if dir_revision != Some(revision) {
-                                    dir_revision = Some(revision);
+                    catalog_dirty |= config_changed;
+                    let snapshot = config.committed_snapshot();
+                    let (dir_document, env_config_ready) = if let Some(dir_config) = &dir_config {
+                        match dir_config.read_authorized(&snapshot) {
+                            Ok(document) => {
+                                let revision = document.as_ref().map(|(_, revision)| *revision);
+                                if dir_revision != revision {
+                                    dir_revision = revision;
                                     env_config_dirty = true;
                                 }
-                                Some((document, revision))
+                                (document, true)
                             }
                             Err(error) => {
                                 env_tools.record_reconcile_failure(error.to_string());
-                                None
+                                (None, false)
                             }
                         }
                     } else {
-                        None
+                        (None, true)
                     };
                     // Only environment configuration depends on this directory document.
                     // A rejected edit must not prevent committed profile or package updates.
-                    let env_config_ready = dir_config.is_none() || dir_document.is_some();
                     if let Some(connector_changes) = &connector_changes {
                         while connector_changes.try_recv().is_ok() {
-                            connector_dirty = true;
+                            catalog_dirty = true;
                         }
                     }
                     while mcp_changes.try_recv().is_ok() {
-                        mcp_dirty = true;
+                        catalog_dirty = true;
                     }
                     while mcp_runtime_intent_changes.try_recv().is_ok() {
-                        mcp_runtime_intent_dirty = true;
+                        catalog_dirty = true;
                     }
                     if let Some(plugin_changes) = &plugin_changes {
                         while let Ok(change) = plugin_changes.try_recv() {
@@ -1990,22 +1978,14 @@ impl ToolConfigWatcher {
                     }
                     if !config_dirty
                         && !(env_config_dirty && env_config_ready)
-                        && !connector_dirty
-                        && !mcp_dirty
+                        && !catalog_dirty
                         && !plugin_dirty
                         && !marketplace_dirty
-                        && !mcp_runtime_intent_dirty
                     {
                         continue;
                     }
-                    let snapshot = match config.read_snapshot() {
-                        Ok(snapshot) => snapshot,
-                        Err(error) => {
-                            env_tools.record_reconcile_failure(error.to_string());
-                            continue;
-                        }
-                    };
                     if config_dirty {
+                        let mut applied = true;
                         network_policy.update(network_access(&snapshot.values.network));
                         network.set_http_compatibility_mode(
                             crate::server::http_transport_mode(snapshot.values.network.http_mode),
@@ -2015,11 +1995,11 @@ impl ToolConfigWatcher {
                             env_runtime.reconcile_user_dir_permissions(&snapshot.values)
                         {
                             env_tools.record_reconcile_failure(error.to_string());
-                            continue;
+                            applied = false;
                         }
                         if let Err(error) = env_runtime.reconcile_hooks(&snapshot.values.hooks) {
                             env_tools.record_reconcile_failure(error.to_string());
-                            continue;
+                            applied = false;
                         }
                         let next_semantic_binding = (
                             snapshot.values.codebase.clone(),
@@ -2028,10 +2008,12 @@ impl ToolConfigWatcher {
                         if semantic_binding.as_ref() != Some(&next_semantic_binding) {
                             if let Err(error) = env_runtime.reconcile_codebase_runtime() {
                                 env_tools.record_reconcile_failure(error.to_string());
-                                continue;
+                                applied = false;
+                            } else {
+                                semantic_binding = Some(next_semantic_binding);
                             }
-                            semantic_binding = Some(next_semantic_binding);
                         }
+                        config_dirty = !applied;
                     }
                     if env_config_dirty && env_config_ready {
                         // Resolve the document already validated during this iteration; rereading
@@ -2055,18 +2037,25 @@ impl ToolConfigWatcher {
                             }
                         }
                     }
-                    if plugin_dirty
-                        && let Some(connectors) = connector_runtime.as_mut()
-                        && let Err(error) = connectors.reconcile_plugin_activation()
-                    {
-                        env_tools.record_reconcile_failure(error.to_string());
-                        continue;
+                    if plugin_dirty && let Some(connectors) = connector_runtime.as_mut() {
+                        match connectors.reconcile_plugin_activation() {
+                            Ok(()) => {
+                                plugin_dirty = false;
+                                catalog_dirty = true;
+                            }
+                            Err(error) => env_tools.record_reconcile_failure(error.to_string()),
+                        }
                     }
-                    if marketplace_dirty
-                        && let Some(connectors) = connector_runtime.as_mut()
-                        && let Err(error) = connectors.reconcile_marketplace()
-                    {
-                        env_tools.record_reconcile_failure(error.to_string());
+                    if marketplace_dirty && let Some(connectors) = connector_runtime.as_mut() {
+                        match connectors.reconcile_marketplace() {
+                            Ok(()) => {
+                                marketplace_dirty = false;
+                                catalog_dirty = true;
+                            }
+                            Err(error) => env_tools.record_reconcile_failure(error.to_string()),
+                        }
+                    }
+                    if !catalog_dirty {
                         continue;
                     }
                     catalog_generation = match catalog_generation.checked_add(1) {
@@ -2120,12 +2109,7 @@ impl ToolConfigWatcher {
                         continue;
                     }
                     env_runtime.replace_mcp_status(mcp_status);
-                    config_dirty = false;
-                    connector_dirty = false;
-                    mcp_dirty = false;
-                    mcp_runtime_intent_dirty = false;
-                    plugin_dirty = false;
-                    marketplace_dirty = false;
+                    catalog_dirty = false;
                 }
             })
             .ok();
@@ -2589,7 +2573,9 @@ fn resolve_local_config(
     let Some(dir_config) = dir_config else {
         return Ok(user.values.clone());
     };
-    let (document, revision) = dir_config.read()?;
+    let Some((document, revision)) = dir_config.read_authorized(user)? else {
+        return Ok(user.values.clone());
+    };
     resolve_scoped_config(
         user,
         Some(DirConfigInput::new(dir_config.scope(), revision, &document)),
@@ -2625,6 +2611,7 @@ fn runtime_catalog_entry(
 
 struct DirConfigTracker {
     store: DirConfigStore,
+    access: InitialDirPermissions,
     observed: Mutex<Option<DirConfigObservation>>,
 }
 
@@ -2634,18 +2621,37 @@ struct DirConfigObservation {
 }
 
 impl DirConfigTracker {
-    fn new(store: DirConfigStore) -> Self {
+    fn new(store: DirConfigStore, access: InitialDirPermissions) -> Self {
         Self {
             store,
+            access,
             observed: Mutex::new(None),
         }
     }
 
+    fn read_authorized(
+        &self,
+        user: &ResolvedConfigSnapshot,
+    ) -> Result<Option<(DirConfigDocument, DirConfigRevision)>, ash_config::ConfigError> {
+        // Permission is part of each resolution, not a startup decision. In particular,
+        // revocation must stop both filesystem reads and directory model/policy overrides.
+        if self.access == InitialDirPermissions::UserConfig
+            && !user
+                .values
+                .dir_permissions
+                .permissions_for(&self.scope().dir_id)
+                .allows(DirPermission::LoadConfig)
+        {
+            return Ok(None);
+        }
+        self.read().map(Some)
+    }
+
     fn read(&self) -> Result<(DirConfigDocument, DirConfigRevision), ash_config::ConfigError> {
-        let document = self.store.read_document()?;
         let mut observed = self.observed.lock().map_err(|_| {
             ash_config::ConfigError("directory config tracker lock poisoned".into())
         })?;
+        let document = self.store.read_document()?;
         if let Some(previous) = observed.as_ref()
             && previous.document == document
         {
@@ -2963,17 +2969,20 @@ impl ModelService for FrozenModelService {
     fn approval_review_model(
         &self,
     ) -> Result<Option<(ash_protocol::ModelRef, Arc<dyn ModelService>)>, CoreError> {
-        if self.source.config.model.is_none() {
-            return Ok(None);
-        }
-        let Ok(model) = self
+        let Ok(config) = self
             .source
             .config
-            .resolve_approval_review_model(self.source.contexts.registry())
+            .resolve_approval_review_config(self.source.contexts.registry())
         else {
             return Ok(None);
         };
-        let runtime = self.source.resolve(ModelSelection::Session(&model))?;
+        let model = config.model.clone().expect("resolved review model");
+        let source = Arc::new(FrozenModelSource {
+            config,
+            contexts: self.source.contexts.clone(),
+            resolver: self.source.resolver.clone(),
+        });
+        let runtime = source.resolve(ModelSelection::ConfiguredDefault)?;
         Ok(Some((model, runtime)))
     }
 

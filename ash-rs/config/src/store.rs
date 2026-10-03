@@ -36,7 +36,7 @@ pub struct ConfigStore {
     config_path: PathBuf,
     connection: Mutex<Connection>,
     subscribers: Arc<Mutex<Vec<Sender<ConfigChange>>>>,
-    last_published: Arc<Mutex<ConfigChange>>,
+    committed: Arc<Mutex<ResolvedConfigSnapshot>>,
     monitor_shutdown: Option<Sender<()>>,
     monitor_thread: Option<JoinHandle<()>>,
 }
@@ -120,9 +120,8 @@ impl ConfigStore {
         }
 
         let (authority, _) = synchronize_authority(&mut connection, &config_path)?;
-        let initial_change = authority.change();
         let subscribers = Arc::new(Mutex::new(Vec::new()));
-        let last_published = Arc::new(Mutex::new(initial_change));
+        let committed = Arc::new(Mutex::new(authority.snapshot()));
         let (monitor_shutdown, monitor_receiver) = mpsc::channel();
         let monitor_connection =
             ash_state::open_sqlite_database(&database_path, ash_state::SqliteDurability::Durable)
@@ -132,14 +131,14 @@ impl ConfigStore {
             config_path.clone(),
             monitor_receiver,
             Arc::clone(&subscribers),
-            Arc::clone(&last_published),
+            Arc::clone(&committed),
         )?;
         Ok(Self {
             database_path,
             config_path,
             connection: Mutex::new(connection),
             subscribers,
-            last_published,
+            committed,
             monitor_shutdown: Some(monitor_shutdown),
             monitor_thread: Some(monitor_thread),
         })
@@ -151,12 +150,22 @@ impl ConfigStore {
             .connection
             .lock()
             .map_err(|_| ConfigError("config database lock poisoned".into()))?;
-        let (authority, changed) = synchronize_authority(&mut connection, &self.config_path)?;
+        let (authority, _) = synchronize_authority(&mut connection, &self.config_path)?;
         drop(connection);
-        if changed {
-            self.publish_change(authority.change());
-        }
-        Ok(authority.snapshot())
+        let snapshot = authority.snapshot();
+        self.publish_snapshot(snapshot.clone());
+        Ok(snapshot)
+    }
+
+    /// Returns the accepted runtime configuration without reading an uncommitted file edit.
+    ///
+    /// Invalid TOML remains an error for strict reads and commands. It cannot replace this
+    /// snapshot or prevent independent runtime authorities from applying their own changes.
+    pub fn committed_snapshot(&self) -> ResolvedConfigSnapshot {
+        self.committed
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// Subscribes to committed API changes and valid external TOML edits.
@@ -201,9 +210,8 @@ impl ConfigStore {
             authority.generation = authority.generation.next();
             write_metadata(&transaction, &authority)?;
             transaction.commit().map_err(sql_error)?;
-            let change = authority.change();
             drop(connection);
-            self.publish_change(change);
+            self.publish_snapshot(authority.snapshot());
             return Err(ConfigCommandError::RevisionConflict {
                 expected: request.expected_revision,
                 actual: authority.revision,
@@ -248,9 +256,7 @@ impl ConfigStore {
             disposition: ConfigCommandDisposition::Updated,
         };
         drop(connection);
-        if changed {
-            self.publish_change(authority.change());
-        }
+        self.publish_snapshot(authority.snapshot());
         Ok(result)
     }
 
@@ -264,8 +270,8 @@ impl ConfigStore {
         &self.config_path
     }
 
-    fn publish_change(&self, change: ConfigChange) {
-        crate::store_monitor::publish(&self.subscribers, &self.last_published, change);
+    fn publish_snapshot(&self, snapshot: ResolvedConfigSnapshot) {
+        crate::store_monitor::publish(&self.subscribers, &self.committed, snapshot);
     }
 }
 
@@ -284,21 +290,14 @@ impl ConfigAuthority {
     fn snapshot(&self) -> ResolvedConfigSnapshot {
         ResolvedConfigSnapshot::from_document(self.revision, self.generation, &self.document)
     }
-
-    fn change(&self) -> ConfigChange {
-        ConfigChange {
-            revision: self.revision,
-            generation: self.generation,
-        }
-    }
 }
 
-pub(crate) fn reconcile_external_change(
+pub(crate) fn reconcile_external_snapshot(
     connection: &mut Connection,
     config_path: &Path,
-) -> Result<Option<ConfigChange>, ConfigError> {
-    let (authority, changed) = synchronize_authority(connection, config_path)?;
-    Ok(changed.then(|| authority.change()))
+) -> Result<ResolvedConfigSnapshot, ConfigError> {
+    let (authority, _) = synchronize_authority(connection, config_path)?;
+    Ok(authority.snapshot())
 }
 
 fn synchronize_authority(

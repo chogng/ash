@@ -44,6 +44,10 @@ Runtime snapshot
 - TOML 替换和回执提交保持原子；
 - 成功提交只影响后续安全点，不改写已经冻结的 Turn。
 
+`ConfigStore` 在内存中保留已提交的不可变快照，快照与 revision 一起发布，较早的读取不能覆盖
+较新的提交。严格读取和修改命令仍会拒绝损坏的 TOML；运行时协调读取已提交快照，不把尚未
+通过校验的编辑当成新配置，因此不会阻塞 Plugin、Connector 或 MCP 的独立状态更新。
+
 `config.toml` 顶层使用 `schemaVersion` 标记文件格式。读取旧版本或无版本的历史文件时，Config 只执行已登记且无歧义的迁移，完成严格校验后原子重写为当前版本；历史字段和当前字段同时出现、未登记字段、过新版本或低于最低支持版本都会拒绝启动。v2 的 `agent.preferredModel`、`agent.preferredReasoningEffort` 会分别迁到 v3 的 `agent.model`、`agent.modelReasoningEffort`。`semanticCodeIndex` 迁到 `codebase` 时不会保留旧的源码外发授权；`workspaceTrust` 只转换路径仍存在、旧身份与路径一致的 `trusted` 项，并为它生成当前目录身份，其他项不落盘。
 v6 将旧 `xai-subscription` 模型引用和提供商配置迁到 `xai`。模型引用只包含供应商与型号；当前接入方式由可用凭据决定，订阅账户就绪时优先订阅，退出后使用已保存的 API key。旧的 OpenAI 与 Kimi 模型引用不改名；切换后型号不在有效目录中时，需重新选择。
 v8 将 BigModel 与 Z.AI 的 GLM 模型引用统一为 `glm`，保留四条连接和各自凭据，并移除旧的 `activeConnections` 选择字段。已就绪连接按 BigModel 订阅、Z.AI 订阅、BigModel API、Z.AI API 排序。
@@ -99,6 +103,10 @@ Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不
 
 主 Agent 使用 `[agent.model]` 中的 `provider`、`model` 选择模型；可选的 `[agent] modelReasoningEffort` 指定推理强度，缺失时使用模型目录默认值。审批审查和提交说明分别使用独立的 `approvalReviewModel`、`commitMessageModel`。
 
+`approvalReviewModel` 可独立指定 `connection`、`model` 和 `reasoningEffort`。自动选择时，ChatGPT 订阅
+使用 `codex-auto-review`，OpenAI API 使用 `gpt-6-luna`，均使用 `low`；不继承主模型的推理强度。
+其他提供方保留自己的审核默认值。配置和连接约束见 [审核模型选择](auto-review.md#审核模型选择)。
+
 保存供应商配置时，若 `agent.model` 尚未设置，Config 从内置模型目录中选取该供应商
 首个 `ProviderApi` 模型，并与供应商配置一起持久化。已有选择保持不变，包括新增其他供应商时。
 没有内置 API 模型的连接不生成模型 ID。保存过程不请求模型列表，也不验证远端调用权限。
@@ -109,6 +117,10 @@ Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不
 
 `DirConfigStore` 严格读取一个目录中的 `.ash/config.toml`。Host 在文档之外提供 `DirId` 与内容
 revision；文件不能选择自己的身份或 generation。目录文件中的 Agent 字段同样使用 `model` 和 `modelReasoningEffort`；旧字段需要由目录文件所有者改名，读取过程不会修改受版本控制的目录文件。
+
+由用户目录权限决定的配置来源在每次解析时检查当前 `LoadConfig`，不是在启动时固定是否加载。
+首次授予后无需重启即可加载；撤销后停止读取该文件，并从后续模型选择和环境执行规则中移除
+该目录的覆盖。Host 显式配置的来源仍由 Host 授权。
 
 ```rust
 pub struct DirConfigDocument {
@@ -190,6 +202,11 @@ BuiltInDefaults
 
 运行中的 Turn 不读取可变 ConfigStore，也不持有 live manager。它只消费创建时冻结的快照和后续
 明确允许的安全点更新。
+
+配置监听订阅后会应用一次当前状态，覆盖初始装配与监听启动之间的变化。各领域协调失败保留
+自己的待处理更新，不跳过其他领域；语义索引重建先准备新服务、工具和监听，全部准备成功后
+再替换旧资源。`grep/index/disableAndDelete` 只修改 grep 后端和索引，不重建目录执行策略，重复
+调用或命令重放也不改变已经加载的目录规则。
 
 ## 文件与接口
 
