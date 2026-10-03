@@ -45,7 +45,7 @@ suiteTeardown(() => sharedNotifications.dispose());
 function inputPart(notifications: NotificationService, dictation?: Pick<IDictationService, 'start'> & Partial<IDictationService>, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService): ChatInputPart {
 	const container = document.createElement('div');
 	document.body.append(container);
-	let state: ChatInputState = { mode, queuedMessages: 0, phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	let state: ChatInputState = { mode, queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	const service: IDictationService | undefined = dictation ? { onDidChangePreparation: AshEvent.None, getOptions: async () => ({ inputDevices: [], languages: [] }), getPreparation: async () => undefined, prepareModel: async () => {}, cancelPreparation: async () => {}, ...dictation } : undefined;
 	const services = sharedServices ?? inputResources.add(new InstantiationService());
 	if (!sharedServices) {
@@ -96,7 +96,7 @@ test('Chat mode picker loads Agents before opening the shared action widget and 
 		listAgents: () => agents,
 		selectAgent: selected => finishSelection(selected),
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mode"] button')!.click();
 	assert.equal(document.querySelector('.ash-action-widget.ash-chat-input-mode-menu'), null);
 	const opened = new Promise<HTMLElement>(resolve => {
@@ -134,7 +134,7 @@ test('Chat input sends attachments without text and rejects duplicate submission
 			await new Promise<void>(resolve => { complete = resolve; });
 		},
 	});
-	part.render({ mode: 'debug', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ mode: 'debug', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	part.addContext({ id: 'file', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'let value = 1;' }) });
 	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button')?.disabled, false);
 	const pending = part.acceptInput();
@@ -149,7 +149,7 @@ test('Chat input sends attachments without text and rejects duplicate submission
 
 test('Chat input keeps failed attachments and restores text for retry', async () => {
 	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { throw new Error('Request failed'); } });
-	part.render({ mode: 'agent', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	part.addContext({ id: 'image', kind: 'image', name: 'image.png', resolve: async () => ({ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }) });
 	await assert.rejects(part.acceptInput('Review image'), /Request failed/u);
 	const captured = await part.captureDraft();
@@ -239,7 +239,7 @@ test('Chat keeps model preparation in settings and reads it only when dictation 
 		cancelPreparation: async () => { cancelled++; },
 		start: async () => { starts++; return { stop: async () => {} }; },
 	}, 'agent', { openModelSettings: async category => { categories.push(category); settingsOpened(); }, send: async text => { sent.push(text); } });
-	part.render({ mode: 'agent', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	assert.equal(part.element.querySelector('.ash-chat-model-preparation'), null);
 	assert.equal(reads, 0);
 	edit(part, 'Text still works');
@@ -295,7 +295,7 @@ test('Dictation replaces the selection and submission waits for final transcript
 			return { stop: async () => { await new Promise<void>(resolve => { finishStop = resolve; }); transcript('replacement', true); onEnded(); } };
 		},
 	}, 'agent', { send: async text => { sent.push(text); } });
-	part.render({ mode: 'agent', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'before old after');
 	const input = part.element.querySelector('textarea')!;
 	input.setSelectionRange(7, 10);

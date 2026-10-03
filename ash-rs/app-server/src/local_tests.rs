@@ -1351,7 +1351,7 @@ fn windows_shell_turn_enforces_account_isolation_through_rpc() {
             "jsonrpc":"2.0","id":5,"method":"session/request",
             "params":{"commandId":"sandbox-turn","sessionId":session_id,"request":{
                 "type":"startShellTurn","threadId":thread_id,"expectedSequence":1,
-                "approvalMode":"askPermissions","command":command,"workingDirectory":work
+                "approvalMode":"manual","command":command,"workingDirectory":work
             }}
         }),
     );
@@ -1554,7 +1554,7 @@ fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
                 "jsonrpc":"2.0","id":10+index,"method":"session/request","params":{
                     "commandId":format!("network-turn-{index}"),"sessionId":session_id,
                     "request":{"type":"startShellTurn","threadId":thread_id,"expectedSequence":before.sequence,
-                        "approvalMode":"askPermissions","command":format!("printf run >> attempts-{index}.txt; /usr/bin/curl -fsS --max-time 10 http://127.0.0.1:{port}/; printf '|status=%s|attempts=' $?; cat attempts-{index}.txt; /usr/bin/curl -fsS --max-time 3 http://127.0.0.1:{denied_port}/; printf '|denied=%s' $?"),"workingDirectory":"."}
+                        "approvalMode":"manual","command":format!("printf run >> attempts-{index}.txt; /usr/bin/curl -fsS --max-time 10 http://127.0.0.1:{port}/; printf '|status=%s|attempts=' $?; cat attempts-{index}.txt; /usr/bin/curl -fsS --max-time 3 http://127.0.0.1:{denied_port}/; printf '|denied=%s' $?"),"workingDirectory":"."}
                 }
             }),
         );

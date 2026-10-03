@@ -25,7 +25,7 @@ impl Default for TurnApprovalModes {
     fn default() -> Self {
         Self {
             current: None,
-            next: ApprovalMode::AskPermissions,
+            next: ApprovalMode::Manual,
         }
     }
 }
@@ -121,9 +121,9 @@ impl ThreadState {
 
     pub(crate) fn cycle_approval_mode(&mut self) {
         self.approval_modes.next = match self.approval_modes.next {
-            ApprovalMode::AskPermissions => ApprovalMode::AutoReview,
-            ApprovalMode::AutoReview => ApprovalMode::BypassPermissions,
-            ApprovalMode::BypassPermissions => ApprovalMode::AskPermissions,
+            ApprovalMode::Manual => ApprovalMode::Auto,
+            ApprovalMode::Auto => ApprovalMode::BypassPermissions,
+            ApprovalMode::BypassPermissions => ApprovalMode::Manual,
         };
     }
 

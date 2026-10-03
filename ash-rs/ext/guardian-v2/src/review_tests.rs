@@ -302,7 +302,7 @@ fn approval_mode_policy_runs_the_reviewer_only_for_auto_review() {
         ash_core::decide_turn_action(
             &policy,
             &revision,
-            ApprovalMode::AskPermissions,
+            ApprovalMode::Manual,
             &request,
             &CancellationSource::new().token(),
         )
@@ -313,7 +313,7 @@ fn approval_mode_policy_runs_the_reviewer_only_for_auto_review() {
         ash_core::decide_turn_action(
             &policy,
             &revision,
-            ApprovalMode::AutoReview,
+            ApprovalMode::Auto,
             &request,
             &CancellationSource::new().token(),
         )

@@ -12,7 +12,7 @@ expression: render(&app)
 ● focus message 07                                
                                                   
              Jump to bottom (click) ↓             
-  ⏸ ask permissions on                            
+  ⏸ Manual                                        
   ──────────────────────────────────────────────  
   > x                                             
   ───────────────────────────── Automatic model   

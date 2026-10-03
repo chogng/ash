@@ -20,7 +20,7 @@ expression: "text(&render(&app, 80, 24))"
                                                                                 
                                                                                 
                                                                                 
-  ⏸ ask permissions on   Type a task to begin, or use Tab to choose an action.  
+  ⏸ Manual               Type a task to begin, or use Tab to choose an action.  
   ────────────────────────────────────────────────────────────────────────────  
   >                                                                             
   ──────────────────────────────────────────────────── Automatic model · Plan   

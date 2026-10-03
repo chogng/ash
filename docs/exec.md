@@ -275,7 +275,7 @@ pub enum HeadlessApprovalMode {
 
 - `DenyInteractiveRequests` 在 Turn 进入 approval/user-input/capability wait 时发送 typed
   `InterruptTurn`，观察 canonical `Interrupted` 后返回 `RequiresInteraction`；
-- `AutomaticReview` 映射为 App Server `AutoReview`，但无法呈现的 user-input/capability 仍会中断；
+- `AutomaticReview` 映射为 App Server `Auto`（`auto`），但无法呈现的 user-input/capability 仍会中断；
 - `BypassPermissions` 只由显式 `--dangerously-bypass-permissions` 选择，绝不是 worker 默认值；
 - Ctrl-C 和 turn timeout 都先发送 typed interrupt，再等待 bounded terminal observation；
 - 当前没有 remote reviewer channel，不能把交互请求悬挂给不存在的 UI。

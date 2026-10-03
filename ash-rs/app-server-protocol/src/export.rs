@@ -259,11 +259,24 @@ fn generated_product_slash_commands() -> String {
     )
 }
 
+fn generated_approval_modes() -> String {
+    let definitions = ash_protocol::ApprovalMode::ALL.map(ash_protocol::ApprovalMode::definition);
+    let definitions =
+        serde_json::to_string_pretty(&definitions).expect("approval definitions serialize");
+    format!(
+        "{GENERATED_TYPESCRIPT_HEADER}export const APPROVAL_MODE_DEFINITIONS = {definitions} as const;\n"
+    )
+}
+
 /// Returns the complete generated TypeScript protocol file set.
 pub fn typescript_files() -> Vec<(PathBuf, String)> {
     assert_typescript_bindings_are_closed();
     let schema = protocol_schema_value();
     let mut files = vec![
+        (
+            PathBuf::from("ApprovalModes.ts"),
+            generated_approval_modes(),
+        ),
         (PathBuf::from("protocol.ts"), generated_protocol()),
         (
             PathBuf::from("ProductSlashCommands.ts"),
@@ -403,6 +416,7 @@ fn generated_index() -> String {
          export type {{ WebWorkspaceOpenRequest }} from './WebWorkspaceOpenRequest.js';\n\
          export {{ APP_SERVER_METHODS }} from './AppServerRequestMap.js';\n\
          export {{ PRODUCT_SLASH_COMMANDS }} from './ProductSlashCommands.js';\n\
+         export {{ APPROVAL_MODE_DEFINITIONS }} from './ApprovalModes.js';\n\
          export type {{ AppServerMethod, AppServerMethodDefinition, AppServerRequest, AppServerRequestMap, AppServerResponse, MethodParams, MethodResult }} from './AppServerRequestMap.js';\n\
          export {{ APP_SERVER_NOTIFICATIONS }} from './AppServerNotificationMap.js';\n\
          export type {{ AppServerNotificationDefinition, AppServerNotificationMap, AppServerNotificationMethod, AppServerWireNotification, NotificationParams, ServerNotification }} from './AppServerNotificationMap.js';\n\

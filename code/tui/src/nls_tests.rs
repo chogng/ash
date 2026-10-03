@@ -4,6 +4,23 @@ use super::localize;
 use super::text;
 
 #[test]
+fn permission_labels_and_descriptions_use_the_shared_product_copy() {
+    for mode in ash_protocol::ApprovalMode::ALL {
+        let definition = mode.definition();
+        for message in [definition.label, definition.description] {
+            for (language, expected) in [
+                (Language::English, message.english),
+                (Language::Chinese, message.chinese),
+                (Language::Japanese, message.japanese),
+                (Language::French, message.french),
+            ] {
+                assert_eq!(localize(language, message.english), expected);
+            }
+        }
+    }
+}
+
+#[test]
 fn product_chrome_keys_are_unique() {
     let mut keys = std::collections::BTreeSet::new();
     let mut duplicates = Vec::new();

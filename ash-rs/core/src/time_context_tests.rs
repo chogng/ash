@@ -55,7 +55,7 @@ fn start(threads: &ThreadController, thread: &ThreadId, command: &str, input: &s
                 kind: TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 policy_revision: "time-tests".into(),
-                approval_mode: ApprovalMode::AskPermissions,
+                approval_mode: ApprovalMode::Manual,
                 tool_mode: ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),

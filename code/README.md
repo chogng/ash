@@ -67,7 +67,7 @@ CLI 将已初始化的 `AppServerSession` 和 `TuiOptions` 交给 `run`：
 
 任务模式通过 `/mode` 或输入框中的 Shift+Tab 选择。按键、颜色和两种屏幕模式的显示见 [LAYOUT.md](LAYOUT.md#任务模式选择与显示)；五种任务模式、队列与 Multitask 的共享行为见 [模式 crate](../ash-rs/collaboration-mode-templates/README.md)。
 
-`/policy` 选择下一轮的权限策略，也支持 `ask-permissions`、`auto-review`、`bypass-permissions` 参数。权限策略不再占用 Shift+Tab；已有用户自定义的权限快捷键仍可使用。
+`/policy` 选择下一轮的权限策略，也支持 `manual`、`auto`、`bypassPermissions` 参数。权限策略不再占用 Shift+Tab；已有用户自定义的权限快捷键仍可使用。
 
 运行中 Steer 不能改变 Skill；遇到这种草稿应保留输入，让用户排队或下一轮提交。权限模式的选择用于下一次 Turn，不直接改变当前任务或 Session 权限。
 

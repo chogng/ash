@@ -124,7 +124,7 @@ fn waiting_turn_can_start_a_steer_request() {
 }
 
 fn command_state(active_turn: Option<TurnId>, activity: CommandActivity) -> CommandState {
-    CommandState::new(active_turn, ApprovalMode::AskPermissions, activity, false)
+    CommandState::new(active_turn, ApprovalMode::Manual, activity, false)
 }
 
 fn submission() -> ChatSubmission {

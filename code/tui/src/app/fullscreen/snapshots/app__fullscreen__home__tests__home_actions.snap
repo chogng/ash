@@ -26,7 +26,7 @@ expression: text(&buffer)
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
-  ⏸ ask permissions on                                                               Type a task to begin, or use Tab to choose an action.  
+  ⏸ Manual                                                                           Type a task to begin, or use Tab to choose an action.  
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
   > Build anything                                                                                                                          
   ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Automatic model   

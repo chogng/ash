@@ -1,3 +1,4 @@
+import { approvalModeMessages } from '../../../../platform/sessions/common/approvalModes.js';
 import type { LanguagePackCatalog } from "../../../../platform/languagePacks/common/languagePacksService.js";
 import { ASH_LOCALIZATION_CATALOG_VERSION } from "../../../../platform/languagePacks/common/languagePackContract.js";
 
@@ -9,6 +10,7 @@ const english: LanguagePackCatalog = {
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
 	 ash: {
+			...approvalModeMessages('english'),
 			"actionWidget.label": "Actions",
 			"actionWidget.helpHint": "Press Alt+F1 for action menu accessibility help.",
 			"actionWidget.helpTitle": "Action menu accessibility help",
@@ -574,10 +576,7 @@ const english: LanguagePackCatalog = {
 			'sessions.navigation.details': 'Session details',
 			'sessions.newCodeSession': 'New code session',
 			'sessions.chat.welcome': 'What can we work on?',
-			'sessions.chat.permission.ask': 'Manual confirmation',
-			'sessions.chat.permission.auto': 'Automatic review',
-			'sessions.chat.permission.full': 'Full access',
-			'sessions.chat.permission.advanced': 'Advanced',
+			'sessions.chat.permissions': 'Permissions',
 			'sessions.chat.permission.fullWarning': 'Skip most permission approvals?',
 			'sessions.chat.permission.fullDetail': 'Commands may change or delete files and perform external actions without asking. File and network access limits still apply. Plan and Ask remain analysis modes.',
 			'sessions.chat.permission.reviewModel': 'Review model…',
@@ -590,7 +589,7 @@ const english: LanguagePackCatalog = {
 			'sessions.chat.permission.reviewEffortDefault': 'Automatic (review default)',
 			'sessions.chat.permission.label': 'Permissions: {0}',
 			'sessions.chat.draftFailed': 'Could not save the Chat draft: {0}',
-			'sessions.chat.inputHelp': 'Chat input\nPress Enter to send and Shift+Enter for a new line. Use Tab and Shift+Tab to reach attachments, Agent, model, thinking effort, dictation, Send, and Permissions. Press Enter or Space to open a menu, use arrow keys to select an item, and Escape to return. Use the + button to attach UTF-8 text files or images, or paste and drop images into the input. Attachments can be sent without text. The Permissions menu applies to the next Turn. Advanced contains Full access and Review model. Review settings choose an independent connection, model and thinking effort. Plan and Ask permit investigation only. Leaving Plan or Ask for Agent, Debug or Multitask requires your choice and keeps the permission selection. A different mode selected for the next message is kept.',
+			'sessions.chat.inputHelp': 'Chat input\nPress Enter to send and Shift+Enter for a new line. Use Tab and Shift+Tab to reach attachments, Agent, model, thinking effort, dictation, Send, and Permissions. Press Enter or Space to open a menu, use arrow keys to select an item, and Escape to return. Use the + button to attach UTF-8 text files or images, or paste and drop images into the input. Attachments can be sent without text. The Permissions menu offers Auto, Manual, and Bypass permissions for the next Turn. While this menu is open, press 1, 2, or 3 to choose a permission mode. Bypass permissions requires confirmation. Review model is available below these choices. Review settings choose an independent connection, model and thinking effort. Plan and Ask permit investigation only. Leaving Plan or Ask for Agent, Debug or Multitask requires your choice and keeps the permission selection. A different mode selected for the next message is kept.',
 			'accessibility.chatVerbosityTitle': 'Chat accessibility help',
 			'accessibility.chatVerbosityDescription': 'Announce how to open accessibility help when the Chat input receives focus.',
 			'chat.tip.attachFiles': 'Tip: Attach text files or images with the + button. You can also paste or drop images into your message.',
@@ -2016,6 +2015,7 @@ const chinese: LanguagePackCatalog = {
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
 		ash: {
+			...approvalModeMessages('chinese'),
 			"actionWidget.label": "操作",
 			"actionWidget.helpHint": "按 Alt+F1 打开操作菜单的无障碍帮助。",
 			"actionWidget.helpTitle": "操作菜单无障碍帮助",
@@ -2581,10 +2581,7 @@ const chinese: LanguagePackCatalog = {
 			'sessions.navigation.details': '会话详情',
 			'sessions.newCodeSession': '新建代码会话',
 			'sessions.chat.welcome': '今天想做些什么？',
-			'sessions.chat.permission.ask': '手动确认',
-			'sessions.chat.permission.auto': '自动审核',
-			'sessions.chat.permission.full': '完全访问',
-			'sessions.chat.permission.advanced': '高级',
+			'sessions.chat.permissions': '权限',
 			'sessions.chat.permission.fullWarning': '跳过大部分权限审批？',
 			'sessions.chat.permission.fullDetail': '命令可能无需询问就修改、删除文件或操作外部服务。文件和网络访问范围仍然有效。Plan 和 Ask 仍然用于分析。',
 			'sessions.chat.permission.reviewModel': '审核模型…',
@@ -2597,7 +2594,7 @@ const chinese: LanguagePackCatalog = {
 			'sessions.chat.permission.reviewEffortDefault': '自动（审核默认值）',
 			'sessions.chat.permission.label': '权限：{0}',
 			'sessions.chat.draftFailed': '无法保存聊天草稿：{0}',
-			'sessions.chat.inputHelp': '聊天输入\n按 Enter 发送，按 Shift+Enter 换行。使用 Tab 和 Shift+Tab 访问附件、Agent、模型、思考深度、听写、发送和权限。按 Enter 或空格打开菜单，用方向键选择，按 Escape 返回。用 + 按钮添加 UTF-8 文本文件或图片，也可以粘贴、拖放图片到输入区。可以仅发送附件。权限菜单应用于下一轮对话。高级菜单提供完全访问和审核模型。审核设置可以独立选择连接、模型和思考强度。Plan 和 Ask 只允许调查分析。从 Plan 或 Ask 切到 Agent、Debug 或 Multitask 需要你选择，权限选择保持不变。你为下一条消息选好的不同模式会保留。',
+			'sessions.chat.inputHelp': '聊天输入\n按 Enter 发送，按 Shift+Enter 换行。使用 Tab 和 Shift+Tab 访问附件、Agent、模型、思考深度、听写、发送和权限。按 Enter 或空格打开菜单，用方向键选择，按 Escape 返回。用 + 按钮添加 UTF-8 文本文件或图片，也可以粘贴、拖放图片到输入区。可以仅发送附件。权限菜单提供自动、手动和跳过权限审批，应用于下一轮对话。菜单打开时，按 1、2 或 3 选择权限模式。跳过权限审批需要确认。审核模型位于这些选项下方。审核设置可以独立选择连接、模型和思考强度。Plan 和 Ask 只允许调查分析。从 Plan 或 Ask 切到 Agent、Debug 或 Multitask 需要你选择，权限选择保持不变。你为下一条消息选好的不同模式会保留。',
 			'accessibility.chatVerbosityTitle': '聊天无障碍帮助',
 			'accessibility.chatVerbosityDescription': '聊天输入区获得焦点时，提示如何打开无障碍帮助。',
 			'chat.tip.attachFiles': '提示：用 + 按钮添加文本文件或图片。也可以将图片粘贴或拖放到输入区。',

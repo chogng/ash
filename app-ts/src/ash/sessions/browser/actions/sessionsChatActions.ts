@@ -1,5 +1,5 @@
 import { DisposableStore } from "../../../base/common/lifecycle.js";
-import { Action2, MenusRegistry, registerAction2 } from "../../../platform/actions/common/actions.js";
+import { Action2, registerAction2 } from "../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
@@ -7,36 +7,29 @@ import type { SessionId, ThreadId } from "../../services/sessions/common/session
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
 import { localizedString } from '../../../platform/action/common/action.js';
-import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
-import type { ApprovalMode } from '../../../workbench/services/chat/common/chatService.js';
+import { approvalModeDefinitions } from '../../../platform/sessions/common/approvalModes.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
-import { Menus } from '../menus.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ModelReasoningEffort } from '../../../workbench/services/chat/common/modelCatalog.js';
 import { localize } from '../../../nls.js';
 
-for (const [mode, key, label] of [
-	['askPermissions', 'sessions.chat.permission.ask', 'Manual confirmation'],
-	['autoReview', 'sessions.chat.permission.auto', 'Automatic review'],
-	['bypassPermissions', 'sessions.chat.permission.full', 'Full access'],
-] as const satisfies readonly (readonly [ApprovalMode, string, string])[]) {
+for (const definition of approvalModeDefinitions) {
+	const mode = definition.id;
 	registerAction2(class SelectSessionApprovalMode extends Action2 {
 		constructor() {
 			super({
 				id: `sessions.chat.permission.${mode}`,
-				title: localizedString('ash', key, label),
-				toggled: mode === 'bypassPermissions' ? undefined : ContextKeyExpr.equals('sessionsChatApprovalMode', mode),
-				menu: { id: mode === 'bypassPermissions' ? Menus.NewSessionAdvancedControl : Menus.NewSessionControl, group: 'navigation' },
+				title: localizedString('ash', definition.label.key, definition.label.text),
 			});
 		}
 
 		override async run(accessor: ServicesAccessor, model: IChatWidgetModel): Promise<void> {
-			if (mode === 'bypassPermissions') {
+			if (definition.requiresConfirmation) {
 				const result = await accessor.get(IDialogService).confirm({
 					message: localize('sessions.chat.permission.fullWarning', 'Skip most permission approvals?'),
 					detail: localize('sessions.chat.permission.fullDetail', 'Commands may change or delete files and perform external actions without asking. File and network access limits still apply. Plan and Ask remain analysis modes.'),
-					primaryButton: localize('sessions.chat.permission.full', 'Full access'),
+					primaryButton: localize(definition.label.key, definition.label.text),
 				});
 				if (!result.confirmed) { return; }
 			}
@@ -46,15 +39,9 @@ for (const [mode, key, label] of [
 	});
 }
 
-MenusRegistry.appendMenuItem(Menus.NewSessionControl, {
-	submenu: Menus.NewSessionAdvancedControl,
-	title: localizedString('ash', 'sessions.chat.permission.advanced', 'Advanced'),
-	group: 'advanced',
-});
-
 registerAction2(class SelectApprovalReviewModel extends Action2 {
 	constructor() {
-		super({ id: 'sessions.chat.permission.reviewModel', title: localizedString('ash', 'sessions.chat.permission.reviewModel', 'Review model…'), menu: { id: Menus.NewSessionAdvancedControl, group: 'settings' } });
+		super({ id: 'sessions.chat.permission.reviewModel', title: localizedString('ash', 'sessions.chat.permission.reviewModel', 'Review model…') });
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {

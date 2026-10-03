@@ -10,13 +10,13 @@ const ACTION_PERMISSIONS: PromptArtifact = PromptArtifact::new(
 const ASK_PERMISSIONS: PromptArtifact = PromptArtifact::new(
     "prompts",
     "permissions/approval/ask",
-    "approval-ask-v1",
+    "approval-ask-v2",
     include_str!("../templates/permissions/approval/ask.md"),
 );
 const AUTO_REVIEW: PromptArtifact = PromptArtifact::new(
     "prompts",
     "permissions/approval/auto-review",
-    "approval-auto-review-v1",
+    "approval-auto-review-v2",
     include_str!("../templates/permissions/approval/auto_review.md"),
 );
 const BYPASS_PERMISSIONS: PromptArtifact = PromptArtifact::new(
@@ -32,8 +32,8 @@ pub fn permissions_instructions(mode: ApprovalMode) -> [PromptArtifact; 2] {
     [
         ACTION_PERMISSIONS,
         match mode {
-            ApprovalMode::AskPermissions => ASK_PERMISSIONS,
-            ApprovalMode::AutoReview => AUTO_REVIEW,
+            ApprovalMode::Manual => ASK_PERMISSIONS,
+            ApprovalMode::Auto => AUTO_REVIEW,
             ApprovalMode::BypassPermissions => BYPASS_PERMISSIONS,
         },
     ]

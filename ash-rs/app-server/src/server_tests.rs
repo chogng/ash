@@ -3737,7 +3737,7 @@ fn session_request_routes_thread_mutations_and_freezes_turn_approval_mode() {
                     "type":"startTurn",
                     "threadId":thread_id,
                     "expectedSequence":1,
-                    "approvalMode":"autoReview",
+                    "approvalMode":"auto",
                     "input":[{"type":"text","text":"hello"}]
                 }
             }
@@ -3752,7 +3752,7 @@ fn session_request_routes_thread_mutations_and_freezes_turn_approval_mode() {
         .unwrap();
     assert_eq!(
         snapshot.turns.last().unwrap().approval_mode,
-        ash_protocol::ApprovalMode::AutoReview
+        ash_protocol::ApprovalMode::Auto
     );
 }
 
@@ -4951,7 +4951,7 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
                 model: None,
                 reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
-                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
@@ -5314,7 +5314,7 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
                 model: None,
                 reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
-                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
@@ -5408,7 +5408,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
                 model: None,
                 reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
-                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
@@ -5525,7 +5525,7 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
                 model: None,
                 reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
-                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
@@ -6932,7 +6932,7 @@ fn message_restore_interrupts_the_source_and_replays_without_interrupting_later_
                     kind: Default::default(),
                     instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                     policy_revision: "test".into(),
-                    approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                    approval_mode: ash_protocol::ApprovalMode::Manual,
                     tool_mode: ash_protocol::ToolMode::Direct,
                     tool_profile: None,
                     activated_skills: vec![],

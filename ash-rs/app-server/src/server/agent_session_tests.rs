@@ -544,7 +544,7 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 policy_revision: "test-policy".into(),
-                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),

@@ -10,6 +10,41 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[test]
+fn actual_tui_permission_ids_select_the_shared_menu_without_changing_plan() {
+    let fixture = Fixture::new();
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("Automatic model");
+    process.submit("/mode plan");
+    process.wait_for_stable_screen("Automatic model · Plan");
+    for (id, label) in [
+        ("auto", "Auto"),
+        ("manual", "Manual"),
+        ("bypassPermissions", "Bypass permissions"),
+    ] {
+        process.submit(&format!("/policy {id}"));
+        process.submit("/policy");
+        process.wait_for_stable_screen("Permissions");
+        assert!(
+            process
+                .screen()
+                .lines()
+                .any(|row| row.contains(label) && row.contains("Current")),
+            "{}",
+            process.screen()
+        );
+        assert!(process.screen().contains("Automatic model · Plan"));
+        if id == "bypassPermissions" {
+            process.send(b"\x1b[C");
+            process.wait_for_stable_screen("access limits still apply");
+            process.assert_snapshot("real/03-approval/permission-menu-shared-copy");
+        }
+        process.send(b"\x1b");
+        process.wait_for_screen_to_omit("Permissions");
+    }
+    process.quit();
+}
+
+#[test]
 fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_changing_the_draft() {
     let fixture = Fixture::new();
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
@@ -22,7 +57,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     process.back_tab();
     process.wait_for_stable_screen("Automatic model · Debug");
     assert!(!process.screen().contains("Next mode:"));
-    process.wait_for_screen_to_omit("ask permissions on");
+    process.wait_for_screen_to_omit("Manual");
     process.assert_snapshot("real/02-terminal/collaboration-shortcuts");
     process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Select a model with /model before changing thinking effort");
@@ -45,7 +80,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
             .config_source()
             .contains("modelReasoningEffort = \"extraHigh\"")
     );
-    process.wait_for_screen_to_omit("ask permissions on");
+    process.wait_for_screen_to_omit("Manual");
     process.assert_snapshot("real/02-terminal/effort-shortcut");
     for (sequence, status, effort) in [
         (b"\x1b[1;2B".as_slice(), "GPT-6 Luna (high)", "high"),
@@ -91,7 +126,7 @@ fn inline_submitted_message_appears_once_while_working_and_after_completion() {
     fixture.write_config(&server.base_url());
     fixture.append_config("\n[tui]\nscreenMode = \"inline\"\n");
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
-    process.wait_for_stable_screen("ask permissions on");
+    process.wait_for_stable_screen("Manual");
     process.submit("start conversation");
     process.wait_for_stable_screen("SETUP-DONE");
     process.submit("rebase");
@@ -125,13 +160,13 @@ fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
     fixture.write_config(&server.base_url());
     fixture.append_config("\n[tui]\nscreenMode = \"inline\"\n");
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
-    process.wait_for_stable_screen("ask permissions on");
+    process.wait_for_stable_screen("Manual");
     #[cfg(unix)]
     assert!(!process.raw_text().contains("\x1b[?1049h"));
     for (index, reply) in replies.iter().enumerate() {
         process.submit(&format!("INLINE-MESSAGE-{index}"));
         process.wait_for_screen(reply);
-        process.wait_for_stable_screen("ask permissions on");
+        process.wait_for_stable_screen("Manual");
         assert!(
             process.terminal_text().contains(reply),
             "finished reply should enter terminal history while inline remains open"
@@ -155,11 +190,11 @@ fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
         process.submit("/status");
         process.wait_for_stable_screen("Full context window");
         process.escape();
-        process.wait_for_stable_screen("ask permissions on");
+        process.wait_for_stable_screen("Manual");
         assert_input_surface_visible(&process);
     }
     process.resize(SMALL_SIZE);
-    process.wait_for_stable_screen("ask permissions on");
+    process.wait_for_stable_screen("Manual");
     process.type_text("DRAFT-AFTER-RESIZE");
     process.wait_for_stable_screen("DRAFT-AFTER-RESIZE");
     #[cfg(unix)]
@@ -197,13 +232,13 @@ fn inline_repeated_status_keeps_history_compact() {
     fixture.write_config(&server.base_url());
     fixture.append_config("\n[tui]\nscreenMode = \"inline\"\n");
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
-    process.wait_for_stable_screen("ask permissions on");
+    process.wait_for_stable_screen("Manual");
 
     for _ in 0..2 {
         process.submit("/status");
         process.wait_for_stable_screen("Full context window");
         process.escape();
-        process.wait_for_stable_screen("ask permissions on");
+        process.wait_for_stable_screen("Manual");
     }
     let deadline = Instant::now() + Duration::from_secs(10);
     while process.screen().contains("image in clipboard") {
@@ -257,7 +292,7 @@ fn actual_tui_inline_statusline_stays_at_terminal_bottom() {
     fixture.write_config(&server.base_url());
     fixture.append_config("\n[tui]\nscreenMode = \"inline\"\n");
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
-    process.wait_for_stable_screen("ask permissions on");
+    process.wait_for_stable_screen("Manual");
     process.submit("keep this in history");
     process.wait_for_stable_screen("BOTTOM-ANCHORED-REPLY");
 
@@ -280,9 +315,9 @@ fn actual_tui_inline_statusline_stays_at_terminal_bottom() {
         process.screen()
     );
     process.escape();
-    process.wait_for_stable_screen("ask permissions on");
+    process.wait_for_stable_screen("Manual");
     assert_eq!(
-        row_containing(&process, "ask permissions on"),
+        row_containing(&process, "Manual"),
         usize::from(SMALL_SIZE.rows - 1),
         "{}",
         process.screen()
@@ -329,9 +364,9 @@ fn actual_tui_screen_mode_switches_live_and_persists() {
     #[cfg(unix)]
     assert!(process.raw_text().contains("\x1b[?1049l"));
     process.escape();
-    process.wait_for_stable_screen("ask permissions on");
+    process.wait_for_stable_screen("Manual");
     assert_eq!(
-        row_containing(&process, "ask permissions on"),
+        row_containing(&process, "Manual"),
         usize::from(LARGE_SIZE.rows - 1),
         "{}",
         process.screen()
@@ -414,7 +449,7 @@ fn actual_tui_input_keeps_its_row_without_blank_line_growth() {
             process
                 .screen()
                 .lines()
-                .position(|line| line.contains("ask permissions on"))
+                .position(|line| line.contains("Manual"))
                 .expect("hint bar remains visible")
         };
         let initial_hint = hint_row(&process);
@@ -600,12 +635,12 @@ fn actual_tui_sandbox_process_details_show_enforcement() {
     process.wait_for_screen("Start a task below, or continue a previous session.");
     process.submit("start a session before changing permissions");
     process.wait_for_stable_screen("SANDBOX-SETUP-DONE");
-    process.submit("/policy bypass-permissions");
-    process.wait_for_screen("bypass permissions on");
+    process.submit("/policy bypassPermissions");
+    process.wait_for_screen("Bypass permissions");
     process.submit("尝试在工作区外创建 sandbox-must-not-write.txt");
     process.wait_for_stable_screen("目标文件没有生成");
     process.refresh_policy_tip();
-    process.wait_for_stable_screen("bypass permissions on");
+    process.wait_for_stable_screen("Bypass permissions");
     process.assert_snapshot("real/03-approval/09-sandbox-blocked");
     assert!(!outside_path.exists());
     assert_eq!(server.request_count(), 3);
@@ -672,7 +707,7 @@ fn actual_tui_process_streams_queues_resizes_and_resumes() {
     let args = ["resume", session_id.as_str(), thread_id.as_str()];
     let mut resumed = TuiProcess::start(&fixture, &args, LARGE_SIZE);
     resumed.wait_for_stable_screen("第二轮排队消息已经执行。");
-    resumed.wait_for_screen_to_omit("ask permissions on");
+    resumed.wait_for_screen_to_omit("Manual");
     resumed.assert_snapshot("real/07-lifecycle/01-resumed");
     resumed.quit();
 }
@@ -719,7 +754,7 @@ fn actual_tui_process_renders_an_http_failure_and_remains_usable() {
     fixture.write_config(&server.base_url());
 
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_screen("ask permissions on");
+    process.wait_for_screen("Manual");
     process.submit("触发真实 HTTP 500");
     process.wait_for_stable_screen("Provider request failed (500). Try again later.");
     process.assert_snapshot("real/07-lifecycle/03-http-500");

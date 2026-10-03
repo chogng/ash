@@ -14,7 +14,42 @@ import { ISessionsManagementService } from "../../../sessions/services/sessions/
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ApprovalReviewModelSelection } from '../../../platform/sessions/common/sessionApi.js';
 import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
-import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
+import { formatNlsMessage, localize, setNlsResolver, resetNlsResolver } from '../../../nls.js';
+import { approvalModeDefinitions, type ApprovalMode } from '../../../platform/sessions/common/approvalModes.js';
+import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+
+test('permission commands use shared Chinese copy and require confirmation only for Bypass', async () => {
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	using services = new InstantiationService();
+	let confirmed = false;
+	const confirmations: string[] = [];
+	services.registerInstance(IDialogService, {
+		confirm: async (options: { primaryButton: string }) => { confirmations.push(options.primaryButton); return { confirmed }; },
+	} as unknown as IDialogService);
+	using commands = new CommandService(services);
+	const selections: ApprovalMode[] = [];
+	const otherSelections: ApprovalMode[] = [];
+	const model = { selectApprovalMode: (mode: ApprovalMode) => selections.push(mode) } as unknown as IChatWidgetModel;
+	const otherModel = { selectApprovalMode: (mode: ApprovalMode) => otherSelections.push(mode) } as unknown as IChatWidgetModel;
+	try {
+		assert.deepEqual(approvalModeDefinitions.map(definition => [localize(definition.label.key, definition.label.text), localize(definition.description.key, definition.description.text)]), [
+			['自动', '自动审核操作，无法判断时询问你'],
+			['手动', '操作需要授权时由你确认'],
+			['跳过权限审批', '跳过大部分审批，访问范围限制仍然有效'],
+		]);
+		await commands.executeCommand('sessions.chat.permission.auto', model);
+		await commands.executeCommand('sessions.chat.permission.manual', otherModel);
+		await commands.executeCommand('sessions.chat.permission.bypassPermissions', model);
+		assert.deepEqual(selections, ['auto']);
+		confirmed = true;
+		await commands.executeCommand('sessions.chat.permission.bypassPermissions', model);
+		assert.deepEqual(selections, ['auto', 'bypassPermissions']);
+		assert.deepEqual(otherSelections, ['manual']);
+		assert.deepEqual(confirmations, ['跳过权限审批', '跳过权限审批']);
+	} finally { resetNlsResolver(); }
+});
 
 test("Sessions owns the local New Chat command without requiring regular Workbench Views", async () => {
 	const onDidChange = new Emitter<void>();
@@ -59,7 +94,7 @@ test("Sessions History opens the selected active chat", async () => {
 			sessionId: "session-1",
 			title: "First Session",
 			status: "active",
-			nextApprovalMode: "askPermissions",
+			nextApprovalMode: "manual",
 			chats: [
 				{ threadId: "thread-1", origin: { type: "root" }, status: "active" },
 				{ threadId: "thread-2", origin: { type: "root" }, status: "archived" },
@@ -69,7 +104,7 @@ test("Sessions History opens the selected active chat", async () => {
 			sessionId: "session-2",
 			title: "Archived Session",
 			status: "archived",
-			nextApprovalMode: "askPermissions",
+			nextApprovalMode: "manual",
 			chats: [{ threadId: "thread-3", origin: { type: "root" }, status: "active" }],
 		},
 	];

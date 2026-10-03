@@ -72,7 +72,7 @@ fn collaboration_shortcuts_preserve_drafts_permissions_and_history_search() {
             assert_eq!(key(&mut app, KeyCode::BackTab, KeyModifiers::SHIFT), None);
             assert_eq!(app.collaboration_mode(), mode);
             assert_eq!(app.input(), "keep this draft\nand this line");
-            assert_eq!(app.approval_mode(), ApprovalMode::AskPermissions);
+            assert_eq!(app.approval_mode(), ApprovalMode::Manual);
             assert_eq!(app.top_tip().text(None), None);
         }
         for (code, modifiers, command) in [
@@ -92,7 +92,7 @@ fn collaboration_shortcuts_preserve_drafts_permissions_and_history_search() {
                 Some(AppCommand::Models(command))
             );
             assert_eq!(app.input(), "keep this draft\nand this line");
-            assert_eq!(app.approval_mode(), ApprovalMode::AskPermissions);
+            assert_eq!(app.approval_mode(), ApprovalMode::Manual);
         }
         key(&mut app, KeyCode::Char('r'), KeyModifiers::CONTROL);
         assert!(app.input_state().searching_history());
@@ -312,7 +312,7 @@ fn collaboration_mode_commands_use_protocol_ids_in_every_language() {
                     assert_ne!(app.collaboration_mode(), mode);
                     assert_eq!(command(&mut app, &format!("/mode {argument}")), None);
                     assert_eq!(app.collaboration_mode(), mode);
-                    assert_eq!(app.approval_mode(), ApprovalMode::AskPermissions);
+                    assert_eq!(app.approval_mode(), ApprovalMode::Manual);
                     assert!(app.input().is_empty());
                     assert!(app.command_panel().is_none());
                     assert!(app.chat_input_focused());
@@ -379,9 +379,9 @@ fn collaboration_policy_and_effort_commands_are_independent() {
     let mut app = App::new();
     app.open_home();
     command(&mut app, "/mode ask");
-    command(&mut app, "/policy auto-review");
+    command(&mut app, "/policy auto");
     assert_eq!(app.collaboration_mode(), CollaborationMode::Ask);
-    assert_eq!(app.approval_mode(), ApprovalMode::AutoReview);
+    assert_eq!(app.approval_mode(), ApprovalMode::Auto);
     assert_eq!(
         command(&mut app, "/effort high"),
         Some(AppCommand::Models(crate::models::Command::SetEffort {
@@ -399,11 +399,53 @@ fn collaboration_policy_and_effort_commands_are_independent() {
     command(&mut app, "/policy");
     assert_eq!(
         app.list_selection().unwrap().selected_visible_index(),
-        Some(1)
+        Some(0)
     );
     key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
     assert_eq!(app.collaboration_mode(), CollaborationMode::Ask);
-    assert_eq!(app.approval_mode(), ApprovalMode::AutoReview);
+    assert_eq!(app.approval_mode(), ApprovalMode::Auto);
+}
+
+#[test]
+fn permission_menu_uses_shared_copy_and_the_same_ids_in_both_screens() {
+    for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        app.open_home();
+        let mut settings = TerminalSettings::default();
+        settings.set_language(crate::nls::Language::Chinese);
+        settings.set_screen_mode(screen);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        command(&mut app, "/mode plan");
+        command(&mut app, "/policy");
+        assert_eq!(
+            app.list_selection().unwrap().selected_visible_index(),
+            Some(1)
+        );
+        key(&mut app, KeyCode::Down, KeyModifiers::NONE);
+        key(&mut app, KeyCode::Right, KeyModifiers::NONE);
+        let visible = render(&app);
+        match screen {
+            ScreenMode::Fullscreen => {
+                crate::tui_assert_snapshot!("permission_menu_fullscreen_chinese", visible)
+            }
+            ScreenMode::Inline => {
+                crate::tui_assert_snapshot!("permission_menu_inline_chinese", visible)
+            }
+        }
+        key(&mut app, KeyCode::Home, KeyModifiers::NONE);
+        key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+        assert_eq!(app.approval_mode(), ApprovalMode::Auto);
+        assert_eq!(app.collaboration_mode(), CollaborationMode::Plan);
+        for (id, mode) in [
+            ("manual", ApprovalMode::Manual),
+            ("auto", ApprovalMode::Auto),
+            ("bypassPermissions", ApprovalMode::BypassPermissions),
+        ] {
+            command(&mut app, &format!("/policy {id}"));
+            assert_eq!(app.approval_mode(), mode);
+            assert_eq!(app.collaboration_mode(), CollaborationMode::Plan);
+        }
+    }
 }
 
 #[test]
@@ -536,7 +578,7 @@ fn running_turn(mode: CollaborationMode) -> Turn {
         reasoning_effort: None,
         tool_profile: None,
         tool_mode: ash_protocol::ToolMode::Direct,
-        approval_mode: ApprovalMode::AskPermissions,
+        approval_mode: ApprovalMode::Manual,
         usage: Default::default(),
         context_usage: None,
         items: vec![],

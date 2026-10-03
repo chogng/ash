@@ -12,7 +12,7 @@ expression: text
                                                             
                                                             
                                                             
-  ⏸ ask permissions on                                      
+  ⏸ Manual                                                  
   ────────────────────────────────────────────────────────  
   > ab你 cd                                                  
   ─────────────────────────────────────── Automatic model   

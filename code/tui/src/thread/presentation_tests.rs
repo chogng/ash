@@ -62,7 +62,7 @@ fn turn(id: &str, status: TurnStatus) -> Turn {
         reasoning_effort: None,
         tool_profile: None,
         tool_mode: ash_protocol::ToolMode::Direct,
-        approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+        approval_mode: ash_protocol::ApprovalMode::Manual,
         usage: ash_protocol::ModelUsageSummary::default(),
         context_usage: None,
         items: Vec::<ThreadItem>::new(),

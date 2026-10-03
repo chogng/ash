@@ -107,7 +107,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
         &mut client,
         request_scope(&conversation),
         first,
-        ApprovalMode::AskPermissions,
+        ApprovalMode::Manual,
     )
     .unwrap();
     conversation.set_thread_sequence(started.sequence);
@@ -156,7 +156,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
         &mut client,
         request_scope(&conversation),
         second,
-        ApprovalMode::AskPermissions,
+        ApprovalMode::Manual,
     )
     .unwrap();
     conversation.set_thread_sequence(started.sequence);

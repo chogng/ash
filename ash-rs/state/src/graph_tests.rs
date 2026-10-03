@@ -294,7 +294,7 @@ fn delegation_queries_keep_breadth_first_order_and_exclude_forks() {
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: instructions.clone(),
                 policy_revision: "policy".into(),
-                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: vec![],

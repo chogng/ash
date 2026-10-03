@@ -283,7 +283,7 @@ fn start(threads: &ThreadController, thread: &ThreadId, key: &str) -> TurnId {
                 kind: protocol::TurnKind::Coding,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
                 policy_revision: "board-tests".into(),
-                approval_mode: protocol::ApprovalMode::AskPermissions,
+                approval_mode: protocol::ApprovalMode::Manual,
                 tool_mode: protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: vec![],

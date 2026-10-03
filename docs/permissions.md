@@ -18,14 +18,19 @@
 | 权限模式 | 需要授权的动作由用户还是审核模型批准 | 当前工作模式、访问硬限制 |
 | 文件和网络范围 | 操作可以访问哪里、能否写入或联网 | 工作模式、审批方式 |
 
-Sessions 输入区显示现有模式选择器和独立权限选择器，例如 `Plan ｜ 权限：自动审核`。
+Sessions 输入区显示现有模式选择器和独立权限选择器，例如 `Plan ｜ Permissions: Auto`。
 批准计划通过 `switch_mode` 切换到现有的非分析模式；权限选择和访问范围保持不变。
 Core 在工具准备时拒绝分析模式下的直接文件或外部修改；调查进程只允许在严格只读、禁网沙箱中运行。
-即使操作获得批准、自动审核通过或选择完全访问，调查进程仍使用该沙箱；沙箱拒绝后也不能提权重试。
+即使操作获得批准、自动审核通过或选择 Bypass permissions，调查进程仍使用该沙箱；沙箱拒绝后也不能提权重试。
 隔离的 Code Mode 控制自身不授予文件权限，其中的每个工具调用仍经过相同检查。
 
-Sessions 的“手动确认”和“自动审核”是主菜单选项；“完全访问”位于“高级”，选择时说明风险。
-“高级 → 审核模型”可以选择连接、模型和思考强度，设置保存在用户配置并用于后续 Turn，
+权限模式统一命名为 `Manual / Auto / Bypass permissions`，中文界面对应“手动 / 自动 / 跳过权限审批”。
+三个选项显示在同一个权限菜单中，每项都有说明、选中标记和数字提示。
+桌面端和 Web 在菜单打开且获得焦点时使用 `1 = Auto / 2 = Manual / 3 = Bypass permissions`；
+菜单关闭后，数字键用于普通输入。方向键、Enter 和 Escape 仍可操作菜单，Tab 关闭菜单并继续移动焦点。
+桌面端和 Web 选择 Bypass permissions 时先确认风险；取消确认不会更改工作模式或权限选择。
+Manual 由用户处理需要批准的操作；Auto 使用自动审核；Bypass permissions 跳过大部分权限审批。
+菜单底部的“审核模型”可以选择连接、模型和思考强度，设置保存在用户配置并用于后续 Turn，
 不会更改输入区的主模型。默认选择规则和配置示例见 [自动审核](auto-review.md#审核模型选择)。
 
 Ash 使用分层权限系统来平衡功能和安全性：能在明确沙箱边界内完成的动作优先受限执行；需要越过
@@ -74,14 +79,27 @@ Grant 后立即失效。
 
 ### 每个 Turn 的交互模式
 
-TUI 当前在 footer 最左侧显示并用 Shift-Tab 循环三种模式。模式在提交时冻结到
-`TurnAccepted`，所以运行中切换只影响后续 Turn，包括排队的 follow-up。
+TUI 当前在 footer 最左侧显示权限模式，通过 `/policy` 菜单或
+`/policy manual|auto|bypassPermissions` 选择。菜单中的左右键可以展开和收起完整说明，
+名称和说明使用同一份共享文案。模式在提交时冻结到 `TurnAccepted`，所以运行中切换只影响后续
+Turn，包括排队的 follow-up。
 
-| Footer 文案 | 模式 | authoritative policy 返回 `AskUser` 时 |
+| Footer 文案 | 枚举 / 协议 ID | authoritative policy 返回 `AskUser` 时 |
 | --- | --- | --- |
-| `ask permissions on` | `AskPermissions` | 创建 durable approval，由用户 approve once 或 decline |
-| `auto review on` | `AutoReview` | 调用配置的审查模型，再由 `ActionPolicyEngine` 应用风险与授权矩阵；模型不可用或失败时继续询问用户 |
-| `bypass permissions on` | `BypassPermissions` | 跳过这次交互并签发精确绑定的 bypass authority |
+| `Manual` | `Manual` / `manual` | 创建 durable approval，由用户 approve once 或 decline |
+| `Auto` | `Auto` / `auto` | 调用配置的审查模型，再由 `ActionPolicyEngine` 应用风险与授权矩阵；模型不可用或失败时继续询问用户 |
+| `Bypass permissions` | `BypassPermissions` / `bypassPermissions` | 跳过这次交互并签发精确绑定的 bypass authority |
+
+模式列表、显示顺序、名称、说明、翻译 key 和确认标记由
+`ash-rs/protocol/src/approval_mode.rs` 统一定义。TypeScript 通过现有协议生成流程获取静态定义，
+在未连接 App Server 时也能显示菜单；TUI 和 Rust App 可直接使用 `ApprovalMode::definition()`。
+每个界面自行解析语言和处理快捷键，后端不保存界面语言或数字键绑定。菜单首项为 Auto，
+默认权限仍为 Manual；Plan、Ask 和无人值守的交互策略不属于这三个权限 ID。
+
+新历史记录使用 schema 23。读取 schema 12–22 时，只迁移权限字段里的
+`askPermissions → manual` 和 `autoReview → auto`；旧记录重新序列化仍使用原 ID，
+保持历史前缀的内容摘要。队列数据库 schema 2 在事务内更新该字段，保留消息、顺序和 revision。
+公共协议只接受新 ID，不将旧 ID 注册为枚举别名。
 
 `BypassPermissions` 不是关闭全部安全检查。base policy 始终先运行；确定性 `Block`、策略版本不匹配、
 无效 action/capability binding、沙箱硬约束和 policy error 都不会被改写。bypass authority 仍绑定

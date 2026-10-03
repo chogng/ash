@@ -41,12 +41,12 @@ impl QueueStore {
         connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;")?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         transaction.execute_batch("CREATE TABLE IF NOT EXISTS queue_metadata (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, revision INTEGER NOT NULL);
-            INSERT OR IGNORE INTO queue_metadata VALUES(1,1,0);")?;
+            INSERT OR IGNORE INTO queue_metadata VALUES(1,2,0);")?;
         let version: u32 =
             transaction.query_row("SELECT version FROM queue_metadata WHERE id=1", [], |row| {
                 row.get(0)
             })?;
-        if version != 1 {
+        if !matches!(version, 1 | 2) {
             return Err(QueueError::Storage(format!(
                 "unsupported queue schema {version}"
             )));
@@ -67,6 +67,17 @@ impl QueueStore {
             sort_key INTEGER NOT NULL DEFAULT 0
         ); CREATE INDEX IF NOT EXISTS queue_thread ON queued_messages(thread_id,position);",
         )?;
+        if version == 1 {
+            // Queue requests are mutable records, unlike content-addressed Thread history.
+            // Migrate only the permission field and preserve command identity and revision.
+            transaction.execute_batch(
+                "UPDATE queued_messages SET request=json_set(request,'$.approvalMode',
+                    CASE json_extract(request,'$.approvalMode')
+                        WHEN 'askPermissions' THEN 'manual' ELSE 'auto' END)
+                    WHERE json_extract(request,'$.approvalMode') IN ('askPermissions','autoReview');
+                 UPDATE queue_metadata SET version=2 WHERE id=1;",
+            )?;
+        }
         transaction.commit()?;
         Ok(Self {
             connection: Mutex::new(connection),

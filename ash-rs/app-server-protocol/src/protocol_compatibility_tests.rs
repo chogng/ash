@@ -115,3 +115,19 @@ fn an_older_turn_contract_cannot_silently_ignore_time_context_policy() {
         Err(ProtocolCompatibilityError::CapabilityVersion { name: "turns", .. })
     ));
 }
+#[test]
+fn permission_id_contract_rejects_a_server_using_the_previous_ids() {
+    let mut initialized = initialization();
+    initialized
+        .capabilities
+        .contracts
+        .insert("turns".into(), CapabilityContract { version: 11 });
+    assert!(matches!(
+        ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES),
+        Err(ProtocolCompatibilityError::CapabilityVersion {
+            name: "turns",
+            received: 11,
+            ..
+        })
+    ));
+}

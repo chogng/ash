@@ -241,7 +241,7 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
                         .freeze()
                         .with_mode(&collaboration_mode_templates::instructions(mode)),
                     policy_revision: "test-policy-v1".into(),
-                    approval_mode: protocol::ApprovalMode::AskPermissions,
+                    approval_mode: protocol::ApprovalMode::Manual,
                     tool_mode: protocol::ToolMode::Direct,
                     tool_profile: None,
                     activated_skills: Vec::new(),
@@ -428,7 +428,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
                 model: None,
                 reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
-                approval_mode: protocol::ApprovalMode::AskPermissions,
+                approval_mode: protocol::ApprovalMode::Manual,
                 tool_mode: protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),

@@ -16,7 +16,7 @@ expression: "render(&app, 100, 20)"
                                                                                                     
                                                                                                     
                                                                                                     
-  ⏸ ask permissions on                                                                              
+  ⏸ Manual                                                                                          
   ──History search: find · ↑/↓ browse · Enter edit · Esc cancel───────────────────────────────────  
   > find the input history owner                                                                    
   ─────────────────────────────────────────────────────────────────────────────── Automatic model   

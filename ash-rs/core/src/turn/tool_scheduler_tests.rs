@@ -408,8 +408,8 @@ fn scheduler_invokes_automatic_review_only_for_interactive_auto_review() {
     use std::sync::atomic::Ordering;
 
     for mode in [
-        ApprovalMode::AskPermissions,
-        ApprovalMode::AutoReview,
+        ApprovalMode::Manual,
+        ApprovalMode::Auto,
         ApprovalMode::BypassPermissions,
     ] {
         let policy = Arc::new(ReviewingPolicy {
@@ -429,15 +429,15 @@ fn scheduler_invokes_automatic_review_only_for_interactive_auto_review() {
         let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
         assert_eq!(
             policy.reviews.load(Ordering::SeqCst),
-            usize::from(mode == ApprovalMode::AutoReview)
+            usize::from(mode == ApprovalMode::Auto)
         );
         match mode {
-            ApprovalMode::AskPermissions => {
+            ApprovalMode::Manual => {
                 assert_eq!(progress, ToolSchedulingProgress::WaitingForApproval);
                 assert!(snapshot.turns.last().unwrap().pending_interaction.is_some());
                 assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
             }
-            ApprovalMode::AutoReview => {
+            ApprovalMode::Auto => {
                 assert_eq!(progress, ToolSchedulingProgress::Complete);
                 assert!(snapshot.turns.last().unwrap().pending_interaction.is_none());
                 assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
@@ -466,7 +466,7 @@ fn scheduler_preserves_deterministic_decisions_without_automatic_review() {
     let fixture = fixture_with_approval_mode(
         Arc::new(ReviewTool::default()),
         policy.clone(),
-        ash_protocol::ApprovalMode::AutoReview,
+        ash_protocol::ApprovalMode::Auto,
     );
     fixture
         .scheduler
@@ -488,7 +488,7 @@ fn auto_review_rechecks_user_input_added_during_review() {
     let mut fixture = fixture_with_approval_mode(
         Arc::new(ReviewTool::default()),
         Arc::new(AskPolicy),
-        ash_protocol::ApprovalMode::AutoReview,
+        ash_protocol::ApprovalMode::Auto,
     );
     let observed = Arc::new(Mutex::new(Vec::new()));
     let policy = Arc::new(ContextAwarePolicy {
@@ -534,7 +534,7 @@ fn auto_review_rechecks_client_goal_changed_during_review() {
     let mut fixture = fixture_with_approval_mode(
         Arc::new(ReviewTool::default()),
         Arc::new(AskPolicy),
-        ash_protocol::ApprovalMode::AutoReview,
+        ash_protocol::ApprovalMode::Auto,
     );
     let observed = Arc::new(Mutex::new(Vec::new()));
     let policy = Arc::new(ContextAwarePolicy {
@@ -580,7 +580,7 @@ fn auto_review_rechecks_user_input_added_before_execution_start() {
     let mut fixture = fixture_with_approval_mode(
         Arc::new(ReviewTool::default()),
         Arc::new(AskPolicy),
-        ash_protocol::ApprovalMode::AutoReview,
+        ash_protocol::ApprovalMode::Auto,
     );
     let observed = Arc::new(Mutex::new(Vec::new()));
     let policy = Arc::new(ContextAwarePolicy {
@@ -632,7 +632,7 @@ fn auto_review_stops_when_context_keeps_changing() {
     let mut fixture = fixture_with_approval_mode(
         Arc::new(ReviewTool::default()),
         Arc::new(AskPolicy),
-        ash_protocol::ApprovalMode::AutoReview,
+        ash_protocol::ApprovalMode::Auto,
     );
     let policy = Arc::new(AlwaysChangingReviewPolicy {
         threads: fixture.threads.clone(),
@@ -1790,8 +1790,8 @@ fn analysis_modes_block_mutation_before_review_or_execution_in_every_permission_
         ash_protocol::CollaborationMode::Ask,
     ] {
         for approval in [
-            ash_protocol::ApprovalMode::AskPermissions,
-            ash_protocol::ApprovalMode::AutoReview,
+            ash_protocol::ApprovalMode::Manual,
+            ash_protocol::ApprovalMode::Auto,
             ash_protocol::ApprovalMode::BypassPermissions,
         ] {
             for kind in [
@@ -1875,7 +1875,7 @@ fn fixture() -> Fixture {
 }
 
 fn fixture_with(tools: Arc<ReviewTool>, policy: Arc<dyn ActionPolicyService>) -> Fixture {
-    fixture_with_approval_mode(tools, policy, ash_protocol::ApprovalMode::AskPermissions)
+    fixture_with_approval_mode(tools, policy, ash_protocol::ApprovalMode::Manual)
 }
 
 fn fixture_with_approval_mode(

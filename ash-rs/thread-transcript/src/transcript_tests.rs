@@ -43,7 +43,7 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
             reasoning_effort: None,
             tool_profile: None,
             tool_mode: ash_protocol::ToolMode::Direct,
-            approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+            approval_mode: ash_protocol::ApprovalMode::Manual,
             usage: ModelUsageSummary::default(),
             context_usage: None,
             items: vec![agent_item("item-1", "done")],

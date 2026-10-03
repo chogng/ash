@@ -107,7 +107,7 @@ export class ChatWidgetModel extends Disposable {
 			phase: this._state,
 			error: this._error,
 			canInterrupt: this.canInterrupt,
-			approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode ?? 'askPermissions',
+			approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode ?? 'manual',
 			models: this._models,
 			modelsError: this.modelsError,
 			slashCommands: this._slashCommands,

@@ -71,7 +71,7 @@ fn advisor_question_uses_consult_request_instead_of_worker_turn() {
             display_text: "/advisor Check cancellation".into(),
             input: vec![ChatInputItem::Text("/advisor Check cancellation".into())],
         },
-        ApprovalMode::AskPermissions,
+        ApprovalMode::Manual,
     );
     let error = result.unwrap_err();
     assert!(error.to_string().contains("AdvisorDisabled"), "{error}");
@@ -705,7 +705,7 @@ fn model_command_updates_and_clears_model_with_config_revision() {
     assert_eq!(
         app.status_line()
             .policy_text_for_width(80, app.approval_mode()),
-        "⏸ ask permissions on"
+        "⏸ Manual"
     );
 
     let update = crate::models::execute(
@@ -721,7 +721,7 @@ fn model_command_updates_and_clears_model_with_config_revision() {
     assert_eq!(
         app.status_line()
             .policy_text_for_width(80, app.approval_mode()),
-        "⏸ ask permissions on"
+        "⏸ Manual"
     );
     assert_eq!(app.status(), &Status::Ready);
 

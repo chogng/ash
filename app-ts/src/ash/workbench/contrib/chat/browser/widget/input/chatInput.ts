@@ -24,7 +24,7 @@ export interface ChatInputState {
 	readonly phase: ChatInputPhase;
 	readonly error?: string;
 	readonly canInterrupt: boolean;
-	readonly approvalMode?: ApprovalMode;
+	readonly approvalMode: ApprovalMode;
 	readonly models: readonly ModelCatalogEntry[];
 	readonly modelsError?: string;
 	readonly slashCommands: readonly SlashCommandDefinition[];

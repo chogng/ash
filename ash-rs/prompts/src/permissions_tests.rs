@@ -3,14 +3,10 @@ use super::*;
 #[test]
 fn approval_modes_select_distinct_versioned_assets_without_changing_the_action_rules() {
     let modes = [
+        (ApprovalMode::Manual, "manual", "permissions/approval/ask"),
         (
-            ApprovalMode::AskPermissions,
-            "askPermissions",
-            "permissions/approval/ask",
-        ),
-        (
-            ApprovalMode::AutoReview,
-            "autoReview",
+            ApprovalMode::Auto,
+            "auto",
             "permissions/approval/auto-review",
         ),
         (

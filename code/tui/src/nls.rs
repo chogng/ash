@@ -769,11 +769,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Utiliser /mode agent|plan|debug|multitask|ask",
     ),
     translation(
-        "Use /policy ask-permissions|auto-review|bypass-permissions",
-        "/policy ask-permissions|auto-review|bypass-permissions を使用",
-        "使用 /policy ask-permissions|auto-review|bypass-permissions",
-        "Utiliser /policy ask-permissions|auto-review|bypass-permissions",
+        "Use /policy manual|auto|bypassPermissions",
+        "/policy manual|auto|bypassPermissions を使用",
+        "使用 /policy manual|auto|bypassPermissions",
+        "Utiliser /policy manual|auto|bypassPermissions",
     ),
+    translation("Permissions", "権限", "权限", "Autorisations"),
     translation(
         "Select a model with /model before changing thinking effort",
         "推論レベルを変える前に /model でモデルを選択してください",
@@ -800,10 +801,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("<effort>", "<推論レベル>", "<推理强度>", "<niveau>"),
     translation(
-        "<ask-permissions|auto-review|bypass-permissions>",
-        "<ask-permissions|auto-review|bypass-permissions>",
-        "<ask-permissions|auto-review|bypass-permissions>",
-        "<ask-permissions|auto-review|bypass-permissions>",
+        "<manual|auto|bypassPermissions>",
+        "<manual|auto|bypassPermissions>",
+        "<manual|auto|bypassPermissions>",
+        "<manual|auto|bypassPermissions>",
     ),
     translation("Extensions", "拡張機能", "扩展", "Extensions"),
     translation(
@@ -4084,24 +4085,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("UTF-8 bytes", "UTF-8 バイト", "UTF-8 字节", "octets UTF-8"),
     translation("characters", "文字", "字符", "caractères"),
-    translation(
-        "ask permissions on",
-        "許可を確認",
-        "请求权限",
-        "demande d’autorisations",
-    ),
-    translation(
-        "auto review on",
-        "自動レビュー",
-        "自动审阅",
-        "révision automatique",
-    ),
-    translation(
-        "bypass permissions on",
-        "許可を省略",
-        "绕过权限",
-        "autorisations contournées",
-    ),
     translation("current", "現在", "当前", "actuel"),
     translation(
         "search input history; Enter edits the match, Esc restores the draft",
@@ -4446,6 +4429,19 @@ const UI_TRANSLATIONS: &[Translation] = &[
 pub(crate) fn localize<'a>(language: Language, source: &'a str) -> Cow<'a, str> {
     if language == Language::English {
         return Cow::Borrowed(source);
+    }
+    for mode in ash_protocol::ApprovalMode::ALL {
+        let definition = mode.definition();
+        for message in [definition.label, definition.description] {
+            if message.english == source {
+                return Cow::Borrowed(match language {
+                    Language::English => message.english,
+                    Language::Japanese => message.japanese,
+                    Language::Chinese => message.chinese,
+                    Language::French => message.french,
+                });
+            }
+        }
     }
     if let Some(value) = UI_TRANSLATIONS
         .iter()

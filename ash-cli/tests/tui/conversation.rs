@@ -24,7 +24,7 @@ fn actual_tui_recalls_input_history_after_process_restart() {
     second.up();
     second.wait_for_stable_screen("> Remember this input across restarts");
     // These snapshots capture the settled screen, after the startup hint has faded.
-    second.wait_for_screen_to_omit("ask permissions on");
+    second.wait_for_screen_to_omit("Manual");
     second.assert_snapshot("real/14-input-history/recalled-after-restart");
     assert_eq!(server.request_count(), 1);
     second.down();
@@ -114,7 +114,7 @@ fn actual_tui_displays_git_branch_and_changes() {
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("1 change");
     assert!(process.screen().lines().next().unwrap().contains("main"));
-    process.wait_for_screen_to_omit("ask permissions on");
+    process.wait_for_screen_to_omit("Manual");
     process.assert_snapshot("real/08-git/00-branch-and-change");
     process.quit();
 }
@@ -192,7 +192,7 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     approve_gate.release();
     approve.wait_for_stable_screen("文件写入完成");
     approve.refresh_policy_tip();
-    approve.wait_for_stable_screen("ask permissions on");
+    approve.wait_for_stable_screen("Manual");
     approve.assert_snapshot("real/03-approval/01-approved-final");
     approve.control_up();
     approve.up();
@@ -241,7 +241,7 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     decline_gate.release();
     decline.wait_for_stable_screen("没有写入文件");
     decline.refresh_policy_tip();
-    decline.wait_for_stable_screen("ask permissions on");
+    decline.wait_for_stable_screen("Manual");
     decline.assert_snapshot("real/03-approval/03-declined-final");
     assert!(decline_fixture.find_file("declined-by-tui.txt").is_none());
     assert!(decline_server.request_bodies()[1].contains("declin"));
@@ -277,14 +277,14 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     auto.wait_for_screen("Start a task below, or continue a previous session.");
     auto.submit("start a session before automatic review");
     auto.wait_for_stable_screen("AUTO-SETUP-DONE");
-    auto.submit("/policy auto-review");
-    auto.wait_for_screen("auto review on");
+    auto.submit("/policy auto");
+    auto.wait_for_screen("Auto");
     auto.submit("请通过自动审查创建 auto-reviewed.txt");
     auto.wait_for_screen("自动审查拒绝了工具");
     auto_gate.wait_until_reached();
     assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
-    auto.submit("/policy bypass-permissions");
-    auto.wait_for_screen("current: auto review on");
+    auto.submit("/policy bypassPermissions");
+    auto.wait_for_screen("current: Auto");
     // Inspect the review result after the follow-up turn can finish.
     auto_gate.release();
     auto.wait_for_stable_screen("文件没有写入");
@@ -316,12 +316,12 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     bypass.wait_for_screen("Start a task below, or continue a previous session.");
     bypass.submit("start a session before permission bypass");
     bypass.wait_for_stable_screen("BYPASS-SETUP-DONE");
-    bypass.submit("/policy bypass-permissions");
-    bypass.wait_for_screen("bypass permissions on");
+    bypass.submit("/policy bypassPermissions");
+    bypass.wait_for_screen("Bypass permissions");
     bypass.submit("请直接创建 permission-bypassed.txt");
     bypass.wait_for_stable_screen("文件直接写入完成");
     bypass.refresh_policy_tip();
-    bypass.wait_for_stable_screen("bypass permissions on");
+    bypass.wait_for_stable_screen("Bypass permissions");
     bypass.assert_snapshot("real/03-approval/07-bypass-final");
     bypass.control_up();
     bypass.up();

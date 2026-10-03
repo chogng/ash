@@ -59,7 +59,7 @@ import { WorkbenchQuickInputService } from "../../../workbench/services/quickinp
 import { h } from "../../../base/browser/dom.js";
 import type { IFileService } from '../../../platform/files/common/files.js';
 import { URI } from "../../../base/common/uri.js";
-import type { ICommandService } from "../../../platform/commands/common/commands.js";
+import { ICommandService } from "../../../platform/commands/common/commands.js";
 import type { IOpenerService } from "../../../platform/opener/common/openerService.js";
 import type { IEditorService } from "../../../workbench/services/editor/common/editorService.js";
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -749,6 +749,8 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	const draft = view.activeSelection;
 	if (draft?.kind !== 'untitled') throw new Error('Expected Code draft');
 	using commands = new CommandService(new InstantiationService());
+	editorServices.registerInstance(ICommandService, commands);
+	editorServices.registerInstance(IContextViewService, contextViewService);
 	using chat = createChatService(fake.api);
 	editorServices.registerInstance(ILanguageModelsService, modelsFor(chat));
 	const widgetModel = createWidgetModel(chat, { kind: 'untitled', session: draft.session }, sessions);
@@ -1505,7 +1507,7 @@ test("ChatWidgetModel projects and refreshes the canonical durable Turn plan", a
 			mode: "agent",
 			kind: "coding",
 			toolMode: "direct",
-			approvalMode: "askPermissions",
+			approvalMode: "manual",
 			usage: emptyUsage(),
 			items: [],
 			plan: {
@@ -1644,7 +1646,7 @@ test("ChatWidgetModel projects a durable Turn failure into the conversation", as
 			mode: "agent",
 			kind: "coding",
 			toolMode: "direct",
-			approvalMode: "askPermissions",
+			approvalMode: "manual",
 			usage: emptyUsage(),
 			items: [],
 			error: {
@@ -2269,11 +2271,11 @@ test('ChatWidgetModel sends image-only input using the selected approval mode', 
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await model.initialize();
-	model.selectApprovalMode('autoReview');
+	model.selectApprovalMode('auto');
 	await model.send('', 'agent', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
-	assert.equal(fake.turnStartRequests[0]?.approvalMode, 'autoReview');
+	assert.equal(fake.turnStartRequests[0]?.approvalMode, 'auto');
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }]);
-	assert.equal(model.inputState.approvalMode, 'autoReview');
+	assert.equal(model.inputState.approvalMode, 'auto');
 });
 
 test("ChatWidgetModel steers an active Turn instead of starting another Turn", async () => {
@@ -2287,7 +2289,7 @@ test("ChatWidgetModel steers an active Turn instead of starting another Turn", a
 			mode: "agent",
 			kind: "coding",
 			toolMode: "direct",
-			approvalMode: "askPermissions",
+			approvalMode: "manual",
 			usage: emptyUsage(),
 			items: [{
 				type: "userMessage",
@@ -2348,7 +2350,7 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	await model.initialize();
 	assert.equal(model.inputState.mode, 'plan');
 	model.selectMode('multitask');
-	model.selectApprovalMode('autoReview');
+	model.selectApprovalMode('auto');
 	await model.send('Implement independent steps', 'multitask', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.equal(fake.turnSteerRequests.length, 0);
@@ -2357,10 +2359,10 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 		sessionId: 'session-1', threadId: 'thread-1', mode: 'multitask',
 		model: undefined, reasoningEffort: undefined,
 		input: [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }, { type: 'text', text: 'Implement independent steps' }],
-		approvalMode: 'autoReview',
+		approvalMode: 'auto',
 	}]);
 	assert.equal(model.inputState.activeMode, 'plan');
-	assert.equal(value.turns[0]!.approvalMode, 'askPermissions');
+	assert.equal(value.turns[0]!.approvalMode, 'manual');
 	assert.equal(model.inputState.mode, 'multitask');
 });
 
@@ -2379,7 +2381,8 @@ test('Chat mode accessibility help explains switch_mode in Chinese and restores 
 		const help = new SessionsChatAccessibilityHelp(container, () => input.focus());
 		const provider = help.getProvider()!;
 		assert.match(provider.provideContent(), /从 Plan 或 Ask 切到 Agent、Debug 或 Multitask 需要你选择，权限选择保持不变/);
-		assert.match(provider.provideContent(), /高级菜单提供完全访问和审核模型/);
+		assert.match(provider.provideContent(), /权限菜单提供自动、手动和跳过权限审批/);
+		assert.match(provider.provideContent(), /菜单打开时，按 1、2 或 3 选择权限模式/);
 		assert.match(provider.provideContent(), /你为下一条消息选好的不同模式会保留/);
 		input.blur();
 		provider.dispose();
@@ -2704,7 +2707,7 @@ function session(
 		sessionId: id,
 		title,
 		status: "active",
-		nextApprovalMode: "askPermissions",
+		nextApprovalMode: "manual",
 		chats: threadId
 			? [{ threadId, origin: { type: "root" }, status: "active" }]
 			: [],
@@ -2749,7 +2752,7 @@ function thread(agentText?: string): Thread {
 				mode: "agent",
 				kind: "coding",
 				toolMode: "direct",
-				approvalMode: "askPermissions",
+				approvalMode: "manual",
 				usage: emptyUsage(),
 				items: [{
 					type: "agentMessage",
@@ -2783,7 +2786,7 @@ function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn
 		mode: "agent",
 		kind: "coding",
 		toolMode: "direct",
-		approvalMode: "askPermissions",
+		approvalMode: "manual",
 		usage: emptyUsage(),
 		items: [],
 		error: { code, message, retryable },

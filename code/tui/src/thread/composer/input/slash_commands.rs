@@ -156,7 +156,7 @@ impl TuiSlashCommandAction {
             Self::Model => Some("<model> [effort]"),
             Self::Mode => Some("<agent|plan|debug|multitask|ask>"),
             Self::Effort => Some("<effort>"),
-            Self::Policy => Some("<ask-permissions|auto-review|bypass-permissions>"),
+            Self::Policy => Some("<manual|auto|bypassPermissions>"),
             Self::Theme => Some("<theme>"),
             Self::Resume => Some("<session-id>"),
             Self::Rewind => Some("<checkpoint>"),

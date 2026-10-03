@@ -1,6 +1,6 @@
 ---
 source: code/tui/src/app/inline/frame_tests.rs
-expression: "text(&render(&app, 80, 60))"
+expression: text(&completion)
 ---
                                                                                 
     ▄  ▄     Ash Code v0.1.0                                                    
@@ -61,4 +61,4 @@ expression: "text(&render(&app, 80, 60))"
 > /status                                                                       
 ────────────────────────────────────────────────────────────────────────────────
                                                                                 
-  ⏸ ask permissions on
+  ⏸ Manual

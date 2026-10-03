@@ -11,10 +11,10 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 7;
-// Version 10 requires an explicit execution target or null in session/create. An older server
-// interprets this request using its Workspace selector, so clients must reject that contract.
-pub const APP_SERVER_CAPABILITY_VERSION: u32 = 11;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 8;
+// Version 12 uses manual/auto permission IDs. Clients must reject older contracts before
+// sending a Turn, rather than silently selecting an unintended permission mode.
+pub const APP_SERVER_CAPABILITY_VERSION: u32 = 12;
 
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[
     CapabilityRequirement::exact("sessions", APP_SERVER_CAPABILITY_VERSION),

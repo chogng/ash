@@ -225,7 +225,7 @@ fn thread_snapshot() -> Thread {
             reasoning_effort: None,
             tool_profile: None,
             tool_mode: ash_protocol::ToolMode::Direct,
-            approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+            approval_mode: ash_protocol::ApprovalMode::Manual,
             usage: ash_protocol::ModelUsageSummary::default(),
             context_usage: None,
             items: vec![
@@ -268,7 +268,7 @@ fn thread_with_item(turn: &str, item: &str, text: &str) -> Thread {
             reasoning_effort: None,
             tool_profile: None,
             tool_mode: ash_protocol::ToolMode::Direct,
-            approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+            approval_mode: ash_protocol::ApprovalMode::Manual,
             usage: ash_protocol::ModelUsageSummary::default(),
             context_usage: None,
             items: vec![ThreadItem::UserMessage {

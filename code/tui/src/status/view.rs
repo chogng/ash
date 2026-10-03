@@ -168,8 +168,8 @@ fn styled_policy_line(
 
 fn mode_color(approval_mode: ApprovalMode, context: RenderContext<'_>) -> ratatui::style::Color {
     match approval_mode {
-        ApprovalMode::AskPermissions => context.warning(),
-        ApprovalMode::AutoReview => context.accent(),
+        ApprovalMode::Manual => context.warning(),
+        ApprovalMode::Auto => context.accent(),
         ApprovalMode::BypassPermissions => context.danger(),
     }
 }

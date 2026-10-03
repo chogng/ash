@@ -395,7 +395,7 @@ fn legacy_start_turn_without_host_skill_activations_remains_distinguishable() {
     let command: ThreadCommand = serde_json::from_value(json!({
         "type": "startTurn",
         "activatedSkills": [],
-        "approvalMode": "askPermissions",
+        "approvalMode": "manual",
         "input": [{ "type": "text", "text": "hello" }]
     }))
     .unwrap();
@@ -1192,4 +1192,42 @@ fn mode_change_events_round_trip_the_previous_mode_and_frozen_instructions() {
     assert_eq!(decoded.kind(), "turn.mode_changed");
     assert_eq!(decoded.thread_id(), &ThreadId::new("thread").unwrap());
     assert_eq!(serde_json::to_value(decoded).unwrap(), event);
+}
+#[test]
+fn permission_ids_are_closed_and_product_order_does_not_change_the_default() {
+    use crate::ApprovalMode;
+    assert_eq!(ApprovalMode::default(), ApprovalMode::Manual);
+    assert_eq!(
+        serde_json::to_value(ApprovalMode::ALL).unwrap(),
+        serde_json::json!(["auto", "manual", "bypassPermissions"])
+    );
+    for old_id in [
+        "askPermissions",
+        "autoReview",
+        "mannual",
+        "plan",
+        "acceptEdits",
+    ] {
+        assert!(serde_json::from_value::<ApprovalMode>(serde_json::json!(old_id)).is_err());
+    }
+    for mode in ApprovalMode::ALL {
+        assert_eq!(serde_json::to_value(mode).unwrap(), mode.id());
+        let definition = mode.definition();
+        assert_eq!(definition.id, mode);
+        assert_eq!(
+            definition.requires_confirmation,
+            mode == ApprovalMode::BypassPermissions
+        );
+        for message in [definition.label, definition.description] {
+            assert!(!message.key.is_empty());
+            for text in [
+                message.english,
+                message.chinese,
+                message.japanese,
+                message.french,
+            ] {
+                assert!(!text.is_empty());
+            }
+        }
+    }
 }

@@ -110,7 +110,7 @@ fn start(
             )
             .unwrap(),
             policy_revision: "policy".into(),
-            approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+            approval_mode: ash_protocol::ApprovalMode::Manual,
             tool_mode: ash_protocol::ToolMode::Direct,
             tool_profile: None,
             activated_skills: vec![],

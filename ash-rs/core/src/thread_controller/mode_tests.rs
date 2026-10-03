@@ -59,7 +59,7 @@ impl Fixture {
                         })
                         .with_mode(&mode_instructions(mode)),
                     policy_revision: "mode-policy".into(),
-                    approval_mode: ApprovalMode::AskPermissions,
+                    approval_mode: ApprovalMode::Manual,
                     tool_mode: ash_protocol::ToolMode::Direct,
                     tool_profile: None,
                     activated_skills: Vec::new(),

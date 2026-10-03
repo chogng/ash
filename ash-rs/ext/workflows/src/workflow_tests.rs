@@ -85,7 +85,7 @@ impl Fixture {
             kind: protocol::TurnKind::Coding,
             instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
             policy_revision: "workflow-test".into(),
-            approval_mode: protocol::ApprovalMode::AskPermissions,
+            approval_mode: protocol::ApprovalMode::Manual,
             tool_mode: protocol::ToolMode::Direct,
             tool_profile: Some(ToolProfileSnapshot {
                 id: "test".into(),

@@ -16,11 +16,10 @@ import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { ChatDragAndDrop } from '../../../../workbench/contrib/chat/browser/widget/chatDragAndDrop.js';
 import { NewChatContextAttachments } from './newChatContextAttachments.js';
+import { NewChatPermissionPicker } from './newChatPermissionPicker.js';
+import { approvalModeDefinition } from '../../../../platform/sessions/common/approvalModes.js';
 import { NewChatInputPasteTarget } from './newChatInputPasteTarget.js';
 import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
-import { IMenuService } from '../../../../platform/actions/common/actions.js';
-import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { Menus } from '../../../browser/menus.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { SessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
@@ -59,8 +58,6 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
 		@INotificationService notifications: INotificationService,
 		@IInstantiationService instantiationService: IInstantiationService,
-		@IMenuService menuService: IMenuService,
-		@IContextKeyService contextKeys: IContextKeyService,
 		@IStorageService private readonly storage: IStorageService,
 		@ILifecycleService lifecycle: ILifecycleService,
 	) {
@@ -117,28 +114,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.permissionButton.setAttribute('aria-expanded', 'false');
 		footer.append(this.permissionButton);
 		this.element.append(footer);
-		const scopedContext = this._register(contextKeys.createScoped(this.element));
-		const approvalMode = scopedContext.createKey('sessionsChatApprovalMode', this.model.inputState.approvalMode);
-		const permissionMenu = this._register(menuService.createMenu(Menus.NewSessionControl, scopedContext));
-		this._register(addDisposableListener(this.permissionButton, 'click', () => {
-			this.permissionButton.setAttribute('aria-expanded', 'true');
-			contextMenus.showContextMenu({
-				getAnchor: () => this.permissionButton,
-				getActions: () => permissionMenu.getActions({ arg: this.model }).flatMap(([, actions]) => actions),
-				getCheckedActionsRepresentation: () => 'radio',
-				autoSelectFirstItem: true,
-				onHide: () => {
-					this.permissionButton.setAttribute('aria-expanded', 'false');
-					this.permissionButton.focus();
-				},
-			});
-		}));
-		this._register(addDisposableListener(this.permissionButton, 'keydown', event => {
-			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-				event.preventDefault();
-				this.permissionButton.click();
-			}
-		}));
+		this._register(instantiationService.createInstance(NewChatPermissionPicker, this.permissionButton, this.model));
 		this._register(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())));
 		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
@@ -168,7 +144,6 @@ export class NewChatInputWidget extends ChatInputPart {
 			}
 		}));
 		this._register(model.onDidChange(() => {
-			approvalMode.set(this.model.inputState.approvalMode);
 			if (this.displayedThreadId !== model.threadId) {
 				// Materializing the draft does not start another conversation; switching an existing Thread does.
 				if (this.displayedThreadId !== undefined) {
@@ -249,9 +224,8 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.heading.hidden = hasConversation;
 		this.tips.update();
 		const permission = this.model.inputState.approvalMode;
-		const label = permission === 'bypassPermissions' ? localize('sessions.chat.permission.full', 'Full access')
-			: permission === 'autoReview' ? localize('sessions.chat.permission.auto', 'Automatic review')
-				: localize('sessions.chat.permission.ask', 'Manual confirmation');
+		const definition = approvalModeDefinition(permission);
+		const label = localize(definition.label.key, definition.label.text);
 		this.permissionButton.textContent = label;
 		this.permissionButton.setAttribute('aria-label', localize('sessions.chat.permission.label', 'Permissions: {0}', label));
 		this.permissionButton.disabled = this.model.inputState.phase === 'submitting';

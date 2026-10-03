@@ -637,7 +637,7 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
                 model: None,
                 reasoning_effort: None,
                 policy_revision: "policy-v1".into(),
-                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
@@ -682,7 +682,7 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
             model: None,
             reasoning_effort: None,
             policy_revision: "policy-v1".into(),
-            approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+            approval_mode: ash_protocol::ApprovalMode::Manual,
             tool_mode: ash_protocol::ToolMode::Direct,
             tool_profile: None,
             activated_skills: Vec::new(),
@@ -1170,7 +1170,7 @@ fn fixture_with_agent(
                 model: None,
                 reasoning_effort: None,
                 policy_revision: "policy-v1".into(),
-                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode,
                 tool_profile: None,
                 activated_skills: Vec::new(),
@@ -1340,7 +1340,7 @@ fn root_role_and_default_worker_share_rules_without_inheriting_responsibilities(
                 .join("\n");
             assert!(body.contains("Shared working rules"));
             assert!(body.contains("## Tool permissions"));
-            assert!(body.contains("Approval mode is `askPermissions`"));
+            assert!(body.contains("Approval mode is `manual`"));
             assert_eq!(
                 body.contains("PARENT_ROLE_ONLY_MARKER"),
                 expects_parent_role

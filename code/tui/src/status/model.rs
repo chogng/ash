@@ -862,17 +862,17 @@ pub(super) fn approval_mode_text(approval: TurnApprovalModes) -> String {
 
 pub(super) fn approval_mode_display(approval_mode: ApprovalMode) -> ApprovalModeDisplay {
     match approval_mode {
-        ApprovalMode::AskPermissions => ApprovalModeDisplay {
+        ApprovalMode::Manual => ApprovalModeDisplay {
             icon: "⏸",
-            label: "ask permissions on",
+            label: approval_mode.definition().label.english,
         },
-        ApprovalMode::AutoReview => ApprovalModeDisplay {
+        ApprovalMode::Auto => ApprovalModeDisplay {
             icon: "⏩",
-            label: "auto review on",
+            label: approval_mode.definition().label.english,
         },
         ApprovalMode::BypassPermissions => ApprovalModeDisplay {
             icon: "▶",
-            label: "bypass permissions on",
+            label: approval_mode.definition().label.english,
         },
     }
 }

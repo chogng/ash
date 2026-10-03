@@ -672,13 +672,7 @@ fn policy_stays_below_input_and_inline_tips_do_not_fade() {
     app.show_policy_tip(started);
     let before = render(&app, 80, 32);
     let areas = super::layout(&app, before.area).session;
-    assert!(
-        text(&before)
-            .lines()
-            .last()
-            .unwrap()
-            .contains("⏸ ask permissions on")
-    );
+    assert!(text(&before).lines().last().unwrap().contains("⏸ Manual"));
     assert!(!app.handle_tick(started + Duration::from_secs(4)));
     assert_eq!(render(&app, 80, 32), before);
     assert!(app.handle_tick(started + Duration::from_secs(5)));
@@ -691,13 +685,7 @@ fn policy_stays_below_input_and_inline_tips_do_not_fade() {
             .trim()
             .is_empty()
     );
-    assert!(
-        text(&after)
-            .lines()
-            .last()
-            .unwrap()
-            .contains("⏸ ask permissions on")
-    );
+    assert!(text(&after).lines().last().unwrap().contains("⏸ Manual"));
 }
 
 #[test]

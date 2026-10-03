@@ -1173,7 +1173,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                         && command_model == model
                         && tool_profile.is_none()
                         && *tool_mode == ToolMode::Direct
-                        && *approval_mode == ApprovalMode::AskPermissions
+                        && *approval_mode == ApprovalMode::Manual
                         && activated_skills.is_empty()
                 }
                 _ => false,
@@ -2463,7 +2463,7 @@ fn import_history(
             reasoning_effort: turn.reasoning_effort,
             advisor: turn.advisor.clone(),
             policy_revision: "imported-history-policy".into(),
-            approval_mode: ApprovalMode::AskPermissions,
+            approval_mode: ApprovalMode::Manual,
             tool_mode: turn.tool_mode,
             activated_skills: Vec::new(),
             failure: turn.error.clone(),
@@ -2571,7 +2571,7 @@ fn append_imported_turn(
         reasoning_effort: turn.reasoning_effort,
         advisor: turn.advisor.clone(),
         policy_revision: "imported-history-policy".into(),
-        approval_mode: ApprovalMode::AskPermissions,
+        approval_mode: ApprovalMode::Manual,
         tool_mode: turn.tool_mode,
         activated_skills: Vec::new(),
         failure: turn.error.clone(),

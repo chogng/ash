@@ -2341,8 +2341,8 @@
     },
     "ApprovalMode": {
       "enum": [
-        "askPermissions",
-        "autoReview",
+        "manual",
+        "auto",
         "bypassPermissions"
       ],
       "type": "string"
@@ -35313,7 +35313,7 @@
           "properties": {
             "approvalMode": {
               "$ref": "#/$defs/ApprovalMode",
-              "default": "askPermissions"
+              "default": "manual"
             },
             "expectedSequence": {
               "format": "uint64",
@@ -35408,7 +35408,7 @@
           "properties": {
             "approvalMode": {
               "$ref": "#/$defs/ApprovalMode",
-              "default": "askPermissions"
+              "default": "manual"
             },
             "command": {
               "type": "string"
@@ -39239,7 +39239,7 @@
             },
             "approvalMode": {
               "$ref": "#/$defs/ApprovalMode",
-              "default": "askPermissions"
+              "default": "manual"
             },
             "instructions": {
               "anyOf": [
@@ -41905,7 +41905,7 @@
         },
         "approvalMode": {
           "$ref": "#/$defs/ApprovalMode",
-          "default": "askPermissions"
+          "default": "manual"
         },
         "contextUsage": {
           "anyOf": [

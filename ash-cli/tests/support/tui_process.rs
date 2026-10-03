@@ -528,7 +528,7 @@ impl TuiProcess {
         // Confirming the current policy refreshes the hint without changing its value.
         self.wait_for_clipboard_tip_to_expire();
         self.submit("/policy");
-        self.wait_for_stable_screen("bypass-permissions");
+        self.wait_for_stable_screen("Bypass permissions");
         self.enter();
         self.wait_for_stable_screen("/policy to change permissions");
     }

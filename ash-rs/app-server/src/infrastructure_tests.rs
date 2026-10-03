@@ -1431,7 +1431,7 @@ fn queue_steering_rejects_a_different_mode_without_changing_the_active_turn() {
                 ),
                 policy_revision: "queue-test".into(),
                 activated_skills: Vec::new(),
-                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 input: vec![ash_protocol::UserInput::Text {
@@ -1502,7 +1502,7 @@ fn queued_modes_survive_reopen_and_use_the_same_init_entrypoint() {
         let (session, thread) = create(&server, &mut connection);
         let params = json!({"commandId":"queued-mode","sessionId":session,"threadId":thread,
             "mode":mode,"reasoningEffort":"high","input":[{"type":"text","text":"/init"}],
-            "approvalMode":"askPermissions"});
+            "approvalMode":"manual"});
         let response = call(
             &server,
             &mut connection,

@@ -44,7 +44,7 @@ fn turn_request() -> ash_core::StartTurnRequest {
         instructions: ash_protocol::TurnInstructions::new("test", "test", "1", "test instructions")
             .unwrap(),
         policy_revision: "policy".into(),
-        approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+        approval_mode: ash_protocol::ApprovalMode::Manual,
         tool_mode: ash_protocol::ToolMode::Direct,
         tool_profile: None,
         activated_skills: vec![],

@@ -174,7 +174,7 @@ fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() 
                     .y
             ))
             .unwrap()
-            .contains("ask permissions on")
+            .contains("Manual")
     );
     assert_eq!(
         rendered.lines().last().unwrap().trim_end(),
@@ -643,7 +643,7 @@ fn empty_session_input_offers_manager_navigation() {
     assert!(!rows[19].contains("permissions on"));
     assert!(
         rows[usize::from(layout(&app, Rect::new(0, 0, 80, 20)).session.top_tip.y)]
-            .contains("⏸ ask permissions on")
+            .contains("⏸ Manual")
     );
 
     assert!(app.handle_tick(Instant::now() + Duration::from_secs(10)));
@@ -677,7 +677,7 @@ fn narrow_session_prioritizes_policy_above_input_and_keeps_shortcuts_below() {
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert_eq!(rows[top_tip_row].trim(), "⏸ ask permissions on");
+    assert_eq!(rows[top_tip_row].trim(), "⏸ Manual");
     assert!(!rows[top_tip_row].contains("shift+tab"));
     assert_eq!(rows[19].trim_end(), "  Enter send");
 }
@@ -786,21 +786,18 @@ fn pending_steer_is_shown_once_in_chat_history() {
 fn top_tip_shows_permission_modes_above_input_shortcuts() {
     let mut app = App::new();
     for (mode, label) in [
-        (
-            ash_protocol::ApprovalMode::AskPermissions,
-            "⏸ ask permissions on",
-        ),
-        (ash_protocol::ApprovalMode::AutoReview, "⏩  auto review on"),
+        (ash_protocol::ApprovalMode::Manual, "⏸ Manual"),
+        (ash_protocol::ApprovalMode::Auto, "⏩  Auto"),
         (
             ash_protocol::ApprovalMode::BypassPermissions,
-            "▶ bypass permissions on",
+            "▶ Bypass permissions",
         ),
     ] {
         app.set_next_approval_mode(mode);
         let screen = render(&app, 100, 20);
         let hints = screen.lines().last().unwrap().trim_end();
         assert!(hints.starts_with("  Enter send"));
-        assert!(!hints.contains("permissions on") && !hints.contains("auto review on"));
+        assert!(!hints.contains("permissions on") && !hints.contains("Auto"));
         let top_tip = layout(&app, Rect::new(0, 0, 100, 20)).session.top_tip;
         assert!(
             screen
@@ -895,12 +892,12 @@ fn top_tip_uses_a_distinct_color_for_each_approval_mode_symbol() {
     let mut app = App::new();
     for (mode, icon, color) in [
         (
-            ash_protocol::ApprovalMode::AskPermissions,
+            ash_protocol::ApprovalMode::Manual,
             "⏸",
             test_context().warning(),
         ),
         (
-            ash_protocol::ApprovalMode::AutoReview,
+            ash_protocol::ApprovalMode::Auto,
             "⏩",
             test_context().accent(),
         ),
@@ -927,8 +924,8 @@ fn top_tip_uses_a_distinct_color_for_each_approval_mode_symbol() {
 #[test]
 fn top_tip_colors_current_and_next_modes_independently() {
     let mut app = App::new();
-    app.set_current_approval_mode(Some(ash_protocol::ApprovalMode::AskPermissions));
-    app.set_next_approval_mode(ash_protocol::ApprovalMode::AutoReview);
+    app.set_current_approval_mode(Some(ash_protocol::ApprovalMode::Manual));
+    app.set_next_approval_mode(ash_protocol::ApprovalMode::Auto);
     let buffer = render_buffer(&app, 120, 20);
     let row = layout(&app, buffer.area).session.top_tip.y;
     let current = (0..120)
@@ -1078,7 +1075,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
 
     let policy_changed = first_tip_expired + Duration::from_secs(1);
     app.cycle_next_approval_mode(policy_changed);
-    assert_eq!(app.approval_mode(), ash_protocol::ApprovalMode::AutoReview);
+    assert_eq!(app.approval_mode(), ash_protocol::ApprovalMode::Auto);
     let after_change = render(&app, 80, 20);
     assert!(
         after_change
@@ -1169,12 +1166,12 @@ fn entire_top_tip_holds_then_fades_without_moving_the_composer() {
 fn policy_changes_restart_the_fade_and_keep_current_and_next_modes_visible() {
     let mut app = App::new();
     let started = Instant::now();
-    app.set_current_approval_mode(Some(ash_protocol::ApprovalMode::AskPermissions));
+    app.set_current_approval_mode(Some(ash_protocol::ApprovalMode::Manual));
     app.cycle_next_approval_mode(started);
-    assert_eq!(app.approval_mode(), ash_protocol::ApprovalMode::AutoReview);
+    assert_eq!(app.approval_mode(), ash_protocol::ApprovalMode::Auto);
     let visible = render(&app, 120, 20);
-    assert!(visible.contains("current: ask permissions on"));
-    assert!(visible.contains("next: auto review on"));
+    assert!(visible.contains("current: Manual"));
+    assert!(visible.contains("next: Auto"));
     crate::tui_assert_snapshot!("policy_top_tip_current_and_next", visible);
     assert!(app.handle_tick(started + Duration::from_secs(4)));
     app.cycle_next_approval_mode(started + Duration::from_secs(4));
@@ -1185,7 +1182,7 @@ fn policy_changes_restart_the_fade_and_keep_current_and_next_modes_visible() {
     let restarted = render_buffer(&app, 120, 20);
     let row = layout(&app, Rect::new(0, 0, 120, 20)).session.top_tip.y;
     assert_eq!(restarted[(2, row)].fg, test_context().warning());
-    assert!(render(&app, 120, 20).contains("next: bypass permissions on"));
+    assert!(render(&app, 120, 20).contains("next: Bypass permissions"));
     assert!(!app.handle_tick(started + Duration::from_secs(7)));
     assert!(app.handle_tick(started + Duration::from_secs(9)));
     crate::tui_assert_snapshot!("policy_top_tip_expired", render(&app, 120, 20));
@@ -1303,7 +1300,7 @@ fn policy_change_shows_the_new_mode_before_the_first_submission() {
 
     let rendered = render(&app, 80, 20);
     assert!(!rendered.contains("← Dashboard"));
-    assert!(rendered.contains("auto review on"));
+    assert!(rendered.contains("Auto"));
     assert!(rendered.contains("/policy to change permissions"));
 }
 
@@ -1370,7 +1367,7 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
     assert!(!rows[19].contains("permissions on"));
     assert!(
         rows[usize::from(layout(&app, Rect::new(0, 0, 80, 20)).session.top_tip.y)]
-            .contains("⏸ ask permissions on")
+            .contains("⏸ Manual")
     );
 }
 
@@ -1389,7 +1386,7 @@ fn turn_activity_does_not_replace_the_permission_mode_in_top_tip() {
             .lines()
             .nth(usize::from(top_tip.y))
             .unwrap()
-            .contains("⏸ ask permissions on")
+            .contains("⏸ Manual")
     );
     assert!(status_line.starts_with("  Enter send"));
     assert!(!status_line.contains("Working"));
@@ -1504,12 +1501,12 @@ fn completed_error_remains_visible_in_the_scrollable_transcript() {
     let rows = rendered.lines().collect::<Vec<_>>();
 
     assert!(rendered.contains("The configured model is unavailable."));
-    assert!(rendered.contains("ask permissions on"));
+    assert!(rendered.contains("Manual"));
     assert!(!rows.iter().any(|line| line.trim() == "error"));
     assert!(!rows[19].contains("permissions on"));
     assert!(
         rows[usize::from(layout(&app, Rect::new(0, 0, 80, 20)).session.top_tip.y)]
-            .contains("⏸ ask permissions on")
+            .contains("⏸ Manual")
     );
     assert!(!rendered.contains("ready to retry"));
     assert!(!rendered.contains("esc esc rewind"));

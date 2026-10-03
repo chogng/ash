@@ -159,7 +159,7 @@ fn ask_permissions_keeps_the_same_action_interactive() {
         crate::decide_turn_action(
             service,
             "policy-1",
-            ApprovalMode::AskPermissions,
+            ApprovalMode::Manual,
             &request,
             &CancellationSource::new().token(),
         )

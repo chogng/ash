@@ -494,7 +494,7 @@ function session(sessionId: SessionId, threadId: ThreadId): ISession {
 		sessionId,
 		title: sessionId,
 		status: "active",
-		nextApprovalMode: "askPermissions",
+		nextApprovalMode: "manual",
 		chats: [{ threadId, origin: { type: "root" }, status: "active" }],
 	};
 }

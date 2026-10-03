@@ -1,4 +1,6 @@
+#[path = "config/patch.rs"]
 mod patch;
+#[path = "config/values.rs"]
 mod values;
 
 pub use patch::Patch;

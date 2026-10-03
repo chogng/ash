@@ -140,8 +140,8 @@ pub(crate) fn required_interaction(turn: &Turn) -> Option<ExecRequiredInteractio
 
 pub(crate) fn protocol_approval_mode(mode: HeadlessApprovalMode) -> ApprovalMode {
     match mode {
-        HeadlessApprovalMode::DenyInteractiveRequests => ApprovalMode::AskPermissions,
-        HeadlessApprovalMode::AutomaticReview => ApprovalMode::AutoReview,
+        HeadlessApprovalMode::DenyInteractiveRequests => ApprovalMode::Manual,
+        HeadlessApprovalMode::AutomaticReview => ApprovalMode::Auto,
         HeadlessApprovalMode::BypassPermissions => ApprovalMode::BypassPermissions,
     }
 }

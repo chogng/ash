@@ -69,7 +69,7 @@ fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                     policy_revision: port.policy.revision(),
-                    approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                    approval_mode: ash_protocol::ApprovalMode::Manual,
                     tool_mode: ash_protocol::ToolMode::Direct,
                     tool_profile: None,
                     activated_skills: Vec::new(),

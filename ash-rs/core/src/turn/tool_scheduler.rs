@@ -428,7 +428,7 @@ impl ToolScheduler {
                 &reviewed,
                 cancellation,
             )?;
-            if approval_mode == ash_protocol::ApprovalMode::AutoReview
+            if approval_mode == ash_protocol::ApprovalMode::Auto
                 && self.threads.read_thread(thread_id)?.sequence != snapshot.sequence
             {
                 refreshes += 1;

@@ -12,7 +12,7 @@ expression: "text(&render(&app, 40, 16))"
   │  Help and shortcuts              │  
   │> Quit                            │  
   ╰──────────────────────────────────╯  
-  ⏸ ask permissions on                  
+  ⏸ Manual   Type a task · Tab actions  
   ────────────────────────────────────  
   > Build anything                      
   ─────────────────── Automatic model   

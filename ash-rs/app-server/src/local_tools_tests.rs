@@ -710,7 +710,7 @@ fn agent_commands_and_sessions_use_the_selected_repository_through_the_tool_port
                 model: None,
                 reasoning_effort: None,
                 policy_revision: combined.policy.revision(),
-                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),

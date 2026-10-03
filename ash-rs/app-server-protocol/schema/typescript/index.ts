@@ -10,6 +10,7 @@ export type { WebWorkspaceListResult } from './WebWorkspaceListResult.js';
 export type { WebWorkspaceOpenRequest } from './WebWorkspaceOpenRequest.js';
 export { APP_SERVER_METHODS } from './AppServerRequestMap.js';
 export { PRODUCT_SLASH_COMMANDS } from './ProductSlashCommands.js';
+export { APPROVAL_MODE_DEFINITIONS } from './ApprovalModes.js';
 export type { AppServerMethod, AppServerMethodDefinition, AppServerRequest, AppServerRequestMap, AppServerResponse, MethodParams, MethodResult } from './AppServerRequestMap.js';
 export { APP_SERVER_NOTIFICATIONS } from './AppServerNotificationMap.js';
 export type { AppServerNotificationDefinition, AppServerNotificationMap, AppServerNotificationMethod, AppServerWireNotification, NotificationParams, ServerNotification } from './AppServerNotificationMap.js';

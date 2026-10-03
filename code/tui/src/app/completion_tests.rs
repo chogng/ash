@@ -185,7 +185,7 @@ fn status_line_context_follows_thread_snapshots() {
             reasoning_effort: None,
             tool_profile: None,
             tool_mode: ash_protocol::ToolMode::Direct,
-            approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+            approval_mode: ash_protocol::ApprovalMode::Manual,
             usage: Default::default(),
             context_usage: Some(ModelContextUsage {
                 used_tokens: 40,

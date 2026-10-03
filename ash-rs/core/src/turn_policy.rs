@@ -174,7 +174,7 @@ pub fn decide_turn_action(
         return Ok(decision);
     }
     match approval_mode {
-        ApprovalMode::AskPermissions => Ok(decision),
+        ApprovalMode::Manual => Ok(decision),
         ApprovalMode::BypassPermissions => Ok(ExecutionDecision::RunWithPermissionBypass(
             PermissionBypassGrant::new(
                 request.action().digest().clone(),
@@ -182,7 +182,7 @@ pub fn decide_turn_action(
                 request.action_policy_revision().clone(),
             ),
         )),
-        ApprovalMode::AutoReview => Ok(policy
+        ApprovalMode::Auto => Ok(policy
             .review_approval(request, cancellation)?
             .unwrap_or(decision)),
     }

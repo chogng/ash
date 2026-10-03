@@ -616,7 +616,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
             model: None,
             reasoning_effort: None,
             policy_revision: "test-policy-v1".into(),
-            approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+            approval_mode: ash_protocol::ApprovalMode::Manual,
             tool_mode: ash_protocol::ToolMode::Direct,
             activated_skills: Vec::new(),
             failure: None,

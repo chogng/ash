@@ -83,5 +83,5 @@ class MemoryProvider extends Disposable implements ISessionsProvider {
 }
 
 function session(id: string, root: string): ISession {
-	return { sessionId: id, title: id, status: 'active', nextApprovalMode: 'askPermissions', workspace: { authorityId: 'local', root }, chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }] };
+	return { sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', workspace: { authorityId: 'local', root }, chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }] };
 }

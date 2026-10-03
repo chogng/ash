@@ -33,8 +33,8 @@ fn status_line_combines_plan_subagents_model_branch_and_changes() {
         "plan 1/3 · subagents 1 · claude-sonnet · main · 1 change"
     );
     assert_eq!(
-        status_line.policy_text_for_width(100, ApprovalMode::AskPermissions),
-        "⏸ ask permissions on"
+        status_line.policy_text_for_width(100, ApprovalMode::Manual),
+        "⏸ Manual"
     );
 }
 
@@ -259,16 +259,16 @@ fn approval_modes_use_pause_fast_forward_and_play_symbols() {
     let status_line = StatusLineModel::new();
 
     assert_eq!(
-        status_line.policy_text_for_width(80, ApprovalMode::AskPermissions),
-        "⏸ ask permissions on"
+        status_line.policy_text_for_width(80, ApprovalMode::Manual),
+        "⏸ Manual"
     );
     assert_eq!(
-        status_line.policy_text_for_width(80, ApprovalMode::AutoReview),
-        "⏩ auto review on"
+        status_line.policy_text_for_width(80, ApprovalMode::Auto),
+        "⏩ Auto"
     );
     assert_eq!(
         status_line.policy_text_for_width(80, ApprovalMode::BypassPermissions),
-        "▶ bypass permissions on"
+        "▶ Bypass permissions"
     );
 }
 
@@ -280,11 +280,11 @@ fn running_turn_and_next_turn_are_both_explicit_when_the_modes_differ() {
         status_line.policy_text_for_width(
             100,
             TurnApprovalModes {
-                current: Some(ApprovalMode::AskPermissions),
-                next: ApprovalMode::AutoReview,
+                current: Some(ApprovalMode::Manual),
+                next: ApprovalMode::Auto,
             },
         ),
-        "⏸ current: ask permissions on · ⏩ next: auto review on"
+        "⏸ current: Manual · ⏩ next: Auto"
     );
 }
 
@@ -303,7 +303,7 @@ fn configured_items_can_be_hidden_independently() {
         "claude-sonnet · 1 change"
     );
     assert_eq!(
-        status_line.policy_text_for_width(80, ApprovalMode::AutoReview),
+        status_line.policy_text_for_width(80, ApprovalMode::Auto),
         ""
     );
 }
@@ -366,7 +366,7 @@ fn status_line_with_every_item_disabled_is_empty() {
         ""
     );
     assert_eq!(
-        status_line.policy_text_for_width(80, ApprovalMode::AskPermissions),
+        status_line.policy_text_for_width(80, ApprovalMode::Manual),
         ""
     );
 }

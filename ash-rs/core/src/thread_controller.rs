@@ -1595,7 +1595,7 @@ impl ThreadController {
                     mode: ash_protocol::CollaborationMode::Agent,
                     instructions: None,
                     policy_revision: request.policy_revision.clone(),
-                    approval_mode: ApprovalMode::AskPermissions,
+                    approval_mode: ApprovalMode::Manual,
                     tool_mode: ash_protocol::ToolMode::Direct,
                     activated_skills: Vec::new(),
                     model: request.model.clone(),

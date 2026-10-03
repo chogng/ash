@@ -11,7 +11,7 @@ use ash_protocol::ThreadId;
 fn resume_request_preserves_the_selected_session_and_thread() {
     let thread_id = ThreadId::new("thread-2").unwrap();
     let request = prepare_command(
-        ApprovalMode::AskPermissions,
+        ApprovalMode::Manual,
         Command::Resume {
             session_id: "session-1".into(),
             preferred_thread_id: Some(thread_id.clone()),
@@ -32,7 +32,7 @@ fn archive_request_preserves_all_selected_sessions() {
     let first = SessionId::new("session-1").unwrap();
     let second = SessionId::new("session-2").unwrap();
     let request = prepare_command(
-        ApprovalMode::AskPermissions,
+        ApprovalMode::Manual,
         Command::Archive {
             session_ids: vec![first.clone(), second.clone()],
         },
@@ -73,7 +73,7 @@ fn manager_request_preserves_submission_and_approval_mode() {
 fn switch_request_preserves_the_selected_thread() {
     let thread_id = ThreadId::new("thread-2").unwrap();
     let request = prepare_command(
-        ApprovalMode::AskPermissions,
+        ApprovalMode::Manual,
         Command::SwitchThread {
             thread_id: thread_id.clone(),
         },

@@ -5,6 +5,7 @@ import type { SkillReference } from "../../../../platform/skills/common/skillApi
 import type { ModelReasoningEffort } from "./modelCatalog.js";
 import type { ResolvedChatContext } from "./chatContextService.js";
 import type { SessionMode } from '../../../../platform/sessions/common/sessionApi.js';
+import type { ApprovalMode } from '../../../../platform/sessions/common/approvalModes.js';
 
 export type { ModelCatalogEntry } from "./modelCatalog.js";
 
@@ -23,7 +24,7 @@ export interface ChatAgent {
 	readonly sourceId: string;
 }
 
-export type ApprovalMode = "askPermissions" | "autoReview" | "bypassPermissions";
+export type { ApprovalMode } from '../../../../platform/sessions/common/approvalModes.js';
 
 export interface ModelProviderCredentialStatus {
 	readonly connection: string;

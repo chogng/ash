@@ -23,8 +23,8 @@ pub enum Personality {
 #[serde(rename_all = "camelCase")]
 pub enum ApprovalMode {
     #[default]
-    AskPermissions,
-    AutoReview,
+    Manual,
+    Auto,
     BypassPermissions,
 }
 

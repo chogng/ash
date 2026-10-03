@@ -83,7 +83,7 @@ fn start_turn_reasoning_effort_round_trips_and_legacy_requests_use_default() {
             "threadId": "thread-1",
             "expectedSequence": 1,
             "mode": "plan",
-            "approvalMode": "askPermissions",
+            "approvalMode": "manual",
             "model": { "provider": "openai", "model": "gpt-6-astra" },
             "reasoningEffort": "high",
             "input": [{ "type": "text", "text": "hello" }]
@@ -1030,7 +1030,7 @@ fn audio_upload_and_turn_input_round_trip_without_image_fields() {
 fn queued_mode_model_and_effort_round_trip_and_omitted_tool_mode_is_explicitly_unselected() {
     let value = serde_json::json!({"commandId":"queued", "sessionId":"session", "threadId":"thread",
         "input":[{"type":"text","text":"Explain the module"}], "mode":"ask",
-        "model":{"provider":"test", "model":"model"}, "reasoningEffort":"high", "approvalMode":"askPermissions"});
+        "model":{"provider":"test", "model":"model"}, "reasoningEffort":"high", "approvalMode":"manual"});
     let request: crate::protocol::queue::QueueEnqueueParams =
         serde_json::from_value(value.clone()).unwrap();
     assert_eq!(request.mode, ash_protocol::CollaborationMode::Ask);

@@ -1,6 +1,60 @@
 use super::*;
 use protocol::UserInput;
 
+#[test]
+fn old_permission_ids_migrate_once_without_changing_queue_delivery_or_revisions() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("state.sqlite");
+    let store = QueueStore::open(&path).unwrap();
+    let mut requests = Vec::new();
+    for (id, mode) in [
+        ("manual", protocol::ApprovalMode::Manual),
+        ("auto", protocol::ApprovalMode::Auto),
+        (
+            "bypassPermissions",
+            protocol::ApprovalMode::BypassPermissions,
+        ),
+    ] {
+        let mut request = input(id);
+        request.approval_mode = mode;
+        request.input = vec![UserInput::Text {
+            text: "askPermissions autoReview".into(),
+        }];
+        requests.push(store.enqueue(&request).unwrap());
+    }
+    drop(store);
+    let connection = Connection::open(&path).unwrap();
+    connection.execute_batch("UPDATE queue_metadata SET version=1 WHERE id=1;
+        UPDATE queued_messages SET request=json_set(request,'$.approvalMode','askPermissions') WHERE id='manual';
+        UPDATE queued_messages SET request=json_set(request,'$.approvalMode','autoReview') WHERE id='auto';").unwrap();
+    drop(connection);
+    for _ in 0..2 {
+        let store = QueueStore::open(&path).unwrap();
+        assert_eq!(
+            store
+                .list(
+                    &requests[0].request.session_id,
+                    &requests[0].request.thread_id
+                )
+                .unwrap(),
+            requests
+        );
+        assert_eq!(store.candidates(1).unwrap(), requests[..1]);
+        for expected in &requests {
+            assert_eq!(store.enqueue(&expected.request).unwrap(), *expected);
+        }
+        let connection = Connection::open(&path).unwrap();
+        assert_eq!(
+            connection
+                .query_row("SELECT version FROM queue_metadata WHERE id=1", [], |row| {
+                    row.get::<_, u32>(0)
+                })
+                .unwrap(),
+            2
+        );
+    }
+}
+
 fn input(id: &str) -> QueueInput {
     QueueInput {
         mode: Default::default(),

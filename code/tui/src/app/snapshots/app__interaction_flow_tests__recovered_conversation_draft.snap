@@ -16,7 +16,7 @@ expression: "render(&restored, 80, 20)"
 
 
 
-  ⏸ ask permissions on
+  ⏸ Manual
   ────────────────────────────────────────────────────────────────────────────
   > conversation draft
   ─────────────────────────────────────────────────────────── Automatic model

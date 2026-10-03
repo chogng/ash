@@ -64,7 +64,7 @@ fn expressive_status_line_renders_emoji_bars_and_permission_text() {
                 frame,
                 frame.area(),
                 &model,
-                ash_protocol::ApprovalMode::AskPermissions.into(),
+                ash_protocol::ApprovalMode::Manual.into(),
                 runtime,
                 crate::render::test_context(),
             )

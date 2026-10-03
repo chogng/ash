@@ -270,7 +270,7 @@ class TestCatalog extends Disposable {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	public readonly materializedSessions = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string }>>(this, new Map());
-	public sessions: readonly ISession[] = ['a', 'b', 'c'].map(id => ({ sessionId: id, title: id, status: 'active', nextApprovalMode: 'askPermissions', chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }] }));
+	public sessions: readonly ISession[] = ['a', 'b', 'c'].map(id => ({ sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }] }));
 	public untitledSessions: readonly IUntitledChatSession[] = [];
 	public active: IActiveSessionThread | undefined = { session: this.sessions[0]!, threadId: 'a-thread' };
 	public activeUntitledSession: IUntitledChatSession | undefined;

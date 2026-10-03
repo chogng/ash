@@ -110,7 +110,7 @@ fn tool_call_durably_updates_the_running_turn_plan() {
                 model: None,
                 reasoning_effort: None,
                 policy_revision: "plan-policy-v1".into(),
-                approval_mode: ApprovalMode::AskPermissions,
+                approval_mode: ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),

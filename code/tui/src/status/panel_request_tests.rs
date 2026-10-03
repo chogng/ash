@@ -82,7 +82,7 @@ fn thread(model: ModelRef) -> Thread {
             reasoning_effort: None,
             tool_profile: None,
             tool_mode: ToolMode::Direct,
-            approval_mode: ApprovalMode::AskPermissions,
+            approval_mode: ApprovalMode::Manual,
             usage: ash_protocol::ModelUsageSummary::default(),
             context_usage: Some(ModelContextUsage {
                 used_tokens: 25_000,

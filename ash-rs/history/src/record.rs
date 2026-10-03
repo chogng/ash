@@ -10,8 +10,8 @@ use serde::de::Error;
 use serde::ser::SerializeStruct;
 
 /// Schema version written for newly persisted Thread history records.
-/// Version 22 records the selected collaboration approach independently of frozen prompt IDs.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 22;
+/// Version 23 uses manual/auto permission IDs. Older records retain their hashed byte representation.
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 23;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
 /// deterministic identity; current records must carry their explicitly allocated identity.
@@ -129,7 +129,10 @@ impl Serialize for StoredEvent {
         record.serialize_field("threadId", &self.thread_id)?;
         record.serialize_field("recordedAt", &self.recorded_at)?;
         if let Some(command) = &self.command {
-            record.serialize_field("command", command)?;
+            record.serialize_field(
+                "command",
+                &StoredCommandReceipt(command, self.schema_version),
+            )?;
         }
         record.serialize_field("event", &StoredThreadEvent(self))?;
         record.end()
@@ -145,8 +148,55 @@ impl Serialize for StoredThreadEvent<'_> {
     {
         // Old imported Turns must retain their byte representation: history prefixes are
         // addressed by a digest of their serialized records, not just their reduced state.
-        if self.0.schema_version < 22 {
+        if self.0.schema_version < 23 {
             match &self.0.event {
+                ThreadEvent::TurnAccepted {
+                    thread_id,
+                    turn_id,
+                    kind,
+                    mode,
+                    instructions,
+                    policy_revision,
+                    approval_mode,
+                    tool_mode,
+                    activated_skills,
+                    model,
+                    reasoning_effort,
+                    advisor,
+                    tool_profile,
+                } => {
+                    let mut event = serializer.serialize_struct("TurnAccepted", 15)?;
+                    event.serialize_field("type", "turnAccepted")?;
+                    event.serialize_field("threadId", thread_id)?;
+                    event.serialize_field("turnId", turn_id)?;
+                    event.serialize_field("kind", kind)?;
+                    if !mode.is_agent() {
+                        event.serialize_field("mode", mode)?;
+                    }
+                    if let Some(value) = instructions {
+                        event.serialize_field("instructions", value)?;
+                    }
+                    event.serialize_field("policyRevision", policy_revision)?;
+                    event.serialize_field(
+                        "approvalMode",
+                        &StoredApprovalMode(*approval_mode, self.0.schema_version),
+                    )?;
+                    event.serialize_field("toolMode", tool_mode)?;
+                    event.serialize_field("activatedSkills", activated_skills)?;
+                    if let Some(value) = model {
+                        event.serialize_field("model", value)?;
+                    }
+                    if let Some(value) = reasoning_effort {
+                        event.serialize_field("reasoningEffort", value)?;
+                    }
+                    if let Some(value) = advisor {
+                        event.serialize_field("advisor", value)?;
+                    }
+                    if let Some(value) = tool_profile {
+                        event.serialize_field("toolProfile", value)?;
+                    }
+                    return event.end();
+                }
                 ThreadEvent::HistoryImported {
                     thread_id,
                     source_thread_id,
@@ -158,7 +208,7 @@ impl Serialize for StoredThreadEvent<'_> {
                     event.serialize_field("threadId", thread_id)?;
                     event.serialize_field("sourceThreadId", source_thread_id)?;
                     event.serialize_field("beforeTurnId", before_turn_id)?;
-                    event.serialize_field("turns", &LegacyTurns(turns))?;
+                    event.serialize_field("turns", &LegacyTurns(turns, self.0.schema_version))?;
                     return event.end();
                 }
                 ThreadEvent::ForkHistoryImported {
@@ -172,7 +222,7 @@ impl Serialize for StoredThreadEvent<'_> {
                     event.serialize_field("threadId", thread_id)?;
                     event.serialize_field("sourceThreadId", source_thread_id)?;
                     event.serialize_field("sourceSequence", source_sequence)?;
-                    event.serialize_field("turns", &LegacyTurns(turns))?;
+                    event.serialize_field("turns", &LegacyTurns(turns, self.0.schema_version))?;
                     return event.end();
                 }
                 ThreadEvent::ForkTurnImported {
@@ -188,7 +238,7 @@ impl Serialize for StoredThreadEvent<'_> {
                     event.serialize_field("sourceThreadId", source_thread_id)?;
                     event.serialize_field("sourceSequence", source_sequence)?;
                     event.serialize_field("turnIndex", turn_index)?;
-                    event.serialize_field("turn", &LegacyTurn(turn))?;
+                    event.serialize_field("turn", &LegacyTurn(turn, self.0.schema_version))?;
                     return event.end();
                 }
                 _ => {}
@@ -230,8 +280,8 @@ impl Serialize for StoredThreadEvent<'_> {
     }
 }
 
-// This representation is fixed to the pre-22 stored schema; readable Turns always expose mode.
-struct LegacyTurn<'a>(&'a ash_protocol::Turn);
+// Stored history retains its original schema because prefix IDs hash its serialized bytes.
+struct LegacyTurn<'a>(&'a ash_protocol::Turn, u32);
 
 impl Serialize for LegacyTurn<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -240,6 +290,9 @@ impl Serialize for LegacyTurn<'_> {
         record.serialize_field("turnId", &turn.turn_id)?;
         record.serialize_field("status", &turn.status)?;
         record.serialize_field("kind", &turn.kind)?;
+        if self.1 >= 22 {
+            record.serialize_field("mode", &turn.mode)?;
+        }
         macro_rules! optional {
             ($name:literal, $value:expr) => {
                 if let Some(value) = $value {
@@ -253,7 +306,10 @@ impl Serialize for LegacyTurn<'_> {
         optional!("advisor", &turn.advisor);
         optional!("toolProfile", &turn.tool_profile);
         record.serialize_field("toolMode", &turn.tool_mode)?;
-        record.serialize_field("approvalMode", &turn.approval_mode)?;
+        record.serialize_field(
+            "approvalMode",
+            &StoredApprovalMode(turn.approval_mode, self.1),
+        )?;
         record.serialize_field("usage", &turn.usage)?;
         optional!("contextUsage", &turn.context_usage);
         record.serialize_field("items", &turn.items)?;
@@ -264,15 +320,145 @@ impl Serialize for LegacyTurn<'_> {
     }
 }
 
-struct LegacyTurns<'a>(&'a [ash_protocol::Turn]);
+struct LegacyTurns<'a>(&'a [ash_protocol::Turn], u32);
 impl Serialize for LegacyTurns<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeSeq;
         let mut turns = serializer.serialize_seq(Some(self.0.len()))?;
         for turn in self.0 {
-            turns.serialize_element(&LegacyTurn(turn))?;
+            turns.serialize_element(&LegacyTurn(turn, self.1))?;
         }
         turns.end()
+    }
+}
+
+struct StoredApprovalMode(ash_protocol::ApprovalMode, u32);
+
+impl Serialize for StoredApprovalMode {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if self.1 >= 23 {
+            return self.0.serialize(serializer);
+        }
+        serializer.serialize_str(match self.0 {
+            ash_protocol::ApprovalMode::Manual => "askPermissions",
+            ash_protocol::ApprovalMode::Auto => "autoReview",
+            ash_protocol::ApprovalMode::BypassPermissions => "bypassPermissions",
+        })
+    }
+}
+
+struct StoredCommandReceipt<'a>(&'a ThreadCommandReceipt, u32);
+
+impl Serialize for StoredCommandReceipt<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut receipt = serializer.serialize_struct("ThreadCommandReceipt", 2)?;
+        receipt.serialize_field("commandId", &self.0.command_id)?;
+        receipt.serialize_field("command", &StoredThreadCommand(&self.0.command, self.1))?;
+        receipt.end()
+    }
+}
+
+struct StoredThreadCommand<'a>(&'a ThreadCommand, u32);
+
+impl Serialize for StoredThreadCommand<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if self.1 >= 23 {
+            return self.0.serialize(serializer);
+        }
+        match self.0 {
+            ThreadCommand::StartTurn {
+                kind,
+                mode,
+                instructions,
+                model,
+                reasoning_effort,
+                advisor,
+                activated_skills,
+                host_activated_skills,
+                approval_mode,
+                tool_mode,
+                tool_profile,
+                input,
+            } => {
+                let mut command = serializer.serialize_struct("StartTurn", 13)?;
+                command.serialize_field("type", "startTurn")?;
+                command.serialize_field("kind", kind)?;
+                if !mode.is_agent() {
+                    command.serialize_field("mode", mode)?;
+                }
+                if let Some(value) = instructions {
+                    command.serialize_field("instructions", value)?;
+                }
+                if let Some(value) = model {
+                    command.serialize_field("model", value)?;
+                }
+                if let Some(value) = reasoning_effort {
+                    command.serialize_field("reasoningEffort", value)?;
+                }
+                if let Some(value) = advisor {
+                    command.serialize_field("advisor", value)?;
+                }
+                command.serialize_field("activatedSkills", activated_skills)?;
+                if let Some(value) = host_activated_skills {
+                    command.serialize_field("hostActivatedSkills", value)?;
+                }
+                command
+                    .serialize_field("approvalMode", &StoredApprovalMode(*approval_mode, self.1))?;
+                command.serialize_field("toolMode", tool_mode)?;
+                if let Some(value) = tool_profile {
+                    command.serialize_field("toolProfile", value)?;
+                }
+                command.serialize_field("input", input)?;
+                command.end()
+            }
+            ThreadCommand::StartShellTurn {
+                command,
+                approval_mode,
+            } => {
+                let mut value = serializer.serialize_struct("StartShellTurn", 3)?;
+                value.serialize_field("type", "startShellTurn")?;
+                value.serialize_field("command", command)?;
+                value
+                    .serialize_field("approvalMode", &StoredApprovalMode(*approval_mode, self.1))?;
+                value.end()
+            }
+            _ => self.0.serialize(serializer),
+        }
+    }
+}
+
+fn migrate_approval_field(value: &mut serde_json::Value) {
+    if let Some(approval) = value.get_mut("approvalMode") {
+        let current = match approval.as_str() {
+            Some("askPermissions") => Some("manual"),
+            Some("autoReview") => Some("auto"),
+            _ => None,
+        };
+        if let Some(current) = current {
+            *approval = current.into();
+        }
+    }
+}
+
+fn migrate_event_approval(event: &mut serde_json::Value) {
+    match event.get("type").and_then(serde_json::Value::as_str) {
+        Some("turnAccepted") => migrate_approval_field(event),
+        Some("historyImported" | "forkHistoryImported") => {
+            if let Some(turns) = event
+                .get_mut("turns")
+                .and_then(serde_json::Value::as_array_mut)
+            {
+                for turn in turns {
+                    migrate_approval_field(turn);
+                }
+            }
+        }
+        Some("forkTurnImported") => {
+            if let Some(turn) = event.get_mut("turn") {
+                migrate_approval_field(turn);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -292,11 +478,21 @@ impl<'de> Deserialize<'de> for StoredEvent {
             thread_id: ThreadId,
             recorded_at: Timestamp,
             #[serde(default)]
-            command: Option<ThreadCommandReceipt>,
+            command: Option<serde_json::Value>,
             event: serde_json::Value,
         }
 
         let mut record = Record::deserialize(deserializer)?;
+        if record.schema_version < 23 {
+            migrate_event_approval(&mut record.event);
+            if let Some(command) = record
+                .command
+                .as_mut()
+                .and_then(|receipt| receipt.get_mut("command"))
+            {
+                migrate_approval_field(command);
+            }
+        }
         if record.schema_version < 21
             && record.event.get("type").and_then(serde_json::Value::as_str) == Some("threadCreated")
         {
@@ -319,7 +515,11 @@ impl<'de> Deserialize<'de> for StoredEvent {
             sequence: record.sequence,
             thread_id: record.thread_id,
             recorded_at: record.recorded_at,
-            command: record.command,
+            command: record
+                .command
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(D::Error::custom)?,
             event: serde_json::from_value(record.event).map_err(D::Error::custom)?,
         })
     }

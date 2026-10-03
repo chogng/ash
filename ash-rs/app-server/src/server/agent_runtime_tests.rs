@@ -145,7 +145,7 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
                 model: None,
                 reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
-                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),

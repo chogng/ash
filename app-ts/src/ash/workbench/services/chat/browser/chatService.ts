@@ -120,11 +120,11 @@ export class ChatService extends Disposable implements IChatService {
 
 	async startTurn(options: StartTurnOptions): Promise<void> {
 		const input = turnInput(options);
-		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode ?? "askPermissions", model: options.model, reasoningEffort: options.reasoningEffort, input });
+		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode ?? "manual", model: options.model, reasoningEffort: options.reasoningEffort, input });
 	}
 
 	async queueTurn(options: StartTurnOptions): Promise<void> {
-		await this.options.turnApi.enqueue({ commandId: commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode: options.approvalMode ?? "askPermissions" });
+		await this.options.turnApi.enqueue({ commandId: commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode: options.approvalMode ?? "manual" });
 	}
 
 	async queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number> {

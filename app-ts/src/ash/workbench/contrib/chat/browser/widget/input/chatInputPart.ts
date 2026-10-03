@@ -96,7 +96,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly pickerResponsiveLayout: ChatInputPickerResponsiveLayout;
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
 	private readonly skills = new SkillSelectorCatalog();
-	private state: ChatInputState = { mode: "agent", queuedMessages: 0, phase: "loading", canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	private state: ChatInputState = { mode: "agent", queuedMessages: 0, approvalMode: 'manual', phase: "loading", canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	private toolbarState: ChatInputToolbarState = { mode: "agent", canSubmit: false, hasInput: false, canInterrupt: false, inputKind: "message", models: [], isAutomaticModel: false, canSelectAgent: false };
 	private serverSlashCommands: ChatInputState["slashCommands"] = [];
 	private skillSelectors: ChatInputState["skillSelectors"] = [];

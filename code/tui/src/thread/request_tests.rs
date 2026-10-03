@@ -64,7 +64,7 @@ fn submit_prompt_carries_every_collaboration_mode_to_the_app_server() {
                 display_text: "work".into(),
                 input: vec![ChatInputItem::Text("work".into())],
             },
-            ash_protocol::ApprovalMode::AskPermissions,
+            ash_protocol::ApprovalMode::Manual,
         )
         .unwrap();
         let request: serde_json::Value =

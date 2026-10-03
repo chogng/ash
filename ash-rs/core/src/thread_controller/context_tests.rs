@@ -108,8 +108,8 @@ impl Fixture {
 #[test]
 fn shared_permission_instructions_follow_the_recorded_turn_mode_and_survive_reload() {
     for mode in [
-        ApprovalMode::AskPermissions,
-        ApprovalMode::AutoReview,
+        ApprovalMode::Manual,
+        ApprovalMode::Auto,
         ApprovalMode::BypassPermissions,
     ] {
         let mut fixture = Fixture::new();
@@ -142,11 +142,7 @@ fn review_terminal_outcomes_appear_once_before_the_following_task_and_survive_re
         (TurnStatus::Failed, "failed"),
     ] {
         let mut fixture = Fixture::new();
-        let review = fixture.start(
-            "inspect changes",
-            TurnKind::Review,
-            ApprovalMode::AskPermissions,
-        );
+        let review = fixture.start("inspect changes", TurnKind::Review, ApprovalMode::Manual);
         assert!(
             !serde_json::to_string(&fixture.request(&review))
                 .unwrap()
@@ -215,7 +211,7 @@ fn review_terminal_outcomes_appear_once_before_the_following_task_and_survive_re
         }
         let instructions = request.instructions.as_ref().unwrap();
         assert!(instructions.contains("`bypassPermissions`"));
-        assert!(!instructions.contains("`askPermissions`"));
+        assert!(!instructions.contains("`manual`"));
         assert!(!instructions.contains("overall_correctness"));
         fixture.controller = ThreadController::with_store(fixture.store.clone());
         assert_eq!(fixture.request(&current), request);
@@ -228,7 +224,7 @@ fn checkpoint_continuation_keeps_its_boundary_and_does_not_reinsert_a_covered_re
     let review = fixture.start(
         "inspect old changes",
         TurnKind::Review,
-        ApprovalMode::AskPermissions,
+        ApprovalMode::Manual,
     );
     fixture
         .controller
@@ -242,7 +238,7 @@ fn checkpoint_continuation_keeps_its_boundary_and_does_not_reinsert_a_covered_re
     let current = fixture.start(
         "continue current task",
         TurnKind::Coding,
-        ApprovalMode::AskPermissions,
+        ApprovalMode::Manual,
     );
     let snapshot = fixture.controller.read_thread(&fixture.thread).unwrap();
     let checkpoint = fixture
@@ -317,7 +313,7 @@ fn frozen_mode_is_present_in_model_input_after_reload() {
                     .freeze()
                     .with_mode(&approach),
                 policy_revision: "test-policy-v1".into(),
-                approval_mode: ApprovalMode::AskPermissions,
+                approval_mode: ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),

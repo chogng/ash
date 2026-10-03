@@ -20,7 +20,7 @@ expression: render(&app)
                                                                                 
                                                                                 
                                                                                 
-  ⏸ ask permissions on                                                          
+  ⏸ Manual                                                                      
   ────────────────────────────────────────────────────────────────────────────  
   > draft behind selector                                                       
   ─────────────────────────────────────────────── Automatic model · Multitask   

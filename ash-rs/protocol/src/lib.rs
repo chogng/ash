@@ -22,8 +22,11 @@ pub use time_context::TimeContext;
 pub use time_context::TimeContextMode;
 pub use time_context::TimeZoneOrigin;
 mod advisor;
+mod approval_mode;
 pub use advisor::AdvisorConfig;
 pub use advisor::AdvisorSelection;
+pub use approval_mode::ApprovalModeDefinition;
+pub use approval_mode::ApprovalModeMessage;
 
 mod thread;
 

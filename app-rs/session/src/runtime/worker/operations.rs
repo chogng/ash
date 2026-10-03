@@ -149,7 +149,7 @@ fn initialize_session(
         thread_id,
         sequence,
         transcript_revision,
-        approval_mode: ApprovalMode::AskPermissions,
+        approval_mode: ApprovalMode::Manual,
         subscription,
     })
 }

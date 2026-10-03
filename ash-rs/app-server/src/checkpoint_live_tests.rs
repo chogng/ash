@@ -126,7 +126,7 @@ fn run(
                 )
                 .unwrap(),
                 policy_revision: "test".into(),
-                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: vec![],

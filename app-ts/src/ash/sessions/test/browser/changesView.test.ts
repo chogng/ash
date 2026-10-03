@@ -105,7 +105,7 @@ test('Changes ignores an old conversation response and opens a shared read-only 
 });
 
 function selected(id: string): SessionsViewSelection {
-	return { kind: 'session', active: { threadId: `${id}-thread`, session: { sessionId: id, title: id, status: 'active', nextApprovalMode: 'askPermissions', chats: [] } } };
+	return { kind: 'session', active: { threadId: `${id}-thread`, session: { sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', chats: [] } } };
 }
 
 function changes(id: string): TurnChangesReadResult {

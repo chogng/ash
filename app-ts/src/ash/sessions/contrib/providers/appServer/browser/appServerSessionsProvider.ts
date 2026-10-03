@@ -145,7 +145,7 @@ function toSession(session: SessionDto, threads: readonly ThreadDto[] = [], prev
 			root: session.executionTarget.root,
 		},
 		model: previous?.model,
-		nextApprovalMode: previous?.nextApprovalMode ?? "askPermissions",
+		nextApprovalMode: previous?.nextApprovalMode ?? "manual",
 		chats: session.threads.map(thread => {
 			const detail = byId.get(thread.threadId);
 			const prior = previous?.chats.find(candidate => candidate.threadId === thread.threadId);

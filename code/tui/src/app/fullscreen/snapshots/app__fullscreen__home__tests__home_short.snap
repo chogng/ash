@@ -8,7 +8,7 @@ expression: text(&buffer)
   │  Ash Code v0.1.0                 │  
   │> Quit                            │  
   ╰──────────────────────────────────╯  
-  ⏸ ask permissions on                  
+  ⏸ Manual   Type a task · Tab actions  
   ────────────────────────────────────  
   > Build anything                      
   ─────────────────── Automatic model   

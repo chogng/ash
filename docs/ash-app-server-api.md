@@ -157,7 +157,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```json
 {
   "serverInfo": { "name": "ash-app-server", "version": "0.1.0" },
-  "protocolVersion": { "major": 4, "revision": 1 },
+  "protocolVersion": { "major": 7, "revision": 8 },
   "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,
@@ -176,10 +176,10 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "typst": true,
     "updateReplay": true,
     "contracts": {
-      "sessions": { "version": 4 },
-      "threads": { "version": 4 },
-      "turns": { "version": 4 },
-      "projects": { "version": 4 }
+      "sessions": { "version": 12 },
+      "threads": { "version": 12 },
+      "turns": { "version": 12 },
+      "projects": { "version": 12 }
     }
   },
   "slashCommands": [
@@ -193,6 +193,9 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```
 
 客户端必须拒绝不同 protocol major、缺失的 required capability 或不支持的 capability version。
+权限 ID 在 capability 12 中统一为 `manual / auto / bypassPermissions`，旧 capability 11
+使用不同 ID，因此必须在初始化时拒绝。名称、说明、翻译 key 与确认标记由共享 Rust 定义生成到
+`ApprovalModes.ts`，界面通过领域适配层渲染，不需要新增一次菜单查询 RPC。
 schema hash 是 exact artifact 诊断信号，不单独决定运行时兼容性。
 `slashCommands` 每项的 `name` 只能使用 lowercase ASCII letters、digits 与 interior hyphens，
 description 不能为空，同一 snapshot 中 name 必须唯一。可选字段 `argumentHint`（如 `<path>`、`<prompt>`）
@@ -844,7 +847,7 @@ App Server 的 [`TranscriptAccumulator`](../ash-rs/thread-transcript/src/accumul
     "type": "startTurn",
     "threadId": "thread_1",
     "expectedSequence": 1,
-    "approvalMode": "askPermissions",
+    "approvalMode": "manual",
     "input": [
       { "type": "text", "text": "Describe this image" },
       {

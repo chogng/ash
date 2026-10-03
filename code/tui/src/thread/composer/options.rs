@@ -74,40 +74,39 @@ pub(crate) fn mode_choices(current: CollaborationMode) -> ComposerOptions {
 }
 
 pub(crate) fn policy_choices(current: ApprovalMode) -> ComposerOptions {
-    choices(
-        "Permissions",
-        [
-            (
-                "Ask permissions",
-                "ask-permissions",
-                ApprovalMode::AskPermissions,
-            ),
-            ("Auto review", "auto-review", ApprovalMode::AutoReview),
-            (
-                "Bypass permissions",
-                "bypass-permissions",
-                ApprovalMode::BypassPermissions,
-            ),
-        ]
-        .into_iter()
-        .map(|(label, id, mode)| {
-            (
-                label.into(),
-                id.into(),
-                ComposerOption::Policy(mode),
-                mode == current,
-            )
-        }),
-    )
+    let mut items = Vec::new();
+    let mut actions = BTreeMap::new();
+    let mut selected = 0;
+    for (index, mode) in ApprovalMode::ALL.into_iter().enumerate() {
+        let definition = mode.definition();
+        let id = ListSelectionItemId::new(mode.id());
+        if mode == current {
+            selected = index;
+        }
+        items.push(
+            ListSelectionItem::new(definition.label.english)
+                .with_columns(
+                    definition.label.english,
+                    definition.description.english,
+                    if mode == current { "Current" } else { "" },
+                )
+                .with_details(definition.description.english)
+                .with_id(id.clone()),
+        );
+        actions.insert(id, ComposerOption::Policy(mode));
+    }
+    ComposerOptions {
+        model: ListSelectionModel::new("Permissions", vec![ListSelectionGroup::new("", items)])
+            .without_tab_bar()
+            .with_expandable_descriptions()
+            .with_initial_selected(selected),
+        actions,
+    }
 }
 
 pub(crate) fn parse_policy(value: &str) -> Result<ApprovalMode, String> {
-    match value {
-        "ask-permissions" => Ok(ApprovalMode::AskPermissions),
-        "auto-review" => Ok(ApprovalMode::AutoReview),
-        "bypass-permissions" => Ok(ApprovalMode::BypassPermissions),
-        _ => Err("Use /policy ask-permissions|auto-review|bypass-permissions".into()),
-    }
+    serde_json::from_value(serde_json::Value::String(value.to_owned()))
+        .map_err(|_| "Use /policy manual|auto|bypassPermissions".into())
 }
 
 pub(crate) fn choices(
