@@ -107,6 +107,10 @@ use crate::protocol::attachments::AttachmentImportRemoteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentMaterializeResult;
 #[cfg(any(test, feature = "export"))]
+use guardian_environment::CommandEvidence;
+#[cfg(any(test, feature = "export"))]
+use guardian_environment::CommandSource;
+#[cfg(any(test, feature = "export"))]
 use guardian_environment::EntryInput;
 #[cfg(any(test, feature = "export"))]
 use guardian_environment::EntryKind;
@@ -118,6 +122,10 @@ use guardian_environment::EnvironmentEntry;
 use guardian_environment::EnvironmentProfile;
 #[cfg(any(test, feature = "export"))]
 use guardian_environment::EnvironmentSource;
+#[cfg(any(test, feature = "export"))]
+use guardian_environment::HistoryCoverage;
+#[cfg(any(test, feature = "export"))]
+use guardian_environment::HistoryScanOptions;
 #[cfg(any(test, feature = "export"))]
 use guardian_environment::ScanOptions;
 #[cfg(any(test, feature = "export"))]
@@ -4730,6 +4738,10 @@ typescript_bindings! {
     EnvironmentDraft,
     EnvironmentEntry,
     EnvironmentSource,
+    CommandSource,
+    CommandEvidence,
+    HistoryScanOptions,
+    HistoryCoverage,
     EntryInput,
     EntryKind,
     SourceKind,

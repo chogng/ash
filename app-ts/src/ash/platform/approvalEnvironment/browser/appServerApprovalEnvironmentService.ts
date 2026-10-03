@@ -22,10 +22,12 @@ export class AppServerApprovalEnvironmentService implements IApprovalEnvironment
 	}
 }
 function entry(value: EntryDto): ReviewEnvironmentEntry {
-	return { id: value.id, kind: value.kind, title: value.title, content: value.content, accepted: value.accepted, current: value.current, source: { id: value.source.id, kind: value.source.kind, label: value.source.label, revision: value.source.revision } };
+	const source = { id: value.source.id, kind: value.source.kind, label: value.source.label, revision: value.source.revision };
+	if (value.source.command) { Object.assign(source, { command: { ...value.source.command, samples: value.source.command.samples.map(sample => ({ ...sample })) } }); }
+	return { id: value.id, kind: value.kind, title: value.title, content: value.content, accepted: value.accepted, current: value.current, source };
 }
-function profile(value: ProfileDto): ReviewEnvironmentProfile { return { root: value.root, revision: value.profile.revision, entries: [...value.profile.entries, ...value.profile.observations.filter(observation => !value.profile.entries.some(accepted => accepted.current && accepted.source.id === observation.source.id))].map(entry) }; }
-function draft(value: DraftDto): ReviewEnvironmentDraft { return { root: value.root, id: value.draft.id, baseRevision: value.draft.baseRevision, entries: value.draft.entries.map(entry) }; }
+function profile(value: ProfileDto): ReviewEnvironmentProfile { return { scanOptions: { ...value.scanOptions, history: { ...value.scanOptions.history } }, root: value.root, revision: value.profile.revision, entries: [...value.profile.entries, ...value.profile.observations.filter(observation => !value.profile.entries.some(accepted => accepted.current && accepted.source.id === observation.source.id))].map(entry) }; }
+function draft(value: DraftDto): ReviewEnvironmentDraft { const result = { root: value.root, id: value.draft.id, baseRevision: value.draft.baseRevision, entries: value.draft.entries.map(entry) }; if (value.history) { Object.assign(result, { history: { ...value.history } }); } return result; }
 function explain(error: unknown): never {
 	if (error instanceof AppServerRemoteError) {
 		switch (error.errorName) {

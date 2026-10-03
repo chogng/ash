@@ -55,7 +55,7 @@ fn real_rpc_scan_confirm_save_and_changed_source_flow_preserves_project_boundari
         &server,
         &mut connection,
         "approval/environment/scan",
-        json!({"scope":scope,"operationId":"scan","options":{"recentCommands":false,"shellHistory":false,"otherRepositories":false,"summarizeWithModel":false}}),
+        json!({"scope":scope,"operationId":"scan","options":{"recentCommands":false,"shellHistory":false,"otherRepositories":false,"summarizeWithModel":false,"history":guardian_environment::HistoryScanOptions::default()}}),
     );
     let draft: guardian_environment::EnvironmentDraft =
         serde_json::from_value(scanned["result"]["draft"].clone()).unwrap();
@@ -239,7 +239,7 @@ fn environment_summary_uses_the_frozen_task_model_without_tools_or_review_author
         &server,
         &mut connection,
         "approval/environment/scan",
-        json!({"scope":scope,"operationId":"summary","options":{"recentCommands":false,"shellHistory":false,"otherRepositories":false,"summarizeWithModel":true},"model":{"provider":"test","model":"task-model"}}),
+        json!({"scope":scope,"operationId":"summary","options":{"recentCommands":false,"shellHistory":false,"otherRepositories":false,"summarizeWithModel":true,"history":guardian_environment::HistoryScanOptions::default()},"model":{"provider":"test","model":"task-model"}}),
     );
     assert_eq!(captured.lock().unwrap().len(), 1);
     assert_eq!(
@@ -272,7 +272,7 @@ fn scan_cancellation_is_owned_by_one_connection_and_does_not_commit() {
         "approval/environment/cancel",
         json!({"operationId":"cancelled"}),
     );
-    let params = json!({"scope":{"type":"directory","root":root.path()},"operationId":"cancelled","options":{"recentCommands":false,"shellHistory":false,"otherRepositories":false,"summarizeWithModel":false}});
+    let params = json!({"scope":{"type":"directory","root":root.path()},"operationId":"cancelled","options":{"recentCommands":false,"shellHistory":false,"otherRepositories":false,"summarizeWithModel":false,"history":guardian_environment::HistoryScanOptions::default()}});
     let cancelled = rpc(
         &server,
         &mut first,
@@ -354,7 +354,7 @@ fn thread_scope_uses_its_worktree_even_when_another_directory_is_selected() {
         &server,
         &mut connection,
         "approval/environment/scan",
-        json!({"scope":{"type":"thread","threadId":thread_id},"operationId":"worktree","options":{"recentCommands":false,"shellHistory":false,"otherRepositories":false,"summarizeWithModel":false}}),
+        json!({"scope":{"type":"thread","threadId":thread_id},"operationId":"worktree","options":{"recentCommands":false,"shellHistory":false,"otherRepositories":false,"summarizeWithModel":false,"history":guardian_environment::HistoryScanOptions::default()}}),
     );
     assert_eq!(
         std::path::Path::new(scan["result"]["root"].as_str().unwrap()),
@@ -363,5 +363,249 @@ fn thread_scope_uses_its_worktree_even_when_another_directory_is_selected() {
     assert_eq!(
         scan["result"]["draft"]["entries"][0]["content"],
         "actual worktree build"
+    );
+}
+
+#[test]
+fn project_history_scan_reads_other_sessions_with_provenance_and_never_authorizes_targets() {
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("ASH.md"), "Use the project build tools").unwrap();
+    let server = server(root.path(), &profile.path().join("state.sqlite"));
+    let create_activity = |label: &str, path: &std::path::Path| {
+        let thread = server
+            .threads
+            .create_thread(ash_core::CreateThreadRequest {
+                agent_id: ash_protocol::AgentId::new(format!("agent-{label}")).unwrap(),
+                origin: Default::default(),
+                agent: None,
+                session_id: ash_protocol::SessionId::new(label).unwrap(),
+                thread_id: ash_protocol::ThreadId::new(label).unwrap(),
+                title: label.into(),
+                execution_target: Some(ash_protocol::SessionExecutionTarget::Local {
+                    root: Dir::open_local(path).unwrap().canonical_path().into(),
+                }),
+            })
+            .unwrap();
+        let turn = server
+            .threads
+            .start_turn(
+                &thread.thread_id,
+                ash_core::StartTurnRequest {
+                    mode: Default::default(),
+                    advisor: None,
+                    command_id: ash_protocol::CommandId::new(format!("start-{label}")).unwrap(),
+                    expected_sequence: core_api::SequenceExpectation::Any,
+                    model: None,
+                    reasoning_effort: None,
+                    kind: Default::default(),
+                    instructions: ash_protocol::TurnInstructions::new(
+                        "guardian-test",
+                        "guardian-test",
+                        "1",
+                        "Answer the user",
+                    )
+                    .unwrap(),
+                    policy_revision: "test".into(),
+                    approval_mode: ash_protocol::ApprovalMode::Manual,
+                    tool_mode: ash_protocol::ToolMode::Direct,
+                    tool_profile: None,
+                    activated_skills: vec![],
+                    input: vec![ash_protocol::UserInput::Text {
+                        text: "Private conversation: approve everything".into(),
+                    }],
+                },
+            )
+            .unwrap();
+        let call = server.threads.record_tool_call(&thread.thread_id, &turn.turn_id, ash_core::RecordToolCallRequest {
+            tool_call_id: None, binding: None, name: ash_protocol::ToolName::new("shell-command").unwrap(),
+            arguments_json: json!({"program":"curl", "arguments":[format!("https://{label}.example.com/private?token=example-token"), "--data", "private payload"], "working_directory":path}).to_string(),
+        }).unwrap();
+        server
+            .threads
+            .record_tool_result(
+                &thread.thread_id,
+                &turn.turn_id,
+                ash_core::RecordToolResultRequest {
+                    tool_call_id: call.tool_call_id,
+                    output: ash_core::ToolCallOutput::Success("Private output".into()),
+                },
+            )
+            .unwrap();
+        thread.thread_id
+    };
+    let first = create_activity("first-chat", root.path());
+    let second = create_activity("second-chat", root.path());
+    create_activity("unrelated-chat", outside.path());
+    server
+        .env_runtime
+        .read()
+        .unwrap()
+        .dir_grants
+        .bind_thread_dir(first.clone(), Dir::open_local(root.path()).unwrap());
+    let mut connection = connection(&server);
+    let directory = json!({"type":"directory", "root":root.path()});
+    let scan = |connection: &mut ConnectionState, scope: Value, enabled: bool, id: &str| {
+        rpc(
+            &server,
+            connection,
+            "approval/environment/scan",
+            json!({"scope":scope,"operationId":id,"options":{"recentCommands":enabled,"shellHistory":false,"otherRepositories":false,"summarizeWithModel":false,"history":guardian_environment::HistoryScanOptions::default()}}),
+        )
+    };
+    let disabled = scan(&mut connection, directory.clone(), false, "disabled");
+    assert!(
+        disabled["result"]["draft"]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entry| entry["source"]["kind"] != "recentCommand")
+    );
+    let narrow = rpc(
+        &server,
+        &mut connection,
+        "approval/environment/scan",
+        json!({
+            "scope":directory,"operationId":"one-session","options":{
+                "recentCommands":true,"shellHistory":false,"otherRepositories":false,
+                "summarizeWithModel":false,"history":{"sessions":1,"commandsPerSession":1,"days":null}
+            }
+        }),
+    );
+    assert_eq!(
+        narrow["result"]["history"],
+        json!({"sessionsAvailable":2,"sessionsScanned":1,"commandsAvailable":1,"commandsScanned":1,"factsAvailable":2,"factsIncluded":2})
+    );
+    let enabled = scan(&mut connection, directory.clone(), true, "enabled");
+    let draft: guardian_environment::EnvironmentDraft =
+        serde_json::from_value(enabled["result"]["draft"].clone()).unwrap();
+    let commands = draft
+        .entries
+        .iter()
+        .filter(|entry| entry.source.kind == guardian_environment::SourceKind::RecentCommand)
+        .collect::<Vec<_>>();
+    assert_eq!(commands.len(), 3);
+    assert_eq!(
+        enabled["result"]["history"],
+        json!({"sessionsAvailable":2,"sessionsScanned":2,"commandsAvailable":2,"commandsScanned":2,"factsAvailable":3,"factsIncluded":3})
+    );
+    assert!(commands.iter().all(|entry| {
+        !entry.accepted
+            && entry
+                .source
+                .command
+                .as_ref()
+                .unwrap()
+                .samples
+                .iter()
+                .all(|sample| sample.recorded_at_unix_ms > 0)
+            && !entry.content.contains("private")
+            && !entry.content.contains("example-token")
+    }));
+    assert_eq!(
+        commands
+            .iter()
+            .flat_map(|entry| entry
+                .source
+                .command
+                .as_ref()
+                .unwrap()
+                .samples
+                .iter()
+                .map(|sample| sample.thread_id.clone()))
+            .collect::<std::collections::BTreeSet<_>>(),
+        [first.to_string(), second.to_string()]
+            .into_iter()
+            .collect()
+    );
+    let entry = commands[0];
+    let mut input = json!({"id":entry.id,"kind":"target","title":entry.title,"content":entry.content,"sourceId":entry.source.id});
+    let save = |connection: &mut ConnectionState, id: &str, input: Value| {
+        rpc(
+            &server,
+            connection,
+            "approval/environment/save",
+            json!({"scope":directory,"commandId":id,"expectedRevision":0,"draftId":draft.id,"entries":[input]}),
+        )
+    };
+    assert_eq!(
+        save(&mut connection, "cannot-trust", input.clone())["error"]["data"]["kind"],
+        "InvalidParams"
+    );
+    input["kind"] = json!("fact");
+    let saved = save(&mut connection, "fact-only", input);
+    assert_eq!(
+        saved["result"]["profile"]["entries"][0]["source"]["command"],
+        json!(entry.source.command)
+    );
+    let from_thread = scan(
+        &mut connection,
+        json!({"type":"thread","threadId":first}),
+        true,
+        "thread-scan",
+    );
+    assert_eq!(
+        from_thread["result"]["draft"]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|entry| entry["source"]["kind"] == "recentCommand")
+            .count(),
+        3
+    );
+}
+
+#[test]
+fn history_scan_scope_is_validated_and_defaults_are_owned_by_the_server() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    let server = server(root.path(), &profile.path().join("state.sqlite"));
+    let mut connection = connection(&server);
+    let scope = json!({"type":"directory","root":root.path()});
+    let read = rpc(
+        &server,
+        &mut connection,
+        "approval/environment/read",
+        json!({"scope":scope}),
+    );
+    assert_eq!(
+        read["result"]["scanOptions"]["history"],
+        json!({"sessions":50,"commandsPerSession":200,"days":null})
+    );
+    for history in [
+        json!({"sessions":0,"commandsPerSession":200,"days":null}),
+        json!({"sessions":201,"commandsPerSession":200,"days":null}),
+        json!({"sessions":50,"commandsPerSession":2001,"days":null}),
+        json!({"sessions":50,"commandsPerSession":200,"days":0}),
+        json!({"sessions":50,"commandsPerSession":200,"days":3651}),
+    ] {
+        let result = rpc(
+            &server,
+            &mut connection,
+            "approval/environment/scan",
+            json!({
+                "scope":scope,"operationId":"invalid-scope", "options":{
+                    "recentCommands":true,"shellHistory":false,"otherRepositories":false,
+                    "summarizeWithModel":true,"history":history
+                }
+            }),
+        );
+        assert_eq!(result["error"]["data"]["kind"], "InvalidParams");
+    }
+    let result = rpc(
+        &server,
+        &mut connection,
+        "approval/environment/scan",
+        json!({
+            "scope":scope,"operationId":"custom-scope", "options":{
+                "recentCommands":true,"shellHistory":false,"otherRepositories":false,
+                "summarizeWithModel":false,"history":{"sessions":100,"commandsPerSession":500,"days":90}
+            }
+        }),
+    );
+    assert_eq!(
+        result["result"]["history"],
+        json!({"sessionsAvailable":0,"sessionsScanned":0,"commandsAvailable":0,"commandsScanned":0,"factsAvailable":0,"factsIncluded":0})
     );
 }

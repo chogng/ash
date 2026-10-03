@@ -277,7 +277,8 @@ just test-tui
 - Marketplace 展示返回包的来源；发行配置已提供 `ash`，增加独立来源才需要配置新的 metadata/targets 地址与信任根。
 - `marketplace.rs`、`lsp.rs` 和 `guardian.rs` 拥有终端状态与交互，后端继续拥有业务和存储。
   `/guardian setup` 扫描当前项目、逐项审核并保存背景资料；`/permission` 选择权限模式，`/init`
-  生成的 `ASH.md` 同时作为 Guardian 的项目说明。共享契约见 [Slash Commands](../docs/slash-commands.md#marketplace-与领域管理入口)。
+  生成的 `ASH.md` 同时作为 Guardian 的项目说明。面板可选择读取此目录的项目会话，
+  默认 50 个会话、每会话 200 条命令、不限定天数；可以调整范围，查看聚合事实的频次、来源样本与扫描覆盖量；历史资料不会授予权限。共享契约见 [Slash Commands](../docs/slash-commands.md#marketplace-与领域管理入口)。
 - 定向验证：`just test ash-tui marketplace`；真实终端流程：`just test-tui actual_tui_marketplace_and_lsp_commands`。
 
 ## Hooks

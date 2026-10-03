@@ -137,6 +137,285 @@ fn append_created_thread(
         .unwrap();
 }
 
+fn append_recent_activity(
+    store: &SqliteThreadStore,
+    label: &str,
+    root: &str,
+    time: u64,
+    count: usize,
+) {
+    append_recent_activity_with_padding(store, label, root, time, count, 0);
+}
+
+fn append_recent_activity_with_padding(
+    store: &SqliteThreadStore,
+    label: &str,
+    root: &str,
+    time: u64,
+    count: usize,
+    argument_bytes: usize,
+) {
+    let session = SessionId::new(label).unwrap();
+    let thread = ThreadId::new(label).unwrap();
+    let turn = TurnId::new(format!("turn-{label}")).unwrap();
+    let target = ash_protocol::SessionExecutionTarget::Local { root: root.into() };
+    let mut events = vec![ThreadEvent::ThreadCreated {
+        execution_target: Some(target.clone()),
+        agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
+        origin: Default::default(),
+        agent: None,
+        session_id: session.clone(),
+        thread_id: thread.clone(),
+        title: label.into(),
+    }];
+    for index in 0..count {
+        events.push(ThreadEvent::ItemCompleted {
+            checkpoint_after_sequence: None, workspace_checkpoint: None, thread_id: thread.clone(), turn_id: turn.clone(),
+            item: ash_protocol::ThreadItem::ToolCall {
+                item_id: ash_protocol::ItemId::new(format!("item-{label}-{index}")).unwrap(), turn_id: turn.clone(),
+                tool_call_id: ash_protocol::ToolCallId::new(format!("call-{label}-{index}")).unwrap(),
+                name: ash_protocol::ToolName::new("shell-command").unwrap(), binding: None,
+                arguments_json: serde_json::json!({"program":"curl", "arguments":[format!("https://{label}.example.com"), "x".repeat(argument_bytes)], "working_directory":root}).to_string(),
+            },
+        });
+        if label != "pending" {
+            events.push(ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
+                thread_id: thread.clone(),
+                turn_id: turn.clone(),
+                item: ash_protocol::ThreadItem::ToolResult {
+                    item_id: ash_protocol::ItemId::new(format!("result-{label}-{index}")).unwrap(),
+                    turn_id: turn.clone(),
+                    tool_call_id: ash_protocol::ToolCallId::new(format!("call-{label}-{index}"))
+                        .unwrap(),
+                    text: "Private output must not become background".into(),
+                    content: None,
+                    is_error: label == "denied",
+                },
+            });
+        }
+    }
+    events.push(ThreadEvent::ItemCompleted {
+        checkpoint_after_sequence: None,
+        workspace_checkpoint: None,
+        thread_id: thread.clone(),
+        turn_id: turn.clone(),
+        item: ash_protocol::ThreadItem::UserMessage {
+            client_id: None,
+            item_id: ash_protocol::ItemId::new(format!("message-{label}")).unwrap(),
+            turn_id: turn,
+            text: "A private user message must never appear in command observations".into(),
+        },
+    });
+    let mut record = catalog(&session, &thread, events.len() as u64);
+    record.execution_target = Some(target);
+    store
+        .append_batch(&ThreadEventBatch {
+            history_prefixes: Vec::new(),
+            batch_id: format!("activity-{label}"),
+            thread_id: thread.clone(),
+            expected_sequence: 0,
+            catalog: record,
+            events: events
+                .into_iter()
+                .enumerate()
+                .map(|(index, event)| StoredEvent {
+                    time_context: None,
+                    schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
+                    event_id: EventId(format!("event-{label}-{index}")),
+                    sequence: index as u64 + 1,
+                    thread_id: thread.clone(),
+                    recorded_at: Timestamp(u128::from(time)),
+                    command: None,
+                    event,
+                })
+                .collect(),
+        })
+        .unwrap();
+}
+
+#[test]
+fn recent_tool_calls_apply_the_byte_budget_after_interleaving_sessions() {
+    let root = tempfile::tempdir().unwrap();
+    let store = SqliteThreadStore::open(root.path().join("activity.sqlite")).unwrap();
+    append_recent_activity_with_padding(&store, "busy", "/project", 90, 500, 30_000);
+    append_recent_activity(&store, "quiet", "/project", 50, 1);
+    let history = store
+        .recent_tool_calls(&ash_thread_store::RecentToolCallsQuery {
+            root: "/project".into(),
+            since_unix_ms: 0,
+            until_unix_ms: 100,
+            sessions: 50,
+            commands_per_session: 2000,
+        })
+        .unwrap();
+    assert_eq!(history.sessions_available, 2);
+    assert_eq!(history.commands_available, 501);
+    assert!(history.calls.len() < 501);
+    assert_eq!(history.calls[0].session_id.as_str(), "busy");
+    assert_eq!(history.calls[1].session_id.as_str(), "quiet");
+    let total = history
+        .calls
+        .iter()
+        .map(|call| call.arguments_json.len())
+        .sum::<usize>();
+    assert!(total <= ash_thread_store::MAX_RECENT_ARGUMENT_TOTAL_BYTES);
+    assert!(total > ash_thread_store::MAX_RECENT_ARGUMENT_TOTAL_BYTES - 31_000);
+}
+
+#[test]
+fn recent_tool_calls_are_scoped_bounded_and_removed_with_their_sessions() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("activity.sqlite");
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_recent_activity(&store, "older", "/project", 49, 1);
+    append_recent_activity(&store, "first", "/project", 50, 2);
+    append_recent_activity(&store, "second", "/project", 60, 1);
+    append_recent_activity(&store, "future", "/project", 101, 1);
+    append_recent_activity(&store, "other", "/project-neighbor", 99, 100);
+    append_recent_activity(&store, "remote", "/project", 98, 1);
+    append_recent_activity(&store, "pending", "/project", 98, 1);
+    append_recent_activity(&store, "denied", "/project", 98, 1);
+    rusqlite::Connection::open(&path).unwrap().execute("INSERT INTO history_imports (source, digest, host, thread_count) VALUES ('import', 'fixture', 'remote.example.com', 1)", []).unwrap();
+    rusqlite::Connection::open(&path).unwrap().execute("INSERT INTO remote_history_bindings (thread_id, source, host, root) VALUES ('remote', 'import', 'remote.example.com', '/project')", []).unwrap();
+    let query = ash_thread_store::RecentToolCallsQuery {
+        root: "/project".into(),
+        since_unix_ms: 50,
+        until_unix_ms: 100,
+        sessions: 50,
+        commands_per_session: 200,
+    };
+    let history = store.recent_tool_calls(&query).unwrap();
+    assert_eq!(
+        (history.sessions_available, history.commands_available),
+        (2, 3)
+    );
+    let calls = &history.calls;
+    assert_eq!(
+        calls
+            .iter()
+            .map(|call| (
+                call.session_id.as_str(),
+                call.sequence,
+                call.recorded_at_unix_ms
+            ))
+            .collect::<Vec<_>>(),
+        [("second", 2, 60), ("first", 4, 50), ("first", 2, 50)]
+    );
+    assert!(
+        calls
+            .iter()
+            .all(|call| call.name == "shell-command"
+                && !call.arguments_json.contains("private user"))
+    );
+    drop(store);
+    let reopened = SqliteThreadStore::open(&path).unwrap();
+    assert_eq!(reopened.recent_tool_calls(&query).unwrap(), history);
+    reopened
+        .delete_session(&SessionId::new("second").unwrap())
+        .unwrap();
+    assert_eq!(
+        reopened.recent_tool_calls(&query).unwrap().calls,
+        calls[1..]
+    );
+    for index in 0..10 {
+        append_recent_activity(
+            &reopened,
+            &format!("recent-{index}"),
+            "/project",
+            70 + index,
+            1,
+        );
+    }
+    let sessions = reopened.recent_tool_calls(&query).unwrap();
+    assert_eq!(sessions.sessions_available, 11);
+    assert_eq!(sessions.calls.len(), 12);
+    let narrow = ash_thread_store::RecentToolCallsQuery {
+        sessions: 2,
+        ..query.clone()
+    };
+    let selected = reopened.recent_tool_calls(&narrow).unwrap();
+    assert_eq!(
+        selected
+            .calls
+            .iter()
+            .map(|call| call.session_id.as_str())
+            .collect::<Vec<_>>(),
+        ["recent-9", "recent-8"]
+    );
+    append_recent_activity(&reopened, "bulk", "/project", 90, 100);
+    let fair = ash_thread_store::RecentToolCallsQuery {
+        commands_per_session: 3,
+        ..query.clone()
+    };
+    let bounded = reopened.recent_tool_calls(&fair).unwrap();
+    assert_eq!(
+        (bounded.sessions_available, bounded.commands_available),
+        (12, 112)
+    );
+    assert_eq!(bounded.calls.len(), 15);
+    assert_eq!(
+        bounded
+            .calls
+            .iter()
+            .filter(|call| call.session_id.as_str() == "bulk")
+            .count(),
+        3
+    );
+    assert!(
+        bounded
+            .calls
+            .iter()
+            .any(|call| call.session_id.as_str() == "first")
+    );
+    // Selecting by recency supports quiet projects too; an age filter is an explicit choice.
+    assert!(
+        reopened
+            .recent_tool_calls(&ash_thread_store::RecentToolCallsQuery {
+                since_unix_ms: 0,
+                ..query.clone()
+            })
+            .unwrap()
+            .calls
+            .iter()
+            .any(|call| call.session_id.as_str() == "older")
+    );
+    for index in 0..55 {
+        append_recent_activity(
+            &reopened,
+            &format!("expanded-{index}"),
+            "/project",
+            200 + index,
+            1,
+        );
+    }
+    let wider = ash_thread_store::RecentToolCallsQuery {
+        until_unix_ms: 1000,
+        ..query
+    };
+    let default = reopened.recent_tool_calls(&wider).unwrap();
+    assert_eq!(default.calls.len(), 50);
+    assert!(
+        default
+            .calls
+            .iter()
+            .all(|call| call.session_id.as_str().starts_with("expanded-"))
+    );
+    let expanded = reopened
+        .recent_tool_calls(&ash_thread_store::RecentToolCallsQuery {
+            sessions: 100,
+            ..wider
+        })
+        .unwrap();
+    assert!(
+        expanded
+            .calls
+            .iter()
+            .any(|call| call.session_id.as_str() == "first")
+    );
+}
+
 #[test]
 fn sqlite_turn_changes_compare_and_swap_complete_records() {
     let path = database_path("turn-changes-cas");

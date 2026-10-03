@@ -157,7 +157,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```json
 {
   "serverInfo": { "name": "ash-app-server", "version": "0.1.0" },
-  "protocolVersion": { "major": 7, "revision": 10 },
+  "protocolVersion": { "major": 7, "revision": 12 },
   "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,
@@ -177,10 +177,10 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "typst": true,
     "updateReplay": true,
     "contracts": {
-      "sessions": { "version": 13 },
-      "threads": { "version": 13 },
-      "turns": { "version": 13 },
-      "projects": { "version": 13 }
+      "sessions": { "version": 15 },
+      "threads": { "version": 15 },
+      "turns": { "version": 15 },
+      "projects": { "version": 15 }
     }
   },
   "slashCommands": [
@@ -194,7 +194,8 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```
 
 客户端必须拒绝不同 protocol major、缺失的 required capability 或不支持的 capability version。
-capability 13 增加 Guardian 的 `observations` 响应字段，旧客户端须先升级再连接。
+capability 15 增加 Guardian 可配置的历史范围、聚合事实来源与扫描覆盖量；capability 14 将 Guardian 近期命令扩展到同一授权目录的跨会话记录，并提供结构化命令来源；capability 13
+增加 `observations` 响应字段。旧客户端须先升级再连接。
 权限 ID 在 capability 12 中统一为 `manual / auto / bypassPermissions`，旧 capability 11
 使用不同 ID，因此必须在初始化时拒绝。名称、说明、翻译 key 与确认标记由共享 Rust 定义生成到
 `ApprovalModes.ts`，界面通过领域适配层渲染，不需要新增一次菜单查询 RPC。
@@ -1379,7 +1380,8 @@ Frontend 的公共契约为 `platform/assets/common/assetService.ts`，`browser/
 
 `scope` 为 `{ "type": "thread", "threadId": "…" }` 或
 `{ "type": "directory", "root": "/absolute/path" }`。Thread 使用它实际执行的工作目录，
-Directory 必须已被当前环境授权。读取结果为 `{ root, profile }`，扫描结果为 `{ root, draft }`。
+Directory 必须已被当前环境授权。读取和保存结果为 `{ root, profile, scanOptions }`，
+扫描结果为 `{ root, draft, history? }`，开启近期会话扫描时返回覆盖量 `history`。
 草稿不参与审核；保存只接受后端已记录的来源 ID，客户端不能提供来源路径或校验值。
 草稿保留 15 分钟，成功保存后释放；重新扫描会取代同一项目的旧草稿。
 来源变化、草稿失效、保存版本过期或命令 ID 被用于不同内容时返回
@@ -1387,6 +1389,14 @@ Directory 必须已被当前环境授权。读取结果为 `{ root, profile }`�
 相同命令 ID 与相同请求可读取原提交回执，来源后续变化不会使该回执重新接受新资料。
 
 扫描选项为 `recentCommands`、`shellHistory`、`otherRepositories` 和 `summarizeWithModel`；
-近期命令只适用于 Thread。三个扩展来源默认关闭，整理选项在界面默认开启。历史观察不能确认
+近期命令在 Thread 与 Directory scope 都可使用，范围由 `history: { sessions, commandsPerSession, days }`
+控制，后端默认值由 read/save 的 `scanOptions` 返回：50 个会话、每会话 200 条命令、`days: null`。
+允许 1–200 个会话、每会话 1–2000 条命令和可选 1–3650 天；超出范围返回 InvalidParams。
+存储轮流取各会话的近期成功命令，合计上限 8 MiB 输入和 20000 条，不恢复历史用户消息。
+命令名和目标分别聚合为最多 20 条事实，来源 `command` 含 occurrences、sessionCount 和最多 3 个 samples；
+每个 sample 含 sessionId、threadId、turnId、sequence、recordedAtUnixMs，客户端不能改写来源。
+scan 的可选 `history` 报告 sessionsAvailable/sessionsScanned、commandsAvailable/commandsScanned、
+factsAvailable/factsIncluded；客户端须显示覆盖量，读取量与事实预算截断不等于没有更多历史。
+三个扩展来源默认关闭，Sessions 的整理选项默认开启。历史观察不能确认
 目标归属；`target` 是用户确认的精确归属说明，仍不授予操作权限。条目含来源种类、版本、接受状态
 和当前状态；详细范围与信任规则见 [准备项目审核环境](guardian.md#准备项目审核环境)。

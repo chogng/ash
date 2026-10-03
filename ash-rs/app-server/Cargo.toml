@@ -95,6 +95,7 @@ ash-chatgpt = { workspace = true }
 ash-config = { workspace = true }
 connectors = { workspace = true }
 ash-core = { workspace = true, features = ["code-mode"] }
+thread-store = { package = "ash-thread-store", path = "../thread-store" }
 ash-client = { workspace = true }
 ash-diff = { workspace = true }
 ash-debug-adapter = { workspace = true }

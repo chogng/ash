@@ -43,11 +43,22 @@ test('Sessions review environment scans a draft, accepts entries, and excludes c
 	await prepare.click();
 	const quick = new QuickAccess(page);
 	await quick.select('Scan project…');
+	await expect(quick.items.filter({ hasText: 'Include recent project sessions' })).toContainText('aggregates command names and targets');
+	await quick.select('Include recent project sessions');
+	await expect(quick.items.filter({ hasText: 'Session limit: 50' })).toHaveCount(1);
+	await expect(quick.items.filter({ hasText: 'Commands per session: 200' })).toHaveCount(1);
+	await expect(quick.items.filter({ hasText: 'Time range: all dates' })).toHaveCount(1);
+	await quick.select('Session limit: 50');
+	const sessionLimit = quick.element.getByRole('textbox');
+	await sessionLimit.fill('100');
+	await sessionLimit.press('Enter');
+	await expect(quick.items.filter({ hasText: 'Session limit: 100' })).toHaveCount(1);
 	await expect(quick.items.filter({ hasText: 'Include shell history executable names' })).toContainText('excludes arguments');
 	await expect(quick.items.filter({ hasText: 'Include other repositories in the home directory' })).toContainText('excludes source code');
 	// This fixture has no model connection. Explicitly choose direct extraction before scanning.
 	await quick.select('Summarize with the current task model');
 	await quick.select('Continue — generate draft');
+	await expect(quick.input).toHaveAttribute('placeholder', /0\/0 sessions/u);
 	const entry = quick.items.filter({ has: page.locator('.ash-quick-pick-row-label').getByText('package.json', { exact: true }) });
 	await expect(entry).toContainText('Pending review');
 	await expect(entry).toContainText('pnpm build');

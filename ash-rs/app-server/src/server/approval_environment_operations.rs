@@ -5,8 +5,6 @@ use super::core_error;
 use super::decode;
 use super::result;
 use crate::dir_grants::DirGrants;
-use guardian_environment::Environment;
-use guardian_environment::EnvironmentError;
 use ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentCancelParams;
 use ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentReadParams;
 use ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentReadResult;
@@ -24,6 +22,8 @@ use ash_file_access::Permission;
 use ash_file_access::Permissions;
 use core_api::ModelSelection;
 use core_api::ReviewEnvironmentService;
+use guardian_environment::Environment;
+use guardian_environment::EnvironmentError;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -75,10 +75,7 @@ impl AppServer {
         Ok(self)
     }
 
-    fn review_environment(
-        &self,
-        connection: &ConnectionState,
-    ) -> Result<&Environment, RpcError> {
+    fn review_environment(&self, connection: &ConnectionState) -> Result<&Environment, RpcError> {
         if !matches!(
             connection.authority,
             super::ConnectionAuthority::ProductHost | super::ConnectionAuthority::Browser
@@ -141,6 +138,7 @@ impl AppServer {
         self.review_environment(connection)?;
         let auth = self.approval_environment_directory(&params.scope)?;
         result(&ApprovalEnvironmentReadResult {
+            scan_options: guardian_environment::ScanOptions::default(),
             root: auth.dir().canonical_path().display().to_string(),
             profile: self
                 .review_environment(connection)?
@@ -158,28 +156,70 @@ impl AppServer {
         let params: ApprovalEnvironmentScanParams = decode(params)?;
         self.review_environment(connection)?;
         let auth = self.approval_environment_directory(&params.scope)?;
+        params
+            .options
+            .history
+            .validate()
+            .map_err(environment_error)?;
         let service = self.review_environment(connection)?;
+        let mut history = None;
         let mut observations = Vec::new();
         if params.options.recent_commands {
-            let ApprovalEnvironmentScope::Thread { thread_id } = &params.scope else {
-                return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
-            };
-            let thread = self.threads.read_thread(thread_id).map_err(core_error)?;
-            let commands = thread
-                .items
+            cancellation
+                .check()
+                .map_err(|_| environment_error(EnvironmentError::Cancelled))?;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|error| environment_error(EnvironmentError::Source(error.to_string())))?
+                .as_millis();
+            let since_unix_ms = u64::try_from(params.options.history.days.map_or(0, |days| {
+                now.saturating_sub(u128::from(days) * 24 * 60 * 60 * 1000)
+            }))
+            .map_err(|error| environment_error(EnvironmentError::Source(error.to_string())))?;
+            let scanned = self
+                .threads
+                .recent_tool_calls(&thread_store::RecentToolCallsQuery {
+                    root: auth.dir().canonical_path().into(),
+                    since_unix_ms,
+                    sessions: params.options.history.sessions,
+                    commands_per_session: params.options.history.commands_per_session,
+                    until_unix_ms: u64::try_from(now).map_err(|error| {
+                        environment_error(EnvironmentError::Source(error.to_string()))
+                    })?,
+                })
+                .map_err(core_error)?;
+            let sessions_scanned = scanned
+                .calls
                 .iter()
-                .filter_map(|item| match item {
-                    ash_protocol::ThreadItem::ToolCall {
-                        name,
-                        arguments_json,
-                        ..
-                    } if matches!(name.as_str(), "exec_command" | "shell" | "run_command") => {
-                        Some(arguments_json.clone())
-                    }
-                    _ => None,
+                .map(|call| &call.session_id)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len() as u32;
+            let commands_scanned = scanned.calls.len() as u32;
+            let commands = scanned
+                .calls
+                .into_iter()
+                .map(|call| guardian_environment::CommandRecord {
+                    source: guardian_environment::CommandSource {
+                        session_id: call.session_id.to_string(),
+                        thread_id: call.thread_id.to_string(),
+                        turn_id: call.turn_id.to_string(),
+                        sequence: call.sequence,
+                        recorded_at_unix_ms: call.recorded_at_unix_ms,
+                    },
+                    tool: call.name,
+                    arguments_json: call.arguments_json,
                 })
                 .collect::<Vec<_>>();
-            observations.extend(Environment::recent_commands(&commands));
+            let (facts, available) = Environment::recent_commands(&commands);
+            history = Some(guardian_environment::HistoryCoverage {
+                sessions_available: scanned.sessions_available,
+                sessions_scanned,
+                commands_available: scanned.commands_available,
+                commands_scanned,
+                facts_available: available as u32,
+                facts_included: facts.len() as u32,
+            });
+            observations.extend(facts);
         }
         if params.options.shell_history || params.options.other_repositories {
             cancellation
@@ -254,6 +294,7 @@ impl AppServer {
         result(&ApprovalEnvironmentScanResult {
             root: auth.dir().canonical_path().display().to_string(),
             draft,
+            history,
         })
     }
 
@@ -266,6 +307,7 @@ impl AppServer {
         self.review_environment(connection)?;
         let auth = self.approval_environment_directory(&params.scope)?;
         result(&ApprovalEnvironmentReadResult {
+            scan_options: guardian_environment::ScanOptions::default(),
             root: auth.dir().canonical_path().display().to_string(),
             profile: self
                 .review_environment(connection)?

@@ -1,7 +1,11 @@
 //! Project-bound background for independent action review. Observations never grant authority.
+mod commands;
 mod model;
 mod scan;
 
+pub use model::CommandEvidence;
+pub use model::CommandRecord;
+pub use model::CommandSource;
 pub use model::EntryInput;
 pub use model::EntryKind;
 pub use model::EnvironmentDraft;
@@ -10,6 +14,8 @@ pub use model::EnvironmentError;
 pub use model::EnvironmentProfile;
 pub use model::EnvironmentSource;
 pub use model::EnvironmentStore;
+pub use model::HistoryCoverage;
+pub use model::HistoryScanOptions;
 pub use model::ScanOptions;
 pub use model::SourceKind;
 pub use scan::home_observations;
@@ -88,7 +94,17 @@ impl Environment {
             .into_iter()
             .chain(observations)
         {
-            if !entries.iter().any(|old| old.source.id == entry.source.id) {
+            if let Some(old) = entries
+                .iter_mut()
+                .find(|old| old.source.id == entry.source.id)
+            {
+                // A new history sample changes the observation version, not the user's authority.
+                if entry.source.kind == SourceKind::RecentCommand
+                    && old.source.revision != entry.source.revision
+                {
+                    *old = entry;
+                }
+            } else {
                 entries.push(entry);
             }
         }
@@ -106,21 +122,8 @@ impl Environment {
         Ok(draft)
     }
 
-    pub fn recent_commands(commands: &[String]) -> Vec<EnvironmentEntry> {
-        commands
-            .iter()
-            .rev()
-            .take(12)
-            .enumerate()
-            .map(|(index, text)| {
-                scan::observation(
-                    SourceKind::RecentCommand,
-                    format!("Historical session command {}", index + 1),
-                    text.clone(),
-                )
-            })
-            .filter(|entry| !entry.content.trim().is_empty())
-            .collect()
+    pub fn recent_commands(commands: &[CommandRecord]) -> (Vec<EnvironmentEntry>, usize) {
+        commands::observations(commands)
     }
 
     /// The task model may summarize bounded observations. Its response cannot mint provenance,
@@ -311,6 +314,7 @@ impl Environment {
                     kind: SourceKind::Manual,
                     label: "User description".into(),
                     revision: scan::digest(input.content.as_bytes()),
+                    command: None,
                 },
             };
             if !scan::is_current(auth, &source)? {

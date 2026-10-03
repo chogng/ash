@@ -716,6 +716,12 @@ impl agent_graph_store::AgentGraphStore for ToggleStore {
 }
 
 impl ThreadStore for ToggleStore {
+    fn recent_tool_calls(
+        &self,
+        _: &ash_thread_store::RecentToolCallsQuery,
+    ) -> Result<ash_thread_store::RecentToolCalls, ThreadStoreError> {
+        Ok(ash_thread_store::RecentToolCalls::default())
+    }
     fn pending_checkpoint_cleanup(
         &self,
     ) -> Result<Vec<(String, ash_protocol::RepositoryCheckpoint)>, ThreadStoreError> {
@@ -1213,6 +1219,12 @@ impl agent_graph_store::AgentGraphStore for PerThreadBlockingStore {
 }
 
 impl ThreadStore for PerThreadBlockingStore {
+    fn recent_tool_calls(
+        &self,
+        query: &ash_thread_store::RecentToolCallsQuery,
+    ) -> Result<ash_thread_store::RecentToolCalls, ThreadStoreError> {
+        self.inner.recent_tool_calls(query)
+    }
     fn pending_checkpoint_cleanup(
         &self,
     ) -> Result<Vec<(String, ash_protocol::RepositoryCheckpoint)>, ThreadStoreError> {

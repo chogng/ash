@@ -36,6 +36,7 @@ ash-utils-path = { workspace = true }
 ash-file-access = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 image = { workspace = true, features = ["jpeg", "webp"] }
 core-api = { workspace = true }
 rusqlite = { workspace = true, features = ["hooks"] }

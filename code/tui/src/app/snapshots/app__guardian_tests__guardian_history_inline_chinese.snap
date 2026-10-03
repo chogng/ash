@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/guardian_tests.rs
+expression: frame
+---
+                                                                                
+  Ash Code v0.1.0                                                               
+  Automatic model                                                               
+  .                                                                             
+─ Guardian ─────────────────────────────────────────────────────────────────────
+                                                                                
+  /project                                                                      
+  扫 描 项 目 …                                                                  +  
+  保 存 已 审 核 资 料                                                              +  
+> curl                                                          未 确 认 的 观 察  -  
+    2 个 会 话 中 出 现  10 次                                                         
+    会 话  session-old                                                            
+    聊 天  thread-old                                                             
+    轮 次  turn-old                                                               
+    记 录 时 间  1970-01-01 00:00 UTC                                               
+    curl                                                                        
+    https://staging.example.com                                                 
+  读 取 项 目 近 期 会 话                                                     已 启 用  +  
+  会 话 上 限                                                                 50 +  
+  每 会 话 命 令 数                                                            200 +  
+  时 间 范 围                                                           所 有 日 期  +  
+  历 史 扫 描 覆 盖 量                                                              +  
+                                                                                
+  Enter 确 认  · ←/→ 详 情  · Esc 关 闭

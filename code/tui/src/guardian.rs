@@ -31,7 +31,7 @@ pub(crate) fn execute<T: JsonRpcTransport>(
     client: &mut AppServerClient<T>,
     command: Command,
 ) -> Result<Event, String> {
-    let (scope, root, revision, draft_id, entries) = match command {
+    let (scope, root, revision, draft_id, entries, options, history) = match command {
         Command::Open(scope) => {
             let result = client
                 .read_approval_environment(ApprovalEnvironmentReadParams {
@@ -47,10 +47,19 @@ pub(crate) fn execute<T: JsonRpcTransport>(
                     entries.push(observation);
                 }
             }
-            (scope, result.root, result.profile.revision, None, entries)
+            (
+                scope,
+                result.root,
+                result.profile.revision,
+                None,
+                entries,
+                result.scan_options,
+                None,
+            )
         }
         Command::Scan(params) => {
             let scope = params.scope.clone();
+            let options = params.options.clone();
             let result = client
                 .scan_approval_environment(params)
                 .map_err(|error| error.to_string())?;
@@ -60,6 +69,8 @@ pub(crate) fn execute<T: JsonRpcTransport>(
                 result.draft.base_revision,
                 Some(result.draft.id),
                 result.draft.entries,
+                options,
+                result.history,
             )
         }
         Command::Save(params) => {
@@ -73,16 +84,24 @@ pub(crate) fn execute<T: JsonRpcTransport>(
                 result.profile.revision,
                 None,
                 result.profile.entries,
+                result.scan_options,
+                None,
             )
         }
     };
-    Ok(Event(Panel::new(scope, root, revision, draft_id, entries)))
+    Ok(Event(Panel::new(
+        scope, root, revision, draft_id, entries, options, history,
+    )))
 }
 
 #[derive(Clone, Debug)]
 enum Action {
     Scan,
     Save,
+    RecentCommands,
+    HistorySessions,
+    HistoryCommands,
+    HistoryDays,
     Toggle(usize),
 }
 
@@ -96,6 +115,8 @@ pub(crate) struct Panel {
     root: String,
     selection: ListSelection<Action>,
     language: crate::nls::Language,
+    options: ScanOptions,
+    history: Option<guardian_environment::HistoryCoverage>,
 }
 
 impl Panel {
@@ -105,8 +126,10 @@ impl Panel {
         revision: u64,
         draft_id: Option<String>,
         entries: Vec<EnvironmentEntry>,
+        options: ScanOptions,
+        history: Option<guardian_environment::HistoryCoverage>,
     ) -> Self {
-        let selection = Self::selection(&root, &entries, 0);
+        let selection = Self::selection(&root, &entries, &options, history.as_ref(), 0);
         Self {
             scope,
             revision,
@@ -115,12 +138,16 @@ impl Panel {
             root,
             selection,
             language: crate::nls::Language::English,
+            options,
+            history,
         }
     }
 
     fn selection(
         root: &str,
         entries: &[EnvironmentEntry],
+        options: &ScanOptions,
+        history: Option<&guardian_environment::HistoryCoverage>,
         selected: usize,
     ) -> ListSelection<Action> {
         let mut items = Vec::new();
@@ -142,18 +169,104 @@ impl Panel {
             } else {
                 "Unconfirmed observation"
             };
+            let details = if let Some(source) = &entry.source.command {
+                let samples = source
+                    .samples
+                    .iter()
+                    .map(|sample| {
+                        crate::nls::Text::template(
+                            "Session {0}\nChat {1}\nTurn {2}\nRecorded at {3}",
+                            vec![
+                                sample.session_id.clone().into(),
+                                sample.thread_id.clone().into(),
+                                sample.turn_id.clone().into(),
+                                chrono::DateTime::<chrono::Utc>::from_timestamp_millis(
+                                    i64::try_from(sample.recorded_at_unix_ms)
+                                        .expect("history timestamps fit milliseconds"),
+                                )
+                                .expect("Guardian history timestamps are valid")
+                                .format("%Y-%m-%d %H:%M UTC")
+                                .to_string()
+                                .into(),
+                            ],
+                        )
+                    })
+                    .reduce(|left, right| crate::nls::Text::template("{0}\n{1}", vec![left, right]))
+                    .expect("a historical fact has a source sample");
+                crate::nls::Text::template(
+                    "{0} occurrences in {1} sessions\n{2}\n{3}",
+                    vec![
+                        source.occurrences.to_string().into(),
+                        source.session_count.to_string().into(),
+                        samples,
+                        crate::nls::Text::literal(entry.content.clone()),
+                    ],
+                )
+            } else {
+                crate::nls::Text::literal(format!(
+                    "{}\n{}\n{}",
+                    entry.source.label, entry.source.revision, entry.content
+                ))
+            };
             items.push(
                 ListSelectionItem::new(entry.title.clone())
                     .with_columns(entry.title.clone(), "", status)
-                    .with_details(format!(
-                        "{}\n{}\n{}",
-                        entry.source.label, entry.source.revision, entry.content
-                    ))
+                    .with_details(details)
                     .with_id(id.clone()),
             );
             if entry.current {
                 actions.insert(id, Action::Toggle(index));
             }
+        }
+        let id = ListSelectionItemId::new("recent-commands");
+        items.push(ListSelectionItem::new("Include recent project sessions")
+            .with_columns("Include recent project sessions", "", if options.recent_commands { "Enabled" } else { "Disabled" })
+            .with_details("Reads this directory’s sessions by recency. Aggregates command names and targets; excludes messages and ordinary arguments.")
+            .with_id(id.clone()));
+        actions.insert(id, Action::RecentCommands);
+        if options.recent_commands {
+            for (id, title, value, detail, action) in [
+                (
+                    "history-sessions",
+                    "Session limit",
+                    options.history.sessions.to_string(),
+                    "Press Enter to cycle 50, 100, or 200 sessions.",
+                    Action::HistorySessions,
+                ),
+                (
+                    "history-commands",
+                    "Commands per session",
+                    options.history.commands_per_session.to_string(),
+                    "Press Enter to cycle 200, 500, or 2000 commands per session.",
+                    Action::HistoryCommands,
+                ),
+                (
+                    "history-days",
+                    "Time range",
+                    options
+                        .history
+                        .days
+                        .map_or("All dates".into(), |days| format!("{days}")),
+                    "Press Enter to cycle all dates, 30 days, or 90 days.",
+                    Action::HistoryDays,
+                ),
+            ] {
+                let id = ListSelectionItemId::new(id);
+                items.push(
+                    ListSelectionItem::new(title)
+                        .with_columns(title, "", value)
+                        .with_details(detail)
+                        .with_id(id.clone()),
+                );
+                actions.insert(id, action);
+            }
+        }
+        if let Some(history) = history {
+            items.push(ListSelectionItem::new("History scan coverage").with_id(ListSelectionItemId::new("history-coverage")).with_details(crate::nls::Text::template(
+                "Scanned {0}/{1} sessions, {2}/{3} commands; kept {4}/{5} facts. Budgets can leave coverage partial.",
+                [u64::from(history.sessions_scanned), history.sessions_available, u64::from(history.commands_scanned), history.commands_available, u64::from(history.facts_included), u64::from(history.facts_available)]
+                    .into_iter().map(|value| value.to_string().into()).collect(),
+            )));
         }
         let model = ListSelectionModel::new("Guardian", vec![ListSelectionGroup::new("", items)])
             .without_tab_bar()
@@ -187,7 +300,7 @@ impl Panel {
                 ListSelectionOutcome::Activate(Command::Scan(ApprovalEnvironmentScanParams {
                     scope: self.scope.clone(),
                     operation_id: crate::client::new_command_id("guardian-scan").to_string(),
-                    options: ScanOptions::default(),
+                    options: self.options.clone(),
                     model: None,
                 }))
             }
@@ -219,7 +332,67 @@ impl Panel {
                 if entry.accepted {
                     entry.kind = EntryKind::Fact;
                 }
-                self.selection = Self::selection(&self.root, &self.entries, selected);
+                self.selection = Self::selection(
+                    &self.root,
+                    &self.entries,
+                    &self.options,
+                    self.history.as_ref(),
+                    selected,
+                );
+                self.selection.state_mut().localize(self.language);
+                ListSelectionOutcome::Consumed
+            }
+            ListSelectionOutcome::Activate(Action::RecentCommands) => {
+                let selected = self.selection.state().selected_visible_index().unwrap_or(0);
+                self.options.recent_commands = !self.options.recent_commands;
+                self.selection = Self::selection(
+                    &self.root,
+                    &self.entries,
+                    &self.options,
+                    self.history.as_ref(),
+                    selected,
+                );
+                self.selection.state_mut().localize(self.language);
+                ListSelectionOutcome::Consumed
+            }
+            ListSelectionOutcome::Activate(
+                action @ (Action::HistorySessions | Action::HistoryCommands | Action::HistoryDays),
+            ) => {
+                match action {
+                    Action::HistorySessions => {
+                        self.options.history.sessions = match self.options.history.sessions {
+                            50 => 100,
+                            100 => 200,
+                            _ => 50,
+                        }
+                    }
+                    Action::HistoryCommands => {
+                        self.options.history.commands_per_session =
+                            match self.options.history.commands_per_session {
+                                200 => 500,
+                                500 => 2000,
+                                _ => 200,
+                            }
+                    }
+                    Action::HistoryDays => {
+                        self.options.history.days = match self.options.history.days {
+                            None => Some(30),
+                            Some(30) => Some(90),
+                            Some(_) => None,
+                        }
+                    }
+                    Action::Scan | Action::Save | Action::RecentCommands | Action::Toggle(_) => {
+                        unreachable!()
+                    }
+                }
+                let selected = self.selection.state().selected_visible_index().unwrap_or(0);
+                self.selection = Self::selection(
+                    &self.root,
+                    &self.entries,
+                    &self.options,
+                    self.history.as_ref(),
+                    selected,
+                );
                 self.selection.state_mut().localize(self.language);
                 ListSelectionOutcome::Consumed
             }

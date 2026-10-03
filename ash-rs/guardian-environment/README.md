@@ -9,6 +9,10 @@
 State 分别保存用户描述和当前观察，只有变化才递增版本；App Server 拥有读取范围、整理模型调用
 和产品协议。模型不能维护授权。Sessions 与 TUI 使用 `/guardian setup` 管理资料。
 
+近期命令由现有 Thread 存储提供，在同一授权目录内跨会话读取，默认 50 个会话、每会话 200 条命令，不限定天数；范围可由用户调整。
+本领域提取命令名、主机和云存储桶线索，按不同会话数和频次聚合，每类最多 20 条事实，保留来源样本和覆盖量；普通参数、用户消息和输出不进入资料。
+历史事实不能确认目标归属；扫描和保存不会授予权限，也不会改写 memories 或开启其读取、写入。
+
 接口与使用流程见 [准备项目审核环境](../../docs/guardian.md#准备项目审核环境)。
 验证使用 `just test ash-guardian-environment`、`just check ash-guardian-environment` 和
 `just rust-warnings ash-guardian-environment`。

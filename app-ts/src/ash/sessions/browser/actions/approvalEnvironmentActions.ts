@@ -2,7 +2,7 @@ import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { localize, localize2 } from '../../../nls.js';
 import { Action2, registerAction2 } from '../../../platform/actions/common/actions.js';
-import { IApprovalEnvironmentService, type ReviewEnvironmentEntry, type ReviewEnvironmentScanOptions, type ReviewEnvironmentScope } from '../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
+import { IApprovalEnvironmentService, type ReviewEnvironmentEntry, type ReviewEnvironmentHistoryCoverage, type ReviewEnvironmentScanOptions, type ReviewEnvironmentScope } from '../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -42,9 +42,11 @@ registerAction2(class PrepareApprovalEnvironment extends Action2 {
 		let entries = [...profile.entries];
 		let revision = profile.revision;
 		let draftId: string | undefined;
+		let history: ReviewEnvironmentHistoryCoverage | undefined;
+		let options: ReviewEnvironmentScanOptions = { ...profile.scanOptions, summarizeWithModel: true };
 		const editedSources = new Set<string>();
 		for (;;) {
-			const choice = await pick(input, localize('approvalEnvironment.review', 'Review environment: {0}', root), [
+			const choice = await pick(input, localize('approvalEnvironment.review', 'Review environment: {0}', root) + (history ? ` — ${localize('approvalEnvironment.coverage', 'Scanned {0}/{1} sessions, {2}/{3} commands; kept {4}/{5} facts', history.sessionsScanned, history.sessionsAvailable, history.commandsScanned, history.commandsAvailable, history.factsIncluded, history.factsAvailable)}` : ''), [
 				{ id: 'scan', label: localize('approvalEnvironment.scan', 'Scan project…'), description: localize('approvalEnvironment.scanDetail', 'Choose scope and create a draft; nothing is accepted automatically') },
 				{ id: 'add', label: localize('approvalEnvironment.add', 'Add a description…') },
 				...entries.map(entry => ({ id: entry.id, label: entry.title, picked: entry.accepted && entry.current, description: entry.current ? entry.accepted ? localize('approvalEnvironment.accepted', 'Accepted') : localize('approvalEnvironment.pending', 'Pending review') : localize('approvalEnvironment.stale', 'Source changed — excluded from review'), detail: `${sourceLabel(entry)}\n${entry.content}` })),
@@ -52,8 +54,9 @@ registerAction2(class PrepareApprovalEnvironment extends Action2 {
 			]);
 			if (!choice) { return; }
 			if (choice.id === 'scan') {
-				const options = await scanOptions(input, !!threadId);
-				if (!options) { continue; }
+				const selectedOptions = await scanOptions(input, options);
+				if (!selectedOptions) { continue; }
+				options = selectedOptions;
 				const operationId = generateUuid();
 				using progress = new DisposableStore();
 				const waiting = progress.add(input.createQuickPick<Item>());
@@ -79,6 +82,7 @@ registerAction2(class PrepareApprovalEnvironment extends Action2 {
 						entries = [...draft.entries.map(entry => entry.current && edited.has(sourceKey(entry)) ? edited.get(sourceKey(entry))! : entry), ...retained];
 						revision = draft.baseRevision;
 						draftId = draft.id;
+						history = draft.history;
 					}
 				} catch (error) { if (!cancelled) { notifications.error(error instanceof Error ? error.message : String(error)); } }
 				finally { finished = true; waiting.hide(); }
@@ -122,26 +126,42 @@ function sourceKey(entry: ReviewEnvironmentEntry): string { return `${entry.sour
 function sourceLabel(entry: ReviewEnvironmentEntry): string {
 	switch (entry.source.kind) {
 		case 'projectFile': return localize('approvalEnvironment.projectSource', 'Project file: {0} · {1}', entry.source.label, entry.source.revision.slice(0, 8));
-		case 'recentCommand': return localize('approvalEnvironment.sessionSource', 'Historical session command');
+		case 'recentCommand': {
+			const source = entry.source.command;
+			if (source) { return [localize('approvalEnvironment.commandCounts', '{0} occurrences in {1} sessions; newest source samples:', source.occurrences, source.sessionCount), ...source.samples.map(sample => localize('approvalEnvironment.commandSource', 'Session {0} · Chat {1} · Turn {2} · {3}', sample.sessionId, sample.threadId, sample.turnId, new Date(sample.recordedAtUnixMs).toLocaleString()))].join('\n'); }
+			return localize('approvalEnvironment.sessionSource', 'Historical session command');
+		}
 		case 'shellHistory': return localize('approvalEnvironment.historySource', 'Historical executable names');
 		case 'otherRepository': return localize('approvalEnvironment.repositorySource', 'Historical remote observation: {0}', entry.source.label.split(': ').at(-1)!);
 		case 'manual': return localize('approvalEnvironment.manualSource', 'Your description');
 	}
 }
 
-async function scanOptions(input: IQuickInputService, hasThread: boolean): Promise<ReviewEnvironmentScanOptions | undefined> {
-	let options: ReviewEnvironmentScanOptions = { recentCommands: false, shellHistory: false, otherRepositories: false, summarizeWithModel: true };
+async function scanOptions(input: IQuickInputService, initial: ReviewEnvironmentScanOptions): Promise<ReviewEnvironmentScanOptions | undefined> {
+	let options = initial;
 	for (;;) {
 		const choice = await pick(input, localize('approvalEnvironment.scope', 'Scan scope — current project is included'), [
 			{ id: 'summarizeWithModel', label: localize('approvalEnvironment.summarize', 'Summarize with the current task model'), description: localize('approvalEnvironment.modelPrivacy', 'Sends filtered observations to this model; no tools or automatic permissions'), picked: options.summarizeWithModel },
-			...(hasThread ? [{ id: 'recentCommands', label: localize('approvalEnvironment.recent', 'Include recent commands from this chat'), picked: options.recentCommands }] : []),
+			{ id: 'recentCommands', label: localize('approvalEnvironment.recent', 'Include recent project sessions'), description: localize('approvalEnvironment.recentDetail', 'Reads this directory’s sessions by recency; aggregates command names and targets; excludes messages and ordinary arguments'), picked: options.recentCommands },
+			...(options.recentCommands ? [
+				{ id: 'historySessions', label: localize('approvalEnvironment.historySessions', 'Session limit: {0}', options.history.sessions), description: localize('approvalEnvironment.historySessionsDetail', 'Enter a number from 1 to 200') },
+				{ id: 'historyCommands', label: localize('approvalEnvironment.historyCommands', 'Commands per session: {0}', options.history.commandsPerSession), description: localize('approvalEnvironment.historyCommandsDetail', 'Enter a number from 1 to 2000; each session has its own budget') },
+				{ id: 'historyDays', label: options.history.days === null ? localize('approvalEnvironment.historyAllDates', 'Time range: all dates') : localize('approvalEnvironment.historyDays', 'Time range: last {0} days', options.history.days), description: localize('approvalEnvironment.historyDaysDetail', 'Leave empty for all dates, or enter 1 to 3650 days') },
+			] : []),
 			{ id: 'shellHistory', label: localize('approvalEnvironment.history', 'Include shell history executable names'), description: localize('approvalEnvironment.historyDetail', 'Reads bounded history on the execution machine; excludes arguments'), picked: options.shellHistory },
 			{ id: 'otherRepositories', label: localize('approvalEnvironment.repositories', 'Include other repositories in the home directory'), description: localize('approvalEnvironment.repositoriesDetail', 'Reads bounded Git remote metadata on the execution machine; excludes source code'), picked: options.otherRepositories },
 			{ id: 'continue', label: localize('approvalEnvironment.continue', 'Continue — generate draft') },
 		]);
 		if (!choice) { return undefined; }
 		if (choice.id === 'continue') { return options; }
-		const key = choice.id as keyof ReviewEnvironmentScanOptions;
+		if (choice.id === 'historySessions' || choice.id === 'historyCommands' || choice.id === 'historyDays') {
+			const field = choice.id === 'historySessions' ? 'sessions' : choice.id === 'historyCommands' ? 'commandsPerSession' : 'days';
+			const maximum = field === 'sessions' ? 200 : field === 'commandsPerSession' ? 2000 : 3650;
+			const value = await input.input({ title: choice.label, value: options.history[field]?.toString() ?? '', validateInput: async value => field === 'days' && !value.trim() || /^[0-9]+$/.test(value) && Number(value) >= 1 && Number(value) <= maximum ? undefined : localize('approvalEnvironment.historyInvalid', 'Enter a whole number from 1 to {0}.', maximum) });
+			if (value !== undefined) { options = { ...options, history: { ...options.history, [field]: field === 'days' && !value.trim() ? null : Number(value) } }; }
+			continue;
+		}
+		const key = choice.id as 'recentCommands' | 'shellHistory' | 'otherRepositories' | 'summarizeWithModel';
 		options = { ...options, [key]: !options[key] };
 	}
 }

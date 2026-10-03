@@ -21,6 +21,7 @@ pub enum ApprovalEnvironmentScope {
 pub struct ApprovalEnvironmentReadResult {
     pub root: String,
     pub profile: guardian_environment::EnvironmentProfile,
+    pub scan_options: guardian_environment::ScanOptions,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -28,6 +29,9 @@ pub struct ApprovalEnvironmentReadResult {
 pub struct ApprovalEnvironmentScanResult {
     pub root: String,
     pub draft: guardian_environment::EnvironmentDraft,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub history: Option<guardian_environment::HistoryCoverage>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

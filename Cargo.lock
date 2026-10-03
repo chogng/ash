@@ -662,6 +662,7 @@ dependencies = [
  "ash-syntax",
  "ash-teams",
  "ash-testing",
+ "ash-thread-store",
  "ash-thread-transcript",
  "ash-tools",
  "ash-typst",
@@ -1731,6 +1732,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "ts-rs",
+ "url",
 ]
 
 [[package]]

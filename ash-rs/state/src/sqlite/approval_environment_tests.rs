@@ -56,6 +56,7 @@ fn automatic_observations_survive_reopen_without_rewriting_user_acceptance_or_re
         accepted: false,
         current: true,
         source: guardian_environment::EnvironmentSource {
+            command: None,
             id: "source".into(),
             kind: guardian_environment::SourceKind::ProjectFile,
             label: "ASH.md".into(),

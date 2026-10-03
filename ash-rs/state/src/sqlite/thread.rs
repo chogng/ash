@@ -78,6 +78,136 @@ impl SqliteThreadStore {
 }
 
 impl ThreadStore for SqliteThreadStore {
+    fn recent_tool_calls(
+        &self,
+        query: &ash_thread_store::RecentToolCallsQuery,
+    ) -> Result<ash_thread_store::RecentToolCalls, ThreadStoreError> {
+        let connection = self.connection()?;
+        // Rank within Sessions before applying aggregate budgets. Each selected Session gets its
+        // newest command first; a busy chat cannot consume the entire history scan.
+        let mut statement = connection.prepare(
+            "WITH local_threads AS MATERIALIZED (
+                SELECT catalog.session_id, catalog.thread_id FROM thread_catalog AS catalog
+                WHERE json_extract(catalog.record_json, '$.execution_target.type') = 'local'
+                  AND json_extract(catalog.record_json, '$.execution_target.root') = ?1
+                  AND NOT EXISTS (SELECT 1 FROM remote_history_bindings AS remote
+                                  WHERE remote.thread_id = catalog.thread_id)
+            ), completed AS MATERIALIZED (
+                SELECT events.thread_id,
+                       json_extract(records.record_json, '$.event.item.toolCallId') AS call_id,
+                       json_extract(records.record_json, '$.event.item.turnId') AS turn_id,
+                       MAX(events.sequence) AS sequence
+                FROM local_threads AS threads
+                JOIN thread_events AS events ON events.thread_id = threads.thread_id
+                JOIN history_records AS records ON records.digest = events.record_digest
+                WHERE json_extract(records.record_json, '$.event.type') = 'itemCompleted'
+                  AND json_extract(records.record_json, '$.event.item.type') = 'toolResult'
+                  AND json_extract(records.record_json, '$.event.item.isError') = 0
+                  AND json_extract(records.record_json, '$.recordedAt') <= ?3
+                GROUP BY events.thread_id, call_id, turn_id
+            ), eligible AS MATERIALIZED (
+                SELECT threads.session_id, events.thread_id, events.sequence,
+                       records.record_json, records.digest,
+                       json_extract(records.record_json, '$.recordedAt') AS recorded_at,
+                       length(CAST(json_extract(records.record_json, '$.event.item.argumentsJson') AS BLOB)) AS bytes
+                FROM local_threads AS threads
+                JOIN thread_events AS events ON events.thread_id = threads.thread_id
+                JOIN history_records AS records ON records.digest = events.record_digest
+                JOIN completed ON completed.thread_id = events.thread_id
+                  AND completed.call_id = json_extract(records.record_json, '$.event.item.toolCallId')
+                  AND completed.turn_id = json_extract(records.record_json, '$.event.item.turnId')
+                  AND completed.sequence > events.sequence
+                WHERE json_extract(records.record_json, '$.recordedAt') BETWEEN ?2 AND ?3
+                  AND json_extract(records.record_json, '$.event.type') = 'itemCompleted'
+                  AND json_extract(records.record_json, '$.event.item.type') = 'toolCall'
+                  AND json_extract(records.record_json, '$.event.item.name')
+                      IN ('exec_command', 'shell', 'run_command', 'shell-command', 'shell-session')
+                  AND bytes <= ?4
+            ), recent_sessions AS (
+                SELECT session_id FROM eligible GROUP BY session_id
+                ORDER BY MAX(recorded_at) DESC, session_id LIMIT ?5
+            ), ranked AS (
+                SELECT eligible.*, ROW_NUMBER() OVER (
+                    PARTITION BY session_id ORDER BY recorded_at DESC, thread_id, sequence DESC
+                ) AS command_rank
+                FROM eligible WHERE session_id IN (SELECT session_id FROM recent_sessions)
+            ), budgeted AS (
+                SELECT ranked.*, SUM(bytes) OVER (
+                    ORDER BY command_rank, recorded_at DESC, session_id, thread_id, sequence DESC
+                    ROWS UNBOUNDED PRECEDING
+                ) AS total_bytes,
+                ROW_NUMBER() OVER (
+                    ORDER BY command_rank, recorded_at DESC, session_id, thread_id, sequence DESC
+                ) AS total_rank
+                FROM ranked WHERE command_rank <= ?6
+            ), coverage AS (
+                SELECT (SELECT COUNT(DISTINCT session_id) FROM eligible) AS sessions_available,
+                       (SELECT COUNT(*) FROM ranked) AS commands_available
+            )
+            SELECT budgeted.session_id, budgeted.thread_id, budgeted.sequence,
+                   budgeted.record_json, budgeted.digest,
+                   coverage.sessions_available, coverage.commands_available
+            FROM coverage LEFT JOIN budgeted ON total_bytes <= ?7 AND total_rank <= ?8
+            ORDER BY command_rank, recorded_at DESC, session_id, thread_id, sequence DESC"
+        ).map_err(storage_error)?;
+        let rows = statement
+            .query_map(
+                params![
+                    query
+                        .root
+                        .to_str()
+                        .ok_or_else(|| storage_error("history root is not UTF-8"))?,
+                    to_sql_integer(query.since_unix_ms).map_err(ThreadStoreError::Storage)?,
+                    to_sql_integer(query.until_unix_ms).map_err(ThreadStoreError::Storage)?,
+                    ash_thread_store::MAX_RECENT_ARGUMENT_BYTES as i64,
+                    i64::from(query.sessions),
+                    i64::from(query.commands_per_session),
+                    ash_thread_store::MAX_RECENT_ARGUMENT_TOTAL_BYTES as i64,
+                    ash_thread_store::MAX_RECENT_TOOL_CALLS as i64,
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, Option<String>>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, Option<i64>>(2)?,
+                        row.get::<_, Option<String>>(3)?,
+                        row.get::<_, Option<String>>(4)?,
+                        row.get::<_, i64>(5)?,
+                        row.get::<_, i64>(6)?,
+                    ))
+                },
+            )
+            .map_err(storage_error)?;
+        let mut result = ash_thread_store::RecentToolCalls::default();
+        for row in rows {
+            let (session_id, thread_id, sequence, json, digest, sessions, commands) =
+                row.map_err(storage_error)?;
+            result.sessions_available =
+                from_sql_integer(sessions).map_err(ThreadStoreError::Storage)?;
+            result.commands_available =
+                from_sql_integer(commands).map_err(ThreadStoreError::Storage)?;
+            if let (Some(session_id), Some(thread_id), Some(sequence), Some(json), Some(digest)) =
+                (session_id, thread_id, sequence, json, digest)
+            {
+                let event = super::history::decode_record(&json, &digest)?;
+                if event.thread_id.as_str() != thread_id
+                    || event.sequence
+                        != from_sql_integer(sequence).map_err(ThreadStoreError::Storage)?
+                {
+                    return Err(storage_error(
+                        "history metadata disagrees with its envelope",
+                    ));
+                }
+                let session_id = SessionId::new(session_id).map_err(storage_error)?;
+                if let Some(call) =
+                    ash_thread_store::RecentToolCall::from_event(&session_id, &event)
+                {
+                    result.calls.push(call);
+                }
+            }
+        }
+        Ok(result)
+    }
     fn execution_binding(
         &self,
         thread_id: &ThreadId,

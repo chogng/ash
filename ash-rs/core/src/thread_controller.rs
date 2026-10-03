@@ -2193,6 +2193,14 @@ impl ThreadController {
         self.read_catalog(|store| store.list_catalog())
     }
 
+    /// Reads bounded local activity without restoring Threads or loading conversation content.
+    pub fn recent_tool_calls(
+        &self,
+        query: &ash_thread_store::RecentToolCallsQuery,
+    ) -> Result<ash_thread_store::RecentToolCalls, CoreError> {
+        self.store.recent_tool_calls(query).map_err(Into::into)
+    }
+
     /// Reads one durable row per Session and repairs damaged list rows from Thread history.
     pub fn list_sessions(&self) -> Result<Vec<Session>, CoreError> {
         loop {
@@ -3316,6 +3324,119 @@ impl InMemoryThreadStore {
 }
 
 impl ThreadStore for InMemoryThreadStore {
+    fn recent_tool_calls(
+        &self,
+        query: &ash_thread_store::RecentToolCallsQuery,
+    ) -> Result<ash_thread_store::RecentToolCalls, ThreadStoreError> {
+        let state = self
+            .0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?;
+        let mut calls = Vec::new();
+        for catalog in state.catalog.values() {
+            if catalog.execution_target
+                != Some(ash_protocol::SessionExecutionTarget::Local {
+                    root: query.root.clone(),
+                })
+            {
+                continue;
+            }
+            if let Some(events) = state.threads.get(&catalog.thread.thread_id) {
+                let completed = events
+                    .iter()
+                    .filter(|event| event.recorded_at.0 <= u128::from(query.until_unix_ms))
+                    .filter_map(|event| match &event.event {
+                        ThreadEvent::ItemCompleted {
+                            item:
+                                ThreadItem::ToolResult {
+                                    tool_call_id,
+                                    turn_id,
+                                    is_error: false,
+                                    ..
+                                },
+                            ..
+                        } => Some(((tool_call_id, turn_id), event.sequence)),
+                        _ => None,
+                    })
+                    .collect::<BTreeMap<_, _>>();
+                calls.extend(
+                    events
+                        .iter()
+                        .filter(|event| {
+                            event.recorded_at.0 >= u128::from(query.since_unix_ms)
+                                && event.recorded_at.0 <= u128::from(query.until_unix_ms)
+                        })
+                        .filter_map(|event| {
+                            ash_thread_store::RecentToolCall::from_event(&catalog.session_id, event)
+                        })
+                        .filter(|call| {
+                            completed
+                                .get(&(&call.tool_call_id, &call.turn_id))
+                                .is_some_and(|sequence| *sequence > call.sequence)
+                        }),
+                );
+            }
+        }
+        calls.sort_by(|left, right| {
+            right
+                .recorded_at_unix_ms
+                .cmp(&left.recorded_at_unix_ms)
+                .then_with(|| left.session_id.cmp(&right.session_id))
+                .then_with(|| left.thread_id.cmp(&right.thread_id))
+                .then_with(|| right.sequence.cmp(&left.sequence))
+        });
+        let sessions_available = calls
+            .iter()
+            .map(|call| &call.session_id)
+            .collect::<BTreeSet<_>>()
+            .len() as u64;
+        let mut sessions = Vec::new();
+        calls.retain(|call| {
+            if sessions.contains(&call.session_id) {
+                return true;
+            }
+            if sessions.len() == query.sessions as usize {
+                return false;
+            }
+            sessions.push(call.session_id.clone());
+            true
+        });
+        let commands_available = calls.len() as u64;
+        let mut per_session = BTreeMap::<SessionId, u32>::new();
+        let mut ranked = calls
+            .into_iter()
+            .filter_map(|call| {
+                let rank = per_session.entry(call.session_id.clone()).or_default();
+                *rank += 1;
+                (*rank <= query.commands_per_session).then_some((*rank, call))
+            })
+            .collect::<Vec<_>>();
+        ranked.sort_by_key(|(rank, call)| {
+            (
+                *rank,
+                std::cmp::Reverse(call.recorded_at_unix_ms),
+                call.session_id.clone(),
+                call.thread_id.clone(),
+                std::cmp::Reverse(call.sequence),
+            )
+        });
+        let mut bytes = 0;
+        let calls = ranked
+            .into_iter()
+            .take(ash_thread_store::MAX_RECENT_TOOL_CALLS)
+            .take_while(|(_, call)| {
+                bytes += call.arguments_json.len();
+                bytes <= ash_thread_store::MAX_RECENT_ARGUMENT_TOTAL_BYTES
+            })
+            .map(|(_, call)| call)
+            .collect();
+        Ok(ash_thread_store::RecentToolCalls {
+            calls,
+            sessions_available,
+            commands_available,
+        })
+    }
+
     fn pending_checkpoint_cleanup(
         &self,
     ) -> Result<Vec<(String, ash_protocol::RepositoryCheckpoint)>, ThreadStoreError> {

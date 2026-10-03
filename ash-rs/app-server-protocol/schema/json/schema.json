@@ -2373,11 +2373,15 @@
         },
         "root": {
           "type": "string"
+        },
+        "scanOptions": {
+          "$ref": "#/$defs/ScanOptions"
         }
       },
       "required": [
         "root",
-        "profile"
+        "profile",
+        "scanOptions"
       ],
       "type": "object"
     },
@@ -2450,6 +2454,16 @@
       "properties": {
         "draft": {
           "$ref": "#/$defs/EnvironmentDraft"
+        },
+        "history": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HistoryCoverage"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "root": {
           "type": "string"
@@ -16363,10 +16377,71 @@
       ],
       "type": "string"
     },
+    "CommandEvidence": {
+      "additionalProperties": false,
+      "description": "Counts cover the scanned commands; samples are the newest references from distinct Sessions.",
+      "properties": {
+        "occurrences": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "samples": {
+          "items": {
+            "$ref": "#/$defs/CommandSource"
+          },
+          "type": "array"
+        },
+        "sessionCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "occurrences",
+        "sessionCount",
+        "samples"
+      ],
+      "type": "object"
+    },
     "CommandId": {
       "description": "Stable caller-supplied identity for one retry-safe product command.",
       "minLength": 1,
       "type": "string"
+    },
+    "CommandSource": {
+      "additionalProperties": false,
+      "description": "Immutable history coordinates, not an endorsement of the command or its targets.",
+      "properties": {
+        "recordedAtUnixMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "turnId",
+        "sequence",
+        "recordedAtUnixMs"
+      ],
+      "type": "object"
     },
     "CommitMessageAuthorizeParams": {
       "description": "Authorizes the active directory to send bounded context and diff to the exact summary model.",
@@ -19668,6 +19743,16 @@
       "additionalProperties": false,
       "description": "A source identifies the exact observation, never a permission to read its parent directory.",
       "properties": {
+        "command": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommandEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "id": {
           "type": "string"
         },
@@ -24005,6 +24090,51 @@
       ],
       "type": "object"
     },
+    "HistoryCoverage": {
+      "additionalProperties": false,
+      "description": "Coverage describes the bounded scan, not the completeness of the project's environment.",
+      "properties": {
+        "commandsAvailable": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "commandsScanned": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "factsAvailable": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "factsIncluded": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionsAvailable": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionsScanned": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sessionsAvailable",
+        "sessionsScanned",
+        "commandsAvailable",
+        "commandsScanned",
+        "factsAvailable",
+        "factsIncluded"
+      ],
+      "type": "object"
+    },
     "HistoryPrefixRef": {
       "description": "Immutable original event prefix. Its records retain their original Thread IDs and sequences.",
       "properties": {
@@ -24024,6 +24154,35 @@
         "digest",
         "sourceThreadId",
         "sourceSequence"
+      ],
+      "type": "object"
+    },
+    "HistoryScanOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "commandsPerSession": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "days": {
+          "description": "None selects by recency without excluding infrequently used projects by age.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sessions": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sessions",
+        "commandsPerSession"
       ],
       "type": "object"
     },
@@ -34182,6 +34341,9 @@
     "ScanOptions": {
       "additionalProperties": false,
       "properties": {
+        "history": {
+          "$ref": "#/$defs/HistoryScanOptions"
+        },
         "otherRepositories": {
           "type": "boolean"
         },
@@ -34199,7 +34361,8 @@
         "recentCommands",
         "shellHistory",
         "otherRepositories",
-        "summarizeWithModel"
+        "summarizeWithModel",
+        "history"
       ],
       "type": "object"
     },

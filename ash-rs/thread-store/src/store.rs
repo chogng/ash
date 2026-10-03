@@ -172,6 +172,12 @@ impl ThreadExecutionBinding {
 /// event or none, makes the complete batch durable before returning success, and excludes
 /// uncommitted tail batches from subsequent `load` results.
 pub trait ThreadStore: agent_graph_store::AgentGraphStore {
+    /// Returns newest shell tool inputs from at most eight Sessions and 64 calls, without
+    /// replaying transcripts. Storage filters execution scope and age before loading content.
+    fn recent_tool_calls(
+        &self,
+        query: &crate::RecentToolCallsQuery,
+    ) -> Result<crate::RecentToolCalls, ThreadStoreError>;
     fn execution_binding(
         &self,
         _thread_id: &ThreadId,
