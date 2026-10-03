@@ -24,6 +24,9 @@ import type {
 	IWebWorkbenchHost,
 } from "./web.api.js";
 import { startWorkbench } from "./workbench.js";
+import { BrowserStorageService } from '../services/storage/browser/storageService.js';
+import { LogService } from '../../platform/log/common/logServiceImpl.js';
+import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
 import { switchBrowserWorkbenchMode } from "../services/workbenchMode/browser/browserWorkbenchModeHost.js";
 import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { BrowserLifecycleService } from '../services/lifecycle/browser/lifecycleService.js';
@@ -41,6 +44,8 @@ export async function createWebWorkbench(
 	if (!ownerWindow) throw new Error('Workbench requires an owner window');
 	return startWorkbench({
 		modeId,
+		createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
+		createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 		configurationApi: options.configurationApi,
 		initialConfigurationSnapshot: options.initialConfigurationSnapshot,
 		defaultLayout: options.defaultLayout,

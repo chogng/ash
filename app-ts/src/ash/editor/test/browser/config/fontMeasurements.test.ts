@@ -28,7 +28,7 @@ test('restored font metrics preserve persisted values until the window measures 
 	const target = dom.window as unknown as Window;
 	const saved = savedFontInfo();
 	const font = new FontInfo(saved, false);
-	assert.deepEqual(measurements.serializeFontInfo(target), []);
+	assert.equal(measurements.serializeFontInfo(target), undefined);
 	measurements.restoreFontInfo(target, JSON.parse(JSON.stringify([saved])));
 	const restored = measurements.readFontInfo(target, font);
 	assert.equal(restored.isTrusted, false);
@@ -42,7 +42,7 @@ test('restored font metrics preserve persisted values until the window measures 
 	assert.equal(measured.isTrusted, true);
 	assert.deepEqual(measurements.serializeFontInfo(target), [measured]);
 	measurements.clearAllFontInfos();
-	assert.deepEqual(measurements.serializeFontInfo(target), []);
+	assert.equal(measurements.serializeFontInfo(target), undefined);
 });
 
 test('restored font validation rejects stale versions and malformed metrics without poisoning the cache', () => {
@@ -59,9 +59,19 @@ test('restored font validation rejects stale versions and malformed metrics with
 		{ ...saved, letterSpacing: '1' }, { ...saved, middotWidth: -1 },
 	];
 	measurements.restoreFontInfo(target, JSON.parse(JSON.stringify(invalid)));
-	assert.deepEqual(measurements.serializeFontInfo(target), []);
+	assert.equal(measurements.serializeFontInfo(target), undefined);
 	measurements.restoreFontInfo(target, JSON.parse(JSON.stringify([...invalid, saved])));
 	assert.equal(measurements.readFontInfo(target, new FontInfo(saved, false)).typicalHalfwidthCharacterWidth, 8);
+	assert.equal(measurements.serializeFontInfo(target), undefined);
+});
+
+test('page teardown preserves saved font metrics after releasing restored readings', () => {
+	const dom = new JSDOM('<body></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using measurements = new FontMeasurementsImpl();
+	const target = dom.window as unknown as Window;
+	measurements.restoreFontInfo(target, [savedFontInfo()]);
+	dom.window.dispatchEvent(new dom.window.PageTransitionEvent('pagehide'));
 	assert.equal(measurements.serializeFontInfo(target), undefined);
 });
 

@@ -22,6 +22,9 @@ import { showStartupError } from '../../workbench/browser/startupError.js';
 import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { Workbench } from "./workbench.js";
+import { BrowserStorageService } from '../../workbench/services/storage/browser/storageService.js';
+import { LogService } from '../../platform/log/common/logServiceImpl.js';
+import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
 import { selectionFromWorkspace } from './workspaceSelection.js';
 
 /** Starts a browser-hosted Sessions page with the optional renderer host. */
@@ -55,6 +58,8 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 		const workbench = sessions.add(await Workbench.create({
 			contributionIds: [],
 			modeId,
+			createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
+			createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 			profile,
 			api: host?.api ?? createDisconnectedRendererApi(),
 			workspaceSelection: () => host?.workspace ? selectionFromWorkspace(workspaceFromIdentifier(host.workspace)) : { type: 'current' },

@@ -41,11 +41,7 @@ import { SessionsLayoutPolicy } from './layoutPolicy.js';
 import { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js';
 import { SessionsViewRegistry } from '../common/views.js';
 import { ViewContainerLocation } from '../../workbench/common/views.js';
-import { DesignEditorService, IDesignEditorService, DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from '../contrib/design/browser/designEditorService.js';
-import { DESIGN_EDITOR_RESOURCE } from '../contrib/design/browser/designDocumentController.js';
-import { EditorPaneVisibility } from '../../workbench/browser/parts/editor/editorPane.js';
-import type { EditorInput } from '../../workbench/services/editor/common/editorService.js';
-import { SESSIONS_FILES_CONTAINER_ID } from '../contrib/files/browser/files.contribution.js';
+import { DesignEditorService, IDesignEditorService } from '../contrib/design/browser/designEditorService.js';
 import { sessionsPartIds, SESSION_SIDEBAR_DEFAULT_WIDTH, SESSION_AUXILIARYBAR_DEFAULT_WIDTH, type SessionsPartId } from '../common/layoutConstants.js';
 import { Disposable, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { ILanguageService } from "../../editor/common/languages/language.js";
@@ -72,8 +68,7 @@ import { IAccessibilityService } from '../../platform/accessibility/common/acces
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
 import { ILogService } from '../../platform/log/common/log.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase, type WorkbenchContributionHost } from '../../workbench/common/contributions.js';
-import { LogService } from '../../platform/log/common/logServiceImpl.js';
-import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
+import type { LogService } from '../../platform/log/common/logServiceImpl.js';
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import { BrowserLayoutService, ILayoutService, type ILayoutOffsetInfo } from "../../platform/layout/browser/layoutService.js";
 import { ILifecycleService, LifecyclePhase, type ShutdownReason } from "../../workbench/services/lifecycle/common/lifecycle.js";
@@ -165,7 +160,7 @@ import { AppServerAccountService } from '../../workbench/services/accounts/brows
 import { IChatService } from "../../workbench/services/chat/common/chatService.js";
 import { WorkbenchConfigurationService } from "../../workbench/services/configuration/browser/configurationService.js";
 import { ExtensionColorThemeService } from "../../workbench/services/extensions/browser/extensionColorThemeService.js";
-import { BrowserStorageService } from "../../workbench/services/storage/browser/storageService.js";
+import type { BrowserStorageServiceOptions } from "../../workbench/services/storage/browser/storageService.js";
 import { IWorkbenchHostService } from "../../workbench/services/host/common/workbenchHostService.js";
 import { WorkbenchThemeService } from "../../workbench/services/themes/browser/workbenchThemeService.js";
 import { IHostColorSchemeService } from '../../workbench/services/themes/common/hostColorSchemeService.js';
@@ -189,7 +184,10 @@ import { ITerminalService } from '../../workbench/services/terminal/common/termi
 import { TerminalService } from '../../workbench/services/terminal/browser/terminalService.js';
 import { AuxiliaryBarPart } from "./parts/auxiliarybar/auxiliaryBarPart.js";
 import { disposableWindowTimeout } from '../../base/browser/scheduler.js';
-import { ActivityBarPart, type SessionsActivityPage } from './parts/activitybar/activityBarPart.js';
+import { ActivityBarPart } from './parts/activitybar/activityBarPart.js';
+import { ISessionsPageService } from '../common/pages.js';
+import { SessionsPageService } from '../services/pages/browser/sessionsPageService.js';
+import { SessionsPageLayoutController } from './pageLayoutController.js';
 import { SessionsPart, type SessionsPartOptions } from "./parts/sessionsPart.js";
 import { SidebarPart } from "./parts/sidebarPart.js";
 import { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
@@ -204,6 +202,8 @@ export interface IWorkbenchOptions {
 	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
 	readonly createFileDialogService: (services: IInstantiationService) => IFileDialogService;
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
+	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable>;
+	readonly createLogService: () => LogService;
 	readonly nativeHostApi?: INativeHostApi;
 	readonly returnToWorkbench: () => void;
 	readonly configurationApi?: IConfigurationApi;
@@ -226,19 +226,28 @@ export class Workbench extends Disposable {
 	private readonly showChat: () => void;
 	private readonly workspaceSelection: () => SessionWorkspaceSelection;
 	private readonly initialized: Promise<void>;
+	private readonly logService: ILogService;
 
 	public static async create(options: IWorkbenchOptions): Promise<Workbench> {
 		const themes = new ExtensionColorThemeService(options.api.extensions, options.api.events);
+		const logger = options.createLogService();
+		let storage: IStorageService & IDisposable | undefined;
 		try {
 			await themes.start();
-			return new Workbench(options, themes);
+			const ownerWindow = options.container.ownerDocument.defaultView;
+			if (!ownerWindow) { throw new Error('Sessions renderer requires an owner window'); }
+			storage = await options.createStorageService({ ownerWindow, applicationId: WorkbenchModeRegistry.get(options.modeId).storageNamespace, workspaceId: 'sessions', profileId: options.profile.id });
+			return new Workbench(options, themes, storage, logger);
 		} catch (error) {
+			logger.error('startup', 'Agents startup failed', error);
+			logger.dispose();
+			storage?.dispose();
 			themes.dispose();
 			throw error;
 		}
 	}
 
-	private constructor(options: IWorkbenchOptions, themes: ExtensionColorThemeService) {
+	private constructor(options: IWorkbenchOptions, themes: ExtensionColorThemeService, storageService: IStorageService & IDisposable, logger: LogService) {
 		super();
 		this._register(themes);
 		this.workspaceSelection = options.workspaceSelection;
@@ -266,7 +275,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILanguageConfigurationService, this._register(new LanguageConfigurationService(configurationService, languageService)));
 		services.registerInstance(ILanguageFeaturesService, this._register(new LanguageFeaturesService()));
 		services.registerInstance(ICodeEditorService, this._register(new StandaloneCodeEditorService()));
-		services.registerInstance(ILogService, this._register(new LogService({ sinks: [new ConsoleLogSink()] })));
+		this.logService = this._register(logger);
+		services.registerInstance(ILogService, this.logService);
 		services.registerInstance(IHostColorSchemeService, this._register(options.createHostColorSchemeService(services)));
 		const themeService = this.themeService = this._register(services.createInstance(WorkbenchThemeService, options.container));
 		services.registerInstance(IThemeService, themeService);
@@ -287,12 +297,7 @@ export class Workbench extends Disposable {
 		})));
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
-		const storage = this._register(new BrowserStorageService({
-			ownerWindow,
-			applicationId: WorkbenchModeRegistry.get(options.modeId).storageNamespace,
-			workspaceId: "sessions",
-			profileId: options.profile.id,
-		}));
+		const storage = this._register(storageService);
 		services.registerInstance(IStorageService, storage);
 		services.registerInstance(ISessionsManagementService, sessions);
 		const view = this.sessionsView = this._register(services.createInstance(SessionsService));
@@ -471,47 +476,10 @@ export class Workbench extends Disposable {
 				role: { type: 'exact' as const, name: agent.name, source: agent.source },
 			}));
 		}));
-		let activitybar: ActivityBarPart;
-		let activityPage: SessionsActivityPage = view.page.get();
-		let codeEditor: EditorInput | undefined;
-		let codeComposite = SESSIONS_FILES_CONTAINER_ID;
-		let openingDesign = false;
-		const selectActivityPage = (page: SessionsActivityPage): void => {
-			layout.updateParts(() => {
-				activityPage = page;
-				activitybar.selectPage(page);
-				sidebar.setEmptyPage(page === 'colab' || page === 'library');
-				if (page === 'chat' || page === 'code') {
-					view.selectPage(page);
-					sessionsPart?.setPage(page);
-					if (sidebar.currentView === 'views') sidebar.selectView('chats');
-				} else sessionsPart?.setPage(page === 'library' ? 'library' : 'empty');
-				layout.setPartAvailable('sidebar', page === 'chat' || page === 'code' || page === 'design');
-				layout.setPartAvailable('auxiliarybar', page === 'code' || page === 'design');
-				layout.setPartAvailable('panel', page === 'code');
-				// Attach the replacement center before hiding Sessions so panel widths stay stable.
-				if (page === 'design') { layout.setPartAvailable('editor', true); layout.showPart('editor'); }
-				layout.setPartAvailable('sessions', page !== 'design');
-				layout.setPartAvailable('editor', page === 'design' || (page === 'code' && editor.activeInput?.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()));
-				if (page === 'design') {
-					if (auxiliarybar!.activeCompositeId && auxiliarybar!.activeCompositeId !== DESIGN_PROPERTIES_CONTAINER_ID) codeComposite = auxiliarybar!.activeCompositeId;
-					sidebar.showComposite(DESIGN_LAYERS_CONTAINER_ID);
-					auxiliarybar!.showComposite(DESIGN_PROPERTIES_CONTAINER_ID);
-					layout.showPart('editor');
-					if (!openingDesign && editor.activeInput?.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()) {
-						openingDesign = true;
-						void editors.openEditor(services.get(IDesignEditorService).input, { pinned: true, preserveFocus: true }).then(() => {
-							openingDesign = false;
-							selectActivityPage(activityPage);
-							if (activityPage === 'design') editor.focus();
-						}).catch(error => { openingDesign = false; notificationService.error(String(error)); });
-					}
-				} else if (page === 'code') {
-					if (auxiliarybar!.activeCompositeId === DESIGN_PROPERTIES_CONTAINER_ID) auxiliarybar!.showComposite(codeComposite);
-					if (codeEditor && editor.activeInput?.resource.toString() === DESIGN_EDITOR_RESOURCE.toString()) editor.activateEditor(codeEditor);
-				}
-			});
-		};
+		const pages = this._register(services.createInstance(SessionsPageService));
+		services.registerInstance(ISessionsPageService, pages);
+		let pageLayoutController: SessionsPageLayoutController;
+		const selectActivityPage = (page: string): void => pages.openPage(page);
 		this._register(CommandsRegistry.register('sessions.library.useInDesign', async (_accessor, value) => {
 			const version = value as AssetVersion;
 			const design = services.get(IDesignEditorService);
@@ -530,9 +498,8 @@ export class Workbench extends Disposable {
 			sessionsPart!.focus();
 		}));
 		this.showChat = () => selectActivityPage('chat');
-		activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
+		const activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
 			focusList: () => sidebar.focusChats(),
-			selectPage: selectActivityPage,
 			showAccountMenu: (anchor: HTMLElement) => accountMenu.show(anchor),
 		}));
 		const activityBarLocation = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
@@ -550,7 +517,7 @@ export class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Chat and Code keep separate selected sessions, navigation history, unsent text, and attachments when you switch pages. Code sessions restore their own editor tabs when you navigate between them. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the Code side panel. Toggle Code side panel closes and reopens the whole composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens an empty page. Library browses imported images, favorites and collections. Design opens an infinite canvas. Accounts opens the account menu, which includes Return to Workbench. Mobile devices is not available yet.'),
+					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter page navigation and Accounts. Use arrow keys, Home and End to move between pages. Press Enter or Space to open the focused page. Drag page icons to reorder them, or use Move earlier and Move later in the Context Menu key or Shift+F10 menu. Page order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Chat and Code keep separate selected sessions, navigation history, unsent text, and attachments when you switch pages. Code sessions restore their own editor tabs when you navigate between them. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the Code side panel. Toggle Code side panel closes and reopens the whole composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens an empty page. Library browses imported images, favorites and collections. Design opens an infinite canvas. Accounts opens the account menu, which includes Return to Workbench.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -649,8 +616,7 @@ export class Workbench extends Disposable {
 				}
 			},
 			openViewContainer: container => {
-				const design = container.id === DESIGN_LAYERS_CONTAINER_ID || container.id === DESIGN_PROPERTIES_CONTAINER_ID;
-				selectActivityPage(design ? 'design' : 'code');
+				pageLayoutController.openContainerPage(container.id, container.location);
 				switch (container.location) {
 					case ViewContainerLocation.Sidebar:
 						layout.showPart('sidebar');
@@ -679,30 +645,9 @@ export class Workbench extends Disposable {
 			['panel', panel],
 		]);
 		layout.createWorkbenchLayout(parts);
-		layout.setPartAvailable('auxiliarybar', view.page.get() === 'code');
-		layout.setPartAvailable('editor', view.page.get() === 'code');
-		layout.setPartAvailable('panel', view.page.get() === 'code');
-		this._register(editors.onDidActiveEditorChange(() => {
-			const input = editors.activeEditor;
-			if (input && input.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()) codeEditor = input;
-			else if (codeEditor && !editor.groups.some(group => group.inputs.some(candidate => candidate.resource.toString() === codeEditor!.resource.toString()))) codeEditor = undefined;
-			if (!openingDesign && input && (activityPage === 'code' || activityPage === 'design')) selectActivityPage(input.resource.toString() === DESIGN_EDITOR_RESOURCE.toString() ? 'design' : 'code');
-		}));
+		pageLayoutController = this._register(services.createInstance(SessionsPageLayoutController, sidebar, sessionsPart, auxiliarybar));
 		const layoutController = this._register(services.createInstance(DesktopLayoutController, panel, auxiliarybar));
 		layoutController.start();
-		this._register(layout.onDidChangePartVisibility(event => {
-			if (event.partId !== 'editor') return;
-			const visibility = event.visible ? EditorPaneVisibility.Visible : EditorPaneVisibility.Hidden;
-			for (const group of editor.groups) {
-				if (group.activeInput?.resource.toString() === DESIGN_EDITOR_RESOURCE.toString()) group.activePane!.setVisible(visibility);
-			}
-			// Split panes resume together; the panels still follow the active group's selection.
-			if (event.visible && editor.activeInput?.resource.toString() === DESIGN_EDITOR_RESOURCE.toString()) editor.activePane!.setVisible(visibility);
-		}));
-		this._register(auxiliarybar.onDidSelectComposite(event => {
-			if (event.compositeId !== DESIGN_PROPERTIES_CONTAINER_ID) codeComposite = event.compositeId;
-			selectActivityPage(event.compositeId === DESIGN_PROPERTIES_CONTAINER_ID ? 'design' : 'code');
-		}));
 		this._register(this.lifecycleService.onBeforeShutdown(event => {
 			event.veto(editor.confirmCloseAllEditors().then(confirmed => !confirmed), 'Sessions unsaved files');
 		}));
@@ -723,7 +668,7 @@ export class Workbench extends Disposable {
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		this.lifecycleService.phase = LifecyclePhase.Ready;
-		this.initialized = this.initialize(view, configurationService, ownerWindow, layoutController, contributions);
+		this.initialized = this.initialize(view, configurationService, ownerWindow, layoutController, contributions, pageLayoutController);
 		void this.initialized.catch(error => console.error('Failed to initialize Sessions Workbench', error));
 	}
 
@@ -747,10 +692,12 @@ export class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async initialize(view: SessionsService, configurationService: WorkbenchConfigurationService, ownerWindow: Window, layoutController: DesktopLayoutController, contributions: WorkbenchContributionHost): Promise<void> {
+	private async initialize(view: SessionsService, configurationService: WorkbenchConfigurationService, ownerWindow: Window, layoutController: DesktopLayoutController, contributions: WorkbenchContributionHost, pages: SessionsPageLayoutController): Promise<void> {
 		await configurationService.reloadConfiguration();
 		await view.initialize();
 		if (this.isDisposed) return;
+		// Page activation may create a draft; restored selections must exist before the saved page opens.
+		pages.start();
 		if (!view.activeSelection) view.openNewSession("New code session");
 		await layoutController.whenSettled();
 		if (this.isDisposed) return;
@@ -758,6 +705,7 @@ export class Workbench extends Disposable {
 		contributions.advance(WorkbenchPhase.AfterRestored);
 		await contributions.workspaceRestored();
 		if (this.isDisposed) return;
+		this.logService.info('lifecycle', 'Agents restored');
 		this._register(disposableWindowTimeout(ownerWindow, () => {
 			this.lifecycleService.phase = LifecyclePhase.Eventually;
 			contributions.advance(WorkbenchPhase.Eventually);
@@ -1105,6 +1053,9 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 			createSessionsWorkbenchGridDescriptor(this.views, this.initialDimension, state, this.activityBarLocation),
 			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
 		));
+		this._register(this.grid.onDidChange(() => {
+			if (this.partUpdateDepth === 0) { this.saveState(); }
+		}));
 		this.dockedAuxiliaryBar = this._register(new DockedAuxiliaryBarController(
 			requiredPart(parts, 'editor') as EditorPart,
 			this.view('auxiliarybar'),
@@ -1168,6 +1119,8 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		this.publishPartVisibility();
 		// Overlay consumers observe completed Part and nested Chat geometry.
 		super.layout(dimension);
+		// Reload can precede the periodic storage save; commit only the completed Part arrangement.
+		this.saveState();
 	}
 
 	/** Composite and editor events can reenter page selection; only the outer selection commits Part geometry. */

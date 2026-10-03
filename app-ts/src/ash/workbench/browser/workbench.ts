@@ -43,9 +43,8 @@ import { WorkbenchModeRegistry, type WorkbenchModeId } from "../common/workbench
 import { URI } from "../../base/common/uri.js";
 import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
 import { IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
-import { ConsoleLogSink } from "../../platform/log/common/consoleLogSink.js";
 import { ILogService } from "../../platform/log/common/log.js";
-import { LogService } from "../../platform/log/common/logServiceImpl.js";
+import type { LogService } from "../../platform/log/common/logServiceImpl.js";
 import { ILifecycleService, LifecyclePhase, type ShutdownReason } from "../services/lifecycle/common/lifecycle.js";
 import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAdapterProcessService.js";
 import { ITestExecutionService } from '../../platform/testing/common/testExecutionService.js';
@@ -161,7 +160,7 @@ import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } fr
 import { ILabelService, LabelService } from "../../platform/label/common/labelService.js";
 import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
-import { BrowserStorageService } from "../services/storage/browser/storageService.js";
+import type { BrowserStorageServiceOptions } from "../services/storage/browser/storageService.js";
 import { SystemOutputService } from "../services/output/browser/systemOutputService.js";
 import { IContentSearchService } from "../../platform/search/common/search.js";
 import { BrowserContentSearchService } from "../../platform/search/browser/searchService.js";
@@ -319,6 +318,8 @@ export interface IStartWorkbenchOptions {
 	/** The host selects its implementation; the Workbench supplies initialized window services. */
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
 	readonly createWindow?: (services: IInstantiationService) => IDisposable;
+	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> }>;
+	readonly createLogService: () => LogService;
 	readonly configurationApi?: IConfigurationApi;
 	readonly initialConfigurationSnapshot?: IConfigurationSnapshot;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
@@ -345,6 +346,8 @@ export async function startWorkbench({
 	workspace,
 	createLifecycleService,
 	createWindow,
+	createStorageService,
+	createLogService,
 	configurationApi,
 	initialConfigurationSnapshot,
 	keybindingsResourceApi,
@@ -361,8 +364,13 @@ export async function startWorkbench({
 	browserViewApi,
 }: IStartWorkbenchOptions): Promise<Workbench> {
 	const themes = new ExtensionColorThemeService(api.extensions, api.events);
+	const logger = createLogService();
+	let storage: Awaited<ReturnType<IStartWorkbenchOptions['createStorageService']>> | undefined;
 	try {
 		await themes.start();
+		const ownerWindow = container.ownerDocument.defaultView;
+		if (!ownerWindow) { throw new Error('Workbench requires an owner window'); }
+		storage = await createStorageService({ ownerWindow, applicationId: WorkbenchModeRegistry.get(modeId).storageNamespace, workspaceId: workspace.id });
 		return new Workbench(
 			modeId,
 			defaultLayout,
@@ -387,9 +395,14 @@ export async function startWorkbench({
 			browserFileSystemProvider,
 			webWorkspaceClient,
 			themes,
+			storage,
+			logger,
 			createWindow,
 		);
 	} catch (error) {
+		logger.error('startup', 'Workbench startup failed', error);
+		logger.dispose();
+		storage?.dispose();
 		themes.dispose();
 		throw error;
 	}
@@ -401,7 +414,7 @@ export class Workbench extends Disposable {
 	readonly whenRestored: Promise<void>;
 	private readonly workspaceContext: WorkspaceContextService;
 	private readonly configurationService: IConfigurationService;
-	private readonly storage: BrowserStorageService;
+	private readonly storage: IStorageService & { switchWorkspace(workspaceId: string): void | Promise<void> };
 	private readonly editor: IEditorPartsService;
 	private readonly untitledTextEditorService: IUntitledTextEditorService;
 	private readonly workbenchLayout: WorkbenchLayout;
@@ -440,6 +453,8 @@ export class Workbench extends Disposable {
 		browserFileSystemProvider: HTMLFileSystemProvider | undefined,
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
 		themes: ExtensionColorThemeService,
+		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> },
+		logger: LogService,
 		createWindow?: (services: IInstantiationService) => IDisposable,
 	) {
 		super();
@@ -453,7 +468,7 @@ export class Workbench extends Disposable {
 		const services = this._register(new InstantiationService(serviceCollection));
 		if (browserViewApi) { services.registerInstance(IBrowserViewApi, browserViewApi); }
 		const instantiationService = services;
-		const logService = this._register(new LogService({ sinks: [new ConsoleLogSink()] }));
+		const logService = this._register(logger);
 		this.logService = logService;
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
@@ -665,11 +680,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IClipboardService, clipboardService ?? new BrowserClipboardService(ownerWindow.navigator.clipboard));
 		const workingCopyBackupTracker = this._register(new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow));
 		this.workingCopyBackupTracker = workingCopyBackupTracker;
-		const storage = this._register(new BrowserStorageService({
-			ownerWindow,
-			applicationId: mode.storageNamespace,
-			workspaceId: workspace.id,
-		}));
+		const storage = this._register(storageService);
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
 		services.registerInstance(IStorageService, storage);
@@ -1235,7 +1246,7 @@ export class Workbench extends Disposable {
 		lifecycleService.phase = LifecyclePhase.Ready;
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		layoutService.layout();
-		this.whenRestored = this.completeStartupRestoration([extensionReady, recentWorkspaces.initialize(), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions);
+		this.whenRestored = this.completeStartupRestoration([extensionReady, recentWorkspaces.initialize(), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions, saveFontInfo);
 		if (createWindow) {
 			this._register(createWindow(services));
 		}
@@ -1270,15 +1281,18 @@ export class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async completeStartupRestoration(extensionReady: readonly Promise<void>[], backups: IWorkingCopyBackupService, editor: IEditorPart, editorParts: IEditorPartsService, contributions: WorkbenchContributionHost): Promise<void> {
+	private async completeStartupRestoration(extensionReady: readonly Promise<void>[], backups: IWorkingCopyBackupService, editor: IEditorPart, editorParts: IEditorPartsService, contributions: WorkbenchContributionHost, saveFontInfo: () => void): Promise<void> {
 		await Promise.allSettled(extensionReady);
 		if (this.isDisposed) return;
 		await this.restoreEditorParts(editorParts);
 		if (this.isDisposed) return;
 		await this.restoreWorkingCopyBackups(backups, editor);
 		if (this.isDisposed) return;
+		// Persist the fonts used by restored editors before navigation can disconnect this document.
+		saveFontInfo();
 		this.lifecycleService.phase = LifecyclePhase.Restored;
 		contributions.advance(WorkbenchPhase.AfterRestored);
+		this.logService.info('lifecycle', 'Workbench restored');
 	}
 
 	private async restoreEditorParts(editorParts: IEditorPartsService): Promise<void> {
@@ -1336,7 +1350,7 @@ export class Workbench extends Disposable {
 		await this.workingCopyBackupTracker.flush();
 		this.untitledTextEditorService.reset();
 		this.workingCopyBackups.switchWorkspace(workspace.id);
-		this.storage.switchWorkspace(workspace.id);
+		await this.storage.switchWorkspace(workspace.id);
 		const nextWorkbenchState = workbenchStateFromWorkspace(workspace);
 		this.workbenchWindow.setWorkbenchState(nextWorkbenchState);
 		this.workspaceContext.updateWorkspace(workspace);

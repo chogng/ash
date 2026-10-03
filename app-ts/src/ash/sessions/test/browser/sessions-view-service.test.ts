@@ -5,6 +5,7 @@ import { JSDOM } from 'jsdom';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { Emitter } from "../../../base/common/event.js";
 import { DeferredPromise } from "../../../base/common/async.js";
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
@@ -13,6 +14,7 @@ import { SessionsService } from "../../../sessions/services/sessions/browser/ses
 import type { SessionsViewSelection } from "../../../sessions/services/sessions/browser/sessionsService.js";
 
 const storageEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+ensureNoDisposablesAreLeakedInTestSuite();
 let storageSequence = 0;
 suiteTeardown(() => storageEnvironment.window.close());
 

@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import { resolveElectronConfiguration } from '../../../automation/electron.js';
 import { Workbench } from '../../../automation/workbench.js';
+import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
+import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
 import type { IConfigurationSnapshot } from '../../../../src/ash/platform/configuration/common/configurationIpc.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';
 
@@ -153,25 +155,20 @@ test('taskbar projects share Welcome history and respect items removed in Window
 	}
 });
 
-test('Desktop imports existing Welcome projects once into the shared history', async ({ workbench }, testInfo) => {
+test('Desktop imports existing Welcome projects once into the shared history', async ({ application, workbench }, testInfo) => {
 	const folder = testInfo.outputPath('old folder');
 	const workspace = testInfo.outputPath('old.code-workspace');
-	await workbench.page.evaluate(({ folder, workspace }) => {
-		const key = 'ash.code.storage.profile.default';
-		const document = JSON.parse(localStorage.getItem(key) ?? '{"version":1,"entries":{}}') as { version: number; entries: Record<string, unknown> };
-		document.entries['workbench.recentWorkspaces'] = { value: JSON.stringify([
+	const identity = { applicationId: 'code', scope: StorageScope.PROFILE, id: 'default' };
+	await seedStorageOnNextLoad(application, workbench.page, identity, {
+		'workbench.recentWorkspaces': { value: JSON.stringify([
 			{ root: folder, name: 'Migrated Folder', lastOpened: 2 },
 			{ root: workspace, name: 'Migrated Team', lastOpened: 1 },
-		]), target: 'user' };
-		const serialized = JSON.stringify(document);
-		localStorage.setItem(key, serialized);
-		// Notify the live storage owner as a peer window would, so its close-time writes keep the seed.
-		window.dispatchEvent(new StorageEvent('storage', { key, newValue: serialized, storageArea: localStorage }));
-	}, { folder, workspace });
+		]), target: StorageTarget.USER },
+	});
 	await workbench.page.reload();
 	await workbench.waitForReady();
 	await expect(workbench.page.locator('.ash-getting-started-recent-name')).toHaveText(['Migrated Folder', 'Migrated Team']);
-	expect(await workbench.page.evaluate(() => JSON.parse(localStorage.getItem('ash.code.storage.profile.default')!).entries['workbench.recentWorkspaces'])).toBeUndefined();
+	await expect.poll(async () => (await readStorageEntries(application, workbench.page, identity))['workbench.recentWorkspaces']).toBeUndefined();
 	await workbench.page.evaluate(async () => {
 		await (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<void> } } }).ash.ipcRenderer.invoke('ash:workspaces:recent:clear');
 	});

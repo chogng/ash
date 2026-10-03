@@ -91,7 +91,17 @@ before flushing storage.
    against its own document. On desktop, both renderers read the shared
    `workbench.colorTheme` setting, so changes apply to both windows.
    `WorkbenchWindow` registers the renderer window and its document styles;
-   The renderer lifecycle service joins storage flush before disposal.
+   Desktop initializes its window storage through the Main `storage` channel
+   before creating Parts. Main merges key updates into `workbench-state.json`
+   and broadcasts revisions; the browser page uses its scoped `localStorage`
+   adapter. The old Desktop document is removed only after a validated,
+   non-conflicting import has reached disk. Sessions retains its own profile
+   and `sessions` workspace identity. The renderer lifecycle service joins
+   storage and Desktop log flush before disposal; Main owns log retention.
+   Pane membership and split widths are saved when their owners commit a
+   change, so an immediate reload does not wait for the periodic flush.
+   A hidden page retains its saved split widths until it is visible and the
+   surrounding Parts have completed their layout.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
    activitybar, sidebar, sessions, editor, and auxiliary Parts are registered; the sidebar and auxiliary Parts can be toggled,
    and Activity Bar visibility follows `sessions.activityBar.location`.

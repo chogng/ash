@@ -1917,7 +1917,7 @@ async function expectActivityIconSize(navigation: Locator, size: number): Promis
 	const horizontal = await navigation.evaluate(element => element.classList.contains('horizontal'));
 	await expect(navigation).toHaveCSS('flex-direction', horizontal ? 'row' : 'column');
 	const icons = navigation.locator('button svg.ash-icon');
-	await expect(icons).toHaveCount(7);
+	await expect(icons).toHaveCount(6);
 	for (const icon of await icons.all()) {
 		await expect(icon).toHaveCSS('width', `${size}px`);
 		await expect(icon).toHaveCSS('height', `${size}px`);
@@ -2090,7 +2090,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await chat.click();
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	await expect(canvas).toBeHidden();
-	await expect(activityBar.locator('.ash-sessions-activity-bottom button svg').first()).toHaveAttribute('data-ash-icon-id', 'device-mobile');
+	await expect(activityBar.locator('.ash-sessions-activity-bottom button svg').first()).toHaveAttribute('data-ash-icon-id', 'account');
 	const accounts = activityBar.locator('.ash-sessions-activity-bottom button').last();
 	await accounts.click();
 	await expect(accounts).toHaveAttribute('aria-expanded', 'true');
@@ -2240,7 +2240,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 	await page.getByRole('menuitemcheckbox', { name: 'Top' }).click();
 	await expect(topHost).toBeVisible();
-	await expectActivityIconSize(activityNavigation, 16);
+	await expectActivityIconSize(activityNavigation, 24);
 	await topHost.locator('button').first().click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 	await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
@@ -2408,7 +2408,7 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 		await expectActivityIconSize(activityNavigation, 16);
 		await updateSettings('top', false);
 		await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
-		await expectActivityIconSize(activityNavigation, 16);
+		await expectActivityIconSize(activityNavigation, 24);
 		await updateSettings('default', false);
 		await expect(page.locator('[data-part="activitybar"]')).toBeVisible();
 		await expectActivityIconSize(activityNavigation, 24);
@@ -2830,8 +2830,8 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	}
 	await expect(sessionsPage.locator("[data-part='activitybar']")).toBeVisible();
 	const activityButtons = sessionsPage.locator("[data-part='activitybar'] button");
-	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'library', 'device-mobile', 'account']);
-	await expect(sessionsPage.locator('.ash-sessions-activity-bottom button')).toHaveCount(2);
+	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'library', 'code', 'symbol-color', 'account']);
+	await expect(sessionsPage.locator('.ash-sessions-activity-bottom button')).toHaveCount(1);
 	const chatButton = activityButtons.first();
 	const chatButtonBounds = await chatButton.boundingBox();
 	const chatIconBounds = await chatButton.locator('svg').boundingBox();
@@ -2843,10 +2843,10 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	expect(Math.abs(chatIconBounds!.y + chatIconBounds!.height / 2 - (chatButtonBounds!.y + chatButtonBounds!.height / 2))).toBeLessThanOrEqual(1);
 	await expect(activityButtons.nth(1)).toBeEnabled();
 	await expect(activityButtons.nth(2)).toBeEnabled();
-	await expect(activityButtons.nth(3)).toBeDisabled();
+	await expect(activityButtons.nth(3)).toBeEnabled();
 	if (target.appServerMode === 'required') {
-		await activityButtons.nth(4).click();
-		await expect(activityButtons.nth(4)).toHaveAttribute('aria-expanded', 'true');
+		await sessionsPage.getByRole('button', { name: 'Accounts', exact: true }).click();
+		await expect(sessionsPage.getByRole('button', { name: 'Accounts', exact: true })).toHaveAttribute('aria-expanded', 'true');
 		if (process.platform !== 'darwin') {
 			await expect(sessionsPage.getByRole('menuitem', { name: 'Settings' })).toBeVisible();
 			await expect(sessionsPage.getByRole('menuitem', { name: 'Return to Workbench' })).toBeVisible();
@@ -3126,7 +3126,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect.poll(() => page.locator('.ash-sessions-titlebar-actions button').evaluateAll(buttons => buttons.map(button => getComputedStyle(button).borderRadius))).toEqual(['8px', '8px', '8px', '8px']);
 		await library.hover();
-		await expect(library).toHaveCSS('background-color', selectedBackground);
+		await expect(library).not.toHaveCSS('background-color', selectedBackground);
 		await menu.hover();
 		await expect(menu).toHaveCSS('background-color', selectedBackground);
 		await toggle.hover();
@@ -3294,7 +3294,7 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 		await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: position, exact: true }).click();
 	};
 	await checkTooltip(chat, 'Chat', 'right');
-	for (const label of ['Collaboration', 'Library', 'Code', 'Mobile devices (coming soon)', 'Accounts']) {
+	for (const label of ['Collaboration', 'Library', 'Code', 'Accounts']) {
 		await checkTooltip(navigation.getByRole('button', { name: label, exact: true }), label, 'right');
 	}
 	await checkTooltip(accounts, 'Accounts', 'right', true);
@@ -3349,7 +3349,7 @@ test('Sessions Activity Bar switches Chat and Code with the keyboard with indepe
 	await expect(card).toHaveCSS('border-radius', '4px');
 	await expect(activityNavigation.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-current', 'page');
 	await activityNavigation.getByRole('button', { name: 'Library' }).focus();
-	await page.keyboard.press('Tab');
+	await page.keyboard.press('ArrowDown');
 	await expect(activityNavigation.getByRole('button', { name: 'Code' })).toBeFocused();
 	await page.keyboard.press('Enter');
 	if (target.kind === 'browser') await expect(page).toHaveURL(/sessions-code\.html$/u);

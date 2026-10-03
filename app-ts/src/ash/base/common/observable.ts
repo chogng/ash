@@ -141,8 +141,17 @@ class ConstantObservable<T> extends ConvenientObservable<T> {
 
 class ObservableValue<T> extends ConvenientObservable<T>
 	implements ISettableObservable<T> {
-	private readonly emitter = new Emitter<T>();
-	readonly onDidChange = this.emitter.event;
+	private emitter: Emitter<T> | undefined;
+	// Values have no disposal scope; subscriptions own their notification resources.
+	readonly onDidChange: Event<T> = (listener, thisArgs, disposables) => {
+		this.emitter ??= new Emitter<T>({
+			onDidRemoveLastListener: emitter => {
+				this.emitter = undefined;
+				emitter.dispose();
+			},
+		});
+		return this.emitter.event(listener, thisArgs, disposables);
+	};
 
 	constructor(private value: T) {
 		super();
@@ -156,9 +165,9 @@ class ObservableValue<T> extends ConvenientObservable<T>
 		if (Object.is(this.value, value)) return;
 		this.value = value;
 		if (activeTransaction) {
-			activeTransaction.enqueue(this, () => this.emitter.fire(this.value));
+			activeTransaction.enqueue(this, () => this.emitter?.fire(this.value));
 		} else {
-			this.emitter.fire(value);
+			this.emitter?.fire(value);
 		}
 	}
 }

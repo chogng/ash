@@ -3,11 +3,15 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
 import type { IView } from '../../../base/browser/ui/grid/grid.js';
+import { getWindowById } from '../../../base/browser/window.js';
 import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlobals.js';
 import { SessionGridLayout } from '../../browser/parts/sessionGridLayout.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 class TestView implements IView {
 	public readonly element: HTMLDivElement;
@@ -50,6 +54,7 @@ test('Sessions split insertion preserves an unrelated pane and retained input fo
 		layout.reconcile([{ id: 'durable-first', view: first }, { id: 'second', view: second }, { id: 'third', view: third }], 'durable-first');
 		assert.deepEqual([first.bounds, second.bounds, third.bounds], beforeMaterialization);
 	} finally {
+		getWindowById(1)?.disposables.dispose();
 		browser.window.close();
 	}
 });
@@ -76,12 +81,13 @@ test('Sessions rearrangement keeps live inputs and does not steal focus from ano
 		assert.equal(second.element.isConnected, false);
 		assert.equal(first.element.isConnected, true);
 	} finally {
+		getWindowById(1)?.disposables.dispose();
 		browser.window.close();
 	}
 });
 
-test('Sessions restores saved widths at the available size without reviving missing panes or changing another page', async () => {
-	const browser = new JSDOM('<!doctype html><body><button>Sidebar</button></body>', { url: 'https://ash.test' });
+test('Sessions restores and immediately saves widths without reviving missing panes or changing another page', async () => {
+	const browser = new JSDOM('<!doctype html><body><button>Sidebar</button></body>', { url: 'https://ash.test', pretendToBeVisual: true });
 	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent']);
 	try {
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'grid-test', workspaceId: 'test', flushInterval: 0 });
@@ -97,12 +103,40 @@ test('Sessions restores saved widths at the available size without reviving miss
 		const input = second.element.querySelector('input')!;
 		input.value = 'Unsent text';
 		browser.window.document.querySelector('button')!.focus();
+		layout.layout(600, 800);
+		layout.setVisible(false);
 		layout.layout(1_200, 800);
-		await storage.flush();
+		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
+		assert.equal(JSON.parse(storage.get('sessions.gridState.chat', StorageScope.WORKSPACE)!).widths[0].width, 300, 'Hidden pages retain their pending saved widths');
+		layout.setVisible(true);
+		layout.layout(1_200, 800);
+		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
 		assert.deepEqual({ widths: [first.bounds!.width, second.bounds!.width], draft: input.value, focus: browser.window.document.activeElement?.tagName, stored: JSON.parse(storage.get('sessions.gridState.chat', StorageScope.WORKSPACE)!), code: JSON.parse(storage.get('sessions.gridState.code', StorageScope.WORKSPACE)!) }, {
 			widths: [400, 800], draft: 'Unsent text', focus: 'BUTTON', stored: { version: 1, widths: [{ id: 'first', width: 400 }, { id: 'second', width: 800 }] }, code: { version: 1, widths: [{ id: 'code', width: 900 }] },
 		});
 	} finally {
+		getWindowById(1)?.disposables.dispose();
+		browser.window.close();
+	}
+});
+
+test('Sessions ignores saved widths when every pane has been replaced before its first layout', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test', pretendToBeVisual: true });
+	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent']);
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'grid-test', workspaceId: 'test', flushInterval: 0 });
+		storage.store('sessions.gridState.code', JSON.stringify({ version: 1, widths: [{ id: 'old', width: 900 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		using services = new InstantiationService();
+		services.registerInstance(IStorageService, storage);
+		const view = new TestView(browser.window.document);
+		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, view, 'code');
+		layout.reconcile([{ id: 'new', view }], 'new');
+		layout.layout(1_200, 800);
+		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
+		assert.equal(view.bounds!.width, 1_200);
+		assert.deepEqual(JSON.parse(storage.get('sessions.gridState.code', StorageScope.WORKSPACE)!), { version: 1, widths: [{ id: 'new', width: 1_200 }] });
+	} finally {
+		getWindowById(1)?.disposables.dispose();
 		browser.window.close();
 	}
 });

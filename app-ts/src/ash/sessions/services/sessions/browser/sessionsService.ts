@@ -61,10 +61,12 @@ export class SessionsService extends Disposable implements ISessionsService {
 	readonly onDidChange = this._onDidChange.event;
 
 	constructor(@ISessionsManagementService sessionService: ISessionsManagementService, @IStorageService private readonly storage: IStorageService) {
+		// Validate persisted input before allocating subscriptions that a failed constructor cannot release.
+		const raw = storage.get('sessions.viewState', StorageScope.WORKSPACE);
+		const storedState = raw === undefined ? undefined : parseStoredSessionsViewState(JSON.parse(raw));
 		super();
 		this.sessionService = sessionService;
-		const raw = storage.get('sessions.viewState', StorageScope.WORKSPACE);
-		this.storedState = raw === undefined ? undefined : parseStoredSessionsViewState(JSON.parse(raw));
+		this.storedState = storedState;
 		this._register(storage.onWillSaveState(() => this.saveState()));
 		this._register(sessionService.onDidChange(() => this.syncFromSessionService()));
 		this.syncFromSessionService();
@@ -79,6 +81,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		if (page === this.page.get()) return;
 		this.page.set(page);
 		if (!this.activeSelection) this.openNewSession(page === 'code' ? 'New code session' : 'New chat');
+		this.saveState();
 		this._onDidChange.fire();
 	}
 
@@ -89,7 +92,6 @@ export class SessionsService extends Disposable implements ISessionsService {
 	async initialize(): Promise<void> {
 		await this.sessionService.initialize();
 		if (!this.initialized) {
-			this.initialized = true;
 			if (this.storedState) {
 				for (const page of ['chat', 'code'] as const) {
 					const state = this.pages[page];
@@ -124,6 +126,8 @@ export class SessionsService extends Disposable implements ISessionsService {
 			if (this.activeSelection && this.sessionService.state !== 'error') {
 				this.activate(referenceForSelection(this.activeSelection), this.current, 'focus');
 			}
+			// Restoring drafts emits catalog changes; none may persist an incomplete arrangement.
+			this.initialized = true;
 		}
 		this.syncFromSessionService();
 	}
@@ -164,6 +168,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			this.select({ kind: 'untitled', session }, state);
 		}
 		this.projectVisibleSelections(state);
+		this.saveState();
 		this._onDidChange.fire();
 	}
 	navigateBack(): void { this.navigate(-1); }
@@ -182,6 +187,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			}
 			state.activeSelection.set(this.resolve(state.activeReference.get()) ?? state.visibleSelections.get()[0]);
 		}
+		this.saveState();
 		this._onDidChange.fire();
 	}
 
@@ -227,6 +233,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			this.projectVisibleSelections(state, tx);
 		});
 		if (!state.navigating && selectionKey(previous) !== selectionKey(selection)) this.record(reference, state);
+		this.saveState();
 		this._onDidChange.fire();
 	}
 

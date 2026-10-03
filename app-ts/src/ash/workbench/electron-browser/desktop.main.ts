@@ -25,6 +25,8 @@ import { NativeDialogHandler } from './parts/dialogs/dialogHandler.js';
 import { DirectoryPermissionDialog } from './parts/dialogs/directoryPermissionDialog.js';
 import { ElectronWindow } from './window.js';
 import { registerLocalTranscriptionService } from '../services/localTranscription/electron-browser/localTranscriptionService.js';
+import { NativeWorkbenchStorageService } from '../services/storage/electron-browser/storageService.js';
+import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
 
 /** Owns desktop startup and the resources of one renderer window. */
 export class DesktopMain extends Disposable {
@@ -53,6 +55,7 @@ export class DesktopMain extends Disposable {
 			const mainProcessService = this._register(profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 			profileServices.registerInstance(IMainProcessService, mainProcessService);
 			await mainProcessService.connect();
+			const logger = profileServices.createInstance(LoggerChannelClient);
 			const api = this._register(await createElectronRendererApi([
 				...this.rendererCapabilities,
 				client => registerLocalTranscriptionService(transcriptionServices, client),
@@ -66,11 +69,21 @@ export class DesktopMain extends Disposable {
 			const hostColorScheme = await api.nativeHost.getOSColorScheme();
 			const workbench = this._register(await startWorkbench({
 				modeId: this.modeId,
+				createLogService: () => logger.createLogger('workbench'),
+				createStorageService: async options => {
+					const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
+					try { await storage.initialize(); return storage; }
+					catch (error) { storage.dispose(); throw error; }
+				},
 				api,
 				browserViewApi: api.browserView,
 				container,
 				workspace,
-				createLifecycleService: services => lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError }),
+				createLifecycleService: services => {
+					lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError });
+					this._register(lifecycleService.onWillShutdown(event => event.join(logger.flush(), 'Desktop logs flush')));
+					return lifecycleService;
+				},
 				createWindow: services => desktopWindow = services.createInstance(ElectronWindow, { invoke, subscribe }),
 				configurationApi: api.configuration,
 				initialConfigurationSnapshot,

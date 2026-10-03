@@ -30,7 +30,6 @@ export interface ISerializedFontInfo {
 
 interface FontCache {
 	readonly values: Map<string, FontInfo>;
-	restored: boolean;
 	measured: boolean;
 }
 
@@ -50,8 +49,9 @@ export class FontMeasurementsImpl extends Disposable {
 
 	/** Undefined keeps persisted readings intact until this window measures a font. */
 	serializeFontInfo(targetWindow: Window): ISerializedFontInfo[] | undefined {
-		const cache = this.cacheFor(targetWindow);
-		if (cache.restored && !cache.measured) return undefined;
+		// Reading during teardown must not create an empty cache and overwrite saved metrics.
+		const cache = this._cache.get(targetWindow);
+		if (!cache?.measured) return undefined;
 		return [...cache.values.values()].filter(fontInfo => fontInfo.isTrusted);
 	}
 
@@ -59,7 +59,6 @@ export class FontMeasurementsImpl extends Disposable {
 		for (const saved of savedFontInfos) {
 			if (!isSerializedFontInfo(saved)) continue;
 			const fontInfo = new FontInfo(saved, false);
-			this.cacheFor(targetWindow).restored = true;
 			this.write(targetWindow, fontInfo, fontInfo);
 		}
 	}
@@ -78,7 +77,7 @@ export class FontMeasurementsImpl extends Disposable {
 	private cacheFor(targetWindow: Window): FontCache {
 		let cache = this._cache.get(targetWindow);
 		if (!cache) {
-			cache = { values: new Map(), restored: false, measured: false };
+			cache = { values: new Map(), measured: false };
 			this._cache.set(targetWindow, cache);
 		}
 		return cache;

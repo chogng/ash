@@ -29,6 +29,8 @@ import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOO
 import { createWorkspaceContextApi } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { selectionFromWorkspace } from '../browser/workspaceSelection.js';
+import { NativeWorkbenchStorageService } from '../../workbench/services/storage/electron-browser/storageService.js';
+import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
 
 /** Starts the Code-specific Electron Sessions page. */
 export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): Promise<IDisposable> {
@@ -69,6 +71,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	const permissionDialog = sessions.add(new DirectoryPermissionDialog(container));
 	const transcriptionServices = sessions.add(new InstantiationService());
 	const profileServices = sessions.add(new InstantiationService());
+	let logger: LoggerChannelClient;
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	try {
 		const windowId = await invoke<unknown>('ash:ipc:window-id');
@@ -76,6 +79,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 		const mainProcessService = sessions.add(profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 		profileServices.registerInstance(IMainProcessService, mainProcessService);
 		await mainProcessService.connect();
+		logger = profileServices.createInstance(LoggerChannelClient);
 		api = await createElectronRendererApi([client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: false }, permissionDialog, mainProcessService);
 	}
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
@@ -110,12 +114,22 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	workbench = sessions.add(await Workbench.create({
 		contributionIds: ['workbench.contrib.nativeWindow', OpenAgentsWindowSystemWideKeybindingContribution.ID],
 		modeId,
+		createLogService: () => logger.createLogger('agents'),
+		createStorageService: async options => {
+			const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
+			try { await storage.initialize(); return storage; }
+			catch (error) { storage.dispose(); throw error; }
+		},
 		profile,
 		api,
 		workspaceSelection: () => workspaceSelection,
 		workspace: () => workspace,
 		createFileDialogService: services => services.createInstance(FileDialogService),
-		createLifecycleService: services => lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError }),
+		createLifecycleService: services => {
+			lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError });
+			sessions.add(lifecycleService.onWillShutdown(event => event.join(logger.flush(), 'Agents logs flush')));
+			return lifecycleService;
+		},
 		nativeHostApi: api.nativeHost,
 		returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },
 		configurationApi: api.configuration,

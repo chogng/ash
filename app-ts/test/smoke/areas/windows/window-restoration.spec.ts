@@ -337,7 +337,7 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 		await expect(page.locator('[data-part="editor"] .ash-tab')).toHaveCount(1);
 		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
 		await expect(page.locator('[data-part="editor"] .ash-tab')).toHaveCount(2);
-		await expect.poll(() => page.evaluate(() => Object.values(localStorage).some(value => value.includes('editorparts.state')))).toBe(true);
+		await expect.poll(async () => (await readFile(join(userDataDirectory, 'workbench-state.json'), 'utf8')).includes('editorparts.state')).toBe(true);
 		await application.close();
 		application = undefined;
 
@@ -390,7 +390,10 @@ test('Workbench reopens detached editor windows with their tabs', async ({}, tes
 		await command.press('Enter');
 		const detached = await opened;
 		await expect(detached.locator('.ash-auxiliary-window-container .ash-tab')).toHaveCount(1);
-		await expect.poll(() => page.evaluate(() => Object.values(localStorage).some(value => value.includes('editorparts.state') && value.includes('Untitled-1')))).toBe(true);
+		await expect.poll(async () => {
+			const saved = await readFile(join(userDataDirectory, 'workbench-state.json'), 'utf8');
+			return saved.includes('editorparts.state') && saved.includes('Untitled-1');
+		}).toBe(true);
 		await application.close();
 		application = undefined;
 

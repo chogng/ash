@@ -418,8 +418,8 @@ execute(method: string, params?: unknown): Promise<unknown>
 | 能力 | 前端契约 owner | 运行时或传输 owner | Workbench 装配责任 |
 | --- | --- | --- | --- |
 | 配置 | `configurationService.ts` | `configurationIpc.ts` 与 Electron adapters | Workbench 创建窗口级 service |
-| 生命周期 | `ILifecycleService` | Web 使用 `BrowserLifecycleService`；Electron Renderer 使用 `ElectronLifecycleService`，Main 使用 `LifecycleMainService` | Workbench 注册 backup、storage 等同步 joiner |
-| 日志 | `ILogService` / `ILogSink` | Console 与 System Output sinks | composition root 选择 sinks |
+| 生命周期 | `ILifecycleService` | Web 使用 `BrowserLifecycleService`；Electron Renderer 使用 `ElectronLifecycleService`，Main 使用 `LifecycleMainService` | Workbench 注册 backup、storage 等 joiner；Desktop 与 Agents 的入口加入日志 flush |
+| 日志 | `ILogService` / `ILogSink` | Console、System Output 与 Desktop 文件 sinks；Main `LoggerService` 拥有文件 | composition root 选择运行时 logger；窗口身份由已认证 IPC 提供 |
 | 外部 URL 与剪贴板 | `IOpenerService` / `IClipboardService` | Browser、Electron Main adapters | Connector host 注入适配器 |
 | 编辑器打开 | `IEditorService` | `BrowserEditorService` | Workbench 把具体 `EditorPart` 封装在 service 后面 |
 | 窗口宿主操作 | `IWorkbenchHostService` | `WorkbenchWindow` | Workbench 注册当前窗口实现 |
@@ -576,10 +576,33 @@ Workbench Mode session profile defaults
 
 `platform/storage/common/storage.ts` 定义 Renderer 通用存储契约，包括 Application、
 Profile、Workspace scope，User/Machine target，值变更事件和 will-save lifecycle。
-`workbench/services/storage/browser/storageService.ts` 是浏览器适配器：以产品、profile 和
-workspace identity 隔离 versioned `localStorage` 文档，提供周期 flush 与释放 fallback；
-Workbench 的 `ILifecycleService` 在显式关闭前先等待工作副本备份检查；检查拒绝或失败时保持窗口开启，不进入后续存储 flush。`platform/lifecycle/common/lifecycle.ts` 汇总同步及异步否决，Electron Main 区分明确否决与保存失败。`pagehide` 时仍尽力完成 shutdown flush。存储不可用
-或文档损坏时回退到内存 projection。
+Web 的 `workbench/services/storage/browser/storageService.ts` 以产品、profile 和
+workspace identity 隔离 versioned `localStorage` 文档。Desktop 与 Agents 的入口选择
+`workbench/services/storage/electron-browser/storageService.ts`，并在创建工作台前完成初始化。
+窗口保留同步读取缓存，通过 `storage` IPC channel 立即发送单键更新；
+`platform/storage/electron-main/storageMainService.ts` 是唯一磁盘写入者，串行合并更新，
+原子写入 Electron user-data 下的 `workbench-state.json`，再广播带 revision 的快照。
+Renderer 不提交整个 scope，因此不同窗口更新不同键不会互相覆盖。
+
+Desktop 第一次读取 scope 时校验并导入对应的旧 `localStorage` 文档。目标已存在且相等时
+完成旧项清理；值冲突或格式错误会报告错误并保留旧项。旧项只在目标落盘后移除，之后只读写
+主进程存储。Application 仍按产品隔离；普通 Workbench 使用默认 Profile，Agents 使用
+自己的 Profile 与固定 `sessions` Workspace。工作台在显式关闭前等待工作副本备份和存储
+flush，保存失败保持窗口开启。直接刷新页面时，每次状态更新已经发往 Main；Main 接收后的
+写入不随窗口断开取消。周期 flush 仍负责收集需要在 will-save 时保存的缓存。
+
+启动恢复结束 30 秒后，存储 owner 清理不再活跃、也不在恢复列表中的 `empty-window-*`
+Workspace。IPC 订阅保护仍在使用的 scope；真实目录、Agents、Application 和 Profile
+状态不参与这项清理。App Server 的业务数据继续由 Rust 拥有。
+
+Desktop 结构化日志经 `platform/log/common/logIpc.ts` 与
+`platform/log/electron-main/logIpc.ts` 到达 `platform/log/node/loggerService.ts`。
+每次启动在 Electron logs 目录创建独立会话目录，保存 `main.log` 与 `window-<id>.log`；
+记录时间、级别、类别、消息、错误栈、来源和写入进程 PID。Main 的连接阶段日志包含窗口 ID、
+连接 generation、前后状态及阶段耗时；`ready` 仍由 Renderer 完成协议初始化后的原有确认产生。
+窗口关闭等待日志 flush，进程退出等待文件队列结束。每个来源保留三份不超过 5 MiB 的日志，
+超出单条限制的记录报告错误；后台维护保留当前会话和最新九个旧会话，只删除日志 owner
+识别的会话目录，并在删除前确认目标位于 logs 目录内。
 
 具体 Layout 内的私有 `WorkbenchLayoutStateModel` 负责把 domain state 映射为存储 key：
 Sidebar、Auxiliary Bar 和 Panel 的尺寸使用 Profile/Machine，显隐使用

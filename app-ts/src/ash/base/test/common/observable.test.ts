@@ -3,6 +3,9 @@ import { test } from "mocha";
 import { Emitter } from "../../common/event.js";
 import { toDisposable } from "../../common/lifecycle.js";
 import { autorun, autorunWithStore, derived, observableFromEvent, observableValue, transaction } from "../../common/observable.js";
+import { ensureNoDisposablesAreLeakedInTestSuite } from "./utils.js";
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 test("derived observables track changing dependency sets", () => {
 	const useFirst = observableValue("useFirst", true);
@@ -71,7 +74,7 @@ test("disposed autoruns stop observing", () => {
 });
 
 test("event-backed observables read current state on every event", () => {
-	const changed = new Emitter<void>();
+	using changed = new Emitter<void>();
 	let current = "first";
 	const value = observableFromEvent("value", changed.event, () => current);
 	const values: string[] = [];
@@ -91,4 +94,23 @@ test("failed initial reactions release resources before propagating", () => {
 		throw new Error("initial reaction failed");
 	}), /initial reaction failed/);
 	assert.equal(disposals, 1);
+});
+
+test("mutable values release the last subscription and support observing again", () => {
+	const value = observableValue("value", 0);
+	const first: number[] = [];
+	const second: number[] = [];
+	const firstListener = value.onDidChange(next => first.push(next));
+	const secondListener = value.onDidChange(next => second.push(next));
+	value.set(1);
+	firstListener.dispose();
+	value.set(2);
+	secondListener.dispose();
+	value.set(3);
+	using nextListener = value.onDidChange(next => second.push(next));
+	transaction(tx => {
+		value.set(4, tx);
+		value.set(5, tx);
+	});
+	assert.deepEqual({ first, second, current: value.get() }, { first: [1], second: [1, 2, 5], current: 5 });
 });

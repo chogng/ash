@@ -1961,3 +1961,33 @@ function compositeBarDragEvent(targetWindow: { readonly Event: typeof Event }, t
 	Object.defineProperty(event, "clientX", { value: clientX });
 	return event;
 }
+
+test('Activity Bar restores user container order in a new window and keeps the active container', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using disposables = new DisposableStore();
+	const registry = new WorkbenchViewRegistry();
+	for (const id of ['first', 'second', 'third']) {
+		disposables.add(registry.registerViewContainer({ id, title: id, location: ViewContainerLocation.Sidebar }));
+	}
+	const storageOptions = { ownerWindow: dom.window as unknown as Window, applicationId: 'activity-order', workspaceId: 'first', flushInterval: 0 };
+	const storage = disposables.add(new BrowserStorageService(storageOptions));
+	const contexts = disposables.add(new ContextKeyService());
+	const descriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contexts, registry }));
+	const bar = disposables.add(new CompositeBar(dom.window.document.body, {
+		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: descriptors,
+		location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: storage,
+	}));
+	bar.setActiveComposite('second');
+	descriptors.moveViewContainer(ViewContainerLocation.Sidebar, 'third', 'first', 'before');
+	assert.equal(bar.activeCompositeId, 'second');
+	await storage.flush();
+	const restoredStorage = disposables.add(new BrowserStorageService({ ...storageOptions, workspaceId: 'second' }));
+	const restoredDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contexts, registry }));
+	const restored = disposables.add(new CompositeBar(dom.window.document.body, {
+		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: restoredDescriptors,
+		location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: restoredStorage,
+	}));
+	assert.deepEqual([...restored.domNode.querySelectorAll<HTMLElement>('.ash-composite-bar-destination')].map(item => item.dataset.actionId), ['third', 'first', 'second']);
+	disposables.dispose();
+	dom.window.close();
+});

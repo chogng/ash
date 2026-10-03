@@ -109,6 +109,7 @@ export class SessionsChatView extends Disposable {
 
 	setVisible(visible: boolean): void {
 		this.visible = visible;
+		this.grid.setVisible(visible);
 		for (const entry of this.entries.values()) entry.pane.setVisible(visible);
 	}
 

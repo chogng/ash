@@ -1,5 +1,6 @@
 import { Direction, Grid, Sizing, type IView } from '../../../base/browser/ui/grid/grid.js';
-import { Disposable, MutableDisposable } from '../../../base/common/lifecycle.js';
+import { scheduleAtNextAnimationFrame } from '../../../base/browser/dom.js';
+import { Disposable, MutableDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import type { SessionsPage } from '../../services/sessions/browser/sessionsService.js';
@@ -12,6 +13,8 @@ export interface ISessionGridEntry {
 /** Owns split geometry; its caller owns membership, active identity, and view lifetimes. */
 export class SessionGridLayout extends Disposable {
 	private readonly gridResource = this._register(new MutableDisposable<Grid<IView>>());
+	private readonly gridChanges = this._register(new MutableDisposable<IDisposable>());
+	private readonly restoreFrame = this._register(new MutableDisposable<IDisposable>());
 	private get grid(): Grid<IView> { return this.gridResource.value!; }
 	public get element(): HTMLDivElement { return this.grid.element; }
 	private views: readonly IView[];
@@ -19,6 +22,7 @@ export class SessionGridLayout extends Disposable {
 	private pendingWidths: ReadonlyMap<string, number> | undefined;
 	private readonly storageKey: string;
 	private dimension: { width: number; height: number } | undefined;
+	private visible = true;
 
 	constructor(private readonly container: HTMLElement, initialView: IView, page: SessionsPage, @IStorageService private readonly storage: IStorageService) {
 		super();
@@ -28,13 +32,8 @@ export class SessionGridLayout extends Disposable {
 		this.gridResource.value = new Grid<IView>(container, { type: 'leaf', view: initialView, size: 800 }, { sashPresentation: { type: 'inset', gap: 8 } });
 		this.element.classList.add('ash-sessions-chat-grid');
 		this.views = [initialView];
-		this._register(storage.onWillSaveState(() => {
-			if (this.pendingWidths || !this.dimension || this.dimension.width <= 0 || this.entries.length === 0) {
-				return;
-			}
-			const widths = this.entries.map(entry => ({ id: entry.id, width: this.grid.getViewSize(entry.view).width }));
-			this.storage.store(this.storageKey, JSON.stringify({ version: 1, widths }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-		}));
+		this.gridChanges.value = this.grid.onDidChange(() => this.saveState());
+		this._register(storage.onWillSaveState(() => this.saveState()));
 	}
 
 	public reconcile(entries: readonly ISessionGridEntry[], active: string): void {
@@ -44,6 +43,8 @@ export class SessionGridLayout extends Disposable {
 		const nextViews = entries.map(entry => entry.view);
 		const retained = new Set(nextViews);
 		const current = [...this.views];
+		// Grid events during membership changes contain incomplete geometry; commit only the final entries.
+		this.entries = [];
 		// Insert before removing the last old leaf so a complete replacement stays in one live Grid.
 		for (let index = 0; index < nextViews.length; index++) {
 			const view = nextViews[index]!;
@@ -70,8 +71,9 @@ export class SessionGridLayout extends Disposable {
 		this.views = nextViews;
 		this.entries = entries.filter(entry => entry.id !== 'empty');
 		if (this.dimension) {
-			this.restoreWidths(this.dimension.width, this.dimension.height);
+			this.scheduleRestoreWidths();
 		}
+		this.saveState();
 		if (restoreFocus && focused.isConnected) {
 			focused.focus({ preventScroll: true });
 		}
@@ -79,12 +81,45 @@ export class SessionGridLayout extends Disposable {
 
 	public layout(width: number, height: number): void {
 		this.dimension = { width, height };
-		this.restoreWidths(width, height);
+		this.scheduleRestoreWidths();
 		this.grid.layout(width, height);
+		this.saveState();
+	}
+
+	public setVisible(visible: boolean): void {
+		this.visible = visible;
+		if (!visible) { this.restoreFrame.clear(); }
+	}
+
+	private saveState(): void {
+		if (this.pendingWidths || !this.dimension || this.dimension.width <= 0 || this.entries.length === 0) {
+			return;
+		}
+		const widths = this.entries.map(entry => ({ id: entry.id, width: this.grid.getViewSize(entry.view).width }));
+		this.storage.store(this.storageKey, JSON.stringify({ version: 1, widths }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	}
+
+	private scheduleRestoreWidths(): void {
+		if (!this.visible || !this.pendingWidths || !this.dimension || this.dimension.width <= 0 || this.dimension.height <= 0 || this.entries.length === 0 || this.restoreFrame.value) {
+			return;
+		}
+		// Page restoration changes which surrounding Parts are present. Apply widths after that layout settles.
+		this.restoreFrame.value = scheduleAtNextAnimationFrame(this.element.ownerDocument.defaultView!, () => {
+			this.restoreFrame.clear();
+			const { width, height } = this.dimension!;
+			this.restoreWidths(width, height);
+			this.grid.layout(width, height);
+			this.saveState();
+		});
 	}
 
 	private restoreWidths(width: number, height: number): void {
 		if (!this.pendingWidths || this.entries.length === 0 || width <= 0 || height <= 0) {
+			return;
+		}
+		// An entirely new arrangement has no saved geometry to restore.
+		if (!this.entries.some(entry => this.pendingWidths!.has(entry.id))) {
+			this.pendingWidths = undefined;
 			return;
 		}
 		const sizes = this.entries.map(entry => this.pendingWidths!.get(entry.id) ?? this.grid.getViewSize(entry.view).width);
@@ -102,6 +137,7 @@ export class SessionGridLayout extends Disposable {
 		}, { sashPresentation: { type: 'inset', gap: 8 } });
 		this.element.classList.add('ash-sessions-chat-grid');
 		this.grid.layout(width, height);
+		this.gridChanges.value = this.grid.onDidChange(() => this.saveState());
 		if (restoreFocus && focused.isConnected) {
 			focused.focus({ preventScroll: true });
 		}
