@@ -1,5 +1,6 @@
 .ash-titlebar-center-adjacent-actions .ash-action-view-item.icon:has(.ash-titlebar-mark) > .ash-button {
   width: auto;
+  padding-inline: var(--ash-spacing-size40);
   white-space: nowrap;
 }
 

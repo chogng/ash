@@ -933,6 +933,18 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 	const mark = entry.locator('svg.ash-titlebar-mark');
 	await expect(mark.locator('path')).toHaveCount(9);
 	const expandedLabel = entry.locator('.ash-icon-label-container');
+	const checkExpandedSpacing = async (): Promise<void> => {
+		await expect.poll(() => entry.evaluate(button => {
+			const bounds = button.getBoundingClientRect();
+			const iconBounds = button.querySelector('.ash-icon-label-icon')!.getBoundingClientRect();
+			const labelBounds = button.querySelector('.ash-icon-label-container')!.getBoundingClientRect();
+			return {
+				left: Math.round(iconBounds.left - bounds.left),
+				iconToText: Math.round(labelBounds.left - iconBounds.right),
+				right: Math.round(bounds.right - labelBounds.right),
+			};
+		})).toEqual({ left: 4, iconToText: 6, right: 4 });
+	};
 	if (target.kind === 'electron') {
 		await expect(expandedLabel).toHaveText('Open in Agents');
 		await expect(expandedLabel).toHaveCSS('opacity', '0');
@@ -966,6 +978,7 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 	if (target.kind === 'electron') {
 		await expect(expandedLabel).toHaveCSS('opacity', '1');
 		await expect.poll(() => entry.evaluate(button => button.getBoundingClientRect().width)).toBeGreaterThan(collapsedWidth + 20);
+		await checkExpandedSpacing();
 	}
 	await page.mouse.move(400, 180);
 	if (target.kind === 'electron') {
@@ -977,6 +990,7 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 	await expect(petal).toHaveCSS('animation-name', 'ash-titlebar-mark-bloom');
 	if (target.kind === 'electron') {
 		await expect(expandedLabel).toHaveCSS('opacity', '1');
+		await checkExpandedSpacing();
 	}
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await expect(petal).toHaveCSS('animation-name', 'none');
