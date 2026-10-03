@@ -38,7 +38,7 @@ import {
 } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 
 function windowsForWorkspacePaths(paths: IWorkspacePathService): WindowsMainService<never> {
-	return new WindowsMainService<never>(() => [], async () => undefined, process.platform, paths);
+	return new WindowsMainService<never>(async () => undefined, process.platform, paths);
 }
 
 test('empty Remote workspaces retain their authority through persisted and renderer boundaries', () => {

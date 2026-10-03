@@ -519,9 +519,9 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - Desktop named-connection adapter/IPC 与多窗口打开：
   `app-ts/src/ash/platform/remote/electron-main/ashCliRemoteConnections.ts`、
   `app-ts/src/ash/platform/remote/electron-main/remoteConnectionIpc.ts`、
-  `app-ts/src/ash/code/electron-main/workbenchWindowRegistry.ts`、
-  `app-ts/src/ash/code/electron-main/electronWindowLaunch.ts`；窗口 registry、第二实例参数和真实
-  Electron 双 Workbench 覆盖分别位于 `app-ts/src/ash/code/test/electron-main/` 与
+  `app-ts/src/ash/platform/windows/electron-main/windowsMainService.ts`、
+  `app-ts/src/ash/platform/environment/node/argvHelper.ts`；窗口管理、第二实例参数和真实
+  Electron 双 Workbench 覆盖分别位于 `app-ts/src/ash/platform/windows/test/electron-main/`、`app-ts/src/ash/platform/environment/test/node/` 与
   `app-ts/test/smoke/areas/windows/multi-workbench.spec.ts`
 - Desktop saved-host Quick Pick 与图形管理器：`app-ts/src/ash/workbench/contrib/remote/browser/remoteActions.ts`、
   `app-ts/src/ash/workbench/contrib/remote/browser/remoteConnectionManagement.ts`

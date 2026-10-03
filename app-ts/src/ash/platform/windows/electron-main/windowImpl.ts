@@ -2,8 +2,10 @@ import { Disposable, toDisposable, type DisposableStore } from '../../../base/co
 import type { IWindowBounds, IWindowState } from '../../window/electron-main/window.js';
 import type { TitleBarStyleConfiguration } from '../../window/common/window.js';
 import { applyWindowState, resolveBrowserWindowOptions, type IWindowConstructorOptions, type IWindowWebPreferences } from './windows.js';
+import { UNKNOWN_EMPTY_WINDOW_WORKSPACE, type IAnyWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 
 export interface IWindowCreationOptions {
+	readonly workspace?: IAnyWorkspaceIdentifier;
 	readonly state: IWindowState;
 	readonly webPreferences: IWindowWebPreferences;
 	readonly title: string;
@@ -29,6 +31,7 @@ export interface ICodeWindowHandle {
 export class CodeWindow<TWindow extends ICodeWindowHandle> extends Disposable {
 	public readonly win: TWindow;
 	public readonly resources: DisposableStore;
+	public openedWorkspace: IAnyWorkspaceIdentifier;
 
 	constructor(
 		createWindow: (options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>) => TWindow,
@@ -36,6 +39,7 @@ export class CodeWindow<TWindow extends ICodeWindowHandle> extends Disposable {
 		resources: DisposableStore,
 	) {
 		super();
+		this.openedWorkspace = options.workspace ?? UNKNOWN_EMPTY_WINDOW_WORKSPACE;
 		this.resources = this._register(resources);
 		try {
 			this.win = createWindow({

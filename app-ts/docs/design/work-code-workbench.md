@@ -115,7 +115,7 @@ Work 和 Code 是同一 Desktop 产品内部的工作台模式，不改变 [`ash
 ### 5. 将顶层 Academic 模式迁移为 Work
 
 - 更新 [`workbenchMode.ts`](../../src/ash/workbench/common/workbenchMode.ts)、Browser/Electron 的模式加载入口、构建入口和可见模式选择：公开值只保留 `code`、`work`。`Academic` 留作文档类型名，不再出现为顶层模式。模式切换仍在生命周期保存与窗口重载后完成；当前打开的编辑器和未保存内容要能恢复。
-- 让 profile 的 `settings.json` 成为用户配置的最终写入位置，并让 Desktop 启动前读取器与运行中的配置服务使用同一来源。旧 `configuration.json` 保存的是整份 JSONC 配置源；迁移须连同其他用户设置及注释一起处理，不能只搬 `workbench.mode`。先校验目标配置：目标已有旧值 `academic` 时将其改成 `work`；目标缺少某个设置时才从旧文件迁入，旧模式值同时转换。使用原子写入；两处同名设置有不同的有效值时保留目标值并报告冲突，其他无效目标值明确报错。迁移成功后不继续双读或双写旧值。相关入口见 [`readPersistedWorkbenchMode.ts`](../../src/ash/code/electron-main/readPersistedWorkbenchMode.ts) 与 [Workbench 配置注册](../../src/ash/workbench/common/configuration.ts)。
+- 让 profile 的 `settings.json` 成为用户配置的最终写入位置，并让 Desktop 启动前读取器与运行中的配置服务使用同一来源。旧 `configuration.json` 保存的是整份 JSONC 配置源；迁移须连同其他用户设置及注释一起处理，不能只搬 `workbench.mode`。先校验目标配置：目标已有旧值 `academic` 时将其改成 `work`；目标缺少某个设置时才从旧文件迁入，旧模式值同时转换。使用原子写入；两处同名设置有不同的有效值时保留目标值并报告冲突，其他无效目标值明确报错。迁移成功后不继续双读或双写旧值。相关入口见 [Desktop 启动入口](../../src/ash/code/electron-main/main.ts) 与 [Workbench 配置注册](../../src/ash/workbench/common/configuration.ts)。
 - 将 `ash.academic.storage` 中仍需恢复的编辑器状态和用户布局迁到 `ash.work.storage`，逐项处理同名目标状态，不能整包覆盖。工作副本备份目前按 workspace ID 保存，不受模式存储命名空间控制；迁移时核对备份的文档内容类型及打开资源能否恢复，而不是复制备份数据库。旧链接或启动参数里的 `academic` 只在迁移入口转换一次，内部状态统一使用 `work`。
 - 验收：旧 Academic 用户首次启动进入 Work、打开旧论文和未保存备份；重启后只保留新模式值；已有 Code 偏好不受影响；配置和工作台状态冲突可见且没有数据覆盖。
 

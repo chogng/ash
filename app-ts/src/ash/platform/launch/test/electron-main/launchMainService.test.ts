@@ -8,7 +8,7 @@ import { parseLaunchArguments } from '../../../environment/node/argvHelper.js';
 import { WorkspaceOpenTargetKind } from '../../../environment/common/argv.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { IWindowsMainService, type IOpenConfiguration } from '../../../windows/electron-main/windows.js';
-import { LaunchMainService } from '../../electron-main/launchMainService.js';
+import { LaunchMainService, parseWindowLaunch } from '../../electron-main/launchMainService.js';
 
 test('launch parsing separates files, project options, window policy and literal filenames', () => {
 	assert.deepEqual(parseLaunchArguments(['--folder', 'project', '--reuse-window', '--goto', 'one.ts:2:7', 'two.ts', '--', '-literal']), {
@@ -73,4 +73,15 @@ test('waiting launches release their marker after file completion, failure or ap
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
+});
+
+test('Agents launches accept a project target and reject file, window and wait requests before startup', () => {
+	const message = 'Invalid Agents launch';
+	const launch = parseWindowLaunch(['--agents-window', '--folder', 'C:\\project'], 'C:\\', message);
+	assert.equal(launch.agentsWindow, true);
+	assert.equal(launch.args.workspace?.path, 'C:\\project');
+	for (const option of ['--wait', '--new-window', '--reuse-window', '--goto', 'file.txt']) {
+		assert.throws(() => parseWindowLaunch(['--agents-window', option], 'C:\\', message), { message });
+	}
+	assert.equal(parseWindowLaunch(['--', '--agents-window'], 'C:\\', message).agentsWindow, false);
 });

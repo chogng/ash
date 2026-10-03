@@ -184,3 +184,37 @@ export function parseWorkspaceLaunchArguments(args: readonly string[]): IWorkspa
 	}
 	return { kind: WorkspaceOpenTargetKind.RemoteFolder, path: target.path, sshHost: remoteSshHost };
 }
+
+export interface MainProcessArgumentsOptions {
+	readonly arguments: readonly string[];
+	readonly packaging: 'packaged' | 'development';
+	readonly appPath: string;
+}
+
+/** Removes Electron/process-only arguments while preserving the user Workspace target. */
+export function parseMainProcessArgv(options: MainProcessArgumentsOptions): string[] {
+	const executableArguments = options.arguments.slice(1);
+	const workspaceArguments: string[] = [];
+	let hasApplicationEntry = options.packaging === 'packaged';
+	for (let index = 0; index < executableArguments.length; index += 1) {
+		const argument = executableArguments[index]!;
+		if (argument.startsWith("--user-data-dir=")) continue;
+		if (argument === "--user-data-dir") {
+			index += 1;
+			continue;
+		}
+		// Electron accepts process switches before a development entry, so the entry has no fixed argv index.
+		if (!hasApplicationEntry && !argument.startsWith('-')) {
+			hasApplicationEntry = true;
+			continue;
+		}
+		if (argument === options.appPath) continue;
+		workspaceArguments.push(argument);
+	}
+	return workspaceArguments;
+}
+
+/** Quotes Windows process arguments, including quotes and trailing backslashes in paths. */
+export function windowsCommandLine(arguments_: readonly string[]): string {
+	return arguments_.map(argument => `"${argument.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`).join(' ');
+}

@@ -284,6 +284,13 @@ primitive 位于 `platform/ipc/electron-main`，不反向依赖任何产品能�
 
 ### 4.1 Workspace 身份与窗口策略
 
+Electron 主进程由 `code/electron-main/main.ts` 编排启动，`app.ts` 装配产品服务并管理应用事件。
+进程参数归 `platform/environment/node/argvHelper.ts`，系统默认数据目录归同目录的
+`userDataPath.ts`，外部窗口启动请求归 `platform/launch/electron-main/launchMainService.ts`。
+`WindowsMainService` 统一拥有窗口身份、活动顺序和工作区复用；`app.ts` 只保留窗口对应的
+App Server、模式和产品资源。Windows 最近项目跳转列表由 `WorkspacesHistoryMainService` 更新。
+
+
 当前实现明确区分两个所有权边界：
 
 - `platform/workspace`（单数）定义一个窗口当前工作区的模型、结构化标识、

@@ -1,3 +1,4 @@
+import { parseLaunchArguments } from '../../environment/node/argvHelper.js';
 import { stat } from 'node:fs/promises';
 import { unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -10,6 +11,7 @@ import type { IWindowFileOpen } from '../../window/common/window.js';
 import { hasWorkspaceFileExtension } from '../../workspace/common/workspace.js';
 
 export interface IStartArguments {
+	readonly agentsWindow?: boolean;
 	readonly args: IParsedLaunchArguments;
 	readonly cwd: string;
 }
@@ -82,4 +84,16 @@ export class LaunchMainService extends Disposable implements ILaunchMainService 
 			throw error;
 		}
 	}
+}
+
+/** Validates product window selection before startup can create a wait marker or acquire the instance lock. */
+export function parseWindowLaunch(arguments_: readonly string[], cwd: string, invalidAgentsArgumentsMessage: string): IStartArguments {
+	const separator = arguments_.indexOf('--');
+	const switches = separator < 0 ? arguments_ : arguments_.slice(0, separator);
+	const args = parseLaunchArguments(arguments_);
+	const agentsWindow = switches.includes('--agents-window');
+	if (agentsWindow && (args.paths.length > 0 || args.newWindow || args.reuseWindow || args.goto || args.wait)) {
+		throw new Error(invalidAgentsArgumentsMessage);
+	}
+	return { args, cwd, agentsWindow };
 }

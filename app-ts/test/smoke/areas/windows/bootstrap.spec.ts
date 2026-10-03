@@ -40,7 +40,7 @@ Tray.prototype.setContextMenu = function(menu) {
 };
 app.on('quit', () => writeFileSync(${JSON.stringify(testInfo.outputPath('tray-cleanup.json'))}, JSON.stringify({ destroyed: globalThis.__ashTray.isDestroyed() })));
 void app.whenReady().then(async () => {
-	const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/startElectronApplication.js')).href)});
+	const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)});
 	startElectronApplication({ initialModeId: 'code' });
 });
 `);
@@ -50,6 +50,63 @@ void app.whenReady().then(async () => {
 test.beforeEach(({}, testInfo) => {
 	test.skip(testInfo.project.name !== 'electron-ui', 'Bootstrap scenarios exercise the Electron host without a backend.');
 });
+
+for (const scenario of [
+	{ name: 'missing settings', settings: undefined, mode: 'code' },
+	{ name: 'JSONC mode selection', settings: '{\n// startup mode\n"workbench.mode":"academic",\n}', mode: 'academic' },
+	{ name: 'unregistered mode', settings: '{"workbench.mode":"unknown"}', mode: 'code' },
+	{ name: 'obsolete settings wrapper', settings: '{"version":1,"values":{"workbench.mode":"academic"}}', mode: 'code' },
+]) {
+	test(`Desktop startup selects its mode from ${scenario.name}`, async ({}, testInfo) => {
+		const userDataDirectory = testInfo.outputPath('user-data');
+		const profile = join(userDataDirectory, 'profile');
+		await mkdir(profile, { recursive: true });
+		if (scenario.settings !== undefined) await writeFile(join(profile, 'settings.json'), scenario.settings);
+		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
+		const environment = { ...configuration.env };
+		delete environment.ASH_WORKBENCH_MODE;
+		const application = await _electron.launch({ executablePath: configuration.executablePath, args: [...configuration.args], cwd: configuration.cwd, env: environment });
+		try {
+			const page = await application.firstWindow();
+			await expect(page.locator('.ash-workbench')).toBeVisible();
+			expect(new URL(page.url()).searchParams.get('ash-workbench-mode')).toBe(scenario.mode);
+		} finally {
+			await application.close();
+		}
+	});
+}
+
+for (const hasWorkbench of [false, true]) {
+	test(`packaged startup rejects an incomplete renderer with Workbench ${hasWorkbench ? 'present' : 'missing'}`, async ({}, testInfo) => {
+		const packagedRoot = testInfo.outputPath('package');
+		await mkdir(packagedRoot, { recursive: true });
+		if (hasWorkbench) {
+			const workbenchRoot = join(packagedRoot, 'dist', 'renderer', 'ash', 'electron-browser', 'workbench');
+			await mkdir(workbenchRoot, { recursive: true });
+			await writeFile(join(workbenchRoot, 'workbench.html'), '<!doctype html>');
+		}
+		const entry = testInfo.outputPath('packaged-start.mjs');
+		await writeFile(entry, `
+import { app } from 'electron/main';
+import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
+bootstrapElectronMain();
+app.setAppPath(${JSON.stringify(packagedRoot)});
+Object.defineProperty(app, 'isPackaged', { value: true });
+try {
+	const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)});
+	await startElectronApplication({ initialModeId: 'code' });
+} catch (error) {
+	console.error(error);
+	app.exit(1);
+}
+`);
+		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory: testInfo.outputPath('user-data') });
+		const result = await runUntilExit({ ...configuration, args: configuration.args.map(argument => argument === desktop ? entry : argument) });
+		expect(result.code).toBe(1);
+		expect(result.output).toContain('Packaged Ash renderer is incomplete');
+		expect(result.output).toContain(hasWorkbench ? 'sessions-code.html' : 'workbench.html');
+	});
+}
 
 test('Desktop starts when its application entry loads after Electron is ready', async ({}, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');

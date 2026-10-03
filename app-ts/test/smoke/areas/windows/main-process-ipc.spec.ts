@@ -67,7 +67,7 @@ Server.prototype.registerChannel = function(name, channel) {
 		},
 	});
 };
-const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/startElectronApplication.js')).href)});
+const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)});
 startElectronApplication({ initialModeId: 'code' });
 `);
 	const application = await _electron.launch({ executablePath: configuration.executablePath, args: configuration.args.map(argument => argument === desktop ? entry : argument), cwd: configuration.cwd, env: configuration.env });

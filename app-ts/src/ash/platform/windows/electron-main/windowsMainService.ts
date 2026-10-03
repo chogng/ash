@@ -22,11 +22,14 @@ import { CodeWindow, type IWindowCreationOptions } from './windowImpl.js';
 import type { IWindowConstructorOptions, IWindowWebPreferences, IOpenConfiguration, IWindowsMainService } from './windows.js';
 import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesResponse, type IWindowFilesRequest, type WindowFilesResponse } from '../../window/common/window.js';
 import type { IWindowBounds, IWindowState } from '../../window/electron-main/window.js';
+import { findWindowOnWorkspaceOrFolder } from './windowsFinder.js';
 
 export interface IWorkbenchWindow<TWindow> extends IFocusableWindow {
 	readonly id: number;
 	on(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
+	on(event: 'focus', listener: () => void): unknown;
 	off(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
+	off(event: 'focus', listener: () => void): unknown;
 	on(event: 'enter-full-screen' | 'leave-full-screen', listener: () => void): unknown;
 	off(event: 'enter-full-screen' | 'leave-full-screen', listener: () => void): unknown;
 	readonly webContents: {
@@ -174,9 +177,10 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 	private readonly fileRequests = this._register(new DisposableMap<number, WindowFileRequest>());
 	private readonly rendererReadiness = new Map<number, DeferredPromise<void>>();
 	private readonly closedWindows = new WeakMap<TWindow, Promise<void>>();
+	private readonly workspaceOpenings = new Map<string, Promise<TWindow | undefined>>();
+	private activationOrder: number[] = [];
 	private nextFileRequest = 0;
 	constructor(
-		private readonly getWindows: () => readonly TWindow[],
 		private readonly createEmptyWindow: (configuration?: IOpenConfiguration, reuseWindow?: TWindow) => Promise<TWindow | undefined>,
 		private readonly platform: NodeJS.Platform = process.platform,
 		private readonly workspacePaths: IWorkspacePathService = nodeWorkspacePathService,
@@ -188,6 +192,68 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 			}
 			this.rendererReadiness.clear();
 		}));
+	}
+
+	public getWindows(): readonly TWindow[] {
+		return [...this.workbenchWindows].map(([, host]) => host.win).filter(window => !window.isDestroyed());
+	}
+
+	public getWindowById(id: number): TWindow | undefined {
+		const window = this.workbenchWindows.get(id)?.win;
+		return window && !window.isDestroyed() ? window : undefined;
+	}
+
+	public getWindowCount(): number {
+		return this.getWindows().length;
+	}
+
+	public getLastActiveWindow(): TWindow | undefined {
+		for (let index = this.activationOrder.length - 1; index >= 0; index--) {
+			const window = this.getWindowById(this.activationOrder[index]!);
+			if (window) return window;
+		}
+		return undefined;
+	}
+
+	public updateWorkspace(id: number, workspace: IAnyWorkspaceIdentifier): void {
+		const host = this.workbenchWindows.get(id);
+		if (!host) throw new Error(`Workbench window ${id} is not registered`);
+		host.openedWorkspace = workspace;
+	}
+
+	public findWorkspace(workspace: IAnyWorkspaceIdentifier): TWindow | undefined {
+		const hosts = [...this.activationOrder].reverse().flatMap(id => {
+			const host = this.workbenchWindows.get(id);
+			return host && !host.win.isDestroyed() ? [host] : [];
+		});
+		let host: CodeWindow<TWindow> | undefined;
+		if (isWorkspaceIdentifier(workspace)) {
+			host = findWindowOnWorkspaceOrFolder(hosts, workspace.configPath);
+		} else if (isSingleFolderWorkspaceIdentifier(workspace)) {
+			host = findWindowOnWorkspaceOrFolder(hosts, workspace.uri);
+		} else {
+			host = hosts.find(host => host.openedWorkspace.id === workspace.id);
+		}
+		return host?.win;
+	}
+
+	public openWorkspace(workspace: IAnyWorkspaceIdentifier, create: () => Promise<TWindow | undefined>): Promise<TWindow | undefined> {
+		this.assertNotDisposed();
+		const pending = this.workspaceOpenings.get(workspace.id);
+		if (pending) return pending;
+		const existing = this.findWorkspace(workspace);
+		if (existing) {
+			focusWindow(existing);
+			return Promise.resolve(existing);
+		}
+		const opening = create();
+		this.workspaceOpenings.set(workspace.id, opening);
+		void opening.finally(() => {
+			if (this.workspaceOpenings.get(workspace.id) === opening) this.workspaceOpenings.delete(workspace.id);
+		}).catch(() => {
+			// The caller observes the original opening, including its rejection.
+		});
+		return opening;
 	}
 
 	/** Workspace callbacks also need a restored renderer because that renderer owns the backend client. */
@@ -210,7 +276,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 	public async open(configuration: IOpenConfiguration): Promise<{ whenClosed: Promise<void>; whenFilesClosed: Promise<void> }> {
 		this.assertNotDisposed();
 		const windows = this.getWindows().filter(window => !window.isDestroyed());
-		const active = windows.find(window => window.isFocused()) ?? windows.at(-1) ?? (!configuration.workspace && configuration.files.length === 0 ? this.managedWindowValues()[0] : undefined);
+		const active = windows.find(window => window.isFocused()) ?? this.getLastActiveWindow() ?? (!configuration.workspace && configuration.files.length === 0 ? this.managedWindowValues()[0] : undefined);
 		const reuse = !configuration.forceNewWindow && (configuration.forceReuseWindow || !configuration.workspace) ? active : undefined;
 		const window = await this.createEmptyWindow(configuration, reuse);
 		if (!window) {
@@ -274,11 +340,25 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		resources: DisposableStore,
 	): CodeWindow<TWindow> {
 		this.assertNotDisposed();
-		const host = new CodeWindow(createWindow, options, resources);
+		const host = new CodeWindow(createWindow, { ...options, workspace: options.workspace ?? createEmptyWorkspaceIdentifier() }, resources);
 		const window = host.win;
+		if (this.workbenchWindows.has(window.id)) {
+			host.dispose();
+			throw new Error(`Workbench window ${window.id} is already registered`);
+		}
 		this.workbenchWindows.set(window.id, host);
+		const activate = (): void => {
+			this.activationOrder = this.activationOrder.filter(id => id !== window.id);
+			this.activationOrder.push(window.id);
+		};
+		activate();
+		window.on('focus', activate);
+		resources.add(toDisposable(() => {
+			if (!window.isDestroyed()) window.off('focus', activate);
+		}));
 		this.rendererReadiness.set(window.id, new DeferredPromise<void>());
 		window.once('closed', () => {
+			this.activationOrder = this.activationOrder.filter(id => id !== window.id);
 			void this.rendererReadiness.get(window.id)?.complete();
 			this.rendererReadiness.delete(window.id);
 			for (const [id, request] of this.fileRequests) {

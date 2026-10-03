@@ -8,7 +8,7 @@ import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/r
 import { BrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationHostRoutes.js";
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { nativeImage, nativeTheme, shell } from "electron";
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, type Event as ElectronEvent, type JumpListCategory, type MenuItemConstructorOptions } from "electron/main";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
 import type { DirGrant } from "../../platform/dirPermissions/common/dirPermissionsService.js";
 import { basename, delimiter, dirname, isAbsolute, join, parse } from "node:path";
 import { homedir } from 'node:os';
@@ -95,15 +95,12 @@ import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS } from '../../platfor
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
-import { parseLaunchArguments, parseWorkspaceLaunchArguments } from '../../platform/environment/node/argvHelper.js';
-import { LaunchMainService } from '../../platform/launch/electron-main/launchMainService.js';
+import { parseLaunchArguments, parseWorkspaceLaunchArguments, parseMainProcessArgv, windowsCommandLine } from '../../platform/environment/node/argvHelper.js';
+import { LaunchMainService, parseWindowLaunch, type IStartArguments } from '../../platform/launch/electron-main/launchMainService.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
-import type { IWorkbenchWindowRecord } from "./workbenchWindowRegistry.js";
-import { WorkbenchWindowRegistry } from "./workbenchWindowRegistry.js";
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
 import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
 import { normalizeLocale } from '../../platform/languagePacks/common/languagePackCatalog.js';
-import { electronWorkspaceLaunchArguments, parseElectronWindowLaunch, windowsCommandLine, type ElectronWindowLaunch } from "./electronWindowLaunch.js";
 import { workbenchModeIpcRoutes } from "../../workbench/services/workbenchMode/electron-main/workbenchModeIpc.js";
 export type AppServerStartupMode = "required" | "disabled";
 
@@ -128,7 +125,8 @@ interface RendererEntry {
 	readonly useDevelopmentUrl: boolean;
 }
 
-interface WorkbenchWindowRecord extends IWorkbenchWindowRecord {
+interface WorkbenchWindowRecord {
+	readonly id: number;
 	readonly window: BrowserWindow;
 	readonly workspaceContext: WorkspaceContextMainService;
 	readonly supervisor: AppServerConnectionRelay;
@@ -223,17 +221,17 @@ export class AshApplication extends Disposable {
 	private readonly developmentAppServerReloader = this._register(new MutableDisposable<DevelopmentAppServerReloader>());
 	private readonly windowIconPath: string | undefined;
 
-	private readonly workbenchWindows = new WorkbenchWindowRegistry<WorkbenchWindowRecord>();
+	// Product resources follow platform-owned windows; this map does not select or reuse windows.
+	private readonly workbenchWindowData = new Map<number, WorkbenchWindowRecord>();
 	private readonly sessionsWindow = this._register(new MutableDisposable<SessionsWindowRecord>());
 	private sessionsWindowOpenQueue: Promise<void> = Promise.resolve();
 	private readonly windowsMainService: WindowsMainService<BrowserWindow> = this._register(new WindowsMainService<BrowserWindow>(
-		() => this.workbenchWindows.values().map(record => record.window),
 		async (configuration, reuseWindow): Promise<BrowserWindow | undefined> => {
 			const workspaces = this.workspaces;
 			if (!workspaces) {
 				throw new Error('Workspace service is not initialized');
 			}
-			const record = reuseWindow ? this.workbenchWindows.values().find(record => record.window === reuseWindow) : undefined;
+			const record = reuseWindow ? this.workbenchWindowData.get(reuseWindow.id) : undefined;
 			if (record) {
 				await this.windowsMainService.whenReady(record.window);
 			}
@@ -277,7 +275,7 @@ export class AshApplication extends Disposable {
 	private themeMainService!: ThemeMainService;
 	private lifecycleMainService!: LifecycleMainService<BrowserWindow>;
 	private windowSessionStateHandler!: WindowSessionStateHandler<WindowSessionEntry>;
-	private readonly pendingWindowLaunches: ElectronWindowLaunch[] = [];
+	private readonly pendingWindowLaunches: IStartArguments[] = [];
 	private launchMainService!: LaunchMainService;
 	private workspacesHistory!: WorkspacesHistoryMainService;
 	private jumpListUpdates: Promise<void> = Promise.resolve();
@@ -309,7 +307,7 @@ export class AshApplication extends Disposable {
 			runCommand: (windowId, commandId, args) => {
 				if (commandId !== OPEN_AGENTS_WINDOW_COMMAND_ID) return;
 				const options = validateOpenAgentsWindow(args);
-				const record = this.workbenchWindows.values().find(candidate => candidate.id === windowId);
+				const record = this.workbenchWindowData.get(windowId);
 				if (record) return this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), record.modeId, options);
 				const session = this.sessionsWindow.value;
 				if (session && this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY)?.id === windowId) {
@@ -327,6 +325,18 @@ export class AshApplication extends Disposable {
 			? join(app.getAppPath(), '..', 'resources', 'win32', 'ash.ico')
 			: undefined;
 
+		app.on('second-instance', this.onSecondInstance);
+		app.on('open-file', this.onOpenFile);
+		app.on('open-url', this.onOpenUrl);
+		app.on('activate', this.onActivate);
+		app.on('window-all-closed', this.onWindowAllClosed);
+		this._register(toDisposable(() => {
+			app.removeListener('second-instance', this.onSecondInstance);
+			app.removeListener('open-file', this.onOpenFile);
+			app.removeListener('open-url', this.onOpenUrl);
+			app.removeListener('activate', this.onActivate);
+			app.removeListener('window-all-closed', this.onWindowAllClosed);
+		}));
 		app.on("before-quit", this.onBeforeQuit);
 		app.on("will-quit", this.onWillQuit);
 		app.on("accessibility-support-changed", this.onAccessibilitySupportChanged);
@@ -393,7 +403,7 @@ export class AshApplication extends Disposable {
 			using restoration = this.windowSessionStateHandler.beginRestoration();
 			await this.openStartupWindows(workspaces, wasUpdated);
 		}
-		if (this.workbenchWindows.size === 0 && this.windowsMainService.managedWindowValues().length === 0) {
+		if (this.windowsMainService.getWindowCount() === 0 && this.windowsMainService.managedWindowValues().length === 0) {
 			if (!this.quitRequested) app.quit();
 			return;
 		}
@@ -411,7 +421,7 @@ export class AshApplication extends Disposable {
 	}
 
 	private async openStartupWindows(workspaces: WorkspacesManagementMainService, wasUpdated: boolean): Promise<void> {
-		const launchRequest = parseElectronWindowLaunch(this.workspaceLaunchArguments(process.argv), process.cwd(), this.mainLocalizationMessages()['taskbar.invalidAgentsArguments']!);
+		const launchRequest = parseWindowLaunch(this.workspaceLaunchArguments(process.argv), process.cwd(), this.mainLocalizationMessages()['taskbar.invalidAgentsArguments']!);
 		if (launchRequest.agentsWindow) {
 			await this.startWindowLaunch(launchRequest);
 			return;
@@ -432,7 +442,7 @@ export class AshApplication extends Disposable {
 		await this.restoreWindowSession(workspaces, launch.explicit, wasUpdated);
 		if (launch.explicit) {
 			await this.openWorkspace(launch.workspace, workspaces);
-		} else if (this.workbenchWindows.size === 0 && this.windowsMainService.managedWindowValues().length === 0) {
+		} else if (this.windowsMainService.getWindowCount() === 0 && this.windowsMainService.managedWindowValues().length === 0) {
 			await this.openWorkspace(launch.workspace, workspaces);
 		}
 	}
@@ -454,7 +464,10 @@ export class AshApplication extends Disposable {
 		}
 		const active = selection.active;
 		if (active) {
-			if (active.kind === 'workbench') this.workbenchWindows.findWorkspace(active.workspace)?.focus();
+			if (active.kind === 'workbench') {
+				const window = this.windowsMainService.findWorkspace(active.workspace);
+				if (window) focusWindow(window);
+			}
 			else {
 				const window = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
 				if (window) focusWindow(window);
@@ -497,7 +510,7 @@ export class AshApplication extends Disposable {
 				const messages = this.mainLocalizationMessages();
 				const recentItems: MenuItemConstructorOptions[] = recents.workspaces.map(recent => ({
 					label: this.recentProjectLabel(recent),
-					click: () => this.handleLaunchArguments(this.recentProjectLaunchArguments(recent), process.cwd()),
+					click: () => this.handleLaunchArguments(this.workspacesHistory.getWorkspaceLaunchArguments(recent), process.cwd()),
 				}));
 				if (recentItems.length === 0) {
 					recentItems.push({ label: messages['shell.noRecentProjects']!, enabled: false });
@@ -544,15 +557,36 @@ export class AshApplication extends Disposable {
 		}
 	}
 
+	private readonly onSecondInstance = (_event: ElectronEvent, arguments_: string[], cwd: string, data: unknown): void => {
+		if (data && typeof data === 'object' && 'launchArguments' in data) {
+			if (!Array.isArray(data.launchArguments) || !data.launchArguments.every((argument: unknown) => typeof argument === 'string')) {
+				throw new TypeError('Invalid launch arguments from another process');
+			}
+			this.handleLaunchArguments(data.launchArguments, cwd);
+			return;
+		}
+		this.handleSecondInstance(arguments_, cwd);
+	};
+	private readonly onOpenFile = (event: ElectronEvent, file: string): void => {
+		event.preventDefault();
+		this.handleLaunchArguments([`--file-uri=${pathToFileURL(file)}`], process.cwd());
+	};
+	private readonly onOpenUrl = (event: ElectronEvent, url: string): void => {
+		event.preventDefault();
+		this.handleLaunchArguments([`--open-url=${url}`], process.cwd());
+	};
+	private readonly onActivate = (): void => { this.handleActivate(); };
+	private readonly onWindowAllClosed = (): void => { this.handleWindowAllClosed(); };
+
 	/** Electron argv includes its executable and, in development, the app entry. */
 	handleSecondInstance(arguments_: readonly string[], cwd: string): void {
 		this.handleLaunchArguments(this.workspaceLaunchArguments(arguments_), cwd);
 	}
 
 	handleLaunchArguments(arguments_: readonly string[], cwd: string): void {
-		let launch: ElectronWindowLaunch;
+		let launch: IStartArguments;
 		try {
-			launch = parseElectronWindowLaunch(arguments_, cwd, this.mainLocalizationMessages()['taskbar.invalidAgentsArguments']!);
+			launch = parseWindowLaunch(arguments_, cwd, this.mainLocalizationMessages()['taskbar.invalidAgentsArguments']!);
 		} catch (error) {
 			void this.reportWindowOpenFailure(error);
 			return;
@@ -564,14 +598,15 @@ export class AshApplication extends Disposable {
 		void this.startWindowLaunch(launch).catch(error => this.reportWindowOpenFailure(error));
 	}
 
-	private async startWindowLaunch(launch: ElectronWindowLaunch): Promise<void> {
+	private async startWindowLaunch(launch: IStartArguments): Promise<void> {
 		if (!launch.agentsWindow) {
 			await this.launchMainService.start(launch);
 			return;
 		}
 		const workspaces = this.workspaces;
 		assertDefined(workspaces, 'Workspace service is not initialized');
-		const active = this.workbenchWindows.active();
+		const activeWindow = this.windowsMainService.getLastActiveWindow();
+		const active = activeWindow ? this.workbenchWindowData.get(activeWindow.id) : undefined;
 		const workspace = launch.args.workspace
 			? await this.windowsMainService.resolveWorkspaceOpenTarget(launch.args.workspace, launch.cwd)
 			: active?.workspaceContext.getWorkspace() ?? createEmptyWorkspaceIdentifier();
@@ -610,10 +645,6 @@ export class AshApplication extends Disposable {
 		return recent.label ?? basename(recentWorkspaceUri(recent).fsPath);
 	}
 
-	private recentProjectLaunchArguments(recent: IRecent): string[] {
-		return 'workspace' in recent ? ['--workspace', recent.workspace.configPath.fsPath] : ['--folder-uri', recent.folderUri.toString()];
-	}
-
 	private async updateWindowsJumpList(): Promise<void> {
 		if (this.isDisposed) {
 			return;
@@ -627,46 +658,13 @@ export class AshApplication extends Disposable {
 		if (WorkbenchModeRegistry.get(this.shellWorkbenchModeId()).dedicatedSessions) {
 			actions.push({ title: messages['taskbar.agentsWindow']!, description: messages['taskbar.agentsWindowDescription']!, argument: '--agents-window' });
 		}
-		const categories: JumpListCategory[] = [{
-			type: 'tasks',
-			items: actions.map(action => ({
-				type: 'task',
-				program: process.execPath,
-				args: windowsCommandLine([...launchArguments, action.argument]),
-				iconPath,
-				iconIndex: 0,
-				title: action.title,
-				description: action.description,
-			})),
-		}];
-		let recents = await this.workspacesHistory.getRecentlyOpened();
-		const settings = app.getJumpListSettings();
-		const removed = recents.workspaces.filter(recent => settings.removedItems.some(item => item.args === windowsCommandLine([...launchArguments, ...this.recentProjectLaunchArguments(recent)])));
-		// Explorer rejects a whole custom category if it contains an item the user removed.
-		if (removed.length > 0) {
-			await this.workspacesHistory.removeRecentlyOpened(removed.map(recentWorkspaceUri));
-			recents = await this.workspacesHistory.getRecentlyOpened();
-		}
-		const items = recents.workspaces.slice(0, settings.minItems).map(recent => ({
-			type: 'task' as const,
-			program: process.execPath,
-			args: windowsCommandLine([...launchArguments, ...this.recentProjectLaunchArguments(recent)]),
+		await this.workspacesHistory.updateWindowsJumpList({
+			executable: process.execPath,
+			launchArguments,
 			iconPath,
-			iconIndex: 0,
-			title: this.recentProjectLabel(recent).slice(0, 255),
-			description: recentWorkspaceUri(recent).fsPath.slice(0, 255),
-		}));
-		if (items.length > 0) {
-			categories.push({ type: 'custom', name: messages['shell.recentProjects']!, items });
-		}
-		categories.push({ type: 'recent' });
-		if (this.isDisposed) {
-			return;
-		}
-		const result = app.setJumpList(categories);
-		if (result !== 'ok') {
-			console.error(`Failed to update Windows Jump List: ${result}`);
-		}
+			recentProjectsTitle: messages['shell.recentProjects']!,
+			tasks: actions,
+		});
 	}
 
 	private recordRecentWorkspace(workspace: IWorkspace): void {
@@ -693,7 +691,11 @@ export class AshApplication extends Disposable {
 
 	/** Focuses a live window, or recreates an empty Workbench when none remains. */
 	handleActivate(): void {
-		if (this.workbenchWindows.focusActive()) return;
+		const active = this.windowsMainService.getLastActiveWindow();
+		if (active) {
+			focusWindow(active);
+			return;
+		}
 		const sessionsWindow = this.windowsMainService.managedWindowValues()[0];
 		if (sessionsWindow) {
 			focusWindow(sessionsWindow);
@@ -762,7 +764,7 @@ export class AshApplication extends Disposable {
 	}
 
 	private workspaceLaunchArguments(arguments_: readonly string[]): string[] {
-		return electronWorkspaceLaunchArguments({
+		return parseMainProcessArgv({
 			arguments: arguments_,
 			packaging: app.isPackaged ? "packaged" : "development",
 			appPath: app.getAppPath(),
@@ -780,17 +782,19 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false): Promise<WorkbenchWindowRecord | undefined> {
+	private async openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false): Promise<WorkbenchWindowRecord | undefined> {
 		if (forceNewWindow) {
 			return this.performOpenWorkspace(workspace, workspaces, true);
 		}
-		return this.workbenchWindows.openWorkspace(workspace, () => this.performOpenWorkspace(workspace, workspaces));
+		const window = await this.windowsMainService.openWorkspace(workspace, async () => (await this.performOpenWorkspace(workspace, workspaces))?.window);
+		return window ? this.workbenchWindowData.get(window.id) : undefined;
 	}
 
 	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false): Promise<WorkbenchWindowRecord | undefined> {
-		const existing = this.workbenchWindows.findWorkspace(workspace);
+		const existingWindow = this.windowsMainService.findWorkspace(workspace);
+		const existing = existingWindow ? this.workbenchWindowData.get(existingWindow.id) : undefined;
 		if (existing && !forceNewWindow) {
-			existing.focus();
+			focusWindow(existing.window);
 			return existing;
 		}
 		const resources = new DisposableStore();
@@ -983,7 +987,7 @@ export class AshApplication extends Disposable {
 					title: `${WorkbenchModeRegistry.get(this.defaultModeId).title} startup failed`,
 					message: "The App Server could not be validated.",
 					detail,
-					buttons: ["Retry", this.workbenchWindows.size === 0 ? "Quit" : "Cancel"],
+					buttons: ["Retry", this.windowsMainService.getWindowCount() === 0 ? "Quit" : "Cancel"],
 					defaultId: 0,
 					cancelId: 1,
 					noLink: true,
@@ -1008,6 +1012,7 @@ export class AshApplication extends Disposable {
 		const windowState = windowsStateHandler.restoreWindowState();
 		const titleBarStyle = this.titleBarStyle;
 		const windowHost = this.windowsMainService.createWindow(options => new BrowserWindow(options), {
+			workspace: workspaceContext.getWorkspace(),
 			state: windowState,
 			backgroundColor: this.themeMainService.getBackgroundColor(),
 			titleBarStyle,
@@ -1021,7 +1026,6 @@ export class AshApplication extends Disposable {
 		const windowStateTracking = windowsStateHandler.trackWindow(window);
 		const record: WorkbenchWindowRecord = {
 			id: window.id,
-			openedWorkspace: workspaceContext.getWorkspace(),
 			window,
 			workspaceContext,
 			supervisor,
@@ -1030,23 +1034,20 @@ export class AshApplication extends Disposable {
 			modeId: this.defaultModeId,
 			windowsStateHandler,
 			windowStateTracking,
-			isDestroyed: () => window.isDestroyed(),
-			focus: () => focusWindow(window),
 		};
-		this.workbenchWindows.add(record);
+		this.workbenchWindowData.set(record.id, record);
 		this.recordRecentWorkspace(workspaceContext.getResolvedWorkspace());
 		resources.add(toDisposable(() => this.globalKeybindings.removeWindow(record.id)));
 		const onFocus = (): void => {
 			if (!window.isDestroyed()) {
-				this.workbenchWindows.activate(record.id);
 				this.windowSessionStateHandler.windowFocused(record.id);
 			}
 		};
 		window.on("focus", onFocus);
 		resources.add(toDisposable(() => window.removeListener("focus", onFocus)));
 		window.once("closed", () => {
-			this.workbenchWindows.remove(record.id);
-			this.windowSessionStateHandler.windowClosed({ kind: 'workbench', workspace: record.openedWorkspace });
+			this.workbenchWindowData.delete(record.id);
+			this.windowSessionStateHandler.windowClosed({ kind: 'workbench', workspace: record.workspaceContext.getWorkspace() });
 		});
 		this.windowSessionStateHandler.windowOpened();
 
@@ -1105,7 +1106,7 @@ export class AshApplication extends Disposable {
 			const nextWindowsStateHandler = this.createWindowsStateHandler(nextWorkspace);
 			record.windowsStateHandler = nextWindowsStateHandler;
 			record.windowStateTracking = windowDisposables.add(nextWindowsStateHandler.trackWindow(window));
-			this.workbenchWindows.updateWorkspace(record.id, nextWorkspace);
+			this.windowsMainService.updateWorkspace(record.id, nextWorkspace);
 			this.recordRecentWorkspace(resolvedWorkspace);
 			this.windowSessionStateHandler.windowChanged();
 		}));
@@ -1488,7 +1489,7 @@ export class AshApplication extends Disposable {
 								// Keep one window alive when Agents is the only restored window.
 								const opened = await this.openWorkspace(session.workspaceContext.getWorkspace(), workspaces);
 								await this.windowsMainService.closeManagedWindow(AGENTS_WINDOW_KEY);
-								opened?.focus();
+								if (opened) focusWindow(opened.window);
 							},
 						},
 						windowCloseResponseIpcRoute(this.lifecycleMainService, window),
@@ -1807,7 +1808,7 @@ export class AshApplication extends Disposable {
 	private readonly onBeforeQuit = (event: ElectronEvent): void => {
 		this.quitRequested = true;
 		if (this.persistentServices) this.windowSessionStateHandler.stopAutomaticSaves();
-		const records = this.workbenchWindows.values();
+		const records = [...this.workbenchWindowData.values()];
 		if (this.quitAfterStateSaved || !this.persistentServices) {
 			return;
 		}
@@ -1841,7 +1842,7 @@ export class AshApplication extends Disposable {
 		_event: ElectronEvent,
 		enabled: boolean,
 	): void => {
-		for (const record of this.workbenchWindows.values()) {
+		for (const record of this.workbenchWindowData.values()) {
 			record.window.webContents.send(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, enabled);
 		}
 		for (const window of this.windowsMainService.managedWindowValues()) {
@@ -1893,10 +1894,10 @@ export class AshApplication extends Disposable {
 		const session = this.sessionsWindow.value;
 		const sessionsWindow = session && this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
 		return [
-			...this.workbenchWindows.values().map(record => ({
-				id: record.id,
-				entry: { kind: 'workbench' as const, workspace: record.openedWorkspace },
-				focused: record.id === focusedWindowId,
+			...this.windowsMainService.getWindows().map(window => ({
+				id: window.id,
+				entry: { kind: 'workbench' as const, workspace: this.workbenchWindowData.get(window.id)!.workspaceContext.getWorkspace() },
+				focused: window.id === focusedWindowId,
 			})),
 			...(sessionsWindow && session ? [{ id: sessionsWindow.id, entry: { kind: 'sessions' as const, workspace: session.workspaceContext.getWorkspace(), modeId: session.modeId }, focused: sessionsWindow.id === focusedWindowId }] : []),
 		];

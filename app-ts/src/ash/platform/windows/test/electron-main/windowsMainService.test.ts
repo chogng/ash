@@ -1,3 +1,4 @@
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -5,13 +6,16 @@ import { URI } from '../../../../base/common/uri.js';
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../../window/common/window.js';
 import { LifecycleMainService } from '../../../lifecycle/electron-main/lifecycleMainService.js';
 import { WindowMode, type IWindowBounds } from '../../../window/electron-main/window.js';
+import type { IAnyWorkspaceIdentifier } from '../../../workspace/common/workspace.js';
 import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } from '../../../workspaces/node/workspaces.js';
 import { WindowsMainService, windowOperationIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
 import type { IOpenConfiguration } from '../../electron-main/windows.js';
 import { WINDOW_OPEN_FILES_CHANNEL, validateWindowFilesRequest, validateWindowFilesResponse } from '../../../window/common/window.js';
 
+ensureNoDisposablesAreLeakedInTestSuite();
+
 test('window restoration selection respects the setting, explicit target, and update restart', () => {
-	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
+	using service = createWindowsService(() => [], async () => undefined);
 	const folder = { workspace: getSingleFolderWorkspaceIdentifier(URI.file('C:\\project')) };
 	const empty = { workspace: createEmptyWorkspaceIdentifier() };
 	const session = { windows: [folder, empty], active: 1 };
@@ -65,18 +69,19 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 		for (const listener of listeners ?? []) listener();
 	}
 	public on(event: 'close', listener: (event: { preventDefault(): void }) => void): void;
-	public on(event: 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
-	public on(event: 'close' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
+	public on(event: 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
+	public on(event: 'close' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
 		if (event === 'close') this.closeListeners.add(listener as (event: { preventDefault(): void }) => void);
 		else { const listeners = this.fullscreenListeners.get(event) ?? new Set<() => void>(); listeners.add(listener as () => void); this.fullscreenListeners.set(event, listeners); }
 	}
 	public off(event: 'close', listener: (event: { preventDefault(): void }) => void): void;
-	public off(event: 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
-	public off(event: 'close' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
+	public off(event: 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
+	public off(event: 'close' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
 		if (event === 'close') this.closeListeners.delete(listener as (event: { preventDefault(): void }) => void);
 		else this.fullscreenListeners.get(event)?.delete(listener as () => void);
 	}
 
+	public emitFocus(): void { for (const listener of this.fullscreenListeners.get('focus') ?? []) listener(); }
 	public isDestroyed(): boolean { return this.destroyed; }
 	public isMinimized(): boolean { return this.minimized; }
 	public restore(): void { this.minimized = false; this.calls.push('restore'); }
@@ -107,7 +112,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 test('file launches wait for renderer readiness, reject replies from another window and retain wait requests until close', async () => {
 	const window = new TestWindow(1, 'Workbench');
 	const other = new TestWindow(2, 'Other');
-	using service = new WindowsMainService(() => [window], async () => window);
+	using service = createWindowsService(() => [window], async () => window);
 	const configuration: IOpenConfiguration = { cwd: 'C:\\project', files: [{ uri: 'file:///C:/project/file.ts' }], forceNewWindow: false, forceReuseWindow: true, waitForFiles: true };
 	const opening = service.open(configuration);
 	await new Promise<void>(resolve => setImmediate(resolve));
@@ -132,7 +137,7 @@ test('new window launches bypass the active window while reuse requests select i
 	active.focused = true;
 	const created = new TestWindow(2, 'Created');
 	const selected: (TestWindow | undefined)[] = [];
-	using service = new WindowsMainService(() => [active], async (_configuration, reuse) => {
+	using service = createWindowsService(() => [active], async (_configuration, reuse) => {
 		selected.push(reuse);
 		return reuse ?? created;
 	});
@@ -144,7 +149,7 @@ test('new window launches bypass the active window while reuse requests select i
 
 test('file requests fail on renderer errors and settle when their window reloads or closes', async () => {
 	let window!: TestWindow;
-	using service = new WindowsMainService(() => [window], async () => window);
+	using service = createWindowsService(() => [window], async () => window);
 	window = service.createWindow(options => new TestWindow(1, options.title), {
 		title: 'Workbench',
 		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
@@ -171,7 +176,7 @@ test('file requests fail on renderer errors and settle when their window reloads
 });
 
 test('renderer readiness follows the latest load and rejects a window that closes during startup', async () => {
-	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
+	using service = createWindowsService(() => [], async () => undefined);
 	const window = service.createWindow(options => new TestWindow(1, options.title), {
 		title: 'Workbench',
 		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
@@ -206,7 +211,7 @@ test('WindowsMainService lists, focuses, and closes only live Workbench windows'
 	const first = new TestWindow(1, 'First');
 	const second = new TestWindow(2, 'Second');
 	second.minimized = true;
-	const service = new WindowsMainService(() => [first, second], async () => undefined, 'win32');
+	using service = createWindowsService(() => [first, second], async () => undefined, 'win32');
 
 	assert.deepEqual(service.perform(first, { kind: 'list' }), [
 		{ id: 1, title: 'First', focused: false },
@@ -230,7 +235,7 @@ test('WindowsMainService lists, focuses, and closes only live Workbench windows'
 });
 
 test('WindowsMainService owns Workbench window resources through close and app disposal', () => {
-	const service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
+	using service = createWindowsService(() => [], async () => undefined);
 	const resources = new DisposableStore();
 	let released = 0;
 	resources.add(toDisposable(() => { released++; }));
@@ -255,7 +260,7 @@ test('WindowsMainService owns Workbench window resources through close and app d
 test('WindowsMainService tracks auxiliary windows and releases them with their parent', () => {
 	const parent = new TestWindow(1, 'Workbench');
 	const child = new TestWindow(2, 'Editor');
-	using service = new WindowsMainService(() => [parent], async () => undefined);
+	using service = createWindowsService(() => [parent], async () => undefined);
 	const registration = service.registerAuxiliaryWindow(child);
 	assert.deepEqual(service.perform(parent, { kind: 'list' }), [
 		{ id: 1, title: 'Workbench', focused: false },
@@ -268,7 +273,7 @@ test('WindowsMainService tracks auxiliary windows and releases them with their p
 	assert.deepEqual(service.perform(parent, { kind: 'list' }), [{ id: 1, title: 'Workbench', focused: false }]);
 
 	const next = new TestWindow(3, 'Editor');
-	service.registerAuxiliaryWindow(next);
+	using nextRegistration = service.registerAuxiliaryWindow(next);
 	service.perform(parent, { kind: 'closeOthers' });
 	assert.deepEqual(next.calls, ['close']);
 	assert.equal(next.isDestroyed(), true);
@@ -276,7 +281,7 @@ test('WindowsMainService tracks auxiliary windows and releases them with their p
 
 test('WindowsMainService owns an independent Sessions window after the Workbench closes', async () => {
 	const workbench = new TestWindow(1, 'Workbench');
-	using service = new WindowsMainService(() => [workbench], async () => undefined, 'win32');
+	using service = createWindowsService(() => [workbench], async () => undefined, 'win32');
 	let created = 0;
 	let released = 0;
 	let closed = 0;
@@ -305,7 +310,7 @@ test('WindowsMainService owns an independent Sessions window after the Workbench
 });
 
 test('WindowsMainService waits for a managed window to close before reopening it', async () => {
-	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
+	using service = createWindowsService(() => [], async () => undefined);
 	const windows: TestWindow[] = [];
 	const create = (options: { readonly title: string }): TestWindow => {
 		const window = new TestWindow(windows.length + 1, options.title);
@@ -331,7 +336,7 @@ test('WindowsMainService waits for a managed window to close before reopening it
 });
 
 test('WindowsMainService keeps a managed window open after a failed close and permits retry', async () => {
-	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
+	using service = createWindowsService(() => [], async () => undefined);
 	using lifecycle = new LifecycleMainService<TestWindow>((window, message) => service.failManagedWindowClose(window, message), window => service.failManagedWindowClose(window, 'Window close was vetoed'), {
 		getItem: () => undefined,
 		setItem: () => {},
@@ -362,7 +367,7 @@ test('WindowsMainService keeps a managed window open after a failed close and pe
 });
 
 test('WindowsMainService releases a failed or crashed managed window', async () => {
-	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
+	using service = createWindowsService(() => [], async () => undefined);
 	const windows: TestWindow[] = [];
 	let released = 0;
 	let closed = 0;
@@ -392,7 +397,7 @@ test('WindowsMainService releases a failed or crashed managed window', async () 
 test('WindowsMainService applies zoom, always-on-top, and platform tab operations', () => {
 	const window = new TestWindow(1, 'First');
 	const windows = () => [window];
-	const service = new WindowsMainService(windows, async () => undefined, 'win32');
+	using service = createWindowsService(windows, async () => undefined, 'win32');
 	service.perform(window, { kind: 'setZoom', level: 2 });
 	service.perform(window, { kind: 'setAlwaysOnTop', enabled: true });
 	assert.deepEqual([
@@ -402,7 +407,7 @@ test('WindowsMainService applies zoom, always-on-top, and platform tab operation
 	], [2, 1.44, true]);
 	assert.throws(() => service.perform(window, { kind: 'nativeTab', action: 'next' }), /require macOS/);
 
-	const macService = new WindowsMainService(windows, async () => undefined, 'darwin');
+	using macService = createWindowsService(windows, async () => undefined, 'darwin');
 	for (const action of ['next', 'previous', 'newWindow', 'merge', 'toggleBar'] as const) {
 		macService.perform(window, { kind: 'nativeTab', action });
 	}
@@ -411,7 +416,7 @@ test('WindowsMainService applies zoom, always-on-top, and platform tab operation
 
 test('WindowsMainService sends zoom changes and releases its window listener', async () => {
 	const window = new TestWindow(1, 'First');
-	const service = new WindowsMainService(() => [window], async () => undefined);
+	using service = createWindowsService(() => [window], async () => undefined);
 	const tracking = service.trackZoomLevel(window);
 	service.perform(window, { kind: 'setZoom', level: 2 });
 	window.emitZoomChanged();
@@ -429,7 +434,7 @@ test('WindowsMainService sends zoom changes and releases its window listener', a
 
 test('WindowsMainService reports fullscreen changes and releases its window listeners', () => {
 	const window = new TestWindow(1, 'First');
-	const service = new WindowsMainService(() => [window], async () => undefined);
+	using service = createWindowsService(() => [window], async () => undefined);
 	assert.equal(service.perform(window, { kind: 'getFullscreen' }), false);
 	const tracking = service.trackFullscreen(window);
 	window.emitFullscreenChanged(true);
@@ -446,7 +451,7 @@ test('WindowsMainService reports fullscreen changes and releases its window list
 
 test('WindowsMainService disposes zoom tracking after window destruction', () => {
 	const window = new TestWindow(1, 'First');
-	const service = new WindowsMainService(() => [window], async () => undefined);
+	using service = createWindowsService(() => [window], async () => undefined);
 	const tracking = service.trackZoomLevel(window);
 	window.destroyed = true;
 	assert.doesNotThrow(() => tracking.dispose());
@@ -456,14 +461,14 @@ test('WindowsMainService creates a new macOS window tab and joins it to its pare
 	const parent = new TestWindow(1, 'Parent');
 	const tab = new TestWindow(2, 'Tab');
 	let creations = 0;
-	const service = new WindowsMainService(() => [parent], async () => {
+	using service = createWindowsService(() => [parent], async () => {
 		creations += 1;
 		return tab;
 	}, 'darwin');
 	await service.perform(parent, { kind: 'newTab' });
 	assert.deepEqual({ creations, calls: parent.calls }, { creations: 1, calls: ['tab:2'] });
 
-	const windowsService = new WindowsMainService(() => [parent], async () => tab, 'win32');
+	using windowsService = createWindowsService(() => [parent], async () => tab, 'win32');
 	assert.throws(() => windowsService.perform(parent, { kind: 'newTab' }), /require macOS/);
 });
 
@@ -472,7 +477,7 @@ test('WindowsMainService closes a new tab when its parent closes during creation
 	const tab = new TestWindow(2, 'Tab');
 	let resolveTab!: (window: TestWindow) => void;
 	const pendingTab = new Promise<TestWindow>(resolve => { resolveTab = resolve; });
-	const service = new WindowsMainService(() => [parent], () => pendingTab, 'darwin');
+	using service = createWindowsService(() => [parent], () => pendingTab, 'darwin');
 	const opening = service.perform(parent, { kind: 'newTab' });
 	parent.destroyed = true;
 	resolveTab(tab);
@@ -482,7 +487,7 @@ test('WindowsMainService closes a new tab when its parent closes during creation
 
 test('window operation IPC validates commands before dispatching to the window host', () => {
 	const window = new TestWindow(1, 'First');
-	const service = new WindowsMainService(() => [window], async () => undefined);
+	using service = createWindowsService(() => [window], async () => undefined);
 	const route = windowOperationIpcRoute(service, window);
 	assert.equal(route.channel, WINDOW_OPERATION_CHANNEL);
 	assert.throws(() => route.validate({ kind: 'focus', windowId: -1 }), /Invalid window operation/);
@@ -492,4 +497,85 @@ test('window operation IPC validates commands before dispatching to the window h
 	assert.deepEqual(route.validate({ kind: 'getZoomFactor' }), { kind: 'getZoomFactor' });
 	route.invoke(route.validate({ kind: 'focusSelf' }));
 	assert.deepEqual(window.calls, ['focus']);
+});
+
+function registerWindow(service: WindowsMainService<TestWindow>, window: TestWindow, workspace: IAnyWorkspaceIdentifier = createEmptyWorkspaceIdentifier()): TestWindow {
+	return service.createWindow(() => window, {
+		workspace,
+		state: { mode: WindowMode.Normal, ...window.bounds },
+		title: window.getTitle(),
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+	}, new DisposableStore()).win;
+}
+
+function createWindowsService(windows: () => readonly TestWindow[], create: ConstructorParameters<typeof WindowsMainService<TestWindow>>[0], platform: NodeJS.Platform = process.platform): WindowsMainService<TestWindow> {
+	const service = new WindowsMainService<TestWindow>(create, platform);
+	for (const window of windows()) {
+		if (window) registerWindow(service, window);
+	}
+	return service;
+}
+
+test('platform window owner tracks activation, workspace changes and close without a product registry', () => {
+	using service = new WindowsMainService<TestWindow>(async () => undefined);
+	const first = registerWindow(service, new TestWindow(1, 'First'), { id: 'first' });
+	const second = registerWindow(service, new TestWindow(2, 'Second'), { id: 'second' });
+	assert.equal(service.getLastActiveWindow(), second);
+	first.emitFocus();
+	assert.equal(service.getLastActiveWindow(), first);
+	service.updateWorkspace(first.id, { id: 'changed' });
+	assert.equal(service.findWorkspace({ id: 'first' }), undefined);
+	assert.equal(service.findWorkspace({ id: 'changed' }), first);
+	first.destroy();
+	assert.equal(service.getLastActiveWindow(), second);
+	assert.equal(service.getWindowCount(), 1);
+	assert.equal(service.getWindowById(first.id), undefined);
+	second.destroy();
+	assert.equal(service.getLastActiveWindow(), undefined);
+	assert.equal(service.getWindowCount(), 0);
+	assert.throws(() => service.updateWorkspace(first.id, { id: 'changed' }), /not registered/);
+});
+
+test('platform window owner reuses the most recently active folder or workspace file', () => {
+	using service = new WindowsMainService<TestWindow>(async () => undefined);
+	const folder = URI.file('/repo/project');
+	const first = registerWindow(service, new TestWindow(1, 'First'), { id: 'first', uri: folder });
+	const second = registerWindow(service, new TestWindow(2, 'Second'), { id: 'second', uri: folder });
+	assert.equal(service.findWorkspace({ id: 'different', uri: folder }), second);
+	first.emitFocus();
+	assert.equal(service.findWorkspace({ id: 'different', uri: folder }), first);
+	const configPath = URI.file('/repo/project.ash-workspace');
+	service.updateWorkspace(first.id, { id: 'workspace', configPath });
+	assert.equal(service.findWorkspace({ id: 'new-id', configPath }), first);
+});
+
+test('platform window owner coalesces opens through renderer startup and focuses the existing window', async () => {
+	using service = new WindowsMainService<TestWindow>(async () => undefined);
+	const workspace = { id: 'pending' };
+	let finishStartup!: () => void;
+	const startup = new Promise<void>(resolve => { finishStartup = resolve; });
+	const window = new TestWindow(1, 'Pending');
+	let creations = 0;
+	const first = service.openWorkspace(workspace, async () => {
+		creations++;
+		registerWindow(service, window, workspace);
+		await startup;
+		return window;
+	});
+	const second = service.openWorkspace(workspace, async () => assert.fail('pending workspace must not be recreated'));
+	assert.equal(first, second);
+	assert.deepEqual({ creations, calls: window.calls }, { creations: 1, calls: [] });
+	finishStartup();
+	assert.equal(await first, window);
+	assert.equal(await second, window);
+	assert.equal(await service.openWorkspace(workspace, async () => assert.fail('live workspace must not be recreated')), window);
+	assert.deepEqual(window.calls, ['focus']);
+});
+
+test('platform window owner releases a failed opening for an explicit retry', async () => {
+	using service = new WindowsMainService<TestWindow>(async () => undefined);
+	const workspace = { id: 'failed' };
+	await assert.rejects(service.openWorkspace(workspace, async () => { throw new Error('startup failed'); }), /startup failed/);
+	const window = new TestWindow(1, 'Retry');
+	assert.equal(await service.openWorkspace(workspace, async () => registerWindow(service, window, workspace)), window);
 });
