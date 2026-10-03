@@ -405,7 +405,7 @@ Searches file contents with a regular expression.
 }
 ```
 
-**执行选择：**默认 `tgrep` 使用包内 executable 与按 Directory 常驻的索引服务；`ripgrep` 显式选择冻结的 `rg`。公共 `grep.backend` 配置同时用于 Agent、编辑器和 Codebase 文字候选。Ash 对 tgrep 结果按路径排序并限制 100 行，刚由 Ash 文件工具编辑的路径直接读取；其他修改由 tgrep 异步监听更新。初始索引未就绪、单文件及正向 glob 查询由 tgrep 扫描磁盘，具体边界见 [`ash-tgrep`](../ash-rs/tgrep/README.md)。
+**执行选择：**默认 `tgrep` 使用包内 executable 与按 Directory 常驻的索引服务；`ripgrep` 显式选择冻结的 `rg`。公共 `grep.backend` 配置同时用于 Agent、编辑器和 Codebase 文字候选。Ash 对 tgrep 结果按路径排序并限制 100 行，刚由 Ash 文件工具编辑的路径直接读取；其他修改由 tgrep 异步监听更新。正向 glob 直接筛选索引内遵守 ignore 规则的非隐藏文件；初始索引未就绪、单文件和含未保存文档的查询使用磁盘扫描，具体边界见 [`ash-tgrep`](../ash-rs/tgrep/README.md)。
 
 **错误文案：**正则非法 → 返回所选执行方式的稳定错误；无命中 → 正常结果 `no matches`。两种方式都遵守目录 ignore 规则。
 

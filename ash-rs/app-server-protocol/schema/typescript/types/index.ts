@@ -228,6 +228,7 @@ export type { ContentPart } from './ContentPart.js';
 export type { ContentSearchCancelParams } from './ContentSearchCancelParams.js';
 export type { ContentSearchCaseSensitivity } from './ContentSearchCaseSensitivity.js';
 export type { ContentSearchFreshness } from './ContentSearchFreshness.js';
+export type { ContentSearchIndexStats } from './ContentSearchIndexStats.js';
 export type { ContentSearchMatch } from './ContentSearchMatch.js';
 export type { ContentSearchMatchRange } from './ContentSearchMatchRange.js';
 export type { ContentSearchPatternKind } from './ContentSearchPatternKind.js';

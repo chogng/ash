@@ -25,6 +25,8 @@ pub enum CaseSensitivity {
 
 /// Indexed queries include observed writes but may lag external filesystem changes.
 /// Current queries read eligible files from disk and bypass cached index contents.
+/// For tgrep directory queries, indexed includes filter the ordinary, non-hidden corpus;
+/// current includes may explicitly admit ignored files. This also holds before index readiness.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Freshness {
     Indexed,
@@ -65,6 +67,19 @@ pub struct SearchResult {
     pub matches: Vec<Match>,
     pub limit_hit: bool,
     pub freshness: Freshness,
+    pub index_stats: Option<IndexStats>,
+}
+
+/// Indexed file-selection diagnostics, excluding later content batches and observed writes.
+/// Scans have no index statistics. The query plan is an engine diagnostic, not a stable grammar.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IndexStats {
+    pub query_plan: String,
+    /// Candidates selected by the trigram plan, before scope and file filters.
+    pub raw_candidates: usize,
+    /// Candidates remaining after scope, visibility and file filters.
+    pub candidates: usize,
+    pub total_files: usize,
 }
 
 /// Current editor text replacing the corresponding file during one search only.
@@ -144,6 +159,7 @@ pub struct Page {
     pub limit_hit: bool,
     pub error: Option<String>,
     pub freshness: Option<Freshness>,
+    pub index_stats: Option<IndexStats>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

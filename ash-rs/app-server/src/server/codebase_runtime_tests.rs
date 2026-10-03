@@ -17,6 +17,7 @@ impl grep::Search for GrepCandidates {
             matches: self.0.lock().unwrap().clone(),
             limit_hit: false,
             freshness: grep::Freshness::Indexed,
+            index_stats: None,
         })
     }
 }

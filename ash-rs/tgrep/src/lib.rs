@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
-pub const VERSION: &str = "1.0.8";
+pub const VERSION: &str = "1.0.11";
 const TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug)]
@@ -108,6 +108,17 @@ pub struct SearchResult {
     pub matches: Vec<Match>,
     pub limit_hit: bool,
     pub indexed: bool,
+    pub index_stats: Option<IndexStats>,
+}
+
+/// Statistics from the initial indexed file-selection query, before the Ash edit overlay.
+/// Content batches repeat that query with exact paths and must not be added to these counts.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct IndexStats {
+    pub query_plan: String,
+    pub raw_candidates: usize,
+    pub candidates: usize,
+    pub total_files: usize,
 }
 #[derive(Clone, Debug, Deserialize)]
 pub struct Status {
@@ -201,10 +212,9 @@ impl Session {
             return Err(failed("search scope escapes its workspace"));
         }
         let status = self.status(cancellation)?;
-        // Single files and explicit glob overrides use tgrep's scanning semantics, including
-        // ignored files deliberately included by the caller. Index readiness is never freshness.
-        if query.current || scope.is_file() || !status.hidden_complete || !query.include.is_empty()
-        {
+        // Current searches and explicit files may include ignored files. Directory queries
+        // requesting the index retain corpus admission even while initialization needs a scan.
+        if query.current || scope.is_file() || !status.hidden_complete {
             let mut result = self.scan(query, &[scope], cancellation, deadline)?;
             result.matches.truncate(limit);
             return Ok(result);
@@ -216,21 +226,14 @@ impl Session {
             .clone();
         let mut globs: Vec<String> = query.include.iter().map(|s| (*s).to_owned()).collect();
         globs.extend(query.exclude.iter().map(|g| format!("!{g}")));
-        // In 1.0.8 the external case-insensitive flag folds the trigram prefilter as ASCII,
-        // losing Unicode equivalents such as K/K. Inline flags use the regex's Unicode-aware
-        // extraction instead, preserving indexed queries and explicit (?-i) overrides.
-        let pattern = if query.case_insensitive {
-            format!("(?i){}", query.pattern)
-        } else {
-            query.pattern.to_owned()
-        };
-        let params = json!({"pattern":pattern,"case_insensitive":false,
-            "scope":portable(query.scope)?,"glob":globs,"files_only":true,"detail":false,"positions":false});
+        let params = json!({"pattern":query.pattern,"case_insensitive":query.case_insensitive,
+            "scope":portable(query.scope)?,"glob":globs,"files_only":true,"max_count":1,"detail":false,"positions":false,"stats":true});
         // One row per matching file bounds broad queries before asking for content. The server
         // has only a per-file max_count; the adapter enforces the caller's global limit.
         let files = self
             .process
             .rpc("search", params.clone(), cancellation, deadline)?;
+        let index_stats = serde_json::from_value(files["index_stats"].clone())?;
         let mut paths = BTreeSet::new();
         for value in rows(&files)? {
             if value.get("type").and_then(Value::as_str) != Some("match") {
@@ -248,7 +251,7 @@ impl Session {
         let dirty: Vec<_> = changed
             .iter()
             .filter(|p| p.starts_with(query.scope))
-            .filter(|p| self.admitted(p))
+            .filter(|p| self.root.join(p).is_file() && self.admitted(p, query.scope))
             .map(|p| self.root.join(p))
             .collect();
         if !dirty.is_empty() {
@@ -265,6 +268,7 @@ impl Session {
             }
             let mut request = params.clone();
             request["files_only"] = json!(false);
+            request["stats"] = json!(false);
             request["max_count"] = json!(limit + 1);
             request["glob"] = json!(
                 chunk
@@ -299,29 +303,44 @@ impl Session {
             matches,
             limit_hit,
             indexed: true,
+            index_stats: Some(index_stats),
         })
     }
-    fn admitted(&self, relative: &Path) -> bool {
-        if relative
-            .components()
-            .any(|c| c.as_os_str().to_string_lossy().starts_with('.'))
-        {
-            return false;
-        }
+    fn admitted(&self, relative: &Path, scope: &Path) -> bool {
         let absolute = self.root.join(relative);
-        if !absolute.is_file() {
+        if !absolute.exists() {
             return false;
         }
         if !dunce::canonicalize(&absolute).is_ok_and(|p| p.starts_with(&self.root)) {
             return false;
         }
         let target = absolute.clone();
-        ignore::WalkBuilder::new(&self.root)
+        // Ignore admission starts at the index root, including ignored scope ancestors.
+        // Visibility starts at the explicit scope, allowing a hidden directory as root while
+        // excluding hidden descendants (including the Windows hidden attribute).
+        let admitted = ignore::WalkBuilder::new(&self.root)
+            .require_git(false)
+            .hidden(false)
+            .filter_entry(move |entry| target.starts_with(entry.path()))
+            .build()
+            .filter_map(Result::ok)
+            .any(|entry| {
+                entry.path() == absolute
+                    && entry.file_type().is_some_and(|t| t.is_file() || t.is_dir())
+            });
+        if !admitted {
+            return false;
+        }
+        let target = absolute.clone();
+        ignore::WalkBuilder::new(self.root.join(scope))
             .require_git(false)
             .filter_entry(move |entry| target.starts_with(entry.path()))
             .build()
             .filter_map(Result::ok)
-            .any(|entry| entry.path() == absolute && entry.file_type().is_some_and(|t| t.is_file()))
+            .any(|entry| {
+                entry.path() == absolute
+                    && entry.file_type().is_some_and(|t| t.is_file() || t.is_dir())
+            })
     }
     fn validate_result_path(&self, path: &Path, scope: &Path) -> Result<(), Error> {
         validate_relative(path)?;
@@ -342,6 +361,28 @@ impl Session {
         cancellation: &CancellationToken,
         deadline: Instant,
     ) -> Result<SearchResult, Error> {
+        let scope = self.root.join(query.scope);
+        let filter_corpus = !query.current && scope.is_dir();
+        if filter_corpus && !self.admitted(query.scope, query.scope) {
+            return Ok(SearchResult {
+                matches: Vec::new(),
+                limit_hit: false,
+                indexed: false,
+                index_stats: None,
+            });
+        }
+        let mut overrides = ignore::overrides::OverrideBuilder::new(&scope);
+        for glob in query.include {
+            overrides
+                .add(&glob.replace('\\', "/"))
+                .map_err(|e| failed(e.to_string()))?;
+        }
+        for glob in query.exclude {
+            overrides
+                .add(&format!("!{}", glob.replace('\\', "/")))
+                .map_err(|e| failed(e.to_string()))?;
+        }
+        let overrides = overrides.build().map_err(|e| failed(e.to_string()))?;
         let mut command = std::process::Command::new(&self.executable.0);
         command.current_dir(&self.root).args([
             "--no-index",
@@ -357,14 +398,46 @@ impl Session {
         if query.case_insensitive {
             command.arg("--ignore-case");
         }
-        for glob in query.include {
-            command.arg("--glob").arg(glob);
-        }
-        for glob in query.exclude {
-            command.arg("--glob").arg(format!("!{glob}"));
+        if !filter_corpus {
+            for glob in query.include {
+                command.arg("--glob").arg(glob);
+            }
+            for glob in query.exclude {
+                command.arg("--glob").arg(format!("!{glob}"));
+            }
         }
         command.arg("--").arg(query.pattern).args(paths);
-        let records = process::scan(command, query.max_results + 1, cancellation, deadline)?;
+        // Positive CLI globs override ignore rules. Apply index globs after the ordinary
+        // directory walk, before the global row budget, including explicitly named dirty files.
+        let records = process::scan(
+            command,
+            query.max_results + 1,
+            cancellation,
+            deadline,
+            &|record| {
+                if !filter_corpus {
+                    return Ok(true);
+                }
+                let path = record["data"]["path"]["text"]
+                    .as_str()
+                    .ok_or_else(|| failed("tgrep returned a non-text path"))?;
+                let absolute = self.root.join(path);
+                let relative = absolute
+                    .strip_prefix(&scope)
+                    .map_err(|_| failed("tgrep returned an out-of-scope path"))?;
+                // Index glob filtering also prunes excluded ancestor directories, even when
+                // dirty files were passed individually rather than reached through a walk.
+                if relative
+                    .ancestors()
+                    .skip(1)
+                    .filter(|p| !p.as_os_str().is_empty())
+                    .any(|parent| overrides.matched(scope.join(parent), true).is_ignore())
+                {
+                    return Ok(false);
+                }
+                Ok(!overrides.matched(absolute, false).is_ignore())
+            },
+        )?;
         let mut matches = Vec::new();
         for record in records {
             if record.get("type").and_then(Value::as_str) != Some("match") {
@@ -402,6 +475,7 @@ impl Session {
             matches,
             limit_hit,
             indexed: false,
+            index_stats: None,
         })
     }
 }

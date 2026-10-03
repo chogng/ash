@@ -101,6 +101,17 @@ pub struct ContentSearchMatch {
     pub ranges: Vec<ContentSearchMatchRange>,
 }
 
+/// Initial index candidate selection; counts exclude the later observed-write overlay.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ContentSearchIndexStats {
+    /// Engine diagnostic text; callers must not parse it as a stable query language.
+    pub query_plan: String,
+    pub raw_candidates: usize,
+    pub candidates: usize,
+    pub total_files: usize,
+}
+
 /// Bounded progress snapshot for a running or completed directory search.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -115,6 +126,11 @@ pub struct ContentSearchReadResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub freshness: Option<ContentSearchFreshness>,
+    /// Initial indexed file selection, excluding content batches and observed-write overlays.
+    /// Absent during execution and for current disk searches.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub index_stats: Option<ContentSearchIndexStats>,
 }
 
 /// Cancels and releases one connection-owned directory search.

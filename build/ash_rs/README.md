@@ -254,7 +254,7 @@ just test-python build
 
 ## Public grep runtime
 
-`tgrep.py` and development `prepare.py` resolve the same pinned 1.0.8 archives from
+`tgrep.py` and development `prepare.py` resolve the same pinned 1.0.11 archives from
 [`third_party/tgrep/runtime-lock.json`](../../third_party/tgrep/runtime-lock.json).
 All products and Remote runtimes include `ash-resources/tgrep/tgrep[.exe]` and its
 MIT license. The component digest and complete file manifest include tgrep; signing

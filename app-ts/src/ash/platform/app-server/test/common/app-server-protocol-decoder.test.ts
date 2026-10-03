@@ -15,6 +15,15 @@ test('directory permissions reject unknown enum values at the generated boundary
 	assert.throws(() => decodeAppServerRequestParams('config/dirPermissions/set', { ...params, permissions: ['futurePermission'] }), AppServerProtocolDecodeError);
 });
 
+test('search reads accept optional index diagnostics and validate their counts', () => {
+	const result = { searchId: 'search-1', matches: [], nextMatch: 0, completed: true, limitHit: false, error: null, freshness: 'indexed' };
+	const response = { jsonrpc: '2.0', id: 1, result };
+	assert.deepEqual(decodeAppServerResponse('grep/search/read', response), response);
+	const indexed = { ...response, result: { ...result, indexStats: { queryPlan: 'AND(3 trigrams)', rawCandidates: 7, candidates: 2, totalFiles: 50 } } };
+	assert.deepEqual(decodeAppServerResponse('grep/search/read', indexed), indexed);
+	assert.throws(() => decodeAppServerResponse('grep/search/read', { ...indexed, result: { ...indexed.result, indexStats: { ...indexed.result.indexStats, candidates: '2' } } }), AppServerProtocolDecodeError);
+});
+
 test('Agent identity and replacement origins survive the generated RPC boundary', () => {
 	const response = {
 		jsonrpc: '2.0', id: 1,

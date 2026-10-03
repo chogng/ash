@@ -8,6 +8,7 @@ use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::search::ContentSearchCancelParams;
 use ash_app_server_protocol::protocol::search::ContentSearchCaseSensitivity as ContentSearchProtocolCaseSensitivity;
 use ash_app_server_protocol::protocol::search::ContentSearchFreshness;
+use ash_app_server_protocol::protocol::search::ContentSearchIndexStats;
 use ash_app_server_protocol::protocol::search::ContentSearchMatch as ContentSearchProtocolMatch;
 use ash_app_server_protocol::protocol::search::ContentSearchMatchRange as ContentSearchProtocolMatchRange;
 use ash_app_server_protocol::protocol::search::ContentSearchPatternKind;
@@ -163,6 +164,12 @@ fn search_page(search_id: String, page: ContentSearchPage) -> ContentSearchReadR
         completed: page.completed,
         limit_hit: page.limit_hit,
         error: page.error,
+        index_stats: page.index_stats.map(|stats| ContentSearchIndexStats {
+            query_plan: stats.query_plan,
+            raw_candidates: stats.raw_candidates,
+            candidates: stats.candidates,
+            total_files: stats.total_files,
+        }),
         freshness: page.freshness.map(|freshness| match freshness {
             grep::Freshness::Indexed => ContentSearchFreshness::Indexed,
             grep::Freshness::Current => ContentSearchFreshness::Current,

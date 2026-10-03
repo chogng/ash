@@ -166,6 +166,7 @@ fn parse(stdout: impl Read, max_results: usize) -> Result<SearchResult, Error> {
                 matches,
                 limit_hit: true,
                 freshness: Freshness::Current,
+                index_stats: None,
             });
         }
         let data = &record["data"];
@@ -207,5 +208,6 @@ fn parse(stdout: impl Read, max_results: usize) -> Result<SearchResult, Error> {
         matches,
         limit_hit: false,
         freshness: Freshness::Current,
+        index_stats: None,
     })
 }

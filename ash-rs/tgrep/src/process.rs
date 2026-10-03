@@ -219,18 +219,36 @@ pub(super) fn scan(
     limit: usize,
     cancellation: &CancellationToken,
     deadline: Instant,
+    admit: &dyn Fn(&Value) -> Result<bool, Error>,
 ) -> Result<Vec<Value>, Error> {
-    let lines = capture(command, cancellation, deadline, limit)?;
+    let lines = capture_selected(command, cancellation, deadline, limit, &|line| {
+        let record: Value = serde_json::from_str(line)?;
+        Ok(record["type"] == "match" && admit(&record)?)
+    })?;
     lines
         .into_iter()
         .map(|line| serde_json::from_str(&line).map_err(Into::into))
         .collect()
 }
 fn capture(
+    command: Command,
+    cancellation: &CancellationToken,
+    deadline: Instant,
+    limit: usize,
+) -> Result<Vec<String>, Error> {
+    capture_selected(command, cancellation, deadline, limit, &|line| {
+        Ok(limit == 1
+            || serde_json::from_str::<Value>(line)?
+                .get("type")
+                .is_some_and(|kind| kind == "match"))
+    })
+}
+fn capture_selected(
     mut command: Command,
     cancellation: &CancellationToken,
     deadline: Instant,
     limit: usize,
+    admit: &dyn Fn(&str) -> Result<bool, Error>,
 ) -> Result<Vec<String>, Error> {
     check(cancellation, deadline)?;
     let mut child = OwnedChild(
@@ -291,10 +309,7 @@ fn capture(
                             return Err(failed("tgrep output exceeds 64 MiB"));
                         }
                         let line = line.trim_end_matches(['\r', '\n']).to_owned();
-                        if limit == 1
-                            || serde_json::from_str::<Value>(&line)
-                                .is_ok_and(|v| v["type"] == "match")
-                        {
+                        if admit(&line)? {
                             output.push(line);
                             if output.len() == limit {
                                 return Ok((output, true));

@@ -135,6 +135,7 @@ impl Jobs {
             limit_hit: state.limit_hit,
             error: state.error.clone(),
             freshness: state.freshness,
+            index_stats: state.index_stats.clone(),
         })
     }
 
@@ -185,6 +186,7 @@ struct JobState {
     limit_hit: bool,
     error: Option<String>,
     freshness: Option<crate::Freshness>,
+    index_stats: Option<crate::IndexStats>,
 }
 
 fn cleanup_jobs(jobs: &mut HashMap<String, Job>) {
@@ -240,6 +242,7 @@ fn run_search(
                 state.matches = result.matches;
                 state.limit_hit = result.limit_hit;
                 state.freshness = Some(result.freshness);
+                state.index_stats = result.index_stats;
             }
             Err(error) => state.error = Some(error.to_string()),
         }

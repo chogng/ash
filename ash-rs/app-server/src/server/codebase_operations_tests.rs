@@ -280,7 +280,7 @@ fn grep_rpc_shares_search_with_codebase_and_editor_then_releases_the_index() {
     );
     assert_eq!(rebuilt["result"]["ready"], true);
     assert!(rebuilt["result"]["indexedFileCount"].as_u64().unwrap() >= 1);
-    assert!(index_directory.join("tgrep-1.0.8").is_dir());
+    assert!(index_directory.join("tgrep-1.0.11").is_dir());
 
     // A substring inside an FTS token must be supplied by the shared grep capability.
     server.codebase_service().unwrap().rebuild().unwrap();
@@ -315,7 +315,7 @@ fn grep_rpc_shares_search_with_codebase_and_editor_then_releases_the_index() {
         "grep/search/start",
         serde_json::json!({
             "query": "grep_rpc_mark", "patternKind": "literal", "caseSensitivity": "sensitive", "freshness": "indexed",
-            "includePatterns": [], "excludePatterns": [], "maxResults": 200
+            "includePatterns": ["*.rs"], "excludePatterns": [], "maxResults": 200
         }),
     );
     let search_id = started["result"]["searchId"].as_str().unwrap();
@@ -335,6 +335,17 @@ fn grep_rpc_shares_search_with_codebase_and_editor_then_releases_the_index() {
             assert!(page["result"]["error"].is_null(), "{page}");
             assert_eq!(page["result"]["matches"].as_array().unwrap().len(), 1);
             assert_eq!(page["result"]["freshness"], "indexed");
+            let stats = &page["result"]["indexStats"];
+            assert!(
+                stats["queryPlan"]
+                    .as_str()
+                    .is_some_and(|plan| !plan.is_empty()),
+                "{page}"
+            );
+            assert_eq!(stats["candidates"], 1, "{page}");
+            assert!(
+                stats["rawCandidates"].as_u64().unwrap() <= stats["totalFiles"].as_u64().unwrap()
+            );
             break;
         }
         assert!(std::time::Instant::now() < deadline);

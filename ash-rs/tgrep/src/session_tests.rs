@@ -81,7 +81,11 @@ fn ash_edits_and_new_files_are_visible_without_waiting_for_watcher() {
     fs::write(&path, "after_marker\n").unwrap();
     let new = root.path().join("new.rs");
     fs::write(&new, "after_marker\n").unwrap();
-    session.paths_changed(&[path.clone(), fs::canonicalize(&new).unwrap()]);
+    // File tools notify canonical paths; macOS temporary directories may use the /var alias.
+    session.paths_changed(&[
+        fs::canonicalize(&path).unwrap(),
+        fs::canonicalize(&new).unwrap(),
+    ]);
     assert!(search(&session, "before_marker").matches.is_empty());
     assert_eq!(search(&session, "after_marker").matches.len(), 2);
     fs::remove_file(&new).unwrap();
@@ -101,7 +105,7 @@ fn scanning_honors_globs_unicode_denials_and_literal_file_paths() {
         case_insensitive: true,
         include: &["*.rs"],
         max_results: 100,
-        current: false,
+        current: true,
         exclude: &["**/.env"],
     };
     let result = session
@@ -129,6 +133,130 @@ fn scanning_honors_globs_unicode_denials_and_literal_file_paths() {
         )
         .unwrap();
     assert_eq!(result.matches.len(), 1);
+}
+
+#[test]
+fn indexed_globs_keep_corpus_admission_and_bound_filtered_matches() {
+    let (root, _index, session) = fixture();
+    fs::create_dir(root.path().join("src")).unwrap();
+    fs::write(root.path().join(".gitignore"), "ignored.rs\n").unwrap();
+    fs::create_dir(root.path().join("src/skip")).unwrap();
+    fs::write(root.path().join("src/skip/d.rs"), "glob_marker\n").unwrap();
+    fs::write(root.path().join("src/ignored.rs"), "glob_marker\n").unwrap();
+    fs::write(root.path().join("src/.hidden.rs"), "glob_marker\n").unwrap();
+    fs::write(root.path().join("src/a.txt"), "glob_marker\n".repeat(200)).unwrap();
+    fs::write(root.path().join("src/b.rs"), "glob_marker\n".repeat(3)).unwrap();
+    fs::write(root.path().join("src/c.rs"), "glob_marker\n").unwrap();
+    let token = CancellationSource::new().token();
+    let request = Query {
+        pattern: "glob_marker",
+        scope: Path::new("src"),
+        case_insensitive: false,
+        include: &["*.rs"],
+        exclude: &["c.rs", "skip"],
+        max_results: 2,
+        current: false,
+    };
+    // Exercise the initialization scan directly so watcher timing cannot skip that branch.
+    let mut scan = session
+        .scan(
+            &request,
+            &[session.root.join("src")],
+            &token,
+            Instant::now() + TIMEOUT,
+        )
+        .unwrap();
+    scan.matches.truncate(request.max_results);
+    assert!(scan.limit_hit && scan.index_stats.is_none());
+    assert_eq!(
+        scan.matches
+            .iter()
+            .map(|m| (m.path.as_path(), m.line_number))
+            .collect::<Vec<_>>(),
+        [(Path::new("src/b.rs"), 1), (Path::new("src/b.rs"), 2)]
+    );
+    session.rebuild(&token).unwrap();
+    let indexed = session.search(&request, &token).unwrap();
+    assert!(indexed.indexed && indexed.limit_hit);
+    assert_eq!(indexed.matches, scan.matches);
+    let stats = indexed.index_stats.unwrap();
+    assert!(!stats.query_plan.is_empty());
+    assert_eq!(stats.candidates, 1);
+    assert!(stats.candidates <= stats.raw_candidates && stats.raw_candidates <= stats.total_files);
+    fs::write(root.path().join("src/b.rs"), "glob_marker edited\n").unwrap();
+    session.paths_changed(&[
+        session.root.join("src/b.rs"),
+        session.root.join("src/a.txt"),
+        session.root.join("src/c.rs"),
+        session.root.join("src/ignored.rs"),
+        session.root.join("src/.hidden.rs"),
+        session.root.join("src/skip/d.rs"),
+    ]);
+    let edited = session.search(&request, &token).unwrap();
+    assert!(edited.indexed && !edited.limit_hit);
+    assert_eq!(edited.matches.len(), 1);
+    assert_eq!(edited.matches[0].content, "glob_marker edited");
+    let current = session
+        .search(
+            &Query {
+                current: true,
+                max_results: 100,
+                ..request
+            },
+            &token,
+        )
+        .unwrap();
+    assert!(!current.indexed && current.index_stats.is_none());
+    assert!(
+        current
+            .matches
+            .iter()
+            .any(|m| m.path == Path::new("src/ignored.rs"))
+    );
+}
+
+#[test]
+fn indexed_explicit_hidden_directory_preserves_visibility_during_scan_and_edits() {
+    let (root, _index, session) = fixture();
+    fs::create_dir(root.path().join(".github")).unwrap();
+    fs::write(root.path().join(".github/workflow.yml"), "scope_marker\n").unwrap();
+    fs::write(root.path().join(".github/.secret.yml"), "scope_marker\n").unwrap();
+    let token = CancellationSource::new().token();
+    let request = Query {
+        pattern: "scope_marker",
+        scope: Path::new(".github"),
+        case_insensitive: false,
+        include: &["*.yml"],
+        exclude: &[],
+        max_results: 100,
+        current: false,
+    };
+    let scan = session
+        .scan(
+            &request,
+            &[session.root.join(".github")],
+            &token,
+            Instant::now() + TIMEOUT,
+        )
+        .unwrap();
+    assert_eq!(scan.matches.len(), 1);
+    session.rebuild(&token).unwrap();
+    assert_eq!(
+        session.search(&request, &token).unwrap().matches,
+        scan.matches
+    );
+    fs::write(
+        root.path().join(".github/workflow.yml"),
+        "scope_marker edited\n",
+    )
+    .unwrap();
+    session.paths_changed(&[
+        session.root.join(".github/workflow.yml"),
+        session.root.join(".github/.secret.yml"),
+    ]);
+    let edited = session.search(&request, &token).unwrap();
+    assert_eq!(edited.matches.len(), 1);
+    assert_eq!(edited.matches[0].content, "scope_marker edited");
 }
 
 #[test]
@@ -260,4 +388,57 @@ fn indexed_case_insensitive_search_preserves_unicode_folding() {
     assert!(result.indexed);
     assert_eq!(result.matches.len(), 1);
     assert_eq!(result.matches[0].path, Path::new("ascii.txt"));
+}
+
+#[test]
+fn indexed_case_flags_match_current_search() {
+    let (root, _index, session) = fixture();
+    fs::write(
+        root.path().join("source.txt"),
+        "SHELLSHOCK\nſhellſhocK\nBaShDoOr\nPREFIXhelloSUFFIX\nprefixHELLOsuffix\nprefixÉsuffix\nprefixésuffix\n",
+    )
+    .unwrap();
+    session.rebuild(&CancellationSource::new().token()).unwrap();
+    for (pattern, case_insensitive, expected_lines) in [
+        ("shellshock|bashdoor", true, vec![1, 2, 3]),
+        ("(?i)shellshock|bashdoor", false, vec![1, 2, 3]),
+        ("PREFIX(?i:hello)SUFFIX", false, vec![4]),
+        ("prefix(?-i:HELLO)suffix", true, vec![5]),
+        ("(?i)prefix(?-i:HELLO)suffix", false, vec![5]),
+        ("prefixésuffix", true, vec![6, 7]),
+    ] {
+        let query = Query {
+            pattern,
+            scope: Path::new(""),
+            case_insensitive,
+            include: &[],
+            max_results: 100,
+            current: false,
+            exclude: &[],
+        };
+        let indexed = session
+            .search(&query, &CancellationSource::new().token())
+            .unwrap();
+        assert!(indexed.indexed, "{pattern}");
+        assert_eq!(
+            indexed
+                .matches
+                .iter()
+                .map(|found| found.line_number)
+                .collect::<Vec<_>>(),
+            expected_lines,
+            "{pattern}"
+        );
+        let current = session
+            .search(
+                &Query {
+                    current: true,
+                    ..query
+                },
+                &CancellationSource::new().token(),
+            )
+            .unwrap();
+        assert!(!current.indexed);
+        assert_eq!(indexed.matches, current.matches, "{pattern}");
+    }
 }

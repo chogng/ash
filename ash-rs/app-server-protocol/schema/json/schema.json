@@ -17551,6 +17551,37 @@
       ],
       "type": "string"
     },
+    "ContentSearchIndexStats": {
+      "description": "Initial index candidate selection; counts exclude the later observed-write overlay.",
+      "properties": {
+        "candidates": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "queryPlan": {
+          "description": "Engine diagnostic text; callers must not parse it as a stable query language.",
+          "type": "string"
+        },
+        "rawCandidates": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "totalFiles": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "queryPlan",
+        "rawCandidates",
+        "candidates",
+        "totalFiles"
+      ],
+      "type": "object"
+    },
     "ContentSearchMatch": {
       "description": "One line containing one or more matches in a directory-relative file.",
       "properties": {
@@ -17672,6 +17703,17 @@
             }
           ],
           "description": "Actual execution mode, available after a successful search."
+        },
+        "indexStats": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentSearchIndexStats"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Initial indexed file selection, excluding content batches and observed-write overlays.\nAbsent during execution and for current disk searches."
         },
         "limitHit": {
           "type": "boolean"

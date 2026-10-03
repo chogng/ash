@@ -47,6 +47,7 @@ fn maps_content_search_page_to_protocol_result() {
             limit_hit: false,
             error: None,
             freshness: Some(grep::Freshness::Current),
+            index_stats: None,
         },
     );
 
@@ -65,6 +66,35 @@ fn maps_content_search_page_to_protocol_result() {
     assert!(!result.limit_hit);
     assert_eq!(result.error, None);
     assert_eq!(result.freshness, Some(ContentSearchFreshness::Current));
+    assert_eq!(result.index_stats, None);
+}
+
+#[test]
+fn indexed_statistics_are_exposed_in_the_read_result() {
+    let result = search_page(
+        "search-1".into(),
+        ContentSearchPage {
+            matches: vec![],
+            next_match: 0,
+            completed: true,
+            limit_hit: false,
+            error: None,
+            freshness: Some(grep::Freshness::Indexed),
+            index_stats: Some(grep::IndexStats {
+                query_plan: "AND(3 trigrams)".into(),
+                raw_candidates: 7,
+                candidates: 2,
+                total_files: 50,
+            }),
+        },
+    );
+    let json = serde_json::to_value(result).unwrap();
+    assert_eq!(
+        json["indexStats"],
+        serde_json::json!({
+            "queryPlan": "AND(3 trigrams)", "rawCandidates": 7, "candidates": 2, "totalFiles": 50,
+        })
+    );
 }
 
 #[test]

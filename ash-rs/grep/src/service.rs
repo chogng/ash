@@ -235,6 +235,9 @@ impl Service {
         cancellation: &CancellationToken,
     ) -> Result<SearchResult, Error> {
         let regex = validate(query)?;
+        if documents.is_empty() {
+            return self.search_disk(dir, query, &regex, cancellation);
+        }
         let includes = document_globs(&query.include_patterns)?;
         let excludes = document_globs(&query.exclude_patterns)?;
         let mut disk_query = query.clone();
@@ -304,6 +307,7 @@ impl Service {
             matches,
             limit_hit,
             freshness: Freshness::Current,
+            index_stats: None,
         })
     }
 
@@ -374,6 +378,12 @@ impl Service {
                         })
                         .collect(),
                     limit_hit: result.limit_hit,
+                    index_stats: result.index_stats.map(|stats| crate::IndexStats {
+                        query_plan: stats.query_plan,
+                        raw_candidates: stats.raw_candidates,
+                        candidates: stats.candidates,
+                        total_files: stats.total_files,
+                    }),
                     freshness: if result.indexed {
                         Freshness::Indexed
                     } else {

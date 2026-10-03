@@ -1092,7 +1092,7 @@ def test_node_resolution(root: Path, spec) -> NodeResolution:
 def test_tgrep_resolution(root):
     executable = executable_file(root / "tgrep-source", b"tgrep")
     return ExecutableResolution(
-        executable, "1.0.8", "local-override", hashlib.sha256(b"tgrep").hexdigest()
+        executable, "1.0.11", "local-override", hashlib.sha256(b"tgrep").hexdigest()
     )
 
 

@@ -160,7 +160,7 @@ def search(client, pattern, freshness):
             "query": pattern,
             "patternKind": "literal",
             "caseSensitivity": "sensitive",
-            "includePatterns": [],
+            "includePatterns": ["*.rs"],
             "excludePatterns": [],
             "maxResults": 200,
             "freshness": freshness,
@@ -185,6 +185,17 @@ def search(client, pattern, freshness):
                 sizes.append(len(page["matches"]))
                 rows.extend(page["matches"])
             if page["completed"]:
+                if freshness == "indexed":
+                    stats = page["indexStats"]
+                    assert stats["queryPlan"], page
+                    assert stats["candidates"] == 1, page
+                    assert (
+                        stats["candidates"]
+                        <= stats["rawCandidates"]
+                        <= stats["totalFiles"]
+                    ), page
+                else:
+                    assert "indexStats" not in page, page
                 return rows, sizes
             time.sleep(0.01)
         raise TimeoutError("search did not finish")
@@ -287,6 +298,8 @@ def verify(package, node=None):
                 "buildId": metadata["buildId"],
                 "tgrepVersion": component["version"],
                 "indexedPages": pages,
+                "indexedGlobs": True,
+                "indexStats": True,
                 "currentDiskLine": 151,
                 "codebaseSearch": True,
                 "codebaseRetrieval": True,

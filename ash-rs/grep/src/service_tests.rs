@@ -61,6 +61,13 @@ fn both_engines_share_literals_unicode_filters_limits_and_current_reads() {
         let result = service.search(&root, &q, &cancellation.token()).unwrap();
         assert_eq!(result.matches.len(), 1);
         assert_eq!(result.matches[0].path, Path::new("a.rs"));
+        match backend {
+            Backend::Tgrep => {
+                assert_eq!(result.freshness, Freshness::Indexed);
+                assert_eq!(result.index_stats.as_ref().unwrap().candidates, 1);
+            }
+            Backend::Ripgrep => assert!(result.index_stats.is_none()),
+        }
         assert_eq!(
             result.matches[0].ranges,
             [MatchRange { start: 14, end: 22 }]
@@ -72,6 +79,7 @@ fn both_engines_share_literals_unicode_filters_limits_and_current_reads() {
         assert_eq!(result.matches.len(), 1);
         assert_eq!(result.matches[0].line_number, 2);
         assert_eq!(result.freshness, Freshness::Current);
+        assert!(result.index_stats.is_none());
         let mut q = query(".");
         q.max_results = 2;
         let result = service.search(&root, &q, &cancellation.token()).unwrap();
@@ -85,6 +93,51 @@ fn both_engines_share_literals_unicode_filters_limits_and_current_reads() {
                 .unwrap()
                 .limit_hit
         );
+    }
+}
+
+#[test]
+fn empty_editor_view_retains_indexed_globs_and_paged_statistics() {
+    let (_temporary, dir) = fixture();
+    fs::write(
+        dir.canonical_path().join("source.rs"),
+        "indexed_glob_marker\n".repeat(3),
+    )
+    .unwrap();
+    fs::write(
+        dir.canonical_path().join("other.txt"),
+        "indexed_glob_marker\n",
+    )
+    .unwrap();
+    let service = Arc::new(Service::new(Backend::Tgrep, ripgrep(), None).unwrap());
+    let token = CancellationSource::new().token();
+    service.rebuild_index(&dir, &token).unwrap();
+    let mut q = query("indexed_glob_marker");
+    q.include_patterns = vec!["*.rs".into()];
+    let result = service
+        .search_with_documents(&dir, &q, &[], &token)
+        .unwrap();
+    assert_eq!(result.freshness, Freshness::Indexed);
+    assert_eq!(result.matches.len(), 3);
+    let expected = result.index_stats.unwrap();
+    assert_eq!(expected.candidates, 1);
+    let jobs = Jobs::new(dir, service);
+    let id = jobs.start(Owner::new(1), q).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let first = jobs.read(Owner::new(1), &id, 0, 1).unwrap();
+        if first.index_stats.is_some() {
+            assert!(!first.completed);
+            assert_eq!(first.index_stats, Some(expected.clone()));
+            let last = jobs
+                .read(Owner::new(1), &id, first.next_match, 100)
+                .unwrap();
+            assert!(last.completed);
+            assert_eq!(last.index_stats, Some(expected));
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(10));
     }
 }
 
@@ -312,6 +365,7 @@ fn cancelling_one_owner_does_not_cancel_another_owners_running_query() {
                 }],
                 limit_hit: false,
                 freshness: Freshness::Current,
+                index_stats: None,
             })
         }
     }

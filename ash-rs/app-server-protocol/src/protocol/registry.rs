@@ -1422,6 +1422,8 @@ use crate::protocol::search::ContentSearchCancelParams;
 use crate::protocol::search::ContentSearchCaseSensitivity;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::search::ContentSearchFreshness;
+#[cfg(any(feature = "export", test))]
+use crate::protocol::search::ContentSearchIndexStats;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::search::ContentSearchMatch;
 #[cfg(any(test, feature = "export"))]
@@ -5486,6 +5488,7 @@ typescript_bindings! {
     ContentSearchReadParams,
     ContentSearchMatchRange,
     ContentSearchMatch,
+    ContentSearchIndexStats,
     ContentSearchReadResult,
     ContentSearchCancelParams,
     CodebaseStateDto,

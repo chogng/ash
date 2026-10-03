@@ -63,6 +63,7 @@ flowchart TD
 | Codebase 职责 | `CodebaseRetrievalService` 组合 FTS、grep、符号和语义候选 | `Codebase` 的源码、chunk 与版本管理不引用 grep |
 | 文件路径搜索 | `file-search::Service` 提供 glob / 枚举与模糊搜索入口；Agent、CLI、TUI 和 Rust 桌面文件面板调用公共能力 | glob 读当前路径并按修改时间排序；模糊搜索复用请求内的路径索引 |
 | 查询新鲜度 | Rust API 与 RPC 均支持 `Indexed` / `Current`，RPC 成功结果返回实际模式 | 编辑器默认保持当前磁盘搜索；Agent 和 Codebase 使用索引候选 |
+| 索引 glob 与诊断 | tgrep 的正向 glob 保持索引查询；Rust 结果和 RPC 分页提供查询计划及候选统计 | 统计描述初始文件筛选，不包含后续内容批次或 Ash 写入覆盖 |
 
 实现入口：[宿主组装](../ash-rs/app-server/src/server/environment_runtime.rs)、
 [检索组合](../ash-rs/codebase/src/retrieval/service.rs)、
@@ -118,7 +119,10 @@ Renderer、Electron Main 和 App Server；搜索模块内部的私有函数只�
 - 任务绑定创建它的 App Server connection，其他连接不能读取或取消。
 - 引擎由公共 `[grep].backend` 配置选择；命令通过参数数组启动，不经过 shell。
 - RPC 的 `freshness` 可选 `indexed` / `current`，省略时为 `current`；成功查询的读取结果返回实际模式。
+- tgrep 的 Indexed 目录 glob 只筛选遵守 ignore 规则的非隐藏文件；初始化扫描与即时写入保持同一过滤。Current glob 可主动包含被忽略文件；单文件 scope 直接读取。
+- `grep/search/read` 的可选 `indexStats` 包含 `queryPlan`、`rawCandidates`、`candidates`、`totalFiles`，分别表示诊断计划、trigram 候选数、范围与文件过滤后的候选数、索引总文件数。扫描或查询仍在执行时省略；查询结束后的各页保留同一份统计。计划文字不具有稳定语法。
 - 编辑器默认请求 `Current`，直接搜索磁盘；Agent 和 Codebase 文字候选使用 `Indexed`。
+- Agent 存在未保存文档时合并当前磁盘与编辑器内容；文档列表为空时保留请求的 Indexed 模式。
 - 公共结果保留 UTF-8 byte ranges，App Server 协议适配器转换为 UTF-16；前端不重新解释。
 
 ## 公共能力
