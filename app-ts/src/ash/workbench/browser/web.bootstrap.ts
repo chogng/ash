@@ -1,5 +1,6 @@
 import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../services/textfile/browser/appServerTextDocumentHost.js';
+import { IChatEditingService } from '../contrib/chat/common/editing/chatEditingService.js';
 import { WorkbenchModeId } from "../common/workbenchMode.js";
 import type { RendererCapabilityContribution } from "../../platform/app-server/browser/webRendererApi.js";
 import { BrowserClipboardService } from "../../platform/clipboard/browser/clipboardService.js";
@@ -14,7 +15,10 @@ export async function startBrowserWorkbench(modeId: WorkbenchModeId, rendererCap
 	try {
 		let documentClient: AppServerProtocolClient | undefined;
 		connectedHost = await connectBrowserWorkbenchHost([...rendererCapabilities, client => { documentClient = client; return {}; }], modeId === WorkbenchModeId.Code);
-		await startWebWorkbench(modeId, connectedHost, documentClient && modeId === WorkbenchModeId.Code ? services => services.createInstance(AppServerTextDocumentHost, documentClient!) : undefined);
+		await startWebWorkbench(modeId, connectedHost, documentClient && modeId === WorkbenchModeId.Code ? services => {
+			const editing = services.get(IChatEditingService);
+			return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
+		} : undefined);
 	} catch (error) {
 		connectedHost?.dispose();
 		showStartupError(error, text => new BrowserClipboardService(window.navigator.clipboard).writeText(text));

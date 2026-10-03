@@ -1492,6 +1492,114 @@ test('Agent document requests use the Agents window model and save closed files 
 	await expect.poll(() => readFile(created, 'utf8')).toBe('created\ntext');
 });
 
+test('Agent review commands are available without an App Server connection', async ({ target, workbench, restartWorkbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode === 'required', 'Exercises the disconnected Code workbench');
+	await workbench.quickaccess.runCommand('chatEditing.reviewChanges');
+	const picker = workbench.page.getByRole('dialog', { name: 'Review Agent changes', exact: true });
+	await expect(picker).toBeVisible();
+	await expect(picker.getByRole('option')).toHaveCount(0);
+	await workbench.page.keyboard.press('Escape');
+	await expect(picker).toBeHidden();
+	await expect(workbench.page.locator('.ash-chat-editing-overlay:visible')).toHaveCount(0);
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+	await language.fill('简体中文');
+	await language.press('Enter');
+	({ workbench } = await restartWorkbench());
+	await workbench.quickaccess.runCommand('chatEditing.reviewChanges');
+	await expect(workbench.page.getByRole('dialog', { name: '审核 Agent 修改', exact: true })).toBeVisible();
+	await workbench.page.keyboard.press('Escape');
+});
+
+test('Agent review accepts individual hunks and rejects the remainder without losing user edits', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	const page = workbench.page;
+	await installDocumentProtocolProbe(page);
+	const restored = page.waitForEvent('console', { predicate: message => message.text() === '[lifecycle] Workbench restored' });
+	await page.reload({ waitUntil: 'domcontentloaded' });
+	await Promise.all([workbench.waitForReady(), restored]);
+	const name = 'agent-review.txt';
+	const path = join(testWorkspace.directory, name);
+	const original = 'first\r\nseparator 1\r\nseparator 2\r\nseparator 3\r\nseparator 4\r\nlast';
+	await writeFile(path, '\uFEFF' + original);
+	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: name }).dblclick();
+	const group = workbench.editors.groupAt(0);
+	const input = group.content.getByRole('textbox', { name, exact: true });
+	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown> }).documentRequest(method, params), { method, params });
+	const snapshot = await request('textDocument/read', { path }) as { snapshot: string };
+	expect(await request('textDocument/apply', { changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: original.replace('first', 'agent first').replace('last', 'agent last') }] })).toEqual({ kind: 'applied' });
+	const review = group.content.locator('.ash-chat-editing-overlay');
+	await expect(review).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.splitEditorRight');
+	await expect(workbench.editors.groupAt(1).content.locator('.ash-chat-editing-overlay')).toBeVisible();
+	const geometry = await review.evaluate(element => {
+		const bounds = element.getBoundingClientRect();
+		return [...element.querySelectorAll('button')].every(button => {
+			const rect = button.getBoundingClientRect();
+			return rect.left >= bounds.left && rect.right <= bounds.right;
+		});
+	});
+	expect(geometry).toBe(true);
+	await workbench.quickaccess.runCommand('workbench.action.closeEditorsInGroup');
+	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		await workbench.quickaccess.input.fill(theme);
+		await workbench.quickaccess.input.press('Enter');
+		await expect(review).toHaveCSS('border-top-style', 'solid');
+		await expect.poll(() => review.evaluate(element => parseFloat(getComputedStyle(element).borderTopWidth))).toBeGreaterThan(0);
+		await expect(review).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(group.content.locator('.ash-chat-editing-deleted').first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	}
+	await expect(review.locator('.ash-chat-editing-count')).toHaveText('1 of 2');
+	await expect(group.content.locator('.ash-chat-editing-deleted')).toHaveText(['first', 'last']);
+	await review.getByRole('button', { name: 'Next change', exact: true }).click();
+	await expect(review.locator('.ash-chat-editing-count')).toHaveText('2 of 2');
+	await review.getByRole('button', { name: 'Previous change', exact: true }).click();
+	await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Review Agent changes[\s\S]*Press Escape to return to the editor/);
+	await page.keyboard.press('Escape');
+	await expect(review.getByRole('button', { name: 'Previous change', exact: true })).toBeFocused();
+	await page.keyboard.press('Alt+F2');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Before:\nfirst[\s\S]*After:\nagent first/);
+	await page.keyboard.press('Escape');
+	await page.keyboard.press('Escape');
+	await expect(input).toBeFocused();
+	await expect(review).toBeVisible();
+	await review.getByRole('button', { name: 'Next change', exact: true }).focus();
+	await page.keyboard.press('ArrowRight');
+	await expect(review.getByRole('button', { name: 'Accept change', exact: true })).toBeFocused();
+	await page.keyboard.press('Enter');
+	await expect(review.locator('.ash-chat-editing-count')).toHaveText('1 of 1');
+	await input.focus();
+	await input.press('ControlOrMeta+Home');
+	await input.press('ArrowDown');
+	await input.press('Home');
+	await input.type('user ');
+	await review.getByRole('button', { name: 'Reject file changes', exact: true }).click();
+	await expect(review).toBeHidden();
+	await expect(group.editor.lines).toHaveText(['agent first', 'user separator 1', 'separator 2', 'separator 3', 'separator 4', 'last']);
+	await expect.poll(() => readFile(path)).toEqual(Buffer.from('\uFEFFagent first\r\nuser separator 1\r\nseparator 2\r\nseparator 3\r\nseparator 4\r\nlast'));
+	await expect(input).toBeFocused();
+
+	// Closed files remain reviewable through the command, using the same model baseline.
+	const closed = join(testWorkspace.directory, 'agent-review-closed.txt');
+	await writeFile(closed, 'closed original');
+	const closedSnapshot = await request('textDocument/read', { path: closed }) as { snapshot: string };
+	expect(await request('textDocument/apply', { changes: [{ kind: 'update', snapshot: closedSnapshot.snapshot, text: 'closed agent' }] })).toEqual({ kind: 'applied' });
+	await workbench.quickaccess.runCommand('chatEditing.rejectAll');
+	await expect.poll(() => readFile(closed, 'utf8')).toBe('closed original');
+	const created = join(testWorkspace.directory, 'agent-review-created.txt');
+	expect(await request('textDocument/apply', { changes: [{ kind: 'create', path: created, text: 'new file' }] })).toEqual({ kind: 'applied' });
+	await workbench.quickaccess.runCommand('chatEditing.reviewChanges');
+	const picker = page.getByRole('dialog', { name: 'Review Agent changes', exact: true });
+	await expect(picker.getByRole('option')).toContainText('agent-review-created.txt');
+	await picker.getByRole('button', { name: 'Reject change set', exact: true }).click();
+	await expect(picker.getByRole('option')).toHaveCount(0);
+	await expect(readFile(created, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+	expect(await request('textDocument/read', { path: created })).toEqual({ kind: 'notFound' });
+	await page.keyboard.press('Escape');
+});
+
 async function installDocumentProtocolProbe(page: Page): Promise<void> {
 	await page.addInitScript(() => {
 		const replies = new Map<string, (value: unknown) => void>();

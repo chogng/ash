@@ -9,10 +9,11 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
 import { IBulkEditService } from '../../../../browser/services/bulkEditService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { BrowserBulkEditService } from '../../../../../workbench/contrib/bulkEdit/browser/bulkEditService.js';
+import { BulkEditService } from '../../../../../workbench/contrib/bulkEdit/browser/bulkEditService.js';
 
 await import('../../browser/codeActionContributions.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
+
 
 
 test('CodeActionController resolves an action with its original provider before applying it', async () => {
@@ -181,7 +182,7 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 				provideCodeActions: () => [{ title: 'Replace value', kind: 'refactor.rewrite', edit: { entries: [{ kind: 'textDocument', resource: model.uri, version: model.getVersionId(), edits: [{ range: model.getFullModelRange(), text: 'result' }] }] } }],
 			});
 			let applied = 0;
-			using bulkEdits = new BrowserBulkEditService({ apply: async () => {
+			using bulkEdits = new BulkEditService({ apply: async () => {
 				applied++;
 				if (outcome === 'commit error') {
 					model.setValue('result');

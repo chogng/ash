@@ -1,4 +1,5 @@
 import '../workbench/contrib/skills/browser/skills.contribution.js';
+import '../workbench/contrib/chat/browser/chatEditing/chatEditing.contribution.js';
 import './contrib/files/browser/files.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './contrib/editor/browser/emptyFileEditor.contribution.js';

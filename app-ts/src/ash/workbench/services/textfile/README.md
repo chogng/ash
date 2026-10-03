@@ -80,8 +80,10 @@ Code Workbench and Agents windows advertise `textDocuments: { version: 1 }`.
 `read_file`, `write_file`, `edit`, `apply_patch` and `grep` use the Rust tool-facing
 `TextDocumentEditor` port for a product Turn bound to such a connection.
 `AppServerTextDocumentHost` converts generated server requests to the existing
-`ITextModelService` and `IBulkEditService`. It owns only snapshot references;
-the editor services retain document state, undo, working copies and saves.
+`ITextModelService` and a per-host apply callback supplied by `IChatEditingService`.
+It owns only snapshot references; the editor services retain document state, undo,
+working copies and saves. Chat Editing owns the accepted baseline and review decisions,
+then applies workspace edits through `IBulkEditService`.
 
 Reads include the current unsaved text and return an opaque version-bound lease.
 Applying consumes the referenced leases and rechecks versions inside the workspace
@@ -103,10 +105,25 @@ without a product connection use the explicit disk execution path. Same-director
 child Turns inherit their parent's exact connection before tool workers run. Isolated
 checkouts and background executions use filesystem documents; completing the parent
 does not discard a running child's binding. Academic does not advertise this text
-capability. Chat Editing accept/reject UI is also not connected by this adapter.
+capability.
+
+Agent updates appear as review hunks in existing Code editors. Accept adopts a hunk
+or file as the baseline; Reject restores the unaccepted text through the same model
+and saves it. User edits outside pending hunks become part of the baseline; a user
+replacement touching a pending hunk adopts that hunk. Pending closed documents retain
+their model reference until review completes. The Review Agent changes command lists
+closed files and exposes accept/reject actions. Create, move and delete are reviewed
+as atomic change sets using the workspace transaction's inverse; later edits of the
+same resources join that change set.
+
+Review records belong to the current window and are held in memory. The document
+protocol carries no Turn identity, so this service does not assign records to Chat
+Turns or restore them after a window restart. Workbench and Agents windows each
+resolve their own Chat Editing service.
 
 `test/browser/appServerTextDocumentHost.test.ts` covers unsaved text, both EOLs,
 BOM, undo, version conflicts, reference disposal, creation and file-operation
-rollback. The editor smoke tests exercise the production services in Web and
+rollback, hunk review, user-edit preservation, file-operation review and retained
+closed models. The editor smoke tests exercise the production services in Web and
 Electron Workbench and Agents windows; the backend suite drives an actual RPC
 Agent Turn through read, search, edit, write and a command that reads the saved file.

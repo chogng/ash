@@ -1,5 +1,6 @@
 import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../services/textfile/browser/appServerTextDocumentHost.js';
+import { IChatEditingService } from '../contrib/chat/common/editing/chatEditingService.js';
 import { addDisposableListener } from '../../base/browser/dom.js';
 import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
 import { Disposable, DisposableTracker, installDisposableTracker, toDisposable } from '../../base/common/lifecycle.js';
@@ -73,7 +74,10 @@ export class DesktopMain extends Disposable {
 			const hostColorScheme = await api.nativeHost.getOSColorScheme();
 			const workbench = this._register(await startWorkbench({
 				modeId: this.modeId,
-				createTextDocumentHost: documentClient && this.modeId === WorkbenchModeId.Code ? services => services.createInstance(AppServerTextDocumentHost, documentClient!) : undefined,
+				createTextDocumentHost: documentClient && this.modeId === WorkbenchModeId.Code ? services => {
+					const editing = services.get(IChatEditingService);
+					return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
+				} : undefined,
 				createLogService: () => logger.createLogger('workbench'),
 				createStorageService: async options => {
 					const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);

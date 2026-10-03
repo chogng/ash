@@ -1469,6 +1469,27 @@ Grammar catalog 由共享 Workbench `ITextMateService` 拥有，声明式 extens
 
 本阶段明确没有把 TextFile、TextMate 或 document identity 下沉到 `base`。当前 host 已具备原子写入与粗粒度变更通知，Stanza 因而拥有 dirty/save/revert 和外改 policy；expected-revision write、workspace-scoped working-copy 备份恢复已经接通。TextFile resolve 先以 stat 限制文本大小，再读取 bytes、剥离 UTF-8 BOM、拒绝 NUL/控制字符密集内容和非法 UTF-8；被拒绝的内容可显式切换到只读 Binary Editor。UTF-8 BOM 的标记随资源内容进入模型服务，保存时恢复；LF/CRLF 由文本模型决定，混合换行按模型归一化后的内容建立保存基线。干净文件的外部刷新保留撤销记录，显式 revert 清空被丢弃的历史。非 UTF-8 原编码写回与编码选择器仍是独立的未来能力，当前实现不会静默转码。
 
+### Agent 文件审核
+
+接受／拒绝由 Workbench 的 Chat Editing 负责，不进入底层 editor。
+
+| 职责 | 所有者 |
+| --- | --- |
+| Agent 文档读取、版本快照、应用请求及保存结果 | `AppServerTextDocumentHost`；应用回调由窗口装配时传入 |
+| 审核基线、逐块或整文件接受／拒绝、连续写入与审核的执行顺序 | `IChatEditingService` / `ChatEditingService` |
+| 现有 editor 的审核工具栏、差异标记、删除文本和无障碍入口 | `ChatEditingEditorOverlay` / `ChatEditingCodeEditorIntegration` |
+| 实际文本、撤销历史、文件格式与保存 | 既有 `TextModel`、模型引用、工作副本和 `IBulkEditService` |
+
+拒绝只恢复尚未接受的 Agent 修改。用户在其他位置输入的文本进入审核基线；
+用户直接改写待审核块时，该块采用用户的新内容。拒绝后通过同一模型引用保存，
+因此后续命令读取的文件与 editor 一致。待审核的关闭文件保留模型引用，审核
+结束才释放。创建、移动、删除使用工作区事务的逆操作，按整组审核；同一资源
+的后续 Agent 写入加入原组，不拆开文件操作的撤销顺序。
+
+Workbench 和 Agents 窗口各自装配审核服务。当前文档协议没有 Turn 身份，审核
+记录按窗口保存在内存，不按 Chat Turn 分组，也不在窗口重启后恢复。这里的
+接入不等同于 VS Code Chat Editing 的完整会话能力。
+
 ### Current 47：Workbench Editor 宿主与 VS Code 文件边界
 
 本轮审计的 VS Code `workbench/browser/parts/editor` 独有路径均已落到对应目录。文件存在本身不算完成：每项仍需实际调用方、唯一所有者和行为验证，并保持 `base → platform → editor → workbench` 依赖方向。下表区分已接通的行为和仍需继续补齐的能力。

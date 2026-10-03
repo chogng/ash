@@ -2,20 +2,20 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 8px;
+  padding: var(--ash-spacing-size80);
 }
 
 .ash-bulk-edit-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding-bottom: 8px;
+  gap: var(--ash-spacing-size60);
+  padding-bottom: var(--ash-spacing-size80);
 }
 
 .ash-bulk-edit-toolbar button {
   border: var(--ash-stroke-thickness) solid var(--ash-border);
   border-radius: var(--ash-corner-radius-small);
-  padding: 4px 8px;
+  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
   color: inherit;
   background: var(--ash-input-background);
   font: inherit;
@@ -38,9 +38,9 @@
 
 .ash-bulk-edit-status {
   min-height: 18px;
-  padding: 4px 2px 8px;
+  padding: var(--ash-spacing-size40) var(--ash-spacing-size20) var(--ash-spacing-size80);
   color: var(--ash-description-foreground);
-  font-size: 12px;
+  font-size: var(--ash-font-size-label1);
 }
 
 .ash-bulk-edit-list {
@@ -52,10 +52,10 @@
 }
 
 .ash-bulk-edit-entry {
-  margin-bottom: 6px;
+  margin-bottom: var(--ash-spacing-size60);
   border: var(--ash-stroke-thickness) solid var(--ash-border);
   border-radius: var(--ash-corner-radius-small);
-  padding: 8px;
+  padding: var(--ash-spacing-size80);
   background: var(--ash-editor-background);
 }
 
@@ -66,26 +66,24 @@
 .ash-bulk-edit-entry-header {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
-  gap: 8px;
+  gap: var(--ash-spacing-size80);
   align-items: center;
 }
 
 .ash-bulk-edit-kind {
   color: var(--ash-description-foreground);
-  font-size: 11px;
-  text-transform: uppercase;
+  font-size: var(--ash-font-size-body2);
 }
 
 .ash-bulk-edit-resource {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .ash-bulk-edit-detail {
-  margin: 4px 0 0 24px;
+  margin: var(--ash-spacing-size40) 0 0 var(--ash-spacing-size240);
   color: var(--ash-description-foreground);
-  font-size: 12px;
+  font-size: var(--ash-font-size-label1);
 }
 
 .ash-bulk-edit-entry.has-error .ash-bulk-edit-detail {
@@ -93,20 +91,57 @@
 }
 
 .ash-bulk-edit-text-change {
-  margin: 6px 0 0 24px;
+  margin: var(--ash-spacing-size60) 0 0 var(--ash-spacing-size240);
   color: var(--ash-description-foreground);
-  font-size: 12px;
+  font-size: var(--ash-font-size-label1);
 }
 
 .ash-bulk-edit-text-change pre {
   max-height: 180px;
-  margin: 6px 0 0;
+  margin: var(--ash-spacing-size60) 0 0;
   overflow: auto;
   border: var(--ash-stroke-thickness) solid var(--ash-border);
-  padding: 6px;
+  padding: var(--ash-spacing-size60);
   color: var(--ash-editor-foreground);
   background: var(--ash-editor-background);
-  font: 11px/1.4 var(--ash-font-family-monospace, ui-monospace, monospace);
+  font: var(--ash-font-size-body2)/1.4 var(--ash-font-family-monospace);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.ash-bulk-edit-group > ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ash-bulk-edit-group-label {
+  padding: var(--ash-spacing-size80) 0;
+  font-weight: var(--ash-font-weight-semi-bold);
+  overflow-wrap: anywhere;
+}
+
+.ash-bulk-edit-replacements {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ash-spacing-size40);
+  margin: var(--ash-spacing-size60) 0 0 var(--ash-spacing-size240);
+}
+
+.ash-bulk-edit-replacements label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ash-spacing-size80);
+  overflow-wrap: anywhere;
+}
+
+.ash-bulk-edit input:focus-visible,
+.ash-bulk-edit summary:focus-visible {
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: 2px;
+}
+
+[data-color-scheme^="high-contrast"] .ash-bulk-edit-entry,
+[data-color-scheme^="high-contrast"] .ash-bulk-edit-toolbar button {
+  border-color: var(--ash-contrast-border);
 }

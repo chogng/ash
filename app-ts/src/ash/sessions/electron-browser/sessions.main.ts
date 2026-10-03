@@ -1,9 +1,6 @@
-import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
-import { IBulkEditService } from '../../editor/browser/services/bulkEditService.js';
-import { BrowserBulkEditService } from '../../workbench/contrib/bulkEdit/browser/bulkEditService.js';
-import { IWorkspaceEditService } from '../../workbench/services/language/common/workspaceEditService.js';
+import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
 import { FileDialogService } from '../../workbench/services/dialogs/electron-browser/fileDialogService.js';
 import { OpenAgentsWindowSystemWideKeybindingContribution } from '../contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
@@ -120,13 +117,10 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	const hostColorScheme = await api.nativeHost.getOSColorScheme();
 	workbench = sessions.add(await Workbench.create({
 		createTextDocumentHost: documentClient ? services => {
-			const resources = new DisposableStore();
-			const bulkEdits = resources.add(new BrowserBulkEditService(services.get(IWorkspaceEditService)));
-			const documentServices = resources.add(services.createChild(new ServiceCollection([IBulkEditService, bulkEdits])));
-			resources.add(documentServices.createInstance(AppServerTextDocumentHost, documentClient!));
-			return resources;
+			const editing = services.get(IChatEditingService);
+			return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
 		} : undefined,
-		contributionIds: ['workbench.contrib.nativeWindow', OpenAgentsWindowSystemWideKeybindingContribution.ID],
+		contributionIds: ['workbench.contrib.nativeWindow', OpenAgentsWindowSystemWideKeybindingContribution.ID, 'chat.edits.editorOverlay'],
 		modeId,
 		createLogService: () => logger.createLogger('agents'),
 		createStorageService: async options => {

@@ -1,10 +1,9 @@
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
-import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Disposable, DisposableMap, toDisposable, type IDisposable, type IReference } from '../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import { IBulkEditService, type IBulkEditService as IBulkEditServiceContract, ResourceEdit, ResourceFileEdit, ResourceTextEdit } from '../../../../editor/browser/services/bulkEditService.js';
+import type { LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from '../../../../editor/common/languages.js';
 import { ITextModelService, type ITextModelService as ITextModelServiceContract, type IResolvedTextEditorModel } from '../../../../editor/common/services/resolverService.js';
 import { AppServerProtocolClient } from '../../../../platform/app-server/browser/appServerProtocolClient.js';
 import { APP_SERVER_SERVER_REQUESTS, type TextDocumentApplyParams, type TextDocumentApplyResult, type TextDocumentReadResult, type TextDocumentListResult } from '../../../../platform/app-server/common/generated/index.js';
@@ -22,7 +21,7 @@ interface DocumentSnapshot extends IDisposable {
 export class AppServerTextDocumentHost extends Disposable {
 	private readonly snapshots = this._register(new DisposableMap<string, DocumentSnapshot>());
 
-	constructor(client: AppServerProtocolClient, @ITextModelService private readonly models: ITextModelServiceContract, @IBulkEditService private readonly bulkEdits: IBulkEditServiceContract, @IWorkingCopyService private readonly workingCopies: IWorkingCopyServiceContract) {
+	constructor(client: AppServerProtocolClient, private readonly applyEdits: (edit: LanguageWorkspaceEdit, signal: AbortSignal) => Promise<{ readonly isApplied: boolean }>, @ITextModelService private readonly models: ITextModelServiceContract, @IWorkingCopyService private readonly workingCopies: IWorkingCopyServiceContract) {
 		super();
 		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/read'], (params, context) => this.read(params.path, context.signal)));
 		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/list'], (params, context) => this.list(params.root, context.signal)));
@@ -78,13 +77,13 @@ export class AppServerTextDocumentHost extends Disposable {
 		let applied = false;
 		try {
 			throwIfCancelled(signal);
-			const edits: ResourceEdit[] = [];
+			const entries: LanguageWorkspaceEditEntry[] = [];
 			const resources = new Set<string>();
 			for (const change of params.changes) {
 				if (change.kind === 'create') {
 					const resource = documentResource(change.path);
 					claimResource(resources, resource);
-					edits.push(new ResourceFileEdit(undefined, resource, { contents: Promise.resolve(VSBuffer.fromString(change.text)) }));
+					entries.push({ kind: 'create', resource, contents: change.text, existing: 'error' });
 					continue;
 				}
 				const snapshot = this.snapshots.get(change.snapshot);
@@ -92,15 +91,15 @@ export class AppServerTextDocumentHost extends Disposable {
 				claimResource(resources, snapshot.resource);
 				const model = snapshot.reference.object.textEditorModel;
 				// Check the captured version again inside the transaction after asynchronous preflight.
-				edits.push(new ResourceTextEdit(snapshot.resource, { range: model.getFullModelRange(), text: change.kind === 'delete' ? model.getValue() : change.text }, snapshot.version));
-				if (change.kind === 'delete') { edits.push(new ResourceFileEdit(snapshot.resource, undefined)); }
+				entries.push({ kind: 'textDocument', resource: snapshot.resource, version: snapshot.version, edits: [{ range: model.getFullModelRange(), text: change.kind === 'delete' ? model.getValue() : change.text }] });
+				if (change.kind === 'delete') { entries.push({ kind: 'delete', resource: snapshot.resource, missing: 'error', mode: 'fileOrEmptyDirectory' }); }
 				if (change.kind === 'move') {
 					const target = documentResource(change.target);
 					claimResource(resources, target);
-					edits.push(new ResourceFileEdit(snapshot.resource, target));
+					entries.push({ kind: 'rename', source: snapshot.resource, target, existing: 'error' });
 				}
 			}
-			const result = await this.bulkEdits.apply(edits, { token: signal, showPreview: false });
+			const result = await this.applyEdits({ entries }, signal);
 			if (!result.isApplied) { return { kind: 'cancelled' }; }
 			applied = true;
 			// File tools participate in executable Agent tasks. Their success means the next

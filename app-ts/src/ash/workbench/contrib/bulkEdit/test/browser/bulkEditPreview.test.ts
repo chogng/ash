@@ -1,42 +1,60 @@
+import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { Emitter } from "../../../../../base/common/event.js";
-import { toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Emitter, Event as EventUtils } from "../../../../../base/common/event.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
-import { type TextModel } from "../../../../../editor/common/model/textModel.js";
-import { type ITextModelResourceService, type TextModelReference } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
+import { TextModel } from "../../../../../editor/common/model/textModel.js";
+import { createBulkEditPreview } from '../../browser/preview/bulkEditPreview.js';
+import { ConflictDetector } from '../../browser/conflicts.js';
+import { BulkEditPane } from '../../browser/preview/bulkEditPane.js';
+import { BulkEditPreviewContribution } from '../../browser/preview/bulkEdit.contribution.js';
+import { registerWindow } from '../../../../../base/browser/window.js';
+import { IFileTextModelService, ITextModelResourceService, type TextModelReference } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
 import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages.js";
-import { FileKind, FileNotFoundError, type IFileService } from "../../../../../platform/files/common/files.js";
-import { type IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";
-import { type BulkEditPreviewModel } from "../../common/bulkEdit.js";
+import { FileKind, FileNotFoundError, IFileService } from "../../../../../platform/files/common/files.js";
+import { IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";
+import { ResourceFileEdit, ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { BulkEditService } from '../../browser/bulkEditService.js';
+import { IBulkEditService } from '../../../../../editor/browser/services/bulkEditService.js';
+import { IWorkspaceEditService } from '../../../../services/language/common/workspaceEditService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IViewsService } from '../../../../services/views/browser/viewsService.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 test("bulk edit preview follows ordered create and text operations without mutating files", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	const existing = URI.file("C:\\workspace\\existing.ts");
 	const created = URI.file("C:\\workspace\\created.ts");
-	const files = new PreviewFileService([[existing, "alpha"]]);
-	const models = new PreviewTextModelService([[existing, "alpha"]], [existing]);
+	using files = new PreviewFileService([[existing, "alpha"]]);
+	using models = new PreviewTextModelService([[existing, "alpha"]], [existing]);
 	const edit: LanguageWorkspaceEdit = {
 		entries: [
-			{ kind: "create", resource: created, existing: "error" },
-			{ kind: "textDocument", resource: created, expectedText: "", edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "hello" }] },
+			{ kind: "create", resource: created, existing: "error", contents: 'seed' },
+			{ kind: "textDocument", resource: created, expectedText: "seed", edits: [{ range: new Range(1, 5, 1, 5), text: "hello" }] },
 			{ kind: "textDocument", resource: existing, expectedText: "alpha", edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "omega" }] },
 			{ kind: "textDocument", resource: existing, expectedText: "omega", edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] },
 		],
 	};
 
 	try {
-		const { createBulkEditPreview } = await import("../../browser/preview/bulkEditPreview.js");
 		const preview = await createBulkEditPreview(edit, { files, models, workingCopies: emptyWorkingCopies() }, new AbortController().signal);
 
 		assert.equal(preview.canApply, true);
 		assert.equal(preview.entries.every(entry => entry.error === undefined), true);
-		assert.equal(preview.entries[1]?.before, "");
-		assert.equal(preview.entries[1]?.after, "hello");
+		assert.equal(preview.entries[1]?.before, "seed");
+		assert.equal(preview.entries[1]?.after, "seedhello");
 		assert.equal(preview.entries[2]?.before, "alpha");
 		assert.equal(preview.entries[2]?.after, "omega");
 		assert.equal(preview.entries[3]?.before, "omega");
@@ -44,28 +62,145 @@ test("bulk edit preview follows ordered create and text operations without mutat
 		assert.equal(files.read(existing), "alpha");
 		assert.equal(files.has(created), false);
 	} finally {
-		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+		installedGlobals.dispose();
 		browser.window.close();
 	}
 });
 
-class PreviewTextModelService implements ITextModelResourceService {
+test('bulk edit preview reports invalid ranges without clamping or mutating the model', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const globals = installDomGlobals(browser);
+	const resource = URI.file('/workspace/range.ts');
+	using files = new PreviewFileService([[resource, 'abc']]);
+	using models = new PreviewTextModelService([[resource, 'abc']], [resource]);
+	try {
+		const preview = await createBulkEditPreview({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(2, 1, 2, 2), text: 'invalid' }] }] }, { files, models, workingCopies: emptyWorkingCopies() }, new AbortController().signal);
+		assert.deepEqual({ canApply: preview.canApply, error: preview.entries[0]?.error, text: models.getModel(resource)?.getText() }, { canApply: false, error: 'The edit range is outside the document.', text: 'abc' });
+	} finally {
+		globals.dispose();
+		browser.window.close();
+	}
+});
+
+test('conflict detection covers both rename resources, model mutations and disposal', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const globals = installDomGlobals(browser);
+	const source = URI.file('/workspace/source.ts');
+	const target = URI.file('/workspace/target.ts');
+	const text = URI.file('/workspace/text.ts');
+	using files = new PreviewFileService([[source, 'source'], [text, 'text']]);
+	using models = new PreviewTextModelService([[text, 'text']], [text]);
+	using services = new InstantiationService();
+	services.registerInstance(IFileService, files);
+	services.registerInstance(IFileTextModelService, models);
+	try {
+		using reference = await models.acquire({ resource: text });
+		using detector = services.createInstance(ConflictDetector, [new ResourceFileEdit(source, target), new ResourceTextEdit(text, { range: new Range(1, 1, 1, 1), text: 'new' })]);
+		files.notify(URI.file('/workspace/unrelated.ts'));
+		assert.equal(detector.hasConflicts(), false);
+		files.notify(target);
+		reference.model.setValue('changed');
+		assert.deepEqual(detector.list(), [target, text]);
+		detector.dispose();
+		files.notify(source);
+		assert.deepEqual(detector.list(), [target, text]);
+	} finally {
+		globals.dispose();
+		browser.window.close();
+	}
+});
+
+for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
+	test(`bulk edit contribution ${outcome} connects the registered service, selection and conflict lifecycle`, async () => {
+		const browser = new JSDOM('<!doctype html><body></body>');
+		const globals = installDomGlobals(browser);
+		const resource = URI.file('/workspace/preview.ts');
+		using files = new PreviewFileService([[resource, 'ab']]);
+		using models = new PreviewTextModelService([[resource, 'ab']], [resource]);
+		using configuration = new InMemoryConfigurationService();
+		using services = new InstantiationService();
+		const applied: LanguageWorkspaceEdit[] = [];
+		services.registerInstance(IFileService, files);
+		services.registerInstance(IFileTextModelService, models);
+		services.registerInstance(ITextModelResourceService, models);
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IWorkingCopyService, emptyWorkingCopies());
+		services.registerInstance(IWorkspaceEditService, { apply: async edit => { applied.push(edit); return { resources: [resource], undo: async () => {} }; } });
+		services.registerInstance(IDialogService, {
+			onWillShowDialog: EventUtils.None, onDidShowDialog: EventUtils.None,
+			confirm: async () => ({ confirmed: true }),
+			showMessage: async () => {}, info: async () => {}, warn: async () => {}, error: async () => {},
+			prompt: async () => ({}), input: async () => ({ confirmed: false }), about: async () => {},
+		});
+		try {
+			using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
+			browser.window.document.body.append(pane.element);
+			pane.setVisible(true);
+			services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } });
+			using bulkEdits = services.createInstance(BulkEditService);
+			services.registerInstance(IBulkEditService, bulkEdits);
+			using contribution = services.createInstance(BulkEditPreviewContribution);
+			const ready = new Promise<void>(resolve => {
+				const observer = new browser.window.MutationObserver(() => {
+					if (pane.hasInput) { observer.disconnect(); resolve(); }
+				});
+				observer.observe(pane.element, { childList: true, subtree: true });
+			});
+			const edits = [{ range: new Range(1, 1, 1, 2), text: 'A' }, { range: new Range(1, 2, 1, 3), text: 'B' }];
+			const pending = bulkEdits.apply({ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits }] }, { showPreview: true });
+			await ready;
+			const provider = AccessibleViewRegistry.getImplementations().find(provider => provider.name === 'bulk-edit-preview-help')!.getProvider(services);
+			assert.match(provider!.provideContent(), /Press Escape to cancel/);
+			provider!.dispose();
+			assert.ok(AccessibleViewRegistry.getImplementations().some(provider => provider.type === AccessibleViewType.View && provider.name === 'bulk-edit-preview-view'));
+			if (outcome === 'accept') {
+				pane.element.querySelector<HTMLInputElement>('input[data-text-edit-index="0"]')!.click();
+				pane.accept();
+				assert.equal((await pending).isApplied, true);
+				assert.deepEqual(applied, [{ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits: [edits[1]] }] }]);
+			} else {
+				if (outcome === 'conflict') {
+					models.getModel(resource)!.setValue('changed');
+					assert.equal(pane.element.querySelector<HTMLButtonElement>('.ash-bulk-edit-apply')!.disabled, true);
+					pane.accept();
+					pane.discard();
+				} else contribution.dispose();
+				assert.deepEqual({ applied: (await pending).isApplied, writes: applied }, { applied: false, writes: [] });
+			}
+		} finally {
+			globals.dispose();
+			browser.window.close();
+		}
+	});
+}
+
+class PreviewTextModelService extends Disposable implements IFileTextModelService {
 	readonly references: TextModelReference[] = [];
 	private readonly resources: ReadonlyMap<string, string>;
 	private readonly persistentResources: ReadonlySet<string>;
 	private readonly persistentModels = new Map<string, TextModel>();
+	private readonly modelAdded = this._register(new Emitter<TextModel>());
+	readonly onModelAdded = this.modelAdded.event;
+	readonly onModelRemoved = EventUtils.None;
+	readonly onModelLanguageChanged = EventUtils.None;
 
 	constructor(resources: readonly (readonly [URI, string])[], persistentResources: readonly URI[] = []) {
+		super();
 		this.resources = new Map(resources.map(([resource, text]) => [resource.toString(), text]));
 		this.persistentResources = new Set(persistentResources.map(resource => resource.toString()));
+		this._register(toDisposable(() => {
+			for (const model of this.persistentModels.values()) model.dispose();
+			this.persistentModels.clear();
+		}));
 	}
 
 	async acquire(input: { readonly resource: URI; readonly initialText?: string }): Promise<TextModelReference> {
-		const { TextModel } = await import("../../../../../editor/common/model/textModel.js");
 		const key = input.resource.toString();
-		const model = this.persistentModels.get(key) ?? new TextModel(input.initialText ?? this.resources.get(key) ?? "");
+		const existing = this.persistentModels.get(key);
+		const model = existing ?? new TextModel(input.initialText ?? this.resources.get(key) ?? "", { resource: input.resource });
 		const persistent = this.persistentResources.has(key);
 		if (persistent) this.persistentModels.set(key, model);
+		if (!existing && persistent) this.modelAdded.fire(model);
 		const emptyEvent = () => toDisposable(() => undefined);
 		const reference: TextModelReference = {
 			resource: input.resource,
@@ -83,21 +218,23 @@ class PreviewTextModelService implements ITextModelResourceService {
 		return reference;
 	}
 
-	dispose(): void {
-		for (const reference of this.references) reference.dispose();
-		this.references.length = 0;
+	getModel(resource: URI): TextModel | null {
+		return this.persistentModels.get(resource.toString()) ?? null;
 	}
-
-	[Symbol.dispose](): void { this.dispose(); }
+	async refresh(): Promise<void> {}
 }
 
-class PreviewFileService implements IFileService {
-	readonly onDidChangeFiles = new Emitter<{ readonly resources: readonly URI[] | undefined }>().event;
+class PreviewFileService extends Disposable implements IFileService {
+	private readonly changeEmitter = this._register(new Emitter<{ readonly resources: readonly URI[] | undefined }>());
+	readonly onDidChangeFiles = this.changeEmitter.event;
 	private readonly resources = new Map<string, string>();
 
 	constructor(resources: readonly (readonly [URI, string])[]) {
+		super();
 		for (const [resource, text] of resources) this.resources.set(resource.toString(), text);
 	}
+
+	notify(resource: URI): void { this.changeEmitter.fire({ resources: [resource] }); }
 
 	has(resource: URI): boolean { return this.resources.has(resource.toString()); }
 	read(resource: URI): string { return this.resources.get(resource.toString()) ?? ""; }
@@ -132,17 +269,7 @@ function emptyWorkingCopies(): IWorkingCopyService {
 	};
 }
 
-function installDomGlobals(browser: JSDOM): readonly string[] {
-	const globals = {
-		window: browser.window,
-		document: browser.window.document,
-		Node: browser.window.Node,
-		Element: browser.window.Element,
-		HTMLElement: browser.window.HTMLElement,
-		Event: browser.window.Event,
-		MouseEvent: browser.window.MouseEvent,
-		navigator: browser.window.navigator,
-	};
-	for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, value });
-	return Object.keys(globals);
+function installDomGlobals(browser: JSDOM) {
+	// Keep the main realm's globals while the pane runs in a registered second window.
+	return registerWindow(browser.window as unknown as Window);
 }

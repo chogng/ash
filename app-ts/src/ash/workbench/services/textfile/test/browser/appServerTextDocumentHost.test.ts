@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -12,7 +13,7 @@ import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_
 import { FileKind, FileNotFoundError, FileRevisionConflictError, type IFileService, type IFileWriteRequest, type FileExistingTargetBehavior } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserTextResourceStore } from '../../../../contrib/codeEditor/browser/browserTextResourceStore.js';
-import { BrowserBulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
+import { BulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
 import { BrowserWorkspaceEditService } from '../../../language/browser/browserWorkspaceEditService.js';
 import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
 import { ITextModelResourceService } from '../../../textmodelResolver/common/textModelResourceService.js';
@@ -21,6 +22,10 @@ import { BrowserWorkingCopyService } from '../../../workingCopy/browser/browserW
 import { IWorkingCopyService, type IWorkingCopy } from '../../../workingCopy/common/workingCopyService.js';
 import { TextFileService } from '../../common/textFileService.js';
 import { AppServerTextDocumentHost } from '../../browser/appServerTextDocumentHost.js';
+import { ChatEditingService } from '../../../../contrib/chat/browser/chatEditing/chatEditingServiceImpl.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 class Transport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(value: unknown) => void>>();
@@ -127,18 +132,19 @@ async function fixture() {
 	const models = lifetime.add(new BrowserTextModelService(new BrowserTextResourceStore(new TextFileService(files))));
 	const workingCopies = lifetime.add(new BrowserWorkingCopyService());
 	const edits = lifetime.add(new BrowserWorkspaceEditService(models, workingCopies, files));
-	const bulk = lifetime.add(new BrowserBulkEditService(edits));
+	const bulk = lifetime.add(new BulkEditService(edits));
 	const services = lifetime.add(new InstantiationService());
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerInstance(IBulkEditService, bulk);
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
+	const editing = lifetime.add(services.createInstance(ChatEditingService));
 	const transport = new Transport();
 	const client = new AppServerProtocolClient(transport);
 	lifetime.add(toDisposable(() => client.dispose()));
-	lifetime.add(services.createInstance(AppServerTextDocumentHost, client));
+	lifetime.add(services.createInstance(AppServerTextDocumentHost, client, editing.applyEdits.bind(editing)));
 	await client.connect();
-	return { files, models, workingCopies, services, transport, client, ...toDisposable(() => lifetime.dispose()) };
+	return { files, models, workingCopies, services, transport, client, editing, bulk, ...toDisposable(() => lifetime.dispose()) };
 }
 
 async function snapshot(transport: Transport, resource: URI): Promise<string> {
@@ -152,6 +158,144 @@ function workingCopy(reference: Awaited<ReturnType<BrowserTextModelService['acqu
 	return { resource: reference.resource, backupKind: 'text', get isDirty() { return reference.isDirty; }, get hasExternalChange() { return reference.hasExternalChange; }, onDidChangeDirty: reference.onDidChangeDirty, onDidChangeExternalChange: reference.onDidChangeExternalChange, onDidChangeContent: listener => reference.model.onDidChangeContent(() => listener()), backup: () => reference.model.getText(), restoreBackup: content => reference.model.reset(content), save: signal => reference.save(signal), saveAs: async () => {}, revert: signal => reference.revert(signal), ...toDisposable(() => {}) };
 }
 
+test('Agent review rejects one hunk, accepts another, saves the baseline and retains user edits', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/review.txt');
+	host.files.contents.set(resource.toString(), '\uFEFFfirst\r\nseparator\r\nlast');
+	using reference = await host.models.acquire({ resource }, new AbortController().signal);
+	using copy = workingCopy(reference);
+	using registration = host.workingCopies.register(copy);
+	const id = await snapshot(host.transport, resource);
+	assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'agent first\nseparator\nagent last' }] }), { kind: 'applied' });
+	const entry = host.editing.entries[0]!;
+	assert.equal(entry.hunks.length, 2);
+	await entry.accept(entry.hunks[0]);
+	reference.model.applyOperations([{ range: new Range(2, 1, 2, 1), text: 'user ' }]);
+	await entry.reject();
+	assert.deepEqual({ text: reference.model.getText(), file: host.files.contents.get(resource.toString()), pending: host.editing.entries.length }, { text: 'agent first\r\nuser separator\r\nlast', file: '\uFEFFagent first\r\nuser separator\r\nlast', pending: 0 });
+	assert.ok(reference.model.undo());
+	assert.equal(reference.model.getText(), 'agent first\r\nuser separator\r\nagent last');
+});
+
+test('Agent review keeps a user replacement inside a pending change', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/user-replacement.txt');
+	host.files.contents.set(resource.toString(), 'first\nseparator\nlast');
+	using reference = await host.models.acquire({ resource }, new AbortController().signal);
+	const id = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'agent first\nseparator\nagent last' }] });
+	reference.model.applyOperations([{ range: new Range(1, 1, 1, 12), text: 'user first' }]);
+	await host.editing.reject();
+	assert.equal(reference.model.getText(), 'user first\nseparator\nlast');
+});
+
+test('consecutive Agent edits keep one review baseline and accepting releases it', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/consecutive.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	for (const text of ['first agent', 'second agent']) {
+		const id = await snapshot(host.transport, resource);
+		assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text }] }), { kind: 'applied' });
+	}
+	assert.equal(host.editing.entries.length, 1);
+	assert.equal(host.editing.entries[0]!.hunks[0]!.originalText, 'original');
+	await host.editing.accept();
+	assert.equal(host.editing.entries.length, 0);
+	assert.equal(host.models.getModel(resource), null);
+	assert.equal(host.files.contents.get(resource.toString()), 'second agent');
+});
+
+for (const [before, after] of [['first\nlast', 'first'], ['first', 'first\nlast'], ['', 'new'], ['old', ''], ['first\n', 'first'], ['first', 'first\n']] as const) {
+	test(`Agent review rejects EOF changes ${JSON.stringify(before)} -> ${JSON.stringify(after)}`, async () => {
+		using host = await fixture();
+		const resource = URI.file('c:/workspace/eof.txt');
+		host.files.contents.set(resource.toString(), before);
+		const id = await snapshot(host.transport, resource);
+		assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: after }] }), { kind: 'applied' });
+		await host.editing.reject();
+		assert.equal(host.files.contents.get(resource.toString()), before);
+	});
+}
+
+test('Agent review rejects an atomic create, move and delete batch', async () => {
+	using host = await fixture();
+	const deleted = URI.file('c:/workspace/deleted.txt');
+	const moved = URI.file('c:/workspace/moved.txt');
+	const target = URI.file('c:/workspace/target.txt');
+	const created = URI.file('c:/workspace/created.txt');
+	host.files.contents.set(deleted.toString(), '\uFEFFdeleted\r\n');
+	host.files.contents.set(moved.toString(), 'moved');
+	const a = await snapshot(host.transport, deleted);
+	const b = await snapshot(host.transport, moved);
+	assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'delete', snapshot: a }, { kind: 'move', snapshot: b, target: target.fsPath, text: 'agent moved' }, { kind: 'create', path: created.fsPath, text: 'created' }] }), { kind: 'applied' });
+	assert.equal(host.editing.entries.length, 1);
+	await host.editing.reject();
+	assert.deepEqual([...host.files.contents].sort(), [[deleted.toString(), '\uFEFFdeleted\r\n'], [moved.toString(), 'moved']].sort());
+});
+
+test('Agent review combines creating and subsequently editing the same file', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/new-review.txt');
+	assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'create', path: resource.fsPath, text: 'created' }] }), { kind: 'applied' });
+	const id = await snapshot(host.transport, resource);
+	assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'updated' }] }), { kind: 'applied' });
+	assert.equal(host.editing.entries.length, 1);
+	await host.editing.reject();
+	assert.equal(host.files.contents.has(resource.toString()), false);
+});
+
+test('Agent review combines modifying and subsequently moving the same file', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/before-move.txt');
+	const target = URI.file('c:/workspace/after-move.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	const first = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: first, text: 'updated' }] });
+	const second = await snapshot(host.transport, resource);
+	assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'move', snapshot: second, target: target.fsPath, text: 'moved' }] }), { kind: 'applied' });
+	await host.editing.reject();
+	assert.deepEqual([...host.files.contents], [[resource.toString(), 'original']]);
+});
+
+test('review decisions wait for an in-flight Agent write', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/queued-review.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	const id = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'first' }] });
+	const entry = host.editing.entries[0]!;
+	const gate = new DeferredPromise<void>();
+	const started = new DeferredPromise<void>();
+	const apply = host.bulk.apply.bind(host.bulk);
+	host.bulk.apply = async (edit, options) => { void started.complete(); await gate.p; return apply(edit, options); };
+	const write = host.editing.applyEdits({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 6), text: 'second' }] }] }, new AbortController().signal);
+	await started.p;
+	const reject = host.editing.rejectEntry(entry);
+	assert.equal(entry.isBusy, true);
+	void gate.complete();
+	await Promise.all([write, reject]);
+	assert.equal(host.files.contents.get(resource.toString()), 'original');
+	assert.equal(host.editing.entries.length, 0);
+});
+
+test('a failed rejection save keeps the review available for retry', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/retry-review.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	const id = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'agent' }] });
+	const entry = host.editing.entries[0]!;
+	const save = host.files.writeFile.bind(host.files);
+	host.files.writeFile = async () => { throw new Error('Injected review save failure'); };
+	await assert.rejects(host.editing.rejectEntry(entry), /Injected review save failure/);
+	assert.equal(host.editing.entries[0], entry);
+	assert.equal(entry.isBusy, false);
+	host.files.writeFile = save;
+	await host.editing.rejectEntry(entry);
+	assert.equal(host.files.contents.get(resource.toString()), 'original');
+	assert.equal(host.editing.entries.length, 0);
+});
+
 test('document search snapshots contain only unsaved text within the requested directory', async () => {
 	using host = await fixture();
 	const inside = URI.file('c:/workspace/open.txt');
@@ -160,8 +304,10 @@ test('document search snapshots contain only unsaved text within the requested d
 	host.files.contents.set(outside.toString(), 'outside');
 	using a = await host.models.acquire({ resource: inside }, new AbortController().signal);
 	using b = await host.models.acquire({ resource: outside }, new AbortController().signal);
-	using registeredA = host.workingCopies.register(workingCopy(a));
-	using registeredB = host.workingCopies.register(workingCopy(b));
+	using copyA = workingCopy(a);
+	using copyB = workingCopy(b);
+	using registeredA = host.workingCopies.register(copyA);
+	using registeredB = host.workingCopies.register(copyB);
 	a.model.applyOperations([{ range: a.model.getFullModelRange(), text: 'unsaved' }]);
 	b.model.applyOperations([{ range: b.model.getFullModelRange(), text: 'other unsaved' }]);
 	assert.deepEqual(await host.transport.call('textDocument/list', { root: 'C:/workspace' }), { kind: 'documents', documents: [{ relativePath: 'open.txt', text: 'unsaved' }] });
@@ -173,7 +319,7 @@ test('a failed save reports a committed edit without losing the model or undo hi
 	const resource = URI.file('c:/workspace/open.txt');
 	host.files.contents.set(resource.toString(), 'disk');
 	using reference = await host.models.acquire({ resource }, new AbortController().signal);
-	const copy = workingCopy(reference);
+	using copy = workingCopy(reference);
 	copy.save = async () => { throw new Error('Save failed'); };
 	using registration = host.workingCopies.register(copy);
 	const id = await snapshot(host.transport, resource);
@@ -192,7 +338,8 @@ for (const eol of ['\n', '\r\n']) {
 		const resource = URI.file('c:/workspace/open.txt');
 		host.files.contents.set(resource.toString(), '\uFEFFdisk' + eol);
 		using reference = await host.models.acquire({ resource }, new AbortController().signal);
-		using registered = host.workingCopies.register(workingCopy(reference));
+		using copy = workingCopy(reference);
+		using registered = host.workingCopies.register(copy);
 		reference.model.applyOperations([{ range: reference.model.getFullModelRange(), text: 'unsaved' + eol }]);
 		const read = await host.transport.call('textDocument/read', { path: resource.fsPath });
 		assert.equal(read.kind, 'document', JSON.stringify(read));
@@ -207,13 +354,15 @@ for (const eol of ['\n', '\r\n']) {
 		assert.ok(reference.model.undo());
 		assert.equal(reference.model.getText(), 'disk' + eol);
 	});
-	test(`closed document edits save BOM and EOL then release the model (${JSON.stringify(eol)})`, async () => {
+	test(`closed document edits save BOM and EOL and release the model after review (${JSON.stringify(eol)})`, async () => {
 		using host = await fixture();
 		const resource = URI.file('c:/workspace/closed.txt');
 		host.files.contents.set(resource.toString(), '\uFEFFdisk' + eol);
 		const id = await snapshot(host.transport, resource);
 		assert.deepEqual(await host.transport.call('textDocument/apply', { changes: [{ kind: 'update', snapshot: id, text: 'agent\n' }] }), { kind: 'applied' });
 		assert.equal(host.files.contents.get(resource.toString()), '\uFEFFagent' + eol);
+		assert.equal(host.editing.entries.length, 1);
+		await host.editing.accept(resource);
 		assert.equal(host.models.getModel(resource), null);
 	});
 }

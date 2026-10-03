@@ -9,6 +9,7 @@ export const IBulkEditService = createServiceIdentifier<IBulkEditService>('bulkE
 
 export interface WorkspaceEditMetadata {
 	readonly label?: string;
+	readonly needsConfirmation?: boolean;
 }
 
 export interface WorkspaceFileEditOptions {

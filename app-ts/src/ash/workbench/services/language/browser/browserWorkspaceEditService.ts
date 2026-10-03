@@ -8,6 +8,7 @@ import { type ITextModelResourceService, type TextModelReference } from "../../t
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
 import { type IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
 import { WorkspaceEditConflictError, type IWorkspaceEditService, type WorkspaceEditResult } from "../common/workspaceEditService.js";
+import type { ProgressHandle } from '../../../../platform/progress/common/progress.js';
 
 interface AcquiredModel {
 	readonly reference: TextModelReference;
@@ -60,7 +61,7 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 		}));
 	}
 
-	async apply(value: LanguageWorkspaceEdit, signal: AbortSignal = new AbortController().signal): Promise<WorkspaceEditResult> {
+	async apply(value: LanguageWorkspaceEdit, signal: AbortSignal = new AbortController().signal, progress?: Pick<ProgressHandle, 'report'>): Promise<WorkspaceEditResult> {
 		const edit = normalizeLanguageWorkspaceEdit(value);
 		const states = new Map<string, VirtualFile>();
 		const acquired = new Map<string, AcquiredModel>();
@@ -69,14 +70,19 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 		try {
 			for (const entry of edit.entries) {
 				throwIfCancelled(signal, "Workspace edit was cancelled");
-				for (const resource of entryResources(entry)) touched.set(resource.toString(), resource);
 				prepared.push(await this.preflight(entry, states, acquired, signal));
 			}
+			const operations = prepared.filter(operation => operation.kind === 'textDocument' ? operation.before !== operation.after : operation.applies);
+			for (const operation of operations) {
+				for (const resource of entryResources(operation.entry)) touched.set(resource.toString(), resource);
+			}
 			const undo: UndoOperation[] = [];
+			progress?.report({ total: operations.length, increment: 0 });
 			try {
-				for (const operation of prepared) {
+				for (const operation of operations) {
 					throwIfCancelled(signal, "Workspace edit was cancelled");
 					await this.execute(operation, undo, signal);
+					progress?.report({ increment: 1 });
 				}
 			} catch (error) {
 				const rollbackErrors = await rollback(undo);
@@ -84,7 +90,7 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 				throw error;
 			}
 			const lastKind = new Map<string, PreparedEdit['kind']>();
-			for (const operation of prepared) {
+			for (const operation of operations) {
 				for (const resource of entryResources(operation.entry)) lastKind.set(resource.toString(), operation.kind);
 			}
 			const finalStates = [...touched.values()].map(resource => {

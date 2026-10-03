@@ -1,4 +1,5 @@
 import './actions/chatSpeechToTextActions.js';
+import './chatEditing/chatEditing.contribution.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import "../common/widget/chatColors.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";

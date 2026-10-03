@@ -2,6 +2,7 @@ import { AbstractDisposable, type IDisposable } from '../../../base/common/lifec
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export const enum AccessibleViewProviderId {
+	BulkEditPreview = 'bulkEditPreview',
 	ActionWidget = 'actionWidget',
 	InspectEditorTokens = 'inspectEditorTokens',
 	Explorer = 'explorer',
@@ -13,6 +14,7 @@ export const enum AccessibleViewProviderId {
 	ImagePreview = 'imagePreview',
 	AgentSessions = 'agentSessions',
 	ChatModelConfiguration = 'chatModelConfiguration',
+	ChatEditing = 'chatEditing',
 	SessionsChat = 'sessionsChat',
 	SessionsSettings = 'sessionsSettings',
 	HooksSettings = 'hooksSettings',
@@ -34,6 +36,7 @@ export const enum AccessibleViewType {
 }
 
 export const enum AccessibilityVerbositySettingId {
+	BulkEditPreview = 'accessibility.verbosity.bulkEditPreview',
 	ActionWidget = 'accessibility.verbosity.actionWidget',
 	InspectEditorTokens = 'accessibility.verbosity.inspectEditorTokens',
 	Explorer = 'accessibility.verbosity.explorer',
@@ -45,6 +48,7 @@ export const enum AccessibilityVerbositySettingId {
 	ImagePreview = 'accessibility.verbosity.imagePreview',
 	AgentSessions = 'accessibility.verbosity.agentSessions',
 	ChatModelConfiguration = 'accessibility.verbosity.chatModelConfiguration',
+	ChatEditing = 'accessibility.verbosity.chatEditing',
 	Chat = 'accessibility.verbosity.chat',
 	SessionsSettings = 'accessibility.verbosity.sessionsSettings',
 	HooksSettings = 'accessibility.verbosity.hooksSettings',

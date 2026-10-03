@@ -1,9 +1,6 @@
-import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
-import { IBulkEditService } from '../../editor/browser/services/bulkEditService.js';
-import { BrowserBulkEditService } from '../../workbench/contrib/bulkEdit/browser/bulkEditService.js';
-import { IWorkspaceEditService } from '../../workbench/services/language/common/workspaceEditService.js';
+import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
 import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { IDialogService } from '../../platform/dialogs/common/dialogs.js';
@@ -68,13 +65,10 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 		if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
 		const workbench = sessions.add(await Workbench.create({
 			createTextDocumentHost: documentClient ? services => {
-				const resources = new DisposableStore();
-				const bulkEdits = resources.add(new BrowserBulkEditService(services.get(IWorkspaceEditService)));
-				const documentServices = resources.add(services.createChild(new ServiceCollection([IBulkEditService, bulkEdits])));
-				resources.add(documentServices.createInstance(AppServerTextDocumentHost, documentClient!));
-				return resources;
+				const editing = services.get(IChatEditingService);
+				return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
 			} : undefined,
-			contributionIds: [],
+			contributionIds: ['chat.edits.editorOverlay'],
 			modeId,
 			createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
 			createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),

@@ -253,7 +253,7 @@ import { IWorkspaceEditService } from "../services/language/common/workspaceEdit
 import { IFileTextModelService, ITextModelResourceService } from "../services/textmodelResolver/common/textModelResourceService.js";
 import { ITextModelService } from '../../editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../services/textmodelResolver/common/textModelResolverService.js';
-import { BrowserBulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
+import { BulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
 import { IBulkEditService } from "../../editor/browser/services/bulkEditService.js";
 import { getBrowserTextModelService } from "../services/textmodelResolver/browser/browserTextModelService.js";
 import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
@@ -619,7 +619,7 @@ export class Workbench extends Disposable {
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 		const workspaceEditService = this._register(new BrowserWorkspaceEditService(textModelService, workingCopyService, fileService));
 		services.registerInstance(IWorkspaceEditService, workspaceEditService);
-		const bulkEditService = this._register(new BrowserBulkEditService(workspaceEditService));
+		const bulkEditService = this._register(services.createInstance(BulkEditService));
 		services.registerInstance(IBulkEditService, bulkEditService);
 		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }
 		this._register(services.createInstance(WorkbenchLanguageFeatures));

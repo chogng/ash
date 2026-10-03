@@ -1,0 +1,37 @@
+.ash-chat-editing-overlay {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	max-width: 100%;
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-widget-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-editor-widget-border);
+	border-radius: var(--ash-corner-radius-large);
+	font-size: var(--ash-font-size-label1);
+}
+
+.ash-chat-editing-overlay[hidden] { display: none; }
+
+.ash-chat-editing-count {
+	flex-shrink: 0;
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-chat-editing-added { background-color: var(--ash-diff-editor-inserted-line-background); }
+.ash-chat-editing-gutter { border-left: 2px solid var(--ash-diff-editor-inserted-text-background); }
+
+.ash-chat-editing-deleted {
+	box-sizing: border-box;
+	white-space: pre;
+	overflow: auto;
+	color: var(--ash-editor-foreground);
+	background-color: var(--ash-diff-editor-removed-line-background);
+}
+
+.hc-black .ash-chat-editing-overlay,
+.hc-light .ash-chat-editing-overlay { border-color: var(--ash-contrast-border); }
+
+.hc-black .ash-chat-editing-gutter,
+.hc-light .ash-chat-editing-gutter { border-color: var(--ash-contrast-border); }

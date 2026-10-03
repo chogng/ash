@@ -4,6 +4,27 @@ import { Extensions, type IConfigurationRegistry } from '../../../../platform/co
 import { Registry } from '../../../../platform/registry/common/platform.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.BulkEditPreview,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('Refactor preview verbosity must be boolean');
+		return value;
+	},
+	setting: {
+		title: localize('bulkEdit.verbosityTitle', 'Refactor preview accessibility help'),
+		description: localize('bulkEdit.verbosityDescription', 'Announce how to open accessibility help in the refactor preview.'),
+		valueType: 'boolean',
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.ChatEditing,
+	defaultValue: true,
+	parse(value: unknown): boolean { if (typeof value !== 'boolean') { throw new TypeError('Chat Editing verbosity must be boolean'); } return value; },
+	setting: { valueType: 'boolean', title: localize('chatEditing.verbosity', 'Agent changes accessibility help'), description: localize('chatEditing.verbosityDescription', 'Announce how to open accessibility help when reviewing Agent changes.') },
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Dictation, defaultValue: true,
 	parse(value: unknown): boolean { if (typeof value !== 'boolean') throw new TypeError('Dictation verbosity must be boolean'); return value; },
 	setting: { valueType: 'boolean', title: localize('dictation.targetVerbosity', 'Dictation accessibility help'), description: localize('dictation.targetVerbosityDescription', 'Announce how to open accessibility help while dictating in an editor or terminal.') },

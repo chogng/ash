@@ -34,7 +34,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } fr
 import { Registry } from '../../platform/registry/common/platform.js';
 import { CloseWorkspaceAction, OpenFolderAction, OpenFolderViaWorkspaceAction } from './actions/workspaceActions.js';
 import { ShowAboutDialogAction } from './actions/windowActions.js';
-import "../contrib/bulkEdit/browser/bulkEdit.contribution.js";
+import "../contrib/bulkEdit/browser/preview/bulkEdit.contribution.js";
 import "../contrib/binaryEditor/browser/binaryEditor.contribution.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
 import "../contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js";

@@ -5907,10 +5907,10 @@ for (const outcome of ['accept', 'cancel', 'change'] as const) {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/standalone.html');
-		await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionPreview());
 		if (outcome === 'cancel') {
 			await page.evaluate(() => window.ashStandaloneIntegration.setActionMenuLanguage('zh-CN'));
 		}
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionPreview());
 		await page.locator('#action-preview-editor .stanza-editor-input').focus();
 		await page.keyboard.press('ControlOrMeta+.');
 		const root = page.locator('.ash-action-widget');
@@ -5919,12 +5919,13 @@ for (const outcome of ['accept', 'cancel', 'change'] as const) {
 		if (outcome === 'accept') await root.getByRole('button', { name: 'Preview', exact: true }).click();
 		else await page.keyboard.press('ControlOrMeta+Enter');
 		const pane = page.locator('#action-preview-pane');
-		await expect(pane.getByRole('button', { name: 'Apply selected' })).toBeEnabled();
+		const apply = pane.getByRole('button', { name: outcome === 'cancel' ? '应用所选修改' : 'Apply selected' });
+		await expect(apply).toBeEnabled();
 		await expect(root).toHaveCount(0);
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
 		if (outcome === 'change') await page.evaluate(() => window.ashStandaloneIntegration.changeCodeActionState('text'));
-		else await pane.getByRole('button', { name: outcome === 'accept' ? 'Apply selected' : 'Cancel', exact: true }).click();
-		await expect(pane.getByRole('button', { name: 'Apply selected' })).toBeDisabled();
+		else await pane.getByRole('button', { name: outcome === 'accept' ? 'Apply selected' : '取消', exact: true }).click();
+		await expect(apply).toBeDisabled();
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(outcome === 'accept' ? 'result' : outcome === 'change' ? 'changed' : 'value');
 		if (outcome === 'accept') {
 			await page.locator('#action-preview-editor .stanza-editor-input').focus();
@@ -5934,6 +5935,62 @@ for (const outcome of ['accept', 'cancel', 'change'] as const) {
 		expect(errors).toEqual([]);
 	});
 }
+
+test('code action preview preserves partial selection, focus and expanded changes across grouping', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionPreview('multiple'));
+	await page.locator('#action-preview-editor .stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+.');
+	await page.locator('.ash-action-widget').getByRole('button', { name: 'Preview', exact: true }).click();
+	const pane = page.locator('#action-preview-pane');
+	const replacements = pane.locator('.ash-bulk-edit-replacements input');
+	await expect(replacements).toHaveCount(2);
+	await pane.getByText('Show text change', { exact: true }).click();
+	await replacements.nth(1).focus();
+	await page.keyboard.press('Space');
+	await expect(replacements.nth(1)).toBeFocused();
+	await expect(replacements.nth(1)).not.toBeChecked();
+	await expect(pane.locator('details')).toHaveAttribute('open', '');
+	await expect(pane.locator('pre')).toHaveText('- value\n+ relue');
+	await expect(replacements.nth(1)).toHaveAttribute('aria-description', /Alt\+F1/);
+	const focusStyle = await replacements.nth(1).evaluate(element => {
+		const style = getComputedStyle(element);
+		return { outline: style.outlineStyle, width: style.outlineWidth };
+	});
+	expect(focusStyle.outline).toBe('solid');
+	expect(parseFloat(focusStyle.width)).toBeGreaterThan(0);
+	for (const theme of ['vs-dark', 'hc-black', 'hc-light']) {
+		await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), theme);
+		const style = await pane.locator('.ash-bulk-edit-entry').evaluate(element => {
+			const computed = getComputedStyle(element);
+			return { border: computed.borderStyle, width: computed.borderWidth, color: computed.borderColor, contrast: computed.getPropertyValue('--ash-contrast-border') };
+		});
+		expect(style.border).toBe('solid');
+		expect(parseFloat(style.width)).toBeGreaterThan(0);
+		if (theme.startsWith('hc-')) expect(style.color).toBe(await pane.evaluate((element, contrast) => {
+			const probe = document.createElement('span');
+			probe.style.color = contrast;
+			element.append(probe);
+			const color = getComputedStyle(probe).color;
+			probe.remove();
+			return color;
+		}, style.contrast));
+	}
+	await pane.getByRole('button', { name: 'Group by type' }).click();
+	await expect(pane.locator('.ash-bulk-edit-group-label')).toHaveText('Text changes');
+	await expect(replacements.nth(1)).not.toBeChecked();
+	await expect(pane.locator('details')).toHaveAttribute('open', '');
+	await pane.getByRole('button', { name: 'Group by file' }).click();
+	await expect(replacements.nth(1)).not.toBeChecked();
+	await expect(pane.locator('details')).toHaveAttribute('open', '');
+	await replacements.nth(0).focus();
+	await page.keyboard.press('ControlOrMeta+Enter');
+	await expect(pane.getByRole('button', { name: 'Apply selected' })).toBeDisabled();
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('relue');
+	await page.locator('#action-preview-editor .stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+z');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
+});
 
 test('code action category tabs preserve the query, skip labels and dispatch the original action', async ({ page }) => {
 	await page.goto('/standalone.html');

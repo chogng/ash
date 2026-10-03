@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
-import { Emitter } from "../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserTextModelService } from "../../../textmodelResolver/browser/browserTextModelService.js";
 import { Position } from "../../../../../editor/common/core/position.js";
@@ -10,9 +10,12 @@ import { type TextResourceChangeEvent, type TextResourceContent, type TextResour
 import { BrowserWorkingCopyService } from "../../../workingCopy/browser/browserWorkingCopyService.js";
 import { type IWorkingCopy } from "../../../workingCopy/common/workingCopyService.js";
 import { BrowserWorkspaceEditService } from "../../browser/browserWorkspaceEditService.js";
-import { BrowserBulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
+import { BulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
 import { ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileService } from "../../../../../platform/files/common/files.js";
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 test("workspace edits preflight every document before mutating and persist closed resources", async () => {
 	const first = URI.file("C:\\project\\first.ts");
@@ -49,13 +52,68 @@ test("workspace edit undo restores multiple closed documents", async () => {
 	assert.deepEqual([store.text(first), store.text(second)], ['alpha', 'bravo']);
 });
 
+test('approved bulk edits still reject a document that changed during preview', async () => {
+	const resource = URI.file('/workspace/stale.ts');
+	using store = new MemoryResourceStore([[resource, 'original']]);
+	using models = new BrowserTextModelService(store);
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	using workingCopies = new BrowserWorkingCopyService();
+	using transaction = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[resource, 'original']]));
+	using bulkEdits = new BulkEditService(transaction);
+	using handler = bulkEdits.setPreviewHandler(async edits => {
+		reference.model.setValue('changed');
+		return edits;
+	});
+	await assert.rejects(bulkEdits.apply({ entries: [{ kind: 'textDocument', resource, expectedText: 'original', edits: [{ range: new Range(1, 1, 1, 9), text: 'replacement' }] }] }, { showPreview: true }), /stale/);
+	assert.deepEqual({ text: reference.model.getText(), saved: store.saved }, { text: 'changed', saved: [] });
+});
+
+test('bulk edit progress follows the committed operations and undo restores their real contents', async () => {
+	const first = URI.file('/workspace/first.ts');
+	const second = URI.file('/workspace/second.ts');
+	using store = new MemoryResourceStore([[first, 'a'], [second, 'b']]);
+	using models = new BrowserTextModelService(store);
+	using workingCopies = new BrowserWorkingCopyService();
+	using transaction = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[first, 'a'], [second, 'b']]));
+	using bulkEdits = new BulkEditService(transaction);
+	const progress: unknown[] = [];
+	const applied = await bulkEdits.apply({ entries: [
+		{ kind: 'textDocument', resource: first, edits: [{ range: new Range(1, 1, 1, 2), text: 'A' }] },
+		{ kind: 'textDocument', resource: second, edits: [{ range: new Range(1, 1, 1, 2), text: 'B' }] },
+	] }, { progress: { report: update => progress.push(update) } });
+	assert.deepEqual({ progress, text: [store.text(first), store.text(second)] }, { progress: [{ total: 2, increment: 0 }, { increment: 1 }, { increment: 1 }], text: ['A', 'B'] });
+	if (!applied.isApplied) throw new Error('Expected the transaction to apply');
+	await applied.undo();
+	assert.deepEqual([store.text(first), store.text(second)], ['a', 'b']);
+});
+
+test('bulk edits with unchanged text and ignored file operations report no applied changes', async () => {
+	const resource = URI.file('/workspace/unchanged.ts');
+	const missing = URI.file('/workspace/missing.ts');
+	using store = new MemoryResourceStore([[resource, 'original']]);
+	using models = new BrowserTextModelService(store);
+	using workingCopies = new BrowserWorkingCopyService();
+	const files = new MemoryFileService([[resource, 'original']]);
+	using transaction = new BrowserWorkspaceEditService(models, workingCopies, files);
+	using bulkEdits = new BulkEditService(transaction);
+	const progress: unknown[] = [];
+	const result = await bulkEdits.apply({ entries: [
+		{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 9), text: 'original' }] },
+		{ kind: 'create', resource, existing: 'ignore' },
+		{ kind: 'delete', resource: missing, missing: 'ignore', mode: 'fileOrEmptyDirectory' },
+	] }, { progress: { report: update => progress.push(update) } });
+	assert.deepEqual({ applied: result.isApplied, saved: store.saved, text: files.text(resource), missing: files.has(missing), progress }, {
+		applied: false, saved: [], text: 'original', missing: false, progress: [{ total: 0, increment: 0 }],
+	});
+});
+
 test('bulk text edits against one resource use the original coordinate space', async () => {
 	const resource = URI.file('C:\\project\\one.ts');
 	using store = new MemoryResourceStore([[resource, 'abc def']]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
 	using workspaceEdits = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[resource, 'abc def']]));
-	using bulkEdits = new BrowserBulkEditService(workspaceEdits);
+	using bulkEdits = new BulkEditService(workspaceEdits);
 
 	const result = await bulkEdits.apply([
 		new ResourceTextEdit(resource, { range: new Range(1, 1, 1, 4), text: 'longword' }),
@@ -73,7 +131,7 @@ test('bulk language workspace edits preserve explicitly ordered document operati
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
 	using workspaceEdits = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[resource, 'abc def']]));
-	using bulkEdits = new BrowserBulkEditService(workspaceEdits);
+	using bulkEdits = new BulkEditService(workspaceEdits);
 
 	const result = await bulkEdits.apply({ entries: [
 		{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 4), text: 'longword' }] },
@@ -320,7 +378,7 @@ class MemoryResourceStore implements ITextResourceStore {
 }
 
 class MemoryFileService implements IFileService {
-	readonly onDidChangeFiles = new Emitter<{ readonly resources: readonly URI[] | undefined }>().event;
+	readonly onDidChangeFiles = Event.None;
 	private readonly resources = new Map<string, string>();
 	failRename = false;
 

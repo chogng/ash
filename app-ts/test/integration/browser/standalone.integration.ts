@@ -43,9 +43,12 @@ import { FontMeasurements } from '../../../src/ash/editor/browser/config/fontMea
 import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 import { StandaloneEditor } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditor.js';
 import { IBulkEditService, ResourceEdit } from '../../../src/ash/editor/browser/services/bulkEditService.js';
-import { BrowserBulkEditService, toLanguageWorkspaceEdit } from '../../../src/ash/workbench/contrib/bulkEdit/browser/bulkEditService.js';
-import { BulkEditPreviewPane } from '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEditPreviewPane.js';
-import '../../../src/ash/workbench/contrib/bulkEdit/browser/media/bulkEdit.css';
+import { BulkEditService, toLanguageWorkspaceEdit } from '../../../src/ash/workbench/contrib/bulkEdit/browser/bulkEditService.js';
+import { BulkEditPane } from '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEditPane.js';
+import { IWorkspaceEditService } from '../../../src/ash/workbench/services/language/common/workspaceEditService.js';
+import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEdit.css';
 
 interface EditorState {
 	readonly value: string | null;
@@ -347,7 +350,7 @@ interface StandaloneHarness {
 	applySelectionEdit(): UndoState;
 	readSelectionUndo(): UndoState;
 	enableCodeActions(kind?: 'single' | 'navigation' | 'grouped'): void;
-	prepareCodeActionPreview(): void;
+	prepareCodeActionPreview(kind?: 'single' | 'multiple'): void;
 	setActionMenuLanguage(locale: 'en' | 'zh-CN'): void;
 	setActionMenuTheme(theme: string): void;
 	prepareLineIdentity(): LineIdentityState;
@@ -2640,17 +2643,18 @@ window.ashStandaloneIntegration = {
 			],
 		});
 	},
-	prepareCodeActionPreview: () => {
+	prepareCodeActionPreview: (kind = 'single') => {
 		actionPreviewResources.clear();
 		callerEditor.setValue('value');
 		const parent = StandaloneServices.get(IInstantiationService);
 		const services = actionPreviewResources.add(parent.createChild());
 		const applier = parent.get(IBulkEditService);
-		const bulkEdits = actionPreviewResources.add(new BrowserBulkEditService({ apply: async (edit, signal) => {
+		services.registerInstance(IWorkspaceEditService, { apply: async (edit, signal) => {
 			const result = await applier.apply(edit, { editor: previewEditor, showPreview: false, token: signal });
 			if (!result.isApplied) throw new Error('Previewed edits were not applied');
 			return { resources: edit.entries.map(entry => entry.kind === 'rename' ? entry.target : entry.resource), undo: result.undo };
-		} }));
+		} });
+		const bulkEdits = actionPreviewResources.add(services.createInstance(BulkEditService));
 		services.registerInstance(IBulkEditService, bulkEdits);
 		const editorHost = h(document, 'div');
 		editorHost.id = 'action-preview-editor';
@@ -2658,16 +2662,20 @@ window.ashStandaloneIntegration = {
 		editorHost.style.height = '100px';
 		const paneHost = h(document, 'div');
 		paneHost.id = 'action-preview-pane';
+		actionPreviewResources.add(bindColorTheme(parent.get(IThemeService), paneHost));
 		document.body.append(editorHost, paneHost);
 		actionPreviewResources.add(toDisposable(() => { editorHost.remove(); paneHost.remove(); }));
-		const pane = actionPreviewResources.add(new BulkEditPreviewPane(paneHost, { id: 'ash.bulkEditPreview', title: 'Refactor Preview' }));
+		const pane = actionPreviewResources.add(services.createInstance(BulkEditPane, paneHost, { id: BulkEditPane.ID, title: 'Refactor Preview' }));
 		paneHost.append(pane.element);
 		pane.setVisible(true);
 		actionPreviewResources.add(bulkEdits.setPreviewHandler(async (edits, options) => {
 			const edit = await toLanguageWorkspaceEdit(edits);
 			const entries = edit.entries.map((entry, index) => {
 				if (entry.kind !== 'textDocument') throw new Error('This fixture only previews text edits');
-				return { index, kind: entry.kind, resource: entry.resource, detail: 'Replace value with result' };
+				const before = callerModel.getValue();
+				using snapshot = new stanza.TextModel(before);
+				snapshot.applyEdits(entry.edits);
+				return { index, kind: entry.kind, resource: entry.resource, detail: 'Replace value with result', before, after: snapshot.getText() };
 			});
 			const pending = pane.setInput({ edit, entries, canApply: true }, options!.token!);
 			pane.element.querySelector<HTMLButtonElement>('.ash-bulk-edit-cancel')!.focus();
@@ -2676,7 +2684,10 @@ window.ashStandaloneIntegration = {
 		}));
 		const previewEditor = actionPreviewResources.add(services.createInstance(StandaloneEditor, { container: editorHost, model: callerModel, ariaLabel: 'preview.ts', dimension: { width: 640, height: 100 } }, callerModel, false));
 		actionPreviewResources.add(StandaloneServices.get(ILanguageFeaturesService).codeActionProvider.register('plaintext', {
-			provideCodeActions: () => [{ title: 'Replace value with result', kind: 'refactor.rewrite', edit: { entries: [{ kind: 'textDocument', resource: callerModel.uri, version: callerModel.getVersionId(), edits: [{ range: callerModel.getFullModelRange(), text: 'result' }] }] } }],
+			provideCodeActions: () => [{ title: 'Replace value with result', kind: 'refactor.rewrite', edit: { entries: [{ kind: 'textDocument', resource: callerModel.uri, version: callerModel.getVersionId(), edits: kind === 'multiple' ? [
+				{ range: new stanza.Range(1, 1, 1, 3), text: 're' },
+				{ range: new stanza.Range(1, 3, 1, 6), text: 'sult' },
+			] : [{ range: callerModel.getFullModelRange(), text: 'result' }] }] } }],
 		}));
 		previewEditor.focus();
 	},
