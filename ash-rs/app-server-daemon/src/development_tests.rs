@@ -48,7 +48,10 @@ fn selection_keeps_a_runtime_leased_after_the_pointer_changes() {
         .open(first.join(".lease"))
         .unwrap();
     assert_eq!(selected.root, first);
-    assert!(lease.try_lock().is_err());
+    assert!(matches!(
+        lease.try_lock(),
+        Err(std::fs::TryLockError::WouldBlock)
+    ));
     // Selection releases publish.lock, so a publisher can commit another generation.
     let publication = OpenOptions::new()
         .read(true)
@@ -57,7 +60,18 @@ fn selection_keeps_a_runtime_leased_after_the_pointer_changes() {
         .unwrap();
     publication.try_lock().unwrap();
     drop(selected);
-    lease.try_lock().unwrap();
+    // Parallel process tests can fork while the lease is held. The child retains
+    // the file description until exec closes it, so OS release is not immediate.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+    loop {
+        match lease.try_lock() {
+            Ok(()) => break,
+            Err(std::fs::TryLockError::WouldBlock) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            Err(error) => panic!("released runtime lease remained unavailable: {error}"),
+        }
+    }
 }
 
 #[test]

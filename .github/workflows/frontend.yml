@@ -101,9 +101,9 @@ jobs:
       - name: Install Chromium
         if: matrix.surface == 'browser'
         run: pnpm --dir app-ts exec playwright install --with-deps chromium
-      - name: Test editor browser integration
+      - name: Test browser integration
         if: matrix.surface == 'browser'
-        run: pnpm --dir app-ts run test:editor:browser --project=chromium
+        run: pnpm --dir app-ts run test:browser:integration --project=chromium
       - name: Prepare production browser UI smoke tests
         if: matrix.surface == 'browser'
         run: pnpm --dir app-ts run pretest:smoke:browser
@@ -119,41 +119,21 @@ jobs:
       - name: Prepare connected Web smoke tests
         if: matrix.surface == 'browser'
         run: pnpm --dir app-ts run pretest:smoke:browser:full
-      - name: Test connected Web settings and scenario isolation
+      - name: Test connected Web
         if: matrix.surface == 'browser'
-        run: >-
-          pnpm --dir app-ts run test:smoke:browser:full:no-compile
-          test/smoke/areas/automation.spec.ts
-          test/smoke/areas/windows/settings-json.spec.ts
-          test/smoke/areas/windows/models-settings.spec.ts
-          test/smoke/areas/windows/network-settings.spec.ts
-          test/smoke/areas/windows/startup-error.spec.ts
-          test/smoke/areas/windows/git-synchronization.spec.ts
-      - name: Test connected Web document protocol
-        if: matrix.surface == 'browser'
-        run: >-
-          pnpm --dir app-ts run test:smoke:browser:full:no-compile
-          test/smoke/areas/editor/editor-open.spec.ts
-          --grep 'Agent document requests'
+        run: pnpm --dir app-ts run test:smoke:browser:full:no-compile
       - name: Prepare connected Electron smoke tests
         if: matrix.surface == 'electron'
         run: pnpm --dir app-ts run pretest:smoke:desktop
-      - name: Test connected Electron settings and process lifecycle
+      - name: Test connected Electron
         if: matrix.surface == 'electron'
-        run: >-
-          pnpm --dir app-ts run test:smoke:desktop:no-compile
-          test/smoke/areas/automation.spec.ts
-          test/smoke/areas/windows/settings-json.spec.ts
-          test/smoke/areas/windows/models-settings.spec.ts
-          test/smoke/areas/windows/network-settings.spec.ts
-          test/smoke/areas/windows/startup-error.spec.ts
-          test/smoke/areas/windows/git-synchronization.spec.ts
-      - name: Test connected Electron document protocol
+        run: pnpm run smoketest-no-compile
+      - name: Test Academic workbench
         if: matrix.surface == 'electron'
-        run: >-
-          pnpm --dir app-ts run test:smoke:desktop:no-compile
-          test/smoke/areas/editor/editor-open.spec.ts
-          --grep 'Agent document requests'
+        run: pnpm --dir app-ts exec playwright test --project=electron-academic-ui
+      - name: Test connected Academic document editing
+        if: matrix.surface == 'electron'
+        run: ASH_WORKBENCH_MODE=academic pnpm --dir app-ts exec node test/smoke/run.ts electron-editor-app-server
       - name: Upload test diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

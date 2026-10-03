@@ -296,7 +296,6 @@
 		"trace.count": "显示 {0} 条 / 保留 {1} 条 · 已丢弃 {2} 条",
 		"trace.row": "{0} · {1} · +{2} 毫秒 · {3} 毫秒",
 		"trace.empty": "暂无 span。连接后，在 Ash 中执行操作。",
-		"trace.helpTitle": "Trace 查看器帮助",
 		"trace.helpText": "启动 App Server 前开启采集：将 ASH_TRACE_WEBSOCKET_ADDR 设为 127.0.0.1:4319，将 ASH_TRACE_WEBSOCKET_TOKEN 设为随机的 64 位十六进制令牌。在此输入相同的地址和令牌。只接收连接后完成的 span。连接会开始新的采集；断开会保留已采集数据。最多保留 2,000 条 span 和 8 MiB，丢弃数量会显示。按 Tab 切换控件，用方向键、Home 和 End 选择 span。时间线以文字显示名称、结果、相对开始时间和耗时；Span 详情提供可选择复制的 OTLP JSON，包含 trace 和父 span ID。筛选也会限制导出的 OTLP 数据。令牌和采集数据只保存在当前编辑器中。按 Escape 关闭帮助。",
 		"trace.succeeded": "成功",
 		"trace.failed": "失败",

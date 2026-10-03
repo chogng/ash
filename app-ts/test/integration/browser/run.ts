@@ -3,21 +3,24 @@ import { resolve } from 'node:path';
 
 const desktopDirectory = resolve(import.meta.dirname, '../../..');
 const serverUrl = 'http://127.0.0.1:5185/textModel.html';
-// Keep the editor command focused while the full browser command covers every spec.
-const editorSpecs = [
-	'academic.integration.spec.ts',
-	'diff.integration.spec.ts',
-	'gpuText.integration.spec.ts',
-	'iPadShowKeyboard.integration.spec.ts',
-	'language.integration.spec.ts',
-	'loading.integration.spec.ts',
-	'standalone.integration.spec.ts',
-	'textModel.integration.spec.ts',
-	'themes.integration.spec.ts',
-	'tokenization.integration.spec.ts',
-];
 const editorOnly = process.argv[2] === '--editor';
 const playwrightArgs = process.argv.slice(editorOnly ? 3 : 2);
+const testArgs = [
+	'node_modules/@playwright/test/cli.js',
+	'test',
+	'--config',
+	'test/integration/browser/playwright.config.ts',
+	...playwrightArgs,
+];
+const testEnv = {
+	...process.env,
+	ASH_EDITOR_BROWSER_ONLY: editorOnly ? '1' : '0',
+	ASH_EDITOR_BROWSER_EXTERNAL_SERVER: '1',
+};
+// Listing only discovers specs; it needs neither browser assets nor a running server.
+if (playwrightArgs.includes('--list')) {
+	process.exit(await run(process.execPath, testArgs, testEnv));
+}
 const build = await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/integration/browser/vite.config.ts'], process.env);
 if (build !== 0) process.exit(build);
 const server = spawn(process.execPath, [
@@ -32,17 +35,7 @@ const server = spawn(process.execPath, [
 let exitCode = 1;
 try {
 	await waitForServer(serverUrl, server);
-	exitCode = await run(process.execPath, [
-		'node_modules/@playwright/test/cli.js',
-		'test',
-		'--config',
-		'test/integration/browser/playwright.config.ts',
-		...(editorOnly ? editorSpecs : []),
-		...playwrightArgs,
-	], {
-		...process.env,
-		ASH_EDITOR_BROWSER_EXTERNAL_SERVER: '1',
-	});
+	exitCode = await run(process.execPath, testArgs, testEnv);
 } finally {
 	await stop(server);
 }

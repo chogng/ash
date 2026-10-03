@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test as browserTest } from '@playwright/test';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Workbench } from '../../../automation/workbench.js';
-import { captureElectronMenu } from '../../../automation/electronDriver.js';
+import { captureElectronMenu } from '../../../automation/menus.js';
 
 test('Code sessions restore editor tabs through Back, Forward and reopening without focusing the editor', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');

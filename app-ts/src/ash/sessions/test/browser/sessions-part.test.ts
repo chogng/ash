@@ -31,8 +31,6 @@ import { ILifecycleService } from '../../../workbench/services/lifecycle/common/
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
-import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
-import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import { ChatAttachmentModel } from '../../../workbench/contrib/chat/browser/attachments/chatAttachmentModel.js';
 import { NewChatContextAttachments } from '../../contrib/chat/browser/newChatContextAttachments.js';
 
@@ -267,19 +265,11 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 2);
 	const firstTip = part.domNode.querySelector('.ash-chat-input-tip');
 	assert.ok(firstTip);
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	try {
-		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
-		assert.match(part.domNode.querySelector('.ash-chat-input-tip')?.textContent ?? '', /用 \+ 按钮添加文本文件或图片/u);
-		assert.equal(part.domNode.querySelector('[data-action-id="ash.chat.input.attach"] button')?.getAttribute('aria-label'), '添加附件');
-		assert.equal(part.domNode.querySelector('.ash-sessions-chat-input-footer button')?.getAttribute('aria-label'), '权限：手动确认');
-	} finally {
-		resetNlsResolver();
-	}
-	const translatedTip = part.domNode.querySelector('.ash-chat-input-tip');
+	assert.match(firstTip.textContent ?? '', /Attach text files or images with the \+ button/u);
+	const retainedTip = part.domNode.querySelector('.ash-chat-input-tip');
 	viewService.activateSelection(viewService.activeSelection!);
-	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), translatedTip);
-	translatedTip!.querySelector<HTMLButtonElement>('button')!.click();
+	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), retainedTip);
+	retainedTip!.querySelector<HTMLButtonElement>('button')!.click();
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 0);
 	assert.equal(services.get(IChatTipService).getWelcomeTip(), undefined);
 

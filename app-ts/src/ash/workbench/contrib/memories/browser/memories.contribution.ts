@@ -1,4 +1,7 @@
-import { localize2 } from '../../../../nls.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { FocusedViewContext } from '../../../common/contextkeys.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -24,6 +27,18 @@ registerWorkbenchContribution('workbench.contrib.memories', WorkbenchPhase.Block
 	if (!accessor.getOptional(IMemoriesService)) { return registrations; }
 	registrations.add(ViewsRegistry.registerViewContainer({ id: 'ash.memories', title: 'Memories', location: ViewContainerLocation.Panel, order: 4 }));
 	registrations.add(ViewsRegistry.registerViews('ash.memories', [{ id: 'ash.memories.view', title: 'Memories', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(MemoriesViewPane) }]));
+	registrations.add(AccessibleViewRegistry.register({
+		type: AccessibleViewType.Help, priority: 100, name: 'memoriesHelp',
+		when: FocusedViewContext.isEqualTo('ash.memories.view'),
+		getProvider: accessor => {
+			const view = accessor.get(IViewsService).getViewWithId('ash.memories.view');
+			if (!(view instanceof MemoriesViewPane)) { return undefined; }
+			const focused = view.element.ownerDocument.activeElement;
+			return new AccessibleContentProvider(AccessibleViewProviderId.Memories, { type: AccessibleViewType.Help },
+				() => localize('memories.help', 'Choose a conversation context and memory scope. Reading and model saving are independent permissions and start disabled. Use Tab and Shift+Tab to move between controls, arrow keys to browse the list, and Ctrl or Command+S to save. Memory content is plain text and can be selected and copied. Open reference shows an exact, read-only excerpt. Editing a model memory gives you ownership and prevents later model overwrites. Escape closes this help dialog.'),
+				() => { if (focused instanceof HTMLElement && focused.isConnected) { focused.focus(); } }, AccessibilityVerbositySettingId.Memories);
+		},
+	}));
 	registrations.add(registerAction2(class OpenMemories extends Action2 {
 		constructor() { super({ id: 'ash.memories.open', title: localize2({ bundle: 'ash.workbench', key: 'command.OpenMemories' }, 'Open memories'), f1: true }); }
 		public override run(services: ServicesAccessor): void { services.get(IViewsService).focusView('ash.memories.view'); }

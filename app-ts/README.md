@@ -119,7 +119,8 @@ iframe 仅通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来
 | `pnpm test:desktop:smoke:browser` | 浏览器 UI，无 App Server |
 | `pnpm test:web-integration` | 浏览器与真实 App Server |
 | `pnpm test:desktop:smoke:ui` | Electron UI，无 App Server |
-| `pnpm test:desktop:smoke` | Electron 与真实 App Server |
+| `pnpm run smoketest` | 准备并运行 Electron 与真实 App Server 冒烟测试 |
+| `pnpm run smoketest-no-compile` | 运行已准备好的同一套冒烟测试 |
 | `pnpm test:desktop:app` | Code 模式的 Electron 编辑器应用测试 |
 
 测试入口会准备对应输入；完整 Web 测试不构建 Electron Main/Preload。Electron UI、Browser UI 和真实后端测试使用各自的 Playwright 项目，失败时查看报告和 trace。

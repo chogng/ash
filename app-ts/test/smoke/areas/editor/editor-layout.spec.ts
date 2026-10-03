@@ -158,11 +158,12 @@ test.describe('startup layout defaults', () => {
 		await expect(group.tabs).toHaveCount(1);
 	});
 
-	test('Git explains that an empty window needs a folder', async ({ workbench }) => {
+	test('Git explains empty windows and folders without repositories', async ({ target, workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 		await expect(page.locator('[data-view-container-id="ash.git"]')).toHaveClass(/ash-scm-viewlet/u);
-		await expect(page.locator('.ash-scm-status')).toHaveText('Open a folder to use source control.');
+		await expect(page.locator('.ash-scm-status')).toHaveText(target.kind === 'browser' && target.appServerMode === 'required'
+			? 'No source control repository found in the open folder.' : 'Open a folder to use source control.');
 		await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
@@ -186,7 +187,7 @@ test.describe('startup layout defaults', () => {
 
 		const newTab = await page.context().newPage();
 		try {
-			await newTab.goto(target.baseURL);
+			await newTab.goto(workbench.page.url());
 			await expect(newTab.locator("[data-part='sidebar']")).toBeHidden();
 			await expect(newTab.locator('.ash-getting-started')).toBeVisible();
 		} finally {
@@ -207,7 +208,7 @@ test('Git explains when the open folder has no repository', async ({ target, wor
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
-	await expect(page.locator('.ash-scm-status')).toHaveText('No Git repository found in the open folder.');
+	await expect(page.locator('.ash-scm-status')).toHaveText('No source control repository found in the open folder.');
 	await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 });
 
@@ -340,13 +341,21 @@ test.describe('welcome brand', () => {
 		await workbench.page.keyboard.press('Escape');
 	});
 
-	test('welcome omits the command hint and empty recent projects', async ({ workbench }) => {
+	test('welcome omits command hints and only shows existing recent projects', async ({ target, workbench }) => {
 		const welcome = workbench.editors.groupAt(0).welcome;
 		await expect(welcome.locator('.ash-editor-group-watermark-shortcuts')).toHaveCount(0);
-		await expect(welcome.locator('.ash-getting-started-recent')).toBeHidden();
+		if (target.kind === 'browser' && target.appServerMode === 'required') {
+			await expect(welcome.locator('.ash-getting-started-recent').getByRole('button')).toHaveCount(1);
+		} else {
+			await expect(welcome.locator('.ash-getting-started-recent')).toBeHidden();
+		}
 	});
 
-	test('welcome actions use gray cards and a black GitHub card', async ({ workbench }) => {
+	test('welcome actions use gray cards and a black GitHub card in the light theme', async ({ workbench }) => {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		await workbench.quickaccess.search('Ash Light');
+		await workbench.quickaccess.select('Ash Light');
+		await expect(workbench.page.locator('#app')).toHaveAttribute('data-color-theme', 'ash-light');
 		const cards = workbench.editors.groupAt(0).welcome.locator('.ash-getting-started-card');
 		await expect(cards).toHaveCount(4);
 		await expect(cards.locator('.ash-getting-started-card-label')).toHaveText(['Open folder', 'Clone repo', 'Connect via SSH', 'Connect GitHub']);
@@ -461,7 +470,7 @@ test.describe('welcome brand', () => {
 				secondCardOnFirstRow: first.top === second.top,
 				labelOverflow: Math.max(0, ...cards.map(card => {
 					const label = card.querySelector<HTMLElement>('.ash-getting-started-card-label')!;
-					return label.scrollWidth - label.clientWidth;
+					return label.getBoundingClientRect().right - card.getBoundingClientRect().right;
 				})),
 			};
 		});

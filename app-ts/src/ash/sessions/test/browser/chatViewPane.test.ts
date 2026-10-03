@@ -1,3 +1,5 @@
+import { createTestModel } from '../../../platform/app-server/test/common/testAppServerProtocol.js';
+import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
 import { ILanguageModelsService, LanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { LanguageModelsConfigurationService } from '../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
 import { ILanguageModelsConfigurationService } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
@@ -70,8 +72,9 @@ import { ILifecycleService } from '../../../workbench/services/lifecycle/common/
 const inputResources = new DisposableStore();
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService): InstantiationService {
-	const services = inputResources.add(new InstantiationService());
+	const services = inputResources.add(createTestEditorServices());
 	services.registerInstance(IContextViewService, contextView);
+	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	services.registerInstance(IDictationService, undefined);
@@ -892,43 +895,6 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.ok(untitledPane?.dataset.untitledSessionId);
 	const input = untitledPane.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
 	assert.ok(input);
-	const agentButton = untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button");
-	agentButton?.click();
-	await waitFor(() => dom.window.document.querySelector(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.directory-1.reviewer']") !== null);
-	dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.directory-1.reviewer'] button")?.click();
-	assert.equal(untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'reviewer');
-	await nextTask();
-	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
-	await waitFor(() => dom.window.document.querySelector(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.directory-1.reviewer'] button") !== null);
-	const selectedAgentItem = dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.directory-1.reviewer'] button");
-	assert.equal(selectedAgentItem?.getAttribute('role'), 'menuitemradio');
-	assert.equal(selectedAgentItem?.getAttribute('aria-checked'), 'true');
-	selectedAgentItem?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
-	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
-	dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.mode.plan'] button")?.click();
-	assert.equal(untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Plan');
-	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
-	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
-	assert.equal(dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.directory-1.reviewer'] button")?.getAttribute('aria-checked'), 'true');
-	assert.equal(dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.mode.plan'] button")?.getAttribute('aria-checked'), 'true');
-	dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.default'] button")?.click();
-	assert.equal(sessions.untitledSessions[0]?.agent, undefined);
-	assert.equal(untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Plan');
-	await nextTask();
-	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
-	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
-	dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.directory-1.reviewer'] button")?.click();
-	assert.equal(untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Plan');
-	await nextTask();
-	failAgentList = true;
-	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
-	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
-	assert.deepEqual(
-		[...dom.window.document.querySelectorAll<HTMLElement>('.ash-chat-input-mode-menu [data-action-id]')].map(item => item.dataset.actionId).filter(id => id?.startsWith('ash.chat.input.')),
-		['ash.chat.input.mode.agent', 'ash.chat.input.mode.plan', 'ash.chat.input.mode.debug', 'ash.chat.input.mode.multitask', 'ash.chat.input.mode.ask', 'ash.chat.input.agent.default'],
-	);
-	dom.window.document.querySelector<HTMLButtonElement>('.ash-chat-input-mode-menu [role="menuitemradio"]')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(untitledPane.classList.contains("empty"), true);
 	let contextResolutions = 0;
 	pane.addContext({
@@ -954,10 +920,10 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	await waitFor(() => fake.turnStartRequests.length === 1);
 
 	assert.equal(fake.createSessionRequests.length, 1);
-	assert.deepEqual(fake.createSessionRequests[0]?.agent, { type: 'exact', source: { type: 'directory', id: 'directory-1' }, name: 'reviewer' });
+	assert.deepEqual(fake.createSessionRequests[0]?.agent, { type: 'default' });
 	assert.equal(fake.createThreadRequests.length, 1);
 	assert.equal(fake.turnStartRequests.length, 1);
-	assert.equal(fake.turnStartRequests[0]?.mode, 'plan');
+	assert.equal(fake.turnStartRequests[0]?.mode, 'agent');
 	assert.equal(contextResolutions, 1);
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [
 		{ type: "context", name: "Git commit abc1234", content: "diff --git a/file b/file" },
@@ -967,12 +933,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(sessions.untitledSessions.length, 0);
 	assert.equal(sessions.active?.session.sessionId, "session-1");
 	assert.equal(sessions.active?.threadId, "thread-1");
-	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
-	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
-	const agentMode = dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.mode.agent'] button");
-	assert.equal(agentMode?.disabled, false);
-	agentMode?.click();
-	assert.equal(untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
+
 	assert.equal(
 		pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.sessionId,
 		"session-1",
@@ -1990,25 +1951,25 @@ test("Language models service applies product visibility defaults and persists m
 	using configuration = new WorkbenchConfigurationService();
 	using chat = createChatService(fake.api, configuration);
 
-	assert.deepEqual(await modelsFor(chat).listModels(), enabled);
-	assert.deepEqual(await modelsFor(chat).listModelCatalog(), catalog);
+	assert.deepEqual((await modelsFor(chat).listModels()).map(({ model, displayName }) => ({ model, displayName })), enabled);
+	assert.deepEqual((await modelsFor(chat).listModelCatalog()).map(({ model, displayName }) => ({ model, displayName })), catalog);
 	assert.equal(fake.modelListRequests.length, 1);
 	await modelsFor(chat).setModelVisible(older.model, true);
 	await modelsFor(chat).setModelVisible(enabled[0]!.model, false);
-	assert.deepEqual(await modelsFor(chat).listModels(), [...enabled.slice(1), older]);
+	assert.deepEqual((await modelsFor(chat).listModels()).map(({ model, displayName }) => ({ model, displayName })), [...enabled.slice(1), older]);
 	assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.hiddenModels), [
 		{ ...older.model, visible: true }, enabled[0]!.model,
 	]);
 	using restored = createChatService(fake.api, configuration);
-	assert.deepEqual(await modelsFor(restored).listModels(), [...enabled.slice(1), older]);
+	assert.deepEqual((await modelsFor(restored).listModels()).map(({ model, displayName }) => ({ model, displayName })), [...enabled.slice(1), older]);
 	await modelsFor(restored).setModelVisible(older.model, false);
 	await modelsFor(restored).setModelVisible(enabled[0]!.model, true);
 	assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.hiddenModels), []);
-	assert.deepEqual(await modelsFor(chat).listModels(), enabled);
+	assert.deepEqual((await modelsFor(chat).listModels()).map(({ model, displayName }) => ({ model, displayName })), enabled);
 	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [older.model, enabled[0]!.model]);
-	assert.deepEqual(await modelsFor(chat).listModels(), enabled.slice(1));
+	assert.deepEqual((await modelsFor(chat).listModels()).map(({ model, displayName }) => ({ model, displayName })), enabled.slice(1));
 	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [{ ...older.model, visible: true }, enabled[0]!.model]);
-	assert.deepEqual(await modelsFor(chat).listModels(), [...enabled.slice(1), older]);
+	assert.deepEqual((await modelsFor(chat).listModels()).map(({ model, displayName }) => ({ model, displayName })), [...enabled.slice(1), older]);
 	await modelsFor(chat).refreshModels();
 	assert.equal(fake.modelListRequests.length, 3);
 	const definition = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(ModelCatalogConfiguration.hiddenModels)!;
@@ -2132,9 +2093,9 @@ test("Language models service includes ready Kimi connections in the model catal
 	});
 	using chat = createChatService(fake.api);
 
-	assert.deepEqual(await modelsFor(chat).listModelCatalog(), [desktop, cli]);
+	assert.deepEqual((await modelsFor(chat).listModelCatalog()).map(({ model, displayName }) => ({ model, displayName })), [desktop, cli]);
 	assert.deepEqual(fake.providerModelRequests, ['kimi-desktop', 'kimi-cli']);
-	assert.deepEqual(await modelsFor(chat).listModelCatalog(), [desktop, cli]);
+	assert.deepEqual((await modelsFor(chat).listModelCatalog()).map(({ model, displayName }) => ({ model, displayName })), [desktop, cli]);
 	assert.deepEqual(fake.providerModelRequests, ['kimi-desktop', 'kimi-cli']);
 });
 
@@ -2380,10 +2341,9 @@ test('Chat mode accessibility help explains switch_mode in Chinese and restores 
 		input.focus();
 		const help = new SessionsChatAccessibilityHelp(container, () => input.focus());
 		const provider = help.getProvider()!;
-		assert.match(provider.provideContent(), /从 Plan 或 Ask 切到 Agent、Debug 或 Multitask 需要你选择，权限选择保持不变/);
-		assert.match(provider.provideContent(), /权限菜单提供自动、手动和跳过权限审批/);
-		assert.match(provider.provideContent(), /菜单打开时，按 1、2 或 3 选择权限模式/);
-		assert.match(provider.provideContent(), /你为下一条消息选好的不同模式会保留/);
+		assert.match(provider.provideContent(), /退出到 Agent、Debug 或 Multitask 需要你的选择，并保留权限模式/);
+		assert.match(provider.provideContent(), /权限菜单提供 Auto、Manual 和 Bypass permissions/);
+		assert.match(provider.provideContent(), /菜单打开时按 1、2、3 选择/);
 		input.blur();
 		provider.dispose();
 		assert.equal(document.activeElement, input);
@@ -2607,12 +2567,12 @@ function fakeApi(options: FakeOptions = {}): {
 			setModelPreferences: async () => {},
 			listModels: async () => {
 				modelListRequests.push(undefined);
-				return { models: [...(options.models ?? [])] };
+				return { models: (options.models ?? []).map(entry => createTestModel({ ...entry, supportedReasoningEfforts: [...(entry.supportedReasoningEfforts ?? [])] })) };
 			},
 			listProviders: async () => ({ providers: providers.map(provider => ({ ...provider })) }),
 			listProviderModels: async (connection: string) => {
 				providerModelRequests.push(connection);
-				return [...(options.providerModels?.[connection] ?? [])];
+				return (options.providerModels?.[connection] ?? []).map(entry => createTestModel(entry));
 			},
 			setProviderApiKey: async ({ connection, apiKey }: { connection: string; apiKey: string }) => {
 				providerKeyRequests.push({ connection, apiKey });

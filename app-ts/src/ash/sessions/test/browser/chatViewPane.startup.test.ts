@@ -1,3 +1,5 @@
+import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
+import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { errorHandler } from '../../../base/common/errors.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
@@ -49,7 +51,8 @@ test("opens a local Chat tab before the backend session request settles", () => 
 	const sessionService = new PendingSessionService();
 	using layoutService = new VisibleAuxiliarybarLayoutService({ root: document.body });
 	using contextViewService = new BrowserContextViewService(document.body);
-	using services = new InstantiationService();
+	using services = createTestEditorServices();
+	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(IDictationService, undefined);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);

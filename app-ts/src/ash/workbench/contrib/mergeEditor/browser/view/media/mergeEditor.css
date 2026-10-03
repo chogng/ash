@@ -15,12 +15,12 @@
 	flex-wrap: wrap;
 	gap: var(--ash-spacing-size80);
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-	border-bottom: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
 }
 
 .ash-merge-progress {
 	margin-inline-start: auto;
-	font-size: var(--ash-fontSize-label1);
+	font-size: var(--ash-font-size-label1);
 }
 
 .ash-merge-inputs {
@@ -47,7 +47,7 @@
 }
 
 .ash-merge-input + .ash-merge-input {
-	border-left: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+	border-left: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
 }
 
 .ash-merge-editor:not(.show-base) .ash-merge-input-current {
@@ -82,7 +82,7 @@
 .ash-merge-editor.columns .ash-merge-result {
 	grid-column: 2;
 	grid-row: 3;
-	border-left: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+	border-left: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
 }
 
 .ash-merge-editor.columns .ash-merge-input-incoming {
@@ -93,16 +93,16 @@
 .ash-merge-editor.columns.show-base .ash-merge-input-base {
 	grid-column: 1 / -1;
 	grid-row: 4;
-	border-top: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+	border-top: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
 }
 
 .ash-merge-input h3,
 .ash-merge-result h3 {
 	margin: 0;
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-	font-size: var(--ash-fontSize-heading3);
-	font-weight: var(--ash-fontWeight-semiBold);
-	border-bottom: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+	font-size: var(--ash-font-size-heading3);
+	font-weight: var(--ash-font-weight-semi-bold);
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
 }
 
 .ash-merge-input-editor,
@@ -119,7 +119,7 @@
 	max-height: 25%;
 	overflow: auto;
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-	border-block: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+	border-block: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
 }
 
 .ash-merge-hunk {
@@ -128,16 +128,16 @@
 	flex-wrap: wrap;
 	gap: var(--ash-spacing-size80);
 	padding: var(--ash-spacing-size40);
-	border: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
-	border-radius: var(--ash-cornerRadius-small);
+	border: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
+	border-radius: var(--ash-corner-radius-small);
 }
 
 .ash-merge-hunk.active {
-	border-color: var(--ash-focusBorder);
+	border-color: var(--ash-focus-border);
 }
 
 .ash-merge-hunk-state {
-	font-size: var(--ash-fontSize-label2);
+	font-size: var(--ash-font-size-label2);
 }
 
 .ash-merge-result {
@@ -149,21 +149,21 @@
 }
 
 .ash-merge-line-unresolved {
-	background: var(--ash-diffEditor-removedLineBackground);
+	background: var(--ash-diff-editor-removed-line-background);
 }
 
 .ash-merge-line-resolved {
-	background: var(--ash-diffEditor-insertedLineBackground);
+	background: var(--ash-diff-editor-inserted-line-background);
 }
 
 .ash-merge-line-base-change,
 .ash-merge-inline-removed {
-	background: var(--ash-diffEditor-removedLineBackground);
+	background: var(--ash-diff-editor-removed-line-background);
 }
 
 .ash-merge-line-change,
 .ash-merge-inline-inserted {
-	background: var(--ash-diffEditor-insertedLineBackground);
+	background: var(--ash-diff-editor-inserted-line-background);
 }
 
 .ash-merge-inline-actions {
@@ -176,12 +176,12 @@
 	overflow-x: auto;
 	white-space: nowrap;
 	background: var(--ash-editor-background);
-	border-block: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+	border-block: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
 }
 
 .ash-merge-inline-state {
-	font-size: var(--ash-fontSize-label1);
-	font-weight: var(--ash-fontWeight-semiBold);
+	font-size: var(--ash-font-size-label1);
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-merge-spacer {
@@ -190,7 +190,7 @@
 
 .hc-black .ash-merge-inline-actions,
 .hc-light .ash-merge-inline-actions {
-	border-color: var(--ash-contrastBorder);
+	border-color: var(--ash-contrast-border);
 }
 
 @container (max-width: 700px) {
@@ -206,6 +206,6 @@
 
 	.ash-merge-input + .ash-merge-input {
 		border-left: 0;
-		border-top: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+		border-top: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
 	}
 }

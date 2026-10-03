@@ -67,6 +67,7 @@ test("workbench context keys describe the current workspace", () => {
 		'activeEditorGroupLast',
 		'agentSidebarVisible',
 		'auxiliaryBarVisible',
+		'browserLocalFolderSupport',
 		'dirtyWorkingCopies',
 		'editorAreaVisible',
 		'editorIsOpen',
@@ -76,6 +77,7 @@ test("workbench context keys describe the current workspace", () => {
 		'isWeb',
 		'isWindows',
 		'multipleEditorGroups',
+		'openFolderWorkspaceSupport',
 		'panelMaximized',
 		'panelVisible',
 		'sideBarVisible',
@@ -194,13 +196,10 @@ test("workbench configuration resolves registered color themes", () => {
 		colorTheme.parse(lightColorTheme.id),
 		lightColorTheme.id,
 	);
-	assert.throws(
-		() => colorTheme.parse("missing-theme"),
-		/Unknown workbench color theme preference/,
-	);
+	assert.equal(colorTheme.parse("extension.theme"), "extension.theme", "Themes installed after startup retain their persisted identity");
 	assert.equal(
-		getWorkbenchColorTheme(lightColorTheme.id),
-		lightColorTheme,
+		getWorkbenchColorTheme(lightColorTheme.id).id,
+		lightColorTheme.id,
 	);
 });
 
@@ -351,7 +350,7 @@ test("file views register after their host container", async () => {
 			registry.getViews(WorkbenchViewContainerId.Sidebar).map(
 				(view) => view.id,
 			),
-			[VIEW_ID, EmptyView.ID],
+			["workbench.explorer.openEditorsView", VIEW_ID, EmptyView.ID],
 		);
 		using contextKeys = new ContextKeyService();
 		const explorer = registry.getView(VIEW_ID);

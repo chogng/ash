@@ -6,7 +6,7 @@ import { launchElectron } from '../../../automation/playwrightElectron.js';
 
 test.use({ openWorkspace: false });
 
-test('Calls validate the server address before opening microphone devices', async ({ target, workbench }) => {
+test('Calls reject unsupported server connections and keep the microphone off', async ({ target, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Calls require an authorized product backend.');
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+Shift+P');
@@ -18,7 +18,8 @@ test('Calls validate the server address before opening microphone devices', asyn
 	await expect(view.getByRole('button', { name: 'Unmute microphone', exact: true })).toBeDisabled();
 	await view.getByLabel('Call', { exact: true }).focus();
 	await page.keyboard.press('Alt+F1');
-	await expect(page.getByRole('dialog', { name: 'Calls help' })).toBeVisible();
+	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+	await expect(help.getByRole('textbox')).toHaveValue(/Your microphone starts off/u);
 	await page.keyboard.press('Escape');
 	await expect(view.getByLabel('Call', { exact: true })).toBeFocused();
 	await view.getByLabel('Call', { exact: true }).selectOption('server');
@@ -26,7 +27,8 @@ test('Calls validate the server address before opening microphone devices', asyn
 	await view.getByLabel('Administrator key or invitation key', { exact: true }).fill('invalid-test-key');
 	await view.getByRole('button', { name: 'Join call', exact: true }).focus();
 	await page.keyboard.press('Enter');
-	await expect(view.getByRole('status')).toContainText('invalid call input');
+	// Web enforces its call permission before the desktop address validation.
+	await expect(view.getByRole('status')).toContainText(target.kind === 'browser' ? 'PermissionRequired' : 'invalid call input');
 	await expect(view.getByRole('button', { name: 'Join call', exact: true })).toBeEnabled();
 	await expect(view.getByRole('button', { name: 'Unmute microphone', exact: true })).toBeDisabled();
 });

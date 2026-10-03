@@ -73,7 +73,7 @@
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-family: var(--ash-monospace-font-family);
+  font-family: var(--ash-font-family-monospace);
   font-size: 12px;
 }
 

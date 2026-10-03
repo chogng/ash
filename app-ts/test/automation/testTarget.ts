@@ -5,7 +5,6 @@ export type PlaywrightTarget =
 	| {
 			readonly kind: "browser";
 			readonly appServerMode: AppServerTestMode;
-			readonly baseURL: string;
 			readonly workbenchMode: DesktopWorkbenchMode;
 		}
 	| {
@@ -14,12 +13,12 @@ export type PlaywrightTarget =
 			readonly workbenchMode: DesktopWorkbenchMode;
 		};
 
-export function playwrightTargetForProject(projectName: string, baseURL: string | undefined): PlaywrightTarget {
+export function playwrightTargetForProject(projectName: string): PlaywrightTarget {
 	switch (projectName) {
 		case "browser-ui":
-			return { kind: "browser", appServerMode: "disabled", baseURL: requiredBaseURL(baseURL, projectName), workbenchMode: testWorkbenchMode() };
+			return { kind: "browser", appServerMode: "disabled", workbenchMode: testWorkbenchMode() };
 		case "browser-app-server":
-			return { kind: "browser", appServerMode: "required", baseURL: requiredBaseURL(baseURL, projectName), workbenchMode: testWorkbenchMode() };
+			return { kind: "browser", appServerMode: "required", workbenchMode: testWorkbenchMode() };
 		case "electron-ui":
 			return { kind: "electron", appServerMode: "disabled", workbenchMode: testWorkbenchMode() };
 		case "electron-app-server":
@@ -33,11 +32,4 @@ export function playwrightTargetForProject(projectName: string, baseURL: string 
 
 function testWorkbenchMode(): DesktopWorkbenchMode {
 	return "code";
-}
-
-function requiredBaseURL(baseURL: string | undefined, projectName: string): string {
-	if (baseURL === undefined) {
-		throw new Error(`Playwright project '${projectName}' requires a baseURL`);
-	}
-	return baseURL;
 }

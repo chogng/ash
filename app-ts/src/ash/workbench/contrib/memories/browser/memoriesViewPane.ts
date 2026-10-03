@@ -1,10 +1,11 @@
+import { IAccessibleViewService, AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { IMemoriesService, type Memory, type MemoryPolicy, type MemoryScopeEntry, type MemorySummary } from '../../../../platform/memories/common/memoriesService.js';
-import { IDialogService, DialogSeverity } from '../../../../platform/dialogs/common/dialogs.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
@@ -42,6 +43,7 @@ export class MemoriesViewPane extends ViewPane {
 		@IMemoriesService private readonly memories: IMemoriesService,
 		@IChatSessionNavigationService private readonly sessions: IChatSessionNavigationService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 	) {
@@ -93,7 +95,6 @@ export class MemoriesViewPane extends ViewPane {
 		this._register(addDisposableListener(this.titleInput, 'input', () => { this.dirty = true; }));
 		this._register(addDisposableListener(this.body, 'input', () => { this.dirty = true; }));
 		this._register(addDisposableListener(this.contentElement, 'keydown', event => {
-			if (event.altKey && event.key === 'F1') { event.preventDefault(); void this.showHelp(); }
 			if ((event.ctrlKey || event.metaKey) && event.key === 's') { event.preventDefault(); void this.perform(() => this.saveMemory()); }
 			if (event.key === 'Enter' && event.target === this.search) { event.preventDefault(); void this.perform(() => this.loadList()); }
 		}));
@@ -263,9 +264,7 @@ export class MemoriesViewPane extends ViewPane {
 		finally { this.working = false; this.contentElement.removeAttribute('aria-busy'); if (!this.isDisposed) { this.applyEnabled(); if (previousFocus instanceof HTMLElement && previousFocus.isConnected && this.contentElement.contains(previousFocus) && !this.contentElement.contains(this.element.ownerDocument.activeElement)) { previousFocus.focus(); } } }
 	}
 	private async showHelp(): Promise<void> {
-		const focus = this.element.ownerDocument.activeElement;
-		await this.dialogs.showMessage({ title: localize('memories.helpTitle', 'Memories help'), severity: DialogSeverity.Info, message: localize('memories.help', 'Choose a conversation context and memory scope. Reading and model saving are independent permissions and start disabled. Use Tab and Shift+Tab to move between controls, arrow keys to browse the list, and Ctrl or Command+S to save. Memory content is plain text and can be selected and copied. Open reference shows an exact, read-only excerpt. Editing a model memory gives you ownership and prevents later model overwrites. Escape closes this help dialog.') });
-		if (focus instanceof HTMLElement && focus.isConnected) { focus.focus(); }
+		this.accessibleView.show(AccessibleViewType.Help);
 	}
 	private applyEnabled(): void {
 		for (const control of this.contentElement.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | HTMLSelectElement>('input, textarea, button, select')) {

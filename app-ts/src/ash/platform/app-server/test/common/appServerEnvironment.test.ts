@@ -5,6 +5,8 @@ import { buildAppServerEnvironment, isAllowedAppServerEnvironmentKey } from "../
 test("App Server environment keeps safe POSIX session variables and excludes credentials", () => {
 	const environment = buildAppServerEnvironment({
 		HOME: "/home/ash",
+		CARGO_HOME: "/tools/cargo",
+		RUSTUP_HOME: "/tools/rustup",
 		ZCODE_DATA_BASE_DIR: "/external-accounts",
 		LANG: "en_US.UTF-8",
 		LC_ALL: "C.UTF-8",
@@ -25,6 +27,8 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 
 	assert.deepEqual(environment, {
 		HOME: "/home/ash",
+		CARGO_HOME: "/tools/cargo",
+		RUSTUP_HOME: "/tools/rustup",
 		ZCODE_DATA_BASE_DIR: "/external-accounts",
 		LANG: "en_US.UTF-8",
 		PATH: "/usr/bin",

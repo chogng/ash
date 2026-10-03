@@ -1,6 +1,5 @@
 import { expect, test } from '../../../automation/test.js';
-import type { ElectronApplication, Page } from '@playwright/test';
-import type { BrowserWindow, MessageBoxOptions } from 'electron';
+import type { Page } from '@playwright/test';
 
 test.use({ openWorkspace: false });
 
@@ -29,35 +28,14 @@ test('browser keeps its save confirmation in the workbench', async ({ target, wo
 
 test('desktop dirty editor sends its choices through the owning window dialog', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled');
-	const electron = application as ElectronApplication;
-	await electron.evaluate(({ dialog }) => {
-		const original = dialog.showMessageBox.bind(dialog);
-		const state = globalThis as typeof globalThis & { ashSaveDialog?: { options?: MessageBoxOptions; finish?: () => void; restore: () => void } };
-		state.ashSaveDialog = { restore: () => { dialog.showMessageBox = original; } };
-		dialog.showMessageBox = ((...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => new Promise(resolve => {
-			const options = args.length === 1 ? args[0] : args[1];
-			state.ashSaveDialog!.options = options;
-			state.ashSaveDialog!.finish = () => resolve({ response: options.buttons?.indexOf("Don't Save") ?? -1, checkboxChecked: false });
-		})) as typeof dialog.showMessageBox;
-	});
-	try {
-		const page = workbench.page;
-		await page.keyboard.press('F1');
-		await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
-		await page.keyboard.press('Enter');
-		const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
-		await expect(input).toBeVisible();
-		await input.focus();
-		await input.type('unsaved draft');
-		await page.keyboard.press('F1');
-		await page.locator('.ash-quick-pick').getByRole('combobox').fill('Close Editor');
-		await page.keyboard.press('Enter');
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashSaveDialog?: { options?: MessageBoxOptions } }).ashSaveDialog?.options?.buttons)).toEqual(['Save', "Don't Save", 'Cancel']);
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashSaveDialog?: { finish?: () => void } }).ashSaveDialog?.finish?.());
-		await expect(input).toHaveCount(0);
-	} finally {
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashSaveDialog?: { restore: () => void } }).ashSaveDialog?.restore());
-	}
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+	await input.focus();
+	await input.type('unsaved draft');
+	const message = await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", () => workbench.quickaccess.runCommand('workbench.action.closeActiveEditor'));
+	expect(message.buttons).toEqual(['Save', "Don't Save", 'Cancel']);
+	await expect(input).toHaveCount(0);
 });
 
 test('browser Save As writes an untitled editor to the selected folder', async ({ target, workbench }) => {
@@ -70,17 +48,13 @@ test('browser Save As writes an untitled editor to the selected folder', async (
 		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
 		return name;
 	});
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
-	await page.keyboard.press('Enter');
-	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
-	await expect(input).toBeVisible();
-	await input.focus();
-	await input.type('saved through the file dialog');
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	const firstGroup = workbench.editors.groupAt(0);
+	const input = firstGroup.editor.input;
+	await firstGroup.editor.waitForEditorFocus();
+	await firstGroup.editor.waitForTypeInEditor('saved through the file dialog');
 	await expect.poll(() => hasWorkingCopyBackup(page, 'saved through the file dialog')).toBe(true);
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Split Editor Horizontal');
-	await page.keyboard.press('Enter');
+	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
 	await expect(workbench.editors.groupAt(1).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(1);
 	await input.press('Control+S');
 	const dialog = page.getByRole('dialog', { name: 'Save File' });
@@ -88,22 +62,21 @@ test('browser Save As writes an untitled editor to the selected folder', async (
 	await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill('draft.txt');
 	await dialog.getByRole('button', { name: 'OK' }).click();
 	await expect(dialog).toHaveCount(0);
-	await expect.poll(() => page.evaluate(async name => {
-		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-		return (await (await folder.getFileHandle('draft.txt')).getFile()).text();
-	}, folderName)).toBe('saved through the file dialog');
 	for (const index of [0, 1]) {
 		await expect(workbench.editors.groupAt(index).tabs.filter({ hasText: 'draft.txt' })).toHaveCount(1);
 		await expect(workbench.editors.groupAt(index).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(0);
 	}
+	await expect.poll(() => page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		return (await (await folder.getFileHandle('draft.txt')).getFile()).text();
+	}, folderName)).toBe('saved through the file dialog');
 	await expect.poll(() => hasWorkingCopyBackup(page, 'saved through the file dialog')).toBe(false);
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
-	await page.keyboard.press('Enter');
-	const secondInput = workbench.editors.groupAt(0).content.locator('.stanza-editor-input').last();
-	await secondInput.focus();
-	await secondInput.type('replacement draft');
-	await secondInput.press('Control+S');
+	await firstGroup.tabs.filter({ hasText: 'draft.txt' }).click();
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	await expect(firstGroup.tabs.filter({ hasText: 'Untitled-' })).toHaveAttribute('aria-selected', 'true');
+	await firstGroup.editor.waitForEditorFocus();
+	await firstGroup.editor.waitForTypeInEditor('replacement draft');
+	await firstGroup.editor.input.press('Control+S');
 	const secondDialog = page.getByRole('dialog', { name: 'Save File' });
 	await secondDialog.getByRole('textbox', { name: 'File name, field 1' }).fill('draft.txt');
 	await secondDialog.getByRole('button', { name: 'OK' }).click();

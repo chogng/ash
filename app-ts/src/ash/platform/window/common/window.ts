@@ -41,6 +41,8 @@ export const enum TitleBarSetting {
 
 export type MenuStyleConfiguration = 'custom' | 'system' | 'inherit';
 export type TitleBarStyleConfiguration = 'custom' | 'system';
+export const DEFAULT_MENU_STYLE: MenuStyleConfiguration = isMacintosh ? 'system' : 'inherit';
+export const DEFAULT_TITLE_BAR_STYLE: TitleBarStyleConfiguration = 'custom';
 export type RestoreWindowsSetting = 'preserve' | 'all' | 'folders' | 'one' | 'none';
 export const RESTORE_WINDOWS_SETTING = 'window.restoreWindows';
 

@@ -5,14 +5,15 @@ import { join, resolve } from 'node:path';
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
 // Preparation builds the product once; each Playwright scenario owns its backend and data.
-const mode = process.argv[2];
-if (mode !== 'disconnected' && mode !== 'full') {
-	throw new Error('Usage: node test/smoke/browser.ts <disconnected|full>');
+const project = process.argv[2];
+const projects = ['browser-ui', 'browser-app-server', 'electron-app-server', 'electron-editor-app-server'];
+if (!projects.includes(project)) {
+	throw new Error(`Usage: node test/smoke/run.ts <${projects.join('|')}>`);
 }
-const fixtureDirectory = mode === 'full' && !process.env.ASH_PLAYWRIGHT_RUST_ANALYZER
-	? await mkdtemp(join(tmpdir(), 'ash-language-server-')) : undefined;
+const connected = project !== 'browser-ui';
+const fixtureDirectory = connected ? await mkdtemp(join(tmpdir(), 'ash-language-server-')) : undefined;
 try {
-	let languageServer = process.env.ASH_PLAYWRIGHT_RUST_ANALYZER;
+	let languageServer: string | undefined;
 	if (fixtureDirectory) {
 		languageServer = join(fixtureDirectory, process.platform === 'win32' ? 'ash-test-language-server.exe' : 'ash-test-language-server');
 		const result = await run('rustc', ['--edition=2024', 'test/fixtures/language-server.rs', '-o', languageServer], process.env);
@@ -20,11 +21,11 @@ try {
 	}
 	process.exitCode = await run(process.execPath, [
 		'node_modules/@playwright/test/cli.js', 'test',
-		`--project=${mode === 'full' ? 'browser-app-server' : 'browser-ui'}`,
+		`--project=${project}`,
 		...process.argv.slice(3),
 	], {
 		...process.env,
-		ASH_PLAYWRIGHT_SERVER: mode,
+		ASH_PLAYWRIGHT_SERVER: project === 'browser-ui' ? 'disconnected' : project === 'browser-app-server' ? 'full' : undefined,
 		...(languageServer ? { ASH_PLAYWRIGHT_LANGUAGE_SERVER: languageServer } : {}),
 	});
 } finally {
@@ -36,7 +37,7 @@ function run(command: string, args: readonly string[], env: NodeJS.ProcessEnv): 
 		const child = spawn(command, args, { cwd: desktopDirectory, env, stdio: 'inherit' });
 		child.once('error', reject);
 		child.once('close', (code, signal) => {
-			if (signal) { reject(new Error(`Web integration command exited with signal ${signal}`)); }
+			if (signal) { reject(new Error(`Smoke test command exited with signal ${signal}`)); }
 			else { resolveExit(code ?? 1); }
 		});
 	});

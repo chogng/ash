@@ -7,13 +7,9 @@ import { expect, test } from '../../../automation/test.js';
 const run = promisify(execFile);
 
 test.describe('SCM editor groups', () => {
+	test.use({ gitRepository: true });
 	test.beforeEach(async ({ target, testWorkspace }) => {
 		test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
-		test.skip(target.kind === 'browser' && process.env.ASH_PLAYWRIGHT_GIT_REPOSITORY !== '1', 'Requires a Web Git workspace before startup.');
-		const cwd = testWorkspace.directory;
-		await run('git', ['init', '-b', 'main'], { cwd });
-		await run('git', ['add', '.'], { cwd });
-		await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-m', 'SCM group baseline'], { cwd });
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
 	});
 
@@ -105,8 +101,9 @@ test.describe('SCM editor groups', () => {
 			await page.reload();
 			await workbench.waitForReady();
 		}
+		await workbench.openExplorer();
 		const explorer = page.locator('.ash-explorer');
-		const folder = explorer.getByRole('treeitem', { name: 'src', exact: true });
+		const folder = explorer.getByRole('treeitem', { name: /^src(?:,|$)/u });
 		await folder.locator('.ash-tree-twistie').click();
 		const file = explorer.getByRole('treeitem').filter({ has: page.getByText('details.ts', { exact: true }) });
 		await expect(file).toBeVisible();
@@ -192,7 +189,8 @@ test.describe('SCM editor groups', () => {
 
 	test('SCM side previews retain focus and reuse the side group for keyboard opens', async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
-		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+		await workbench.openExplorer();
+		await page.locator('.ash-explorer').getByRole('treeitem', { name: /^main\.ts(?:,|$)/u }).dblclick();
 		const original = workbench.editors.groupAt(0);
 		await expect(original.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 		await original.editor.waitForEditorFocus();
@@ -296,7 +294,8 @@ test.describe('SCM merge editor groups', () => {
 	test('SCM opens a merge editor to the side and preserves the original file', async ({ target, workbench }) => {
 		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop merge-conflict workspace.');
 		const page = workbench.page;
-		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+		await workbench.openExplorer();
+		await page.locator('.ash-explorer').getByRole('treeitem', { name: /^main\.ts(?:,|$)/u }).dblclick();
 		const original = workbench.editors.groupAt(0);
 		await expect(original.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 		await original.editor.waitForEditorFocus();

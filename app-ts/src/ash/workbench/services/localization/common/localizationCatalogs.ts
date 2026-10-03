@@ -1343,7 +1343,6 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"memories.changed": "Memories changed. Refresh to load the latest version; your draft is kept.",
 				"memories.count": "{0} memories on this page.",
 				"memories.help": "Choose a conversation context and memory scope. Reading and model saving are independent permissions and start disabled. Use Tab and Shift+Tab to move between controls, arrow keys to browse the list, and Ctrl or Command+S to save. Memory content is plain text and can be selected and copied. Open reference shows an exact, read-only excerpt. Editing a model memory gives you ownership and prevents later model overwrites. Escape closes this help dialog.",
-				"memories.helpTitle": "Memories help",
 				"memories.hint": "Memories. Use Tab to navigate, Ctrl or Command+S to save, and Alt+F1 for help.",
 				"memories.reference": "Exact reference, revision {0}.",
 				"memories.saved": "Memory saved.",
@@ -2066,7 +2065,6 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"trace.filter": "Filter by name, outcome or trace ID",
 				"trace.help": "Help",
 				"trace.helpText": "Enable tracing before starting App Server: set ASH_TRACE_WEBSOCKET_ADDR to 127.0.0.1:4319 and ASH_TRACE_WEBSOCKET_TOKEN to a random 64-digit hexadecimal token. Enter that address and token here. Only new completed spans are received. Connect starts a new capture; Disconnect keeps the capture. Up to 2,000 spans and 8 MiB are retained; dropped spans are counted. Tab moves between controls. Arrow keys, Home and End select spans. The timeline gives each span’s name, result, relative start and duration as text; Span details contains selectable OTLP JSON with trace and parent IDs. Filtering also limits the OTLP export. Tokens and captures are kept only in this editor. Escape closes this help dialog.",
-				"trace.helpTitle": "Trace viewer help",
 				"trace.hint": "Trace viewer. Press Alt+F1 for keyboard and connection help.",
 				"trace.open": "Developer: Open trace viewer",
 				"trace.protocolError": "Invalid trace stream. The connection was closed.",
@@ -2365,6 +2363,7 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"showSecondarySidebar": "Show Secondary Side Bar"
 			},
 			"ash.marketplace": {
+				"accessibilityHelp": "Open with /marketplace [query] to search, or /plugins to manage installed packages. Search by package, capability, language name, alias, or file extension. Capability filters include capabilities bundled in Plugins. A language server ID filter requires an executable route for that exact language and excludes packages that only supply syntax resources. Installed lists local packages even when the catalog is unavailable. Install, update, and uninstall affect the whole package. Use Tab and Shift+Tab to navigate and arrow keys to select a package. Escape closes this help.",
 				"available": "Available",
 				"browse": "Browse Marketplace",
 				"clearFilters": "Clear filters",
@@ -2664,6 +2663,8 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"testing": "Testing"
 			},
 			"ash.workbench": {
+				"browser.accessibilityHelp": "Use Tab to move through browser controls. Enter in the address field navigates. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Webpages use the browser’s accessibility tree. Downloads and website permissions are unavailable in this isolated session.",
+				"call.accessibilityHelp": "Create a call on this computer or a server, or join with an invitation. Your microphone starts off. Use Tab and Shift+Tab to move between controls and Enter or Space to activate a button. Muting stops sending audio; Stop listening stops playback. Share screen opens a display or window selector. Use arrow keys to choose a source, then Start sharing. Escape cancels selection. Stop sharing ends screen capture without leaving the call. Shared screen images are labeled by participant; their visual contents are not transcribed. Sharing stops when its window closes, the call reconnects, or you leave. Leave disconnects only you. End for everyone closes the room. Invitation keys grant access: share them only with people you want in the call. Escape closes this help.",
 				"command.ChangeKeyboardLayoutAction": "Preferences: Change Keyboard Layout",
 				"command.ClearDebugConsoleAction": "Clear Console",
 				"command.ClearOutputAction": "Output: Clear Output",
@@ -4066,7 +4067,6 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"memories.changed": "记忆已更改。刷新以加载最新版本，当前草稿会保留。",
 				"memories.count": "本页有 {0} 条记忆。",
 				"memories.help": "选择对话上下文和记忆范围。读取和模型保存是独立权限，默认均关闭。用 Tab 和 Shift+Tab 在控件之间移动，用方向键浏览列表，按 Ctrl 或 Command+S 保存。记忆内容是纯文本，可以选择和复制。打开引用可查看准确的只读摘录。编辑模型记忆后，该记忆归你维护，模型不能再覆盖。按 Escape 关闭此帮助对话框。",
-				"memories.helpTitle": "记忆帮助",
 				"memories.hint": "记忆。用 Tab 导航，按 Ctrl 或 Command+S 保存，按 Alt+F1 查看帮助。",
 				"memories.reference": "原始引用，修订版本 {0}。",
 				"memories.saved": "记忆已保存。",
@@ -4789,7 +4789,6 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"trace.filter": "按名称、结果或 Trace ID 筛选",
 				"trace.help": "帮助",
 				"trace.helpText": "启动 App Server 前开启采集：将 ASH_TRACE_WEBSOCKET_ADDR 设为 127.0.0.1:4319，将 ASH_TRACE_WEBSOCKET_TOKEN 设为随机的 64 位十六进制令牌。在此输入相同的地址和令牌。只接收连接后完成的 span。连接会开始新的采集；断开会保留已采集数据。最多保留 2,000 条 span 和 8 MiB，丢弃数量会显示。按 Tab 切换控件，用方向键、Home 和 End 选择 span。时间线以文字显示名称、结果、相对开始时间和耗时；Span 详情提供可选择复制的 OTLP JSON，包含 trace 和父 span ID。筛选也会限制导出的 OTLP 数据。令牌和采集数据只保存在当前编辑器中。按 Escape 关闭帮助。",
-				"trace.helpTitle": "Trace 查看器帮助",
 				"trace.hint": "Trace 查看器。按 Alt+F1 查看键盘操作和连接帮助。",
 				"trace.open": "开发者：打开 Trace 查看器",
 				"trace.protocolError": "Trace 数据格式无效，连接已关闭。",
@@ -5088,6 +5087,7 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"showSecondarySidebar": "显示辅助侧栏"
 			},
 			"ash.marketplace": {
+				"accessibilityHelp": "使用 /marketplace [关键词] 搜索，或使用 /plugins 管理已安装的软件包。可按软件包、能力、语言名称、别名或文件扩展名搜索。能力筛选包含插件捆绑的能力。语言服务器 ID 筛选要求该语言具有可执行程序，并排除仅提供语法资源的软件包。目录不可用时，已安装列表仍显示本地软件包。安装、更新和卸载作用于整个软件包。用 Tab 和 Shift+Tab 切换控件，用方向键选择软件包，按 Escape 关闭帮助。",
 				"available": "可安装",
 				"browse": "浏览 Marketplace",
 				"clearFilters": "清除筛选条件",
@@ -5387,6 +5387,8 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"testing": "测试"
 			},
 			"ash.workbench": {
+				"browser.accessibilityHelp": "用 Tab 切换浏览器控件，在地址栏按 Enter 导航。在网页中按 Ctrl+L（macOS 为 Command+L）或 F6 返回地址栏。后退和前进按钮浏览网页历史。关闭编辑器标签页会关闭对应网页。网页使用浏览器的无障碍树。此隔离会话不提供下载和网站权限。",
+				"call.accessibilityHelp": "在本机或服务器创建通话，或通过邀请加入。麦克风默认关闭。按 Tab 和 Shift+Tab 在控件间移动，按回车或空格激活按钮。静音会停止发送声音；停止收听会停止播放。共享屏幕会打开显示器和窗口选择器，用方向键选择来源，再选择开始共享。Escape 取消选择。停止共享不会退出通话。共享画面按参与者标记，画面内容不会转写。窗口关闭、通话重新连接或退出通话时会停止共享。离开只断开你自己的连接；为所有人结束会关闭通话。邀请密钥授予访问权限，只应分享给你希望加入的人。Escape 关闭帮助。",
 				"command.ChangeKeyboardLayoutAction": "首选项：更改键盘布局",
 				"command.ClearDebugConsoleAction": "清空控制台",
 				"command.ClearOutputAction": "输出：清空输出",

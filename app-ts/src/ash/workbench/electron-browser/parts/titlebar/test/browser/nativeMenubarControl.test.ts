@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { SubmenuAction } from '../../../../../../base/common/actions.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
-import { type IMenuChangeEvent, type IMenuService, MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
+import { type IMenuChangeEvent, type IMenuService, MenuId, MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import type { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { ContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
 import type { INativeMenubarApi, INativeMenubarData, INativeMenubarSelection } from '../../../../../../platform/menubar/common/nativeMenubar.js';
@@ -43,7 +43,7 @@ test('failed menubar updates retain the last installed revision', async () => {
 		[Symbol.dispose]() {},
 	};
 	const menuService = {
-		createMenu: () => menu,
+		createMenu: (id: MenuId) => id === MenuId.MenubarMainMenu ? menu : { ...menu, onDidChange: Event.None, getActions: () => [] },
 		getMenuActions: () => [],
 	} as unknown as IMenuService;
 	const api: INativeMenubarApi = {
@@ -60,7 +60,7 @@ test('failed menubar updates retain the last installed revision', async () => {
 	await waitFor(() => updates.length === 1);
 	const firstItem = updates[0]!.menus[0]!.items[0];
 	assert.equal(firstItem?.type, 'action');
-	if (firstItem?.type !== 'action') return;
+	assert.equal(firstItem.type, 'action');
 	assert.ok(firstItem.altId);
 
 	selections.fire({ revision: 1, id: firstItem.altId });

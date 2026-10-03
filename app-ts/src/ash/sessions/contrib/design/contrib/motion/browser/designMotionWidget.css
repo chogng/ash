@@ -3,10 +3,10 @@
 	box-sizing: border-box;
 	padding: var(--ash-spacing-size120);
 	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-xLarge);
+	border-radius: var(--ash-corner-radius-x-large);
 	background: var(--ash-editor-background);
 	color: var(--ash-foreground);
-	font-size: var(--ash-fontSize-label1);
+	font-size: var(--ash-font-size-label1);
 	overflow: auto;
 }
 
@@ -44,7 +44,7 @@
 	width: 80px;
 	min-height: 28px;
 	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(--ash-corner-radius-small);
 	background: var(--ash-input-background);
 	color: var(--ash-input-foreground);
 	font: inherit;

@@ -6,7 +6,7 @@ import { builtinLanguagePackCatalogs } from '../../../../workbench/services/loca
 import { AppServerAssetService } from '../../browser/appServerAssetService.js';
 import { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../app-server/common/appServerTransport.js';
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH, APP_SERVER_CAPABILITY_VERSION } from '../../../app-server/common/generated/index.js';
+import { createTestInitializeResult } from '../../../app-server/test/common/testAppServerProtocol.js';
 
 class Transport implements AppServerTransport {
 	public readonly requests: { method: string; params: Record<string, unknown> }[] = [];
@@ -35,8 +35,9 @@ class Transport implements AppServerTransport {
 		let failure: string | undefined;
 		switch (request.method) {
 			case 'initialize': {
-				const contracts = { sessions: { version: APP_SERVER_CAPABILITY_VERSION }, threads: { version: APP_SERVER_CAPABILITY_VERSION }, turns: { version: APP_SERVER_CAPABILITY_VERSION }, ...(this.supportsAssets ? { assets: { version: 1 } } : {}) };
-				result = { serverInfo: { name: 'ash-app-server', version: '1' }, protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION }, schemaHash: APP_SERVER_SCHEMA_HASH, slashCommands: [], capabilities: { ...Object.fromEntries(['agentInteractions', 'documentCollaboration', 'sessions', 'threads', 'turns', 'projects', 'memories', 'resources', 'attachments', 'fileSystem', 'git', 'contentSearch', 'codebase', 'cloudCodebase', 'terminal', 'debugAdapter', 'typst', 'updateReplay', 'extensions', 'extensionHost', 'connectors', 'plugins', 'marketplace', 'mcp', 'mcpOAuth'].map(name => [name, true])), contracts } };
+				const initialized = createTestInitializeResult();
+				if (this.supportsAssets) initialized.capabilities.contracts.assets = { version: 1 };
+				result = initialized;
 				break;
 			}
 			case 'asset/catalog': result = { entries: this.version.assetId ? [{ version: this.version, addedAt: 1700000000000, favorite: this.favorite, collectionIds: this.collectionIds }] : [], collections: this.collections }; break;

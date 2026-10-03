@@ -1,3 +1,5 @@
+use std::io::BufRead;
+use std::io::BufReader;
 use std::io::Write;
 
 use ash_app_server_protocol::schema_hash;
@@ -9,6 +11,36 @@ use crate::process::ProcessRecord;
 use crate::process::ProcessRecordGuard;
 use crate::wire::ControlResponse;
 use crate::wire::ControlState;
+
+#[test]
+fn control_reads_distinguish_shutdown_eof_from_malformed_responses() {
+    for response in [b"".as_slice(), b"{".as_slice()] {
+        let profile = tempfile::tempdir().unwrap();
+        let endpoint = EndpointPaths::prepare(profile.path()).unwrap();
+        let listener = endpoint.bind_listener().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = String::new();
+            BufReader::new(&mut stream).read_line(&mut request).unwrap();
+            stream.write_all(response).unwrap();
+            request
+        });
+        let result = super::request_control(&endpoint, crate::wire::ControlCommand::Status);
+        let request: serde_json::Value = serde_json::from_str(&server.join().unwrap()).unwrap();
+        assert_eq!(
+            request,
+            serde_json::json!({ "version": 1, "kind": "control", "command": "status" })
+        );
+        if response.is_empty() {
+            assert_eq!(result.unwrap(), None);
+        } else {
+            assert_eq!(
+                result.unwrap_err(),
+                "Local App Server daemon returned an invalid control response"
+            );
+        }
+    }
+}
 
 #[test]
 fn managed_control_response_must_match_the_private_process_record() {

@@ -195,6 +195,7 @@ test('open code editor applies live view settings and actions without replacing 
 	using models = new BrowserTextModelService(resourceStore);
 	using services = paneServices(models);
 	const configuration = services.get(IConfigurationService);
+	await configuration.updateValue(CodeEditorConfiguration.lineNumbers, false);
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
 	await configuration.updateValue(EditorMinimapConfiguration.enabled, false);
 	await configuration.updateValue(EditorMinimapConfiguration.side, 'left');
@@ -203,14 +204,17 @@ test('open code editor applies live view settings and actions without replacing 
 	await pane.setInput({ resource: URI.file('/project/settings.ts') }, new AbortController().signal);
 	const control = pane.getControl();
 	assert.ok(control instanceof CodeEditorWidget);
+	assert.equal(control.getOption(EditorOption.lineNumbers).renderType, 0);
 	assert.equal(control.getOption(EditorOption.wordWrap), 'on');
 	assert.equal(control.getOption(EditorOption.minimap).enabled, false);
 	assert.equal(control.getOption(EditorOption.minimap).side, 'left');
 
+	await configuration.updateValue(CodeEditorConfiguration.lineNumbers, true);
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.Off);
 	await configuration.updateValue(EditorMinimapConfiguration.enabled, true);
 	await configuration.updateValue(EditorMinimapConfiguration.size, 'fit');
 	assert.equal(pane.getControl(), control);
+	assert.equal(control.getOption(EditorOption.lineNumbers).renderType, 1);
 	assert.equal(control.getOption(EditorOption.wordWrap), 'off');
 	assert.equal(control.getOption(EditorOption.minimap).enabled, true);
 	assert.equal(control.getOption(EditorOption.minimap).size, 'fit');

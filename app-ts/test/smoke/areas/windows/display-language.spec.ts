@@ -30,6 +30,16 @@ test('display language stays unchanged until restart and initializes Chinese com
 	page = workbench.page;
 	await expect(page.getByRole('button', { name: '搜索命令', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: '管理', exact: true })).toBeVisible();
+	if (target.appServerMode === 'required') {
+		await workbench.quickaccess.runCommand('ash.call.open');
+		const call = page.locator('.ash-call').getByRole('combobox', { name: 'Call', exact: true });
+		await call.focus();
+		await call.press('Alt+F1');
+		const help = page.getByRole('dialog', { name: '无障碍帮助', exact: true });
+		await expect(help.getByRole('textbox')).toHaveValue(/麦克风/u);
+		await page.keyboard.press('Escape');
+		await expect(call).toBeFocused();
+	}
 	await page.keyboard.press('F1');
 	const commands = page.locator('.ash-quick-pick');
 	await commands.getByRole('combobox').fill('创建分支');

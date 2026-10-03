@@ -1,18 +1,11 @@
 import { expect, test } from '../../../automation/test.js';
+import { Menus } from '../../../automation/menus.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
 test('Sessions registered pages coordinate Parts and retain drafts through drag and keyboard ordering', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
-	let page = workbench.page;
-	if (target.kind === 'browser') {
-		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	} else {
-		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
+	let page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const items = navigation.locator('.ash-sessions-activity-top .ash-action-view-item');
 	const chat = navigation.getByRole('button', { name: 'Chat', exact: true });
@@ -46,8 +39,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await chat.click();
 	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
 	await design.focus();
-	await page.keyboard.press('Shift+F10');
-	await page.getByRole('menuitem', { name: 'Move later', exact: true }).click();
+	await new Menus(page).select(application, () => page.keyboard.press('Shift+F10'), ['Move later']);
 	await expect(design).toBeFocused();
 	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['chat', 'design', 'colab', 'library', 'code']);
 	await expect(chat).toHaveAttribute('aria-current', 'page');
@@ -61,9 +53,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
 	await chat.click();
 	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
-	await chat.click({ button: 'right' });
-	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-	await page.getByRole('menuitemcheckbox', { name: 'Top', exact: true }).click();
+	await new Menus(page).select(application, () => chat.click({ button: 'right' }), ['Activity Bar Position', 'Top']);
 	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
 	await expect(navigation.locator('[role="toolbar"]')).toHaveAttribute('aria-orientation', 'horizontal');
 	await navigation.locator('[data-action-id="code"]').dragTo(navigation.locator('[data-action-id="colab"]'), { targetPosition: { x: 2, y: 8 } });

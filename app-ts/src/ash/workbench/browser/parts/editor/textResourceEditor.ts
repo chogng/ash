@@ -39,6 +39,7 @@ import { Position } from '../../../../editor/common/core/position.js';
 import { AbstractTextCodeEditor, type ITextCodeEditorControl } from './textCodeEditor.js';
 import { toEditorPaneSelectionChangeReason } from './textEditor.js';
 
+const lineNumbersConfiguration = "editor.lineNumbers";
 const wordWrapConfiguration = "editor.wordWrap";
 const renderWhitespaceConfiguration = "editor.renderWhitespace";
 const renderControlCharactersConfiguration = "editor.renderControlCharacters";
@@ -186,11 +187,15 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			const part = this.part.value;
 			if (!part) return;
 			const update: {
+				lineNumbers?: IEditorOptions['lineNumbers'];
 				wordWrap?: IEditorOptions['wordWrap'];
 				minimap?: IEditorOptions['minimap'];
 				renderWhitespace?: IEditorOptions['renderWhitespace'];
 				renderControlCharacters?: IEditorOptions['renderControlCharacters'];
 			} = {};
+			if (this.options.lineNumbers === undefined && event.affectsConfiguration(lineNumbersConfiguration)) {
+				update.lineNumbers = this.configurationService.getValue<boolean>(lineNumbersConfiguration) ? 'on' : 'off';
+			}
 			if (this.options.lineWrapping === undefined && event.affectsConfiguration(wordWrapConfiguration)) {
 				update.wordWrap = this.configurationService.getValue(wordWrapConfiguration) === EditorLineWrapping.On ? 'on' : 'off';
 			}
@@ -270,7 +275,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				cursorSmoothCaretAnimation: this.options.cursorSmoothCaretAnimation,
 				cursorWidth: this.options.cursorWidth,
 				cursorHeight: this.options.cursorHeight,
-				lineNumbers: this.options.lineNumbers,
+				lineNumbers: this.options.lineNumbers ?? (this.configurationService.getValue<boolean>(lineNumbersConfiguration) ? 'on' : 'off'),
 				guides: this.options.guides,
 				bracketPairColorization: this.options.bracketPairColorization,
 				matchBrackets: this.options.matchBrackets,

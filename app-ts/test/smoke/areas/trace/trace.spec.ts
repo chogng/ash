@@ -21,7 +21,7 @@ test('developer trace viewer validates connection settings and restores focus af
 	const filter = viewer.getByLabel('Filter by name, outcome or trace ID', { exact: true });
 	await filter.focus();
 	await page.keyboard.press('Alt+F1');
-	await expect(page.getByRole('dialog', { name: 'Trace viewer help' })).toBeVisible();
+	await expect(page.getByRole('dialog', { name: 'Accessibility Help' })).toBeVisible();
 	await page.keyboard.press('Escape');
 	await expect(filter).toBeFocused();
 	await page.getByRole('button', { name: 'Close Trace viewer', exact: true }).click();
@@ -83,19 +83,23 @@ test('developer trace viewer connects to App Server, filters, exports and releas
 		await expect(viewer.getByRole('status')).toContainText('Connected');
 		await call('diagnostics/read', {});
 		await call('trace/nonexistent', { prompt: 'private-content', authorization: 'private-key' });
-		await expect(viewer.getByRole('option')).toHaveCount(2);
+		// RPC requests also complete internal server spans; select the two RPC roots.
+		await viewer.getByLabel('Filter by name, outcome or trace ID', { exact: true }).fill('rpc');
+		await expect(viewer.getByRole('option', { name: /^rpc ·/u })).toHaveCount(2);
 		const timeline = viewer.getByRole('listbox', { name: 'Trace timeline' });
 		await timeline.focus();
 		await page.keyboard.press('End');
 		await expect(viewer.getByRole('option').last()).toHaveAttribute('aria-selected', 'true');
-		await expect(viewer.getByRole('region', { name: 'Span details' })).toContainText('failed');
 		await page.keyboard.press('Alt+F1');
-		const help = page.getByRole('dialog', { name: 'Trace viewer help' });
+		const help = page.getByRole('dialog', { name: 'Accessibility Help' });
 		await expect(help).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(timeline).toBeFocused();
 		await viewer.getByLabel('Filter by name, outcome or trace ID', { exact: true }).fill('failed');
 		await expect(viewer.getByRole('option')).toHaveCount(1);
+		await timeline.focus();
+		await page.keyboard.press('Home');
+		await expect(viewer.getByRole('region', { name: 'Span details' })).toContainText('failed');
 		let exportedPath: string;
 		if ('windows' in application) {
 			exportedPath = join(profile, 'exported-traces.json');

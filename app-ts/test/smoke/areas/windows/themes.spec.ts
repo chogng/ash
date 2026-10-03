@@ -1,7 +1,5 @@
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
-import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
 test('Seti extension fonts render in Explorer and editor tabs and can be switched off', async ({ application, target, workbench }) => {
@@ -40,7 +38,7 @@ test('Seti extension fonts render in Explorer and editor tabs and can be switche
 	const tabId = await tab.getAttribute('id');
 	await tab.focus();
 	for (const scheme of ['dark', 'light'] as const) {
-		await setAppearance(application, workbench.page, scheme);
+		await workbench.setAppearance(application, scheme);
 		await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-' + scheme);
 		await expect.poll(async () => (await tabIcon.evaluate(element => getComputedStyle(element).color)) === (await icon.evaluate(element => getComputedStyle(element).color))).toBe(true);
 		await expect(tab).toBeFocused();
@@ -65,9 +63,9 @@ test('Seti extension fonts render in Explorer and editor tabs and can be switche
 });
 
 test('Workbench follows system color changes without reopening the window', async ({ application, workbench }) => {
-	await setAppearance(application, workbench.page, 'dark');
+	await workbench.setAppearance(application, 'dark');
 	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
-	await setAppearance(application, workbench.page, 'light');
+	await workbench.setAppearance(application, 'light');
 	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
 	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).colorScheme)).toBe('light');
 });
@@ -84,7 +82,7 @@ test('Explorer keeps selection distinct from hover and reflects keyboard focus',
 		{ scheme: 'light', id: 'ash-light', active: 'rgb(232, 232, 232)', foreground: 'rgb(0, 0, 0)', inactive: 'rgb(228, 230, 241)', hover: 'rgb(242, 242, 242)' },
 		{ scheme: 'dark', id: 'ash-dark', active: 'rgba(255, 255, 255, 0.13)', foreground: 'rgb(237, 237, 237)', inactive: 'rgb(44, 45, 46)', hover: 'rgba(255, 255, 255, 0.08)' },
 	] as const) {
-		await setAppearance(application, page, theme.scheme);
+		await workbench.setAppearance(application, theme.scheme);
 		await expect(workbench.element).toHaveAttribute('data-color-theme', theme.id);
 		await tree.focus();
 		await expect(selected).toHaveAttribute('aria-selected', 'true');
@@ -145,7 +143,7 @@ test.describe('Workbench shell colors', () => {
 		const commandCenter = titleBar.locator('.ash-titlebar-command-center-button');
 		const welcome = workbench.editors.groupAt(0).welcome;
 
-		await setAppearance(application, workbench.page, 'dark');
+		await workbench.setAppearance(application, 'dark');
 		await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
 		await expect(welcome).toHaveCSS('background-color', 'rgb(30, 30, 30)');
 		await expect(titleBar).toHaveCSS('background-color', 'rgb(30, 30, 30)');
@@ -158,7 +156,7 @@ test.describe('Workbench shell colors', () => {
 		await expect(commandCenter).toHaveCSS('color', 'rgb(204, 204, 204)');
 		await expect(statusBar).toHaveCSS('color', 'rgb(204, 204, 204)');
 
-		await setAppearance(application, workbench.page, 'light');
+		await workbench.setAppearance(application, 'light');
 		await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
 		await expect(welcome).toHaveCSS('background-color', 'rgb(255, 255, 255)');
 		await expect(titleBar).toHaveCSS('background-color', 'rgb(255, 255, 255)');
@@ -186,11 +184,9 @@ test('Settings modal dims and restores Electron window controls', async ({ appli
 	});
 	test.skip(!hasOverlay, 'macOS window buttons use a separate host control');
 	const page = workbench.page;
-	await setAppearance(application, page, 'light');
+	await workbench.setAppearance(application, 'light');
 	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
-	await page.keyboard.press('ControlOrMeta+Shift+P');
-	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
-	await page.keyboard.press('Enter');
+	await workbench.settingsEditor.openUserSettingsUI();
 	await expect(page.getByRole('dialog', { name: 'Ash Settings' })).toBeVisible();
 	await expect.poll(() => application.evaluate(() => {
 		const colors = (globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string }[] }).modalControlColors.at(-1);
@@ -242,11 +238,6 @@ test('Desktop migrates a user theme through the file provider and applies its co
 	}
 });
 
-async function setAppearance(application: PlaywrightApplication, page: Page, colorScheme: 'dark' | 'light'): Promise<void> {
-	if ('windows' in application) {
-		await application.evaluate(({ nativeTheme }, scheme) => { nativeTheme.themeSource = scheme; }, colorScheme);
-	} else { await page.emulateMedia({ colorScheme }); }
-}
 
 test('structured theme settings persist scoped colors and token rules after reload', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code product settings');

@@ -515,7 +515,12 @@ fn request_control(
         .take((MAX_RESPONSE_BYTES + 1) as u64)
         .read_line(&mut line)
         .map_err(io_error)?;
-    if read == 0 || read > MAX_RESPONSE_BYTES || !line.ends_with('\n') {
+    // Shutdown can close an accepted control connection before sending a frame.
+    // That endpoint is no longer available; a partial frame is still a protocol error.
+    if read == 0 {
+        return Ok(None);
+    }
+    if read > MAX_RESPONSE_BYTES || !line.ends_with('\n') {
         return Err("Local App Server daemon returned an invalid control response".into());
     }
     let response: ControlResponse =

@@ -6,17 +6,12 @@ import { expect, test } from '../../../automation/test.js';
 
 const run = promisify(execFile);
 
-test.use({ gitRepository: async ({ target }, use) => { await use(target.kind === 'electron'); } });
+test.use({ gitRepository: true });
 
 test('SCM history shows Git commits and opens file and multi-file comparisons', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
-	test.skip(target.kind === 'browser' && process.env.ASH_PLAYWRIGHT_GIT_REPOSITORY !== '1', 'Requires Web Git setup before server startup (ASH_PLAYWRIGHT_GIT_REPOSITORY=1).');
 
 	const cwd = testWorkspace.directory;
-	if (target.kind === 'browser') {
-		await run('git', ['add', 'main.ts'], { cwd });
-		await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Initial'], { cwd });
-	}
 	await run('git', ['remote', 'add', 'origin', 'https://github.com/ash-test/history.git'], { cwd });
 	await run('git', ['branch', 'topic'], { cwd });
 	await run('git', ['branch', 'feature'], { cwd });
@@ -108,8 +103,8 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	await expect(page.getByRole('menuitem', { name: 'Stage All', exact: true })).toHaveCount(0);
 	await expect(page.getByRole('menuitem', { name: 'Discard All', exact: true })).toHaveCount(0);
 	await page.keyboard.press('Escape');
-	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['main.ts']);
-	await expect(comparisons.locator('.stanza-multi-diff-editor-section')).toHaveCount(1);
+	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['Cargo.toml', 'main.rs', 'main.ts', 'paper.ash-academic', 'paper.pdf']);
+	await expect(comparisons.locator('.stanza-multi-diff-editor-section')).toHaveCount(5);
 
 	await writeFile(join(cwd, 'main.ts'), 'const value = 2;\n');
 	await writeFile(join(cwd, 'other.ts'), 'export const other = true;\n');
@@ -130,7 +125,7 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 });
 
 test('SCM history pane opens without a connected repository', async ({ target, workbench }) => {
-	test.skip(target.kind === 'electron' && target.appServerMode === 'required', 'Checks disconnected Workbench hosts.');
+	test.skip(target.appServerMode === 'required', 'Checks disconnected Workbench hosts.');
 
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
@@ -144,16 +139,13 @@ test('SCM history pane opens without a connected repository', async ({ target, w
 });
 
 test.describe('SCM folding', () => {
-	test.use({ gitRepository: false });
 	test.beforeEach(async ({ target, testWorkspace }) => {
 		if (target.appServerMode !== 'required') { return; }
-		test.skip(target.kind === 'browser' && process.env.ASH_PLAYWRIGHT_GIT_REPOSITORY !== '1', 'Requires Web Git setup before server startup (ASH_PLAYWRIGHT_GIT_REPOSITORY=1).');
 		const cwd = testWorkspace.directory;
 		await mkdir(join(cwd, 'src'));
 		await writeFile(join(cwd, 'src', 'details.ts'), 'export const details = 1;\n');
-		await run('git', ['init', '-b', 'main'], { cwd });
-		await run('git', ['add', 'main.ts', 'src/details.ts'], { cwd });
-		await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Initial'], { cwd });
+		await run('git', ['add', 'src/details.ts'], { cwd });
+		await run('git', ['commit', '-m', 'Add folding fixture'], { cwd });
 		await writeFile(join(cwd, 'main.ts'), 'const value = 2;\n');
 		await writeFile(join(cwd, 'src', 'details.ts'), 'export const details = 2;\n');
 		await run('git', ['add', 'main.ts', 'src/details.ts'], { cwd });

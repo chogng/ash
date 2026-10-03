@@ -43,8 +43,11 @@ export async function createTestWorkspace(options: TestWorkspaceOptions = {}): P
 	await writeFile(pdfFile, createPdfDocument());
 	if (options.gitRepository) {
 		await run('git', ['init', '-b', 'main'], { cwd: directory });
-		await run('git', ['add', 'main.ts'], { cwd: directory });
-		await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Initial'], { cwd: directory });
+		await run('git', ['config', 'commit.gpgsign', 'false'], { cwd: directory });
+		await run('git', ['config', 'user.name', 'Ash Test'], { cwd: directory });
+		await run('git', ['config', 'user.email', 'ash-test@example.invalid'], { cwd: directory });
+		await run('git', ['add', '.'], { cwd: directory });
+		await run('git', ['commit', '-m', 'Initial'], { cwd: directory });
 		if (options.gitMergeConflict) {
 			await run('git', ['switch', '-c', 'topic'], { cwd: directory });
 			await writeFile(file, 'const value = 2;\n');
@@ -59,8 +62,6 @@ export async function createTestWorkspace(options: TestWorkspaceOptions = {}): P
 				throw new Error('Test repository did not produce a merge conflict');
 			}
 		}
-	} else if (process.env.ASH_PLAYWRIGHT_GIT_REPOSITORY === '1') {
-		await run('git', ['init', '-b', 'main'], { cwd: directory });
 	}
 	return { directory, file, rustFile, academicFile, largeFile, pdfFile };
 }

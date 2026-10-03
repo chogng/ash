@@ -1,7 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { ElectronApplication, Locator } from '@playwright/test';
-import type { BrowserWindow, MessageBoxOptions } from 'electron';
+import type { Locator } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
 async function pasteJson(input: Locator, source: string): Promise<void> {
@@ -122,62 +121,34 @@ test('Saving JSON token customization refreshes Markdown and the canonical profi
 test('Settings JSON rejects invalid values and preserves dirty edits during a configuration conflict', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code settings editor');
 	const page = workbench.page;
-	const electron = target.kind === 'electron' ? application as ElectronApplication : undefined;
-	if (electron) {
-		await electron.evaluate(({ dialog }) => {
-			const original = dialog.showMessageBox.bind(dialog);
-			const state = globalThis as typeof globalThis & { ashSettingsSaveDialogs?: { messages: MessageBoxOptions[]; restore: () => void } };
-			state.ashSettingsSaveDialogs = { messages: [], restore: () => { dialog.showMessageBox = original; } };
-			dialog.showMessageBox = (async (...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => {
-				state.ashSettingsSaveDialogs!.messages.push(args.length === 1 ? args[0] : args[1]);
-				return { response: 0, checkboxChecked: false };
-			}) as typeof dialog.showMessageBox;
-		});
-	}
-	try {
-		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
-		const group = workbench.editors.groupAt(0);
-		const tab = group.tabs.filter({ hasText: 'User Settings (JSON)' });
-		await expect(group.editor.input).toBeFocused();
-		await group.editor.input.press('ControlOrMeta+A');
-		await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('characters selected');
-		await pasteJson(group.editor.input, '{ "editor.fontSize": "invalid" }');
-		await group.editor.input.press('ControlOrMeta+S');
-		if (electron) {
-			await expect.poll(() => electron.evaluate(() => JSON.stringify((globalThis as typeof globalThis & { ashSettingsSaveDialogs?: { messages: MessageBoxOptions[] } }).ashSettingsSaveDialogs?.messages))).toContain('editor.fontSize');
-		} else {
-			const invalid = page.getByRole('dialog', { name: 'Could not save file', exact: true });
-			await expect(invalid).toContainText('editor.fontSize');
-			await invalid.getByRole('button', { name: 'OK', exact: true }).click();
-		}
-		await expect(tab.locator('..')).toHaveAttribute('data-state', /dirty|conflict/u);
-		await group.editor.waitForEditorFocus();
-		await group.editor.input.press('ControlOrMeta+A');
-		await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('characters selected');
-		await pasteJson(group.editor.input, '{ "editor.fontSize": 18 }');
+	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	const group = workbench.editors.groupAt(0);
+	const tab = group.tabs.filter({ hasText: 'User Settings (JSON)' });
+	await expect(group.editor.input).toBeFocused();
+	await group.editor.input.press('ControlOrMeta+A');
+	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('characters selected');
+	await pasteJson(group.editor.input, '{ "editor.fontSize": "invalid" }');
+	const invalid = await workbench.dialogs.expectMessage(application, 'Could not save file', () => group.editor.input.press('ControlOrMeta+S'));
+	expect(`${invalid.message} ${invalid.detail}`).toContain('editor.fontSize');
+	await expect(tab.locator('..')).toHaveAttribute('data-state', /dirty|conflict/u);
+	await group.editor.waitForEditorFocus();
+	await group.editor.input.press('ControlOrMeta+A');
+	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('characters selected');
+	await pasteJson(group.editor.input, '{ "editor.fontSize": 18 }');
 
-		await workbench.settingsEditor.openUserSettingsUI();
-		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-		await workbench.settingsEditor.selectCategory('editor');
-		await settings.getByRole('searchbox').fill('@id:editor.fontSize');
-		const font = settings.getByRole('spinbutton', { name: 'Font size', exact: true });
-		await expect(font).toHaveValue('13');
-		await font.fill('20');
-		await font.press('Tab');
-		await expect(settings.locator('[data-settings-item-id="editor.fontSize"] .ash-settings-indicators')).toBeHidden();
-		await settings.locator('.ash-modal-editor-close').click();
-		await group.editor.waitForEditorFocus();
-		await group.editor.input.press('ControlOrMeta+S');
-		if (electron) {
-			await expect.poll(() => electron.evaluate(() => JSON.stringify((globalThis as typeof globalThis & { ashSettingsSaveDialogs?: { messages: MessageBoxOptions[] } }).ashSettingsSaveDialogs?.messages))).toContain('file changed on disk');
-		} else {
-			const conflict = page.getByRole('dialog', { name: 'File changed on disk', exact: true });
-			await expect(conflict).toContainText('Your unsaved changes are still open');
-			await conflict.getByRole('button', { name: 'OK', exact: true }).click();
-		}
-		await expect(tab.locator('..')).toHaveAttribute('data-state', /dirty|conflict/u);
-		await group.editor.waitForEditorContents(content => content.includes('18'));
-	} finally {
-		await electron?.evaluate(() => (globalThis as typeof globalThis & { ashSettingsSaveDialogs?: { restore: () => void } }).ashSettingsSaveDialogs?.restore());
-	}
+	await workbench.settingsEditor.openUserSettingsUI();
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await workbench.settingsEditor.selectCategory('editor');
+	await settings.getByRole('searchbox').fill('@id:editor.fontSize');
+	const font = settings.getByRole('spinbutton', { name: 'Font size', exact: true });
+	await expect(font).toHaveValue('13');
+	await font.fill('20');
+	await font.press('Tab');
+	await expect(settings.locator('[data-settings-item-id="editor.fontSize"] .ash-settings-indicators')).toBeHidden();
+	await settings.locator('.ash-modal-editor-close').click();
+	await group.editor.waitForEditorFocus();
+	const conflict = await workbench.dialogs.expectMessage(application, 'File changed on disk', () => group.editor.input.press('ControlOrMeta+S'));
+	expect(`${conflict.message} ${conflict.detail}`).toContain('Your unsaved changes are still open');
+	await expect(tab.locator('..')).toHaveAttribute('data-state', /dirty|conflict/u);
+	await group.editor.waitForEditorContents(content => content.includes('18'));
 });

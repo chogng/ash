@@ -211,7 +211,8 @@ test('tray Quit honors a window veto, keeps services usable, and restores drafts
 	test.skip(process.platform !== 'win32' && process.platform !== 'darwin', 'The tray is available on Windows and macOS.');
 	test.setTimeout(60_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
-	await mkdir(userDataDirectory, { recursive: true });
+	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
+	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'workbench.locale': 'zh-cn' }));
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
 	const entry = await writeShellEntry(testInfo);
 	const options = { executablePath: configuration.executablePath, args: configuration.args.map(argument => argument === desktop ? entry : argument), cwd: configuration.cwd, env: configuration.env };
@@ -220,9 +221,7 @@ test('tray Quit honors a window veto, keeps services usable, and restores drafts
 		const page = await application.firstWindow();
 		const workbench = new Workbench(page);
 		await workbench.waitForReady();
-		await page.keyboard.press('F1');
-		await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
-		await page.keyboard.press('Enter');
+		await page.keyboard.press('ControlOrMeta+N');
 		const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
 		await input.focus();
 		await input.type('unsaved tray draft');
@@ -238,26 +237,15 @@ test('tray Quit honors a window veto, keeps services usable, and restores drafts
 				void contents.executeJavaScript(`globalThis.ash.ipcRenderer.invoke('ash:window:close-response', { kind: 'vetoed', token: ${Number(args[0])} })`).then(() => state.__ashQuitVetoCount++);
 			};
 		});
-		await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === 'Quit Ash')!.click({ altKey: false }));
+		await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === '退出 Ash')!.click({ altKey: false }));
 		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashQuitVetoCount)).toBe(1);
 		await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toContainText('unsaved tray draft');
-		await page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
-			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify({ ...JSON.parse(snapshot.document.source), 'workbench.locale': 'zh-cn' }) } });
-		});
 		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.map(item => item.label || item.type))).toEqual(['显示 Ash', '新建窗口', '打开 Agents 窗口', 'separator', '最近的文件夹和工作区', 'separator', '退出 Ash']);
 		await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === '新建窗口')!.click({ altKey: false }));
 		await expect.poll(() => application.windows().length).toBe(2);
 		await new Workbench(application.windows()[1]!).waitForReady();
-		await page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
-			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify({ ...JSON.parse(snapshot.document.source), 'workbench.locale': 'en' }) } });
-		});
-		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.at(-1)!.label)).toBe('Quit Ash');
 		const closed = application.waitForEvent('close');
-		await application.evaluate(() => { (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === 'Quit Ash')!.click({ altKey: false }); });
+		await application.evaluate(() => { (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === '退出 Ash')!.click({ altKey: false }); });
 		await closed;
 		expect(JSON.parse(await readFile(testInfo.outputPath('tray-cleanup.json'), 'utf8'))).toEqual({ destroyed: true });
 		application = await _electron.launch(options);

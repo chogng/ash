@@ -30,8 +30,8 @@
 
 .ash-network-settings > h5 {
 	margin: 0;
-	font-size: var(--ash-fontSize-body1);
-	font-weight: var(--ash-fontWeight-semiBold);
+	font-size: var(--ash-font-size-body1);
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-network-settings-description {

@@ -115,7 +115,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			path: target.path,
 			languageId,
 			model,
-			modelListener: toDisposable(() => undefined),
+			modelListener: Disposable.None,
 			references: 1,
 			timer: undefined,
 			queue: Promise.resolve(),
@@ -123,7 +123,11 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			codeIntelligenceSynchronized: false,
 		};
 		entry.modelListener = model.onDidChangeContent(() => this.schedule(entry, false));
-		if (this.workspaceServerKeys.delete(key)) {
+		this.workspaceServerKeys.delete(key);
+		const previous = this.serverSnapshots.get(key);
+		// Providers can open the server document while the model is being resolved,
+		// before an editor acquires it. Keep that push only for the acquired revision.
+		if (previous && previous.revision !== model.version) {
 			this.serverSnapshots.delete(key);
 			this.changeEmitter.fire(resource);
 		}
@@ -210,7 +214,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 				if (!isUnsupportedDiagnosticPull(error)) throw error;
 			}
 			this.queueWorkspaceDiagnostics();
-		}).catch(reportLanguageSynchronizationError);
+		}).catch(error => { if (this.alive) reportLanguageSynchronizationError(error); });
 	}
 
 	private queueWorkspaceDiagnostics(): void {
@@ -326,7 +330,9 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		entry.modelListener.dispose();
 		if (this.serverSnapshots.delete(key)) this.changeEmitter.fire(entry.resource);
 		entry.queue = entry.queue.catch(() => undefined).then(async () => {
-			if (entry.references > 0) return;
+			// Releasing an editor can queue this close during Workbench disposal.
+			// The connection is gone by the next microtask; only a live owner may send it.
+			if (!this.alive || this.entries.get(key) !== entry || entry.references > 0) return;
 			const closeLanguage = entry.languageSynchronized ? this.api.close({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path }) : Promise.resolve();
 			const closeCodeIntelligence = entry.codeIntelligenceSynchronized && this.canSynchronizeCodeIntelligence(entry) ? this.codeIntelligenceDocuments?.close(entry.path).catch(reportCodeIntelligenceSynchronizationError) : undefined;
 			entry.languageSynchronized = false;
@@ -334,7 +340,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			await Promise.all([closeLanguage, closeCodeIntelligence]);
 			if (entry.references === 0 && this.entries.get(key) === entry) this.entries.delete(key);
 			this.queueWorkspaceDiagnostics();
-		}).catch(reportLanguageSynchronizationError);
+		}).catch(error => { if (this.alive) reportLanguageSynchronizationError(error); });
 	}
 
 	private acceptDiagnostics(notification: LanguageDiagnosticsNotification): void {
@@ -348,10 +354,11 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		if (!resource) return;
 		const key = resource.toString();
 		const entry = this.entries.get(key);
-		if (!entry || entry.references === 0 || !this.support.supports(entry.dirId, entry.languageId) || notification.revision > entry.model.version) return;
+		if (entry && (entry.references === 0 || !this.support.supports(entry.dirId, entry.languageId) || notification.revision > entry.model.version)) return;
+		if (!entry && this.support.workspaceLanguageIds(folder.id).length === 0) return;
 		const current = this.serverSnapshots.get(key);
 		if (current && current.revision > notification.revision) return;
-		const diagnostics = notification.diagnostics.flatMap(diagnostic => projectDiagnostic(diagnostic, entry.model));
+		const diagnostics = notification.diagnostics.flatMap(diagnostic => entry ? projectDiagnostic(diagnostic, entry.model) : projectWorkspaceDiagnostic(diagnostic));
 		if (current?.revision === notification.revision && equalDiagnostics(current.diagnostics, diagnostics)) return;
 		this.serverSnapshots.set(key, Object.freeze({ resource, revision: notification.revision, diagnostics: Object.freeze(diagnostics) }));
 		this.workspaceServerKeys.delete(key);

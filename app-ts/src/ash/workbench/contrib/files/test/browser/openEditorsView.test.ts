@@ -140,10 +140,13 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		assert.equal(activeBadge?.description, '2 unsaved files');
+		using translated = new DirtyFilesIndicator(activity, workingCopies);
 		assert.equal(activeBadge?.description, '2 个未保存的文件');
 	} finally {
 		resetNlsResolver();
 	}
+	secondDirtyChanges.fire();
 	assert.equal(activeBadge?.description, '2 unsaved files');
 	isDirty = false;
 	dirtyChanges.fire();

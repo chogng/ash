@@ -44,8 +44,7 @@ test('Image preview opens workspace images, zooms, exposes metadata and releases
 		URL.revokeObjectURL = url => { revoked.add(url); revoke(url); };
 		Object.defineProperty(window, 'imagePreviewRevokedURLs', { value: revoked, configurable: true });
 	});
-	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
-	if (await showSidebar.isVisible()) { await showSidebar.click(); }
+	await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'product.png', exact: true })).toBeVisible();
 	const explorer = page.locator('.ash-explorer');
 	await explorer.getByRole('treeitem', { name: 'product.png', exact: true }).dblclick();
 	const preview = page.locator('.ash-image-preview');

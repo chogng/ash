@@ -1,3 +1,4 @@
+import { Menus } from '../../../automation/menus.js';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
@@ -5,17 +6,7 @@ import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storag
 
 test('Sessions content shares one raised card with equal right and bottom margins', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
-	let page = workbench.page;
-	if (target.kind === 'browser') {
-		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	} else {
-		if (!('windows' in application)) {
-			throw new Error('Expected Electron windows');
-		}
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
+	let page = await workbench.openAgentsWindow(target.kind);
 	const card = page.locator('.ash-sessions-content-card');
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const sessions = page.locator('[data-part="sessions"]');
@@ -51,14 +42,12 @@ test('Sessions content shares one raised card with equal right and bottom margin
 		})).toEqual([4, 4, 0, 0, 0, 0, 0, 0, 0]);
 	};
 	await expectCardGeometry();
-	await accounts.click({ button: 'right' });
-	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Size' }).press('ArrowRight');
-	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Compact', exact: true }).click();
+	const menus = new Menus(page);
+	const selectSize = (size: string): Promise<void> => menus.select(application, () => accounts.click({ button: 'right' }), ['Activity Bar Size', size]);
+	await selectSize('Compact');
 	await expect(navigation).toHaveClass(/compact/u);
 	await expectCardGeometry();
-	await accounts.click({ button: 'right' });
-	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Size' }).press('ArrowRight');
-	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Default', exact: true }).click();
+	await selectSize('Default');
 	await expect(navigation).not.toHaveClass(/compact/u);
 	await expectCardGeometry();
 	await expect(sidebar).toHaveCSS('border-top-left-radius', '12px');
@@ -94,17 +83,7 @@ test('Sessions content shares one raised card with equal right and bottom margin
 
 test('Sessions shared layout preserves user geometry across pages, resize and reload', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
-	let page = workbench.page;
-	if (target.kind === 'browser') {
-		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	} else {
-		if (!('windows' in application)) {
-			throw new Error('Expected Electron windows');
-		}
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
+	let page = await workbench.openAgentsWindow(target.kind);
 	const failures: string[] = [];
 	page.on('pageerror', error => failures.push(error.message));
 	const sidebar = page.locator('[data-part="sidebar"]');
@@ -173,15 +152,7 @@ test('Sessions shared layout preserves user geometry across pages, resize and re
 
 test('Sessions restores independent pane arrangements, active selections and drafts after reload', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
-	let page = workbench.page;
-	if (target.kind === 'browser') {
-		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	} else {
-		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
+	let page = await workbench.openAgentsWindow(target.kind);
 	const failures: string[] = [];
 	page.on('pageerror', error => failures.push(error.message));
 	await page.setViewportSize({ width: 1_900, height: 950 });

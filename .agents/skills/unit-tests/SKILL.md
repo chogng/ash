@@ -1,105 +1,37 @@
 ---
 name: unit-tests
-description: Use when running unit tests in the Ash repo. Covers the runTests tool, scripts/test.sh (macOS/Linux) and scripts/test.bat (Windows), and their supported arguments for filtering, globbing, and debugging tests.
+description: Use when running unit tests in the Ash repo. Covers pnpm test:unit and its supported arguments for filtering tests by file, glob, and name.
 ---
 
 # Running Unit Tests
 
-## Preferred: Use the `runTests` tool
+Unit tests run in Node/jsdom through Mocha. Use the Node version in `.nvmrc` and run these commands from the repository root.
 
-If the `runTests` tool is available, **prefer it** over running shell commands. It provides structured output with detailed pass/fail information and supports filtering by file and test name.
+## Scripts
 
-- Pass absolute paths to test files via the `files` parameter.
-- Pass test names via the `testNames` parameter to filter which tests run.
-- Set `mode="coverage"` to collect coverage.
+| Scope | Command |
+| --- | --- |
+| Frontend and architecture units | `pnpm --dir app-ts test:unit` |
+| Editor and its Workbench integrations | `pnpm --dir app-ts test:editor:unit` |
+| Extension units | `pnpm --dir app-ts test:extensions` |
+| Build tools | `pnpm --dir build test` |
 
-Example (conceptual): run tests in `src/ash/editor/test/common/model.test.ts` with test name filter `"should split lines"`.
+The frontend, editor, and extension commands prepare resources and compile tests before running them. Build-tool tests use Node's test runner and do not accept the Mocha options below.
 
-## Fallback: Shell scripts
+## Common options
 
-When the `runTests` tool is not available (e.g. in CLI environments), use the platform-appropriate script from the repo root:
-
-- **macOS / Linux:** `./scripts/test.sh [options]`
-- **Windows:** `.\scripts\test.bat [options]`
-
-These scripts download Electron if needed and launch the Mocha test runner.
-
-### Commonly used options
-
-#### Bare file paths - Run tests from specific files
-
-Pass source file paths directly as positional arguments. The test runner automatically treats bare `.ts`/`.js` positional arguments as `--run` values.
+| Option | Meaning |
+| --- | --- |
+| `--run <path>` | A source `.ts` or emitted `.js` path relative to `app-ts`; starts with `src/` or `test/`. Repeat for multiple files. |
+| `--runGlob <pattern>` | Match emitted `.js` paths relative to `.build/app-ts/test`. Cannot be combined with `--run`. |
+| `--grep <pattern>` | Match full Mocha test titles in the selected files. |
+| `--timeout <milliseconds>` | Positive integer; default 60,000 per test. |
 
 ```bash
-./scripts/test.sh src/ash/editor/test/common/model.test.ts
+pnpm --dir app-ts test:unit --run src/ash/workbench/contrib/preferences/test/browser/settings.test.ts --grep 'Models Settings'
+pnpm --dir app-ts test:unit --runGlob '**/localizationService.test.js'
 ```
 
-```bat
-.\scripts\test.bat src\ash\editor\test\common\model.test.ts
-```
+Use `--run` for file paths; bare positional paths and `--coverage` are unsupported. The runner fails if no tests execute. Check the selected suite's final test count and exit code; `test:unit` also runs the runner regression tests, which have their own summary.
 
-Multiple files:
-
-```bash
-./scripts/test.sh src/ash/editor/test/common/model.test.ts src/ash/editor/test/common/range.test.ts
-```
-
-#### `--run <file>` - Run tests from a specific file (explicit form)
-
-Accepts a **source file path** (starting with `src/`). The runner strips the `src/` prefix and the `.ts`/`.js` extension automatically to resolve the compiled module.
-
-```bash
-./scripts/test.sh --run src/ash/editor/test/common/model.test.ts
-```
-
-Multiple files can be specified by repeating `--run`:
-
-```bash
-./scripts/test.sh --run src/ash/editor/test/common/model.test.ts --run src/ash/editor/test/common/range.test.ts
-```
-
-#### `--grep <pattern>` (aliases: `-g`, `-f`) - Filter tests by name
-
-Runs only tests whose full title matches the pattern (passed to Mocha's `--grep`).
-
-```bash
-./scripts/test.sh --grep "should split lines"
-```
-
-Combine with `--run` to filter tests within a specific file:
-
-```bash
-./scripts/test.sh --run src/ash/editor/test/common/model.test.ts --grep "should split lines"
-```
-
-#### `--runGlob <pattern>` (aliases: `--glob`, `--runGrep`) - Run tests matching a glob
-
-Runs all test files matching a glob pattern against the compiled output directory. Useful for running all tests under a feature area.
-
-```bash
-./scripts/test.sh --runGlob "**/editor/test/**/*.test.js"
-```
-
-Note: the glob runs against compiled `.js` files in the output directory, not source `.ts` files.
-
-#### `--coverage` - Generate a coverage report
-
-```bash
-./scripts/test.sh --run src/ash/editor/test/common/model.test.ts --coverage
-```
-
-#### `--timeout <ms>` - Set test timeout
-
-Override the default Mocha timeout for long-running tests.
-
-```bash
-./scripts/test.sh --run src/ash/editor/test/common/model.test.ts --timeout 10000
-```
-
-### Integration tests
-
-Integration tests (files ending in `.integrationTest.ts` or located in `extensions/`) are **not run** by `scripts/test.sh`. Use `scripts/test-integration.sh` (or `scripts/test-integration.bat`) instead. See the `integration-tests` skill for details.
-
-### Compilation requirement
-
-Tests run against compiled JavaScript output. Ensure the `Ash - Build` watch task is running or that compilation has completed before running tests. Test failures caused by stale output are a common pitfall.
+For test design and cleanup, read [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) and [TypeScript Testing](../../../.github/instructions/typescript-testing.instructions.md). Real layout and input behavior belong in the Playwright browser integration suite; complete product flows belong in [smoke-tests](../smoke-tests/SKILL.md).

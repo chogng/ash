@@ -2,6 +2,10 @@ import type { Browser, ElectronApplication, Locator, Page } from "@playwright/te
 import { Editors } from "./editors.js";
 import { QuickAccess } from "./quickaccess.js";
 import { SettingsEditor } from './settings.js';
+import { Terminal } from './terminal.js';
+import { Dialogs } from './dialogs.js';
+import { Search } from './search.js';
+import { Menus } from './menus.js';
 import type { PlaywrightTarget } from './testTarget.js';
 
 /** Product-level automation surface for one Ash Workbench window. */
@@ -10,12 +14,20 @@ export class Workbench {
 	readonly editors: Editors;
 	readonly quickaccess: QuickAccess;
 	readonly settingsEditor: SettingsEditor;
+	readonly terminal: Terminal;
+	readonly dialogs: Dialogs;
+	readonly search: Search;
+	readonly menus: Menus;
 
 	constructor(readonly page: Page) {
 		this.element = page.locator(".ash-workbench");
 		this.editors = new Editors(page);
 		this.quickaccess = new QuickAccess(page);
 		this.settingsEditor = new SettingsEditor(page, this.quickaccess);
+		this.terminal = new Terminal(page);
+		this.dialogs = new Dialogs(page);
+		this.search = new Search(page);
+		this.menus = new Menus(page);
 	}
 
 	async waitForReady(): Promise<void> {
@@ -25,9 +37,29 @@ export class Workbench {
 		await this.waitForUiIdle();
 	}
 
+	/** Recreates the renderer realm; use the reloadWorkbench fixture for a normal close/reopen. */
 	async reloadWindow(page: Page = this.page): Promise<void> {
 		await page.reload();
 		await waitForWindowLoad(page);
+	}
+
+	/** System appearance belongs to Main on Electron and media queries on Browser. */
+	async setAppearance(application: Browser | ElectronApplication, colorScheme: 'light' | 'dark', page = this.page): Promise<void> {
+		if ('windows' in application) {
+			await application.evaluate(({ nativeTheme }, scheme) => { nativeTheme.themeSource = scheme; }, colorScheme);
+		} else {
+			await page.emulateMedia({ colorScheme });
+		}
+	}
+
+	async openExplorer(): Promise<void> {
+		const sidebar = this.page.locator('[data-part="sidebar"]');
+		const explorer = this.page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Explorer', exact: true });
+		if (await explorer.getAttribute('aria-selected') !== 'true' || !await sidebar.isVisible()) {
+			await explorer.click();
+		}
+		await sidebar.waitFor({ state: 'visible' });
+		await this.page.locator('[data-part="sidebar"] .ash-sidebar-title-label').getByText('Explorer', { exact: true }).waitFor({ state: 'visible' });
 	}
 
 	async reopenAgentsWindow(application: Browser | ElectronApplication, page: Page): Promise<Page> {

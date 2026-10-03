@@ -6,7 +6,7 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { DialogSeverity, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IAccessibleViewService, AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { exportTrace, TraceConnection, type TraceConnectionState, type TraceSpan } from './traceConnection.js';
@@ -36,7 +36,7 @@ export class TraceEditor extends Disposable implements IEditorPane {
 	private shown = true;
 	private readonly listId = 'ash-trace-list-' + nextListId++;
 
-	constructor(@IDialogService private readonly dialogs: IDialogService, @IConfigurationService private readonly configuration: IConfigurationService) { super(); }
+	constructor(@IAccessibleViewService private readonly accessibleView: IAccessibleViewService, @IConfigurationService private readonly configuration: IConfigurationService) { super(); }
 
 	create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
@@ -97,7 +97,6 @@ export class TraceEditor extends Disposable implements IEditorPane {
 			this.rows.get(this.selected!)!.domNode.scrollIntoView({ block: 'nearest' });
 		}));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
-			if (event.altKey && event.key === 'F1') { event.preventDefault(); event.stopPropagation(); void this.showHelp(); }
 		}));
 		this._register(this.connection.onDidChange(() => this.scheduleRender()));
 		this._register(toDisposable(() => {
@@ -209,15 +208,9 @@ export class TraceEditor extends Disposable implements IEditorPane {
 		if (this.detailsDomNode.textContent !== details) { this.detailsDomNode.textContent = details; }
 	}
 
-	private async showHelp(): Promise<void> {
-		const focus = this.domNode.ownerDocument.activeElement as HTMLElement | null;
-		await this.dialogs.showMessage({
-			severity: DialogSeverity.Info, title: localize('trace.helpTitle', 'Trace viewer help'),
-			message: localize('trace.helpText', 'Enable tracing before starting App Server: set ASH_TRACE_WEBSOCKET_ADDR to 127.0.0.1:4319 and ASH_TRACE_WEBSOCKET_TOKEN to a random 64-digit hexadecimal token. Enter that address and token here. Only new completed spans are received. Connect starts a new capture; Disconnect keeps the capture. Up to 2,000 spans and 8 MiB are retained; dropped spans are counted. Tab moves between controls. Arrow keys, Home and End select spans. The timeline gives each span’s name, result, relative start and duration as text; Span details contains selectable OTLP JSON with trace and parent IDs. Filtering also limits the OTLP export. Tokens and captures are kept only in this editor. Escape closes this help dialog.'),
-		});
-		if (focus?.isConnected) { focus.focus(); }
-	}
-}
+	private showHelp(): void {
+		this.accessibleView.show(AccessibleViewType.Help);
+	}}
 
 function outcomeLabel(outcome: string): string {
 	switch (outcome) {

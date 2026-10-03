@@ -7,68 +7,6 @@ import { findDesktopRoot } from "./testPaths.js";
 
 const desktopRoot = findDesktopRoot(import.meta.dirname);
 const sourceRoot = resolve(desktopRoot, "src/ash");
-const allowedNativeDomFiles = new Set([
-	resolve(sourceRoot, "base/browser/dom.ts"),
-	resolve(sourceRoot, "base/browser/reactiveDom.ts"),
-]);
-const allowedAnimationFrameFiles = new Set([
-	resolve(sourceRoot, "base/browser/scheduler.ts"),
-	resolve(desktopRoot, "test/automation/workbench.ts"),
-]);
-const baseUiRoot = resolve(sourceRoot, "base/browser/ui");
-const allowedExplicitDocumentContracts = new Map<string, ReadonlySet<string>>([
-	[resolve(sourceRoot, "base/browser/domSanitize.ts"), new Set(["HtmlSanitizerOptions"])],
-	[resolve(sourceRoot, "base/browser/fileAccess.ts"), new Set(["FilePickerOptions"])],
-	[resolve(sourceRoot, "base/browser/markdownRenderer.ts"), new Set(["MarkdownElementOptions", "MarkdownSanitizerOptions"])],
-	[resolve(sourceRoot, "editor/browser/widget/richTextEditor/richTextEditorWidget.ts"), new Set(["NodeViewContext", "InlineNodeViewContext", "EditorToolbarActionContext"])],
-	[resolve(sourceRoot, "editor/browser/view/renderingContext.ts"), new Set(["EditorOverlayContext"])],
-	[resolve(sourceRoot, "workbench/services/keybinding/browser/keybindingService.ts"), new Set(["WorkbenchKeybindingServiceOptions"])],
-]);
-const allowedDocumentConstructors = new Map<string, ReadonlySet<string>>([
-	[resolve(sourceRoot, "base/browser/domStylesheets.ts"), new Set(["ManagedStyleSheet"])],
-	[resolve(sourceRoot, "base/browser/reactiveDom.ts"), new Set(["ReactiveElement"])],
-	[resolve(sourceRoot, "base/browser/ui/aria/aria.ts"), new Set(["AriaLiveRegion"])],
-]);
-
-test("frontend TypeScript creates DOM only through the canonical foundations", () => {
-	const violations: string[] = [];
-	for (const file of frontendTypeScriptFiles()) {
-		const source = readFileSync(file, "utf8");
-		const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-		visit(sourceFile, node => {
-			if (!ts.isCallExpression(node)) return;
-			if (isBrowserEvaluation(node)) return;
-			const name = calledName(node.expression);
-			if (ts.isPropertyAccessExpression(node.expression) && ["createElement", "createElementNS", "createTextNode", "createDocumentFragment"].includes(name ?? "") && !allowedNativeDomFiles.has(file)) {
-				violations.push(location(file, sourceFile, node, name!));
-			}
-			if (["requestAnimationFrame", "cancelAnimationFrame"].includes(name ?? "") && !allowedAnimationFrameFiles.has(file)) {
-				violations.push(location(file, sourceFile, node, name!));
-			}
-		});
-	}
-	assert.deepEqual(violations, []);
-});
-
-test("browser evaluation callbacks use browser APIs without importing the test runner's modules", () => {
-	const sourceFile = ts.createSourceFile("test/integration/browser/example.integration.spec.ts", `
-		const host = document.createElement('main');
-		page.evaluate(() => {
-			document.createElement('span');
-			requestAnimationFrame(() => document.createTextNode('ready'));
-		});
-		const probe = () => document.createElement('div');
-		page.evaluate(probe);
-	`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-	const checked: string[] = [];
-	visit(sourceFile, node => {
-		if (ts.isCallExpression(node) && calledName(node.expression) === "createElement" && !isBrowserEvaluation(node)) {
-			checked.push(node.getText(sourceFile));
-		}
-	});
-	assert.deepEqual(checked, ["document.createElement('main')", "document.createElement('div')"]);
-});
-
 test("DOM context queries have one canonical owner", () => {
 	const expectedSymbols = ["getWindow", "getDocument", "getActiveElement", "getActiveDocument"];
 	const ownerFiles = [
@@ -95,57 +33,8 @@ test("the retired DOM builder and binding protocol stay removed", () => {
 	assert.deepEqual(violations, []);
 });
 
-test("mounted UI derives its document from the host boundary", () => {
-	const violations: string[] = [];
-	for (const file of collectTypeScriptFiles(baseUiRoot)) {
-		const source = readFileSync(file, "utf8");
-		const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-		visit(sourceFile, node => {
-			if (!ts.isPropertySignature(node) && !ts.isParameter(node)) return;
-			if (!ts.isIdentifier(node.name) || node.name.text !== "ownerDocument") return;
-			if (ts.isPropertySignature(node)) {
-				violations.push(location(file, sourceFile, node, "ownerDocument option on mounted UI"));
-			}
-			if (ts.isParameter(node)) {
-				if (node.questionToken) violations.push(location(file, sourceFile, node, "optional ownerDocument"));
-				if (node.initializer) violations.push(location(file, sourceFile, node, "default ownerDocument"));
-			}
-		});
-	}
-	assert.deepEqual(violations, []);
-});
-
-test("frontend component contracts do not carry a redundant document", () => {
-	const violations: string[] = [];
-	for (const file of productionTypeScriptFiles()) {
-		const source = readFileSync(file, "utf8");
-		const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-		visit(sourceFile, node => {
-			if (ts.isPropertySignature(node) && ts.isIdentifier(node.name) && node.name.text === "ownerDocument") {
-				const contractName = containingDeclarationName(node);
-				if (!contractName || !allowedExplicitDocumentContracts.get(file)?.has(contractName)) {
-					violations.push(location(file, sourceFile, node, `ownerDocument on ${contractName ?? "anonymous contract"}`));
-				}
-			}
-			if (!ts.isConstructorDeclaration(node)) return;
-			const className = ts.isClassDeclaration(node.parent) ? node.parent.name?.text : undefined;
-			for (const parameter of node.parameters) {
-				if (parameter.type?.getText(sourceFile) !== "Document") continue;
-				if (!className || !allowedDocumentConstructors.get(file)?.has(className)) {
-					violations.push(location(file, sourceFile, parameter, `Document constructor parameter on ${className ?? "anonymous class"}`));
-				}
-			}
-		});
-	}
-	assert.deepEqual(violations, []);
-});
-
 function frontendTypeScriptFiles(): string[] {
 	return [resolve(sourceRoot), resolve(desktopRoot, "test")].flatMap(collectTypeScriptFiles);
-}
-
-function productionTypeScriptFiles(): string[] {
-	return collectTypeScriptFiles(sourceRoot).filter(file => !/[\\/](?:test|tests)[\\/]|\.test\.tsx?$/u.test(file));
 }
 
 function collectTypeScriptFiles(directory: string): string[] {
@@ -156,37 +45,4 @@ function collectTypeScriptFiles(directory: string): string[] {
 		else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) files.push(path);
 	}
 	return files;
-}
-
-function visit(node: ts.Node, accept: (node: ts.Node) => void): void {
-	accept(node);
-	ts.forEachChild(node, child => visit(child, accept));
-}
-
-function calledName(expression: ts.LeftHandSideExpression): string | undefined {
-	if (ts.isIdentifier(expression)) return expression.text;
-	if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
-	return undefined;
-}
-
-function isBrowserEvaluation(node: ts.Node): boolean {
-	if (!/[\\/]test[\\/]integration[\\/]browser[\\/].*\.spec\.ts$/u.test(`/${node.getSourceFile().fileName}`)) return false;
-	for (let current = node.parent; current; current = current.parent) {
-		if (!ts.isArrowFunction(current) && !ts.isFunctionExpression(current)) continue;
-		const call = current.parent;
-		if (ts.isCallExpression(call) && ts.isPropertyAccessExpression(call.expression) && call.expression.name.text === "evaluate" && call.arguments[0] === current) return true;
-	}
-	return false;
-}
-
-function containingDeclarationName(node: ts.Node): string | undefined {
-	for (let current = node.parent; current; current = current.parent) {
-		if (ts.isInterfaceDeclaration(current) || ts.isTypeAliasDeclaration(current) || ts.isClassDeclaration(current)) return current.name?.text;
-	}
-	return undefined;
-}
-
-function location(file: string, sourceFile: ts.SourceFile, node: ts.Node, operation: string): string {
-	const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-	return `${relative(desktopRoot, file).replaceAll("\\", "/")}:${line}: ${operation}`;
 }

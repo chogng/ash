@@ -6,15 +6,7 @@ import { join } from 'node:path';
 
 test('Sessions review environment scans a draft, accepts entries, and excludes changed sources', async ({ application, target, workbench, testWorkspace }) => {
 	test.skip(target.workbenchMode !== 'code');
-	let page = workbench.page;
-	if (target.kind === 'browser') {
-		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	} else {
-		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
+	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true }).click();
 	const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 	await editor.waitForEditorFocus();

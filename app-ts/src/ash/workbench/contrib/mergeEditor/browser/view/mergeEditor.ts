@@ -81,9 +81,7 @@ export class MergeEditor extends Disposable {
 	public create(container: HTMLElement): void {
 		this.alignmentScheduler = this._register(new AnimationFrameScheduler(getWindow(container), () => {
 			if (!this.model?.isReady) return;
-			const focusedButtonIndex = this.hunkActionButtons.findIndex(button => button.domNode === this.domNode.ownerDocument.activeElement);
 			this.renderZones();
-			if (focusedButtonIndex >= 0) this.hunkActionButtons[focusedButtonIndex]?.focus();
 			this.synchronizeScroll('current', { scrollTopChanged: true, scrollLeftChanged: false });
 		}));
 		const document = container.ownerDocument;
@@ -154,7 +152,11 @@ export class MergeEditor extends Disposable {
 				minimap: { enabled: false },
 			}));
 			this.sourceEditors.set(side, editor);
-			this._register(observeElementSize(editorNode, size => editor.layout(size)));
+			const layout = this._register(new AnimationFrameScheduler(getWindow(editorNode), () => {
+				editor.layout({ width: editorNode.clientWidth, height: editorNode.clientHeight });
+			}));
+			// Editor layout writes geometry; run it after the ResizeObserver delivery.
+			this._register(observeElementSize(editorNode, () => layout.schedule()));
 		}
 		this.hunksDomNode = h(document, 'div');
 		this.hunksDomNode.className = 'ash-merge-hunks';
@@ -169,7 +171,10 @@ export class MergeEditor extends Disposable {
 		resultSection.append(resultTitle, this.resultDomNode, this.resultPlaceholderDomNode);
 		this.domNode.append(navigation, inputs, this.hunksDomNode, resultSection);
 		this.resultEditor.create(this.resultDomNode);
-		this._register(observeElementSize(this.resultDomNode, size => this.resultEditor.layout(size)));
+		const resultLayout = this._register(new AnimationFrameScheduler(getWindow(this.resultDomNode), () => {
+			this.resultEditor.layout({ width: this.resultDomNode.clientWidth, height: this.resultDomNode.clientHeight });
+		}));
+		this._register(observeElementSize(this.resultDomNode, () => resultLayout.schedule()));
 		this.updateLayout();
 		this.updateNavigation();
 	}
@@ -329,16 +334,16 @@ export class MergeEditor extends Disposable {
 			row.append(state);
 			this.hunksDomNode.append(row);
 		}
-		const focusButton = this.renderZones();
+		this.renderZones();
 		this.updateNavigation();
-		focusButton?.focus();
 		this.pendingActionFocus = undefined;
 	}
 
-	private renderZones(): Button | undefined {
+	private renderZones(): void {
+		const focusedButtonIndex = this.hunkActionButtons.findIndex(button => button.hasFocus());
 		this.clearZones();
 		const model = this.model;
-		if (!model?.isReady) return undefined;
+		if (!model?.isReady) return;
 		const sides: readonly MergeEditorSide[] = this.showBase ? ['base', 'current', 'incoming', 'result'] : ['current', 'incoming', 'result'];
 		const specs = new Map<MergeEditorSide, MergeZone[]>(sides.map(side => [side, []]));
 		const added = new Map<MergeEditorSide, number>(sides.map(side => [side, 0]));
@@ -401,7 +406,18 @@ export class MergeEditor extends Disposable {
 						} else {
 							node.className = 'ash-merge-spacer';
 						}
-						ids.push(accessor.addZone({ afterLineNumber: spec.afterLineNumber, heightInPx: spec.heightInPx, domNode: node, isAccessible: spec.hunkIndex !== undefined }));
+						ids.push(accessor.addZone({
+							afterLineNumber: spec.afterLineNumber, heightInPx: spec.heightInPx, domNode: node,
+							isAccessible: spec.hunkIndex !== undefined,
+							// View zones start hidden. Restore keyboard focus only after the
+							// editor paints the replacement actions into a visible zone.
+							onDomNodeTop: () => {
+								if (focusButton && node.contains(focusButton.domNode) && node.hasAttribute('data-visible-view-zone')) {
+									focusButton.focus();
+									focusButton = undefined;
+								}
+							},
+						}));
 					}
 				});
 				this.zoneIds.set(side, ids);
@@ -409,7 +425,7 @@ export class MergeEditor extends Disposable {
 		} finally {
 			this.syncingScroll = false;
 		}
-		return focusButton;
+		if (!focusButton && focusedButtonIndex >= 0) focusButton = this.hunkActionButtons[focusedButtonIndex];
 	}
 
 	private renderZoneActions(node: HTMLElement, side: MergeEditorSide, hunk: MergeEditorHunk): Button | undefined {

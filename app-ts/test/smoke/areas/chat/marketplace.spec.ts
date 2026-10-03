@@ -1,9 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
-import type { Page } from '@playwright/test';
-import type { BrowserWindow, MessageBoxOptions } from 'electron';
-import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 
 test.beforeEach(async ({ target, workbench }) => {
 	if (target.workbenchMode === 'code') {
@@ -11,34 +8,6 @@ test.beforeEach(async ({ target, workbench }) => {
 		await expect(workbench.page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
 	}
 });
-
-async function expectHelp(page: Page, application: PlaywrightApplication, title: string, open: () => Promise<unknown>): Promise<void> {
-	if (!('windows' in application)) {
-		await open();
-		await expect(page.getByRole('dialog', { name: title, exact: true })).toBeVisible();
-		await page.keyboard.press('Escape');
-		return;
-	}
-	await application.evaluate(({ dialog }) => {
-		const original = dialog.showMessageBox.bind(dialog);
-		const state = globalThis as typeof globalThis & { ashMarketplaceHelp?: { title?: string; finish?: () => void; restore: () => void } };
-		state.ashMarketplaceHelp = { restore: () => { dialog.showMessageBox = original; } };
-		dialog.showMessageBox = ((...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => new Promise(resolve => {
-			state.ashMarketplaceHelp!.title = (args.length === 1 ? args[0] : args[1]).title;
-			state.ashMarketplaceHelp!.finish = () => resolve({ response: 0, checkboxChecked: false });
-		})) as typeof dialog.showMessageBox;
-	});
-	try {
-		await open();
-		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { ashMarketplaceHelp?: { title?: string } }).ashMarketplaceHelp?.title)).toBe(title);
-	} finally {
-		await application.evaluate(() => {
-			const state = (globalThis as typeof globalThis & { ashMarketplaceHelp?: { finish?: () => void; restore: () => void } }).ashMarketplaceHelp;
-			state?.finish?.();
-			state?.restore();
-		});
-	}
-}
 
 test('Skills command opens Settings after the Skills sidebar is removed', async ({ target, application, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
@@ -50,7 +19,12 @@ test('Skills command opens Settings after the Skills sidebar is removed', async 
 	await expect(skills).toBeVisible();
 	await expect(page.getByRole('tab', { name: 'Skills', exact: true })).toHaveCount(0);
 	const helpButton = skills.getByRole('button', { name: 'Help', exact: true });
-	await expectHelp(page, application, 'Skills help', () => helpButton.click());
+	await workbench.dialogs.expectMessage(application, 'Skills help', () => helpButton.click());
+	await expect(helpButton).toBeFocused();
+	await helpButton.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+	await expect(help.getByRole('textbox')).toHaveValue(/Select a skill by name and source/u);
+	await page.keyboard.press('Escape');
 	await expect(helpButton).toBeFocused();
 	await page.locator('.ash-modal-editor-close').click();
 });
@@ -66,6 +40,13 @@ test('Marketplace view tab uses the extensions icon', async ({ target, workbench
 	await marketplaceTab.click();
 	await expect(page.locator('.ash-marketplace')).toBeVisible();
 	await expect(marketplaceTab).toHaveAttribute('aria-selected', 'true');
+	const search = page.locator('.ash-marketplace').getByRole('searchbox', { name: 'Search packages', exact: true });
+	await search.focus();
+	await search.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+	await expect(help.getByRole('textbox')).toHaveValue(/Install, update, and uninstall affect the whole package/u);
+	await page.keyboard.press('Escape');
+	await expect(search).toBeFocused();
 });
 
 test('Marketplace slash commands open their Workbench owners without sending a chat message', async ({ target, application, workbench }) => {

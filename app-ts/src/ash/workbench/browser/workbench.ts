@@ -626,12 +626,15 @@ export class Workbench extends Disposable {
 		services.registerInstance(IBulkEditService, bulkEditService);
 		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }
 		this._register(services.createInstance(WorkbenchLanguageFeatures));
-		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { dirPermissions: dirPermissionsService, events: api.events }));
+		// Only the desktop host may inspect directory grants. Web language requests
+		// are authorized by the server for the authenticated workspace.
+		const languageDirPermissions = nativeHostApi ? dirPermissionsService : undefined;
+		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { dirPermissions: languageDirPermissions, events: api.events }));
 		const diffService = new DiffService();
 		services.registerInstance(IDiffService, diffService);
 		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols);
 		services.registerInstance(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);
-		const languageDiagnosticsService = this._register(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments, dirPermissionsService));
+		const languageDiagnosticsService = this._register(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments, languageDirPermissions));
 		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
 		const markerService = this._register(new MarkerService());
 		services.registerInstance(IMarkerService, markerService);

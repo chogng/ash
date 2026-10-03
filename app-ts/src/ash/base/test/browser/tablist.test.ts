@@ -127,7 +127,7 @@ test("TabList exposes its ActionBar edge treatment as a presentation", () => {
 	dom.window.close();
 });
 
-test("TabList reveals the selected tab when horizontal content overflows", () => {
+test("TabList reveals selected and keyboard-focused tabs when horizontal content overflows", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const tabList = new TabList(dom.window.document.body, {
 		ariaLabel: "Overflowing tabs",
@@ -148,12 +148,27 @@ test("TabList reveals the selected tab when horizontal content overflows", () =>
 	const originalGetBoundingClientRect =
 		dom.window.HTMLElement.prototype.getBoundingClientRect;
 	dom.window.HTMLElement.prototype.getBoundingClientRect = function (): DOMRect {
-		if (this.classList.contains("ash-tab")) return rect(150, 0, 200, 24);
+		if (this.classList.contains("ash-tab")) return this.dataset.actionId === "second" ? rect(150, 0, 200, 24) : rect(0, 0, 50, 24);
 		return originalGetBoundingClientRect.call(this);
 	};
 
 	tabList.setTabs([tab("first"), tab("second")], "second");
 
+	assert.equal(viewport.scrollLeft, 100);
+	viewport.scrollLeft = 0;
+	const second = tabList.element.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')!;
+	second.focus();
+	assert.equal(viewport.scrollLeft, 100);
+	assert.equal(dom.window.document.activeElement, second);
+	assert.equal(second.getAttribute('aria-selected'), 'true');
+	second.blur();
+	viewport.scrollLeft = 0;
+	second.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true }));
+	second.focus();
+	assert.equal(viewport.scrollLeft, 0, 'pointer focus must not move the pressed tab before its click');
+	dom.window.document.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true }));
+	second.blur();
+	second.focus();
 	assert.equal(viewport.scrollLeft, 100);
 	tabList.dispose();
 	dom.window.close();

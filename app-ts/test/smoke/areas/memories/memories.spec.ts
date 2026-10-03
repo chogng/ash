@@ -1,7 +1,7 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('Memories can be created, edited, authorized and deleted through the product backend', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Memory management requires the product backend.');
+test('Memories can be created, edited, authorized and deleted through the product backend', async ({ target, workbench, application }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Memory management requires the desktop product host.');
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+Shift+P');
 	await page.getByPlaceholder('Type the name of a command to run').fill('Open memories');
@@ -37,12 +37,23 @@ test('Memories can be created, edited, authorized and deleted through the produc
 	await expect(view.getByLabel('Memory content', { exact: true })).toHaveJSProperty('readOnly', false);
 	await view.getByLabel('Memory content', { exact: true }).focus();
 	await page.keyboard.press('Alt+F1');
-	const help = page.getByRole('dialog', { name: 'Memories help' });
+	const help = page.getByRole('dialog', { name: 'Accessibility Help' });
 	await expect(help).toBeVisible();
 	await page.keyboard.press('Escape');
 	await expect(help).toBeHidden();
 	await expect(view.getByLabel('Memory content', { exact: true })).toBeFocused();
-	await view.getByRole('button', { name: 'Delete memory', exact: true }).click();
-	await page.getByRole('dialog', { name: 'Delete memory' }).getByRole('button', { name: 'Delete', exact: true }).click();
+	await workbench.dialogs.confirm(application, 'Delete memory', 'Delete', () => view.getByRole('button', { name: 'Delete memory', exact: true }).click());
 	await expect(view.getByLabel('Saved memories', { exact: true })).not.toContainText('Playwright fixture');
+});
+
+
+test('Browser Memories keeps authorization and saving disabled when the backend requires a desktop host', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires the authenticated Web backend.');
+	await workbench.quickaccess.runCommand('ash.memories.open');
+	const view = workbench.page.locator('.ash-memories');
+	await expect(view.getByRole('status')).toHaveText('PermissionRequired');
+	await expect(view.getByLabel('Allow memory reading', { exact: true })).toBeDisabled();
+	await expect(view.getByLabel('Allow model saving', { exact: true })).toBeDisabled();
+	await expect(view.getByRole('button', { name: 'Save memory', exact: true })).toBeDisabled();
+	await expect(view.getByRole('button', { name: 'Delete memory', exact: true })).toBeDisabled();
 });

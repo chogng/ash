@@ -1,18 +1,25 @@
 ---
 name: smoke-tests
-description: Use when running Ash smoke tests or working on smoke-test CI steps. Covers npm run smoketest / smoketest-no-compile, grep filtering tests, and a temporary repeat-loop technique for tracking down flaky smoke tests in CI.
+description: Use when running Ash smoke tests or working on smoke-test CI steps. Covers pnpm run smoketest / smoketest-no-compile, grep filtering tests, and tracking down flaky smoke tests in CI.
 ---
 
 # Running Smoke Tests
 
-Smoke tests live in `app-ts/test/smoke/` and drive a full Ash instance (Electron, web, or remote) through end-to-end user flows.
+Smoke tests live in `app-ts/test/smoke/` and drive a full Ash instance (Electron or web) through end-to-end user flows.
 
 ## Scripts
+
+Run from the repository root:
+
+- `pnpm run smoketest` — prepares the application and tests, then runs Electron smoke tests with App Server.
+- `pnpm run smoketest-no-compile` — runs the same tests after preparation. CI uses this after an explicit preparation step.
+
+For a specific target:
 
 | Target | Prepare and run | Run after preparation |
 | --- | --- | --- |
 | Electron UI | `pnpm --dir app-ts run test:smoke:ui` | `pnpm --dir app-ts run test:smoke:ui:no-compile` |
-| Electron with App Server | `pnpm --dir app-ts run test:smoke:desktop` | `pnpm --dir app-ts run test:smoke:desktop:no-compile` |
+| Electron with App Server | `pnpm run smoketest` | `pnpm run smoketest-no-compile` |
 | Browser UI | `pnpm --dir app-ts run test:smoke:browser` | `pnpm --dir app-ts run test:smoke:browser:no-compile` |
 | Browser with App Server | `pnpm --dir app-ts run test:smoke:browser:full` | `pnpm --dir app-ts run test:smoke:browser:full:no-compile` |
 
@@ -29,14 +36,14 @@ The regular commands run their matching `pretest:smoke:*` preparation first. The
 | `--max-failures=1` | Stop after the first failed test. |
 
 ```bash
-# Run the Browser UI suite after preparing its build
+# Prepare and run the Browser UI suite
 pnpm --dir app-ts run test:smoke:browser
 
 # Select a spec and check its tests before running
 pnpm --dir app-ts run test:smoke:ui:no-compile test/smoke/areas/windows/home.spec.ts --list
 
 # Run only tests whose titles match a pattern
-pnpm --dir app-ts run test:smoke:ui --grep "<test title>"
+pnpm run smoketest --grep "<test title>"
 ```
 
 A grep pattern can select more than one test. Check the selected list when the title is not unique. The runner exits nonzero if a selected test fails.
@@ -45,8 +52,8 @@ A grep pattern can select more than one test. Check the selected list when the t
 
 For an intermittent failure that appears only in CI, run the affected test repeatedly in the failing CI environment and stop on the first failure. This is a temporary diagnostic change, not a permanent CI step.
 
-1. Identify the failing surface and test title from the job log. The Browser UI job runs on Linux and the Electron UI job runs on Windows in `.github/workflows/frontend.yml`.
-2. On a temporary branch, keep the existing preparation step. Replace the matching smoke test step with a loop over its `no-compile` command. The example below replaces the Electron UI step; use `test:smoke:browser:no-compile` for Browser UI.
+1. Identify the failing surface and test title from the job log. Read the current matrix in `.github/workflows/frontend.yml`: Browser runs on Linux, and Electron runs on Windows and macOS; each also runs selected App Server-connected scenarios.
+2. On a temporary branch, keep the existing preparation step. Replace the matching smoke test step with a loop over its `no-compile` command. The example below replaces the Electron UI step; use `pnpm --dir app-ts run test:smoke:browser:no-compile` for Browser UI.
 3. Increase the job's `timeout-minutes` if the selected test needs more time for all iterations. Keep the existing failure artifact upload step.
 4. Fix the failure, then remove the loop and restore the normal CI command and timeout before merging.
 
@@ -66,16 +73,22 @@ The first failure is enough to reproduce the problem. Stopping there preserves i
 
 ## Debugging CI smoke failures
 
-Start with the failing test and error in the GitHub Actions job log. The workflow uploads `.build/app-ts/playwright/` on failure as `frontend-browser` or `frontend-electron`. The run ID appears in the Actions run URL. Download the artifact for the failing surface:
+Start with the failing test and error in the GitHub Actions job log. The workflow uploads `.build/app-ts/playwright/` on failure as `frontend-<surface>-<runner>`; use the exact name in the failing job. The run ID appears in the Actions run URL. Download the artifact for the failing surface:
 
 ```bash
-gh run download <run-id> -n frontend-electron -D ./logs
+gh run download <run-id> -n frontend-electron-windows-latest -D ./logs
 ```
 
-Use `frontend-browser` for the Browser job. The artifact contains `test-results/` and, when generated, `report/`. A failed test that reaches the Workbench fixture attaches `trace.zip` under its test result. Inspect the error and trace to find the failing action, then run that test locally with the same target and filter. If it fails only in CI, use the temporary loop above.
+The artifact contains `test-results/` and, when generated, `report/`. A failed test that reaches the Workbench fixture attaches `trace.zip` under its test result. Inspect the error and trace to find the failing action, then run that test locally with the same target and filter. If it fails only in CI, use the temporary loop above.
 
 ## Distinction from other test types
 
-- Unit tests: `pnpm --dir app-ts run test:unit`.
-- Editor browser integration tests: `pnpm --dir app-ts run test:editor:browser`.
+- Unit tests: `pnpm --dir app-ts test:unit`.
+- Editor browser integration tests: `pnpm --dir app-ts test:editor:browser`.
 - Smoke tests: the Playwright scripts above.
+
+## Changing tests
+
+Read [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) for shared fixtures, assertions, readiness, isolation, and cleanup. Reuse `test/automation/test.ts`, `workbench.settingsEditor`, and `workbench.openAgentsWindow(target.kind)` for setup and navigation.
+
+For Sessions restoration, use `workbench.reopenAgentsWindow(application, page)`: web reloads the page; Electron closes and reopens the window with the same profile so asynchronous saves complete. For system-menu assertions, use `captureElectronMenu` from `electronDriver.ts` and trigger the real UI action.

@@ -1,4 +1,3 @@
-import { IDialogService, DialogSeverity } from '../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { ICallService, type ScreenFrame, type ScreenSource } from '../../../../platform/call/common/callService.js';
@@ -22,7 +21,7 @@ export class CallViewPane extends ViewPane {
 	private readonly buttons = new Map<string, HTMLButtonElement>();
 	private working = false;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ICallService private readonly calls: ICallService, @IDialogService private readonly dialogs: IDialogService, @IConfigurationService private readonly configuration: IConfigurationService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ICallService private readonly calls: ICallService, @IConfigurationService private readonly configuration: IConfigurationService) {
 		super(container, options);
 		const document = container.ownerDocument;
 		this.contentElement.classList.add('ash-call');
@@ -117,9 +116,6 @@ export class CallViewPane extends ViewPane {
 		this.participantsDomNode = h(document, 'ul');
 		this.participantsDomNode.setAttribute('aria-label', 'People in this call');
 		this.contentElement.append(this.statusDomNode, this.formDomNode, actions, this.sourcePickerDomNode, this.screenStatusDomNode, this.screensDomNode, this.invitationDomNode, this.participantsDomNode);
-		this._register(addDisposableListener(this.contentElement, 'keydown', event => {
-			if (event.altKey && event.key === 'F1') { event.preventDefault(); void this.showHelp(); }
-		}));
 		this._register(calls.onDidChange(() => this.render()));
 		this._register(calls.onDidChangeScreens(() => this.renderScreens()));
 		this.render();
@@ -132,12 +128,6 @@ export class CallViewPane extends ViewPane {
 		if (this.configuration.getValue<boolean>('accessibility.verbosity.calls')) {
 			this.statusDomNode.textContent += ' Use Tab to navigate and Alt+F1 for help.';
 		}
-	}
-
-	private async showHelp(): Promise<void> {
-		const focus = this.element.ownerDocument.activeElement;
-		await this.dialogs.showMessage({ title: 'Calls help', severity: DialogSeverity.Info, message: 'Create a call on this computer or a server, or join with an invitation. Your microphone starts off. Use Tab and Shift+Tab to move between controls and Enter or Space to activate a button. Muting stops sending audio; Stop listening stops playback. Share screen opens a display or window selector. Use arrow keys to choose a source, then Start sharing. Escape cancels selection. Stop sharing ends screen capture without leaving the call. Shared screen images are labeled by participant; their visual contents are not transcribed. Sharing stops when its window closes, the call reconnects, or you leave. Leave disconnects only you. End for everyone closes the room. Invitation keys grant access: share them only with people you want in the call. Escape closes this help.' });
-		if (focus instanceof HTMLElement && focus.isConnected) { focus.focus(); }
 	}
 
 	private field(container: HTMLElement, name: string, control: HTMLElement): void {

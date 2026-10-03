@@ -119,11 +119,12 @@ test('Image preview closes a decoder that finishes after disposal', async () => 
 	}
 });
 
-test('Image preview updates its visible and accessible text when Chinese is selected', async () => {
-	using fixture = new ImageFixture();
-	await fixture.preview.setInput({ resource }, new AbortController().signal);
+test('Image preview initializes its visible and accessible text in Chinese', async () => {
 	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
+	using fixture = new ImageFixture();
+	await fixture.preview.setInput({ resource }, new AbortController().signal);
+
 	assert.match(fixture.browser.window.document.querySelector('.ash-image-preview-summary')!.textContent!, /像素.*适应窗口/);
 	assert.match(fixture.preview.getAccessibleContent(), /图片：product.png[\s\S]*格式：image\/png/);
 	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '适应窗口');

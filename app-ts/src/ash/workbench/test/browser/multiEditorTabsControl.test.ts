@@ -36,14 +36,15 @@ import { WorkspaceContextService } from '../../services/workspaces/browser/works
 import { FileKind } from '../../../platform/files/common/files.js';
 import type { FileElement } from '../../browser/parts/editor/breadcrumbsModel.js';
 
-test('Editor breadcrumbs localize their navigation label when the language changes', () => {
+test('Editor breadcrumbs initialize their navigation label in Chinese', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		using services = createTestEditorServices();
-		using control = services.createInstance(EditorBreadcrumbsControl, dom.window.document.body, undefined, undefined);
-		control.setInput(input('folder/file.ts'));
 		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
+		using control = services.createInstance(EditorBreadcrumbsControl, dom.window.document.body, undefined, undefined);
+		control.setInput(input('folder/file.ts'));
+
 		assert.equal(control.domNode.getAttribute('aria-label'), '编辑器面包屑');
 		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(EditorShowIconsConfiguration)?.setting;
 		assert.deepEqual([setting?.title, setting?.description], ['工作台 › 编辑器：显示图标', '在编辑器标签中显示文件图标。']);

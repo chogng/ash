@@ -1,3 +1,7 @@
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { ActiveEditorContext } from '../../../common/contextkeys.js';
+import { localize } from '../../../../nls.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IBrowserViewApi, type IBrowserViewState } from '../../../../platform/browser/common/browserView.js';
@@ -91,7 +95,16 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		this._register(addDisposableListener<KeyboardEvent>(this.domNode, 'keydown', event => {
 			if (event.key === 'Enter' && event.target === this.addressDomNode) { event.preventDefault(); void this.navigate().catch(error => this.report(error)); }
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') { event.preventDefault(); this.focus(); }
-			if (event.altKey && event.key === 'F1') { event.preventDefault(); void this.showHelp(); }
+		}));
+		this._register(AccessibleViewRegistry.register({
+			type: AccessibleViewType.Help, priority: 100, name: 'browserHelp',
+			when: ActiveEditorContext.isEqualTo(BrowserEditor.ID),
+			getProvider: () => {
+				const focused = document.activeElement;
+				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
+				return new AccessibleContentProvider(AccessibleViewProviderId.Browser, { type: AccessibleViewType.Help },
+					() => this.helpContent(), () => focused.focus(), AccessibilityVerbositySettingId.Browser);
+			},
 		}));
 		const observer = new ResizeObserver(() => this.refreshLayout()); observer.observe(this.viewportDomNode);
 		this._register(toDisposable(() => observer.disconnect()));
@@ -147,8 +160,12 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		}).catch(error => this.report(error));
 	}
 	private report(error: unknown): void { if (!this.isDisposed) { this.statusDomNode.textContent = error instanceof Error ? error.message : String(error); } }
+	private helpContent(): string {
+		return localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelp' }, 'Use Tab to move through browser controls. Enter in the address field navigates. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Webpages use the browser’s accessibility tree. Downloads and website permissions are unavailable in this isolated session.');
+	}
+
 	private showHelp(): Promise<void> {
-		return this.dialogService.showMessage({ severity: DialogSeverity.Info, title: 'Browser accessibility help', message: 'Use Tab to move through browser controls. Enter in the address field navigates. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage.', detail: 'Webpages use the browser’s accessibility tree. Downloads and website permissions are unavailable in this isolated session.' });
+		return this.dialogService.showMessage({ severity: DialogSeverity.Info, title: 'Browser accessibility help', message: this.helpContent() });
 	}
 }
 

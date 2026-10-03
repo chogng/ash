@@ -116,20 +116,21 @@ test("Debug controls follow session state, dispatch actions, and retain collapse
 	}
 });
 
-test("Debug view updates Chinese labels and keeps the entered watch expression and collapsed section", async () => {
+test("Debug view initializes Chinese labels and retains its draft and collapsed section during refresh", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => {}, focusActiveEditor() {} };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new FakeDebugService();
+		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === "zh-CN")!;
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 		using view = new DebugViewPane(browser.window.document.body, { id: "ash.debug.locale.test", title: "Debug" }, debug, editor, contextMenus);
 		const watch = view.element.querySelector<HTMLDetailsElement>(".ash-debug-watch")!.parentElement as HTMLDetailsElement;
 		const input = view.element.querySelector<HTMLInputElement>(".ash-debug-input-form input")!;
 		input.value = "myValue";
 		watch.open = false;
-		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === "zh-CN")!;
-		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
+		await debug.refresh();
 		assert.deepEqual([...view.element.querySelectorAll("summary")].map(summary => summary.textContent), ["变量", "监视", "调用堆栈", "断点", "异常断点"]);
 		assert.deepEqual([input.value, watch.open, input.getAttribute("aria-label")], ["myValue", false, "添加监视表达式"]);
 		assert.equal(view.element.querySelector("button[aria-label='启动调试']")?.textContent, "启动调试");

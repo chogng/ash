@@ -17,12 +17,23 @@ test('generated protocol dependencies stay in transport contracts and runtime ad
 		const allowed = /^platform\/app-server\//u.test(name)
 			|| /^platform\/[^/]+\/common\/[^/]*Api\.ts$/u.test(name)
 			|| /^platform\/[^/]+\/(?:browser|electron-browser|electron-main|node)\//u.test(name)
-			|| /^(?:workbench|sessions)\/services\/[^/]+\/(?:browser|electron-browser)\//u.test(name);
+			|| /^(?:workbench|sessions)\/services\/[^/]+\/(?:browser|electron-browser)\//u.test(name)
+			|| /^sessions\/contrib\/providers\/appServer\/browser\//u.test(name)
+			|| name === 'workbench/contrib/git/browser/gitService.ts'
+			// This shared implementation adapts IModelApi into frontend model choices.
+			|| name === 'workbench/contrib/chat/common/languageModels.ts';
+		// Generated product definitions are metadata, not wire data or transport APIs.
+		const metadataOnly = source.statements.filter(ts.isImportDeclaration).every(statement => {
+			if (!ts.isStringLiteral(statement.moduleSpecifier) || !statement.moduleSpecifier.text.includes('generated/')) return true;
+			const bindings = statement.importClause?.namedBindings;
+			return bindings && ts.isNamedImports(bindings) && bindings.elements.every(element =>
+				['APPROVAL_MODE_DEFINITIONS', 'PRODUCT_SLASH_COMMANDS'].includes((element.propertyName ?? element.name).text));
+		});
 		function visit(node: ts.Node): void {
 			if (ts.isStringLiteral(node) && node.text.startsWith('.')) {
 				const target = relative(generatedRoot, resolve(dirname(file), node.text)).replaceAll('\\', '/');
 				const generated = target !== '..' && !target.startsWith('../') && !target.includes(':');
-				if (node.text.includes('generated/app-server') || generated && (!allowed || target.startsWith('types/'))) violations.push(`${name}: ${node.text}`);
+				if (node.text.includes('generated/app-server') || generated && (!allowed && !metadataOnly || target.startsWith('types/'))) violations.push(`${name}: ${node.text}`);
 			}
 			ts.forEachChild(node, visit);
 		}

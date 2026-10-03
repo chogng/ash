@@ -54,7 +54,6 @@ registerEditorPane({
 			cursorSmoothCaretAnimation: configuration?.getValue(CodeEditorConfiguration.cursorSmoothCaretAnimation),
 			cursorWidth: configuration?.getValue(CodeEditorConfiguration.cursorWidth),
 			cursorHeight: configuration?.getValue(CodeEditorConfiguration.cursorHeight),
-			lineNumbers: configuration?.getValue(CodeEditorConfiguration.lineNumbers) === false ? 'off' : 'on',
 			guides: {
 				indentation: configuration?.getValue(CodeEditorConfiguration.indentationGuides),
 				bracketPairs: configuration?.getValue(CodeEditorConfiguration.bracketPairGuides),

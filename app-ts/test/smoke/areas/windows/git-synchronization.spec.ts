@@ -84,7 +84,7 @@ test('External Git refs refresh two Workbench windows sharing the backend', asyn
 		// One application owns both windows, their authentication, and diagnostics.
 		second = await workbench.page.context().newPage();
 		close = () => second.close();
-		await second.goto(target.baseURL, { waitUntil: 'domcontentloaded' });
+		await second.goto(workbench.page.url(), { waitUntil: 'domcontentloaded' });
 	} else {
 		const electron = application as ElectronApplication;
 		const opened = electron.waitForEvent('window');

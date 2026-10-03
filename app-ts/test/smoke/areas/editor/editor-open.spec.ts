@@ -324,6 +324,7 @@ test("Show All Editors searches recent editors and restores editor focus", async
 		"This scenario requires the Code App Server product",
 	);
 
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	const page = workbench.page;
 	const fileRow = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
 	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
@@ -548,8 +549,7 @@ test("Single editor tab uses the available title width", async ({ target, workbe
 	const page = workbench.page;
 	const mainFile = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
 	await mainFile.click();
-	await page.getByRole("button", { name: "Manage" }).click();
-	await page.getByRole("menu").last().getByRole("menuitem", { name: "Settings" }).click();
+	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.locator(".ash-settings-editor");
 	await expect(settings).toBeVisible();
 	await settings.locator('[data-settings-category-id="editor"]').click();
@@ -665,6 +665,7 @@ test("Close Editor command closes the active tab", async ({ target, workbench })
 		"This scenario requires the Code App Server product",
 	);
 
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	const page = workbench.page;
 	const fileRow = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
 	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
@@ -685,6 +686,7 @@ test('Dragging a tab to a group edge shows the split target and moves the editor
 		'This scenario requires the Code App Server product',
 	);
 
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	const page = workbench.page;
 	const explorer = page.locator('.ash-explorer .ash-tree-row');
 	for (const filename of ['main.rs', 'main.ts']) {
@@ -901,14 +903,14 @@ test("Code finds local workspace symbols when the language server has no workspa
 	const query = quickPick.locator(".ash-quick-pick-input input");
 	await query.focus();
 	await expect(query).toBeFocused();
-	await query.fill("main");
+	await query.fill("@main");
 	const result = quickPick.locator(".ash-quick-pick-row-content").filter({ has: page.locator(".ash-quick-pick-row-label", { hasText: /^main$/ }) }).filter({ hasText: "main.rs" });
 	await expect(result).toBeVisible({ timeout: 60_000 });
 	await query.press("Enter");
 
 	await expect(quickPick).toBeHidden();
 	const group = workbench.editors.groupAt(0);
-	await expect(group.tabs.first()).toContainText("main.rs");
+	await expect(group.tabs.filter({ hasText: 'main.rs' })).toHaveAttribute('aria-selected', 'true');
 	await expect(group.content.locator(".stanza-editor-accessibility-status")).toContainText("4 characters selected");
 });
 
@@ -932,14 +934,17 @@ test("Code searches and opens a workspace symbol from unsaved editor content", a
 	for (let index = 0; index < 3; index += 1) await input.press("ArrowRight");
 	for (let index = 0; index < 4; index += 1) await input.press("Shift+ArrowRight");
 	await workbench.page.keyboard.insertText("ephemeral_workspace_symbol");
-	await expect.poll(() => hasIndexedSymbol(page, "ephemeral_workspace_symbol"), { timeout: 60_000, message: "unsaved declaration reaches the Workspace CodebaseSymbols overlay" }).toBe(true);
 	await page.keyboard.press(process.platform === "darwin" ? "Meta+T" : "Control+T");
 
 	const quickPick = page.locator(".ash-quick-pick");
 	const query = quickPick.locator(".ash-quick-pick-input input");
 	await expect(query).toBeFocused();
-	await query.fill("ephemeral_workspace_symbol");
-	await expect(quickPick.locator(".ash-quick-pick-row-label", { hasText: /^ephemeral_workspace_symbol$/ })).toBeVisible({ timeout: 60_000 });
+	// Query the current overlay index again while the unsaved revision is being indexed.
+	await expect(async () => {
+		await query.fill('@');
+		await query.fill('@ephemeral_workspace_symbol');
+		await expect(quickPick.locator('.ash-quick-pick-row-label', { hasText: /^ephemeral_workspace_symbol$/ })).toBeVisible({ timeout: 1_000 });
+	}).toPass({ timeout: 60_000 });
 	await query.press("Enter");
 
 	await expect(quickPick).toBeHidden();
@@ -994,7 +999,7 @@ test("Code shows App Server LSP completions in Stanza", async ({ target, workben
 	await input.press("ArrowUp");
 	await input.press("ArrowUp");
 	await input.press("End");
-	await input.press(process.platform === "darwin" ? "Meta+Space" : "Control+Space");
+	await input.press("Control+Space");
 
 	const options = group.content.locator(".stanza-editor-completion-option");
 	await expect.poll(() => options.count(), { timeout: 60_000, message: "LSP completion candidates appear" }).toBeGreaterThan(0);
@@ -1008,21 +1013,28 @@ test("Code streams current App Server LSP diagnostics into Stanza", async ({ tar
 	);
 	test.setTimeout(120_000);
 
-	const explorer = workbench.page.locator(".ash-explorer");
+	const page = workbench.page;
+	const explorer = page.locator(".ash-explorer");
 	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "main.rs" });
 	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "Rust workspace file appears in Explorer" }).toBe(1);
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	const marker = group.content.locator(".stanza-editor-diagnostic-marker.error[title*='fixture diagnostic']");
-	await expect(group.content.locator(".stanza-editor-diagnostic-marker.error[title*='fixture diagnostic v1']")).toBeVisible({ timeout: 60_000 });
+	const marker = group.content.locator('.cdr.squiggly-error');
+	await expect(marker).toHaveCount(2, { timeout: 60_000 });
+	await expect(marker.nth(0)).toBeVisible();
+	await expect(marker.nth(1)).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.togglePanel');
+	await page.locator('[data-part="panel"]').getByRole('tab', { name: 'Problems', exact: true }).click();
+	const diagnostics = page.locator('.ash-problems-message').filter({ hasText: /^fixture diagnostic v\d+$/u });
+	await expect(diagnostics).toHaveText('fixture diagnostic v1');
 
 	const input = group.content.locator(".stanza-editor-input");
 	await input.focus();
 	await input.press(process.platform === "darwin" ? "Meta+End" : "Control+End");
 	await input.type(" ");
-	await expect(group.content.locator(".stanza-editor-diagnostic-marker.error[title*='fixture diagnostic v2']")).toBeVisible({ timeout: 60_000 });
-	await expect(marker).toHaveCount(1);
+	await expect(diagnostics).toHaveText('fixture diagnostic v2');
+	await expect(marker).toHaveCount(2);
 });
 
 test("Code applies and undoes App Server LSP document formatting in Stanza", async ({ target, workbench }) => {
@@ -1108,6 +1120,7 @@ test("Code keeps App Server LSP linked edits in one undo step", async ({ target,
 	await input.press(process.platform === "darwin" ? "Meta+Home" : "Control+Home");
 	await input.press("ArrowDown");
 	await input.press("Home");
+	await input.press("Home");
 	for (let index = 0; index < 9; index += 1) await input.press("ArrowRight");
 	await expect(editor).toHaveClass(/linked-editing-active/, { timeout: 60_000 });
 
@@ -1131,8 +1144,7 @@ test("Code renders workspace PDFs and persists review annotations", async ({ tar
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	await expect(group.tabs).toHaveCount(1);
-	await expect(group.tabs.first()).toContainText("paper.pdf");
+	await expect(group.tabs.filter({ hasText: "paper.pdf" })).toHaveAttribute("aria-selected", "true");
 	const reader = group.content.locator(".ash-pdf-editor");
 	await expect(reader).toBeVisible();
 	await expect(reader.locator(".ash-pdf-page-canvas")).toBeVisible();
@@ -1185,7 +1197,8 @@ test.describe("large files", () => {
 		const input = editor.locator(".stanza-editor-input");
 		await input.focus();
 		await input.press("ControlOrMeta+Home");
-		await input.type("// edited\n");
+		await workbench.page.keyboard.insertText("// edited\n");
+		await expect(editor.locator(".view-lines")).toContainText("// edited");
 		await input.press("ControlOrMeta+S");
 
 		await expect.poll(
@@ -1200,12 +1213,66 @@ function selectedCharacterCount(status: string | null): number {
 	return match ? Number(match[1]) : 0;
 }
 
-async function hasIndexedSymbol(page: Page, name: string): Promise<boolean> {
-	return page.evaluate(async query => {
-		const host = (globalThis as { ashWebWorkbenchHost?: { api: { codebaseSymbols: { search(request: { query: string; maxResults: number }): Promise<{ hits: readonly { name: string }[] }> } } } }).ashWebWorkbenchHost;
-		if (!host) return false;
-		return host.api.codebaseSymbols.search({ query, maxResults: 20 }).then(result => result.hits.some(hit => hit.name === query), () => false);
-	}, name);
+
+
+for (const mode of ['manual save', 'unsaved', 'auto save after delay', 'auto save on focus change'] as const) {
+	test(`Code preserves ${mode} file edits across restart`, async ({ target, testWorkspace, workbench, restartWorkbench }) => {
+		test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+		if (mode.startsWith('auto save')) {
+			await workbench.settingsEditor.openUserSettingsUI();
+			await workbench.settingsEditor.selectCategory('editor');
+			const settings = workbench.settingsEditor.element;
+			await settings.getByRole('searchbox').fill('@id:files.autoSave');
+			await settings.locator('[data-configuration-key="files.autoSave"]').getByRole('combobox').click();
+			await workbench.page.getByRole('option', { name: mode === 'auto save after delay' ? 'After Delay' : 'On Focus Change', exact: true }).click();
+			await settings.locator('.ash-modal-editor-close').click();
+		}
+
+		await workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+		let group = workbench.editors.groupAt(0);
+		const content = 'const restarted = 42;';
+		await group.editor.input.focus();
+		await group.editor.input.press('ControlOrMeta+A');
+		await group.editor.input.pressSequentially(content);
+		if (mode === 'manual save') {
+			await group.editor.input.press('ControlOrMeta+S');
+		} else if (mode === 'auto save on focus change') {
+			expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 1;\n');
+			await workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.rs', exact: true }).dblclick();
+			await group.tabs.filter({ hasText: 'main.ts' }).click();
+		}
+		const tab = group.title.locator('.ash-tab').filter({ hasText: 'main.ts' });
+		if (mode === 'unsaved') {
+			await expect(tab).toHaveAttribute('data-state', 'dirty');
+			await expect.poll(() => hasWorkingCopyBackup(workbench.page, content), { message: 'unsaved content has a durable backup' }).toBe(true);
+			expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 1;\n');
+		} else {
+			await expect.poll(() => readFile(testWorkspace.file, 'utf8'), { message: `${mode} reaches the workspace without further input` }).toBe(content);
+			await expect(tab).not.toHaveAttribute('data-state', 'dirty');
+			await expect.poll(() => hasWorkingCopyBackup(workbench.page, content)).toBe(false);
+		}
+
+		// Display-language selection is an existing user action that requests a real
+		// product restart, including Desktop shutdown and relaunch of the same profile.
+		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+		const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+		await picker.getByRole('combobox').fill('简体中文');
+		await picker.getByRole('combobox').press('Enter');
+		({ workbench } = await restartWorkbench());
+		group = workbench.editors.groupAt(0);
+		await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
+		await expect(group.editor.lines).toHaveText([content]);
+		expect(await readFile(testWorkspace.file, 'utf8')).toBe(mode === 'unsaved' ? 'const value = 1;\n' : content);
+		const restoredTab = group.title.locator('.ash-tab').filter({ hasText: 'main.ts' });
+		if (mode === 'unsaved') {
+			await expect(restoredTab).toHaveAttribute('data-state', 'dirty');
+			await group.editor.input.focus();
+			await group.editor.input.press('ControlOrMeta+S');
+			await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe(content);
+			await expect.poll(() => hasWorkingCopyBackup(workbench.page, content)).toBe(false);
+		}
+		await expect(restoredTab).not.toHaveAttribute('data-state', 'dirty');
+	});
 }
 
 test("Code restores unsaved editor content after a browser reload", async ({ target, testWorkspace, workbench }) => {
@@ -1228,8 +1295,7 @@ test("Code restores unsaved editor content after a browser reload", async ({ tar
 	await expect.poll(() => hasWorkingCopyBackup(page, "const recovered = 42;"), { message: "dirty editor content reaches IndexedDB" }).toBe(true);
 	expect(await readFile(testWorkspace.file, "utf8")).toBe("const value = 1;\n");
 
-	await page.reload({ waitUntil: "domcontentloaded" });
-	await expect(page.locator(".ash-workbench")).toBeVisible();
+	await workbench.reloadWindow();
 	await expect(group.tabs.filter({ hasText: "main.ts" })).toHaveCount(1);
 	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("const recovered = 42;");
 	expect(await readFile(testWorkspace.file, "utf8")).toBe("const value = 1;\n");

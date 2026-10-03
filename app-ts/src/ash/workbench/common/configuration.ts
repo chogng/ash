@@ -4,7 +4,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } fr
 import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
 import { Registry } from "../../platform/registry/common/platform.js";
 import { isMacintosh, isWeb } from "../../base/common/platform.js";
-import { MenuSettings, TitleBarSetting, parseMenuStyle, parseTitleBarStyle, type MenuStyleConfiguration, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
+import { DEFAULT_MENU_STYLE, DEFAULT_TITLE_BAR_STYLE, MenuSettings, TitleBarSetting, parseMenuStyle, parseTitleBarStyle, type MenuStyleConfiguration, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry } from "./workbenchMode.js";
 
 export type WorkbenchLayoutStyle = "modern" | "flat";
@@ -24,7 +24,7 @@ export const WorkbenchConfiguration = Object.freeze({
 	...(!isWeb ? {
 		menuStyle: configurationRegistry.registerConfiguration<MenuStyleConfiguration>({
 			key: MenuSettings.MenuStyle,
-			defaultValue: isMacintosh ? 'system' : 'inherit',
+			defaultValue: DEFAULT_MENU_STYLE,
 			parse: parseMenuStyle,
 			setting: {
 				valueType: 'select',
@@ -41,7 +41,7 @@ export const WorkbenchConfiguration = Object.freeze({
 		}),
 		titleBarStyle: configurationRegistry.registerConfiguration<TitleBarStyleConfiguration>({
 			key: TitleBarSetting.TitleBarStyle,
-			defaultValue: 'custom',
+			defaultValue: DEFAULT_TITLE_BAR_STYLE,
 			parse: parseTitleBarStyle,
 			setting: {
 				valueType: 'select',

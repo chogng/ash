@@ -30,7 +30,7 @@ export class NativeMenubarControl extends Disposable
 	private readonly api: INativeMenubarApi;
 	private readonly menu: IMenu;
 	private readonly touchBarMenu: IMenu | undefined;
-	private readonly touchBarIcons: Promise<readonly string[]> | undefined;
+	private touchBarIcons: Promise<readonly string[]> | undefined;
 	private readonly actionsByRevision = new Map<
 		number,
 		ReadonlyMap<string, IAction>
@@ -51,10 +51,6 @@ export class NativeMenubarControl extends Disposable
 		if (isMacintosh) {
 			this.touchBarMenu = this._register(menuService.createMenu(MenuId.TouchBarContext));
 			this._register(this.touchBarMenu.onDidChange(() => this.synchronize()));
-			this.touchBarIcons = Promise.all([
-				pngDataUrl(new URL("../../../browser/parts/editor/media/back-tb.png", import.meta.url).href),
-				pngDataUrl(new URL("../../../browser/parts/editor/media/forward-tb.png", import.meta.url).href),
-			]);
 		}
 		const selection = api.onDidSelect(({ revision, id }) => {
 			const action = this.actionsByRevision.get(revision)?.get(id);
@@ -71,6 +67,14 @@ export class NativeMenubarControl extends Disposable
 		const revision = this.nextRevision();
 		const menuActions = this.menu.getActions().flatMap(([, actions]) => actions);
 		const touchBarActions = this.touchBarMenu?.getActions().flatMap(([, actions]) => actions) ?? [];
+
+		// Empty menus have no artwork to load; retain one load when actions appear.
+		if (touchBarActions.length && !this.touchBarIcons) {
+			this.touchBarIcons = Promise.all([
+				pngDataUrl(new URL("../../../browser/parts/editor/media/back-tb.png", import.meta.url).href),
+				pngDataUrl(new URL("../../../browser/parts/editor/media/forward-tb.png", import.meta.url).href),
+			]);
+		}
 
 		this.updateTail = this.updateTail
 			.then(async () => {

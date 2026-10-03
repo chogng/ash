@@ -1,4 +1,4 @@
-import type { ElectronApplication, Locator } from '@playwright/test';
+import type { Locator } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
@@ -6,100 +6,66 @@ test.use({ openWorkspace: false });
 test('tab command groups close and split the clicked tabs from mouse and keyboard', async ({ target, application, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
 	const page = workbench.page;
-	const systemMenu = target.kind === 'electron' && process.platform === 'darwin';
-	const electron = application as ElectronApplication;
-	if (systemMenu) {
-		await electron.evaluate(({ Menu }) => {
-			const popup = Menu.prototype.popup;
-			const probe = { selected: '', restore: () => { Menu.prototype.popup = popup; } };
-			(globalThis as typeof globalThis & { ashTabCommandsProbe: typeof probe }).ashTabCommandsProbe = probe;
-			Menu.prototype.popup = function (options) {
-				if (!this.items.some(item => item.label === 'Close Editor')) return popup.call(this, options);
-				const selected = this.items.find(item => item.label === probe.selected);
-				if (!selected?.enabled) throw new Error(`Tab action is unavailable: ${probe.selected}`);
-				selected.click();
-				options?.callback?.();
-			};
-		});
-	}
-	try {
-		const choose = async (tab: Locator, label: string, keyboard = false): Promise<void> => {
-			if (systemMenu) {
-				await electron.evaluate((_, selected) => {
-					(globalThis as typeof globalThis & { ashTabCommandsProbe: { selected: string } }).ashTabCommandsProbe.selected = selected;
-				}, label);
-			}
-			if (keyboard) {
-				await tab.focus();
-				await tab.press('Shift+F10');
-			} else {
-				await tab.click({ button: 'right' });
-			}
-			if (!systemMenu) await page.getByRole('menu').last().getByRole('menuitem', { name: label, exact: true }).click();
-		};
-		await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
-		const source = workbench.editors.groupAt(0);
-		const names: string[] = [];
-		for (let index = 0; index < 3; index++) {
-			await page.keyboard.press('ControlOrMeta+N');
-			await expect(source.tabs).toHaveCount(index + 1);
-			names.push((await source.tabs.last().getAttribute('aria-label'))!);
-		}
-		const first = source.element.getByRole('tab', { name: names[0], exact: true });
-		const second = source.element.getByRole('tab', { name: names[1], exact: true });
-		const third = source.element.getByRole('tab', { name: names[2], exact: true });
-		await choose(first, 'Split Right');
-		await expect(workbench.editors.groups).toHaveCount(2);
-		const copied = workbench.editors.groupAt(1);
-		await expect(copied.tabs).toHaveCount(1);
-		await expect(copied.tabs).toHaveAttribute('aria-label', names[0]);
-		await expect(third).toHaveAttribute('aria-selected', 'true');
-		const originalBounds = (await source.element.boundingBox())!;
-		const copiedBounds = (await copied.element.boundingBox())!;
-		expect(copiedBounds.x).toBeGreaterThan(originalBounds.x);
-		await choose(copied.tabs, 'Close All in Group', true);
-		await expect(copied.tabs).toHaveCount(0);
-		await expect(source.tabs).toHaveCount(3);
-		await first.click();
-		await second.click({ modifiers: ['ControlOrMeta'] });
-		await choose(first, 'Split Down', true);
-		await expect(workbench.editors.groups).toHaveCount(3);
-		const down = workbench.editors.groups.filter({ has: page.getByRole('tab', { name: names[0], exact: true }) }).nth(1);
-		const downTabs = down.getByRole('tab');
-		await expect(downTabs).toHaveCount(2);
-		expect(await downTabs.evaluateAll(tabs => tabs.map(tab => tab.getAttribute('aria-label')))).toEqual(names.slice(0, 2));
-		const downBounds = (await down.boundingBox())!;
-		expect(downBounds.y).toBeGreaterThan((await source.element.boundingBox())!.y);
-		await choose(downTabs.first(), 'Close All in Group');
-		await expect(workbench.editors.groups.filter({ has: page.getByRole('tab', { name: names[0], exact: true }) })).toHaveCount(1);
-		await third.click();
-		await choose(second, 'Close to the Right', true);
-		await expect(third).toHaveCount(0);
-		await expect(source.tabs).toHaveCount(2);
-		await choose(first, 'Pin Editor', true);
-		await expect(first).toHaveAttribute('aria-description', /Pinned tab/u);
-		const previousTabCount = await source.tabs.count();
+	const choose = async (tab: Locator, label: string, keyboard = false): Promise<void> => {
+		await workbench.menus.select(application, async () => {
+			if (keyboard) { await tab.focus(); await tab.press('Shift+F10'); }
+			else { await tab.click({ button: 'right' }); }
+		}, [label]);
+	};
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	const source = workbench.editors.groupAt(0);
+	const names: string[] = [];
+	for (let index = 0; index < 3; index++) {
 		await page.keyboard.press('ControlOrMeta+N');
-		await expect(source.tabs).toHaveCount(previousTabCount + 1);
-		const dirty = source.tabs.last();
-		const dirtyName = (await dirty.getAttribute('aria-label'))!;
-		await source.content.getByRole('textbox', { name: dirtyName, exact: true }).focus();
-		await page.keyboard.insertText('unsaved text');
-		await expect(dirty).toHaveAttribute('aria-label', /unsaved changes/u);
-		await choose(second, 'Close Saved');
-		await expect(second).toHaveCount(0);
-		await expect(first).toHaveCount(1);
-		await expect(dirty).toHaveCount(1);
-		await expect(source.tabs).toHaveCount(2);
-	} finally {
-		if (systemMenu) {
-			await electron.evaluate(() => {
-				const globals = globalThis as typeof globalThis & { ashTabCommandsProbe?: { restore(): void } };
-				globals.ashTabCommandsProbe!.restore();
-				delete globals.ashTabCommandsProbe;
-			});
-		}
+		await expect(source.tabs).toHaveCount(index + 1);
+		names.push((await source.tabs.last().getAttribute('aria-label'))!);
 	}
+	const first = source.element.getByRole('tab', { name: names[0], exact: true });
+	const second = source.element.getByRole('tab', { name: names[1], exact: true });
+	const third = source.element.getByRole('tab', { name: names[2], exact: true });
+	await choose(first, 'Split Right');
+	await expect(workbench.editors.groups).toHaveCount(2);
+	const copied = workbench.editors.groupAt(1);
+	await expect(copied.tabs).toHaveCount(1);
+	await expect(copied.tabs).toHaveAttribute('aria-label', names[0]);
+	await expect(third).toHaveAttribute('aria-selected', 'true');
+	const originalBounds = (await source.element.boundingBox())!;
+	const copiedBounds = (await copied.element.boundingBox())!;
+	expect(copiedBounds.x).toBeGreaterThan(originalBounds.x);
+	await choose(copied.tabs, 'Close All in Group', true);
+	await expect(copied.tabs).toHaveCount(0);
+	await expect(source.tabs).toHaveCount(3);
+	await first.click();
+	await second.click({ modifiers: ['ControlOrMeta'] });
+	await choose(first, 'Split Down', true);
+	await expect(workbench.editors.groups).toHaveCount(3);
+	const down = workbench.editors.groups.filter({ has: page.getByRole('tab', { name: names[0], exact: true }) }).nth(1);
+	const downTabs = down.getByRole('tab');
+	await expect(downTabs).toHaveCount(2);
+	expect(await downTabs.evaluateAll(tabs => tabs.map(tab => tab.getAttribute('aria-label')))).toEqual(names.slice(0, 2));
+	const downBounds = (await down.boundingBox())!;
+	expect(downBounds.y).toBeGreaterThan((await source.element.boundingBox())!.y);
+	await choose(downTabs.first(), 'Close All in Group');
+	await expect(workbench.editors.groups.filter({ has: page.getByRole('tab', { name: names[0], exact: true }) })).toHaveCount(1);
+	await third.click();
+	await choose(second, 'Close to the Right', true);
+	await expect(third).toHaveCount(0);
+	await expect(source.tabs).toHaveCount(2);
+	await choose(first, 'Pin Editor', true);
+	await expect(first).toHaveAttribute('aria-description', /Pinned tab/u);
+	const previousTabCount = await source.tabs.count();
+	await page.keyboard.press('ControlOrMeta+N');
+	await expect(source.tabs).toHaveCount(previousTabCount + 1);
+	const dirty = source.tabs.last();
+	const dirtyName = (await dirty.getAttribute('aria-label'))!;
+	await source.content.getByRole('textbox', { name: dirtyName, exact: true }).focus();
+	await page.keyboard.insertText('unsaved text');
+	await expect(dirty).toHaveAttribute('aria-label', /unsaved changes/u);
+	await choose(second, 'Close Saved');
+	await expect(second).toHaveCount(0);
+	await expect(first).toHaveCount(1);
+	await expect(dirty).toHaveCount(1);
+	await expect(source.tabs).toHaveCount(2);
 });
 
 test('editor tabs distinguish the active document from the tab strip across themes', async ({ workbench }) => {
@@ -292,7 +258,6 @@ test('editor tab menu targets the clicked tab and opens from the keyboard', asyn
 
 test('macOS Electron editor tab menu targets mouse and keyboard actions', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron' || process.platform !== 'darwin' || target.workbenchMode !== 'code', 'This scenario requires the macOS Code desktop product');
-	const electron = application as ElectronApplication;
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
 	await page.keyboard.press('ControlOrMeta+N');
@@ -302,34 +267,12 @@ test('macOS Electron editor tab menu targets mouse and keyboard actions', async 
 	await expect(untitledTabs).toHaveCount(2);
 	const remainingName = await untitledTabs.last().getAttribute('aria-label');
 
-	// Electron menus are outside the renderer DOM; capture the popup and select its actions in the main process.
-	await electron.evaluate(({ Menu }) => {
-		const probe = { menus: [] as string[][], selected: 'Close Editor' as string | undefined };
-		(globalThis as typeof globalThis & { ashEditorTabMenuProbe?: typeof probe }).ashEditorTabMenuProbe = probe;
-		const popup = Menu.prototype.popup;
-		Menu.prototype.popup = function (options) {
-			const labels = this.items.map(item => item.label);
-			if (!labels.includes('Close Editor')) return popup.call(this, options);
-			probe.menus.push(labels);
-			if (probe.selected) this.items.find(item => item.label === probe.selected)?.click();
-			probe.selected = undefined;
-			options?.callback?.();
-		};
-	});
-
-	const first = group.element.getByRole('tab', { name: firstName! });
-	const remaining = group.element.getByRole('tab', { name: remainingName! });
-	await first.click({ button: 'right' });
-	await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashEditorTabMenuProbe?: { menus: string[][] } }).ashEditorTabMenuProbe?.menus.length)).toBe(1);
+	const first = group.element.getByRole('tab', { name: firstName!, exact: true });
+	const remaining = group.element.getByRole('tab', { name: remainingName!, exact: true });
+	await workbench.menus.select(application, () => first.click({ button: 'right' }), ['Close Editor']);
 	await expect(first).toHaveCount(0);
 	await expect(remaining).toHaveCount(1);
-
-	await electron.evaluate(() => {
-		(globalThis as typeof globalThis & { ashEditorTabMenuProbe?: { selected?: string } }).ashEditorTabMenuProbe!.selected = 'Pin Editor';
-	});
-	await remaining.focus();
-	await remaining.press('Shift+F10');
-	await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashEditorTabMenuProbe?: { menus: string[][] } }).ashEditorTabMenuProbe?.menus.length)).toBe(2);
+	await workbench.menus.select(application, async () => { await remaining.focus(); await remaining.press('Shift+F10'); }, ['Pin Editor']);
 	await expect(remaining).toHaveAttribute('aria-description', /Pinned tab/u);
 });
 

@@ -53,25 +53,24 @@ test('keyboard layout stays in commands while the status bar is quiet', async ({
 	await page.keyboard.press('Escape');
 });
 
-test('opening a folder names the target and explains the permission choice in the selected language', async ({ application, target, testWorkspace, workbench }) => {
+test('opening a folder names the target and explains the permission choice in the selected language', async ({ application, target, testWorkspace, workbench, restartWorkbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 
-	await workbench.page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-		const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string } };
-		await ipc.invoke('ash:configuration:update', {
-			expectedRevision: snapshot.revision,
-			document: { version: 1, source: JSON.stringify({ ...JSON.parse(snapshot.document.source), 'workbench.locale': 'zh-CN' }) },
-		});
-	});
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+	await language.fill('简体中文');
+	await language.press('Enter');
+	({ application, workbench } = await restartWorkbench());
+	if (!('windows' in application)) throw new Error('Expected Electron after restart');
+
 	await application.evaluate(({ dialog }, folder) => {
 		dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [folder] })) as typeof dialog.showOpenDialog;
 	}, testWorkspace.directory);
 
 	const page = workbench.page;
 	await expect(page.locator('[data-statusbar-item-id="ash.status.editor.state"]')).toHaveCount(0);
-	await page.getByRole('button', { name: /^(Open Folder|打开文件夹)$/ }).click();
+	await page.getByRole('button', { name: /^(Open folder|打开文件夹)$/ }).click();
 	const prompt = page.getByRole('dialog', { name: 'Ash' });
 	await expect(prompt).toBeVisible();
 	await expect(prompt.locator('.ash-dialog-message')).toHaveText('是否信任此文件夹中的文件？');
@@ -87,7 +86,7 @@ test('opening a folder names the target and explains the permission choice in th
 		return ipc.invoke('ash:workspace:context:read');
 	});
 	expect(parseWorkspace(workspaceAfterCancel).folders).toHaveLength(0);
-	await page.getByRole('button', { name: /^(Open Folder|打开文件夹)$/ }).click();
+	await page.getByRole('button', { name: /^(Open folder|打开文件夹)$/ }).click();
 	await page.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: '以只读模式打开' }).click();
 	await expect.poll(async () => {
 		const value = await workbench.page.evaluate(() => {

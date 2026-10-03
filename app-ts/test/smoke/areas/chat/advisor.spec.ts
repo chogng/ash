@@ -322,11 +322,20 @@ test('New Chat starts with the last model chosen in the picker', async ({ target
 		await expect(auto).not.toHaveAttribute('aria-busy', 'true');
 	}
 	const search = page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('combobox', { name: 'Choose a chat model' });
-	await search.fill('GPT-5.4');
+	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
+	const currentName = await selector.textContent();
+	// Catalog names change. Retain a different enabled row's identity before
+	// selection reorders the picker, then assert New Chat preserves that choice.
+	const options = picker.getByRole('option').filter({ visible: true });
+	await expect(options.first()).toBeVisible();
+	const names = await options.locator('.ash-quick-pick-row-label').allTextContents();
+	const chosen = names.find(name => name !== currentName);
+	expect(chosen).toBeTruthy();
+	await search.fill(chosen!);
 	await search.press('Enter');
-	await expect(selector).toHaveText('GPT-5.4');
+	await expect(selector).toHaveText(chosen!);
 	await page.locator('.ash-chat-title-actions').getByRole('button', { name: 'New Chat' }).click();
-	await expect(selector).toHaveText('GPT-5.4');
+	await expect(selector).toHaveText(chosen!);
 });
 
 async function expectModelPickerAnchored(picker: import('@playwright/test').Locator, selector: import('@playwright/test').Locator): Promise<void> {

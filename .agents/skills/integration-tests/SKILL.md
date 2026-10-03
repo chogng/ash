@@ -1,132 +1,40 @@
 ---
 name: integration-tests
-description: Use when running integration tests in the Ash repo. Covers scripts/test-integration.sh (macOS/Linux) and scripts/test-integration.bat (Windows), their supported arguments for filtering, and the difference between node.js integration tests and extension host tests.
+description: Use when running browser integration tests in the Ash repo. Covers pnpm test:browser:integration / test:editor:browser and their supported arguments for filtering tests.
 ---
 
 # Running Integration Tests
 
-Integration tests in VS Code are split into two categories:
-
-1. **Node.js integration tests** - files ending in `.integrationTest.ts` under `src/`. These run in Electron via the same Mocha runner as unit tests.
-2. **Extension host tests** - tests embedded in built-in extensions under `extensions/` (API tests, Git tests, TypeScript tests, etc.). These launch a full Ash instance with `--extensionDevelopmentPath`.
+Browser integration tests live in `app-ts/test/integration/browser/`. They test editors and components in a real browser through Playwright.
 
 ## Scripts
 
-- **macOS / Linux:** `./scripts/test-integration.sh [options]`
-- **Windows:** `.\scripts\test-integration.bat [options]`
+| Scope | Command from the repository root |
+| --- | --- |
+| All browser integration specs | `pnpm --dir app-ts test:browser:integration` |
+| Editor browser specs | `pnpm --dir app-ts test:editor:browser` |
+| Editor units plus browser integration | `pnpm --dir app-ts test:editor` |
 
-When run **without filters**, both scripts execute all node.js integration tests followed by all extension host tests. The deterministic Agent Host E2E entrypoints are parallelized across isolated test processes during the node.js phase, then excluded from the remaining serial node.js run.
+These commands typecheck the tests, build the browser pages, start the test server, and close it when Playwright exits. With `--list`, they only typecheck and list tests.
 
-When run **with `--run` or `--runGlob`** (without `--suite`), only the node.js integration tests are run and the filter is applied. Extension host tests are skipped since these filters are node.js-specific.
+## Common options
 
-When run **with `--grep` alone** (no `--run`, `--runGlob`, or `--suite`), all tests are run -- both node.js integration tests and all extension host suites -- with the grep pattern forwarded to every test runner.
-
-When run **with `--suite`**, only the matching extension host test suites are run. Node.js integration tests are skipped. Combine `--suite` with `--grep` to filter individual tests within the selected suites.
-
-## Options
-
-### `--build` - Run against build output
-
-Selects the `out-build/` directory instead of `out/` for node.js integration tests and the shared VS Code modules used by the standalone JSON suite. This does not compile either output tree; the JSON extension tests still require `compile-extension:json-language-features-client` to generate `client/out/`.
+Arguments go directly to Playwright; do not add a `--` separator:
 
 ```bash
-./scripts/test-integration.sh --suite json --build
+pnpm --dir app-ts test:browser:integration dialog.integration.spec.ts --project=chromium
+pnpm --dir app-ts test:editor:browser textModel.integration.spec.ts --project=chromium --list
+pnpm --dir app-ts test:editor:browser --project=chromium --grep 'restores'
 ```
 
-### `--run <file>` - Run tests from a specific file
+`--grep`, `--list`, `--repeat-each=N`, and `--max-failures=1` use Playwright's meanings. Check the selected tests with `--list` when a filter is ambiguous. The `chrome-gpu` project selects GPU specs and requires the corresponding Chrome installation; ordinary component specs use `chromium`.
 
-Accepts a **source file path** (starting with `src/`). Works identically to `scripts/test.sh --run`.
+## Distinction from other test types
 
-```bash
-./scripts/test-integration.sh --run src/vs/workbench/services/search/test/browser/search.integrationTest.ts
-```
+- Unit tests: [unit-tests](../unit-tests/SKILL.md).
+- Browser integration tests: the Playwright commands above.
+- Full application flows: [smoke-tests](../smoke-tests/SKILL.md).
 
-### `--runGlob <pattern>` (aliases: `--glob`, `--runGrep`) - Select test files by path
+## Debugging failures
 
-Selects which test **files** to load by matching compiled `.js` file paths against a glob pattern. Overrides the default `**/*.integrationTest.js` glob. Only applies to node.js integration tests (extension host tests are skipped).
-
-```bash
-./scripts/test-integration.sh --runGlob "**/search/**/*.integrationTest.js"
-```
-
-### `--grep <pattern>` (aliases: `-g`, `-f`) - Filter test cases by name
-
-Filters which **test cases** run by matching against their test titles (e.g. `describe`/`test` names). When used alone, the grep is applied to both node.js integration tests and all extension host suites. When combined with `--suite`, only the matched suites run with the grep.
-
-```bash
-./scripts/test-integration.sh --grep "TextSearchProvider"
-```
-
-### `--suite <pattern>` - Run specific extension host test suites
-
-Runs only the extension host test suites whose name matches the pattern. Supports comma-separated values and shell glob patterns (on macOS/Linux). Node.js integration tests are skipped.
-
-Available suite names: `api-folder`, `api-workspace`, `colorize`, `terminal-suggest`, `typescript`, `markdown`, `emmet`, `git`, `git-base`, `ipynb`, `notebook-renderers`, `configuration-editing`, `github-authentication`, `copilot`, `css`, `html`, `json`.
-
-The `css`, `html`, and `json` suites are standalone extension tests that run in Electron's Node.js mode without opening a workbench. They share the same suite selection and grep filtering as extension host tests.
-
-```bash
-# Run only Git extension tests
-./scripts/test-integration.sh --suite git
-
-# Run API folder and workspace tests (glob, macOS/Linux only)
-./scripts/test-integration.sh --suite 'api*'
-
-# Run multiple specific suites
-./scripts/test-integration.sh --suite 'git,emmet,typescript'
-
-# Filter tests within a suite by name
-./scripts/test-integration.sh --suite api-folder --grep 'should open'
-```
-
-### `--help`, `-h` - Show help
-
-```bash
-./scripts/test-integration.sh --help
-```
-
-### Other options
-
-All other options (e.g. `--timeout`, `--coverage`, `--reporter`) are forwarded to the underlying `scripts/test.sh` runner for node.js integration tests. These extra options are **not** forwarded to extension host suites when using `--suite`.
-
-## Examples
-
-```bash
-# Run all integration tests (node.js + extension host)
-./scripts/test-integration.sh
-
-# Run a single integration test file
-./scripts/test-integration.sh --run src/vs/workbench/services/search/test/browser/search.integrationTest.ts
-
-# Run integration tests matching a grep pattern
-./scripts/test-integration.sh --grep "TextSearchProvider"
-
-# Run integration tests under a specific area
-./scripts/test-integration.sh --runGlob "**/workbench/**/*.integrationTest.js"
-
-# Run only Git extension host tests
-./scripts/test-integration.sh --suite git
-
-# Run API folder + workspace extension tests (glob)
-./scripts/test-integration.sh --suite 'api*'
-
-# Run multiple extension test suites
-./scripts/test-integration.sh --suite 'git,typescript,emmet'
-
-# Grep for specific tests in the API folder suite
-./scripts/test-integration.sh --suite api-folder --grep 'should open'
-
-# Combine file and grep
-./scripts/test-integration.sh --run src/vs/workbench/services/search/test/browser/search.integrationTest.ts --grep "should search"
-```
-
-## Compilation requirement
-
-Tests run against compiled JavaScript output. Ensure the `VS Code - Build` watch task is running or that compilation has completed before running tests.
-
-## Distinction from unit tests
-
-- **Unit tests** (`.test.ts`) → use `scripts/test.sh` or the `runTests` tool
-- **Integration tests** (`.integrationTest.ts` and extension tests) → use `scripts/test-integration.sh`
-
-Do **not** mix these up: `scripts/test.sh` will not find integration test files unless you explicitly pass `--runGlob **/*.integrationTest.js`, and `scripts/test-integration.sh` is not intended for `.test.ts` files.
+Diagnostics and traces are under `.build/app-ts/playwright/editor-results`; the HTML report is under `editor-report`. Inspect state, DOM, logs, and traces when a test fails. Follow [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) for fixture ownership and cleanup.

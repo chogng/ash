@@ -16,7 +16,7 @@ test("Code opens Academic through the document contribution and saves its struct
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	const paperTab = group.tabs.filter({ hasText: 'paper.ash-academic' });
+	const paperTab = group.element.getByRole('tab', { name: 'paper.ash-academic', exact: true });
 	await expect(paperTab).toHaveCount(1);
 	await expect(paperTab).toHaveAttribute('aria-selected', 'true');
 	await expect(group.content.locator(".stanza-structured-editor-pane")).toBeVisible();
@@ -35,7 +35,7 @@ test("Code opens Academic through the document contribution and saves its struct
 	await fontSize.selectOption("18");
 	await expect(fontSize).toHaveValue("18");
 
-	const input = group.content.locator(".stanza-document-code-block textarea.stanza-document-text-input");
+	const input = group.content.getByRole('textbox', { name: 'typescript code block', exact: true });
 	await expect(input).toBeAttached();
 	await input.focus();
 	await input.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
@@ -48,7 +48,7 @@ test("Code opens Academic through the document contribution and saves its struct
 	).toContain("\"fontSize\":18");
 	await expect.poll(
 		() => readFile(testWorkspace.academicFile, "utf8"),
-		{ timeout: 15_000, message: "Document engine code codeBlock save reaches the App Server workspace" },
+		{ timeout: 15_000, message: "Document engine code block save reaches the App Server workspace" },
 	).toContain("const paper = 2;");
 	await explorer.getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
 	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-selected', 'true');

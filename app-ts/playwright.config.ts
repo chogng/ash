@@ -22,7 +22,14 @@ export default defineConfig({
 				testMatch: ["**/areas/editor/academic-open.spec.ts", "**/areas/editor/editor-open.spec.ts"],
 			},
 			{ name: "electron-pdf-corpus-app-server", testMatch: "**/areas/pdf/pdf-academic-corpus.spec.ts" },
-		].map(project => ({ ...project, testIgnore: '**/release-package.spec.ts' })),
+		].map(project => ({
+			...project,
+			// Publisher downloads have their own opt-in corpus project. Ordinary
+			// smoke runs use the PDF fixture created by the shared workspace.
+			testIgnore: project.name === 'electron-pdf-corpus-app-server'
+				? '**/release-package.spec.ts'
+				: ['**/release-package.spec.ts', '**/pdf-academic-corpus.spec.ts'],
+		})),
 		{ name: 'electron-release', testMatch: '**/release-package.spec.ts', testIgnore: '', timeout: 600_000 },
 	],
 	webServer: browserServerMode === "disconnected"

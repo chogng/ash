@@ -1,3 +1,7 @@
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
@@ -40,6 +44,7 @@ export class SkillsSettingsContent extends Disposable implements SettingsContent
 		@ICommandService private readonly commands: ICommandService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
 		const document = container.ownerDocument;
@@ -60,8 +65,19 @@ export class SkillsSettingsContent extends Disposable implements SettingsContent
 			if (this.configuration.getValue<boolean>('accessibility.verbosity.skills')) this.list.setAttribute('aria-description', localize('skills.hint', 'Skills. Use arrow keys to select a skill, Tab to navigate, and Alt+F1 for help.'));
 			else this.list.removeAttribute('aria-description');
 		}));
-		this._register(addDisposableListener(this.domNode, 'keydown', event => { if (event.altKey && event.key === 'F1') { event.preventDefault(); void this.showHelp(); } }));
 		this._register(marketplace.onDidChangeInstalled(() => { this.snapshot = undefined; if (this.visible && !this.working) { void this.run(() => this.load()); } }));
+		const scopedContext = this._register(contextKeys.createScoped(this.domNode));
+		scopedContext.createKey('skillsSettingsFocused', true);
+		this._register(AccessibleViewRegistry.register({
+			type: AccessibleViewType.Help, priority: 100, name: `skills-help-${generateUuid()}`,
+			when: ContextKeyExpr.has('skillsSettingsFocused'),
+			getProvider: () => {
+				const focused = this.domNode.ownerDocument.activeElement;
+				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
+				return new AccessibleContentProvider(AccessibleViewProviderId.Skills, { type: AccessibleViewType.Help },
+					() => localize('skills.help', 'This view loads skill metadata and diagnostics. Select a skill by name and source to enable or disable it. Use $name in chat to invoke an enabled skill. Get skills opens Marketplace, including skills bundled in Plugins. Package installation and removal are managed there. If configuration changes elsewhere, refresh before changing enablement again. Use Tab and Shift+Tab to navigate, arrow keys to select a skill, and Escape to close help.'), () => focused.focus(), AccessibilityVerbositySettingId.Skills);
+			},
+		}));
 		this.applyEnabled();
 	}
 	public setVisible(visible: boolean): void { if (this.visible === visible) { return; } this.visible = visible; if (visible && !this.snapshot) { void this.run(() => this.load()); } }

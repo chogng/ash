@@ -144,6 +144,19 @@ export class TabList<T> extends Disposable {
 		this.element = this.scrollable.element;
 		this.scrollableElement = this.scrollable.scrollableElement;
 		if (this.select) this.actionBar.element.setAttribute("aria-multiselectable", "true");
+		// Keyboard focus may move without changing the selected tab. Reveal the
+		// focused item through the shared scrollbar so both states stay accessible.
+		let pointerActivation = false;
+		this._register(addDisposableListener(this.actionBar.element, 'pointerdown', () => { pointerActivation = true; }, true));
+		this._register(addDisposableListener(this.actionBar.element.ownerDocument, 'pointerup', () => { pointerActivation = false; }));
+		this._register(addDisposableListener(this.actionBar.element.ownerDocument, 'pointercancel', () => { pointerActivation = false; }));
+		this._register(addDisposableListener(this.actionBar.element, "focusin", event => {
+			const target = event.target as HTMLElement;
+			// Moving the pressed tab before pointerup prevents its click from completing.
+			if (pointerActivation || target.getAttribute('role') !== 'tab') return;
+			const tab = target.closest<HTMLElement>(".ash-tab");
+			if (tab) this.scrollable.reveal(tab);
+		}));
 	}
 
 	public get onDidScroll(): ScrollableElement['onDidScroll'] { return this.scrollable.onDidScroll; }

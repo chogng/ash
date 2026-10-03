@@ -49,9 +49,7 @@ test('Models Settings saves enabled choices, preserves keyboard focus and restor
 test('Models Settings offers provider creation with compact fields and keyboard navigation', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Uses Code Settings.');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+Shift+P');
-	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
-	await page.keyboard.press('Enter');
+	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	await workbench.settingsEditor.selectGroup('agents');
 	await workbench.settingsEditor.selectCategory('models');
@@ -126,9 +124,7 @@ test('Models Settings saves custom model IDs and keys and tests the configured e
 		const address = server.address();
 		if (!address || typeof address === 'string') throw new Error('Test endpoint has no port');
 		const page = workbench.page;
-		await page.keyboard.press('ControlOrMeta+Shift+P');
-		await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
-		await page.keyboard.press('Enter');
+		await workbench.settingsEditor.openUserSettingsUI();
 		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 		await workbench.settingsEditor.selectGroup('agents');
 		await workbench.settingsEditor.selectCategory('models');
@@ -256,9 +252,7 @@ test('Models Settings saves custom model IDs and keys and tests the configured e
 		rejectDiscovery = false;
 		await settings.locator('.ash-modal-editor-close').click();
 		await expect(settings).not.toBeVisible();
-		await page.keyboard.press('ControlOrMeta+Shift+P');
-		await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
-		await page.keyboard.press('Enter');
+		await workbench.settingsEditor.openUserSettingsUI();
 		await workbench.settingsEditor.selectGroup('agents');
 		await workbench.settingsEditor.selectCategory('models');
 		await search.fill('Gemini 3.1 Pro');

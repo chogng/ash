@@ -142,7 +142,7 @@ test("Markdown supports all five GitHub alert severities", () => {
 	})), [
 		{ severity: 'ash-markdown-alert-note', label: 'Note', icon: 'info' },
 		{ severity: 'ash-markdown-alert-tip', label: 'Tip', icon: 'lightning' },
-		{ severity: 'ash-markdown-alert-important', label: 'Important', icon: 'chat' },
+		{ severity: 'ash-markdown-alert-important', label: 'Important', icon: 'chat-1' },
 		{ severity: 'ash-markdown-alert-warning', label: 'Warning', icon: 'warning' },
 		{ severity: 'ash-markdown-alert-caution', label: 'Caution', icon: 'error' },
 	]);

@@ -9,7 +9,8 @@ export class BrowserHostService implements IHostService {
 	constructor(@ILifecycleService private readonly lifecycle: ILifecycleService) {}
 
 	public async restart(): Promise<void> {
-		try { await this.lifecycle.shutdown('load'); }
+		// A restart retains the workspace and dirty backups; 'load' replaces it.
+		try { await this.lifecycle.shutdown('reload'); }
 		catch (error) { if (error instanceof ShutdownVetoError) { return; } throw error; }
 		this.ownerWindow.location.reload();
 	}

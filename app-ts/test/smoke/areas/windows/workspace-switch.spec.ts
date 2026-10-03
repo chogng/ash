@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ElectronApplication } from '@playwright/test';
-import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import { expect, test } from '../../../automation/test.js';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 
@@ -89,40 +88,13 @@ test('opening a folder displays its files in Explorer', async ({ target, testWor
 
 test('Explorer file context menu includes file actions for the clicked row', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
-	const electron = application as ElectronApplication;
-	await electron.evaluate(({ Menu }) => {
-		const originalPopup = Menu.prototype.popup;
-		const state = globalThis as typeof globalThis & { ashExplorerMenuTest?: { labels: string[]; restore: () => void } };
-		state.ashExplorerMenuTest = {
-			labels: [],
-			restore: () => { Menu.prototype.popup = originalPopup; },
-		};
-		Menu.prototype.popup = function(options) {
-			state.ashExplorerMenuTest!.labels = this.items.map(item => item.label);
-			options?.callback?.();
-		};
-	});
-	try {
-		const file = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
-		await file.click({ button: 'right' });
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashExplorerMenuTest?: { labels: string[] } }).ashExplorerMenuTest?.labels)).toEqual(expect.arrayContaining([
-			'Open to the Side',
-			'Cut',
-			'Copy',
-			'Copy Path',
-			'Copy Relative Path',
-			'Rename',
-			'Delete Permanently',
-		]));
-		const labels = await electron.evaluate(() => (globalThis as typeof globalThis & { ashExplorerMenuTest?: { labels: string[] } }).ashExplorerMenuTest?.labels ?? []);
-		expect(labels).not.toContain('New File...');
-		expect(labels).not.toContain('New Folder...');
-		expect(labels).not.toContain('Download File...');
-	} finally {
-		await electron.evaluate(({ Menu }) => {
-			(globalThis as typeof globalThis & { ashExplorerMenuTest?: { restore: () => void } }).ashExplorerMenuTest?.restore();
-		});
-	}
+	const file = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+	const items = await workbench.menus.inspect(application, () => file.click({ button: 'right' }));
+	const labels = items.map(item => item.label);
+	expect(labels).toEqual(expect.arrayContaining(['Open to the Side', 'Cut', 'Copy', 'Copy Path', 'Copy Relative Path', 'Rename', 'Delete Permanently']));
+	expect(labels).not.toContain('New File...');
+	expect(labels).not.toContain('New Folder...');
+	expect(labels).not.toContain('Download File...');
 });
 
 test('Explorer shortcuts copy and move binary files into folders', async ({ target, testWorkspace, workbench, application }) => {
@@ -285,93 +257,39 @@ test.describe('System clipboard', () => {
 
 test('Explorer opens the focused file context menu from the keyboard', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
-	const electron = application as ElectronApplication;
-	await electron.evaluate(({ Menu }) => {
-		const originalPopup = Menu.prototype.popup;
-		const state = globalThis as typeof globalThis & { ashExplorerKeyboardMenuTest?: { labels: string[]; restore: () => void } };
-		state.ashExplorerKeyboardMenuTest = {
-			labels: [],
-			restore: () => { Menu.prototype.popup = originalPopup; },
-		};
-		Menu.prototype.popup = function(options) {
-			state.ashExplorerKeyboardMenuTest!.labels = this.items.map(item => item.label);
-			options?.callback?.();
-		};
-	});
-	try {
-		const file = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
-		await file.click();
-		await workbench.page.keyboard.press('Shift+F10');
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashExplorerKeyboardMenuTest?: { labels: string[] } }).ashExplorerKeyboardMenuTest?.labels)).toContain('Rename');
-	} finally {
-		await electron.evaluate(({ Menu }) => {
-			(globalThis as typeof globalThis & { ashExplorerKeyboardMenuTest?: { restore: () => void } }).ashExplorerKeyboardMenuTest?.restore();
-		});
-	}
+	const file = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+	await file.click();
+	const items = await workbench.menus.inspect(application, () => workbench.page.keyboard.press('Shift+F10'));
+	expect(items).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Rename', enabled: true })]));
 });
 
 test('Explorer file shortcuts target the selected file', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
-	const electron = application as ElectronApplication;
-	await electron.evaluate(({ dialog }) => {
-		const original = dialog.showMessageBox.bind(dialog);
-		const state = globalThis as typeof globalThis & { ashExplorerDeleteDialogTest?: { message?: string; restore: () => void } };
-		state.ashExplorerDeleteDialogTest = { restore: () => { dialog.showMessageBox = original; } };
-		dialog.showMessageBox = (async (...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => {
-			const options = args.length === 1 ? args[0] : args[1];
-			state.ashExplorerDeleteDialogTest!.message = options.message;
-			return { response: 1, checkboxChecked: false };
-		}) as typeof dialog.showMessageBox;
-	});
-	try {
-		const page = workbench.page;
-		await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' }).click();
-		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+Backspace' : 'Shift+Delete');
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashExplorerDeleteDialogTest?: { message?: string } }).ashExplorerDeleteDialogTest?.message)).toBe('Permanently delete main.ts?');
-		await page.keyboard.press(process.platform === 'darwin' ? 'Enter' : 'F2');
-		const input = page.locator('.ash-quick-pick-input input');
-		await expect(input).toBeVisible();
-		await expect(input).toHaveValue('main.ts');
-		await input.press('Escape');
-	} finally {
-		await electron.evaluate(({ dialog }) => {
-			(globalThis as typeof globalThis & { ashExplorerDeleteDialogTest?: { restore: () => void } }).ashExplorerDeleteDialogTest?.restore();
-		});
-	}
+	const page = workbench.page;
+	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' }).click();
+	const confirmation = await workbench.dialogs.confirm(application, 'Confirm', 'Cancel', () => page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+Backspace' : 'Shift+Delete'));
+	expect(confirmation.message).toBe('Permanently delete main.ts?');
+	await page.keyboard.press(process.platform === 'darwin' ? 'Enter' : 'F2');
+	const input = page.locator('.ash-quick-pick-input input');
+	await expect(input).toBeVisible();
+	await expect(input).toHaveValue('main.ts');
+	await input.press('Escape');
 });
 
 test('Explorer creates a child folder from a folder context menu', async ({ target, application, testWorkspace, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
 	const parent = join(testWorkspace.directory, 'menu-parent');
 	await mkdir(parent);
-	const electron = application as ElectronApplication;
-	await electron.evaluate(({ Menu }) => {
-		const originalPopup = Menu.prototype.popup;
-		const state = globalThis as typeof globalThis & { ashExplorerFolderTest?: { restore: () => void } };
-		state.ashExplorerFolderTest = { restore: () => { Menu.prototype.popup = originalPopup; } };
-		Menu.prototype.popup = function(options) {
-			const folder = this.items.find(item => item.label === 'New Folder...');
-			const select = folder?.click as (() => void) | undefined;
-			select?.();
-			options?.callback?.();
-		};
-	});
-	try {
-		const folder = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'menu-parent' });
-		await expect(folder).toHaveCount(1);
-		await folder.click({ button: 'right' });
-		const input = workbench.page.locator('.ash-quick-pick-input input');
-		await expect(input).toBeVisible();
-		await input.fill('created-from-menu');
-		await input.press('Enter');
-		await expect.poll(async () => stat(join(parent, 'created-from-menu')).then(metadata => metadata.isDirectory(), () => false)).toBe(true);
-		await folder.click();
-		await expect(workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'created-from-menu' })).toHaveCount(1);
-	} finally {
-		await electron.evaluate(({ Menu }) => {
-			(globalThis as typeof globalThis & { ashExplorerFolderTest?: { restore: () => void } }).ashExplorerFolderTest?.restore();
-		});
-	}
+	const folder = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'menu-parent' });
+	await expect(folder).toHaveCount(1);
+	await workbench.menus.select(application, () => folder.click({ button: 'right' }), ['New Folder...']);
+	const input = workbench.page.locator('.ash-quick-pick-input input');
+	await expect(input).toBeVisible();
+	await input.fill('created-from-menu');
+	await input.press('Enter');
+	await expect.poll(async () => stat(join(parent, 'created-from-menu')).then(metadata => metadata.isDirectory(), () => false)).toBe(true);
+	await folder.click();
+	await expect(workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'created-from-menu' })).toHaveCount(1);
 });
 
 test('Explorer expands and collapses a refreshed folder without replacing sibling rows', async ({ target, testWorkspace, workbench }) => {
@@ -402,7 +320,7 @@ test('Explorer expands and collapses a refreshed folder without replacing siblin
 	expect(await siblingRow?.evaluate(row => row.isConnected)).toBe(true);
 });
 
-test('Explorer uses the desktop clipboard and imports binary files from a paste event', async ({ target, testWorkspace, workbench }) => {
+test('Explorer uses the desktop clipboard and imports binary files from a paste event', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
 	const destination = join(testWorkspace.directory, 'paste-target');
 	await mkdir(destination);
@@ -415,14 +333,19 @@ test('Explorer uses the desktop clipboard and imports binary files from a paste 
 	await explorer.getByRole('tree').focus();
 	await page.keyboard.press('ControlOrMeta+C');
 	await expect.poll(() => page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<string[]> } } }).ash.ipcRenderer;
-		return (await ipc.invoke('ash:host:readClipboardResources')).length;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ resources: string[]; operation: 'copy' | 'move' }> } } }).ash.ipcRenderer;
+		const result = await ipc.invoke('ash:host:readClipboardResources');
+		return result.resources.length;
 	})).toBe(1);
 	await folder.click();
 	await explorer.getByRole('tree').focus();
 	await page.keyboard.press('ControlOrMeta+V');
 	await expect.poll(async () => readFile(join(destination, 'main.ts'), 'utf8').catch(() => undefined)).toBe('const value = 1;\n');
 
+	if (!('windows' in application)) throw new Error('Expected Electron clipboard');
+	await application.evaluate(({ clipboard }) => clipboard.clear());
+	await folder.click();
+	await explorer.getByRole('tree').focus();
 	await explorer.getByRole('tree').evaluate(tree => {
 		const data = new DataTransfer();
 		data.items.add(new File([new Uint8Array([0, 255, 42])], 'picture.bin'));

@@ -1,6 +1,5 @@
 import { createServer } from 'node:http';
 import type { ElectronApplication } from '@playwright/test';
-import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js";
 import { decodeAppServerServerRequestResult } from '../../../../src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.js';
 import { expect, test } from '../../../automation/test.js';
@@ -36,6 +35,7 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await expect(page.getByRole('tab', { name: 'First page' })).toBeVisible();
 		const views = () => electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(view => 'webContents' in view).map(view => ({ bounds: view.getBounds(), visible: view.getVisible(), url: (view as Electron.WebContentsView).webContents.getURL() })));
 		await expect.poll(async () => (await views()).filter(view => view.url === url && view.visible).length).toBe(1);
+		await editor.locator('.ash-browser-viewport').focus();
 		await electron.evaluate(async ({ BrowserWindow }) => {
 			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL().endsWith('/')) as Electron.WebContentsView;
 			await view.webContents.executeJavaScript("history.pushState({}, '', '/routed'); document.title = 'Routed page';");
@@ -44,10 +44,10 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await expect(page.getByRole('tab', { name: 'Routed page' })).toBeVisible();
 		await editor.getByRole('button', { name: 'Back', exact: true }).click();
 		await expect(location).toHaveValue(url);
-		await electron.evaluate(async ({ BrowserWindow }) => {
+		await electron.evaluate(async ({ BrowserWindow }, url) => {
 			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView;
 			await view.webContents.executeJavaScript("document.title = 'First page';");
-		});
+		}, url);
 		await location.fill(`${url}second`); await location.press('Enter');
 		await expect(editor.getByRole('status')).toHaveText('Second page');
 		await page.keyboard.press('ControlOrMeta+Shift+P');
@@ -87,26 +87,15 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 			const view = (await views()).find(view => view.url === `${url}second`);
 			return bounds && view ? Math.abs(view.bounds.width - bounds.width) : 1000;
 		}).toBeLessThan(2);
-		await electron.evaluate(({ dialog }) => {
-			const original = dialog.showMessageBox.bind(dialog);
-			const state = globalThis as typeof globalThis & { ashTestDialog?: { title?: string; finish?: () => void; restore: () => void } };
-			state.ashTestDialog = { restore: () => { dialog.showMessageBox = original; } };
-			dialog.showMessageBox = ((...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => new Promise(resolve => {
-				const options = args.length === 1 ? args[0] : args[1];
-				state.ashTestDialog!.title = options.title;
-				state.ashTestDialog!.finish = () => resolve({ response: 0, checkboxChecked: false });
-			})) as typeof dialog.showMessageBox;
-		});
 		await location.focus(); await location.press('Alt+F1');
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashTestDialog?: { title?: string } }).ashTestDialog?.title)).toBe('Browser accessibility help');
+		const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+		await expect(help.getByRole('textbox')).toHaveValue(/Webpages use the browser’s accessibility tree/u);
 		await expect.poll(async () => (await views()).filter(view => view.url === `${url}second` && view.visible).length).toBe(0);
-		await electron.evaluate(() => {
-			const state = (globalThis as typeof globalThis & { ashTestDialog?: { finish?: () => void; restore: () => void } }).ashTestDialog;
-			state?.finish?.();
-			state?.restore();
-		});
+		await page.keyboard.press('Escape');
+		await expect(location).toBeFocused();
 		await page.getByRole('button', { name: 'Close Second page', exact: true }).click();
-		await expect.poll(async () => (await views()).filter(view => view.url.startsWith(url)).length).toBe(0);
+		await expect(page.getByRole('tab', { name: 'Second page', exact: true })).toHaveCount(0);
+		await expect.poll(async () => (await views()).filter(view => view.url.startsWith(url)).map(view => view.url)).toEqual([]);
 		const hostCall = (method: string, params: unknown) => page.evaluate(({ method, params }) => {
 			const bridge = (globalThis as unknown as { ash: ISandboxGlobals }).ash;
 			return bridge.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params });

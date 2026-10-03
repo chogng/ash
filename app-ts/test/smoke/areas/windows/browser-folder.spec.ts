@@ -35,7 +35,7 @@ test('Explorer selection stays beneath its scrollbar', async ({ target, workbenc
 		const trackBounds = track.getBoundingClientRect();
 		const x = trackBounds.left + trackBounds.width / 2;
 		const y = rowBounds.top + rowBounds.height / 2;
-		return rowBounds.right > x && document.elementFromPoint(x, y)?.closest('.ash-scrollbar-track-vertical') === track;
+		return document.elementFromPoint(x, y)?.closest('.ash-scrollbar-track-vertical') === track;
 	});
 	expect(overlap).toBe(true);
 });

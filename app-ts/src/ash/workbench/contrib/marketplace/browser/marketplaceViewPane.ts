@@ -1,3 +1,8 @@
+import { localize } from '../../../../nls.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -45,6 +50,7 @@ export class MarketplaceContent extends Disposable {
 		@IMarketplaceService private readonly marketplace: IMarketplaceService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
 		const document = container.ownerDocument;
@@ -91,10 +97,21 @@ export class MarketplaceContent extends Disposable {
 		this._register(addDisposableListener(this.capability, 'change', () => { void this.run(() => this.load()); }));
 		this._register(addDisposableListener(this.list, 'change', () => { void this.run(() => this.select()); }));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
-			if (event.altKey && event.key === 'F1') { event.preventDefault(); void this.showHelp(); }
 			if (event.key === 'Enter' && (event.target === this.query || event.target === this.language)) { event.preventDefault(); void this.run(() => this.load()); }
 		}));
 		this._register(marketplace.onDidChangeInstalled(() => { this.loaded = false; if (this.visible && !this.working) { void this.run(() => this.load()); } }));
+		const scopedContext = this._register(contextKeys.createScoped(this.domNode));
+		scopedContext.createKey('marketplaceFocused', true);
+		this._register(AccessibleViewRegistry.register({
+			type: AccessibleViewType.Help, priority: 100, name: `marketplace-help-${generateUuid()}`,
+			when: ContextKeyExpr.has('marketplaceFocused'),
+			getProvider: () => {
+				const focused = this.domNode.ownerDocument.activeElement;
+				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
+				return new AccessibleContentProvider(AccessibleViewProviderId.Marketplace, { type: AccessibleViewType.Help },
+					() => this.helpContent(), () => focused.focus(), AccessibilityVerbositySettingId.Marketplace);
+			},
+		}));
 		this.applyEnabled();
 	}
 
@@ -220,9 +237,13 @@ export class MarketplaceContent extends Disposable {
 		catch (error) { if (!this.isDisposed) { this.status.textContent = error instanceof Error ? error.message : String(error); } }
 	}
 
+	private helpContent(): string {
+		return localize({ bundle: 'ash.marketplace', key: 'accessibilityHelp' }, 'Open with /marketplace [query] to search, or /plugins to manage installed packages. Search by package, capability, language name, alias, or file extension. Capability filters include capabilities bundled in Plugins. A language server ID filter requires an executable route for that exact language and excludes packages that only supply syntax resources. Installed lists local packages even when the catalog is unavailable. Install, update, and uninstall affect the whole package. Use Tab and Shift+Tab to navigate and arrow keys to select a package. Escape closes this help.');
+	}
+
 	private async showHelp(): Promise<void> {
 		const focus = this.domNode.ownerDocument.activeElement;
-		await this.dialogs.showMessage({ title: 'Marketplace help', severity: DialogSeverity.Info, message: 'Open with /marketplace [query] to search, or /plugins to manage installed packages. Search by package, capability, language name, alias, or file extension. Capability filters include capabilities bundled in Plugins. A language server ID filter requires an executable route for that exact language and excludes packages that only supply syntax resources. Installed lists local packages even when the catalog is unavailable. Install, update, and uninstall affect the whole package. Use Tab and Shift+Tab to navigate and arrow keys to select a package. Escape closes this help.' });
+		await this.dialogs.showMessage({ title: 'Marketplace help', severity: DialogSeverity.Info, message: this.helpContent() });
 		if (focus instanceof HTMLElement && focus.isConnected) { focus.focus(); }
 	}
 

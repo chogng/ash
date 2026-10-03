@@ -260,7 +260,6 @@
 		"memories.changed": "记忆已更改。刷新以加载最新版本，当前草稿会保留。",
 		"memories.count": "本页有 {0} 条记忆。",
 		"memories.help": "选择对话上下文和记忆范围。读取和模型保存是独立权限，默认均关闭。用 Tab 和 Shift+Tab 在控件之间移动，用方向键浏览列表，按 Ctrl 或 Command+S 保存。记忆内容是纯文本，可以选择和复制。打开引用可查看准确的只读摘录。编辑模型记忆后，该记忆归你维护，模型不能再覆盖。按 Escape 关闭此帮助对话框。",
-		"memories.helpTitle": "记忆帮助",
 		"memories.hint": "记忆。用 Tab 导航，按 Ctrl 或 Command+S 保存，按 Alt+F1 查看帮助。",
 		"memories.reference": "原始引用，修订版本 {0}。",
 		"memories.saved": "记忆已保存。",

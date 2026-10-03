@@ -22,7 +22,7 @@ test('EditorGroupView keeps the caller language when resource detection has no l
 			canOpen: input => input.languageId === 'jsonc' ? EditorPaneMatch.Default : EditorPaneMatch.None,
 			create: () => new TestEditorPane(),
 		});
-		using services = createTestEditorServices();
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
 		using group = services.createInstance(EditorGroupView, dom.window.document.body, {
 			registry,
 			languageResolver: { resolveLanguageId: () => undefined },
@@ -52,7 +52,7 @@ test("EditorGroupView reorders tabs and moves them between groups", async () => 
 			canOpen: () => EditorPaneMatch.Default,
 			create: () => new TestEditorPane(),
 		});
-		using services = createTestEditorServices();
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
 		const source = services.createInstance(EditorGroupView,dom.window.document.body, { registry });
 		const target = services.createInstance(EditorGroupView,dom.window.document.body, { registry });
 		const first = input("first");
@@ -104,7 +104,7 @@ test("EditorGroupView selects a range of tabs and resolves close-command targets
 		const { resolveCommandsContext } = await import("../../browser/parts/editor/editorCommandsContext.js");
 		const registry = new EditorPaneRegistry();
 		registry.registerEditorPane({ id: "test.editor", name: "Test Editor", canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane() });
-		using services = createTestEditorServices();
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
 		const group = services.createInstance(EditorGroupView,dom.window.document.body, { registry });
 		try {
 			const first = input("first");

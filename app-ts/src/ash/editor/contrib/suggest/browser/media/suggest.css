@@ -61,7 +61,7 @@
 .stanza-editor-completion-label strong,
 .stanza-editor-completion-detail strong {
   color: var(--ash-editor-foreground);
-  font-weight: var(--ash-fontWeight-semiBold);
+  font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .stanza-editor-completion-option.focused strong {

@@ -1,4 +1,7 @@
-import { localize2 } from '../../../../nls.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { FocusedViewContext } from '../../../common/contextkeys.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -26,6 +29,18 @@ registerWorkbenchContribution('workbench.contrib.call', WorkbenchPhase.BlockStar
 		id: 'ash.call.view', title: 'Calls', canToggleVisibility: false,
 		ctorDescriptor: new SyncDescriptor(CallViewPane),
 	}]));
+	registrations.add(AccessibleViewRegistry.register({
+		type: AccessibleViewType.Help, priority: 100, name: 'callsHelp',
+		when: FocusedViewContext.isEqualTo('ash.call.view'),
+		getProvider: accessor => {
+			const view = accessor.get(IViewsService).getViewWithId('ash.call.view');
+			if (!(view instanceof CallViewPane)) { return undefined; }
+			const focused = view.element.ownerDocument.activeElement;
+			return new AccessibleContentProvider(AccessibleViewProviderId.Calls, { type: AccessibleViewType.Help },
+				() => localize({ bundle: 'ash.workbench', key: 'call.accessibilityHelp' }, "Create a call on this computer or a server, or join with an invitation. Your microphone starts off. Use Tab and Shift+Tab to move between controls and Enter or Space to activate a button. Muting stops sending audio; Stop listening stops playback. Share screen opens a display or window selector. Use arrow keys to choose a source, then Start sharing. Escape cancels selection. Stop sharing ends screen capture without leaving the call. Shared screen images are labeled by participant; their visual contents are not transcribed. Sharing stops when its window closes, the call reconnects, or you leave. Leave disconnects only you. End for everyone closes the room. Invitation keys grant access: share them only with people you want in the call. Escape closes this help."),
+				() => { if (focused instanceof HTMLElement && focused.isConnected) { focused.focus(); } }, AccessibilityVerbositySettingId.Calls);
+		},
+	}));
 	registrations.add(registerAction2(class OpenCalls extends Action2 {
 		constructor() { super({ id: 'ash.call.open', title: localize2({ bundle: 'ash.workbench', key: 'command.OpenCalls' }, 'Open Calls'), f1: true }); }
 		public override run(accessor: ServicesAccessor): void { accessor.get(IViewsService).focusView('ash.call.view'); }

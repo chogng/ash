@@ -61,8 +61,9 @@ suite('Welcome page', () => {
 		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		try {
 			setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
-			assert.deepEqual([...cards].map(card => card.querySelector('.ash-getting-started-card-label')?.textContent), ['打开文件夹', '克隆仓库', '通过 SSH 连接', '连接 GitHub']);
-			assert.equal(page.domNode.querySelector('h2')?.textContent, '最近的项目');
+			using translated = new GettingStarted(dom.window.document.body, { recentProjects: [{ name: 'ash', path: '~/Desktop' }] });
+			assert.deepEqual([...translated.domNode.querySelectorAll('.ash-getting-started-card')].map(card => card.querySelector('.ash-getting-started-card-label')?.textContent), ['打开文件夹', '克隆仓库', '通过 SSH 连接', '连接 GitHub']);
+			assert.equal(translated.domNode.querySelector('h2')?.textContent, '最近的项目');
 		} finally {
 			resetNlsResolver();
 		}

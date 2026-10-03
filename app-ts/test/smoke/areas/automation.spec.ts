@@ -1,14 +1,26 @@
-import type { ChildProcess } from 'node:child_process';
+import { execFile, type ChildProcess } from 'node:child_process';
 import { readdir, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
+import { promisify } from 'node:util';
 import { _electron, chromium, type Browser } from '@playwright/test';
 import { expect, test } from '../../automation/test.js';
 import { launchElectron } from '../../automation/playwrightElectron.js';
 import { launchBrowser } from '../../automation/playwrightBrowser.js';
 import { Workbench } from '../../automation/workbench.js';
-import { captureElectronMenu } from '../../automation/electronDriver.js';
+import { captureElectronMenu } from '../../automation/menus.js';
+
+test('all smoke projects collect without fixture dependency cycles', async () => {
+	const directory = resolve(import.meta.dirname, '../../..');
+	const { stdout } = await promisify(execFile)(process.execPath, [
+		'node_modules/@playwright/test/cli.js', 'test', '--list',
+		'--project=browser-app-server', '--project=electron-ui', '--project=electron-app-server', '--project=electron-pdf-corpus-app-server',
+	], { cwd: directory, env: { ...process.env, ASH_PLAYWRIGHT_SERVER: 'full' } });
+	expect(stdout).toContain('scm-history.spec.ts');
+	expect(stdout).toContain('pdf-academic-corpus.spec.ts');
+	expect(stdout).toMatch(/Total: [1-9]\d* tests/u);
+});
 
 test.describe('startup diagnostics', () => {
 	const waitForReady = Workbench.prototype.waitForReady;
@@ -69,6 +81,22 @@ test('a failed desktop menu selection restores capture and leaves Main running',
 	const items = await captureElectronMenu(application, () => button.click());
 	expect(items.some(item => item.label === 'File')).toBe(true);
 	await expect(button).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('a failed dialog choice cancels the request and permits the next confirmation', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Checks the Code editor save confirmation.');
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	const group = workbench.editors.groupAt(0);
+	const tab = group.tabs.filter({ hasText: 'Untitled-1' });
+	await group.editor.input.focus();
+	await group.editor.input.pressSequentially('dialog capture draft');
+	const close = () => workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await expect(workbench.dialogs.confirm(application, 'Save Changes', 'Missing test dialog button', close)).rejects.toThrow('Expected dialog button: Missing test dialog button');
+	await expect(tab).toBeVisible();
+	await expect(group.editor.lines).toHaveText(['dialog capture draft']);
+	const message = await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", close);
+	expect(message.buttons).toEqual(['Save', "Don't Save", 'Cancel']);
+	await expect(tab).toHaveCount(0);
 });
 
 test('failed browser navigation closes the allocated browser', async ({}, testInfo) => {

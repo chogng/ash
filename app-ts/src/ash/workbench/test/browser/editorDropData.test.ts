@@ -1,3 +1,5 @@
+import { URI } from '../../../base/common/uri.js';
+import { isWindows } from '../../../base/common/platform.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { extractExternalEditorInputs } from "../../browser/parts/editor/editorDropData.js";
@@ -18,14 +20,15 @@ test("external editor drop data preserves URIs and snapshots browser files", asy
 	assert.equal(inputs[1]?.initialText, "dropped notes");
 });
 
-test("external editor drop data keeps native file paths loadable", async () => {
+test("external editor drop data keeps host file paths loadable", async () => {
+	const path = isWindows ? "C:\\project\\dropped.ts" : "/project/dropped.ts";
 	const dataTransfer = {
 		getData: () => "",
-		files: [{ name: "native.ts", type: "text/typescript", path: "C:\\project\\native.ts", text: async () => "unused" }],
+		files: [{ name: "dropped.ts", type: "text/typescript", path, text: async () => "unused" }],
 	} as unknown as DataTransfer;
 
 	const [input] = await extractExternalEditorInputs(dataTransfer);
 
-	assert.equal(input?.resource.toString(), "file:///C:/project/native.ts");
+	assert.equal(input?.resource.toString(), URI.file(path).toString());
 	assert.equal(input?.initialText, undefined);
 });

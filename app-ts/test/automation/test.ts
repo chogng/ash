@@ -1,5 +1,5 @@
 import { test as base, expect } from "@playwright/test";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchBrowser } from "./playwrightBrowser.js";
@@ -15,6 +15,7 @@ interface RunningApplication {
 	diagnostics: Pick<WorkbenchDiagnostics, 'pageErrors' | 'consoleErrors' | 'errors'>;
 	deferRestart(): Promise<void>;
 	restartMessage(): Promise<string>;
+	reload(): Promise<{ application: PlaywrightApplication; workbench: Workbench }>;
 	restart(): Promise<{ application: PlaywrightApplication; workbench: Workbench }>;
 }
 
@@ -22,6 +23,7 @@ interface PlaywrightFixtures {
 	readonly webAppServer: WebLaunchResult | undefined;
 	readonly runningApplication: RunningApplication;
 	readonly restartWorkbench: RunningApplication['restart'];
+	readonly reloadWorkbench: RunningApplication['reload'];
 	readonly deferRestart: () => Promise<void>;
 	readonly restartMessage: () => Promise<string>;
 	readonly includeLargeTestFile: boolean;
@@ -40,8 +42,10 @@ export const test = base.extend<PlaywrightFixtures>({
 	gitRepository: [false, { option: true }],
 	gitMergeConflict: [false, { option: true }],
 	openWorkspace: [true, { option: true }],
-	target: async ({ baseURL, webAppServer }, use, testInfo) => {
-		await use(playwrightTargetForProject(testInfo.project.name, webAppServer?.connection.endpoint ?? baseURL));
+	// Workspace options may depend on the platform. Connection addresses belong
+	// to the later launch, otherwise target -> server -> workspace -> target cycles.
+	target: async ({}, use, testInfo) => {
+		await use(playwrightTargetForProject(testInfo.project.name));
 	},
 	webAppServer: [async ({ testWorkspace }, use, testInfo) => {
 		if (testInfo.project.name !== 'browser-app-server') { await use(undefined); return; }
@@ -58,7 +62,7 @@ export const test = base.extend<PlaywrightFixtures>({
 	},
 	// Startup (30s), process exit (10s), and daemon stop (30s) have independent
 	// owned budgets. Keep them inside the fixture budget; test actions retain 45s.
-	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer }, use, testInfo) => {
+	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL }, use, testInfo) => {
 		// Restart replaces the driver; retain errors from each application generation.
 		const generations: WorkbenchDiagnostics[] = [];
 		const diagnostics = {
@@ -93,9 +97,18 @@ export const test = base.extend<PlaywrightFixtures>({
 			}
 		};
 		if (target.kind === 'browser') {
-			const { application, driver } = await launchBrowser({ ...target, webSession: webAppServer?.connection });
+			const url = target.appServerMode === 'required' ? webAppServer!.connection.endpoint : baseURL;
+			if (url === undefined) throw new Error(`Browser project '${testInfo.project.name}' requires a baseURL`);
+			const { application, driver } = await launchBrowser({ ...target, baseURL: url, webSession: webAppServer?.connection });
 			generations.push(driver.diagnostics);
 			const running: RunningApplication = { driver, diagnostics,
+				reload: async () => {
+					await driver.workbench.page.context().tracing.stop();
+					await driver.workbench.reloadWindow();
+					await driver.workbench.waitForReady();
+					await driver.workbench.page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+					return { application, workbench: driver.workbench };
+				},
 				deferRestart: async () => { await driver.workbench.page.getByRole('button', { name: /^(Later|稍后)$/u }).click(); },
 				restartMessage: async () => driver.workbench.page.locator('.ash-dialog-message').textContent().then(text => text ?? ''),
 				restart: async () => {
@@ -117,12 +130,33 @@ export const test = base.extend<PlaywrightFixtures>({
 			workspacePermissions: openWorkspace ? 'development' as const : undefined,
 		};
 		try {
+			const languageServer = process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER;
+			if (languageServer && target.appServerMode === 'required') {
+				const profileDirectory = join(userDataDirectory, 'profile');
+				await mkdir(profileDirectory);
+				await writeFile(join(profileDirectory, 'config.toml'), `[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServer)}\n`);
+			}
 			let current = await launchElectron(options);
 			try {
 				generations.push(current.driver.diagnostics);
 				await captureRestartDialogs(current.application);
 				let generation = 0;
 				const running: RunningApplication = { driver: current.driver, diagnostics,
+					reload: async () => {
+						await current.driver.workbench.page.context().tracing.stop();
+						const page = current.driver.workbench.page;
+						const closed = page.waitForEvent('close');
+						const window = await current.application.browserWindow(page);
+						await window.evaluate(window => window.close());
+						await closed;
+						await current.close();
+						current = await launchElectron(options);
+						generations.push(current.driver.diagnostics);
+						await captureRestartDialogs(current.application);
+						running.driver = current.driver;
+						await current.driver.workbench.page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+						return { application: current.application, workbench: current.driver.workbench };
+					},
 					deferRestart: async () => {
 						await expect.poll(async () => current.application.evaluate(() => Boolean((globalThis as RestartDialogGlobal).ashTestRestartDialog))).toBe(true);
 						await current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond(1));
@@ -164,6 +198,7 @@ export const test = base.extend<PlaywrightFixtures>({
 		}
 	}, { timeout: 75_000 }],
 	driver: async ({ runningApplication }, use) => { await use(runningApplication.driver); },
+	reloadWorkbench: async ({ runningApplication }, use) => { await use(() => runningApplication.reload()); },
 	restartWorkbench: async ({ runningApplication }, use) => { await use(() => runningApplication.restart()); },
 	deferRestart: async ({ runningApplication }, use) => { await use(() => runningApplication.deferRestart()); },
 	restartMessage: async ({ runningApplication }, use) => { await use(() => runningApplication.restartMessage()); },

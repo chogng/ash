@@ -2,14 +2,14 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
-test('multiple view panes resize independently and restore their layout after reload', async ({ target, workbench }) => {
+test('multiple view panes resize independently and restore their layout after reload', async ({ target, workbench, reloadWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code workbench.');
-	const page = workbench.page;
+	let page = workbench.page;
 	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
-	const container = page.locator('[data-view-container-id="ash.git"]');
-	const changes = container.locator('[data-view-id="ash.gitView"]');
-	const review = container.locator('[data-view-id="ash.gitAgentReview"]');
-	const graph = container.locator('[data-view-id="ash.gitGraph"]');
+	let container = page.locator('[data-view-container-id="ash.git"]');
+	let changes = container.locator('[data-view-id="ash.gitView"]');
+	let review = container.locator('[data-view-id="ash.gitAgentReview"]');
+	let graph = container.locator('[data-view-id="ash.gitGraph"]');
 	const header = (pane: typeof graph) => pane.locator('.ash-pane-view-header-button');
 	const height = (pane: typeof graph) => pane.evaluate(element => element.getBoundingClientRect().height);
 	await expect(header(changes)).toHaveAttribute('aria-expanded', 'true');
@@ -72,7 +72,12 @@ test('multiple view panes resize independently and restore their layout after re
 	}
 
 	await header(graph).press('ArrowLeft');
-	await page.reload();
+	({ workbench } = await reloadWorkbench());
+	page = workbench.page;
+	container = page.locator('[data-view-container-id="ash.git"]');
+	changes = container.locator('[data-view-id="ash.gitView"]');
+	review = container.locator('[data-view-id="ash.gitAgentReview"]');
+	graph = container.locator('[data-view-id="ash.gitGraph"]');
 	await workbench.waitForReady();
 	await expect(container).toBeVisible();
 	await expect(header(graph)).toHaveAttribute('aria-expanded', 'false');

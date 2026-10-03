@@ -661,6 +661,7 @@ test('text editor automation keeps split group inputs and contents separate', as
 	await expect(workbench.editors.groups).toHaveCount(2);
 	await page.keyboard.press('ControlOrMeta+N');
 	const second = workbench.editors.groupAt(1).editor;
+	await expect(second.input).toHaveAttribute('aria-label', 'Untitled-2');
 	await second.waitForEditorFocus();
 	await second.waitForTypeInEditor('second group');
 	await first.waitForEditorContents(contents => contents === 'first group');

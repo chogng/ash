@@ -97,10 +97,10 @@ test('LSP and Skills share capability discovery while retaining their own config
 	await expect.poll(() => page.evaluate(() => window.ashMarketplaceIntegration.requests.filter((entry: any) => entry[0] === 'configure').length)).toBe(2);
 	expect(await page.evaluate(() => window.ashMarketplaceIntegration.requests.filter((entry: any) => entry[0] === 'configure').at(-1))).toEqual(['configure', 'typescript-language-server', { mode: 'enabled', executable: '/tools/server' }, 4]);
 	await skills.getByLabel('Skills', { exact: true }).focus();
-	await page.keyboard.press('Alt+F1');
+	await skills.getByRole('button', { name: 'Help', exact: true }).click();
 	await expect(page.getByRole('dialog', { name: 'Skills help' })).toBeVisible();
 	await page.keyboard.press('Escape');
-	await expect(skills.getByLabel('Skills', { exact: true })).toBeFocused();
+	await expect(skills.getByRole('button', { name: 'Help', exact: true })).toBeFocused();
 	await page.evaluate(() => window.ashMarketplaceIntegration.dispose());
 	await expect(page.locator('.ash-marketplace, .ash-skills, .ash-language-server-settings')).toHaveCount(0);
 });

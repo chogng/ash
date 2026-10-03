@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
-test('Markdown customization updates rendered styles and the token scope report', async ({ target, testWorkspace, workbench }) => {
+test('Markdown customization updates rendered styles and the token scope report', async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires the Code product grammar resources');
 	const page = workbench.page;
 	await writeFile(join(testWorkspace.directory, 'inspect.md'), '# Heading\n');
@@ -10,10 +10,11 @@ test('Markdown customization updates rendered styles and the token scope report'
 	if (await showSidebar.isVisible()) await showSidebar.click();
 	const row = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'inspect.md' });
 	await expect(row).toHaveCount(1);
-	await row.click();
+	await row.dblclick();
 	const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
 	const heading = editor.locator('.stanza-editor-token').filter({ hasText: 'Heading' });
 	await expect(heading).toHaveCSS('font-weight', '700');
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'inspect.md' })).toHaveCount(1);
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	await settings.locator('[data-settings-group-id="workbench"]').click();
@@ -48,9 +49,8 @@ test('Markdown customization updates rendered styles and the token scope report'
 	await expect(report).toBeFocused();
 	await page.keyboard.press('Escape');
 	await expect(input).toBeFocused();
-	await page.reload();
-	await workbench.waitForReady();
-	await expect(heading).toHaveCSS('color', 'rgb(101, 67, 33)');
+	({ workbench } = await reloadWorkbench());
+	await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-token').filter({ hasText: 'Heading' })).toHaveCSS('color', 'rgb(101, 67, 33)');
 });
 
 test('token inspection handles plaintext, Chinese labels, keyboard close and focus restoration', async ({ target, workbench, restartWorkbench }) => {

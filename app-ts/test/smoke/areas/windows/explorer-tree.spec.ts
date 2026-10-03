@@ -53,7 +53,7 @@ test.describe('Git ignore decorations', () => {
 });
 
 test.beforeEach(async ({ target, testWorkspace }) => {
-	if (target.kind !== 'electron' || target.appServerMode !== 'required') return;
+	if (target.appServerMode !== 'required') return;
 	await mkdir(join(testWorkspace.directory, 'tree-parent', 'tree-child'), { recursive: true });
 	await writeFile(join(testWorkspace.directory, 'root.ts'), 'root');
 	await writeFile(join(testWorkspace.directory, 'tree-parent', 'tree-child', 'leaf.ts'), 'leaf');
@@ -65,13 +65,13 @@ test('Explorer scrollbar stays at the pane edge while rows remain inset', async 
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code Explorer');
 	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
 	const names = Array.from({ length: 100 }, (_, index) => `scroll-${String(index).padStart(3, '0')}.txt`);
-	if (target.kind === 'electron') {
+	if (target.appServerMode === 'required') {
 		await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
 	}
 	const page = workbench.page;
 	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 	if (await showSidebar.isVisible()) await showSidebar.click();
-	if (target.kind === 'browser') {
+	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 		await page.evaluate(async names => {
 			const root = await navigator.storage.getDirectory();
 			const workspace = await root.getDirectoryHandle(`scroll-edge-${crypto.randomUUID()}`, { create: true });
@@ -132,11 +132,11 @@ test('Explorer scrollbar stays at the pane edge while rows remain inset', async 
 	await settings.locator('.ash-modal-editor-close').click();
 });
 
-test('Explorer tree guides align with ancestor arrows and settings update without replacing rows', async ({ application, target, workbench }) => {
+test('Explorer tree guides align with ancestor arrows and settings update without replacing rows', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code Explorer');
 	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
 	const page = workbench.page;
-	const hasFileIcons = target.kind === 'electron';
+	const hasFileIcons = target.appServerMode === 'required';
 	if (target.kind === 'electron' && 'windows' in application) {
 		const home = await application.evaluate(() => process.env.ASH_HOME!);
 		await cp('../extensions/theme-seti', join(home, 'extensions', 'theme-seti'), { recursive: true });
@@ -145,7 +145,7 @@ test('Explorer tree guides align with ancestor arrows and settings update withou
 	}
 	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 	if (await showSidebar.isVisible()) await showSidebar.click();
-	if (target.kind === 'browser') {
+	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 		await page.evaluate(async () => {
 			const root = await navigator.storage.getDirectory();
 			const workspace = await root.getDirectoryHandle(`tree-guides-${crypto.randomUUID()}`, { create: true });
@@ -257,14 +257,13 @@ test('Explorer tree guides align with ancestor arrows and settings update withou
 	await expect(leaf).toBeVisible();
 	if (hasFileIcons) {
 		for (const id of [null, 'vs-seti']) {
-			await page.evaluate(async id => {
-				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-				const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
-				const values = JSON.parse(snapshot.document.source);
-				values['workbench.iconTheme'] = id;
-				await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
-			}, id);
-			await expect.poll(geometry).toEqual({ alignment: 0, indent: 4, rootContent: id === null ? 22 : 0, leafContent: id === null ? 26 : 4, rootText: 0, leafText: 4 });
+			await workbench.quickaccess.runCommand('workbench.action.selectIconTheme');
+			await page.getByRole('option', { name: id === null ? 'None' : 'Seti', exact: true }).click();
+			await page.keyboard.press('Escape');
+			await expect(leaf).toBeVisible();
+			await expect(async () => {
+				expect(await geometry()).toEqual({ alignment: 0, indent: 4, rootContent: id === null ? 22 : 0, leafContent: id === null ? 26 : 4, rootText: 0, leafText: 4 });
+			}).toPass({ timeout: 10_000 });
 			expect(await leafRow!.evaluate(row => row.isConnected)).toBe(true);
 		}
 	}

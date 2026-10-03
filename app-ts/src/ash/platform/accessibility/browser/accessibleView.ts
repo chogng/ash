@@ -28,6 +28,12 @@ export const enum AccessibleViewProviderId {
 	ScmMerge = 'scmMerge',
 	DiffEditor = 'diffEditor',
 	Testing = 'testing',
+	Browser = 'browser',
+	Marketplace = 'marketplace',
+	Skills = 'skills',
+	Calls = 'calls',
+	Memories = 'memories',
+	Trace = 'trace',
 }
 
 export const enum AccessibleViewType {
@@ -62,6 +68,12 @@ export const enum AccessibilityVerbositySettingId {
 	ScmMerge = 'accessibility.verbosity.scmMerge',
 	DiffEditor = 'accessibility.verbosity.diffEditor',
 	Testing = 'accessibility.verbosity.testing',
+	Browser = 'accessibility.verbosity.browser',
+	Marketplace = 'accessibility.verbosity.marketplace',
+	Skills = 'accessibility.verbosity.skills',
+	Calls = 'accessibility.verbosity.calls',
+	Memories = 'accessibility.verbosity.memories',
+	Trace = 'accessibility.verbosity.trace',
 }
 
 export interface IAccessibleViewOptions {

@@ -1,5 +1,6 @@
 {
 	"ash.marketplace": {
+		"accessibilityHelp": "使用 /marketplace [关键词] 搜索，或使用 /plugins 管理已安装的软件包。可按软件包、能力、语言名称、别名或文件扩展名搜索。能力筛选包含插件捆绑的能力。语言服务器 ID 筛选要求该语言具有可执行程序，并排除仅提供语法资源的软件包。目录不可用时，已安装列表仍显示本地软件包。安装、更新和卸载作用于整个软件包。用 Tab 和 Shift+Tab 切换控件，用方向键选择软件包，按 Escape 关闭帮助。",
 		"searchMarketplace": "搜索 Marketplace",
 		"searchLanguageExtensions": "搜索语言扩展",
 		"searchPackages": "搜索插件、技能、MCP…",

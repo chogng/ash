@@ -661,6 +661,8 @@
 		"editorShortcuts": "编辑器快捷方式"
 	},
 	"ash.workbench": {
+		"browser.accessibilityHelp": "用 Tab 切换浏览器控件，在地址栏按 Enter 导航。在网页中按 Ctrl+L（macOS 为 Command+L）或 F6 返回地址栏。后退和前进按钮浏览网页历史。关闭编辑器标签页会关闭对应网页。网页使用浏览器的无障碍树。此隔离会话不提供下载和网站权限。",
+		"call.accessibilityHelp": "在本机或服务器创建通话，或通过邀请加入。麦克风默认关闭。按 Tab 和 Shift+Tab 在控件间移动，按回车或空格激活按钮。静音会停止发送声音；停止收听会停止播放。共享屏幕会打开显示器和窗口选择器，用方向键选择来源，再选择开始共享。Escape 取消选择。停止共享不会退出通话。共享画面按参与者标记，画面内容不会转写。窗口关闭、通话重新连接或退出通话时会停止共享。离开只断开你自己的连接；为所有人结束会关闭通话。邀请密钥授予访问权限，只应分享给你希望加入的人。Escape 关闭帮助。",
 		"command.OpenCodeSessionsAction": "打开 Code 会话",
 		"command.ToggleDiffLayoutAction": "切换行内差异视图",
 		"command.NextChangeAction": "转到下一个更改",

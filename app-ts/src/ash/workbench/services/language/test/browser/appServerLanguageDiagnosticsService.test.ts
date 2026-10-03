@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Event } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
@@ -57,6 +58,85 @@ test("App Server diagnostics service synchronizes, filters revisions, and closes
 	assert.equal(service.getAllDiagnostics().length, 1);
 	publisher.dispose();
 	assert.equal(service.getAllDiagnostics().length, 0);
+});
+
+suite('App Server diagnostics shutdown', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	for (const disposed of [false, true]) {
+		test(`a rejected synchronization ${disposed ? 'after disposal releases its error' : 'in a live service reports its error'}`, async () => {
+			const api = new FakeLanguageApi();
+			let rejectSynchronization: ((error: Error) => void) | undefined;
+			api.synchronize = request => {
+				api.synchronized.push(request);
+				return new Promise((_, reject) => { rejectSynchronization = reject; });
+			};
+			using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+			using service = new AppServerLanguageDiagnosticsService(api, new FakeServerEvents(), workspace);
+			using model = new TextModel('fn main() {}\n');
+			using acquisition = service.acquire(URI.file('/project/main.rs'), 'rust', model);
+			await tick();
+			assert.equal(api.synchronized.length, 1);
+			assert.ok(rejectSynchronization);
+			const error = new Error('test language transport stopped');
+			const reported: unknown[][] = [];
+			const original = console.error;
+			console.error = (...arguments_: unknown[]) => reported.push(arguments_);
+			try {
+				if (disposed) service.dispose();
+				rejectSynchronization(error);
+				await tick();
+				assert.deepEqual(reported, disposed ? [] : [['App Server language document synchronization failed', error]]);
+			} finally { console.error = original; }
+		});
+	}
+
+	test('disposal cancels queued document closes before the transport stops', async () => {
+		const api = new FakeLanguageApi();
+		const documents = new FakeCodeIntelligenceDocuments();
+		using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+		using service = new AppServerLanguageDiagnosticsService(api, new FakeServerEvents(), workspace, documents);
+		using model = new TextModel('fn main() {}\n');
+		using acquisition = service.acquire(URI.file('/project/main.rs'), 'rust', model);
+		await tick();
+		assert.equal(api.synchronized.length, 1);
+		assert.equal(documents.synchronized.length, 1);
+		acquisition.dispose();
+		service.dispose();
+		await tick();
+		assert.deepEqual({ language: api.closed, codeIntelligence: documents.closed, diagnostics: service.getAllDiagnostics() }, { language: [], codeIntelligence: [], diagnostics: [] });
+	});
+});
+
+test("App Server diagnostics retain pushes received before the editor acquires its model", async () => {
+	const events = new FakeServerEvents();
+	const api = new FakeLanguageApi();
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
+	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+	await tick();
+	const resource = URI.file("/project/main.rs");
+	const diagnostic = { range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: "error" as const, message: "server diagnostic", code: null, source: "fixture" };
+	events.fire({ method: "language/diagnostics", params: { path: "main.rs", revision: 1, diagnostics: [diagnostic] } });
+	using model = new TextModel("fn main() {}\n");
+	using acquisition = service.acquire(resource, "rust", model);
+	await tick();
+	assert.deepEqual(service.getAllDiagnostics().map(snapshot => ({ revision: snapshot.revision, messages: snapshot.diagnostics.map(diagnostic => diagnostic.message) })), [{ revision: 1, messages: ["server diagnostic"] }]);
+	acquisition.dispose();
+	await tick();
+	assert.deepEqual(service.getAllDiagnostics(), []);
+});
+
+test("App Server diagnostics discard a push from a different revision when acquiring a model", async () => {
+	const events = new FakeServerEvents();
+	const api = new FakeLanguageApi();
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
+	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+	await tick();
+	const resource = URI.file("/project/main.rs");
+	events.fire({ method: "language/diagnostics", params: { path: "main.rs", revision: 2, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: "error", message: "different revision", code: null, source: "fixture" }] } });
+	using model = new TextModel("fn main() {}\n");
+	using acquisition = service.acquire(resource, "rust", model);
+	await tick();
+	assert.deepEqual(service.getAllDiagnostics(), []);
 });
 
 test("App Server diagnostics keep equal relative paths isolated by Workspace folder", async () => {

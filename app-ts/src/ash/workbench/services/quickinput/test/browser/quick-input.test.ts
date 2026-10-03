@@ -1,3 +1,5 @@
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -140,6 +142,7 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	focusTarget.focus();
 
 	const services = new InstantiationService();
+	services.registerSingleton(IDialogService, () => new DialogService());
 	const contextKeys = new ContextKeyService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	const commands = new CommandService(services);
@@ -212,6 +215,7 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 	installDomGlobals(dom);
 	{
 		using services = new InstantiationService();
+	services.registerSingleton(IDialogService, () => new DialogService());
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		using commands = new CommandService(services);

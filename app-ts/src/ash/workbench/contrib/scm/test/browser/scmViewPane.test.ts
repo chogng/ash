@@ -658,7 +658,7 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 		await waitFor(() => pane.element.querySelector('.ash-scm-graph-actions button') !== null);
 		const commit = pane.element.querySelector<HTMLElement>('.ash-scm-graph-commit')!;
 		const button = commit.querySelector<HTMLButtonElement>('[data-action-id="workbench.scm.action.graph.viewChanges"] > button')!;
-		assert.equal(button.getAttribute('aria-label'), '打开更改');
+		assert.equal(button.getAttribute('aria-label'), 'Open Changes');
 		assert.match(pane.element.querySelector('[role="tree"]')!.getAttribute('aria-description')!, /比较该提交的所有文本文件/);
 		button.click();
 		await waitFor(() => opened.length === 1);
@@ -1394,13 +1394,15 @@ suite('SCM badge and decorations', () => {
 		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		try {
 			setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+			assert.equal(activityDescription, '2 changed files');
+			changes.fire({ ...status, revision: 3, changes: [...status.changes, change('src/other.ts', 'unmodified', 'untracked')] });
 			assert.equal(activityDescription, '2 个已更改文件');
 			using translated = decorations.getDecoration(resource, false)!;
 			assert.equal(translated.tooltip, '已修改');
 		} finally {
 			resetNlsResolver();
 		}
-		changes.fire({ ...status, revision: 3, changes: [change('src/both.ts', 'added', 'unmodified')] });
+		changes.fire({ ...status, revision: 4, changes: [change('src/both.ts', 'added', 'unmodified')] });
 		using staged = decorations.getDecoration(resource, false)!;
 		assert.equal(staged.tooltip, 'Added');
 		changes.fire(status);
@@ -1419,7 +1421,7 @@ suite('SCM badge and decorations', () => {
 			['typeChanged', 'T', 'Type changed', 'modifiedResourceForeground'],
 			['untracked', 'U', 'Untracked', 'untrackedResourceForeground'],
 		] as const;
-		changes.fire({ ...status, revision: 4, changes: [
+		changes.fire({ ...status, revision: 5, changes: [
 			...states.map(([state]) => change(`src/${state}.ts`, 'unmodified', state)),
 			{ ...change('src/conflict.ts', 'added', 'modified'), conflicted: true },
 		] });
@@ -1439,7 +1441,7 @@ suite('SCM badge and decorations', () => {
 		assert.equal(conflicting.color, 'gitDecoration.conflictingResourceForeground');
 		assert.equal(scm.getRepository('repo')!.provider.groups[0]!.resources[0]!.decorations.kind, 'unmerged');
 		assert.equal((scm.getRepository('repo')!.provider as GitSCMProvider).provideDecorations(URI.file('/workspace/src'))!.color, conflicting.color);
-		changes.fire({ ...status, revision: 5, changes: [] });
+		changes.fire({ ...status, revision: 6, changes: [] });
 		assert.equal(activityCount, undefined);
 		assert.equal(decorations.getDecoration(resource, false), undefined);
 		assert.equal(decorations.getDecoration(URI.file('/workspace/src'), true), undefined);

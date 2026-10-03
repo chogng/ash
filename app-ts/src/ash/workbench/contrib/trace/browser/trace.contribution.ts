@@ -1,3 +1,8 @@
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
+import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -32,3 +37,15 @@ registerWorkbenchContribution('workbench.contrib.trace', WorkbenchPhase.BlockSta
 		await services.get(IEditorService).openEditor({ resource: URI.parse('ash-trace:/viewer'), label: localize('trace.title', 'Trace viewer'), readOnly: true, showBreadcrumbs: false });
 	}
 }));
+
+AccessibleViewRegistry.register({
+	type: AccessibleViewType.Help, priority: 100, name: 'traceHelp',
+	when: ActiveEditorContext.isEqualTo(traceEditorId),
+	getProvider: accessor => {
+		if (!(accessor.get(IEditorPart).activePane instanceof TraceEditor)) { return undefined; }
+		const focused = accessor.get(ILayoutService).mainContainer.ownerDocument.activeElement;
+		return new AccessibleContentProvider(AccessibleViewProviderId.Trace, { type: AccessibleViewType.Help },
+			() => localize('trace.helpText', 'Enable tracing before starting App Server: set ASH_TRACE_WEBSOCKET_ADDR to 127.0.0.1:4319 and ASH_TRACE_WEBSOCKET_TOKEN to a random 64-digit hexadecimal token. Enter that address and token here. Only new completed spans are received. Connect starts a new capture; Disconnect keeps the capture. Up to 2,000 spans and 8 MiB are retained; dropped spans are counted. Tab moves between controls. Arrow keys, Home and End select spans. The timeline gives each span’s name, result, relative start and duration as text; Span details contains selectable OTLP JSON with trace and parent IDs. Filtering also limits the OTLP export. Tokens and captures are kept only in this editor. Escape closes this help dialog.'),
+			() => { if (focused instanceof HTMLElement && focused.isConnected) { focused.focus(); } }, AccessibilityVerbositySettingId.Trace);
+	},
+});

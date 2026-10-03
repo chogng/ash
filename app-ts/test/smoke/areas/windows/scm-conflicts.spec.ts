@@ -16,7 +16,7 @@ test('SCM opens a three-way merge editor and stages the saved manual resolution'
 	await open.click();
 
 	const group = workbench.editors.groupAt(0);
-	await expect(group.tabs.first()).toContainText('main.ts');
+	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 	await expect(group.content.locator('.ash-merge-inputs')).toBeVisible();
 	await expect(group.content.locator('.ash-merge-input .stanza-editor')).toHaveCount(3);
 	await expect(group.content.locator('.ash-merge-inline-actions')).toHaveCount(3);

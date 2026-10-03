@@ -1,3 +1,4 @@
+import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../base/common/errors.js";
@@ -148,44 +149,7 @@ class FakeTransport implements AppServerTransport {
 		const request = JSON.parse(payload.frame) as Record<string, unknown>;
 		this.requests.push(request);
 		if (request.method === "initialize") {
-			const result = this.initialize({
-				serverInfo: { name: "ash-app-server", version: "0.1.0" },
-				protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION },
-				schemaHash: APP_SERVER_SCHEMA_HASH,
-				capabilities: {
-					agentInteractions: true,
-					documentCollaboration: true,
-					sessions: true,
-					threads: true,
-					turns: true,
-					projects: true,
-					memories: true, approvalEnvironment: true,
-					resources: true,
-					attachments: true,
-					fileSystem: true,
-					git: true,
-					contentSearch: true,
-					codebase: true,
-					cloudCodebase: false,
-					terminal: true,
-					debugAdapter: true,
-					typst: true,
-					updateReplay: true,
-					extensions: true,
-					extensionHost: true,
-					connectors: true,
-					plugins: true,
-					marketplace: true,
-					mcp: true,
-					mcpOAuth: true,
-					contracts: {
-						sessions: { version: APP_SERVER_CAPABILITY_VERSION },
-						threads: { version: APP_SERVER_CAPABILITY_VERSION },
-						turns: { version: APP_SERVER_CAPABILITY_VERSION },
-					},
-				},
-				slashCommands: [],
-			} satisfies InitializeResult);
+			const result = this.initialize(createTestInitializeResult());
 			if (this.initializeDelayMs > 0) {
 				setTimeout(() => this.respond(request, result), this.initializeDelayMs);
 			} else {

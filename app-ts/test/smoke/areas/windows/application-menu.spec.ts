@@ -1,5 +1,4 @@
 import type { ElectronApplication, Locator } from '@playwright/test';
-import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import { readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
@@ -47,6 +46,7 @@ test('File menu keeps close commands visible and closes single and all editors',
 	await expect(tabs).toHaveCount(0);
 	await expect.poll(readCloseItems).toEqual(closeLabels.map(label => ({ label, enabled: false })));
 	await runMenuCommand('New Untitled Text Editor');
+	await expect(tabs).toHaveCount(1);
 	await runMenuCommand('New Untitled Text Editor');
 	await expect(tabs).toHaveCount(2);
 	await expect.poll(readCloseItems).toEqual(closeLabels.map(label => ({ label, enabled: true })));
@@ -76,6 +76,7 @@ test.describe('File menu closes the workspace', () => {
 			await page.locator('.ash-quick-pick').getByRole('combobox').fill('Open Folder');
 			await page.keyboard.press('Enter');
 		}
+		if (target.kind === 'browser') await expect(page.locator('.ash-explorer')).toBeVisible();
 		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 		await expect(workbench.editors.element.getByRole('tab', { name: /Untitled-1/ })).toBeVisible();
 		const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
@@ -83,19 +84,6 @@ test.describe('File menu closes the workspace', () => {
 		await input.type('unsaved draft');
 		const electron = application as ElectronApplication;
 
-		if (target.kind === 'electron') {
-			await electron.evaluate(({ dialog }) => {
-				const original = dialog.showMessageBox.bind(dialog);
-				const state = globalThis as typeof globalThis & { ashCloseFolderDialog?: { count: number; restore: () => void } };
-				state.ashCloseFolderDialog = { count: 0, restore: () => { dialog.showMessageBox = original; } };
-				dialog.showMessageBox = ((...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => {
-					const options = args.length === 1 ? args[0] : args[1];
-					if (!options.buttons?.includes("Don't Save")) return args.length === 1 ? original(args[0]) : original(args[0], args[1]);
-					const label = state.ashCloseFolderDialog!.count++ === 0 ? 'Cancel' : "Don't Save";
-					return Promise.resolve({ response: options.buttons.indexOf(label), checkboxChecked: false });
-				}) as typeof dialog.showMessageBox;
-			});
-		}
 		const closeFolder = async () => {
 			if (target.kind === 'electron' && process.platform === 'darwin') {
 				await expect.poll(() => electron.evaluate(({ Menu }) => Menu.getApplicationMenu()?.items.find(item => item.label === 'File')?.submenu?.items.find(item => item.label === 'Close Folder')?.enabled)).toBe(true);
@@ -106,27 +94,13 @@ test.describe('File menu closes the workspace', () => {
 				await page.getByRole('menu').last().getByRole('menuitem', { name: 'Close Folder', exact: true }).click();
 			}
 		};
-		try {
-			await closeFolder();
-			if (target.kind === 'electron') {
-				await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashCloseFolderDialog?: { count: number } }).ashCloseFolderDialog?.count)).toBe(1);
-			} else {
-				await page.getByRole('dialog', { name: 'Save Changes' }).getByRole('button', { name: 'Cancel', exact: true }).click();
-			}
-			await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toContainText('unsaved draft');
-			await expect(workbench.editors.element.getByRole('tab', { name: /Untitled-1/ })).toBeVisible();
-			expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalRenderer);
-			await closeFolder();
-			if (target.kind === 'browser') {
-				await page.getByRole('dialog', { name: 'Save Changes' }).getByRole('button', { name: "Don't Save", exact: true }).click();
-			}
-			await expect(workbench.editors.element.getByRole('tab')).toHaveText(['Welcome']);
-			await expect.poll(() => page.evaluate(() => performance.timeOrigin)).not.toBe(originalRenderer);
-		} finally {
-			if (target.kind === 'electron') {
-				await electron.evaluate(() => (globalThis as typeof globalThis & { ashCloseFolderDialog?: { restore: () => void } }).ashCloseFolderDialog?.restore());
-			}
-		}
+		await workbench.dialogs.confirm(application, 'Save Changes', 'Cancel', closeFolder);
+		await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toContainText('unsaved draft');
+		await expect(workbench.editors.element.getByRole('tab', { name: /Untitled-1/ })).toBeVisible();
+		expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalRenderer);
+		await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", closeFolder);
+		await expect(workbench.editors.element.getByRole('tab')).toHaveText(['Welcome']);
+		await expect.poll(() => page.evaluate(() => performance.timeOrigin)).not.toBe(originalRenderer);
 		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 		if (await showSidebar.isVisible()) await showSidebar.click();
 		await expect(page.getByRole('button', { name: 'Open Folder', exact: true })).toBeVisible();
@@ -144,15 +118,10 @@ test.describe('File menu closes the workspace', () => {
 		const destination = join(await realpath(testWorkspace.directory), 'saved-before-close.txt');
 		const electron = application as ElectronApplication;
 		await electron.evaluate(({ dialog }, destination) => {
-			const originalMessage = dialog.showMessageBox.bind(dialog);
 			const originalSave = dialog.showSaveDialog.bind(dialog);
 			const state = globalThis as typeof globalThis & { ashRestoreCloseDialogs?: () => void };
-			state.ashRestoreCloseDialogs = () => { dialog.showMessageBox = originalMessage; dialog.showSaveDialog = originalSave; };
-			dialog.showMessageBox = ((...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => {
-				const options = args.length === 1 ? args[0] : args[1];
-				if (!options.buttons?.includes("Don't Save")) return args.length === 1 ? originalMessage(args[0]) : originalMessage(args[0], args[1]);
-				return Promise.resolve({ response: options.buttons.indexOf('Save'), checkboxChecked: false });
-			}) as typeof dialog.showMessageBox;
+			state.ashRestoreCloseDialogs = () => { dialog.showSaveDialog = originalSave; delete state.ashRestoreCloseDialogs; };
+
 			dialog.showSaveDialog = (async () => ({ canceled: false, filePath: destination })) as typeof dialog.showSaveDialog;
 		}, destination);
 		try {
@@ -160,13 +129,15 @@ test.describe('File menu closes the workspace', () => {
 			const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
 			await input.focus();
 			await input.type('saved through workspace shutdown');
-			if (process.platform === 'darwin') {
-				await electron.evaluate(({ Menu }) => Menu.getApplicationMenu()!.items.find(item => item.label === 'File')!.submenu!.items.find(item => item.label === 'Close Folder')!.click({ altKey: false }));
-			} else {
-				await page.getByRole('button', { name: 'Application menu' }).click();
-				await page.getByRole('menu').first().getByRole('menuitem', { name: 'File', exact: true }).click();
-				await page.getByRole('menu').last().getByRole('menuitem', { name: 'Close Folder', exact: true }).click();
-			}
+			await workbench.dialogs.confirm(application, 'Save Changes', 'Save', async () => {
+				if (process.platform === 'darwin') {
+					await electron.evaluate(({ Menu }) => Menu.getApplicationMenu()!.items.find(item => item.label === 'File')!.submenu!.items.find(item => item.label === 'Close Folder')!.click({ altKey: false }));
+				} else {
+					await page.getByRole('button', { name: 'Application menu' }).click();
+					await page.getByRole('menu').first().getByRole('menuitem', { name: 'File', exact: true }).click();
+					await page.getByRole('menu').last().getByRole('menuitem', { name: 'Close Folder', exact: true }).click();
+				}
+			});
 			await expect(workbench.editors.element.getByRole('tab')).toHaveText(['Welcome']);
 			expect(await readFile(destination, 'utf8')).toBe('saved through workspace shutdown');
 		} finally {
@@ -225,9 +196,7 @@ test('application menu trigger uses the titlebar action size', async ({ target, 
 test('macOS menu style switches context menus without a titlebar menu button', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron' || process.platform !== 'darwin' || target.workbenchMode !== 'code', 'This scenario requires the macOS Code desktop');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+Shift+P');
-	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
-	await page.keyboard.press('Enter');
+	await workbench.settingsEditor.openUserSettingsUI();
 	await page.locator('[data-settings-group-id="workbench"]').click();
 	await page.locator('[data-settings-category-id="layout"]').click();
 	const menuStyle = page.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox');
@@ -240,9 +209,7 @@ test('macOS menu style switches context menus without a titlebar menu button', a
 	await expect(page.getByRole('menu').last()).toBeVisible();
 	await page.keyboard.press('Escape');
 
-	await page.keyboard.press('ControlOrMeta+Shift+P');
-	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
-	await page.keyboard.press('Enter');
+	await workbench.settingsEditor.openUserSettingsUI();
 	await page.locator('[data-settings-group-id="workbench"]').click();
 	await page.locator('[data-settings-category-id="layout"]').click();
 	await menuStyle.click();
@@ -335,7 +302,7 @@ test('application menu shows clean labels and readable shortcuts', async ({ targ
 	const selectAll = selectionMenu.getByRole('menuitem', { name: 'Select All' });
 	await expect(selectAll.locator('.ash-button-label')).toHaveText('Select All');
 	const shortcut = selectAll.locator('.ash-menu-keybinding kbd');
-	await expect(shortcut).toHaveText('Ctrl+A');
+	await expect(shortcut).toHaveText(process.platform === 'darwin' ? '⌘A' : 'Ctrl+A');
 	expect(await shortcut.evaluate(element => ({
 		fontFamily: getComputedStyle(element).fontFamily,
 		fontSize: getComputedStyle(element).fontSize,
@@ -348,7 +315,7 @@ test('application menu shows clean labels and readable shortcuts', async ({ targ
 	await mainMenu.getByRole('menuitem', { name: 'File' }).hover();
 	const fileMenu = page.getByRole('menu').last();
 	const newEditor = fileMenu.getByRole('menuitem', { name: 'New Untitled Text Editor' });
-	await expect(newEditor.locator('.ash-menu-keybinding kbd')).toHaveText('Ctrl+N');
+	await expect(newEditor.locator('.ash-menu-keybinding kbd')).toHaveText(process.platform === 'darwin' ? '⌘N' : 'Ctrl+N');
 	expect(await newEditor.locator('.ash-menu-keybinding kbd').evaluate(element => getComputedStyle(element).fontFamily)).toBe(
 		await newEditor.evaluate(element => getComputedStyle(element).fontFamily),
 	);
@@ -364,6 +331,8 @@ test('checked View menu icons stay inside the leading slot', async ({ target, wo
 	const page = workbench.page;
 	const sidebarToggle = page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button');
 	if (await sidebarToggle.getAttribute('aria-label') === 'Show Primary Side Bar') await sidebarToggle.click();
+	const hideAuxiliary = page.getByRole('button', { name: 'Hide Secondary Side Bar', exact: true });
+	if (await hideAuxiliary.isVisible()) await hideAuxiliary.click();
 	await page.getByRole('button', { name: 'Application menu' }).click();
 	const view = page.getByRole('menu').first().getByRole('menuitem', { name: 'View' });
 	await view.hover();

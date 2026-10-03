@@ -27,8 +27,10 @@ for (const mode of ['production', 'development'] as const) {
 			socket.on('socketerror', error => diagnostics.push(`Socket error: ${error}`));
 		});
 		let launch: Awaited<ReturnType<typeof launchWeb>> | undefined;
+		let hostDiagnostics = '';
 		try {
 			launch = await launchWeb(mode, port, env);
+			launch.child.stderr!.on('data', chunk => { hostDiagnostics = (hostDiagnostics + String(chunk)).slice(-8192); });
 			await page.goto(launch.url);
 			await expectWorkspace(page);
 			expect(new URL(page.url()).hash).toBe('');
@@ -75,7 +77,7 @@ for (const mode of ['production', 'development'] as const) {
 				await expectWorkspace(page);
 			}
 		} catch (error) {
-			throw new Error(`${String(error)}\n${diagnostics.slice(-12).join('\n')}\n${await page.locator('body').innerText()}`, { cause: error });
+			throw new Error(`${String(error)}\n${hostDiagnostics}\n${diagnostics.slice(-12).join('\n')}\n${await page.locator('body').innerText()}`, { cause: error });
 		} finally {
 			await browser.close();
 			if (launch) { await stop(launch.child); }

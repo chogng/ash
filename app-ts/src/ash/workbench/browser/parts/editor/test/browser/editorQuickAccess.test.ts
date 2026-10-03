@@ -42,7 +42,7 @@ test("Show All Editors opens the MRU quick access mode and activates the chosen 
 			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		await import("../../editor.contribution.js");
 		const { ShowAllEditorsCommandId } = await import("../../editorActions.js");
-		const selected = { groupId: "group-1", instanceId: "editor-1", paneId: "pane-1", input: { resource: URI.file("C:\\project\\main.ts") } };
+		const selected = { groupId: "group-1", instanceId: "editor-1", paneId: "pane-1", input: { resource: URI.parse("file:///C:/project/main.ts") } };
 		const changes = new Emitter<EditorPartChangeEvent>();
 		let activated: string | undefined;
 		let focused = false;

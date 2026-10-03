@@ -2,7 +2,25 @@
 
 本目录只保存跨源码 owner 的测试基础设施和完整应用测试。单元与组件测试跟随实现放在 `src/ash/<owner>/test/<runtime>`。
 
-## 快速理解
+## 运行冒烟测试
+
+在仓库根目录运行：
+
+```bash
+# Electron 与真实 App Server
+pnpm run smoketest
+
+# 使用已准备好的构建，筛选一个场景
+pnpm run smoketest-no-compile --grep "<test title>"
+
+# Web 与真实 App Server
+pnpm test:desktop:smoke:browser:full
+
+# Electron UI
+pnpm test:desktop:smoke:ui
+```
+
+## 测试结构
 
 | 测试类型 | 放置位置 | 运行入口 |
 | --- | --- | --- |
@@ -17,11 +35,17 @@
 | Electron + App Server 场景 | `test/smoke/areas/<area>` | `pnpm test:smoke:desktop` |
 | 构建工具测试 | `../build/**/*.test.ts` | `pnpm test:build-tools` |
 
-`pnpm test:main` 依次运行构建工具测试和全部单元测试。仓库根 `package.json` 直接调用这里的公开测试命令。`test/unit/` 使用 Mocha，逐文件启动独立进程，并提供 `--run`、`--runGlob`、`--grep` 筛选。`pnpm test:unit` 编译后先验证 runner 的筛选和失败行为，再执行选择的用例；汇总执行数量不包含跳过项，没有执行任何用例时返回失败。清理、reporter 与 loader 也归此目录，由 `pnpm typecheck:test-unit` 检查。编辑器浏览器集成测试位于 `test/integration/browser/`，Browser smoke 入口位于 `test/smoke/`。`pnpm test:smoke:browser` 启动 5173 的 disconnected Browser Workbench；`pnpm test:smoke:browser:full` 为每个场景在独立端口启动生产 Web 服务和真实 App Server，使用该场景的工作区与配置目录。`pnpm test:smoke:ui` 启动禁用 App Server 的 Electron，适合快速验证 Renderer 和 Workbench；`pnpm test:smoke:desktop` 会额外组装 Rust 开发包并启动真实 App Server。仓库根目录 `pnpm test:desktop:smoke` 指向完整 Electron + App Server 模式；`pnpm test:desktop:smoke:ui` 显式运行 Electron 快速模式，也可通过 `pnpm test:desktop:smoke:browser` 和 `pnpm test:desktop:smoke:browser:full` 运行 Browser 模式。CI 先运行对应的 `pretest:smoke:*` 准备步骤，再用 `test:smoke:*:no-compile` 运行已准备好的测试，便于重复排查偶发失败。
+`pnpm test:main` 依次运行构建工具测试和全部单元测试。仓库根 `package.json` 直接调用这里的公开测试命令。`test/unit/` 使用 Mocha，逐文件启动独立进程，并提供 `--run`、`--runGlob`、`--grep` 筛选。`pnpm test:unit` 编译后先验证 runner 的筛选和失败行为，再执行选择的用例；汇总执行数量不包含跳过项，没有执行任何用例时返回失败。清理、reporter 与 loader 也归此目录，由 `pnpm typecheck:test-unit` 检查。编辑器浏览器集成测试位于 `test/integration/browser/`，Browser 和连接后端的 Electron smoke 入口共用 `test/smoke/run.ts`；入口为每次运行编译同一个语言服务器 fixture，每个场景在自己的配置目录中启用它，运行结束后清理。`pnpm test:smoke:browser` 启动 5173 的 disconnected Browser Workbench；`pnpm test:smoke:browser:full` 为每个场景在独立端口启动生产 Web 服务和真实 App Server，使用该场景的工作区与配置目录。`pnpm test:smoke:ui` 启动禁用 App Server 的 Electron，适合快速验证 Renderer 和 Workbench；`pnpm test:smoke:desktop` 会额外组装 Rust 开发包并启动真实 App Server。仓库根目录 `pnpm run smoketest` 准备并运行完整 Electron + App Server 冒烟测试，`pnpm run smoketest-no-compile` 运行已准备好的同一套测试；`pnpm test:desktop:smoke:ui` 显式运行 Electron 快速模式，也可通过 `pnpm test:desktop:smoke:browser` 和 `pnpm test:desktop:smoke:browser:full` 运行 Browser 模式。CI 先运行对应的 `pretest:smoke:*` 准备步骤，再用 `test:smoke:*:no-compile` 运行已准备好的测试，便于重复排查偶发失败。
 
 新增测试时先选择拥有被验证 contract 的最窄源码模块，再按真实运行时选择 `common`、`browser`、`node`、`electron-browser` 或 `electron-main`。只有没有单一源码 owner 的全仓库约束才进入 `test/architecture`；跨多个用户操作的场景才进入 `test/smoke`。
 
-应用场景复用 `test/automation/test.ts` 的 fixture：它负责工作区、配置、启动、重启、全窗口错误收集和退出清理。不同场景使用独立数据，同一场景重启保留数据。设置导航复用 `workbench.settingsEditor`，常规 Sessions 入口复用 `workbench.openAgentsWindow(target.kind)`；专门验证快捷键、菜单或窗口入口的场景保留对应真实操作。工作台和 Sessions 的启动入口均等待自身状态恢复完成；导航辅助代码等待操作结果，功能断言留在用例中。
+连接后端的 Code 场景在 Browser 和 Electron 中实际执行语言服务测试，覆盖补全、诊断随编辑更新、格式化及撤销、参数提示、内联提示和联动编辑。Memories 读写依赖桌面宿主权限；Browser 验证明确的权限拒绝和禁用状态。
+
+应用场景复用 `test/automation/test.ts` 的 fixture：它负责工作区、配置、启动、重启、全窗口错误收集和退出清理。不同场景使用独立数据，同一场景重启保留数据。Explorer 导航复用 `workbench.openExplorer()`，设置导航复用 `workbench.settingsEditor`，终端输入复用 `workbench.terminal`，工作区搜索复用 `workbench.search`，系统和网页菜单复用 `workbench.menus`，消息与确认对话框复用 `workbench.dialogs`，常规 Sessions 入口复用 `workbench.openAgentsWindow(target.kind)`；专门验证快捷键、菜单或窗口入口的场景保留对应真实操作。工作台和 Sessions 的启动入口均等待自身状态恢复完成；导航辅助代码等待操作结果，功能断言留在用例中。
+
+Frontend CI 运行全部单元测试、Chromium 浏览器集成测试，以及 Browser、Electron UI 和连接真实 App Server 的完整 smoke suite；连接测试不再通过文件白名单或 grep 缩小范围。Academic Workbench 使用独立项目。需要联网下载出版社 PDF 的语料测试使用 `electron-pdf-corpus-app-server` 独立项目，不进入普通 smoke suite。
+
+真实 App Server 场景运行文件保存、BOM/CRLF、外部修改后的撤销，以及手动保存、未保存、延迟自动保存、切换编辑器自动保存后的重启恢复；Browser 还验证未保存内容在页面重载后的恢复。终端覆盖输入、工作区目录、面板关闭再打开、多实例输出隔离和 shell 退出后的重新启动。Search 验证大小写、正则、包含与排除条件及清除结果；Tasks 验证发现、执行、重跑、取消和实际输出；Settings 验证即时生效、重启保存和恢复默认。CI 配置覆盖 Linux Browser、macOS Electron 和 Windows Electron；终端进程在窗口重启后的恢复尚未实现，不属于当前覆盖。
 
 ## 发布成品检查
 

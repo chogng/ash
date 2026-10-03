@@ -31,7 +31,7 @@ class TestPart extends WorkbenchPart {
 	constructor(container: HTMLElement, id: SessionsPartId) { super(container, id); }
 }
 
-test('Sessions titlebar localizes its actions and closes the application menu before refreshing or disposal', () => {
+test('Sessions titlebar initializes localized actions and closes the application menu before refreshing or disposal', () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 	using changed = new Emitter<void>();
@@ -76,6 +76,12 @@ test('Sessions titlebar localizes its actions and closes the application menu be
 		navigateBack() {},
 		navigateForward() {},
 	};
+	setNlsResolver((bundle, key, fallback) => {
+		if (bundle === 'ash.regions' && key === 'applicationMenu') { return '应用程序菜单'; }
+		if (bundle === 'ash.regions' && key === 'titleBarLeftActions') { return '标题栏左侧操作'; }
+		if (key === 'sessions.navigation.hideSidebar') { return '隐藏侧栏'; }
+		return fallback;
+	});
 	const titlebar = new TitlebarPart(browser.window.document.body, menus, contextMenus);
 	const parts = new Map<SessionsPartId, WorkbenchPart>(sessionsPartIds.map(id => [id, id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id))]));
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
@@ -92,18 +98,12 @@ test('Sessions titlebar localizes its actions and closes the application menu be
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'false');
 		layout.showPart('sidebar');
 		menuButton().click();
-		setNlsResolver((bundle, key, fallback) => {
-			if (bundle === 'ash.regions' && key === 'applicationMenu') { return '应用程序菜单'; }
-			if (bundle === 'ash.regions' && key === 'titleBarLeftActions') { return '标题栏左侧操作'; }
-			if (key === 'sessions.navigation.hideSidebar') { return '隐藏侧栏'; }
-			return fallback;
-		});
-		assert.equal(closedMenus, 2);
+
+		assert.equal(closedMenus, 1);
 		assert.deepEqual([...titlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['应用程序菜单', '隐藏侧栏', 'Back', 'Forward']);
 		assert.equal(titlebar.domNode.querySelector('[role="toolbar"]')?.getAttribute('aria-label'), '标题栏左侧操作');
-		menuButton().click();
 		titlebar.dispose();
-		assert.equal(closedMenus, 3);
+		assert.equal(closedMenus, 2);
 		actions.dispose();
 		assert.equal(changed.hasListeners(), false);
 		layout.dispose();

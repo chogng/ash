@@ -194,7 +194,7 @@
 .ash-sessions-permission-check {
   flex: 0 0 auto;
   visibility: hidden;
-  color: var(--ash-text-link-foreground);
+  color: var(--ash-accent-foreground);
 }
 
 .ash-sessions-permission-item.checked .ash-sessions-permission-check {

@@ -51,7 +51,12 @@ test('Sessions Files selects one view from the current folder state and creates 
 	const catalog = builtinLanguagePackCatalogs.find(pack => pack.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, original) => catalog.bundles[bundle]?.[key] ?? original);
-		assert.equal(message?.textContent, '文件夹和文件将在这里显示。');
+		assert.equal(message?.textContent, 'Folders and files will appear here.');
+		using translated = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
+			viewContainer: model.viewContainer, model, instantiationService: services, contextKeyService: contexts,
+			onDidFailCreateView: (error: unknown) => { throw error; },
+		});
+		assert.equal(translated.element.querySelector('[role="status"]')?.textContent, '文件夹和文件将在这里显示。');
 		host.getView(SESSIONS_FILES_EMPTY_VIEW_ID)!.focus();
 		assert.equal(browserEnvironment.window.document.activeElement, host.getView(SESSIONS_FILES_EMPTY_VIEW_ID)!.element);
 	} finally {

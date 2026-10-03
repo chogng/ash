@@ -1,3 +1,7 @@
+import '../../contrib/welcomeGettingStarted/browser/gettingStartedColors.js';
+import '../../../sessions/contrib/design/browser/widget/designToolsWidget.js';
+import '../../../platform/theme/common/colors/baseColors.js';
+import '../../../platform/theme/common/sizes/baseSizes.js';
 import { strict as assert } from "node:assert";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
@@ -41,9 +45,18 @@ test("CSS consumes registered design tokens and isolates intentional color sampl
 		"editor/contrib/colorPicker/browser/colorPicker.css",
 	]);
 	const sourceRoot = join(process.cwd(), "src", "ash");
+	// Component geometry and presentation variables are owned by CSS or TS,
+	// while shared color and size tokens must come from the registries.
+	for (const file of await presentationFiles(sourceRoot)) {
+		const source = await readFile(file, 'utf8');
+		for (const match of source.matchAll(/["']?(--ash-[a-zA-Z0-9-]+)["']?\s*:|setProperty\(\s*["'](--ash-[a-zA-Z0-9-]+)["']/gu)) {
+			componentPresentationVariables.add(match[1] ?? match[2]!);
+		}
+	}
+	platformVariables.add('--ash-shadow-lg');
 	const unknownVariables: string[] = [];
 	const rawColors: string[] = [];
-	for (const file of await cssFiles(sourceRoot)) {
+	for (const file of (await presentationFiles(sourceRoot)).filter(file => file.endsWith(".css"))) {
 		const source = await readFile(file, "utf8");
 		const name = relative(sourceRoot, file).replaceAll("\\", "/");
 		for (const match of source.matchAll(/var\((--ash-[a-zA-Z0-9-]+)/g)) {
@@ -59,12 +72,12 @@ test("CSS consumes registered design tokens and isolates intentional color sampl
 	assert.deepEqual(rawColors, []);
 });
 
-async function cssFiles(directory: string): Promise<string[]> {
+async function presentationFiles(directory: string): Promise<string[]> {
 	const result: string[] = [];
 	for (const entry of await readdir(directory, { withFileTypes: true })) {
 		const path = join(directory, entry.name);
-		if (entry.isDirectory()) result.push(...await cssFiles(path));
-		else if (entry.name.endsWith(".css")) result.push(path);
+		if (entry.isDirectory()) result.push(...await presentationFiles(path));
+		else if (entry.name.endsWith(".css") || entry.name.endsWith(".ts") && !path.includes("/test/")) result.push(path);
 	}
 	return result;
 }

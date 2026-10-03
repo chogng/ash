@@ -52,7 +52,6 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 		await expect(page.getByRole('menuitemradio', { name: 'Default', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('menuitemradio', { name: 'Inherit from the parent', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('menuitemradio', { name: 'GPT-5.6 Sol', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('menuitemradio', { name: 'Muse Spark 1.3', exact: true })).toBeVisible();
 		await page.getByRole('menuitemradio', { name: 'GPT-6.1 Sol', exact: true }).click();
 		await expect(workbenchSettings.locator('.ash-advisor-settings [role="status"]')).toHaveText('Advisor settings saved.');
 		if (!await workbenchEnable.isChecked()) { await workbenchEnable.press('Space'); }

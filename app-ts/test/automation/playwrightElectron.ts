@@ -51,7 +51,9 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 				const stopDaemon = async (): Promise<void> => {
 					if (options.appServerMode !== 'required' || options.profileDirectory !== undefined) return;
 					const daemon = appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: options.packagedBundle !== undefined, platform: process.platform, resourcesPath: configuration.resourcesPath });
-					await promisify(execFile)(daemon, ['stop'], { env: { ...configuration.env, ASH_HOME: resolve(options.userDataDirectory, 'profile') }, windowsHide: true, timeout: 30_000 });
+					await promisify(execFile)(daemon, ['stop'], { env: { ...configuration.env, ASH_HOME: resolve(options.userDataDirectory, 'profile') }, windowsHide: true, timeout: 30_000 }).catch(error => {
+						throw new Error(`Test daemon shutdown failed: code=${error.code}; signal=${error.signal}; killed=${error.killed}; stdout=${error.stdout}; stderr=${error.stderr}`, { cause: error });
+					});
 				};
 				await Promise.all([application.close(), stopDaemon()]);
 			}
