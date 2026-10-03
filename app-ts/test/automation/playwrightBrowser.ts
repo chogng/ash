@@ -42,6 +42,12 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 	page.on("console", message => {
 		if (message.type() === "error") consoleErrors.push(message.text());
 	});
+	// The editor surface appears before restoration finishes; opening a file then
+	// can be overwritten when the saved editor layout is restored.
+	const restored = page.waitForEvent('console', {
+		predicate: message => message.text() === '[lifecycle] Workbench restored',
+		timeout: 30_000,
+	});
 	await page.goto(options.baseURL, { waitUntil: "domcontentloaded" });
 	if (options.appServerMode === "required") {
 		await page.waitForFunction(
@@ -52,6 +58,6 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 	}
 
 	const driver = new PlaywrightDriver(browser, page, consoleErrors);
-	await driver.workbench.waitForReady();
+	await Promise.all([driver.workbench.waitForReady(), restored]);
 	return { application: browser, driver, videoStartedAt };
 }

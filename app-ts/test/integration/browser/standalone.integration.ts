@@ -2664,7 +2664,7 @@ window.ashStandaloneIntegration = {
 		paneHost.append(pane.element);
 		pane.setVisible(true);
 		actionPreviewResources.add(bulkEdits.setPreviewHandler(async (edits, options) => {
-			const edit = toLanguageWorkspaceEdit(edits);
+			const edit = await toLanguageWorkspaceEdit(edits);
 			const entries = edit.entries.map((entry, index) => {
 				if (entry.kind !== 'textDocument') throw new Error('This fixture only previews text edits');
 				return { index, kind: entry.kind, resource: entry.resource, detail: 'Replace value with result' };

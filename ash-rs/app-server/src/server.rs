@@ -90,7 +90,6 @@ mod connector_operations;
 mod connector_runtime;
 mod debug_operations;
 mod diagnostics_operations;
-mod network_operations;
 mod dictation_operations;
 mod diff_operations;
 mod dir_contributions;
@@ -137,6 +136,7 @@ mod memories_operations;
 mod memory_operations;
 mod message_checkpoints;
 pub(crate) mod message_queue;
+mod network_operations;
 pub(crate) mod notification_queue;
 mod operations;
 mod plugin_extension_sources;
@@ -258,6 +258,8 @@ pub struct AppServer {
     execution_tool_port: Option<crate::tool_composition::ToolPort>,
     extension_tool_port: Option<crate::tool_composition::ToolPort>,
     browser_host: Arc<BrowserHost>,
+    pub(super) client_host: Arc<crate::client_host::ClientHost>,
+    pub(super) text_document_host: Arc<crate::text_document_host::TextDocumentHost>,
     browser_tool_port: crate::tool_composition::ToolPort,
     env_state: EnvStateMode,
     pty_helper: Option<std::path::PathBuf>,
@@ -489,7 +491,14 @@ impl AppServer {
             env_runtime_gate.clone(),
         );
         let resources = Arc::new(Mutex::new(ResourceStore::default()));
-        let browser_host = Arc::new(BrowserHost::new(Arc::clone(&resources)));
+        let client_host = Arc::new(crate::client_host::ClientHost::default());
+        let text_document_host = Arc::new(crate::text_document_host::TextDocumentHost::new(
+            Arc::clone(&client_host),
+        ));
+        let browser_host = Arc::new(BrowserHost::new(
+            Arc::clone(&resources),
+            Arc::clone(&client_host),
+        ));
         let browser_tool_port = crate::tool_composition::ToolPort::host(
             Arc::new(BrowserToolService::new(Arc::clone(&browser_host))),
             Arc::new(BrowserToolPolicy),
@@ -497,6 +506,7 @@ impl AppServer {
         let turn_executor = TurnExecutor::without_tools(threads.clone(), model.clone())
             .with_execution_activity(runtime_extensions::ExecutionActivity::shared())
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
+                client_host: Arc::clone(&client_host),
                 threads: Arc::clone(&threads),
                 updates: updates.clone(),
             }))
@@ -505,6 +515,13 @@ impl AppServer {
             Arc::clone(&threads),
             AgentTreeLimits::default(),
         ));
+        multi_agent
+            .install_turn_submission(Arc::new(AppServerAgentTurnSubmission {
+                clients: Arc::clone(&client_host),
+                threads: Arc::clone(&threads),
+                directories: None,
+            }))
+            .expect("new Agent coordinator accepts its product submission owner");
         let turn_backend = Arc::new(turn_backend_router::TurnBackendHandle::new(
             turn_executor.clone(),
         ));
@@ -580,6 +597,8 @@ impl AppServer {
             execution_tool_port: None,
             extension_tool_port: None,
             browser_host,
+            client_host,
+            text_document_host,
             browser_tool_port,
             env_state: EnvStateMode::Unconfigured,
             pty_helper: None,
@@ -640,6 +659,13 @@ impl AppServer {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .turn_executor = executor;
+        self.multi_agent
+            .install_turn_submission(Arc::new(AppServerAgentTurnSubmission {
+                clients: Arc::clone(&self.client_host),
+                threads: Arc::clone(&self.threads),
+                directories: Some(Arc::clone(&runtime)),
+            }))
+            .map_err(|error| error.to_string())?;
         self.git_turn_changes = Some(runtime);
         Ok(self)
     }
@@ -736,8 +762,13 @@ impl AppServer {
         Ok(self)
     }
 
-    pub(crate) fn with_local_assets(mut self, database_path: &std::path::Path) -> Result<Self, String> {
-        let store = Arc::new(ash_state::SqliteAssetStore::open(database_path).map_err(|error| error.to_string())?);
+    pub(crate) fn with_local_assets(
+        mut self,
+        database_path: &std::path::Path,
+    ) -> Result<Self, String> {
+        let store = Arc::new(
+            ash_state::SqliteAssetStore::open(database_path).map_err(|error| error.to_string())?,
+        );
         self.assets = Some(Arc::new(assets::Assets::new(store)));
         Ok(self)
     }
@@ -933,7 +964,9 @@ impl AppServer {
         for terminals in self.configured_terminal_services() {
             terminals.close_owner(connection.connection_id);
         }
-        if let Some(assets) = &self.assets { assets.close_owner(connection.connection_id); }
+        if let Some(assets) = &self.assets {
+            assets.close_owner(connection.connection_id);
+        }
         self.testing.close_owner(connection.connection_id);
         for debug_adapters in self.configured_debug_adapter_services() {
             debug_adapters.close_owner(connection.connection_id);
@@ -1548,6 +1581,7 @@ impl AppServer {
             .clone()
             .with_tool_service(tools, policy)
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
+                client_host: Arc::clone(&self.client_host),
                 threads: Arc::clone(&self.threads),
                 updates: self.updates.clone(),
             }));
@@ -1604,7 +1638,7 @@ impl AppServer {
         Ok(self)
     }
 
-    pub(super) fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {
+    pub(super) fn agent_runtime(&self) -> ash_core::Runtime<'_> {
         ash_core::Runtime::new(
             self.threads.as_ref(),
             self.multi_agent.as_ref(),
@@ -1612,6 +1646,7 @@ impl AppServer {
             self.turn_backend.as_ref(),
             self.thread_worktree_binder.as_ref(),
             Arc::new(AppServerThreadUpdates {
+                client_host: Arc::clone(&self.client_host),
                 threads: Arc::clone(&self.threads),
                 updates: Arc::clone(&self.updates),
             }),
@@ -1678,13 +1713,36 @@ impl AppServer {
         }
     }
 
+    pub(super) fn admit_bound_turn(
+        &self,
+        thread: &ash_protocol::ThreadId,
+        request: ash_core::StartTurnRequest,
+        connection: Option<u64>,
+        document_mode: crate::client_host::TextDocumentMode,
+    ) -> Result<ash_core::StartTurnResult, CoreError> {
+        let mut started = None;
+        self.client_host
+            .submit_turn(thread, connection, document_mode, || {
+                let result = self.threads.start_turn(thread, request)?;
+                let receipt = core_api::TurnReceipt {
+                    turn_id: result.turn_id.clone(),
+                    sequence: result.sequence,
+                };
+                started = Some(result);
+                Ok(receipt)
+            })?;
+        Ok(started.expect("successful admission retains its receipt"))
+    }
+
     pub(super) fn submit_workflow(
         &self,
         thread: &ash_protocol::ThreadId,
         command: workflows::Command,
         request: core_api::SubmitTurnRequest,
+        connection: Option<u64>,
+        document_mode: crate::client_host::TextDocumentMode,
     ) -> Result<workflows::Receipt, CoreError> {
-        self.workflow_runtime().execute(
+        self.workflow_runtime().execute_with_turn_submission(
             thread,
             command,
             ash_core::StartTurnRequest {
@@ -1703,6 +1761,7 @@ impl AppServer {
                 activated_skills: request.activated_skills,
                 input: request.input,
             },
+            |thread, request| self.admit_bound_turn(thread, request, connection, document_mode),
         )
     }
 
@@ -2079,7 +2138,7 @@ impl AppServer {
         response: Value,
     ) -> std::io::Result<()> {
         if self
-            .browser_host
+            .client_host
             .handle_response(connection.connection_id, response)
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?
         {
@@ -2148,7 +2207,7 @@ impl AppServer {
                     })?;
                     if envelope.get("method").is_none() {
                         let handled = self
-                            .browser_host
+                            .client_host
                             .handle_response(connection.connection_id, envelope)
                             .map_err(|error| {
                                 std::io::Error::new(std::io::ErrorKind::InvalidData, error)
@@ -2579,12 +2638,24 @@ impl AppServer {
             }
             Some(ClientMethod::AssetCatalog) => self.asset_catalog(&request.params),
             Some(ClientMethod::AssetCatalogUpdate) => self.asset_catalog_update(&request.params),
-            Some(ClientMethod::AssetCollectionCreate) => self.asset_collection_create(&request.params),
-            Some(ClientMethod::AssetCollectionDelete) => self.asset_collection_delete(&request.params),
-            Some(ClientMethod::AssetImportStart) => self.asset_import_start(connection, &request.params),
-            Some(ClientMethod::AssetImportWrite) => self.asset_import_write(connection, &request.params),
-            Some(ClientMethod::AssetImportFinish) => self.asset_import_finish(connection, &request.params),
-            Some(ClientMethod::AssetImportCancel) => self.asset_import_cancel(connection, &request.params),
+            Some(ClientMethod::AssetCollectionCreate) => {
+                self.asset_collection_create(&request.params)
+            }
+            Some(ClientMethod::AssetCollectionDelete) => {
+                self.asset_collection_delete(&request.params)
+            }
+            Some(ClientMethod::AssetImportStart) => {
+                self.asset_import_start(connection, &request.params)
+            }
+            Some(ClientMethod::AssetImportWrite) => {
+                self.asset_import_write(connection, &request.params)
+            }
+            Some(ClientMethod::AssetImportFinish) => {
+                self.asset_import_finish(connection, &request.params)
+            }
+            Some(ClientMethod::AssetImportCancel) => {
+                self.asset_import_cancel(connection, &request.params)
+            }
             Some(ClientMethod::AssetVersion) => self.asset_version(&request.params),
             Some(ClientMethod::AssetRead) => self.asset_read(&request.params),
             Some(ClientMethod::ResourceMetadata) => {
@@ -2825,7 +2896,9 @@ impl AppServer {
                 self.testing_discover(connection, &request.params)
             }
             Some(ClientMethod::TestingRun) => self.testing_run(connection, &request.params),
-            Some(ClientMethod::TestingPrepareDebug) => self.testing_prepare_debug(connection, &request.params),
+            Some(ClientMethod::TestingPrepareDebug) => {
+                self.testing_prepare_debug(connection, &request.params)
+            }
             Some(ClientMethod::TestingRead) => self.testing_read(connection, &request.params),
             Some(ClientMethod::TestingCancel) => self.testing_cancel(connection, &request.params),
             Some(ClientMethod::TestingRelease) => self.testing_release(connection, &request.params),
@@ -2844,12 +2917,23 @@ impl AppServer {
 }
 
 struct AppServerThreadUpdates {
+    client_host: Arc<crate::client_host::ClientHost>,
     threads: Arc<ThreadController>,
     updates: Arc<UpdateBroker>,
 }
 
 impl ThreadUpdateSink for AppServerThreadUpdates {
     fn publish(&self, update: ThreadUpdateEnvelope) {
+        if let ash_protocol::ThreadUpdate::Committed { event } = &update.update {
+            match event {
+                ash_protocol::ThreadEvent::TurnCompleted { turn_id, .. }
+                | ash_protocol::ThreadEvent::TurnFailed { turn_id, .. }
+                | ash_protocol::ThreadEvent::TurnInterrupted { turn_id, .. } => {
+                    self.client_host.finish_turn(&update.thread_id, turn_id)
+                }
+                _ => {}
+            }
+        }
         enum GoalNotification {
             Updated(ash_app_server_protocol::protocol::goal::ThreadGoalUpdatedNotification),
             Cleared(ash_app_server_protocol::protocol::goal::ThreadGoalClearedNotification),
@@ -2976,3 +3060,70 @@ mod agent_session_tests;
 #[cfg(test)]
 #[path = "server/agent_benchmarks.rs"]
 mod agent_benchmarks;
+
+struct AppServerAgentTurnSubmission {
+    clients: Arc<crate::client_host::ClientHost>,
+    threads: Arc<ThreadController>,
+    directories: Option<Arc<git_turn_changes_runtime::GitTurnChangesRuntime>>,
+}
+
+impl ash_core::AgentTurnSubmission for AppServerAgentTurnSubmission {
+    fn submit(
+        &self,
+        parent_thread: &ash_protocol::ThreadId,
+        parent_turn: &ash_protocol::TurnId,
+        child_thread: &ash_protocol::ThreadId,
+        request: ash_core::StartTurnRequest,
+    ) -> Result<ash_core::StartTurnResult, core_api::CoreError> {
+        let child = self.threads.read_thread(child_thread)?;
+        let replayed_turn = child
+            .commands
+            .iter()
+            .find(|entry| entry.receipt.command_id == request.command_id)
+            .and_then(|entry| match &entry.result {
+                ash_core::ThreadCommandResult::TurnAccepted { turn_id } => Some(turn_id),
+                _ => None,
+            });
+        // Reconciliation of terminal children validates the recorded command without
+        // acquiring an execution context: it cannot schedule another document tool.
+        if replayed_turn.is_some_and(|id| {
+            child.turns.iter().any(|turn| {
+                &turn.turn_id == id
+                    && matches!(
+                        turn.status,
+                        ash_protocol::TurnStatus::Completed
+                            | ash_protocol::TurnStatus::Failed
+                            | ash_protocol::TurnStatus::Interrupted
+                    )
+            })
+        }) {
+            return self.threads.start_turn(child_thread, request);
+        }
+        let mode = match &self.directories {
+            Some(directories) => match (
+                directories.binding(parent_thread),
+                directories.binding(child_thread),
+            ) {
+                (Some(parent), Some(child)) if parent.checkout_root() == child.checkout_root() => {
+                    crate::client_host::TextDocumentMode::Client
+                }
+                (Some(_), Some(_)) => crate::client_host::TextDocumentMode::FileSystem,
+                (None, None) => crate::client_host::TextDocumentMode::Client,
+                _ => {
+                    return Err(CoreError::Execution(
+                        "parent and child directory bindings are incomplete".into(),
+                    ));
+                }
+            },
+            None => crate::client_host::TextDocumentMode::Client,
+        };
+        self.clients.submit_agent_turn(
+            parent_thread,
+            parent_turn,
+            child_thread,
+            replayed_turn,
+            mode,
+            || self.threads.start_turn(child_thread, request),
+        )
+    }
+}

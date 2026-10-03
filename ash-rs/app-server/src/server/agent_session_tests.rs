@@ -65,7 +65,10 @@ fn model() -> ModelRef {
     )
 }
 
-struct WorkflowModel(mpsc::Sender<ModelRequest>);
+struct WorkflowModel(
+    mpsc::Sender<ModelRequest>,
+    std::sync::Mutex<mpsc::Receiver<()>>,
+);
 impl ModelService for WorkflowModel {
     fn invoke(
         &self,
@@ -74,6 +77,11 @@ impl ModelService for WorkflowModel {
         _: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {
         self.0.send(request.clone()).unwrap();
+        self.1
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(10))
+            .unwrap();
         let acceptance = request
             .instructions
             .as_deref()
@@ -92,15 +100,22 @@ fn workflow_commands_run_dedicated_agents_through_rpc_and_require_user_acceptanc
         InMemoryThreadStore::default(),
     )));
     let (sender, requests) = mpsc::channel();
-    let mut server = AppServer::new(threads.clone(), Arc::new(WorkflowModel(sender)))
-        .with_tool_service(Arc::new(CatalogTools), Arc::new(UnusedPolicy));
+    let (allow_result, result_admission) = mpsc::channel();
+    let mut server = AppServer::new(
+        threads.clone(),
+        Arc::new(WorkflowModel(
+            sender,
+            std::sync::Mutex::new(result_admission),
+        )),
+    )
+    .with_tool_service(Arc::new(CatalogTools), Arc::new(UnusedPolicy));
     server.model_catalog = Arc::new(TestModels);
     let mut connection = server.connection();
     call(
         &server,
         &mut connection,
         "initialize",
-        serde_json::json!({"clientInfo":{"name":"workflow-test","version":"1"},"capabilities":{}}),
+        serde_json::json!({"clientInfo":{"name":"workflow-test","version":"1"},"capabilities":{"textDocuments":{"version":1}}}),
     );
     let rejected = call(
         &server,
@@ -117,6 +132,7 @@ fn workflow_commands_run_dedicated_agents_through_rpc_and_require_user_acceptanc
     );
     let session = created["result"]["session"]["sessionId"].as_str().unwrap();
     let root = ThreadId::new(session).unwrap();
+    let owner = connection.connection_id;
     let mut submit = |id: &str, text: &str| {
         let sequence = threads.read_thread(&root).unwrap().sequence;
         call(
@@ -150,6 +166,17 @@ fn workflow_commands_run_dedicated_agents_through_rpc_and_require_user_acceptanc
             })
             .unwrap();
         let child = delegation.child_thread_id.clone().unwrap();
+        let child_snapshot = threads.read_thread(&child).unwrap();
+        let binding = server
+            .client_host
+            .binding(&child, &child_snapshot.turns.last().unwrap().turn_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (binding.connection_id, binding.text_documents),
+            (owner, true)
+        );
+        allow_result.send(()).unwrap();
         let deadline = std::time::Instant::now() + Duration::from_secs(10);
         while threads
             .read_thread(&child)
@@ -222,6 +249,7 @@ fn workflow_commands_run_dedicated_agents_through_rpc_and_require_user_acceptanc
     let team = submit("team-start", "/team inspect search changes");
     assert!(team.get("error").is_none(), "{team}");
     let request = requests.recv_timeout(Duration::from_secs(10)).unwrap();
+    allow_result.send(()).unwrap();
     assert!(
         request
             .instructions

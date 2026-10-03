@@ -132,11 +132,7 @@ pub(super) fn search(
                 .path
                 .components()
                 .all(|c| matches!(c, Component::Normal(_)))
-            || dir
-                .canonical_path()
-                .join(&m.path)
-                .canonicalize()
-                .is_ok_and(|p| !p.starts_with(dir.canonical_path()))
+            || dir.resolve_existing(&m.path).is_err()
         {
             return Err(Error::Failed("grep returned an out-of-scope path".into()));
         }

@@ -58,7 +58,11 @@ pub struct FileMutationError {
 
 impl std::fmt::Display for FileMutationError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.source.fmt(formatter)
+        self.source.fmt(formatter)?;
+        if self.publication_started {
+            write!(formatter, "; published paths: {:?}", self.completed_paths)?;
+        }
+        Ok(())
     }
 }
 

@@ -199,6 +199,7 @@ impl Default for EnvRuntimeConfig {
 
 #[derive(Clone)]
 pub(crate) struct EnvRuntimeControl {
+    text_document_host: Arc<crate::text_document_host::TextDocumentHost>,
     authority_gate: Arc<Mutex<()>>,
     runtime: Arc<RwLock<EnvRuntime>>,
     tools: Arc<EnvToolPorts>,
@@ -312,6 +313,7 @@ impl EnvRuntimeControl {
             grep.ok_or_else(|| EnvRuntimeError::Failed("grep capability is unavailable".into()))?,
             Arc::clone(&self.file_search),
             self.pty_helper.as_ref(),
+            Some(self.text_document_host.clone()),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         if let Some(codebase) = codebase {
@@ -467,6 +469,7 @@ impl EnvRuntimeControl {
                 .ok_or_else(|| EnvRuntimeError::Failed("grep capability is unavailable".into()))?,
             Arc::clone(&self.file_search),
             self.pty_helper.as_ref(),
+            Some(self.text_document_host.clone()),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let action_policy_revision = local.action_policy_revision().clone();
@@ -1252,6 +1255,7 @@ impl AppServer {
             .with_tool_service(tools.reloadable.tools(), policy)
             .with_hooks(hooks.clone())
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
+                client_host: Arc::clone(&self.client_host),
                 threads: Arc::clone(&self.threads),
                 updates: Arc::clone(&self.updates),
             }));
@@ -1293,6 +1297,7 @@ impl AppServer {
 
     pub(crate) fn env_runtime_control(&self) -> Option<EnvRuntimeControl> {
         self.local_env_host.as_ref().map(|host| EnvRuntimeControl {
+            text_document_host: Arc::clone(&self.text_document_host),
             authority_gate: Arc::clone(&self.env_runtime_gate),
             runtime: Arc::clone(&self.env_runtime),
             tools: Arc::clone(&host.tools),
@@ -2042,6 +2047,7 @@ impl AppServer {
                 Arc::clone(&grep),
                 Arc::clone(&self.file_search),
                 self.pty_helper.as_ref(),
+                Some(self.text_document_host.clone()),
             )
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
             self.commit_full_env_runtime(authorization, local, grep, host)

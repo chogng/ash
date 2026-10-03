@@ -35,23 +35,12 @@ pub(super) enum PatchLine {
 
 pub(super) enum PatchError {
     Message(String),
-    Io(String),
-}
-
-impl PatchError {
-    pub(super) fn io(error: std::io::Error) -> Self {
-        Self::Io(error.to_string())
-    }
-
-    pub(super) fn sandbox(error: impl fmt::Display) -> Self {
-        Self::Message(error.to_string())
-    }
 }
 
 impl fmt::Display for PatchError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Message(message) | Self::Io(message) => formatter.write_str(message),
+            Self::Message(message) => formatter.write_str(message),
         }
     }
 }

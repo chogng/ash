@@ -1436,3 +1436,117 @@ test('text-file saves retain UTF-8 BOM and CRLF, and external reloads remain und
 		await expect.poll(() => readFile(path)).toEqual(Buffer.from(bom + 'edited first\r\nsecond', 'utf8'));
 	}
 });
+
+
+test('Agent document requests preserve unsaved editor content, undo, BOM and CRLF', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	const page = workbench.page;
+	await installDocumentProtocolProbe(page);
+	const restored = page.waitForEvent('console', { predicate: message => message.text() === '[lifecycle] Workbench restored' });
+	await page.reload({ waitUntil: 'domcontentloaded' });
+	await Promise.all([workbench.waitForReady(), restored]);
+	const name = 'agent-document-crlf.txt';
+	const path = join(testWorkspace.directory, name);
+	await writeFile(path, '\uFEFFfirst\r\nsecond');
+	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: name }).dblclick();
+	const group = workbench.editors.groupAt(0);
+	const input = group.content.getByRole('textbox', { name, exact: true });
+	await input.focus();
+	await input.press('ControlOrMeta+Home');
+	await input.type('unsaved ');
+	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown> }).documentRequest(method, params), { method, params });
+	const snapshot = await request('textDocument/read', { path }) as { kind: string; snapshot: string; text: string };
+	expect(snapshot).toMatchObject({ kind: 'document', text: 'unsaved first\r\nsecond' });
+	expect(await request('textDocument/list', { root: testWorkspace.directory })).toEqual({ kind: 'documents', documents: [{ relativePath: name, text: 'unsaved first\r\nsecond' }] });
+	expect(await request('textDocument/apply', { changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: 'agent first\nsecond' }] })).toEqual({ kind: 'applied' });
+	await expect(group.editor.lines).toHaveText(['agent first', 'second']);
+	expect(await readFile(path)).toEqual(Buffer.from('\uFEFFagent first\r\nsecond'));
+	expect(await request('textDocument/list', { root: testWorkspace.directory })).toEqual({ kind: 'documents', documents: [] });
+	await input.focus();
+	await input.press('ControlOrMeta+z');
+	await expect(group.editor.lines).toHaveText(['unsaved first', 'second']);
+	await input.press('ControlOrMeta+s');
+	await expect.poll(() => readFile(path)).toEqual(Buffer.from('\uFEFFunsaved first\r\nsecond'));
+	const stale = await request('textDocument/read', { path }) as { snapshot: string };
+	await input.press('ControlOrMeta+Home');
+	await input.type('user ');
+	expect(await request('textDocument/apply', { changes: [{ kind: 'update', snapshot: stale.snapshot, text: 'stale agent' }] })).toEqual({ kind: 'conflict' });
+	await expect(group.editor.lines).toHaveText(['user unsaved first', 'second']);
+});
+
+
+test('Agent document requests use the Agents window model and save closed files through editor services', async ({ application, target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	let page = workbench.page;
+	if (target.kind === 'electron') {
+		if (!('windows' in application)) throw new Error('Missing Electron application');
+		const opened = application.waitForEvent('window');
+		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+		page = await opened;
+	} else {
+		await page.locator("[data-action-id='ash.code.open-sessions'] button").click();
+	}
+	await expect(page.locator('.ash-code-sessions-window')).toBeVisible();
+	await installDocumentProtocolProbe(page);
+	await page.reload({ waitUntil: 'domcontentloaded' });
+	await expect(page.locator('.ash-code-sessions-window')).toBeVisible();
+	const path = join(testWorkspace.directory, 'agents-document.txt');
+	await writeFile(path, '\uFEFForiginal\r\nsecond');
+	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown> }).documentRequest(method, params), { method, params });
+	const snapshot = await request('textDocument/read', { path }) as { kind: string; snapshot: string; text: string };
+	expect(snapshot).toMatchObject({ kind: 'document', text: 'original\r\nsecond' });
+	expect(await request('textDocument/apply', { changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: 'agent\nsecond' }] })).toEqual({ kind: 'applied' });
+	await expect.poll(() => readFile(path)).toEqual(Buffer.from('\uFEFFagent\r\nsecond'));
+	const created = join(testWorkspace.directory, 'nested', 'agents-created.txt');
+	expect(await request('textDocument/apply', { changes: [{ kind: 'create', path: created, text: 'created\ntext' }] })).toEqual({ kind: 'applied' });
+	await expect.poll(() => readFile(created, 'utf8')).toBe('created\ntext');
+});
+
+async function installDocumentProtocolProbe(page: Page): Promise<void> {
+	await page.addInitScript(() => {
+		const replies = new Map<string, (value: unknown) => void>();
+		let sequence = 0;
+		let socket: WebSocket | undefined;
+		let port: MessagePort | undefined;
+		let injecting = false;
+		const takeReply = (frame: string): boolean => {
+			const message = JSON.parse(frame) as { id?: string; result?: unknown; error?: unknown };
+			if (typeof message.id !== 'string' || !message.id.startsWith('test-document:')) { return false; }
+			replies.get(message.id)?.(message.result ?? message.error);
+			replies.delete(message.id);
+			return true;
+		};
+		// Inject only the server side of the document protocol. Ordinary product traffic
+		// continues through the real transport; fixture replies never reach the backend.
+		const send = WebSocket.prototype.send;
+		WebSocket.prototype.send = function (data): void {
+			if (this.url.includes('/ash/app-server')) { socket = this; }
+			if (typeof data === 'string' && takeReply(data)) { return; }
+			send.call(this, data);
+		};
+		const post = MessagePort.prototype.postMessage;
+		MessagePort.prototype.postMessage = function (message: { frame?: string; ack?: boolean }, options?: Transferable[] | StructuredSerializeOptions): void {
+			if (message.frame) {
+				if (JSON.parse(message.frame).method === 'initialize') { port = this; }
+				if (takeReply(message.frame)) {
+					this.dispatchEvent(new MessageEvent('message', { data: { ack: true } }));
+					return;
+				}
+			}
+			if (injecting && message.ack) { return; }
+			post.call(this, message, Array.isArray(options) ? { transfer: options } : options);
+		};
+		(window as Window & { documentRequest?: (method: string, params: unknown) => Promise<unknown> }).documentRequest = (method, params) => {
+			const id = `test-document:${++sequence}`;
+			const result = new Promise(resolve => replies.set(id, resolve));
+			const frame = JSON.stringify({ jsonrpc: '2.0', id, method, params });
+			injecting = true;
+			try {
+				if (port) { port.dispatchEvent(new MessageEvent('message', { data: { frame } })); }
+				else if (socket) { socket.dispatchEvent(new MessageEvent('message', { data: frame })); }
+				else { throw new Error('Product document transport was not initialized'); }
+			} finally { injecting = false; }
+			return result;
+		};
+	});
+}

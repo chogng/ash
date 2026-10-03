@@ -67,6 +67,13 @@ pub struct SearchResult {
     pub freshness: Freshness,
 }
 
+/// Current editor text replacing the corresponding file during one search only.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DocumentContent {
+    pub path: PathBuf,
+    pub text: String,
+}
+
 /// Consumer-facing search capability. Implementations own engine execution and honor
 /// scope, limits, cancellation and freshness; callers own authorization and presentation.
 pub trait Search: Send + Sync {

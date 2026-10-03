@@ -4,6 +4,7 @@ mod error;
 mod find_up;
 mod local;
 mod service;
+mod text_document;
 mod text_file;
 mod types;
 
@@ -13,6 +14,10 @@ pub use local::LocalFileSystem;
 pub use local::commit_file_mutations;
 pub use service::FileSystem;
 pub use service::SystemFileTransferOperation;
+pub use text_document::{
+    FileTextDocuments, TextDocumentChange, TextDocumentContent, TextDocumentEditor,
+    TextDocumentError, TextDocumentSnapshot,
+};
 pub use text_file::TextFileFormat;
 pub use types::FileMutation;
 pub use types::FileMutationError;

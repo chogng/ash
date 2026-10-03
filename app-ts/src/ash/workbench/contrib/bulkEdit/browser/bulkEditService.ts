@@ -39,7 +39,7 @@ export class BrowserBulkEditService extends Disposable implements IBulkEditServi
 			previewed = true;
 			if (signal.aborted || edits.length === 0) return { ariaSummary: 'No edits were applied', isApplied: false };
 		}
-		const edit = sourceEdit && !previewed ? sourceEdit : toLanguageWorkspaceEdit(edits);
+		const edit = sourceEdit && !previewed ? sourceEdit : await toLanguageWorkspaceEdit(edits);
 		if (edit.entries.length === 0) return { ariaSummary: 'No edits were applied', isApplied: false };
 		// Approval transfers ownership to the transaction. Its own document changes can retire
 		// the originating language request, which must not cancel an approved multi-file commit.
@@ -48,7 +48,7 @@ export class BrowserBulkEditService extends Disposable implements IBulkEditServi
 	}
 }
 
-export function toLanguageWorkspaceEdit(edits: readonly ResourceEdit[]): LanguageWorkspaceEdit {
+export async function toLanguageWorkspaceEdit(edits: readonly ResourceEdit[]): Promise<LanguageWorkspaceEdit> {
 	const entries: LanguageWorkspaceEditEntry[] = [];
 	const groups = new Map<string, { kind: 'textDocument'; resource: ResourceTextEdit['resource']; version?: number; edits: ResourceTextEdit['textEdit'][] }>();
 	const flushText = (): void => {
@@ -72,7 +72,7 @@ export function toLanguageWorkspaceEdit(edits: readonly ResourceEdit[]): Languag
 		flushText();
 		if (!(edit instanceof ResourceFileEdit)) throw new TypeError('Unknown resource edit');
 		if (edit.oldResource && edit.newResource) entries.push({ kind: 'rename', source: edit.oldResource, target: edit.newResource, existing: existing(edit.options) });
-		else if (edit.newResource) entries.push({ kind: 'create', resource: edit.newResource, existing: existing(edit.options) });
+		else if (edit.newResource) entries.push({ kind: 'create', resource: edit.newResource, existing: existing(edit.options), ...(edit.options.contents ? { contents: (await edit.options.contents).toString() } : {}) });
 		else entries.push({ kind: 'delete', resource: edit.oldResource!, missing: edit.options.ignoreIfNotExists ? 'ignore' : 'error', mode: edit.options.recursive ? 'recursive' : 'fileOrEmptyDirectory' });
 	}
 	flushText();

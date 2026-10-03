@@ -115,6 +115,12 @@ fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {
 
 #[test]
 fn recovered_spawn_starts_a_new_child_turn_once() {
+    for documents in [false, true] {
+        recovered_spawn_with_document_context(documents);
+    }
+}
+
+fn recovered_spawn_with_document_context(documents: bool) {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
@@ -155,6 +161,27 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
             },
         )
         .unwrap();
+    if documents {
+        server.client_host.register(
+            7,
+            true,
+            super::notification_queue::NotificationQueue::default(),
+        );
+    }
+    server
+        .client_host
+        .submit_turn(
+            &parent.thread_id,
+            documents.then_some(7),
+            crate::client_host::TextDocumentMode::Client,
+            || {
+                Ok(core_api::TurnReceipt {
+                    turn_id: parent_turn.turn_id.clone(),
+                    sequence: parent_turn.sequence,
+                })
+            },
+        )
+        .unwrap();
     let spawned = server
         .multi_agent
         .spawn(SpawnAgentRequest {
@@ -186,6 +213,18 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
         })
         .unwrap();
 
+    assert_eq!(
+        server
+            .client_host
+            .binding(&spawned.child_thread_id, &spawned.child_turn_id)
+            .unwrap()
+            .is_some_and(|binding| binding.text_documents),
+        documents
+    );
+    server.client_host.finish_turn(
+        &spawned.context_seed.parent_thread_id,
+        &spawned.context_seed.parent_turn_id,
+    );
     assert_eq!(server.resume_recovered_agent_coordinations().unwrap(), 1);
     let deadline = Instant::now() + Duration::from_secs(1);
     loop {
@@ -658,7 +697,7 @@ fn rpc_turn_executes_browser_tool_only_on_its_originating_window() {
                     assert_eq!(index, 0, "a Web task must not borrow a desktop browser");
                     assert!(!created_page);
                     created_page = true;
-                    assert!(server.browser_host.handle_response(connection.connection_id, json!({"jsonrpc":"2.0","id":request["id"],"result":{"targetId":"browser_target_test"}})).unwrap());
+                    assert!(server.client_host.handle_response(connection.connection_id, json!({"jsonrpc":"2.0","id":request["id"],"result":{"targetId":"browser_target_test"}})).unwrap());
                 }
             }
             assert!(

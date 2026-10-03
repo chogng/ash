@@ -38,6 +38,24 @@
 
 `memory/changed` 只向产品 host 发布作用域和新 catalog revision；客户端随后重新读取。`queue/changed` 是无内容的失效通知。Config 的 Feature 来源由 `ash-features` 解释。反馈待审阅包在 connection 关闭时释放，持久队列由 profile 后台调度器恢复。
 
+## 编辑器文档宿主
+
+Code Workbench 与 Agents 连接在 `initialize` 声明 `textDocuments: { version: 1 }`。
+服务端向发起产品 Turn 的连接发送 `textDocument/read`、`textDocument/list`、`textDocument/apply` 和
+`textDocument/release`。路径是该 App Server 环境中的绝对文件路径；工具在发出请求前检查目录授权。
+
+`read` 返回当前模型正文与不透明 snapshot，正文包含未保存内容，不包含编码 BOM。
+`list` 返回请求根目录内未保存的文本工作副本，以 `relativePath` 标识文件，供搜索替换对应磁盘内容；不创建编辑 lease。根目录的文件身份由后端确定，不受编辑器 URI 的 Windows 盘符写法影响。
+`apply` 成功返回前保存受影响工作副本，保留已有用户正文与撤销记录；保存失败返回 outcomeUnknown。
+`apply` 提交最多 128 个创建、版本绑定更新、删除或移动操作，前端复用模型与工作区编辑服务。
+更新、删除和移动的 snapshot 在本次申请结束时被消费；重复读取同一资源替换旧 snapshot。
+`release` 提前释放读取引用，断开连接时释放全部引用。两端均限制同时保留的 snapshot 数量。
+
+修改结果区分 applied、conflict、cancelled、failed 和 outcomeUnknown。
+提交后的断线、超时或取消可能丢失已完成的回复，工具返回 outcomeUnknown，不自动重发修改。
+没有文档能力或产品连接的执行使用磁盘接口；已绑定窗口断开不能切换成磁盘写入。
+本接口不创建新的文档状态服务，也不定义 Chat Editing 的接受或拒绝界面。
+
 ## Hook 配置来源查询
 
 `hook/list` 接受可选 `sessionId`，返回 `HookListResult.sources`。每个来源包含 `namespace`、

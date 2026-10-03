@@ -553,6 +553,23 @@ export class MutableDisposable<T extends IDisposable> extends AbstractDisposable
 export class DisposableMap<K, V extends IDisposable = IDisposable> extends AbstractDisposable implements Iterable<[K, V]> {
 	private readonly resources = new Map<K, V>();
 
+	public get size(): number {
+		return this.resources.size;
+	}
+
+	public clearAndDisposeAll(): void {
+		if (this.resources.size === 0) return;
+		const resources = [...this.resources.values()];
+		this.resources.clear();
+		const stack = new DisposableStack();
+		for (const resource of resources) stack.use(resource);
+		try {
+			stack.dispose();
+		} finally {
+			for (const resource of resources) markAsDisposed(resource);
+		}
+	}
+
 	public get(key: K): V | undefined {
 		return this.resources.get(key);
 	}
@@ -600,16 +617,7 @@ export class DisposableMap<K, V extends IDisposable = IDisposable> extends Abstr
 	}
 
 	protected override disposeCore(): void {
-		if (this.resources.size === 0) return;
-		const resources = [...this.resources.values()];
-		this.resources.clear();
-		const stack = new DisposableStack();
-		for (const resource of resources) stack.use(resource);
-		try {
-			stack.dispose();
-		} finally {
-			for (const resource of resources) markAsDisposed(resource);
-		}
+		this.clearAndDisposeAll();
 	}
 
 	private disposeResource(resource: V): void {

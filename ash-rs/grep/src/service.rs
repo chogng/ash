@@ -1,5 +1,6 @@
 use crate::Backend;
 use crate::CaseSensitivity;
+use crate::DocumentContent;
 use crate::Error;
 use crate::Freshness;
 use crate::IndexStatus;
@@ -220,8 +221,106 @@ impl Search for Service {
             .check()
             .map_err(|s| Error::Cancelled(s.reason().to_string()))?;
         let regex = validate(query)?;
-        let path = dir.canonical_path().join(&query.scope).canonicalize()?;
-        if !path.starts_with(dir.canonical_path()) {
+        self.search_disk(dir, query, &regex, cancellation)
+    }
+}
+
+impl Service {
+    /// Searches one coherent task view without putting unsaved text into the shared index.
+    pub fn search_with_documents(
+        &self,
+        dir: &Dir,
+        query: &Query,
+        documents: &[DocumentContent],
+        cancellation: &CancellationToken,
+    ) -> Result<SearchResult, Error> {
+        let regex = validate(query)?;
+        let includes = document_globs(&query.include_patterns)?;
+        let excludes = document_globs(&query.exclude_patterns)?;
+        let mut disk_query = query.clone();
+        disk_query.freshness = Freshness::Current;
+        let mut matches = Vec::new();
+        let mut limit_hit = false;
+        let mut replaced_scope = false;
+        let mut documents = documents.iter().collect::<Vec<_>>();
+        documents.sort_by(|left, right| left.path.cmp(&right.path));
+        for document in documents {
+            cancellation
+                .check()
+                .map_err(|s| Error::Cancelled(s.reason().to_string()))?;
+            let relative = document
+                .path
+                .strip_prefix(dir.canonical_path())
+                .map_err(|e| Error::InvalidInput(e.to_string()))?;
+            dir.resolve_for_write(relative)
+                .map_err(|e| Error::InvalidInput(e.to_string()))?;
+            if !relative.starts_with(&query.scope) {
+                continue;
+            }
+            replaced_scope |= relative == query.scope;
+            let path = relative.to_string_lossy().replace('\\', "/");
+            disk_query.exclude_patterns.push(globset::escape(&path));
+            if (!query.include_patterns.is_empty() && !includes.is_match(&path))
+                || excludes.is_match(&path)
+            {
+                continue;
+            }
+            for (line, text) in document.text.lines().enumerate() {
+                let ranges = regex
+                    .find_iter(text)
+                    .map(|found| MatchRange {
+                        start: found.start(),
+                        end: found.end(),
+                    })
+                    .collect::<Vec<_>>();
+                if ranges.is_empty() {
+                    continue;
+                }
+                if matches.len() == query.max_results {
+                    limit_hit = true;
+                    break;
+                }
+                matches.push(Match {
+                    path: relative.to_path_buf(),
+                    line_number: line + 1,
+                    content: text.into(),
+                    ranges,
+                });
+            }
+        }
+        // Engines search an explicitly named file even when a glob excludes it.
+        // A scope supplied by the editor has no disk contribution, including no matches.
+        if !replaced_scope {
+            let disk = self.search_disk(dir, &disk_query, &regex, cancellation)?;
+            limit_hit |= disk.limit_hit;
+            matches.extend(disk.matches);
+        }
+        matches.sort_by(|left, right| {
+            (&left.path, left.line_number).cmp(&(&right.path, right.line_number))
+        });
+        limit_hit |= matches.len() > query.max_results;
+        matches.truncate(query.max_results);
+        Ok(SearchResult {
+            matches,
+            limit_hit,
+            freshness: Freshness::Current,
+        })
+    }
+
+    fn search_disk(
+        &self,
+        dir: &Dir,
+        query: &Query,
+        regex: &regex::Regex,
+        cancellation: &CancellationToken,
+    ) -> Result<SearchResult, Error> {
+        let scope = if query.scope.as_os_str().is_empty() {
+            dir.canonical_path().to_path_buf()
+        } else {
+            dir.resolve_existing(&query.scope)
+                .map_err(|e| Error::InvalidInput(e.to_string()))?
+        };
+        if !scope.starts_with(dir.canonical_path()) {
             return Err(Error::InvalidInput(
                 "search scope escapes its directory".into(),
             ));
@@ -342,3 +441,24 @@ pub(crate) fn validate(query: &Query) -> Result<regex::Regex, Error> {
 #[cfg(test)]
 #[path = "service_tests.rs"]
 mod tests;
+
+fn document_globs(patterns: &[String]) -> Result<globset::GlobSet, Error> {
+    let mut builder = globset::GlobSetBuilder::new();
+    for pattern in patterns {
+        let path = pattern.replace('\\', "/");
+        let path = if path.contains('/') {
+            path
+        } else {
+            format!("**/{path}")
+        };
+        builder.add(
+            globset::GlobBuilder::new(&path)
+                .literal_separator(true)
+                .build()
+                .map_err(|e| Error::InvalidInput(e.to_string()))?,
+        );
+    }
+    builder
+        .build()
+        .map_err(|e| Error::InvalidInput(e.to_string()))
+}

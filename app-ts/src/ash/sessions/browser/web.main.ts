@@ -1,3 +1,9 @@
+import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
+import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
+import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
+import { IBulkEditService } from '../../editor/browser/services/bulkEditService.js';
+import { BrowserBulkEditService } from '../../workbench/contrib/bulkEdit/browser/bulkEditService.js';
+import { IWorkspaceEditService } from '../../workbench/services/language/common/workspaceEditService.js';
 import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { IDialogService } from '../../platform/dialogs/common/dialogs.js';
@@ -43,15 +49,16 @@ export function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsP
 async function startBrowserSessionsAsync(modeId: WorkbenchModeId, profile: SessionsProfile): Promise<void> {
 	let connectedHost: IDisposable | undefined;
 	try {
-		connectedHost = await connectBrowserWorkbenchHost();
-		await mountBrowserSessions(modeId, profile, connectedHost);
+		let documentClient: AppServerProtocolClient | undefined;
+		connectedHost = await connectBrowserWorkbenchHost([client => { documentClient = client; return {}; }], true);
+		await mountBrowserSessions(modeId, profile, connectedHost, documentClient);
 	} catch (error) {
 		connectedHost?.dispose();
 		showStartupError(error, text => new BrowserClipboardService(window.navigator.clipboard).writeText(text));
 	}
 }
 
-async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile, connectedHost?: IDisposable): Promise<void> {
+async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile, connectedHost?: IDisposable, documentClient?: AppServerProtocolClient): Promise<void> {
 	installBaseUiStyles();
 	const sessions = new DisposableStore();
 	try {
@@ -64,6 +71,13 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 		const ownerWindow = container.ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
 		const workbench = sessions.add(await Workbench.create({
+			createTextDocumentHost: documentClient ? services => {
+				const resources = new DisposableStore();
+				const bulkEdits = resources.add(new BrowserBulkEditService(services.get(IWorkspaceEditService)));
+				const documentServices = resources.add(services.createChild(new ServiceCollection([IBulkEditService, bulkEdits])));
+				resources.add(documentServices.createInstance(AppServerTextDocumentHost, documentClient!));
+				return resources;
+			} : undefined,
 			contributionIds: [],
 			modeId,
 			createStorageService: async storageOptions => new BrowserStorageService(storageOptions),

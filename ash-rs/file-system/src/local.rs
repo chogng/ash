@@ -904,6 +904,9 @@ pub fn commit_file_mutations(
                     FileMutation::Remove { .. } => return Ok(None),
                 };
                 let target = files.resolve_for_write(path)?;
+                if let Some(parent) = target.parent() {
+                    files.handle().create_dir_all(parent).map_err(io_error)?;
+                }
                 PreparedWrite::new(files.handle(), &target, content, permissions)
                     .map(Some)
                     .map_err(io_error)
@@ -1238,6 +1241,13 @@ impl ScopedFiles {
                     self.write_file_inner(path, &[], 1, WritePublication::Replace)
                 }
             };
+        }
+        // Editor file creation and Agent writes share the same parent-directory behavior.
+        if let Some(parent) = resolved
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            self.handle().create_dir_all(parent).map_err(io_error)?;
         }
         let publication = match existing {
             ExistingTargetBehavior::Overwrite => WritePublication::Replace,

@@ -1,3 +1,4 @@
+import type { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import type { IDisposable } from "../../base/common/lifecycle.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import type { ShutdownReason } from "../services/lifecycle/common/lifecycle.js";
@@ -27,6 +28,7 @@ export interface IWebWorkbenchHost {
 
 /** Inputs used to create one browser-hosted Workbench instance. */
 export interface IWebWorkbenchConstructionOptions {
+	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly api: IRendererHost;
 	readonly configurationApi: IConfigurationApi;
 	readonly initialConfigurationSnapshot: IConfigurationSnapshot;

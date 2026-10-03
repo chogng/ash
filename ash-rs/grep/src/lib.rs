@@ -10,6 +10,7 @@ pub use jobs::Jobs;
 pub use service::Service;
 pub use types::Backend;
 pub use types::CaseSensitivity;
+pub use types::DocumentContent;
 pub use types::Error;
 pub use types::Freshness;
 pub use types::IndexStatus;

@@ -1,3 +1,5 @@
+import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
+import { AppServerTextDocumentHost } from '../services/textfile/browser/appServerTextDocumentHost.js';
 import { addDisposableListener } from '../../base/browser/dom.js';
 import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
 import { Disposable, DisposableTracker, installDisposableTracker, toDisposable } from '../../base/common/lifecycle.js';
@@ -15,7 +17,7 @@ import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../browser/startupError.js';
 import { NativeHostColorSchemeService } from '../services/themes/electron-browser/nativeHostColorSchemeService.js';
 import { startWorkbench, type Workbench } from '../browser/workbench.js';
-import type { WorkbenchModeId } from '../common/workbenchMode.js';
+import { WorkbenchModeId } from '../common/workbenchMode.js';
 import { createElectronWorkbenchContextMenuService } from '../services/contextmenu/electron-browser/contextMenuService.js';
 import { loadUserThemes } from '../services/themes/browser/workbenchThemeService.js';
 import { switchElectronWorkbenchMode } from '../services/workbenchMode/electron-browser/electronWorkbenchModeHost.js';
@@ -56,10 +58,12 @@ export class DesktopMain extends Disposable {
 			profileServices.registerInstance(IMainProcessService, mainProcessService);
 			await mainProcessService.connect();
 			const logger = profileServices.createInstance(LoggerChannelClient);
+			let documentClient: AppServerProtocolClient | undefined;
 			const api = this._register(await createElectronRendererApi([
+				client => { documentClient = client; return {}; },
 				...this.rendererCapabilities,
 				client => registerLocalTranscriptionService(transcriptionServices, client),
-			], { browser: true }, permissionDialog, mainProcessService));
+			], { browser: true, textDocuments: this.modeId === WorkbenchModeId.Code }, permissionDialog, mainProcessService));
 			profileServices.registerInstance(IFileService, api.localFiles);
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
 			const workspace = parseWorkspace(await api.workspace.getWorkspace());
@@ -69,6 +73,7 @@ export class DesktopMain extends Disposable {
 			const hostColorScheme = await api.nativeHost.getOSColorScheme();
 			const workbench = this._register(await startWorkbench({
 				modeId: this.modeId,
+				createTextDocumentHost: documentClient && this.modeId === WorkbenchModeId.Code ? services => services.createInstance(AppServerTextDocumentHost, documentClient!) : undefined,
 				createLogService: () => logger.createLogger('workbench'),
 				createStorageService: async options => {
 					const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);

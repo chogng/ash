@@ -72,6 +72,12 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 		page.on('requestfinished', onRequestFinished);
 		page.on('requestfailed', onRequestFailed);
 		try {
+			// A visible editor group is not ready for edits until startup restoration
+			// has finished replacing its saved layout and recovering working copies.
+			const restored = page.waitForEvent('console', {
+				predicate: message => message.text() === '[lifecycle] Workbench restored',
+				timeout: 30_000,
+			});
 			const ready = driver.workbench.waitForReady();
 			if (options.appServerMode === 'required' && options.workspaceDirectory && options.workspacePermissions === 'development') {
 				const prompt = page.getByRole('dialog', { name: 'Ash' });
@@ -81,7 +87,7 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 					onMilestone?.('trust-accepted');
 				}
 			}
-			await ready;
+			await Promise.all([ready, restored]);
 			onMilestone?.('workbench-ready');
 		} catch (error) {
 			const text = await page.evaluate(() => [document.body.innerText, ...Array.from(document.querySelectorAll('textarea'), field => field.value)].join('\n')).catch(() => 'Document is unavailable');

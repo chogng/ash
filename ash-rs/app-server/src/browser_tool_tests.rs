@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 #[test]
 fn browser_tools_are_complete_strict_and_require_one_time_approval() {
-    let service = BrowserToolService::new(Arc::new(BrowserHost::new(Arc::new(Mutex::new(
+    let service = BrowserToolService::new(Arc::new(browser_host(Arc::new(Mutex::new(
         ResourceStore::default(),
     )))));
     let definitions = service.definitions();
@@ -41,7 +41,7 @@ fn browser_tools_are_complete_strict_and_require_one_time_approval() {
 
 #[test]
 fn browser_tools_reject_privileged_urls_and_ambiguous_element_ids() {
-    let service = BrowserToolService::new(Arc::new(BrowserHost::new(Arc::new(Mutex::new(
+    let service = BrowserToolService::new(Arc::new(browser_host(Arc::new(Mutex::new(
         ResourceStore::default(),
     )))));
     for url in [
@@ -74,4 +74,11 @@ fn call(name: &str, arguments: Value) -> ToolCall {
         name: ToolName::new(name).unwrap(),
         arguments,
     }
+}
+
+fn browser_host(resources: Arc<Mutex<ResourceStore>>) -> BrowserHost {
+    BrowserHost::new(
+        resources,
+        Arc::new(crate::client_host::ClientHost::default()),
+    )
 }

@@ -7,7 +7,7 @@ import { TextModel } from "../../../../editor/common/model/textModel.js";
 import { type ITextModelResourceService, type TextModelReference } from "../../textmodelResolver/common/textModelResourceService.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
 import { type IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
-import { type IWorkspaceEditService, type WorkspaceEditResult } from "../common/workspaceEditService.js";
+import { WorkspaceEditConflictError, type IWorkspaceEditService, type WorkspaceEditResult } from "../common/workspaceEditService.js";
 
 interface AcquiredModel {
 	readonly reference: TextModelReference;
@@ -19,6 +19,8 @@ interface VirtualFile {
 	exists: boolean;
 	text: string | undefined;
 	synthetic: boolean;
+	document?: AcquiredModel;
+	serializedText?: string;
 }
 
 interface PreparedTextEdit {
@@ -139,8 +141,8 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 				const state = await this.textState(entry.resource, states, acquired, signal);
 				if (!state.exists || state.text === undefined) throw new Error(`Workspace edit target '${entry.resource.toString()}' does not exist`);
 				const model = acquired.get(entry.resource.toString())!;
-				if (entry.version !== undefined && model.reference.model.version !== entry.version) throw new Error(`Workspace edit for '${entry.resource.toString()}' is stale`);
-				if (entry.expectedText !== undefined && normalizeTextLineEndings(entry.expectedText) !== normalizeTextLineEndings(state.text)) throw new Error(`Workspace edit content for '${entry.resource.toString()}' is stale`);
+				if (entry.version !== undefined && model.reference.model.version !== entry.version) throw new WorkspaceEditConflictError(`Workspace edit for '${entry.resource.toString()}' is stale`);
+				if (entry.expectedText !== undefined && normalizeTextLineEndings(entry.expectedText) !== normalizeTextLineEndings(state.text)) throw new WorkspaceEditConflictError(`Workspace edit content for '${entry.resource.toString()}' is stale`);
 				using snapshot = new TextModel(state.text);
 				for (const edit of entry.edits) {
 					if (!snapshot.isValidRange(edit.range)) throw new Error("Workspace edit range is outside the document: " + entry.resource.toString());
@@ -157,7 +159,7 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 				if (target.exists && entry.existing === "error") throw new Error(`Workspace create target '${entry.resource.toString()}' already exists`);
 				const applies = !target.exists || entry.existing === "overwrite";
 				const targetBefore = target.exists ? target.text : undefined;
-				if (applies) states.set(entry.resource.toString(), { exists: true, text: "", synthetic: true });
+				if (applies) states.set(entry.resource.toString(), { exists: true, text: entry.contents ?? "", synthetic: true });
 				return { kind: entry.kind, entry, applies, targetBefore };
 			}
 			case "rename": {
@@ -190,8 +192,8 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 	private async execute(operation: PreparedEdit, undo: UndoOperation[], signal: AbortSignal): Promise<void> {
 		if (operation.kind === "textDocument") {
 			const { entry, model, before, after } = operation;
-			if (model.reference.model.version !== model.version) throw new Error(`Workspace edit for '${entry.resource.toString()}' is stale`);
-			if (model.reference.model.getText() !== before) throw new Error(`Workspace edit content for '${entry.resource.toString()}' changed during application`);
+			if (model.reference.model.version !== model.version) throw new WorkspaceEditConflictError(`Workspace edit for '${entry.resource.toString()}' is stale`);
+			if (model.reference.model.getText() !== before) throw new WorkspaceEditConflictError(`Workspace edit content for '${entry.resource.toString()}' changed during application`);
 			if (before === after) return;
 			model.reference.model.applyOperations(entry.edits);
 			model.version = model.reference.model.version;
@@ -205,7 +207,7 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 					throw error;
 				}
 			}
-			if (model.reference.model.getText() !== after) throw new Error(`Workspace edit for '${entry.resource.toString()}' produced an inconsistent result`);
+			if (model.reference.model.getText() !== after) throw new WorkspaceEditConflictError(`Workspace edit for '${entry.resource.toString()}' produced an inconsistent result`);
 			return;
 		}
 		if (!operation.applies) return;
@@ -214,11 +216,17 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 				const entry = operation.entry;
 				if (entry.kind !== "create") throw new Error("Invalid prepared workspace create");
 				await this.files.createFile(entry.resource, entry.existing);
+				let written = '';
 				undo.push(async () => {
-					await this.assertFileText(entry.resource, '');
+					await this.assertFileText(entry.resource, written);
 					if (operation.targetBefore === undefined) await this.files.delete(entry.resource, "ignore", "fileOrEmptyDirectory");
 					else await this.files.writeFile({ resource: entry.resource, content: operation.targetBefore });
 				});
+				if (entry.contents !== undefined) {
+					const empty = await this.files.readFile(entry.resource);
+					await this.files.writeFile({ resource: entry.resource, content: entry.contents, expectedRevision: empty.revision });
+					written = entry.contents;
+				}
 				return;
 			}
 			case "rename": {
@@ -251,7 +259,7 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 			if (reference.model.getText() !== after || reference.model.getAlternativeVersionId() !== appliedVersion) {
 				throw new Error(`Workspace edit target '${resource.toString()}' changed before replacement`);
 			}
-			if (!reference.model.undo() || reference.model.getText() !== before) throw new Error(`Workspace edit for '${resource.toString()}' is no longer the latest undo step`);
+			if (!reference.model.undo() || reference.model.getText() !== before) throw new WorkspaceEditConflictError(`Workspace edit for '${resource.toString()}' is no longer the latest undo step`);
 			if (!wasOpen) await reference.save(new AbortController().signal);
 		} finally {
 			reference.dispose();
@@ -278,7 +286,13 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 			model = { reference, wasOpen, version: reference.model.version };
 			acquired.set(key, model);
 		}
-		const state = existing ?? { exists: true, text: model.reference.model.getText(), synthetic: false };
+		const state: VirtualFile = existing ?? { exists: true, text: model.reference.model.getText(), synthetic: false, document: model };
+		if (!state.document && state.text !== undefined) {
+			state.serializedText = state.text;
+			using snapshot = new TextModel(state.text);
+			state.text = snapshot.getText();
+			state.document = model;
+		}
 		if (state.text === undefined) state.text = model.reference.model.getText();
 		states.set(key, state);
 		return state;
@@ -287,7 +301,19 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 	private async fileState(resource: URI, states: Map<string, VirtualFile>): Promise<VirtualFile> {
 		const key = resource.toString();
 		const current = states.get(key);
-		if (current) return current;
+		if (current) {
+			if (current.document && current.text !== undefined) {
+				// File operations and their inverse use serialized bytes. A model snapshot omits
+				// the BOM and normalizes mixed EOLs, so an unchanged document keeps its original bytes.
+				const original = current.serializedText ?? (await this.files.readFile(resource)).content;
+				current.text = current.text === current.document.reference.model.getText()
+					? original
+					: (original.startsWith('\uFEFF') ? '\uFEFF' : '') + current.text;
+				current.serializedText = current.text;
+				delete current.document;
+			}
+			return current;
+		}
 		try {
 			const stat = await this.files.stat(resource);
 			if (stat.kind !== FileKind.File) return { exists: true, text: undefined, synthetic: false };

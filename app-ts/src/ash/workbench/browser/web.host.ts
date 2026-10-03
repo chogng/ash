@@ -10,7 +10,7 @@ import { AppServerWebWorkspaceClient } from '../services/workspaces/browser/appS
 declare const __ASH_WEB_APP_SERVER__: boolean;
 
 /** Connects a browser page to its App Server workspace before building either Workbench. */
-export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly RendererCapabilityContribution[] = []): Promise<IDisposable | undefined> {
+export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly RendererCapabilityContribution[] = [], textDocuments = false): Promise<IDisposable | undefined> {
 	if (globalThis.ashWebWorkbenchHost !== undefined || !__ASH_WEB_APP_SERVER__) return undefined;
 	let transport: AppServerWebSocketTransport | undefined;
 	try {
@@ -22,7 +22,7 @@ export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly
 		const connected = await connectWebRendererApi(transport, {
 			openerService: new BrowserOpenerService(window),
 			clipboardService: new BrowserClipboardService(window.navigator.clipboard),
-		}, {}, rendererCapabilities);
+		}, { capabilities: textDocuments ? { textDocuments: { version: 1 } } : {} }, rendererCapabilities);
 		globalThis.ashWebWorkbenchHost = {
 			api: connected.api,
 			webWorkspaceClient: new AppServerWebWorkspaceClient(endpoint, transport.sessionToken, window),

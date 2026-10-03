@@ -107,6 +107,26 @@ use crate::protocol::attachments::AttachmentImportRemoteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentMaterializeResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::common::TextDocumentsCapability;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentApplyParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentApplyResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentChangeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentContentDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentListParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentReleaseParams;
+#[cfg(any(test, feature = "export"))]
 use guardian_environment::CommandEvidence;
 #[cfg(any(test, feature = "export"))]
 use guardian_environment::CommandSource;
@@ -1348,7 +1368,6 @@ use crate::protocol::projects::ProjectSessionMutationParams;
 use crate::protocol::projects::ProjectStatusDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectSummaryDto;
-#[cfg(any(test, feature = "export"))]
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::provider::ProviderApiKeyDto;
 #[cfg(any(test, feature = "export"))]
@@ -4174,6 +4193,10 @@ macro_rules! host_methods {
 }
 
 host_methods! {
+    TextDocumentList => "textDocument/list" { params: TextDocumentListParams, response: TextDocumentListResult, },
+    TextDocumentRead => "textDocument/read" { params: TextDocumentReadParams, response: TextDocumentReadResult, },
+    TextDocumentApply => "textDocument/apply" { params: TextDocumentApplyParams, response: TextDocumentApplyResult, },
+    TextDocumentRelease => "textDocument/release" { params: TextDocumentReleaseParams, response: (), },
     BrowserCreate => "browser/create" {
         params: BrowserCreateParams,
         response: BrowserCreateResult,
@@ -4562,6 +4585,16 @@ typescript_bindings! {
     BrowserPerformResult,
     BrowserTextInputTargetDto,
     ClientCapabilities,
+    TextDocumentsCapability,
+    TextDocumentListParams,
+    TextDocumentListResult,
+    TextDocumentContentDto,
+    TextDocumentReadParams,
+    TextDocumentReadResult,
+    TextDocumentApplyParams,
+    TextDocumentApplyResult,
+    TextDocumentChangeDto,
+    TextDocumentReleaseParams,
     ServerInfo,
     CallStartParams,
     CallResourceParams,

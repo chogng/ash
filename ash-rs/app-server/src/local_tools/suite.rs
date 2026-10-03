@@ -21,9 +21,7 @@ use ash_core::ToolService;
 use ash_file_access::Authorization;
 use ash_file_access::Dir;
 use ash_file_access::Permission as DirPermission;
-use ash_file_system::FileSystem;
-use ash_file_system::FileWriteCondition;
-use ash_file_system::LocalFileSystem;
+use ash_file_system::FileTextDocuments;
 use ash_file_system::TextFileFormat;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
@@ -39,13 +37,15 @@ use ash_shell_command::CommandSessionOwner;
 use ash_shell_command::CommandSessionStart;
 use ash_shell_command::CommandSessionStatus;
 use ash_shell_command::CommandTerminalSize;
+use ash_tools::{
+    TextDocumentChange, TextDocumentEditor, TextDocumentEditorProvider, TextDocumentError,
+    TextDocumentSnapshot,
+};
 use core_api::CoreError;
 use serde_json::Value;
 use serde_json::json;
 use sha2::Digest;
 use sha2::Sha256;
-use std::collections::BTreeSet;
-use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -138,9 +138,21 @@ pub(crate) struct LocalToolSuite<B> {
     authorization: Authorization,
     grant: ash_file_access::Grant,
     dir_grants: Arc<DirGrants>,
-    read_paths: Mutex<BTreeSet<(String, PathBuf)>>,
     read_fingerprints: Mutex<std::collections::BTreeMap<(String, PathBuf), String>>,
     definitions: Vec<ToolDefinition>,
+    documents: Option<Arc<dyn TextDocumentEditorProvider>>,
+    document_reads: Mutex<std::collections::BTreeMap<(String, PathBuf), DocumentRead>>,
+}
+
+struct DocumentRead {
+    editor: Arc<dyn TextDocumentEditor>,
+    snapshot: TextDocumentSnapshot,
+}
+
+impl Drop for DocumentRead {
+    fn drop(&mut self) {
+        self.editor.release(vec![self.snapshot.id.clone()]);
+    }
 }
 
 pub(super) struct ResolvedFilePath {
@@ -179,9 +191,192 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             authorization,
             grant,
             dir_grants,
-            read_paths: Mutex::new(BTreeSet::new()),
             read_fingerprints: Mutex::new(std::collections::BTreeMap::new()),
             definitions,
+            documents: None,
+            document_reads: Mutex::new(std::collections::BTreeMap::new()),
+        }
+    }
+
+    pub(super) fn with_text_document_editor(
+        mut self,
+        documents: Arc<dyn TextDocumentEditorProvider>,
+    ) -> Self {
+        self.documents = Some(documents);
+        self
+    }
+
+    fn execute_document_tool(
+        &self,
+        call: &ToolCall,
+        scope: &str,
+        session: Option<&SessionId>,
+        thread: Option<&ThreadId>,
+        editor: Option<Arc<dyn TextDocumentEditor>>,
+        cancellation: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        let path = string_arg(&call.arguments, "path")?;
+        let reading = call.name.as_str() == "read_file";
+        let resolved = self
+            .resolve(
+                &path,
+                false,
+                session,
+                thread,
+                if reading {
+                    DirPermission::ReadFiles
+                } else {
+                    DirPermission::WriteFiles
+                },
+            )
+            .map_err(CoreError::Execution)?;
+        let editor: Arc<dyn TextDocumentEditor> = match editor {
+            Some(editor) => editor,
+            None => Arc::new(FileTextDocuments::new(resolved.root.clone())),
+        };
+        let key = (scope.to_string(), resolved.absolute.clone());
+        if reading {
+            let snapshot = editor
+                .read(&resolved.absolute, cancellation)
+                .map_err(|e| CoreError::Execution(e.to_string()))?
+                .ok_or_else(|| CoreError::Execution(format!("file not found: {path}")))?;
+            if snapshot.text.len() > MAX_READ_FILE_BYTES as usize {
+                editor.release(vec![snapshot.id]);
+                return Ok(ToolExecutionOutput::Failure(format!(
+                    "file too large to read: {path}"
+                )));
+            }
+            let output = read_output(call, &snapshot.text);
+            self.remember_read(key.clone(), &snapshot.text);
+            // One bounded lease per read target. Release RPCs run outside the cache lock.
+            let retired = {
+                let mut reads = self
+                    .document_reads
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut retired = reads
+                    .insert(key, DocumentRead { editor, snapshot })
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                while reads.len() > 128 {
+                    if let Some((_, read)) = reads.pop_first() {
+                        retired.push(read);
+                    }
+                }
+                retired
+            };
+            drop(retired);
+            return output;
+        }
+        let cached = self
+            .document_reads
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&key);
+        let read = match cached {
+            Some(read) => Some(read),
+            None => {
+                // After our own write a fresh lease is needed, but the previous content baseline
+                // still prevents silently overwriting a user's intervening edit.
+                self.resolve(&path, false, session, thread, DirPermission::ReadFiles)
+                    .map_err(CoreError::Execution)?;
+                let snapshot = editor
+                    .read(&resolved.absolute, cancellation)
+                    .map_err(|e| CoreError::Execution(e.to_string()))?;
+                snapshot.map(|snapshot| DocumentRead {
+                    editor: Arc::clone(&editor),
+                    snapshot,
+                })
+            }
+        };
+        let baseline = self
+            .read_fingerprints
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&key)
+            .cloned();
+        if let Some(read) = &read {
+            if baseline.as_ref()
+                != Some(&format!(
+                    "{:x}",
+                    Sha256::digest(read.snapshot.text.as_bytes())
+                ))
+            {
+                return Ok(ToolExecutionOutput::Failure(format!(
+                    "{path} must be read again before editing"
+                )));
+            }
+        }
+        let (text, output) = if call.name.as_str() == "write_file" {
+            let content = string_arg(&call.arguments, "content")?;
+            let format = match &read {
+                Some(read) => TextFileFormat::for_existing(&read.snapshot.text),
+                None => {
+                    TextFileFormat::for_new_file(resolved.authorization.dir(), &resolved.relative)
+                        .map_err(|e| CoreError::Execution(e.to_string()))?
+                }
+            };
+            (format.normalize(&content), format!("wrote {path}"))
+        } else {
+            let Some(read) = &read else {
+                return Ok(ToolExecutionOutput::Failure(format!(
+                    "file not found: {path}"
+                )));
+            };
+            let old = string_arg(&call.arguments, "old_string")?;
+            let new = string_arg(&call.arguments, "new_string")?;
+            let all = nullable_bool(&call.arguments, "replace_all")?.unwrap_or(false);
+            match replace_text(&path, &read.snapshot.text, &old, &new, all) {
+                Ok((text, line)) => {
+                    let excerpt = edit_excerpt(&text, line);
+                    (text, excerpt)
+                }
+                Err(message) => return Ok(ToolExecutionOutput::Failure(message)),
+            }
+        };
+        if text.len() > MAX_WRITE_FILE_BYTES {
+            return Ok(ToolExecutionOutput::Failure(
+                "file exceeds the write size limit".into(),
+            ));
+        }
+        let change = match &read {
+            Some(read) => TextDocumentChange::Update {
+                snapshot: read.snapshot.id.clone(),
+                text: text.clone(),
+            },
+            None => TextDocumentChange::Create {
+                path: resolved.absolute.clone(),
+                text: text.clone(),
+            },
+        };
+        let editor = read
+            .as_ref()
+            .map(|read| Arc::clone(&read.editor))
+            .unwrap_or(editor);
+        match editor.apply(vec![change], cancellation) {
+            Ok(()) => {}
+            Err(TextDocumentError::OutcomeUnknown(message)) => {
+                return Ok(ToolExecutionOutput::OutcomeUnknown(message));
+            }
+            Err(error) => return Ok(ToolExecutionOutput::Failure(error.to_string())),
+        }
+        self.remember_read(key, &text);
+        self.grep
+            .paths_changed(&resolved.root, &[resolved.absolute]);
+        Ok(ToolExecutionOutput::Success(output))
+    }
+
+    fn remember_read(&self, key: (String, PathBuf), text: &str) {
+        let mut fingerprints = self
+            .read_fingerprints
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        fingerprints.insert(key, format!("{:x}", Sha256::digest(text.as_bytes())));
+        while fingerprints.len() > 128 {
+            fingerprints.pop_first();
         }
     }
 
@@ -356,312 +551,13 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
         ))
     }
 
-    fn read_file(
-        &self,
-        call: &ToolCall,
-        scope: &str,
-        session_id: Option<&SessionId>,
-        thread_id: Option<&ThreadId>,
-    ) -> Result<ToolExecutionOutput, CoreError> {
-        let path = string_arg(&call.arguments, "path")?;
-        let resolved = self
-            .resolve(
-                &path,
-                false,
-                session_id,
-                thread_id,
-                DirPermission::ReadFiles,
-            )
-            .map_err(CoreError::Execution)?;
-        let metadata = fs::metadata(&resolved.absolute)
-            .map_err(|_| CoreError::Execution(format!("file not found: {path}")))?;
-        if metadata.is_dir() {
-            return Ok(ToolExecutionOutput::Failure(format!(
-                "{path} is a directory. Use glob to list its files"
-            )));
-        }
-        if metadata.len() > MAX_READ_FILE_BYTES {
-            return Ok(ToolExecutionOutput::Failure(format!(
-                "file too large to read: {path} exceeds 10485760 bytes"
-            )));
-        }
-        let bytes = LocalFileSystem::from_authorization(resolved.authorization.clone())
-            .read_file(&resolved.relative, MAX_READ_FILE_BYTES as usize)
-            .map_err(|error| CoreError::Execution(error.to_string()))?;
-        let text = match String::from_utf8(bytes) {
-            Ok(text) if !text.as_bytes().contains(&0) => text,
-            _ => {
-                return Ok(ToolExecutionOutput::Failure(format!(
-                    "{path} is a binary file and cannot be displayed as text"
-                )));
-            }
-        };
-        self.read_paths
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert((scope.into(), resolved.absolute.clone()));
-        self.read_fingerprints
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(
-                (scope.into(), resolved.absolute.clone()),
-                format!("{:x}", Sha256::digest(text.as_bytes())),
-            );
-        if text.is_empty() {
-            return Ok(ToolExecutionOutput::Success("(file is empty)".into()));
-        }
-        let lines = text.lines().collect::<Vec<_>>();
-        let offset = nullable_u64(&call.arguments, "offset")?.unwrap_or(1);
-        let limit = nullable_u64(&call.arguments, "limit")?.unwrap_or(2000);
-        if offset == 0 || limit == 0 {
-            return Err(CoreError::Execution(
-                "offset and limit must be greater than zero".into(),
-            ));
-        }
-        let start = (offset - 1) as usize;
-        let end = start.saturating_add(limit as usize).min(lines.len());
-        let mut output = lines[start.min(lines.len())..end]
-            .iter()
-            .enumerate()
-            .map(|(index, line)| format!("{:>6}\t{}", start + index + 1, truncate_line(line)))
-            .collect::<Vec<_>>();
-        if end < lines.len() {
-            output.push(format!(
-                "[... {} more lines, continue with offset={}]",
-                lines.len() - end,
-                end + 1
-            ));
-        }
-        Ok(ToolExecutionOutput::Success(output.join("\n")))
-    }
-
-    fn write_file(
-        &self,
-        call: &ToolCall,
-        scope: &str,
-        session_id: Option<&SessionId>,
-        thread_id: Option<&ThreadId>,
-    ) -> Result<ToolExecutionOutput, CoreError> {
-        let path = string_arg(&call.arguments, "path")?;
-        let content = string_arg(&call.arguments, "content")?;
-        let resolved = self
-            .resolve(
-                &path,
-                false,
-                session_id,
-                thread_id,
-                DirPermission::WriteFiles,
-            )
-            .map_err(CoreError::Execution)?;
-        if resolved.absolute.is_dir() {
-            return Ok(ToolExecutionOutput::Failure(format!(
-                "{path} is a directory"
-            )));
-        }
-        if resolved.absolute.exists()
-            && !self
-                .read_paths
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .contains(&(scope.into(), resolved.absolute.clone()))
-        {
-            return Ok(ToolExecutionOutput::Failure(format!(
-                "{path} exists but has not been read in this conversation. Read it first, or choose a new path"
-            )));
-        }
-        if let Some(parent) = resolved.relative.parent() {
-            LocalFileSystem::from_authorization(resolved.authorization.clone())
-                .create_directory(parent)
-                .map_err(|error| CoreError::Execution(error.to_string()))?;
-        }
-        let expected_revision = self
-            .read_fingerprints
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&(scope.into(), resolved.absolute.clone()))
-            .cloned();
-        if resolved.absolute.exists() && expected_revision.is_none() {
-            return Ok(ToolExecutionOutput::Failure(format!(
-                "{path} must be read again after reconnecting before it can be overwritten"
-            )));
-        }
-        let file_system = LocalFileSystem::from_authorization(resolved.authorization.clone());
-        let format = if resolved.absolute.exists() {
-            let read = self
-                .resolve(&path, true, session_id, thread_id, DirPermission::ReadFiles)
-                .map_err(CoreError::Execution)?;
-            let bytes = LocalFileSystem::from_authorization(read.authorization)
-                .read_file(&read.relative, MAX_READ_FILE_BYTES as usize)
-                .map_err(|error| CoreError::Execution(error.to_string()))?;
-            let original = String::from_utf8(bytes)
-                .map_err(|error| CoreError::Execution(error.to_string()))?;
-            TextFileFormat::for_existing(&original)
-        } else {
-            TextFileFormat::for_new_file(resolved.authorization.dir(), &resolved.relative)
-                .map_err(|error| CoreError::Execution(error.to_string()))?
-        };
-        let content = format.normalize(&content);
-        let write = match expected_revision {
-            Some(revision) => file_system.write_file_with_condition(
-                &resolved.relative,
-                content.as_bytes(),
-                MAX_WRITE_FILE_BYTES,
-                &FileWriteCondition::ExpectedRevision(revision),
-            ),
-            None => {
-                file_system.write_file(&resolved.relative, content.as_bytes(), MAX_WRITE_FILE_BYTES)
-            }
-        };
-        write.map_err(|error| CoreError::Execution(error.to_string()))?;
-        self.read_paths
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert((scope.into(), resolved.absolute.clone()));
-        self.read_fingerprints
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(
-                (scope.into(), resolved.absolute.clone()),
-                format!("{:x}", Sha256::digest(content.as_bytes())),
-            );
-        self.grep
-            .paths_changed(&resolved.root, &[resolved.absolute]);
-        Ok(ToolExecutionOutput::Success(format!("wrote {path}")))
-    }
-
-    fn edit(
-        &self,
-        call: &ToolCall,
-        scope: &str,
-        session_id: Option<&SessionId>,
-        thread_id: Option<&ThreadId>,
-    ) -> Result<ToolExecutionOutput, CoreError> {
-        let path = string_arg(&call.arguments, "path")?;
-        let old = string_arg(&call.arguments, "old_string")?;
-        let new = string_arg(&call.arguments, "new_string")?;
-        let replace_all = nullable_bool(&call.arguments, "replace_all")?.unwrap_or(false);
-        if old == new {
-            return Ok(ToolExecutionOutput::Failure(
-                "new_string must differ from old_string".into(),
-            ));
-        }
-        let resolved = self
-            .resolve(
-                &path,
-                false,
-                session_id,
-                thread_id,
-                DirPermission::WriteFiles,
-            )
-            .map_err(CoreError::Execution)?;
-        if !self
-            .read_paths
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .contains(&(scope.into(), resolved.absolute.clone()))
-        {
-            return Ok(ToolExecutionOutput::Failure(format!(
-                "{path} has not been read in this conversation. Read it first"
-            )));
-        }
-        let read = self
-            .resolve(&path, true, session_id, thread_id, DirPermission::ReadFiles)
-            .map_err(CoreError::Execution)?;
-        let bytes = LocalFileSystem::from_authorization(read.authorization)
-            .read_file(&read.relative, MAX_READ_FILE_BYTES as usize)
-            .map_err(|error| CoreError::Execution(error.to_string()))?;
-        let text =
-            String::from_utf8(bytes).map_err(|error| CoreError::Execution(error.to_string()))?;
-        if let Some(expected) = self
-            .read_fingerprints
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&(scope.into(), resolved.absolute.clone()))
-            && expected != &format!("{:x}", Sha256::digest(text.as_bytes()))
-        {
-            return Ok(ToolExecutionOutput::Failure(format!(
-                "{path} changed on disk after your last read. Read it again before editing"
-            )));
-        }
-        let format = TextFileFormat::for_existing(&text);
-        let old = format.normalize_fragment(&old);
-        let new = format.normalize_fragment(&new);
-        if old == new {
-            return Ok(ToolExecutionOutput::Failure(
-                "new_string must differ from old_string".into(),
-            ));
-        }
-        let matches = TextFileFormat::matching_ranges(&text, &old);
-        let count = matches.len();
-        if count == 0 {
-            return Ok(ToolExecutionOutput::Failure(format!(
-                "old_string not found in {path}. Re-read the file: the content may differ from what you expect (check whitespace and indentation)"
-            )));
-        }
-        if count > 1 && !replace_all {
-            return Ok(ToolExecutionOutput::Failure(format!(
-                "old_string matches {count} locations in {path}. Extend it with more surrounding context to make it unique, or set replace_all to true"
-            )));
-        }
-        let replacement_line = text[..matches[0].start].lines().count().max(1);
-        let mut replaced = String::new();
-        let mut cursor = 0;
-        for range in matches
-            .into_iter()
-            .take(if replace_all { count } else { 1 })
-        {
-            replaced.push_str(&text[cursor..range.start]);
-            replaced.push_str(&new);
-            cursor = range.end;
-        }
-        replaced.push_str(&text[cursor..]);
-        let replaced = format.finish_edit(replaced);
-        let Some(expected_revision) = self
-            .read_fingerprints
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&(scope.into(), resolved.absolute.clone()))
-            .cloned()
-        else {
-            return Ok(ToolExecutionOutput::Failure(format!(
-                "{path} must be read again after reconnecting before it can be edited"
-            )));
-        };
-        LocalFileSystem::from_authorization(resolved.authorization.clone())
-            .write_file_with_condition(
-                &resolved.relative,
-                replaced.as_bytes(),
-                MAX_WRITE_FILE_BYTES,
-                &FileWriteCondition::ExpectedRevision(expected_revision),
-            )
-            .map_err(|error| CoreError::Execution(error.to_string()))?;
-        self.read_fingerprints
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(
-                (scope.into(), resolved.absolute.clone()),
-                format!("{:x}", Sha256::digest(replaced.as_bytes())),
-            );
-        self.grep
-            .paths_changed(&resolved.root, &[resolved.absolute]);
-        let lines = replaced.lines().collect::<Vec<_>>();
-        let excerpt_start = replacement_line.saturating_sub(5);
-        let excerpt_end = excerpt_start.saturating_add(9).min(lines.len());
-        let excerpt = lines[excerpt_start..excerpt_end]
-            .iter()
-            .enumerate()
-            .map(|(index, line)| format!("{:>6}\t{}", excerpt_start + index + 1, line))
-            .collect::<Vec<_>>()
-            .join("\n");
-        Ok(ToolExecutionOutput::Success(excerpt))
-    }
-
     fn grep(
         &self,
         call: &ToolCall,
         cancellation: &CancellationToken,
         session_id: Option<&SessionId>,
         thread_id: Option<&ThreadId>,
+        editor: Option<&dyn TextDocumentEditor>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let pattern = string_arg(&call.arguments, "pattern")?;
         let path = nullable_string(&call.arguments, "path")?.unwrap_or_else(|| {
@@ -682,8 +578,22 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .map_err(CoreError::Execution)?;
         let glob = nullable_string(&call.arguments, "glob")?;
         let insensitive = nullable_bool(&call.arguments, "case_insensitive")?.unwrap_or(false);
+        let documents = editor
+            .map(|editor| editor.open_documents(resolved.root.canonical_path(), cancellation))
+            .transpose()
+            .map_err(|error| CoreError::Execution(error.to_string()))?
+            .map(|documents| {
+                documents
+                    .into_iter()
+                    .map(|document| grep::DocumentContent {
+                        path: document.path,
+                        text: document.text,
+                    })
+                    .collect::<Vec<_>>()
+            });
         super::grep_output::execute(
             self.grep.as_ref(),
+            documents.as_deref(),
             pattern,
             &resolved,
             glob,
@@ -1113,20 +1023,40 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         let identity = facts.execution_identity().ok_or_else(|| {
             CoreError::Execution("local tools require durable caller identity".into())
         })?;
-        let scope = identity.thread_id().to_string();
+        let scope = format!("{}:{}", identity.thread_id(), identity.turn_id());
         let session_id = identity.session_id();
-        for path in facts.read_paths() {
-            if let Ok(resolved) = self.resolve(
-                &path.display().to_string(),
-                true,
-                Some(session_id),
-                Some(identity.thread_id()),
-                DirPermission::InspectRepository,
-            ) {
-                self.read_paths
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert((scope.clone(), resolved.absolute));
+        if matches!(
+            call.name.as_str(),
+            "read_file" | "write_file" | "edit" | "grep"
+        ) {
+            if let Some(provider) = &self.documents {
+                let editor = provider
+                    .for_turn(identity.thread_id(), identity.turn_id())
+                    .map_err(|error| CoreError::Execution(error.to_string()))?;
+                if let Some(editor) = editor {
+                    let output = if call.name.as_str() == "grep" {
+                        self.grep(
+                            call,
+                            cancellation,
+                            Some(session_id),
+                            Some(identity.thread_id()),
+                            Some(editor.as_ref()),
+                        )?
+                    } else {
+                        self.execute_document_tool(
+                            call,
+                            &scope,
+                            Some(session_id),
+                            Some(identity.thread_id()),
+                            Some(editor),
+                            cancellation,
+                        )?
+                    };
+                    if let ToolExecutionOutput::Success(text) = &output {
+                        sink.emit(ToolOutputStream::Stdout, text.clone())?;
+                    }
+                    return Ok(output);
+                }
             }
         }
         let output = self.execute_scoped(
@@ -1283,10 +1213,10 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         match call.name.as_str() {
-            "read_file" => self.read_file(call, scope, session_id, thread_id),
-            "write_file" => self.write_file(call, scope, session_id, thread_id),
-            "edit" => self.edit(call, scope, session_id, thread_id),
-            "grep" => self.grep(call, cancellation, session_id, thread_id),
+            "read_file" | "write_file" | "edit" => {
+                self.execute_document_tool(call, scope, session_id, thread_id, None, cancellation)
+            }
+            "grep" => self.grep(call, cancellation, session_id, thread_id, None),
             "glob" => self.glob(call, cancellation, session_id, thread_id),
             _ => Ok(ToolExecutionOutput::Failure(format!(
                 "tool is not available: {}",
@@ -1494,4 +1424,86 @@ pub(super) fn limit_matches(output: &str, line_limit: usize) -> String {
         result.push_str(&format!("\n[{total} matches, showing first 100]"));
     }
     result
+}
+
+fn read_output(call: &ToolCall, text: &str) -> Result<ToolExecutionOutput, CoreError> {
+    if text.is_empty() {
+        return Ok(ToolExecutionOutput::Success("(file is empty)".into()));
+    }
+    let lines = text.lines().collect::<Vec<_>>();
+    let offset = nullable_u64(&call.arguments, "offset")?.unwrap_or(1);
+    let limit = nullable_u64(&call.arguments, "limit")?.unwrap_or(2000);
+    if offset == 0 || limit == 0 {
+        return Err(CoreError::Execution(
+            "offset and limit must be greater than zero".into(),
+        ));
+    }
+    let start = (offset - 1) as usize;
+    let end = start.saturating_add(limit as usize).min(lines.len());
+    let mut output = lines[start.min(lines.len())..end]
+        .iter()
+        .enumerate()
+        .map(|(index, line)| format!("{:>6}\t{}", start + index + 1, truncate_line(line)))
+        .collect::<Vec<_>>();
+    if end < lines.len() {
+        output.push(format!(
+            "[... {} more lines, continue with offset={}]",
+            lines.len() - end,
+            end + 1
+        ));
+    }
+    Ok(ToolExecutionOutput::Success(output.join("\n")))
+}
+
+fn replace_text(
+    path: &str,
+    text: &str,
+    old: &str,
+    new: &str,
+    replace_all: bool,
+) -> Result<(String, usize), String> {
+    let format = TextFileFormat::for_existing(&text);
+    let old = format.normalize_fragment(&old);
+    let new = format.normalize_fragment(&new);
+    if old == new {
+        return Err("new_string must differ from old_string".into());
+    }
+    let matches = TextFileFormat::matching_ranges(&text, &old);
+    let count = matches.len();
+    if count == 0 {
+        return Err(format!(
+            "old_string not found in {path}. Re-read the file: the content may differ from what you expect (check whitespace and indentation)"
+        ));
+    }
+    if count > 1 && !replace_all {
+        return Err(format!(
+            "old_string matches {count} locations in {path}. Extend it with more surrounding context to make it unique, or set replace_all to true"
+        ));
+    }
+    let replacement_line = text[..matches[0].start].lines().count().max(1);
+    let mut replaced = String::new();
+    let mut cursor = 0;
+    for range in matches
+        .into_iter()
+        .take(if replace_all { count } else { 1 })
+    {
+        replaced.push_str(&text[cursor..range.start]);
+        replaced.push_str(&new);
+        cursor = range.end;
+    }
+    replaced.push_str(&text[cursor..]);
+    let replaced = format.finish_edit(replaced);
+    Ok((replaced, replacement_line))
+}
+
+fn edit_excerpt(text: &str, line: usize) -> String {
+    let lines = text.lines().collect::<Vec<_>>();
+    let start = line.saturating_sub(5).min(lines.len());
+    let end = start.saturating_add(9).min(lines.len());
+    lines[start..end]
+        .iter()
+        .enumerate()
+        .map(|(i, line)| format!("{:>6}\t{}", start + i + 1, line))
+        .collect::<Vec<_>>()
+        .join("\n")
 }

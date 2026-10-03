@@ -245,6 +245,20 @@ impl AppServer {
                 return Err(RpcError::new(-32603, AppServerErrorName::InternalError));
             }
         }
+        if params
+            .capabilities
+            .text_documents
+            .as_ref()
+            .is_some_and(|capability| capability.version != 1)
+        {
+            self.browser_host.unregister(connection.connection_id);
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        self.client_host.register(
+            connection.connection_id,
+            params.capabilities.text_documents.is_some(),
+            connection.outbound_notifications.clone(),
+        );
         connection.set_initialized();
         let (file_system, git, content_search, codebase, cloud_codebase, terminal, debug_adapter) =
             self.env_features();
@@ -292,7 +306,10 @@ impl AppServer {
             ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
         );
         if self.assets.is_some() {
-            capabilities.contracts.insert("assets".into(), ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 });
+            capabilities.contracts.insert(
+                "assets".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
         }
         if self.home.is_some() {
             capabilities.contracts.insert(
@@ -1388,35 +1405,52 @@ impl AppServer {
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         let is_workflow = workflow.is_some();
         let mut workflow_child = None;
-        let receipt = self
-            .browser_host
-            .submit_turn(&thread_id, mutation.connection_id, || {
-                let request = core_api::SubmitTurnRequest {
-                    mode,
-                    command_id: mutation.command_id,
-                    expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                    model,
-                    reasoning_effort,
-                    advisor,
-                    kind,
-                    instructions,
-                    approval_mode,
-                    tool_mode,
-                    activated_skills,
-                    input,
-                };
-                if let Some(command) = workflow {
-                    let result = self.submit_workflow(&thread_id, command, request)?;
-                    workflow_child = result.child;
-                    Ok(core_api::TurnReceipt {
-                        turn_id: result.turn_id,
-                        sequence: result.sequence,
-                    })
-                } else {
-                    self.agent_runtime().submit_turn(&thread_id, request)
-                }
-            })
-            .map_err(core_error)?;
+        let document_mode = if self
+            .git_turn_changes
+            .as_ref()
+            .and_then(|runtime| runtime.binding(&thread_id))
+            .is_some_and(|binding| binding.checkout_root() != binding.source_repository_root())
+        {
+            crate::client_host::TextDocumentMode::FileSystem
+        } else {
+            crate::client_host::TextDocumentMode::Client
+        };
+        let request = core_api::SubmitTurnRequest {
+            mode,
+            command_id: mutation.command_id,
+            expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
+            model,
+            reasoning_effort,
+            advisor,
+            kind,
+            instructions,
+            approval_mode,
+            tool_mode,
+            activated_skills,
+            input,
+        };
+        let receipt = if let Some(command) = workflow {
+            let result = self
+                .submit_workflow(
+                    &thread_id,
+                    command,
+                    request,
+                    mutation.connection_id,
+                    document_mode,
+                )
+                .map_err(core_error)?;
+            workflow_child = result.child;
+            core_api::TurnReceipt {
+                turn_id: result.turn_id,
+                sequence: result.sequence,
+            }
+        } else {
+            self.agent_runtime()
+                .submit_turn_with_admission(&thread_id, request, |thread, request| {
+                    self.admit_bound_turn(thread, request, mutation.connection_id, document_mode)
+                })
+                .map_err(core_error)?
+        };
         if is_workflow {
             self.notify_thread_updates(&thread_id, thread_before.sequence)?;
             if let Some(child) = workflow_child {

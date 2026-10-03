@@ -317,3 +317,17 @@ test("disposable guards and borrowed references keep ownership explicit", () => 
 	assert.equal(isDisposable(null), false);
 	assert.doesNotThrow(() => reference.dispose());
 });
+
+test('DisposableMap clears connection resources and remains reusable', () => {
+	using map = new DisposableMap<string>();
+	const disposed: string[] = [];
+	map.set('a', toDisposable(() => disposed.push('a')));
+	map.set('b', toDisposable(() => disposed.push('b')));
+	map.clearAndDisposeAll();
+	assert.equal(map.size, 0);
+	assert.deepEqual(disposed, ['b', 'a']);
+	map.set('next', toDisposable(() => disposed.push('next')));
+	assert.equal(map.size, 1);
+	map.deleteAndDispose('next');
+	assert.deepEqual(disposed, ['b', 'a', 'next']);
+});

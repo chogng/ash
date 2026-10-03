@@ -1,4 +1,6 @@
-import type { WorkbenchModeId } from "../common/workbenchMode.js";
+import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
+import { AppServerTextDocumentHost } from '../services/textfile/browser/appServerTextDocumentHost.js';
+import { WorkbenchModeId } from "../common/workbenchMode.js";
 import type { RendererCapabilityContribution } from "../../platform/app-server/browser/webRendererApi.js";
 import { BrowserClipboardService } from "../../platform/clipboard/browser/clipboardService.js";
 import { startWebWorkbench } from "./web.factory.js";
@@ -14,8 +16,9 @@ export function startBrowserWorkbench(modeId: WorkbenchModeId, rendererCapabilit
 async function startBrowserWorkbenchAsync(modeId: WorkbenchModeId, rendererCapabilities: readonly RendererCapabilityContribution[]): Promise<void> {
 	let connectedHost: IDisposable | undefined;
 	try {
-		connectedHost = await connectBrowserWorkbenchHost(rendererCapabilities);
-		await startWebWorkbench(modeId, connectedHost);
+		let documentClient: AppServerProtocolClient | undefined;
+		connectedHost = await connectBrowserWorkbenchHost([...rendererCapabilities, client => { documentClient = client; return {}; }], modeId === WorkbenchModeId.Code);
+		await startWebWorkbench(modeId, connectedHost, documentClient && modeId === WorkbenchModeId.Code ? services => services.createInstance(AppServerTextDocumentHost, documentClient!) : undefined);
 	} catch (error) {
 		connectedHost?.dispose();
 		showStartupError(error, text => new BrowserClipboardService(window.navigator.clipboard).writeText(text));

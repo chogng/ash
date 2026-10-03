@@ -13,11 +13,6 @@ use ash_app_server_protocol::protocol::browser::BrowserPerformResult;
 use ash_app_server_protocol::protocol::browser::BrowserTextInputTargetDto;
 use ash_app_server_protocol::protocol::common::BrowserCapability as ClientBrowserCapability;
 use ash_app_server_protocol::protocol::registry::HostMethod;
-use ash_app_server_protocol::rpc::JsonRpcError;
-use ash_app_server_protocol::rpc::JsonRpcId;
-use ash_app_server_protocol::rpc::JsonRpcNotification;
-use ash_app_server_protocol::rpc::JsonRpcRequest;
-use ash_app_server_protocol::rpc::JsonRpcResponse;
 use ash_async_utils::CancellationToken;
 use base64::Engine;
 use core_api::BrowserAction;
@@ -33,19 +28,12 @@ use core_api::CreateBrowserTargetRequest;
 use core_api::CreateBrowserTargetResult;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use serde_json::Value;
 use std::collections::BTreeMap;
-use std::collections::VecDeque;
 use std::collections::btree_map::Entry;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::mpsc;
 use std::time::Duration;
-use std::time::Instant;
 
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-const CANCELLATION_POLL: Duration = Duration::from_millis(50);
-const RETIRED_REQUEST_LIMIT: usize = 1_024;
 const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
 
 #[derive(Default)]
@@ -53,91 +41,31 @@ struct BrowserHostState {
     owners: BTreeMap<u64, BrowserHostOwner>,
     owner_revision: u64,
     target_owners: BTreeMap<String, u64>,
-    pending: BTreeMap<String, PendingRequest>,
-    retired: BTreeMap<String, RetiredRequest>,
-    retired_order: VecDeque<String>,
-    next_request_id: u64,
-}
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum RetiredRequest {
-    Completed,
-    Abandoned,
-}
-
-impl BrowserHostState {
-    fn retire(&mut self, request_id: String, outcome: RetiredRequest) {
-        self.retired.insert(request_id.clone(), outcome);
-        self.retired_order.push_back(request_id);
-        while self.retired_order.len() > RETIRED_REQUEST_LIMIT {
-            if let Some(oldest) = self.retired_order.pop_front() {
-                self.retired.remove(&oldest);
-            }
-        }
-    }
 }
 
 struct BrowserHostOwner {
     capability: ClientBrowserCapability,
-    outbound: NotificationQueue,
-}
-
-struct PendingRequest {
-    connection_id: u64,
-    sender: mpsc::SyncSender<Result<Value, BrowserError>>,
-}
-
-// A response removes the registration before waking the caller. Every other exit must retire
-// it so late responses remain valid and the client receives cancellation exactly once.
-struct PendingRequestGuard<'a> {
-    host: &'a BrowserHost,
-    owner: u64,
-    request_id: &'a str,
-}
-
-impl Drop for PendingRequestGuard<'_> {
-    fn drop(&mut self) {
-        self.host.cancel_request(self.owner, self.request_id);
-    }
 }
 
 /// Routes semantic Core browser requests to the exact capable client connection and target owner.
 pub(crate) struct BrowserHost {
     state: Arc<Mutex<BrowserHostState>>,
     resources: Arc<Mutex<ResourceStore>>,
-    turns: Arc<Mutex<BTreeMap<(ash_protocol::ThreadId, ash_protocol::TurnId), u64>>>,
+    pub(crate) clients: Arc<crate::client_host::ClientHost>,
     owner: Option<u64>,
 }
 
 impl BrowserHost {
-    pub(crate) fn new(resources: Arc<Mutex<ResourceStore>>) -> Self {
+    pub(crate) fn new(
+        resources: Arc<Mutex<ResourceStore>>,
+        clients: Arc<crate::client_host::ClientHost>,
+    ) -> Self {
         Self {
             state: Arc::new(Mutex::new(BrowserHostState::default())),
             resources,
-            turns: Arc::new(Mutex::new(BTreeMap::new())),
+            clients,
             owner: None,
         }
-    }
-
-    /// Hold the binding gate until submission returns its durable Turn identity.
-    /// Tool workers cannot race ahead of the originating connection binding.
-    pub(crate) fn submit_turn(
-        &self,
-        thread: &ash_protocol::ThreadId,
-        connection: Option<u64>,
-        submit: impl FnOnce() -> Result<core_api::TurnReceipt, core_api::CoreError>,
-    ) -> Result<core_api::TurnReceipt, core_api::CoreError> {
-        let mut turns = self
-            .turns
-            .lock()
-            .map_err(|_| core_api::CoreError::Execution("browser binding lock poisoned".into()))?;
-        let receipt = submit()?;
-        if let Some(connection) = connection {
-            turns
-                .entry((thread.clone(), receipt.turn_id.clone()))
-                .or_insert(connection);
-        }
-        Ok(receipt)
     }
 
     pub(crate) fn for_turn(
@@ -146,16 +74,15 @@ impl BrowserHost {
         turn: &ash_protocol::TurnId,
     ) -> Result<Self, BrowserError> {
         let owner = self
-            .turns
-            .lock()
-            .map_err(|_| BrowserError::CapabilityUnavailable)?
-            .get(&(thread.clone(), turn.clone()))
-            .copied()
-            .ok_or(BrowserError::CapabilityUnavailable)?;
+            .clients
+            .binding(thread, turn)
+            .map_err(browser_host_error)?
+            .ok_or(BrowserError::CapabilityUnavailable)?
+            .connection_id;
         let scoped = Self {
             state: Arc::clone(&self.state),
             resources: Arc::clone(&self.resources),
-            turns: Arc::clone(&self.turns),
+            clients: Arc::clone(&self.clients),
             owner: Some(owner),
         };
         scoped.create_owner()?;
@@ -169,52 +96,30 @@ impl BrowserHost {
         outbound: NotificationQueue,
     ) {
         self.unregister(connection_id);
+        self.clients
+            .register(connection_id, false, outbound.clone());
         let mut state = self
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        state.owners.insert(
-            connection_id,
-            BrowserHostOwner {
-                capability,
-                outbound,
-            },
-        );
+        state
+            .owners
+            .insert(connection_id, BrowserHostOwner { capability });
         state.owner_revision = state.owner_revision.wrapping_add(1);
     }
 
     pub(crate) fn unregister(&self, connection_id: u64) {
-        self.turns
+        self.clients.unregister(connection_id);
+        let mut state = self
+            .state
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .retain(|_, owner| *owner != connection_id);
-        let pending = {
-            let mut state = self
-                .state
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if state.owners.remove(&connection_id).is_some() {
-                state.owner_revision = state.owner_revision.wrapping_add(1);
-            }
-            state
-                .target_owners
-                .retain(|_, owner| *owner != connection_id);
-            let request_ids = state
-                .pending
-                .iter()
-                .filter(|(_, pending)| pending.connection_id == connection_id)
-                .map(|(request_id, _)| request_id.clone())
-                .collect::<Vec<_>>();
-            request_ids
-                .into_iter()
-                .filter_map(|request_id| state.pending.remove(&request_id))
-                .collect::<Vec<_>>()
-        };
-        for pending in pending {
-            let _ = pending
-                .sender
-                .send(Err(BrowserError::CapabilityUnavailable));
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if state.owners.remove(&connection_id).is_some() {
+            state.owner_revision = state.owner_revision.wrapping_add(1);
         }
+        state
+            .target_owners
+            .retain(|_, owner| *owner != connection_id);
     }
 
     pub(crate) fn owner_availability(&self) -> (u64, bool) {
@@ -231,55 +136,6 @@ impl BrowserHost {
         )
     }
 
-    pub(crate) fn handle_response(
-        &self,
-        connection_id: u64,
-        message: Value,
-    ) -> Result<bool, String> {
-        let Some(request_id) = message
-            .get("id")
-            .and_then(Value::as_str)
-            .filter(|request_id| request_id.starts_with("browser-host:"))
-            .map(str::to_owned)
-        else {
-            return Ok(false);
-        };
-        let response = serde_json::from_value::<JsonRpcResponse<Value, JsonRpcError>>(message)
-            .map_err(|error| format!("invalid browser host response: {error}"))?;
-        let pending = {
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|_| "browser host state lock poisoned".to_string())?;
-            let Some(pending) = state.pending.get(&request_id) else {
-                return match state.retired.get(&request_id) {
-                    Some(RetiredRequest::Abandoned) => Ok(true),
-                    Some(RetiredRequest::Completed) => {
-                        Err(format!("duplicate browser host response: {request_id}"))
-                    }
-                    None => Err(format!(
-                        "browser host response has unknown request ID: {request_id}"
-                    )),
-                };
-            };
-            if pending.connection_id != connection_id {
-                return Err("browser host response came from a non-owning connection".into());
-            }
-            let pending = state
-                .pending
-                .remove(&request_id)
-                .expect("browser host pending request was checked while locked");
-            state.retire(request_id.clone(), RetiredRequest::Completed);
-            pending
-        };
-        let result = match response {
-            JsonRpcResponse::Success(success) => Ok(success.result),
-            JsonRpcResponse::Failure(failure) => Err(host_error(failure.error)),
-        };
-        let _ = pending.sender.send(result);
-        Ok(true)
-    }
-
     fn request<P: Serialize, R: DeserializeOwned>(
         &self,
         owner: u64,
@@ -287,93 +143,9 @@ impl BrowserHost {
         params: &P,
         cancellation: &CancellationToken,
     ) -> Result<R, BrowserError> {
-        cancellation
-            .check()
-            .map_err(|signal| BrowserError::Cancelled(signal.reason().to_string()))?;
-        let params = serde_json::to_value(params)
-            .map_err(|error| BrowserError::Failed(error.to_string()))?;
-        let (sender, receiver) = mpsc::sync_channel(1);
-        let (request_id, outbound) = {
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|_| BrowserError::Failed("browser host state lock poisoned".into()))?;
-            let outbound = state
-                .owners
-                .get(&owner)
-                .map(|owner| owner.outbound.clone())
-                .ok_or(BrowserError::CapabilityUnavailable)?;
-            state.next_request_id = state
-                .next_request_id
-                .checked_add(1)
-                .ok_or_else(|| BrowserError::Failed("browser host request ID exhausted".into()))?;
-            let request_id = format!("browser-host:{owner}:{}", state.next_request_id);
-            state.pending.insert(
-                request_id.clone(),
-                PendingRequest {
-                    connection_id: owner,
-                    sender,
-                },
-            );
-            (request_id, outbound)
-        };
-        let _registration = PendingRequestGuard {
-            host: self,
-            owner,
-            request_id: &request_id,
-        };
-        let request = JsonRpcRequest::new(
-            JsonRpcId::String(request_id.clone()),
-            method.as_str().into(),
-            params,
-        );
-        outbound.push(
-            serde_json::to_value(request)
-                .map_err(|error| BrowserError::Failed(error.to_string()))?,
-        );
-
-        let deadline = Instant::now() + REQUEST_TIMEOUT;
-        let value = loop {
-            match receiver.recv_timeout(CANCELLATION_POLL) {
-                Ok(result) => break result?,
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    break Err(BrowserError::CapabilityUnavailable)?;
-                }
-                Err(mpsc::RecvTimeoutError::Timeout) => {}
-            }
-            if let Err(signal) = cancellation.check() {
-                return Err(BrowserError::Cancelled(signal.reason().to_string()));
-            }
-            if Instant::now() >= deadline {
-                return Err(BrowserError::TimedOut);
-            }
-        };
-        serde_json::from_value(value).map_err(|error| {
-            BrowserError::Failed(format!("invalid {} result: {error}", method.as_str()))
-        })
-    }
-
-    fn cancel_request(&self, owner: u64, request_id: &str) {
-        let outbound = {
-            let mut state = self
-                .state
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if state.pending.remove(request_id).is_none() {
-                return;
-            }
-            state.retire(request_id.to_owned(), RetiredRequest::Abandoned);
-            state.owners.get(&owner).map(|owner| owner.outbound.clone())
-        };
-        if let Some(outbound) = outbound {
-            let notification = JsonRpcNotification::new(
-                "$/cancelRequest".into(),
-                serde_json::json!({ "id": request_id }),
-            );
-            if let Ok(value) = serde_json::to_value(notification) {
-                outbound.push(value);
-            }
-        }
+        self.clients
+            .request(owner, method, params, cancellation)
+            .map_err(browser_host_error)
     }
 
     fn create_owner(&self) -> Result<u64, BrowserError> {
@@ -665,13 +437,14 @@ fn browser_action_dto(action: BrowserAction) -> BrowserPerformActionDto {
     }
 }
 
-fn host_error(error: JsonRpcError) -> BrowserError {
-    if error.message.contains("BrowserTargetUnavailable") {
-        BrowserError::Failed("browser target became unavailable".into())
-    } else if error.code == -32800 {
-        BrowserError::Cancelled(error.message)
-    } else {
-        BrowserError::Failed(error.message)
+fn browser_host_error(error: crate::client_host::ClientHostError) -> BrowserError {
+    match error {
+        crate::client_host::ClientHostError::CapabilityUnavailable => {
+            BrowserError::CapabilityUnavailable
+        }
+        crate::client_host::ClientHostError::Cancelled(message) => BrowserError::Cancelled(message),
+        crate::client_host::ClientHostError::TimedOut => BrowserError::TimedOut,
+        crate::client_host::ClientHostError::Failed(message) => BrowserError::Failed(message),
     }
 }
 

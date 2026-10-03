@@ -427,3 +427,55 @@ fn revoking_directory_authorization_cancels_jobs_and_blocks_further_reads() {
         Err(JobError::Unavailable)
     );
 }
+
+#[test]
+fn unsaved_documents_replace_disk_matches_without_starving_search_limits() {
+    let (_temporary, dir) = fixture();
+    fs::write(dir.canonical_path().join("a.rs"), "needle\n".repeat(110)).unwrap();
+    fs::write(dir.canonical_path().join("b.rs"), "needle on disk\n").unwrap();
+    fs::write(dir.canonical_path().join("c.txt"), "needle excluded\n").unwrap();
+    let service = Service::new(Backend::Ripgrep, ripgrep(), None).unwrap();
+    let token = CancellationSource::new().token();
+    let documents = vec![
+        DocumentContent {
+            path: dir.canonical_path().join("a.rs"),
+            text: "removed matches\n".into(),
+        },
+        DocumentContent {
+            path: dir.canonical_path().join("c.txt"),
+            text: "needle unsaved\n".into(),
+        },
+    ];
+    for backend in [Backend::Ripgrep, Backend::Tgrep] {
+        service.configure(backend).unwrap();
+        let mut q = query("needle");
+        q.max_results = 1;
+        q.include_patterns = vec!["*.rs".into()];
+        let result = service
+            .search_with_documents(&dir, &q, &documents, &token)
+            .unwrap();
+        assert_eq!(
+            result
+                .matches
+                .iter()
+                .map(|found| (found.path.as_path(), found.content.as_str()))
+                .collect::<Vec<_>>(),
+            [(Path::new("b.rs"), "needle on disk")]
+        );
+        assert!(!result.limit_hit);
+        q.include_patterns.clear();
+        q.scope = "c.txt".into();
+        let result = service
+            .search_with_documents(&dir, &q, &documents, &token)
+            .unwrap();
+        assert_eq!(result.matches[0].content, "needle unsaved");
+        q.exclude_patterns = vec!["c.txt".into()];
+        assert!(
+            service
+                .search_with_documents(&dir, &q, &documents, &token)
+                .unwrap()
+                .matches
+                .is_empty()
+        );
+    }
+}

@@ -144,6 +144,7 @@ pub(crate) fn compose_local_tools_with_config(
     grep: Arc<grep::Service>,
     file_search: Arc<file_search::Service>,
     pty_helper: Option<&std::path::PathBuf>,
+    documents: Option<Arc<dyn ash_tools::TextDocumentEditorProvider>>,
 ) -> Result<LocalToolComposition, LocalToolError> {
     let authorization = grant
         .authorize(DirPermission::ExecuteCommands)
@@ -185,14 +186,16 @@ pub(crate) fn compose_local_tools_with_config(
         )
         .map_err(LocalToolError::definition)?,
     );
-    let apply_patch_executor: Arc<dyn ash_tools::ToolExecutor> = Arc::new(
-        ApplyPatchTool::new(
-            environment_id.clone(),
-            authorization.dir().clone(),
-            ApplyPatchLimits::default(),
-        )
-        .map_err(LocalToolError::definition)?,
-    );
+    let mut apply_patch = ApplyPatchTool::new(
+        environment_id.clone(),
+        authorization.dir().clone(),
+        ApplyPatchLimits::default(),
+    )
+    .map_err(LocalToolError::definition)?;
+    if let Some(documents) = &documents {
+        apply_patch = apply_patch.with_text_document_editor(Arc::clone(documents));
+    }
+    let apply_patch_executor: Arc<dyn ash_tools::ToolExecutor> = Arc::new(apply_patch);
     let policy = LocalShellPolicy {
         exec_policy,
         action_policy_revision: action_policy_revision.clone(),
@@ -204,7 +207,10 @@ pub(crate) fn compose_local_tools_with_config(
         action_policy_revision.clone(),
         shell_policy,
     )?;
-    let service = LocalToolSuite::new(shell, grep, file_search, dir_grants, grant);
+    let mut service = LocalToolSuite::new(shell, grep, file_search, dir_grants, grant);
+    if let Some(documents) = documents {
+        service = service.with_text_document_editor(documents);
+    }
     Ok(LocalToolComposition {
         tools: Arc::new(service),
         policy: Arc::new(policy),

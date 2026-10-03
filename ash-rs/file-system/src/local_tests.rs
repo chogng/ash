@@ -503,6 +503,30 @@ fn creates_renames_overwrites_and_deletes_dir_files() {
     assert!(!dir.path.join("created.txt").exists());
 }
 
+#[test]
+fn file_creation_builds_missing_parents_without_overwriting_an_existing_target() {
+    let dir = TestDir::new();
+    let file_system = dir.file_system();
+    let path = Path::new("missing/nested/created.txt");
+    file_system
+        .create_file(path, ExistingTargetBehavior::Error)
+        .unwrap();
+    assert_eq!(fs::read(dir.path.join(path)).unwrap(), b"");
+    fs::write(dir.path.join(path), b"user content").unwrap();
+    assert!(matches!(
+        file_system.create_file(path, ExistingTargetBehavior::Error),
+        Err(FileSystemError::AlreadyExists(_))
+    ));
+    assert_eq!(fs::read(dir.path.join(path)).unwrap(), b"user content");
+    assert!(matches!(
+        file_system.create_file(
+            Path::new("../outside/new.txt"),
+            ExistingTargetBehavior::Error
+        ),
+        Err(FileSystemError::InvalidPath(_))
+    ));
+}
+
 #[cfg(unix)]
 #[test]
 fn preserves_existing_file_permissions_during_replacement() {

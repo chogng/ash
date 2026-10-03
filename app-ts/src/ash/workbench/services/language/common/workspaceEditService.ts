@@ -14,3 +14,6 @@ export interface IWorkspaceEditService {
 }
 
 export const IWorkspaceEditService = createServiceIdentifier<IWorkspaceEditService>("workspaceEditService");
+
+/** A captured document version or content no longer matches the shared model. */
+export class WorkspaceEditConflictError extends Error {}

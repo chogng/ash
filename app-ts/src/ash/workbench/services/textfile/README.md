@@ -74,4 +74,39 @@ recovery tests.
 
 Clean external reloads apply model edits and EOL changes in one undo step, keeping earlier saved edits undoable. Explicit revert still clears the discarded history. The persisted baseline uses the model's normalized text, so mixed line endings do not mark a freshly reloaded document dirty. Saves use the model EOL, including a deliberate user change to LF or CRLF.
 
-Agent file tools currently read and write disk in Rust. They do not yet use the frontend document editing interface and cannot observe unsaved text. The frontend already supplies shared model references and `IWorkspaceEditService` for versioned edits, open working copies and undo. Connecting Agent tools requires a generated, connection-bound document request protocol; frontend code must not call Rust tool implementations, and Rust must not access frontend model objects.
+## Agent document requests
+
+Code Workbench and Agents windows advertise `textDocuments: { version: 1 }`.
+`read_file`, `write_file`, `edit`, `apply_patch` and `grep` use the Rust tool-facing
+`TextDocumentEditor` port for a product Turn bound to such a connection.
+`AppServerTextDocumentHost` converts generated server requests to the existing
+`ITextModelService` and `IBulkEditService`. It owns only snapshot references;
+the editor services retain document state, undo, working copies and saves.
+
+Reads include the current unsaved text and return an opaque version-bound lease.
+Applying consumes the referenced leases and rechecks versions inside the workspace
+transaction. Successful file-tool batches save all affected working copies through
+the existing text-file service before reporting success, including earlier unsaved
+user text. They retain undo history, UTF-8 BOM and model EOL, so the next command
+reads the same saved result. Save failures keep the model and report an unknown
+outcome; the adapter does not replay an already applied edit. `textDocument/list`
+reads dirty text working copies under the requested root; searches replace each
+corresponding disk result with this text without updating the shared index.
+Creates use the file service, including missing parent directories. Delete and
+move currently require closed resources, as defined by the workspace edit service.
+File-operation rollback retains the serialized bytes, including BOM and mixed EOLs.
+
+Connection close and cancelled resolution release references. A closed originating
+editor or a lost commit reply fails the tool without switching it to a disk write;
+the latter reports an unknown outcome. Clients without this capability and Turns
+without a product connection use the explicit disk execution path. Same-directory
+child Turns inherit their parent's exact connection before tool workers run. Isolated
+checkouts and background executions use filesystem documents; completing the parent
+does not discard a running child's binding. Academic does not advertise this text
+capability. Chat Editing accept/reject UI is also not connected by this adapter.
+
+`test/browser/appServerTextDocumentHost.test.ts` covers unsaved text, both EOLs,
+BOM, undo, version conflicts, reference disposal, creation and file-operation
+rollback. The editor smoke tests exercise the production services in Web and
+Electron Workbench and Agents windows; the backend suite drives an actual RPC
+Agent Turn through read, search, edit, write and a command that reads the saved file.

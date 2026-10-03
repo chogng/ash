@@ -81,7 +81,8 @@ pub trait FileSystem: Send + Sync {
     /// Lists the direct children of one existing directory.
     fn read_directory(&self, path: &Path) -> Result<Vec<DirectoryEntry>, FileSystemError>;
 
-    /// Creates an empty file according to the explicit existing-target behavior.
+    /// Creates an empty file and its missing parent directories according to the explicit
+    /// existing-target behavior. Requires WriteFiles.
     fn create_file(
         &self,
         path: &Path,

@@ -6,7 +6,8 @@ use core_api::CoreError;
 
 /// Model-facing formatting only. Engine selection and index ownership belong to grep.
 pub(super) fn execute(
-    search: &dyn grep::Search,
+    search: &grep::Service,
+    documents: Option<&[grep::DocumentContent]>,
     pattern: String,
     path: &ResolvedFilePath,
     glob: Option<String>,
@@ -38,7 +39,13 @@ pub(super) fn execute(
         max_results: 100,
         freshness: grep::Freshness::Indexed,
     };
-    let result = match search.search(&path.root, &query, cancellation) {
+    let searched = match documents {
+        Some(documents) => {
+            search.search_with_documents(&path.root, &query, documents, cancellation)
+        }
+        None => grep::Search::search(search, &path.root, &query, cancellation),
+    };
+    let result = match searched {
         Ok(result) => result,
         Err(grep::Error::Cancelled(reason)) => return Err(CoreError::Cancelled(reason)),
         Err(error) => return Ok(ToolExecutionOutput::Failure(error.to_string())),

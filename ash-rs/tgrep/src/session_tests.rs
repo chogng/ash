@@ -40,7 +40,11 @@ fn real_server_searches_in_path_order_with_one_global_limit_and_scope() {
     fs::write(root.path().join("a.rs"), "needle\n".repeat(75)).unwrap();
     fs::write(root.path().join("src/b.rs"), "needle\n".repeat(75)).unwrap();
     fs::write(root.path().join(".env"), "needle private\n").unwrap();
-    fs::write(root.path().join("src/[odd]*?.rs"), "rare_marker\n").unwrap();
+    #[cfg(windows)]
+    let literal_name = "src/[odd].rs";
+    #[cfg(not(windows))]
+    let literal_name = "src/[odd]*?.rs";
+    fs::write(root.path().join(literal_name), "rare_marker\n").unwrap();
     session.rebuild(&CancellationSource::new().token()).unwrap();
     let result = search(&session, "needle");
     assert!(result.indexed && result.limit_hit);
@@ -77,10 +81,7 @@ fn ash_edits_and_new_files_are_visible_without_waiting_for_watcher() {
     fs::write(&path, "after_marker\n").unwrap();
     let new = root.path().join("new.rs");
     fs::write(&new, "after_marker\n").unwrap();
-    session.paths_changed(&[
-        fs::canonicalize(&path).unwrap(),
-        fs::canonicalize(&new).unwrap(),
-    ]);
+    session.paths_changed(&[path.clone(), fs::canonicalize(&new).unwrap()]);
     assert!(search(&session, "before_marker").matches.is_empty());
     assert_eq!(search(&session, "after_marker").matches.len(), 2);
     fs::remove_file(&new).unwrap();

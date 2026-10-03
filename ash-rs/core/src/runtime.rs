@@ -82,6 +82,80 @@ impl<'a> Runtime<'a> {
         }
     }
 
+    /// Admits and binds a Turn before dispatch; host admission locks must be released
+    /// before backend startup can synchronously publish a terminal update.
+    pub fn submit_turn_with_admission(
+        &self,
+        thread_id: &ThreadId,
+        request: SubmitTurnRequest,
+        admit: impl FnOnce(
+            &ThreadId,
+            crate::StartTurnRequest,
+        ) -> Result<crate::StartTurnResult, CoreError>,
+    ) -> Result<TurnReceipt, CoreError> {
+        if let Some(receipt) = self.replay_turn(
+            thread_id,
+            &request.command_id,
+            SubmittedCommand::Turn {
+                kind: request.kind,
+                input: &request.input,
+                tool_mode: request.tool_mode,
+                mode: request.mode,
+            },
+        )? {
+            return Ok(receipt);
+        }
+        let before = self.threads.read_thread(thread_id)?.sequence;
+        let command_id = request.command_id.clone();
+        let input = request.input.clone();
+        let tool_mode = request.tool_mode;
+        let kind = request.kind;
+        let mode = request.mode;
+        let start = admit(
+            thread_id,
+            crate::StartTurnRequest {
+                command_id: request.command_id,
+                expected_sequence: request.expected_sequence,
+                model: request.model,
+                reasoning_effort: request.reasoning_effort,
+                advisor: request.advisor,
+                kind: request.kind,
+                mode,
+                instructions: request.instructions,
+                policy_revision: self.executor.policy_revision(),
+                approval_mode: request.approval_mode,
+                tool_mode,
+                tool_profile: Some(self.executor.tool_profile_snapshot()?),
+                activated_skills: request.activated_skills,
+                input: request.input,
+            },
+        )?;
+        if start.disposition == crate::StartTurnDisposition::Replayed {
+            return self
+                .replay_turn(
+                    thread_id,
+                    &command_id,
+                    SubmittedCommand::Turn {
+                        kind,
+                        input: &input,
+                        tool_mode,
+                        mode,
+                    },
+                )?
+                .ok_or_else(|| CoreError::Journal("accepted Turn receipt is missing".into()));
+        }
+        self.publish(thread_id, before)?;
+        self.dispatch(
+            thread_id,
+            &start.turn_id,
+            self.backend.start(thread_id, &start.turn_id),
+        )?;
+        Ok(TurnReceipt {
+            turn_id: start.turn_id,
+            sequence: start.sequence,
+        })
+    }
+
     fn publish(&self, thread_id: &ThreadId, after: u64) -> Result<(), CoreError> {
         for update in self.threads.thread_updates_after(thread_id, after)? {
             self.updates.publish(update);
@@ -132,66 +206,8 @@ impl AgentRuntime for Runtime<'_> {
         thread_id: &ThreadId,
         request: SubmitTurnRequest,
     ) -> Result<TurnReceipt, CoreError> {
-        if let Some(receipt) = self.replay_turn(
-            thread_id,
-            &request.command_id,
-            SubmittedCommand::Turn {
-                kind: request.kind,
-                input: &request.input,
-                tool_mode: request.tool_mode,
-                mode: request.mode,
-            },
-        )? {
-            return Ok(receipt);
-        }
-        let before = self.threads.read_thread(thread_id)?.sequence;
-        let command_id = request.command_id.clone();
-        let input = request.input.clone();
-        let tool_mode = request.tool_mode;
-        let kind = request.kind;
-        let mode = request.mode;
-        let start = self.threads.start_turn(
-            thread_id,
-            crate::StartTurnRequest {
-                command_id: request.command_id,
-                expected_sequence: request.expected_sequence,
-                model: request.model,
-                reasoning_effort: request.reasoning_effort,
-                advisor: request.advisor,
-                kind: request.kind,
-                mode,
-                instructions: request.instructions,
-                policy_revision: self.executor.policy_revision(),
-                approval_mode: request.approval_mode,
-                tool_mode,
-                tool_profile: Some(self.executor.tool_profile_snapshot()?),
-                activated_skills: request.activated_skills,
-                input: request.input,
-            },
-        )?;
-        if start.disposition == crate::StartTurnDisposition::Replayed {
-            return self
-                .replay_turn(
-                    thread_id,
-                    &command_id,
-                    SubmittedCommand::Turn {
-                        kind,
-                        input: &input,
-                        tool_mode,
-                        mode,
-                    },
-                )?
-                .ok_or_else(|| CoreError::Journal("accepted Turn receipt is missing".into()));
-        }
-        self.publish(thread_id, before)?;
-        self.dispatch(
-            thread_id,
-            &start.turn_id,
-            self.backend.start(thread_id, &start.turn_id),
-        )?;
-        Ok(TurnReceipt {
-            turn_id: start.turn_id,
-            sequence: start.sequence,
+        self.submit_turn_with_admission(thread_id, request, |thread, request| {
+            self.threads.start_turn(thread, request)
         })
     }
 

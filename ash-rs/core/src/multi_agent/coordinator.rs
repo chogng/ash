@@ -8,6 +8,7 @@ use crate::NoHooks;
 use crate::SequenceExpectation;
 use crate::StartTurnDisposition;
 use crate::StartTurnRequest;
+use crate::StartTurnResult;
 use crate::ThreadController;
 use crate::ThreadSnapshot;
 use crate::thread_reducer::satisfied_agent_join;
@@ -137,16 +138,54 @@ pub struct MultiAgentCoordinator {
     limits: AgentTreeLimits,
     thread_worktree_binder: RwLock<Arc<dyn crate::ThreadWorktreeBinder>>,
     hooks: RwLock<Arc<dyn HookService>>,
+    turn_submission: RwLock<Arc<dyn AgentTurnSubmission>>,
+}
+
+/// Lets the product bind a child's execution context before its initial Turn becomes runnable.
+/// Core-only consumers submit directly through the Thread controller.
+pub trait AgentTurnSubmission: Send + Sync {
+    fn submit(
+        &self,
+        parent_thread: &ThreadId,
+        parent_turn: &TurnId,
+        child_thread: &ThreadId,
+        request: StartTurnRequest,
+    ) -> Result<StartTurnResult, CoreError>;
+}
+
+impl AgentTurnSubmission for ThreadController {
+    fn submit(
+        &self,
+        _: &ThreadId,
+        _: &TurnId,
+        child_thread: &ThreadId,
+        request: StartTurnRequest,
+    ) -> Result<StartTurnResult, CoreError> {
+        self.start_turn(child_thread, request)
+    }
 }
 
 impl MultiAgentCoordinator {
     pub fn new(threads: Arc<ThreadController>, limits: AgentTreeLimits) -> Self {
         Self {
+            turn_submission: RwLock::new(threads.clone()),
             threads,
             limits,
             thread_worktree_binder: RwLock::new(Arc::new(crate::NoThreadWorktreeBinder)),
             hooks: RwLock::new(Arc::new(NoHooks)),
         }
+    }
+
+    pub fn install_turn_submission(
+        &self,
+        submission: Arc<dyn AgentTurnSubmission>,
+    ) -> Result<(), CoreError> {
+        *self
+            .turn_submission
+            .write()
+            .map_err(|_| CoreError::Execution("Agent Turn submission lock poisoned".into()))? =
+            submission;
+        Ok(())
     }
 
     pub fn install_hooks(&self, hooks: Arc<dyn HookService>) -> Result<(), CoreError> {
@@ -647,7 +686,14 @@ impl MultiAgentCoordinator {
             seed.delegation_id.clone(),
             spawned.thread_id.clone(),
         )?;
-        let initial_turn = self.threads.start_turn(
+        let submission = self
+            .turn_submission
+            .read()
+            .map_err(|_| CoreError::Execution("Agent Turn submission lock poisoned".into()))?
+            .clone();
+        let initial_turn = submission.submit(
+            &seed.parent_thread_id,
+            &seed.parent_turn_id,
             &spawned.thread_id,
             StartTurnRequest {
                 advisor: None,

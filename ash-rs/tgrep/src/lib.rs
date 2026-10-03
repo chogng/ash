@@ -133,7 +133,7 @@ impl Session {
         index: &Path,
         cancellation: &CancellationToken,
     ) -> Result<Self, Error> {
-        let root = std::fs::canonicalize(root)?;
+        let root = dunce::canonicalize(root)?;
         let process = process::Server::start(&executable, &root, index, cancellation)?;
         Ok(Self {
             executable,
@@ -166,6 +166,9 @@ impl Session {
     pub fn paths_changed(&self, paths: &[PathBuf]) {
         let mut changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
         for path in paths {
+            // Windows filesystem notifications and directory services may spell the same
+            // absolute path with or without the extended prefix, including deleted files.
+            let path = dunce::simplified(path);
             if let Ok(relative) = path.strip_prefix(&self.root) {
                 if relative
                     .components()
@@ -193,7 +196,7 @@ impl Session {
         regex::Regex::new(query.pattern).map_err(|e| failed(e.to_string()))?;
         validate_relative(query.scope)?;
         let scope = self.root.join(query.scope);
-        let canonical = std::fs::canonicalize(&scope)?;
+        let canonical = dunce::canonicalize(&scope)?;
         if !canonical.starts_with(&self.root) {
             return Err(failed("search scope escapes its workspace"));
         }
@@ -309,7 +312,7 @@ impl Session {
         if !absolute.is_file() {
             return false;
         }
-        if !std::fs::canonicalize(&absolute).is_ok_and(|p| p.starts_with(&self.root)) {
+        if !dunce::canonicalize(&absolute).is_ok_and(|p| p.starts_with(&self.root)) {
             return false;
         }
         let target = absolute.clone();
@@ -325,7 +328,7 @@ impl Session {
         if path.as_os_str().is_empty() || !path.starts_with(scope) {
             return Err(failed("tgrep returned an out-of-scope path"));
         }
-        if let Ok(current) = std::fs::canonicalize(self.root.join(path)) {
+        if let Ok(current) = dunce::canonicalize(self.root.join(path)) {
             if !current.starts_with(&self.root) {
                 return Err(failed("tgrep result escapes its workspace"));
             }

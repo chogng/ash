@@ -2,5 +2,6 @@
 import type { AgentInteractionCapability } from './AgentInteractionCapability.js';
 import type { BrowserCapability } from './BrowserCapability.js';
 import type { DirPermissionsHostCapability } from './DirPermissionsHostCapability.js';
+import type { TextDocumentsCapability } from './TextDocumentsCapability.js';
 
-export type ClientCapabilities = { notifications?: boolean, agentInteractions?: AgentInteractionCapability | null, browser?: BrowserCapability | null, dirPermissionsHost?: DirPermissionsHostCapability | null, };
+export type ClientCapabilities = { notifications?: boolean, agentInteractions?: AgentInteractionCapability | null, browser?: BrowserCapability | null, dirPermissionsHost?: DirPermissionsHostCapability | null, textDocuments?: TextDocumentsCapability | null, };

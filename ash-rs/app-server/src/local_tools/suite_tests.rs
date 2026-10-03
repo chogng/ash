@@ -13,7 +13,7 @@ use ash_sandboxing::SandboxCommand;
 use ash_sandboxing::SandboxError;
 use ash_sandboxing::SandboxKind;
 use ash_sandboxing::SandboxPolicy;
-use ash_shell_command::RipgrepExecutable;
+use std::fs;
 
 struct PassThroughBackend;
 
@@ -50,7 +50,8 @@ fn patch_move_review_checks_both_paths_and_preserves_the_move_header() {
 
 fn text_edit_suite(path: &std::path::Path) -> LocalToolSuite<PassThroughBackend> {
     let grant = authorization(path);
-    let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
+    let ripgrep =
+        super::super::resolve_ripgrep(&ash_install_context::InstallContext::current()).unwrap();
     let shell = LocalShellToolService::new_with_action_policy_revision(
         grant.authorize(Permission::ExecuteCommands).unwrap(),
         ripgrep.clone(),
@@ -242,7 +243,8 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
             ),
         )
         .unwrap();
-    let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
+    let ripgrep =
+        super::super::resolve_ripgrep(&ash_install_context::InstallContext::current()).unwrap();
     let shell = LocalShellToolService::new_with_action_policy_revision(
         cwd_authorization,
         ripgrep.clone(),
@@ -274,7 +276,7 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
         dunce::canonicalize(&session_file).unwrap()
     );
     let read = suite
-        .read_file(
+        .execute_document_tool(
             &tool_call(
                 "read_file",
                 serde_json::json!({
@@ -286,12 +288,14 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
             "thread",
             Some(&session_id),
             None,
+            None,
+            &ash_async_utils::CancellationSource::new().token(),
         )
         .unwrap();
     assert!(matches!(read, ToolExecutionOutput::Success(text) if text.contains("extra")));
     let created = session_dir.path().join("created.txt");
     let write = suite
-        .write_file(
+        .execute_document_tool(
             &tool_call(
                 "write_file",
                 serde_json::json!({
@@ -302,6 +306,8 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
             "thread",
             Some(&session_id),
             None,
+            None,
+            &ash_async_utils::CancellationSource::new().token(),
         )
         .unwrap();
     assert!(matches!(write, ToolExecutionOutput::Success(_)));
@@ -378,7 +384,8 @@ fn file_tools_read_a_large_workspace_without_scanning_every_entry() {
     let private = nested.join(".env");
     fs::write(&private, "private-value").unwrap();
     let grant = authorization(dir.path());
-    let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
+    let ripgrep =
+        super::super::resolve_ripgrep(&ash_install_context::InstallContext::current()).unwrap();
     let shell = LocalShellToolService::new(
         grant.authorize(Permission::ExecuteCommands).unwrap(),
         ripgrep.clone(),
@@ -394,7 +401,7 @@ fn file_tools_read_a_large_workspace_without_scanning_every_entry() {
         grant,
     );
     let read = suite
-        .read_file(
+        .execute_document_tool(
             &tool_call(
                 "read_file",
                 serde_json::json!({"path": public, "offset": null, "limit": null}),
@@ -402,10 +409,12 @@ fn file_tools_read_a_large_workspace_without_scanning_every_entry() {
             "thread",
             None,
             None,
+            None,
+            &ash_async_utils::CancellationSource::new().token(),
         )
         .unwrap();
     assert!(matches!(read, ToolExecutionOutput::Success(text) if text.contains("public-value")));
-    let denied = suite.read_file(
+    let denied = suite.execute_document_tool(
         &tool_call(
             "read_file",
             serde_json::json!({"path": private, "offset": null, "limit": null}),
@@ -413,6 +422,8 @@ fn file_tools_read_a_large_workspace_without_scanning_every_entry() {
         "thread",
         None,
         None,
+        None,
+        &ash_async_utils::CancellationSource::new().token(),
     );
     assert!(
         matches!(denied, Err(error) if error.to_string().contains("denied by the local filesystem policy"))
@@ -438,7 +449,8 @@ fn shell_session_tool_returns_early_then_drives_the_same_process() {
             ),
         )
         .unwrap();
-    let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
+    let ripgrep =
+        super::super::resolve_ripgrep(&ash_install_context::InstallContext::current()).unwrap();
     let shell = LocalShellToolService::new_with_action_policy_revision(
         shell_authorization,
         ripgrep.clone(),
@@ -580,4 +592,268 @@ fn tool_call(name: &str, arguments: serde_json::Value) -> ToolCall {
         name: ToolName::new(name).unwrap(),
         arguments,
     }
+}
+
+struct DocumentWorkflowModel {
+    path: PathBuf,
+}
+impl core_api::ModelService for DocumentWorkflowModel {
+    fn invoke(
+        &self,
+        _: core_api::ModelSelection<'_>,
+        request: &ash_protocol::ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ash_protocol::ModelResponse, CoreError> {
+        let turn_start = request.input.iter().rposition(|item| matches!(item, ash_protocol::InputItem::Message(message) if message.role == ash_protocol::MessageRole::User)).unwrap();
+        let results = request.input[turn_start + 1..]
+            .iter()
+            .filter_map(|item| match item {
+                ash_protocol::InputItem::ToolResult(result) => Some(result),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        if matches!(&request.input[turn_start], ash_protocol::InputItem::Message(message) if message.content.iter().any(|part| matches!(part, ash_protocol::ContentPart::Text(text) if text == "write without reading again")))
+        {
+            if results.is_empty() {
+                let mut write = tool_call(
+                    "write_file",
+                    json!({"path":self.path,"content":"must not overwrite\n"}),
+                );
+                write.id = ToolCallId::new("next-turn-write").unwrap();
+                return Ok(ash_protocol::ModelResponse {
+                    output: vec![ash_protocol::ResponseItem::ToolCall(write)],
+                    usage: None,
+                    billing: None,
+                    stop_reason: ash_protocol::StopReason::Completed,
+                });
+            }
+            assert_eq!(results.len(), 1);
+            assert!(results[0].is_error);
+            assert!(results[0].content.iter().any(|part| matches!(part, ash_protocol::ContentPart::Text(text) if text.contains("must be read again"))));
+            return Ok(ash_protocol::ModelResponse {
+                output: vec![ash_protocol::ResponseItem::Text("read required".into())],
+                usage: None,
+                billing: None,
+                stop_reason: ash_protocol::StopReason::Completed,
+            });
+        }
+        assert!(results.iter().all(|result| !result.is_error), "{results:?}");
+        if results.len() == 2 {
+            assert!(results[1].content.iter().any(|part| matches!(part, ash_protocol::ContentPart::Text(text) if text.contains("unsaved"))));
+        }
+        if results.len() == 5 {
+            assert!(results[4].content.iter().any(|part| matches!(part, ash_protocol::ContentPart::Text(text) if text.contains("rewritten"))), "{results:?}");
+        }
+        let (name, arguments) = match results.len() {
+            0 => (
+                "read_file",
+                json!({"path": self.path, "offset":null, "limit":null}),
+            ),
+            1 => (
+                "grep",
+                json!({"pattern":"unsaved", "path":self.path.parent().unwrap(), "glob":"*.txt", "case_insensitive":false}),
+            ),
+            2 => (
+                "edit",
+                json!({"path": self.path, "old_string":"unsaved", "new_string":"edited", "replace_all":false}),
+            ),
+            3 => (
+                "write_file",
+                json!({"path": self.path, "content":"rewritten\n"}),
+            ),
+            4 => {
+                #[cfg(windows)]
+                let (program, arguments) = (
+                    std::env::var("COMSPEC").unwrap(),
+                    vec!["/d", "/c", "type", "file.txt"],
+                );
+                #[cfg(not(windows))]
+                let (program, arguments) = ("/bin/cat".to_string(), vec!["file.txt"]);
+                (
+                    "shell-command",
+                    json!({"program":program,"arguments":arguments,"working_directory":self.path.parent().unwrap()}),
+                )
+            }
+            _ => {
+                return Ok(ash_protocol::ModelResponse {
+                    output: vec![ash_protocol::ResponseItem::Text("done".into())],
+                    usage: None,
+                    billing: None,
+                    stop_reason: ash_protocol::StopReason::Completed,
+                });
+            }
+        };
+        Ok(ash_protocol::ModelResponse {
+            output: vec![ash_protocol::ResponseItem::ToolCall(tool_call(
+                name, arguments,
+            ))],
+            usage: None,
+            billing: None,
+            stop_reason: ash_protocol::StopReason::Completed,
+        })
+    }
+}
+struct ApproveDocuments;
+impl core_api::ActionPolicyService for ApproveDocuments {
+    fn revision(&self) -> String {
+        super::super::local_policy_revision().as_str().into()
+    }
+    fn decide(
+        &self,
+        _: &ash_action_policy::ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ash_action_policy::ExecutionDecision, CoreError> {
+        Ok(ash_action_policy::ExecutionDecision::RunUnsandboxed {
+            grant_id: ash_action_policy::GrantId::new("document-test"),
+        })
+    }
+}
+struct SelectedDocumentModel;
+impl crate::model_catalog::ModelCatalog for SelectedDocumentModel {
+    fn set_preferences(
+        &self,
+        _: crate::model_catalog::ModelPreferencesCommand,
+    ) -> Result<ash_config::ConfigCommandResult, crate::model_catalog::ModelPreferencesError> {
+        unreachable!("fixture does not change preferences")
+    }
+    fn list(
+        &self,
+    ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
+        Ok(Vec::new())
+    }
+    fn current_access(
+        &self,
+        _: &ash_protocol::ModelRef,
+    ) -> Result<ash_protocol::ModelAccess, CoreError> {
+        Ok(ash_protocol::ModelAccess::Unknown)
+    }
+    fn configured_default(&self) -> Result<Option<ash_protocol::ModelRef>, CoreError> {
+        Ok(Some(ash_protocol::ModelRef::new(
+            ash_protocol::ProviderId::new("openai").unwrap(),
+            ash_protocol::ModelId::new("gpt-6-astra").unwrap(),
+        )))
+    }
+}
+
+#[test]
+fn rpc_agent_tools_search_unsaved_content_and_persist_edits_through_the_originating_document() {
+    use crate::server::AppServer;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("file.txt");
+    fs::write(&path, "disk\n").unwrap();
+    let threads = Arc::new(ash_core::ThreadController::with_store(Arc::new(
+        ash_core::InMemoryThreadStore::default(),
+    )));
+    let server = AppServer::new(
+        Arc::clone(&threads),
+        Arc::new(DocumentWorkflowModel { path: path.clone() }),
+    );
+    let suite = text_edit_suite(directory.path())
+        .with_text_document_editor(server.text_document_host.clone());
+    let server = server
+        .with_tool_service(Arc::new(suite), Arc::new(ApproveDocuments))
+        .with_model_catalog(Arc::new(SelectedDocumentModel));
+    let mut origin = server.connection();
+    let mut other = server.connection();
+    let next_id = std::cell::Cell::new(0);
+    let call =
+        |connection: &mut crate::server::ConnectionState, method: &str, params: Value| -> Value {
+            next_id.set(next_id.get() + 1);
+            let response: Value = serde_json::from_str(
+                &server.handle_json(
+                    connection,
+                    &json!({"jsonrpc":"2.0","id":next_id.get(),"method":method,"params":params})
+                        .to_string(),
+                ),
+            )
+            .unwrap();
+            assert!(response.get("error").is_none(), "{response}");
+            response["result"].clone()
+        };
+    for connection in [&mut origin, &mut other] {
+        call(
+            connection,
+            "initialize",
+            json!({"clientInfo":{"name":"desktop-test","version":"1"},"capabilities":{"textDocuments":{"version":1}}}),
+        );
+    }
+    let created = call(
+        &mut origin,
+        "session/create",
+        json!({"commandId":"documents-session","title":"Edit document","executionTarget":null,"agent":{"type":"default"}}),
+    );
+    let session = created["session"]["sessionId"].as_str().unwrap();
+    call(
+        &mut origin,
+        "session/request",
+        json!({"commandId":"documents-turn","sessionId":session,"request":{"type":"startTurn","threadId":session,"expectedSequence":1,"input":[{"type":"text","text":"edit this file"}]}}),
+    );
+    let mut live_text = "unsaved\r\n".to_string();
+    let mut edits = 0;
+    for turn_index in 0..2 {
+        if turn_index == 1 {
+            let snapshot = threads
+                .read_thread(&ash_protocol::ThreadId::new(session).unwrap())
+                .unwrap();
+            call(
+                &mut origin,
+                "session/request",
+                json!({"commandId":"documents-next-turn","sessionId":session,"request":{"type":"startTurn","threadId":session,"expectedSequence":snapshot.sequence,"input":[{"type":"text","text":"write without reading again"}]}}),
+            );
+        }
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            for frame in server.drain_notifications(&mut origin) {
+                let request: Value = serde_json::from_str(&frame).unwrap();
+                let result = match request["method"].as_str() {
+                    Some("textDocument/list") => {
+                        json!({"kind":"documents","documents":[{"relativePath":"file.txt","text":live_text}]})
+                    }
+                    Some("textDocument/read") => {
+                        json!({"kind":"document","snapshot":"snapshot-1","text":live_text})
+                    }
+                    Some("textDocument/apply") => {
+                        assert_eq!(request["params"]["changes"][0]["kind"], "update");
+                        live_text = request["params"]["changes"][0]["text"]
+                            .as_str()
+                            .unwrap()
+                            .to_string();
+                        fs::write(&path, &live_text).unwrap();
+                        edits += 1;
+                        json!({"kind":"applied"})
+                    }
+                    Some("textDocument/release") => Value::Null,
+                    _ => continue,
+                };
+                server
+                    .client_host
+                    .handle_response(
+                        origin.connection_id,
+                        json!({"jsonrpc":"2.0","id":request["id"],"result":result}),
+                    )
+                    .unwrap();
+            }
+            assert!(!server.drain_notifications(&mut other).iter().any(|frame| {
+                serde_json::from_str::<Value>(frame).unwrap()["method"]
+                    .as_str()
+                    .is_some_and(|method| method.starts_with("textDocument/"))
+            }));
+            let snapshot = threads
+                .read_thread(&ash_protocol::ThreadId::new(session).unwrap())
+                .unwrap();
+            if snapshot.turns[turn_index].status == ash_protocol::TurnStatus::Completed {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "document turn did not complete: {:?}",
+                snapshot.turns[turn_index]
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+    assert_eq!((edits, live_text.as_str()), (2, "rewritten\r\n"));
+    assert_eq!(fs::read_to_string(&path).unwrap(), "rewritten\r\n");
+    server.close_connection(origin);
+    server.close_connection(other);
 }

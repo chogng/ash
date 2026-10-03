@@ -318,6 +318,7 @@ export interface IStartWorkbenchOptions {
 	readonly workspace: IWorkspace;
 	/** The host selects its implementation; the Workbench supplies initialized window services. */
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
+	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly createWindow?: (services: IInstantiationService) => IDisposable;
 	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> }>;
 	readonly createLogService: () => LogService;
@@ -347,6 +348,7 @@ export async function startWorkbench({
 	workspace,
 	createLifecycleService,
 	createWindow,
+	createTextDocumentHost,
 	createStorageService,
 	createLogService,
 	configurationApi,
@@ -399,6 +401,7 @@ export async function startWorkbench({
 			storage,
 			logger,
 			createWindow,
+			createTextDocumentHost,
 		);
 	} catch (error) {
 		logger.error('startup', 'Workbench startup failed', error);
@@ -457,6 +460,7 @@ export class Workbench extends Disposable {
 		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> },
 		logger: LogService,
 		createWindow?: (services: IInstantiationService) => IDisposable,
+		createTextDocumentHost?: (services: IInstantiationService) => IDisposable,
 	) {
 		super();
 		this._register(themes);
@@ -617,6 +621,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceEditService, workspaceEditService);
 		const bulkEditService = this._register(new BrowserBulkEditService(workspaceEditService));
 		services.registerInstance(IBulkEditService, bulkEditService);
+		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }
 		this._register(services.createInstance(WorkbenchLanguageFeatures));
 		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { dirPermissions: dirPermissionsService, events: api.events }));
 		const diffService = new DiffService();

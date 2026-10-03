@@ -18,8 +18,14 @@ mod output;
 mod protocol_adapter;
 mod registry;
 mod schema;
+mod text_document;
 
 pub use ash_environment::EnvId;
+pub use ash_file_system::TextDocumentChange;
+pub use ash_file_system::TextDocumentContent;
+pub use ash_file_system::TextDocumentEditor;
+pub use ash_file_system::TextDocumentError;
+pub use ash_file_system::TextDocumentSnapshot;
 pub use ash_protocol::{ImageDetail, ToolActivity, ToolCall, ToolCallId, ToolName};
 pub use ash_protocol::{
     ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput, ToolReplaySafety,
@@ -68,3 +74,4 @@ pub use registry::{
     ToolSearchResult, ToolSearchScore,
 };
 pub use schema::{ToolInputSchema, ToolSchema, ToolSchemaDigest};
+pub use text_document::TextDocumentEditorProvider;

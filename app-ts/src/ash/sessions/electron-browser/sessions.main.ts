@@ -1,3 +1,9 @@
+import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
+import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
+import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
+import { IBulkEditService } from '../../editor/browser/services/bulkEditService.js';
+import { BrowserBulkEditService } from '../../workbench/contrib/bulkEdit/browser/bulkEditService.js';
+import { IWorkspaceEditService } from '../../workbench/services/language/common/workspaceEditService.js';
 import { FileDialogService } from '../../workbench/services/dialogs/electron-browser/fileDialogService.js';
 import { OpenAgentsWindowSystemWideKeybindingContribution } from '../contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
@@ -73,6 +79,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	const profileServices = sessions.add(new InstantiationService());
 	let logger: LoggerChannelClient;
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
+	let documentClient: AppServerProtocolClient | undefined;
 	try {
 		const windowId = await invoke<unknown>('ash:ipc:window-id');
 		if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) { throw new TypeError('Invalid Main IPC window ID'); }
@@ -80,7 +87,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 		profileServices.registerInstance(IMainProcessService, mainProcessService);
 		await mainProcessService.connect();
 		logger = profileServices.createInstance(LoggerChannelClient);
-		api = await createElectronRendererApi([client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: false }, permissionDialog, mainProcessService);
+		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: false, textDocuments: true }, permissionDialog, mainProcessService);
 	}
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
 	sessions.add(api);
@@ -112,6 +119,13 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 	const hostColorScheme = await api.nativeHost.getOSColorScheme();
 	workbench = sessions.add(await Workbench.create({
+		createTextDocumentHost: documentClient ? services => {
+			const resources = new DisposableStore();
+			const bulkEdits = resources.add(new BrowserBulkEditService(services.get(IWorkspaceEditService)));
+			const documentServices = resources.add(services.createChild(new ServiceCollection([IBulkEditService, bulkEdits])));
+			resources.add(documentServices.createInstance(AppServerTextDocumentHost, documentClient!));
+			return resources;
+		} : undefined,
 		contributionIds: ['workbench.contrib.nativeWindow', OpenAgentsWindowSystemWideKeybindingContribution.ID],
 		modeId,
 		createLogService: () => logger.createLogger('agents'),

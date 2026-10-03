@@ -54,8 +54,21 @@ impl Runtime<'_> {
         command: Command,
         request: StartTurnRequest,
     ) -> Result<Receipt, CoreError> {
+        self.execute_with_turn_submission(root, command, request, |thread, request| {
+            self.threads.start_turn(thread, request)
+        })
+    }
+
+    /// Binds the root's product execution context before creating or dispatching children.
+    pub fn execute_with_turn_submission(
+        &self,
+        root: &ThreadId,
+        command: Command,
+        request: StartTurnRequest,
+        submit: impl FnOnce(&ThreadId, StartTurnRequest) -> Result<ash_core::StartTurnResult, CoreError>,
+    ) -> Result<Receipt, CoreError> {
         let plan = self.prepare(root, command, request)?;
-        self.finish(root, plan)
+        self.finish(root, plan, submit)
     }
 
     fn prepare(
@@ -197,14 +210,21 @@ impl Runtime<'_> {
         let pending = self.store.pending()?;
         let count = pending.len();
         for (root, plan) in pending {
-            self.finish(&root, plan)?;
+            self.finish(&root, plan, |thread, request| {
+                self.threads.start_turn(thread, request)
+            })?;
         }
         Ok(count)
     }
 
-    fn finish(&self, root: &ThreadId, mut plan: Plan) -> Result<Receipt, CoreError> {
+    fn finish(
+        &self,
+        root: &ThreadId,
+        mut plan: Plan,
+        submit: impl FnOnce(&ThreadId, StartTurnRequest) -> Result<ash_core::StartTurnResult, CoreError>,
+    ) -> Result<Receipt, CoreError> {
         if plan.turn.is_none() {
-            let started = match self.threads.start_turn(root, plan.submission.request()) {
+            let started = match submit(root, plan.submission.request()) {
                 Ok(started) => started,
                 Err(error) => {
                     if matches!(

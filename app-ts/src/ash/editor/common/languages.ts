@@ -727,6 +727,7 @@ export type LanguageMissingTargetBehavior = "error" | "ignore";
 export type LanguageDeleteMode = "fileOrEmptyDirectory" | "recursive";
 
 export interface LanguageCreateFileEdit {
+	readonly contents?: string;
 	readonly kind: "create";
 	readonly resource: URI;
 	readonly existing: LanguageExistingTargetBehavior;
@@ -764,7 +765,8 @@ export function normalizeLanguageWorkspaceEdit(edit: LanguageWorkspaceEdit): Lan
 				if (entry.expectedText !== undefined && typeof entry.expectedText !== "string") throw new TypeError("Language document edit expected text must be text");
 				return Object.freeze({ kind: entry.kind, resource: entry.resource, ...(entry.version !== undefined ? { version: entry.version } : {}), ...(entry.expectedText !== undefined ? { expectedText: entry.expectedText } : {}), edits: Object.freeze([...entry.edits]) });
 			case "create":
-				return Object.freeze({ kind: entry.kind, resource: requireResource(entry.resource, "create target"), existing: existingBehavior(entry.existing) });
+				if (entry.contents !== undefined && typeof entry.contents !== "string") throw new TypeError("Workspace create contents must be text");
+				return Object.freeze({ kind: entry.kind, resource: requireResource(entry.resource, "create target"), existing: existingBehavior(entry.existing), ...(entry.contents !== undefined ? { contents: entry.contents } : {}) });
 			case "rename":
 				return Object.freeze({ kind: entry.kind, source: requireResource(entry.source, "rename source"), target: requireResource(entry.target, "rename target"), existing: existingBehavior(entry.existing) });
 			case "delete":

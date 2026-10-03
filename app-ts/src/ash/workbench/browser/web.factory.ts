@@ -1,3 +1,4 @@
+import type { IStartWorkbenchOptions } from './workbench.js';
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import {
@@ -44,6 +45,7 @@ export async function createWebWorkbench(
 	if (!ownerWindow) throw new Error('Workbench requires an owner window');
 	return startWorkbench({
 		modeId,
+		createTextDocumentHost: options.createTextDocumentHost,
 		createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
 		createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 		configurationApi: options.configurationApi,
@@ -79,6 +81,7 @@ function getEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {
 export async function startWebWorkbench(
 	modeId: WorkbenchModeId,
 	hostLifetime?: IDisposable,
+	createTextDocumentHost?: IStartWorkbenchOptions['createTextDocumentHost'],
 ): Promise<IDisposable> {
 	const host = readWebWorkbenchHost();
 	const workbench = new DisposableStore();
@@ -92,6 +95,7 @@ export async function startWebWorkbench(
 			: undefined;
 		const instance = await createWebWorkbench(modeId, {
 			api: host?.api ?? createDisconnectedRendererApi(),
+			createTextDocumentHost,
 			configurationApi,
 			initialConfigurationSnapshot,
 			webWorkspaceClient: host?.webWorkspaceClient,

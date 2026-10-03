@@ -3,6 +3,7 @@
 mod attachment_upload_store;
 mod browser_host;
 mod browser_tool;
+mod client_host;
 mod codebase_retrieval_context;
 mod codebase_retrieval_tool;
 mod debug_service;
@@ -21,6 +22,7 @@ mod network_policy;
 mod product_services;
 mod resource_store;
 mod server;
+mod text_document_host;
 mod tool_composition;
 mod tool_executor_adapter;
 mod tool_search_embedding;

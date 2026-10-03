@@ -1,7 +1,8 @@
 //! Validated dir patch application as one model-visible tool.
 //!
 //! The parser accepts a documented patch grammar with context anchors, EOF markers, and moves. Every operation is prepared before any file
-//! is changed, and replacement writes are atomic per file.
+//! is changed. Editor-bound execution commits through versioned document edits and the editor's
+//! save service; explicit disk execution publishes replacement writes atomically per file.
 //! Updates retain existing line endings and EOF conventions. New files use the selected
 //! directory's EditorConfig rules, shared with text writes and replacements by the filesystem layer.
 
@@ -12,13 +13,13 @@ mod patch_commit;
 use crate::file_update::apply_hunks;
 use crate::file_update::new_file_content;
 use crate::parser::PatchDocument;
-use crate::parser::PatchError;
 use crate::parser::PatchOperation;
-use crate::patch_commit::commit;
 use ash_file_access::Dir;
-use ash_file_system::FileMutation;
+use ash_file_system::FileTextDocuments;
 use ash_file_system::TextFileFormat;
-use ash_file_system::file_revision;
+use ash_tools::{
+    TextDocumentChange, TextDocumentEditor, TextDocumentEditorProvider, TextDocumentError,
+};
 use ash_tools::{
     ToolConcurrency, ToolConflictClass, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome,
     ToolExecutor, ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput,
@@ -28,6 +29,7 @@ use serde::Deserialize;
 use serde_json::json;
 use std::fmt;
 use std::future;
+use std::sync::Arc;
 
 const DEFAULT_MAX_PATCH_BYTES: usize = 512 * 1024;
 const DEFAULT_MAX_CHANGED_FILES: usize = 128;
@@ -113,12 +115,14 @@ pub fn changed_paths(
 ///
 /// The accepted grammar has `*** Begin Patch` / `*** End Patch` delimiters and `*** Update File:`,
 /// `*** Add File:`, and `*** Delete File:` operations. Every hunk is matched against the current
-/// file before any write begins; commit checks its exact byte revision again. A partial multi-file commit is reported as an uncertain outcome.
+/// document before any change begins. Editor commits recheck model versions and preserve undo;
+/// disk commits recheck byte revisions. A lost editor reply or partial disk commit is uncertain.
 pub struct ApplyPatchTool {
     environment_id: ash_tools::EnvId,
     dir: Dir,
     limits: ApplyPatchLimits,
     definition: ToolDefinition,
+    documents: Option<Arc<dyn TextDocumentEditorProvider>>,
 }
 
 impl ApplyPatchTool {
@@ -132,7 +136,16 @@ impl ApplyPatchTool {
             dir,
             limits,
             definition: apply_patch_definition()?,
+            documents: None,
         })
+    }
+
+    pub fn with_text_document_editor(
+        mut self,
+        documents: Arc<dyn TextDocumentEditorProvider>,
+    ) -> Self {
+        self.documents = Some(documents);
+        self
     }
 
     fn run(&self, invocation: ToolInvocation) -> ToolExecutionOutcome {
@@ -181,99 +194,113 @@ impl ApplyPatchTool {
             return not_started("patch application was cancelled before writes began");
         }
 
-        let prepared = match Self::prepare(&dir, document) {
-            Ok(prepared) => prepared,
-            Err(error) => return returned_error(format!("patch could not be prepared: {error}")),
-        };
-        if invocation.context().cancellation().is_cancelled() {
-            return not_started("patch application was cancelled before writes began");
-        }
-
-        match commit(&dir, prepared) {
-            Ok(summary) => returned_json(json!({
-                "tool": "apply_patch",
-                "result": {
-                    "updated_files": summary.updated,
-                    "added_files": summary.added,
-                    "deleted_files": summary.deleted,
-                    "moved_files": summary.moved.into_iter().map(|(from, to)| json!({"from": from, "to": to})).collect::<Vec<_>>(),
+        if let (Some(provider), Some(thread)) = (&self.documents, invocation.context().thread_id())
+        {
+            match provider.for_turn(thread, invocation.turn_id()) {
+                Ok(Some(editor)) => {
+                    return Self::run_document_patch(&dir, document, editor.as_ref(), &invocation);
                 }
-            })),
-            Err(error) if !error.publication_started => returned_error(format!(
-                "patch commit rejected before any file changed: {error}"
-            )),
-            Err(error) => {
-                ToolExecutionOutcome::OutcomeUncertain(ToolUncertainOutcome::new(format!(
-                    "patch commit failed; completed paths: {:?}; further changes may have been written: {error}",
-                    error.completed_paths
-                )))
+                Ok(None) => {}
+                Err(error) => return returned_error(error.to_string()),
             }
         }
+        let files = FileTextDocuments::new(dir.clone());
+        Self::run_document_patch(&dir, document, &files, &invocation)
     }
 
-    fn prepare(dir: &Dir, document: PatchDocument) -> Result<Vec<FileMutation>, PatchError> {
-        document
-            .operations
-            .into_iter()
-            .map(|operation| Self::prepare_operation(dir, operation))
-            .collect()
-    }
-
-    fn prepare_operation(dir: &Dir, operation: PatchOperation) -> Result<FileMutation, PatchError> {
-        match operation {
-            PatchOperation::Update {
-                path,
-                move_path,
-                hunks,
-            } => {
-                dir.resolve_existing(&path).map_err(PatchError::sandbox)?;
-                let bytes = dir
-                    .directory()
-                    .handle()
-                    .read(&path)
-                    .map_err(PatchError::io)?;
-                let expected_revision = file_revision(&bytes);
-                let original = String::from_utf8(bytes).map_err(PatchError::sandbox)?;
-                let content = apply_hunks(&original, &hunks)?.into_bytes();
-                match move_path {
-                    Some(target) => {
-                        dir.resolve_for_write(&target)
-                            .map_err(PatchError::sandbox)?;
-                        Ok(FileMutation::MoveAndReplace {
-                            path,
-                            target,
-                            content,
-                            expected_revision,
-                        })
+    fn run_document_patch(
+        dir: &Dir,
+        document: PatchDocument,
+        editor: &dyn TextDocumentEditor,
+        invocation: &ToolInvocation,
+    ) -> ToolExecutionOutcome {
+        let cancellation = invocation.context().cancellation();
+        let mut snapshots = Vec::new();
+        let prepared = (|| -> Result<_, String> {
+            let mut changes = Vec::new();
+            let mut summary = crate::patch_commit::PatchSummary {
+                updated: Vec::new(),
+                added: Vec::new(),
+                deleted: Vec::new(),
+                moved: Vec::new(),
+            };
+            for operation in document.operations {
+                match operation {
+                    PatchOperation::Add { path, lines } => {
+                        let absolute = dir.resolve_for_write(&path).map_err(|e| e.to_string())?;
+                        let text = TextFileFormat::for_new_file(dir, &path)
+                            .map_err(|e| e.to_string())?
+                            .normalize(&new_file_content(&lines));
+                        changes.push(TextDocumentChange::Create {
+                            path: absolute,
+                            text,
+                        });
+                        summary.added.push(path.display().to_string());
                     }
-                    None => Ok(FileMutation::Replace {
+                    PatchOperation::Update {
                         path,
-                        content,
-                        expected_revision,
-                    }),
+                        move_path,
+                        hunks,
+                    } => {
+                        let absolute = dir.resolve_existing(&path).map_err(|e| e.to_string())?;
+                        let snapshot = editor
+                            .read(&absolute, cancellation)
+                            .map_err(|e| e.to_string())?
+                            .ok_or_else(|| format!("file not found: {}", path.display()))?;
+                        snapshots.push(snapshot.id.clone());
+                        let text =
+                            apply_hunks(&snapshot.text, &hunks).map_err(|e| e.to_string())?;
+                        match move_path {
+                            Some(target) => {
+                                let absolute_target =
+                                    dir.resolve_for_write(&target).map_err(|e| e.to_string())?;
+                                changes.push(TextDocumentChange::Move {
+                                    snapshot: snapshot.id,
+                                    target: absolute_target,
+                                    text,
+                                });
+                                summary.moved.push((
+                                    path.display().to_string(),
+                                    target.display().to_string(),
+                                ));
+                            }
+                            None => {
+                                changes.push(TextDocumentChange::Update {
+                                    snapshot: snapshot.id,
+                                    text,
+                                });
+                                summary.updated.push(path.display().to_string());
+                            }
+                        }
+                    }
+                    PatchOperation::Delete { path } => {
+                        let absolute = dir.resolve_existing(&path).map_err(|e| e.to_string())?;
+                        let snapshot = editor
+                            .read(&absolute, cancellation)
+                            .map_err(|e| e.to_string())?
+                            .ok_or_else(|| format!("file not found: {}", path.display()))?;
+                        snapshots.push(snapshot.id.clone());
+                        changes.push(TextDocumentChange::Delete {
+                            snapshot: snapshot.id,
+                        });
+                        summary.deleted.push(path.display().to_string());
+                    }
                 }
             }
-            PatchOperation::Add { path, lines } => {
-                dir.resolve_for_write(&path).map_err(PatchError::sandbox)?;
-                let content = TextFileFormat::for_new_file(dir, &path)
-                    .map_err(PatchError::io)?
-                    .normalize(&new_file_content(&lines))
-                    .into_bytes();
-                Ok(FileMutation::Create { path, content })
-            }
-            PatchOperation::Delete { path } => {
-                dir.resolve_existing(&path).map_err(PatchError::sandbox)?;
-                let bytes = dir
-                    .directory()
-                    .handle()
-                    .read(&path)
-                    .map_err(PatchError::io)?;
-                Ok(FileMutation::Remove {
-                    path,
-                    expected_revision: file_revision(&bytes),
-                })
-            }
-        }
+            Ok((changes, summary))
+        })();
+        let outcome = match prepared {
+            Ok((changes, summary)) => match editor.apply(changes, cancellation) {
+                Ok(()) => returned_summary(summary),
+                Err(TextDocumentError::OutcomeUnknown(message)) => {
+                    ToolExecutionOutcome::OutcomeUncertain(ToolUncertainOutcome::new(message))
+                }
+                Err(error) => returned_error(error.to_string()),
+            },
+            Err(message) => returned_error(message),
+        };
+        editor.release(snapshots);
+        outcome
     }
 }
 
@@ -308,7 +335,7 @@ struct ApplyPatchInput {
 fn apply_patch_definition() -> Result<ToolDefinition, ApplyPatchError> {
     ToolDefinition::function(
         ToolName::new("apply_patch").map_err(definition_error)?,
-        "Apply a validated dir patch. Use *** Begin Patch and *** End Patch, with *** Update File:, *** Add File:, or *** Delete File: operations. Update hunks start with @@ or @@ followed by a context line; their lines start with a space (context), - (remove), or + (add). An update may use *** Move to: to move to an absent destination. *** End of File anchors a hunk at EOF; a hunk containing only additions appends to the file. Paths are relative to the selected directory and parents must exist. Prefer this tool for general multi-hunk or multi-file code changes; use edit for one exact local replacement.",
+        "Apply a validated dir patch. Use *** Begin Patch and *** End Patch, with *** Update File:, *** Add File:, or *** Delete File: operations. Update hunks start with @@ or @@ followed by a context line; their lines start with a space (context), - (remove), or + (add). An update may use *** Move to: to move to an absent destination. *** End of File anchors a hunk at EOF; a hunk containing only additions appends to the file. Paths are relative to the selected directory; missing parent directories are created. Prefer this tool for general multi-hunk or multi-file code changes; use edit for one exact local replacement.",
         ToolInputSchema::parse(json!({
             "type": "object",
             "properties": {
@@ -362,6 +389,13 @@ fn returned_error(message: impl Into<String>) -> ToolExecutionOutcome {
     ToolExecutionOutcome::Returned(ToolOutput::error(vec![ash_tools::ToolContent::Text(
         message.into(),
     )]))
+}
+
+fn returned_summary(summary: crate::patch_commit::PatchSummary) -> ToolExecutionOutcome {
+    returned_json(json!({ "tool": "apply_patch", "result": {
+        "updated_files": summary.updated, "added_files": summary.added, "deleted_files": summary.deleted,
+        "moved_files": summary.moved.into_iter().map(|(from, to)| json!({ "from": from, "to": to })).collect::<Vec<_>>(),
+    }}))
 }
 
 fn returned_json(value: serde_json::Value) -> ToolExecutionOutcome {

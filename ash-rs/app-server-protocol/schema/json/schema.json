@@ -4614,6 +4614,17 @@
             "boolean",
             "null"
           ]
+        },
+        "textDocuments": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextDocumentsCapability"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "type": "object"
@@ -24455,6 +24466,70 @@
         {
           "properties": {
             "method": {
+              "const": "textDocument/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TextDocumentListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "textDocument/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TextDocumentReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "textDocument/apply",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TextDocumentApplyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "textDocument/release",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TextDocumentReleaseParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "browser/create",
               "type": "string"
             },
@@ -24520,6 +24595,70 @@
     },
     "HostResultSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "textDocument/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TextDocumentListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "textDocument/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TextDocumentReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "textDocument/apply",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TextDocumentApplyResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "textDocument/release",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -24654,7 +24793,8 @@
             "agentInteractions": null,
             "browser": null,
             "dirPermissionsHost": null,
-            "notifications": null
+            "notifications": null,
+            "textDocuments": null
           }
         },
         "clientInfo": {
@@ -39236,6 +39376,355 @@
         "operationId",
         "sequence",
         "status"
+      ],
+      "type": "object"
+    },
+    "TextDocumentApplyParams": {
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/TextDocumentChangeDto"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "changes"
+      ],
+      "type": "object"
+    },
+    "TextDocumentApplyResult": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "applied",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "conflict",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "cancelled",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "failed",
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "message"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "outcomeUnknown",
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "message"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TextDocumentChangeDto": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "create",
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "update",
+              "type": "string"
+            },
+            "snapshot": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "snapshot",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "delete",
+              "type": "string"
+            },
+            "snapshot": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "snapshot"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "move",
+              "type": "string"
+            },
+            "snapshot": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "snapshot",
+            "target",
+            "text"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TextDocumentContentDto": {
+      "additionalProperties": false,
+      "properties": {
+        "relativePath": {
+          "description": "Path relative to the requested root, using forward slashes. The root's\nfilesystem identity belongs to the server, not the editor's URI spelling.",
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "relativePath",
+        "text"
+      ],
+      "type": "object"
+    },
+    "TextDocumentListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "root"
+      ],
+      "type": "object"
+    },
+    "TextDocumentListResult": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "documents": {
+              "items": {
+                "$ref": "#/$defs/TextDocumentContentDto"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "documents",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "documents"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "failed",
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "message"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TextDocumentReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "TextDocumentReadResult": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "document",
+              "type": "string"
+            },
+            "snapshot": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "snapshot",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "notFound",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "failed",
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "message"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TextDocumentReleaseParams": {
+      "additionalProperties": false,
+      "properties": {
+        "snapshots": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "type": "array"
+        }
+      },
+      "required": [
+        "snapshots"
+      ],
+      "type": "object"
+    },
+    "TextDocumentsCapability": {
+      "description": "This connection can edit its live text models through the generated host requests.",
+      "properties": {
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version"
       ],
       "type": "object"
     },

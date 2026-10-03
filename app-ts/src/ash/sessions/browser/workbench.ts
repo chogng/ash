@@ -1,3 +1,7 @@
+import { ITextModelService } from '../../editor/common/services/resolverService.js';
+import { TextModelResolverService } from '../../workbench/services/textmodelResolver/common/textModelResolverService.js';
+import { IWorkspaceEditService } from '../../workbench/services/language/common/workspaceEditService.js';
+import { BrowserWorkspaceEditService } from '../../workbench/services/language/browser/browserWorkspaceEditService.js';
 import { IHostService } from '../../workbench/services/host/browser/host.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
@@ -199,6 +203,7 @@ import { SidebarPart } from "./parts/sidebarPart.js";
 import { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
 
 export interface IWorkbenchOptions {
+	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly contributionIds: readonly string[];
 	readonly modeId: WorkbenchModeId;
 	readonly profile: SessionsProfile;
@@ -355,6 +360,9 @@ export class Workbench extends Disposable {
 		}));
 		services.registerInstance(ITextModelResourceService, textModels);
 		services.registerInstance(IFileTextModelService, textModels);
+		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
+		services.registerInstance(IWorkspaceEditService, this._register(new BrowserWorkspaceEditService(textModels, workingCopies, fileService)));
+		if (options.createTextDocumentHost) { this._register(options.createTextDocumentHost(services)); }
 		services.registerInstance(IChatService, chat);
 		services.registerInstance(ModelApiId, options.api.model);
 		services.registerInstance(AppServerApiId, options.api.appServer);

@@ -1,3 +1,4 @@
+import { VSBuffer } from '../../../base/common/buffer.js';
 import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
@@ -11,6 +12,7 @@ export interface WorkspaceEditMetadata {
 }
 
 export interface WorkspaceFileEditOptions {
+	readonly contents?: Promise<VSBuffer>;
 	readonly overwrite?: boolean;
 	readonly ignoreIfExists?: boolean;
 	readonly ignoreIfNotExists?: boolean;
@@ -123,6 +125,7 @@ function resourceEdits(entry: LanguageWorkspaceEditEntry): ResourceEdit[] {
 			return entry.edits.map(edit => new ResourceTextEdit(entry.resource, edit, entry.version));
 		case 'create':
 			return [new ResourceFileEdit(undefined, entry.resource, {
+				...(entry.contents !== undefined ? { contents: Promise.resolve(VSBuffer.fromString(entry.contents)) } : {}),
 				overwrite: entry.existing === 'overwrite',
 				ignoreIfExists: entry.existing === 'ignore',
 			})];

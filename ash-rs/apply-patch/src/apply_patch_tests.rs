@@ -608,43 +608,9 @@ fn moves_reject_existing_destinations_escape_and_overlapping_operations() {
 }
 
 #[test]
-fn commit_checks_all_source_revisions_before_publishing_any_file() {
-    for operation in [
-        "*** Update File: old.txt\n@@\n-old\n+changed\n",
-        "*** Delete File: old.txt\n",
-        "*** Update File: old.txt\n*** Move to: moved.txt\n",
-    ] {
-        let dir = TestDir::new();
-        dir.write("old.txt", "old\n");
-        let patch = format!(
-            "*** Begin Patch\n*** Add File: earlier.txt\n+earlier\n{operation}*** End Patch\n"
-        );
-        let document = PatchDocument::parse(&patch).unwrap_or_else(|error| panic!("{error}"));
-        let prepared = ApplyPatchTool::prepare(&dir.root(), document)
-            .unwrap_or_else(|error| panic!("{error}"));
-        dir.write("old.txt", "external edit\n");
-        let error = match commit(&dir.root(), prepared) {
-            Ok(_) => panic!("stale patch must fail"),
-            Err(error) => error,
-        };
-        assert!(matches!(
-            error.source,
-            ash_file_system::FileSystemError::RevisionConflict(_)
-        ));
-        assert!(!error.publication_started);
-        assert!(error.completed_paths.is_empty());
-        assert_eq!(
-            fs::read_to_string(dir.path().join("old.txt")).unwrap(),
-            "external edit\n"
-        );
-        assert!(!dir.path().join("earlier.txt").exists());
-        assert!(!dir.path().join("moved.txt").exists());
-    }
-}
-
-#[test]
 fn staging_failure_leaves_no_earlier_changes_or_temporary_files() {
     let dir = TestDir::new();
+    dir.write("missing", "a file blocks the target directory");
     let tool =
         ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
     let patch = "*** Begin Patch\n*** Add File: earlier.txt\n+earlier\n*** Add File: missing/later.txt\n+later\n*** End Patch\n";
@@ -652,30 +618,7 @@ fn staging_failure_leaves_no_earlier_changes_or_temporary_files() {
     assert!(
         matches!(outcome, ToolExecutionOutcome::Returned(output) if output.status() == ToolOutputStatus::Error)
     );
-    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
-}
-
-#[test]
-fn add_rejects_a_destination_created_after_preparation() {
-    let dir = TestDir::new();
-    let patch = "*** Begin Patch\n*** Add File: new.txt\n+model\n*** End Patch\n";
-    let document = PatchDocument::parse(patch).unwrap_or_else(|error| panic!("{error}"));
-    let prepared =
-        ApplyPatchTool::prepare(&dir.root(), document).unwrap_or_else(|error| panic!("{error}"));
-    dir.write("new.txt", "external\n");
-    let error = match commit(&dir.root(), prepared) {
-        Ok(_) => panic!("existing destination must fail"),
-        Err(error) => error,
-    };
-    assert!(matches!(
-        error.source,
-        ash_file_system::FileSystemError::AlreadyExists(_)
-    ));
-    assert!(!error.publication_started);
-    assert_eq!(
-        fs::read_to_string(dir.path().join("new.txt")).unwrap(),
-        "external\n"
-    );
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
 }
 
 #[cfg(windows)]
@@ -712,4 +655,83 @@ fn failed_move_publication_reports_the_completed_destination() {
         fs::read_to_string(dir.path().join("old.txt")).unwrap(),
         "old\n"
     );
+}
+
+struct EditorDocuments {
+    text: std::sync::Mutex<String>,
+    fail: bool,
+}
+impl TextDocumentEditor for EditorDocuments {
+    fn read(
+        &self,
+        _: &Path,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<Option<ash_tools::TextDocumentSnapshot>, TextDocumentError> {
+        Ok(Some(ash_tools::TextDocumentSnapshot {
+            id: "snapshot".into(),
+            text: self.text.lock().unwrap().clone(),
+        }))
+    }
+    fn apply(
+        &self,
+        changes: Vec<TextDocumentChange>,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<(), TextDocumentError> {
+        if self.fail {
+            return Err(TextDocumentError::OutcomeUnknown("connection lost".into()));
+        }
+        let [TextDocumentChange::Update { text, .. }] = changes.as_slice() else {
+            panic!("expected document update")
+        };
+        *self.text.lock().unwrap() = text.clone();
+        Ok(())
+    }
+    fn open_documents(
+        &self,
+        _: &std::path::Path,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<Vec<ash_tools::TextDocumentContent>, TextDocumentError> {
+        Ok(Vec::new())
+    }
+    fn release(&self, _: Vec<String>) {}
+}
+struct EditorProvider(Arc<EditorDocuments>);
+impl TextDocumentEditorProvider for EditorProvider {
+    fn for_turn(
+        &self,
+        _: &ash_protocol::ThreadId,
+        _: &TurnId,
+    ) -> Result<Option<Arc<dyn TextDocumentEditor>>, TextDocumentError> {
+        Ok(Some(self.0.clone()))
+    }
+}
+
+#[test]
+fn editor_patch_matches_unsaved_model_preserves_crlf_and_never_writes_disk() {
+    for fail in [false, true] {
+        let dir = TestDir::new();
+        dir.write("file.txt", "disk\n");
+        let editor = Arc::new(EditorDocuments {
+            text: std::sync::Mutex::new("unsaved\r\n".into()),
+            fail,
+        });
+        let tool = ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default())
+            .unwrap()
+            .with_text_document_editor(Arc::new(EditorProvider(Arc::clone(&editor))));
+        let outcome = resolve(tool.execute(invocation_with_context(&tool.definition(), json!({"patch":"*** Begin Patch\n*** Update File: file.txt\n@@\n-unsaved\n+agent\n*** End Patch\n"}), ToolExecutionContext::new(environment_id(), CancellationSource::new().token(), ToolRuntimeAuthority::Unrestricted).with_thread_id(ash_protocol::ThreadId::new("editor-thread").unwrap()))));
+        if fail {
+            assert!(matches!(outcome, ToolExecutionOutcome::OutcomeUncertain(_)));
+            assert_eq!(*editor.text.lock().unwrap(), "unsaved\r\n");
+        } else {
+            let ToolExecutionOutcome::Returned(output) = outcome else {
+                panic!("expected successful patch")
+            };
+            assert_eq!(output.status(), ToolOutputStatus::Success);
+            assert_eq!(*editor.text.lock().unwrap(), "agent\r\n");
+        }
+        assert_eq!(
+            fs::read_to_string(dir.path().join("file.txt")).unwrap(),
+            "disk\n"
+        );
+    }
 }

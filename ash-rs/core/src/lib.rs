@@ -47,6 +47,7 @@ pub use context::ResolvedContextBudget;
 pub use hooks::NoHooks;
 pub use multi_agent::AgentCommandDisposition;
 pub use multi_agent::AgentTreeLimits;
+pub use multi_agent::AgentTurnSubmission;
 pub use multi_agent::CompleteDelegationRequest;
 pub use multi_agent::DeliveredAgentMessage;
 pub use multi_agent::JoinAgentsRequest;

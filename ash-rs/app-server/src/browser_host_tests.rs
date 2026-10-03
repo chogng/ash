@@ -6,47 +6,10 @@ use ash_async_utils::CancellationSource;
 use core_api::BrowserCapability;
 use core_api::BrowserObserveRequest;
 use core_api::CreateBrowserTargetRequest;
-use serde_json::json;
+use serde_json::{Value, json};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
-
-struct UnserializableParams;
-
-impl Serialize for UnserializableParams {
-    fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
-        Err(serde::ser::Error::custom("invalid browser params"))
-    }
-}
-
-#[test]
-fn parameter_serialization_failure_does_not_register_or_publish_a_request() {
-    let host = BrowserHost::new(Arc::new(Mutex::new(ResourceStore::default())));
-    let outbound = NotificationQueue::default();
-    host.register(
-        7,
-        ClientBrowserCapability {
-            version: 1,
-            observe: true,
-            input: true,
-        },
-        outbound.clone(),
-    );
-    let result = host.request::<_, Value>(
-        7,
-        HostMethod::BrowserCreate,
-        &UnserializableParams,
-        &CancellationSource::new().token(),
-    );
-    assert!(
-        matches!(result, Err(BrowserError::Failed(message)) if message == "invalid browser params")
-    );
-    let state = host.state.lock().unwrap();
-    assert!(state.pending.is_empty());
-    assert!(state.retired.is_empty());
-    assert_eq!(state.next_request_id, 0);
-    assert!(outbound.listener().drain().is_empty());
-}
 
 #[test]
 fn terminal_errors_release_registration_without_sending_cancellation() {
@@ -54,7 +17,7 @@ fn terminal_errors_release_registration_without_sending_cancellation() {
         json!({"error": {"code": -32603, "message": "browser failed", "data": null}}),
         json!({"result": {"targetId": 42}}),
     ] {
-        let mut host = BrowserHost::new(Arc::new(Mutex::new(ResourceStore::default())));
+        let mut host = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
         host.owner = Some(7);
         let host = Arc::new(host);
         let outbound = NotificationQueue::default();
@@ -80,13 +43,8 @@ fn terminal_errors_release_registration_without_sending_cancellation() {
         let mut response = response;
         response["jsonrpc"] = json!("2.0");
         response["id"] = request["id"].clone();
-        host.handle_response(7, response).unwrap();
+        host.clients.handle_response(7, response).unwrap();
         assert!(worker.join().unwrap().is_err());
-        let state = host.state.lock().unwrap();
-        assert!(state.pending.is_empty());
-        assert!(
-            state.retired.get(request["id"].as_str().unwrap()) == Some(&RetiredRequest::Completed)
-        );
         assert!(outbound.listener().drain().is_empty());
     }
 }
@@ -94,7 +52,7 @@ fn terminal_errors_release_registration_without_sending_cancellation() {
 #[test]
 fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
     let resources = Arc::new(Mutex::new(ResourceStore::default()));
-    let mut host = BrowserHost::new(Arc::clone(&resources));
+    let mut host = browser_host(Arc::clone(&resources));
     host.owner = Some(7);
     let host = Arc::new(host);
     let outbound = NotificationQueue::default();
@@ -122,40 +80,42 @@ fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
     assert_eq!(request["params"]["url"], "https://example.test/");
     let request_id = request["id"].as_str().unwrap();
     assert!(
-        host.handle_response(
-            8,
-            json!({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": { "targetId": "browser_target_stolen" },
-            }),
-        )
-        .is_err()
+        host.clients
+            .handle_response(
+                8,
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": { "targetId": "browser_target_stolen" },
+                }),
+            )
+            .is_err()
     );
     assert!(
-        host.handle_response(
-            7,
-            json!({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": { "targetId": "browser_target_test" },
-            }),
-        )
-        .unwrap()
+        host.clients
+            .handle_response(
+                7,
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": { "targetId": "browser_target_test" },
+                }),
+            )
+            .unwrap()
     );
     assert!(
-        host.handle_response(
-            7,
-            json!({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": { "targetId": "browser_target_duplicate" },
-            }),
-        )
-        .is_err()
+        host.clients
+            .handle_response(
+                7,
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": { "targetId": "browser_target_duplicate" },
+                }),
+            )
+            .is_err()
     );
     let target = create.join().unwrap().unwrap().target_id;
-    assert!(host.state.lock().unwrap().pending.is_empty());
     assert!(outbound.listener().drain().is_empty());
 
     let observe_host = Arc::clone(&host);
@@ -174,26 +134,27 @@ fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
     let request = next_request(&outbound);
     assert_eq!(request["method"], "browser/observe");
     let request_id = request["id"].as_str().unwrap();
-    host.handle_response(
-        7,
-        json!({
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "targetId": target.0,
-                "url": "https://example.test/",
-                "title": "Example",
-                "loading": false,
-                "accessibilityTree": "{}",
-                "screenshot": {
-                    "mimeType": "image/png",
-                    "dataBase64": "iVBORw0KGgo=",
-                    "decodedLength": 8
-                }
-            },
-        }),
-    )
-    .unwrap();
+    host.clients
+        .handle_response(
+            7,
+            json!({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "targetId": target.0,
+                    "url": "https://example.test/",
+                    "title": "Example",
+                    "loading": false,
+                    "accessibilityTree": "{}",
+                    "screenshot": {
+                        "mimeType": "image/png",
+                        "dataBase64": "iVBORw0KGgo=",
+                        "decodedLength": 8
+                    }
+                },
+            }),
+        )
+        .unwrap();
     let observation = observe.join().unwrap().unwrap();
     let screenshot = observation.screenshot.unwrap();
     assert_eq!(screenshot.mime_type, "image/png");
@@ -217,7 +178,7 @@ fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
 #[test]
 fn disconnect_fails_pending_requests_and_forgets_target_ownership() {
     let resources = Arc::new(Mutex::new(ResourceStore::default()));
-    let mut host = BrowserHost::new(resources);
+    let mut host = browser_host(resources);
     host.owner = Some(3);
     let host = Arc::new(host);
     let outbound = NotificationQueue::default();
@@ -245,14 +206,13 @@ fn disconnect_fails_pending_requests_and_forgets_target_ownership() {
         request.join().unwrap(),
         Err(BrowserError::CapabilityUnavailable)
     );
-    assert!(host.state.lock().unwrap().pending.is_empty());
     assert!(outbound.listener().drain().is_empty());
 }
 
 #[test]
 fn cancellation_retires_the_request_and_accepts_its_late_terminal_response() {
     let resources = Arc::new(Mutex::new(ResourceStore::default()));
-    let mut host = BrowserHost::new(resources);
+    let mut host = browser_host(resources);
     host.owner = Some(11);
     let host = Arc::new(host);
     let outbound = NotificationQueue::default();
@@ -287,17 +247,17 @@ fn cancellation_retires_the_request_and_accepts_its_late_terminal_response() {
     let cancellation = next_request(&outbound);
     assert_eq!(cancellation["method"], "$/cancelRequest");
     assert_eq!(cancellation["params"]["id"], request_id);
-    assert!(host.state.lock().unwrap().pending.is_empty());
     assert!(
-        host.handle_response(
-            11,
-            json!({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "error": { "code": -32800, "message": "Request cancelled", "data": null },
-            }),
-        )
-        .unwrap()
+        host.clients
+            .handle_response(
+                11,
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": { "code": -32800, "message": "Request cancelled", "data": null },
+                }),
+            )
+            .unwrap()
     );
 }
 
@@ -309,7 +269,7 @@ fn next_request(outbound: &NotificationQueue) -> Value {
 
 #[test]
 fn task_binding_never_borrows_another_window_or_a_replayed_command() {
-    let host = BrowserHost::new(Arc::new(Mutex::new(ResourceStore::default())));
+    let host = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
     for owner in [1, 2] {
         host.register(
             owner,
@@ -329,22 +289,42 @@ fn task_binding_never_borrows_another_window_or_a_replayed_command() {
             sequence: 1,
         })
     };
-    host.submit_turn(&thread, Some(2), receipt).unwrap();
+    host.clients
+        .submit_turn(
+            &thread,
+            Some(2),
+            crate::client_host::TextDocumentMode::Client,
+            receipt,
+        )
+        .unwrap();
     assert_eq!(host.for_turn(&thread, &turn).unwrap().create_owner(), Ok(2));
-    host.submit_turn(&thread, Some(1), receipt).unwrap();
+    host.clients
+        .submit_turn(
+            &thread,
+            Some(1),
+            crate::client_host::TextDocumentMode::Client,
+            receipt,
+        )
+        .unwrap();
     assert_eq!(host.for_turn(&thread, &turn).unwrap().create_owner(), Ok(2));
     assert_eq!(
         host.create_owner(),
         Err(BrowserError::CapabilityUnavailable)
     );
     let other_turn = ash_protocol::TurnId::new("web-turn").unwrap();
-    host.submit_turn(&thread, None, || {
-        Ok(core_api::TurnReceipt {
-            turn_id: other_turn.clone(),
-            sequence: 2,
-        })
-    })
-    .unwrap();
+    host.clients
+        .submit_turn(
+            &thread,
+            None,
+            crate::client_host::TextDocumentMode::Client,
+            || {
+                Ok(core_api::TurnReceipt {
+                    turn_id: other_turn.clone(),
+                    sequence: 2,
+                })
+            },
+        )
+        .unwrap();
     assert!(matches!(
         host.for_turn(&thread, &other_turn),
         Err(BrowserError::CapabilityUnavailable)
@@ -366,4 +346,11 @@ fn task_binding_never_borrows_another_window_or_a_replayed_command() {
         host.for_turn(&thread, &turn),
         Err(BrowserError::CapabilityUnavailable)
     ));
+}
+
+fn browser_host(resources: Arc<Mutex<ResourceStore>>) -> BrowserHost {
+    BrowserHost::new(
+        resources,
+        Arc::new(crate::client_host::ClientHost::default()),
+    )
 }

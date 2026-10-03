@@ -13,6 +13,9 @@ use crate::protocol::registry::SERVER_NOTIFICATIONS;
 use crate::protocol::session::SessionRequest;
 use crate::protocol::slash_commands::SlashCommandArgumentModeDto;
 use crate::protocol::slash_commands::SlashCommandDefinition;
+use crate::protocol::text_document::{
+    TextDocumentApplyParams, TextDocumentApplyResult, TextDocumentChangeDto, TextDocumentReadResult,
+};
 use crate::protocol::turn::InputItem;
 use crate::rpc::JsonRpcFailure;
 use crate::rpc::JsonRpcId;
@@ -217,6 +220,10 @@ fn registry_method_and_notification_names_are_unique() {
             "browser/create",
             "browser/observe",
             "browser/perform",
+            "textDocument/apply",
+            "textDocument/list",
+            "textDocument/read",
+            "textDocument/release",
         ])
     );
 }
@@ -1036,4 +1043,46 @@ fn queued_mode_model_and_effort_round_trip_and_omitted_tool_mode_is_explicitly_u
     assert_eq!(request.mode, ash_protocol::CollaborationMode::Ask);
     assert_eq!(request.tool_mode, None);
     assert_eq!(serde_json::to_value(request).unwrap(), value);
+}
+
+#[test]
+fn snapshots_round_trip_unsaved_bom_free_crlf_text() {
+    let value =
+        serde_json::json!({"kind": "document", "snapshot": "lease-1", "text": "dirty\r\ntext"});
+    let snapshot: TextDocumentReadResult = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(snapshot).unwrap(), value);
+    let documents = serde_json::json!({"kind":"documents", "documents":[{"relativePath":"src/file.txt", "text":"dirty\r\ntext"}]});
+    let list: crate::protocol::text_document::TextDocumentListResult =
+        serde_json::from_value(documents.clone()).unwrap();
+    assert_eq!(serde_json::to_value(list).unwrap(), documents);
+    assert!(
+        serde_json::from_value::<TextDocumentReadResult>(serde_json::json!({
+            "kind": "document", "snapshot": "lease-1", "text": "text", "version": 1
+        }))
+        .is_err()
+    );
+}
+
+#[test]
+fn changes_require_snapshot_identity_and_preserve_typed_commit_outcomes() {
+    assert!(
+        serde_json::from_value::<TextDocumentChangeDto>(serde_json::json!({
+            "kind": "update", "path": "/file", "text": "text"
+        }))
+        .is_err()
+    );
+    let changes = serde_json::json!({"changes": [
+        {"kind": "update", "snapshot": "lease-1", "text": "new\ntext"},
+        {"kind": "move", "snapshot": "lease-2", "target": "/new", "text": "moved"}
+    ]});
+    let request: TextDocumentApplyParams = serde_json::from_value(changes.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), changes);
+    for outcome in [
+        serde_json::json!({"kind": "conflict"}),
+        serde_json::json!({"kind": "cancelled"}),
+        serde_json::json!({"kind": "outcomeUnknown", "message": "connection closed"}),
+    ] {
+        let result: TextDocumentApplyResult = serde_json::from_value(outcome.clone()).unwrap();
+        assert_eq!(serde_json::to_value(result).unwrap(), outcome);
+    }
 }

@@ -42,6 +42,16 @@ pub struct ClientCapabilities {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub dir_permissions_host: Option<DirPermissionsHostCapability>,
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub text_documents: Option<TextDocumentsCapability>,
+}
+
+/// This connection can edit its live text models through the generated host requests.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TextDocumentsCapability {
+    pub version: u32,
 }
 
 /// Agent interaction kinds that one client connection can present and resolve.
