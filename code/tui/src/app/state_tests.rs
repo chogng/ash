@@ -821,7 +821,7 @@ fn voice_command_adds_recognized_text_to_the_draft_and_stops() {
         app.dictation_status().as_deref(),
         Some("Dictation · listening")
     );
-    crate::tui_assert_snapshot!("dictation_listening", render_dictation_frame(&app));
+    crate::tui_assert_snapshot!(app = &app; "dictation_listening", render_dictation_frame(&app));
     app.dictation_transcript("other", "ignored", false);
     app.dictation_transcript(&resource_id, "recognized text", false);
     assert_eq!(app.input(), "recognized text");
@@ -881,7 +881,7 @@ fn interrupt_cancels_dictation_download_without_quitting_or_sending_the_draft() 
             ScreenMode::Fullscreen => "dictation_download_fullscreen_zh",
             ScreenMode::Inline => "dictation_download_inline_zh",
         };
-        crate::tui_assert_snapshot!(name, render_dictation_frame(&app));
+        crate::tui_assert_snapshot!(app = &app; name, render_dictation_frame(&app));
 
         assert_eq!(
             app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
@@ -908,7 +908,7 @@ fn interrupt_cancels_dictation_download_without_quitting_or_sending_the_draft() 
             ScreenMode::Fullscreen => "dictation_download_cancelled_fullscreen_zh",
             ScreenMode::Inline => "dictation_download_cancelled_inline_zh",
         };
-        crate::tui_assert_snapshot!(name, render_dictation_frame(&app));
+        crate::tui_assert_snapshot!(app = &app; name, render_dictation_frame(&app));
         assert_eq!(
             app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
             Some(AppCommand::Quit)
@@ -1044,7 +1044,7 @@ fn interrupt_stops_dictation_preparation_before_a_running_chat_turn() {
     assert!(progress_row < input_row);
     assert!(speech_row < input_row);
     assert!(!rendered.contains("to interrupt"));
-    crate::tui_assert_snapshot!("dictation_preparation_with_running_turn", rendered);
+    crate::tui_assert_snapshot!(app = &app; "dictation_preparation_with_running_turn", rendered);
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
         Some(AppCommand::DictationStop {
@@ -1053,6 +1053,7 @@ fn interrupt_stops_dictation_preparation_before_a_running_chat_turn() {
     );
     assert!(app.dictation_key_hints().is_none());
     crate::tui_assert_snapshot!(
+        app = &app;
         "dictation_stopping_with_running_turn",
         render_dictation_frame(&app)
     );
@@ -1261,7 +1262,7 @@ fn config_can_enable_and_change_the_local_dictation_shortcut() {
             "dictation-shortcut"
         )),
     );
-    crate::tui_assert_snapshot!("config_dictation_shortcut", render_dictation_frame(&app));
+    crate::tui_assert_snapshot!(app = &app; "config_dictation_shortcut", render_dictation_frame(&app));
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let Some(AppCommand::SetDictationShortcutSettings(settings)) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
@@ -1319,7 +1320,7 @@ fn dictation_replaces_partial_text_and_commits_final_once() {
     assert_eq!(app.input(), "Draft hel");
     app.dictation_transcript(&resource_id, "hello", false);
     assert_eq!(app.input(), "Draft hello");
-    crate::tui_assert_snapshot!("dictation_partial_draft", render_dictation_frame(&app));
+    crate::tui_assert_snapshot!(app = &app; "dictation_partial_draft", render_dictation_frame(&app));
     app.dictation_transcript(&resource_id, "hello world", true);
     assert_eq!(app.input(), "Draft hello world");
     app.update(AppEvent::DictationStopped {
@@ -1505,7 +1506,7 @@ fn config_owns_the_advisor_model_picker() {
         .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
-    crate::tui_assert_snapshot!("config_advisor_settings", rendered);
+    crate::tui_assert_snapshot!(app = &app; "config_advisor_settings", rendered);
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         None
@@ -1901,6 +1902,7 @@ fn api_key_save_reports_catalog_result_in_chinese() {
     }
     assert!(app.list_selection().is_none());
     crate::tui_assert_snapshot!(
+        app = &app;
         "api_key_catalog_loaded_zh",
         crate::app::usage_tests::render(&app, 96, 24)
     );
@@ -1971,7 +1973,7 @@ fn chatgpt_subscription_shows_fetched_models_in_chinese() {
     assert!(screen.contains("GPT Ash"));
     assert!(!screen.contains("gpt-ash"));
     assert!(!screen.contains("OpenAI"));
-    crate::tui_assert_snapshot!("chatgpt_subscription_models_chinese", screen);
+    crate::tui_assert_snapshot!(app = &app; "chatgpt_subscription_models_chinese", screen);
 
     for revision in 2..=3 {
         app.update(ConfigEvent::Subscription(SubscriptionEvent::Updated(
@@ -2020,7 +2022,7 @@ fn chatgpt_subscription_shows_fetched_models_in_chinese() {
     let updated = crate::app::usage_tests::render(&app, 96, 24);
     assert!(updated.contains("GPT Next"));
     assert!(!updated.contains("正在加载模型"));
-    crate::tui_assert_snapshot!("chatgpt_subscription_auto_models_chinese", updated);
+    crate::tui_assert_snapshot!(app = &app; "chatgpt_subscription_auto_models_chinese", updated);
 }
 
 #[test]
@@ -2137,7 +2139,7 @@ fn subscription_sign_out_shortcut_uses_each_connection_owner() {
         assert!(reconnected.contains("person@example.test"));
         assert!(reconnected.contains("l to sign out"));
         if provider == SubscriptionProvider::ChatGpt {
-            crate::tui_assert_snapshot!("chatgpt_subscription_reconnected", reconnected);
+            crate::tui_assert_snapshot!(app = &app; "chatgpt_subscription_reconnected", reconnected);
         }
     }
 }
@@ -2283,7 +2285,7 @@ fn chatgpt_external_login_error_shows_codex_instructions_and_allows_retry() {
     assert!(screen.contains("Sign in to ChatGPT in Codex, then reconnect here."));
     assert!(!screen.contains("Working…"));
     assert!(app.list_selection().is_none());
-    crate::tui_assert_snapshot!("chatgpt_external_login_required", screen);
+    crate::tui_assert_snapshot!(app = &app; "chatgpt_external_login_required", screen);
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert_eq!(
         app.list_selection()
@@ -3852,7 +3854,7 @@ fn xai_subscription_displays_server_plan() {
     assert!(screen.contains("SuperGrok Heavy"));
     assert!(screen.contains("Grok Account Model"));
     assert!(!screen.contains("Grok 4.6"));
-    crate::tui_assert_snapshot!("xai_subscription_plan", screen);
+    crate::tui_assert_snapshot!(app = &app; "xai_subscription_plan", screen);
     for _ in 0..2 {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     }
@@ -3878,7 +3880,7 @@ fn xai_subscription_displays_server_plan() {
     let updated = crate::app::usage_tests::render(&app, 96, 24);
     assert!(updated.contains("Grok Next"));
     assert!(!updated.contains("Grok Account Model"));
-    crate::tui_assert_snapshot!("xai_subscription_auto_models", updated);
+    crate::tui_assert_snapshot!(app = &app; "xai_subscription_auto_models", updated);
 }
 
 #[test]
@@ -3911,6 +3913,7 @@ fn kimi_subscription_shows_account_and_sign_out_shortcut() {
         },
     ));
     crate::tui_assert_snapshot!(
+        app = &app;
         "kimi_subscription_account",
         crate::app::usage_tests::render(&app, 96, 24)
     );
@@ -3967,6 +3970,7 @@ fn kimi_subscription_signed_out_shows_only_the_sign_in_action_in_chinese() {
     assert_eq!(selection.visible_items().len(), 1);
     assert_eq!(selection.selected_item().unwrap().label(), "登录 Kimi");
     crate::tui_assert_snapshot!(
+        app = &app;
         "kimi_subscription_signed_out_chinese",
         crate::app::usage_tests::render(&app, 96, 24)
     );
@@ -4025,7 +4029,7 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
     ));
     let screen = crate::app::usage_tests::render(&app, 96, 24);
     assert!(screen.contains("XAI-1234") && screen.contains("https://auth.x.ai/device"));
-    crate::tui_assert_snapshot!("xai_subscription_device_login", screen);
+    crate::tui_assert_snapshot!(app = &app; "xai_subscription_device_login", screen);
     for _ in 0..2 {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     }
@@ -4100,7 +4104,7 @@ fn xai_subscription_browser_failure_keeps_the_manual_challenge_visible() {
     let screen = crate::app::usage_tests::render(&app, 96, 24);
     assert!(screen.contains("Could not open browser"));
     assert!(app.list_selection().is_none());
-    crate::tui_assert_snapshot!("xai_subscription_browser_failure", screen);
+    crate::tui_assert_snapshot!(app = &app; "xai_subscription_browser_failure", screen);
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     let challenge = crate::app::usage_tests::render(&app, 96, 24);
     assert!(challenge.contains("https://auth.x.ai/device"));
@@ -4126,7 +4130,7 @@ fn kimi_login_failure_uses_dialog_and_restores_sign_in() {
     assert!(screen.contains("错误"));
     assert!(screen.contains("Kimi token exchange failed with HTTP 400"));
     assert!(app.list_selection().is_none());
-    crate::tui_assert_snapshot!("kimi_subscription_error_dialog", screen);
+    crate::tui_assert_snapshot!(app = &app; "kimi_subscription_error_dialog", screen);
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(
         app.list_selection()
@@ -4172,6 +4176,7 @@ fn bigmodel_subscription_uses_browser_login_from_the_tui() {
         },
     ));
     crate::tui_assert_snapshot!(
+        app = &app;
         "bigmodel_subscription_sign_in",
         crate::app::usage_tests::render(&app, 96, 24)
     );
@@ -4195,7 +4200,7 @@ fn bigmodel_subscription_uses_browser_login_from_the_tui() {
     let screen = crate::app::usage_tests::render(&app, 96, 24);
     assert!(screen.contains("https://zcode.z.ai/authorize"));
     assert!(!screen.contains("API key"));
-    crate::tui_assert_snapshot!("bigmodel_subscription_browser_login", screen);
+    crate::tui_assert_snapshot!(app = &app; "bigmodel_subscription_browser_login", screen);
 }
 
 #[test]
@@ -4237,7 +4242,7 @@ fn zai_subscription_shows_account_and_sign_out_hint() {
     let screen = crate::app::usage_tests::render(&app, 96, 24);
     assert!(screen.contains("person@example.test"));
     assert!(screen.contains("l to sign out"));
-    crate::tui_assert_snapshot!("zai_subscription_configured", screen);
+    crate::tui_assert_snapshot!(app = &app; "zai_subscription_configured", screen);
 }
 
 #[test]
@@ -4333,7 +4338,7 @@ fn dictation_finished_text_stays_in_draft_until_explicit_submission() {
         assert_eq!(app.take_dictation_submission(), None);
         app.insert_text(" and run tests");
         if mode == ScreenMode::Fullscreen {
-            crate::tui_assert_snapshot!("dictation_ready_to_review", render_dictation_frame(&app));
+            crate::tui_assert_snapshot!(app = &app; "dictation_ready_to_review", render_dictation_frame(&app));
         }
         let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) =
             app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
@@ -4395,6 +4400,6 @@ fn removed_dictate_command_is_visible_before_session_creation() {
             ScreenMode::Fullscreen => "removed_dictate_before_session_fullscreen",
             ScreenMode::Inline => "removed_dictate_before_session_inline",
         };
-        crate::tui_assert_snapshot!(snapshot, frame);
+        crate::tui_assert_snapshot!(app = &app; snapshot, frame);
     }
 }

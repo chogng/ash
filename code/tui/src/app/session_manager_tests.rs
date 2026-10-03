@@ -28,7 +28,7 @@ fn agents_manager_simulates_navigation_and_transient_details() {
     assert_eq!(app.handle_key(key(KeyCode::Left)), None);
     assert!(app.session_manager_view().is_some());
     assert!(!app.session_manager_focused());
-    crate::tui_assert_snapshot!("agents_manager_open_unfocused", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "agents_manager_open_unfocused", render(&app));
 
     assert_eq!(app.handle_key(key(KeyCode::Up)), None);
     assert!(app.session_manager_focused());
@@ -43,7 +43,7 @@ fn agents_manager_simulates_navigation_and_transient_details() {
     let loading = render(&app);
     assert_eq!(loading.matches("Esc to close").count(), 1);
     assert!(!loading.contains("Enter to open"));
-    crate::tui_assert_snapshot!("session_details_loading", loading);
+    crate::tui_assert_snapshot!(app = &app; "session_details_loading", loading);
     let (generation, session_id) = app.take_session_details_request().unwrap();
     assert_eq!(session_id, session().session_id);
     let root = &session().threads[0];
@@ -59,7 +59,7 @@ fn agents_manager_simulates_navigation_and_transient_details() {
             agent_tree: tree,
         }),
     });
-    crate::tui_assert_snapshot!("agents_manager_transient_session_details", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "agents_manager_transient_session_details", render(&app));
 
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
@@ -74,7 +74,7 @@ fn agents_manager_simulates_navigation_and_transient_details() {
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
     assert!(app.overlay().is_none());
     assert!(app.session_manager_focused());
-    crate::tui_assert_snapshot!("agents_manager_after_preview_closed", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "agents_manager_after_preview_closed", render(&app));
 
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
     assert!(app.session_manager_view().is_none());
@@ -103,6 +103,7 @@ fn resuming_selected_session_restores_manager_navigation() {
     assert!(!app.session_manager_focused());
     assert_eq!(app.screen_navigation_tip(), Some("← Dashboard"));
     crate::tui_assert_snapshot!(
+        app = &app;
         "agents_session_after_resume_restores_manager_tip",
         render(&app)
     );
@@ -117,11 +118,11 @@ fn dashboard_command_opens_the_manager() {
     app.insert_text("/dashboard");
 
     assert!(app.completion().is_some());
-    crate::tui_assert_snapshot!("dashboard_command_completion", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "dashboard_command_completion", render(&app));
 
     assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
     assert!(app.session_manager_view().is_some());
-    crate::tui_assert_snapshot!("dashboard_command_opened_manager", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "dashboard_command_opened_manager", render(&app));
 
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
     assert!(app.session_manager_view().is_none());
@@ -144,13 +145,13 @@ fn dashboard_escape_exits_from_focused_list_and_right_does_not_exit() {
     assert!(app.session_manager_hint().text().ends_with("Esc to return"));
     assert_eq!(app.handle_key(key(KeyCode::Right)), None);
     assert!(app.session_manager_view().is_some());
-    crate::tui_assert_snapshot!("dashboard_list_focused_before_escape", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "dashboard_list_focused_before_escape", render(&app));
 
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
     assert!(app.session_manager_view().is_none());
     assert!(!app.session_manager_focused());
     assert!(app.chat_input_focused());
-    crate::tui_assert_snapshot!("dashboard_after_escape", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "dashboard_after_escape", render(&app));
 }
 
 #[test]
@@ -201,7 +202,7 @@ fn inline_dashboard_right_returns_from_input_and_session_list() {
         assert!(app.session_manager_view().is_none());
         assert!(app.chat_input_focused());
     }
-    crate::tui_assert_snapshot!("inline_dashboard_arrow_navigation", frames.join("\n\n"));
+    crate::tui_assert_snapshot!(mode = crate::terminal::ScreenMode::Inline; "inline_dashboard_arrow_navigation", frames.join("\n\n"));
 }
 
 #[test]
@@ -260,7 +261,7 @@ fn inline_dashboard_right_in_a_draft_edits_the_input() {
     assert!(app.session_manager_view().is_some());
     app.insert_text("X");
     assert_eq!(app.input(), "dXraft");
-    crate::tui_assert_snapshot!("inline_dashboard_right_edits_draft", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "inline_dashboard_right_edits_draft", render(&app));
 }
 
 #[test]
@@ -277,7 +278,7 @@ fn inline_dashboard_return_is_discoverable_in_localized_help() {
     let output = render(&app);
     assert!(output.contains("→/Esc"));
     assert!(output.replace(' ', "").contains("从inline仪表盘返回"));
-    crate::tui_assert_snapshot!("inline_dashboard_return_help_chinese", output);
+    crate::tui_assert_snapshot!(app = &app; "inline_dashboard_return_help_chinese", output);
 }
 
 #[test]
@@ -294,13 +295,13 @@ fn session_manager_preview_reads_conversation_and_restores_focus_without_editing
     assert_eq!(params.session_id.as_str(), "current");
     assert_eq!(params.thread_id.as_str(), "current");
     assert!(!app.accepts_input());
-    crate::tui_assert_snapshot!("session_manager_preview_loading", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "session_manager_preview_loading", render(&app));
     app.finish_session_preview(
         app.screen_mode(),
         generation,
         Ok(preview_result(0..35, false)),
     );
-    crate::tui_assert_snapshot!("session_manager_preview_conversation", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "session_manager_preview_conversation", render(&app));
     for code in [
         KeyCode::Char('x'),
         KeyCode::Char('/'),
@@ -319,7 +320,7 @@ fn session_manager_preview_reads_conversation_and_restores_focus_without_editing
         None
     );
     assert!(app.fullscreen.preview.scroll.anchor().is_some());
-    crate::tui_assert_snapshot!("session_manager_preview_scrolled", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "session_manager_preview_scrolled", render(&app));
     let preview_anchor = app.fullscreen.preview.scroll.anchor().cloned();
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
@@ -421,7 +422,7 @@ fn session_manager_archived_group_restores_deletes_and_previews() {
     );
     app.handle_key(key(KeyCode::Enter));
     app.handle_key(key(KeyCode::Down));
-    crate::tui_assert_snapshot!("session_manager_archived_expanded", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "session_manager_archived_expanded", render(&app));
     assert_eq!(
         app.handle_key(key(KeyCode::Enter)),
         Some(
@@ -475,7 +476,7 @@ fn session_manager_group_keys_collapse_expand_and_skip_hidden_sessions() {
     );
     assert!(!render(&app).contains("Snapshot session"));
     assert!(app.session_preview().is_none());
-    crate::tui_assert_snapshot!("session_manager_idle_collapsed", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "session_manager_idle_collapsed", render(&app));
 
     app.update(SessionEvent::CatalogReceived(vec![session()]));
     assert!(
@@ -489,7 +490,7 @@ fn session_manager_group_keys_collapse_expand_and_skip_hidden_sessions() {
     assert_eq!(app.handle_key(key(KeyCode::Char(' '))), None);
     assert!(app.session_preview().is_none());
     assert!(render(&app).contains("Snapshot session"));
-    crate::tui_assert_snapshot!("session_manager_idle_expanded", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "session_manager_idle_expanded", render(&app));
 
     for code in [KeyCode::Left, KeyCode::Left] {
         assert_eq!(app.handle_key(key(code)), None);

@@ -9,6 +9,7 @@ use ash_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
 use ash_app_server_protocol::protocol::config::ToolSearchModeDto;
 use std::collections::BTreeMap;
 use std::fmt::Display;
+use std::path::PathBuf;
 #[cfg(feature = "in-process-tests")]
 use std::sync::Mutex;
 #[cfg(feature = "in-process-tests")]
@@ -17,19 +18,44 @@ use std::sync::MutexGuard;
 #[cfg(feature = "in-process-tests")]
 static IN_PROCESS_TEST_LOCK: Mutex<()> = Mutex::new(());
 
-pub(crate) fn snapshot_name(name: impl Display, module_path: &str) -> String {
-    let module_path = module_path
-        .split_once("::")
-        .map_or(module_path, |(_, module_path)| module_path)
-        .replace("::", "__");
-    let name = name.to_string().replace(['/', '\\'], "__");
-    format!("{module_path}__{name}")
+pub(crate) fn snapshot_settings(
+    module_path: &str,
+    mode: Option<crate::terminal::ScreenMode>,
+) -> insta::Settings {
+    let category = match mode {
+        Some(crate::terminal::ScreenMode::Fullscreen) => "fullscreen",
+        Some(crate::terminal::ScreenMode::Inline) => "inline",
+        None => "shared",
+    };
+    // An absolute crate path keeps expectations together regardless of the test source's location.
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("snapshots")
+        .join(category);
+    let mut has_owner = false;
+    for module in module_path.split("::").skip(1) {
+        if matches!(module, "app" | "fullscreen" | "inline" | "tests") {
+            continue;
+        }
+        path.push(module.strip_suffix("_tests").unwrap_or(module));
+        has_owner = true;
+    }
+    if !has_owner {
+        path.push("frame");
+    }
+    let mut settings = insta::Settings::clone_current();
+    settings.set_snapshot_path(path);
+    settings.set_prepend_module_to_snapshot(false);
+    settings
 }
 
-pub(crate) fn snapshot_name_for_function(function_path: &str, module_path: &str) -> String {
+pub(crate) fn snapshot_name(name: impl Display) -> String {
+    name.to_string().replace(['/', '\\'], "__")
+}
+
+pub(crate) fn snapshot_name_for_function(function_path: &str) -> String {
     let function_name = function_path.rsplit("::").next().unwrap_or(function_path);
     let function_name = function_name.strip_prefix("test_").unwrap_or(function_name);
-    snapshot_name(function_name, module_path)
+    snapshot_name(function_name)
 }
 
 #[cfg(feature = "in-process-tests")]

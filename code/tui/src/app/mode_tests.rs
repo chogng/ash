@@ -56,7 +56,7 @@ fn modes_restore_their_own_scroll_while_sharing_the_draft_and_queue() {
     app.handle_key_in_area(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE), area);
     let fullscreen_anchor = app.transcript_scroll().anchor().cloned();
     assert!(fullscreen_anchor.is_some());
-    crate::tui_assert_snapshot!("fullscreen_scroll_with_shared_draft", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "fullscreen_scroll_with_shared_draft", render(&app));
 
     switch(&mut app, ScreenMode::Inline);
     assert!(app.transcript_scroll().anchor().is_none());
@@ -66,7 +66,7 @@ fn modes_restore_their_own_scroll_while_sharing_the_draft_and_queue() {
     let inline_anchor = app.transcript_scroll().anchor().cloned();
     assert!(inline_anchor.is_some());
     assert_ne!(inline_anchor, fullscreen_anchor);
-    crate::tui_assert_snapshot!("inline_scroll_with_shared_draft", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "inline_scroll_with_shared_draft", render(&app));
 
     switch(&mut app, ScreenMode::Fullscreen);
     assert_eq!(app.transcript_scroll().anchor(), fullscreen_anchor.as_ref());
@@ -104,13 +104,13 @@ fn switching_modes_moves_the_active_panel_and_keeps_its_keyboard_selection() {
         Some(1)
     );
     assert!(!app.chat_input_focused());
-    crate::tui_assert_snapshot!("panel_transferred_to_inline", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "panel_transferred_to_inline", render(&app));
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert!(app.chat_input_focused());
     assert_eq!(app.input(), "keep editing this draft");
-    crate::tui_assert_snapshot!("inline_draft_after_panel_dismissed", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "inline_draft_after_panel_dismissed", render(&app));
     switch(&mut app, ScreenMode::Fullscreen);
     assert!(app.command_panel().is_none());
     assert_eq!(app.input(), "keep editing this draft");
@@ -186,7 +186,7 @@ fn modes_restore_independent_queue_and_transcript_focus() {
         assert!(!app.queue_focused());
         assert!(app.transcript_selection_active());
         assert_eq!(app.queue_view().items[0].text, "queued message");
-        crate::tui_assert_snapshot!(snapshot, render(&app));
+        crate::tui_assert_snapshot!(app = &app; snapshot, render(&app));
 
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert!(!app.transcript_selection_active());
@@ -233,7 +233,7 @@ fn escape_returns_to_the_shared_draft_after_restoring_transcript_selection() {
         assert_eq!(app.input(), "x");
         assert!(!app.transcript_selection_active());
         assert!(app.chat_input_focused());
-        crate::tui_assert_snapshot!(snapshot, render(&app));
+        crate::tui_assert_snapshot!(app = &app; snapshot, render(&app));
 
         let area = Rect::new(0, 0, 50, 16);
         let input = match target {
@@ -326,7 +326,7 @@ fn inline_navigation_does_not_replace_the_fullscreen_home() {
     switch(&mut app, ScreenMode::Fullscreen);
     assert!(app.fullscreen_home_visible());
     assert!(app.session_manager_view().is_none());
-    crate::tui_assert_snapshot!("fullscreen_home_after_inline_navigation", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "fullscreen_home_after_inline_navigation", render(&app));
     switch(&mut app, ScreenMode::Inline);
     assert!(app.session_manager_focused());
     assert!(app.session_manager_view().is_some());
@@ -356,7 +356,7 @@ fn managers_share_the_catalogue_but_keep_separate_selections_and_focus() {
             .map(|id| id.as_str()),
         Some("first")
     );
-    crate::tui_assert_snapshot!("inline_manager_own_selection", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "inline_manager_own_selection", render(&app));
     switch(&mut app, ScreenMode::Fullscreen);
     assert_eq!(
         app.session_navigation().manager().selected_session(),
@@ -365,7 +365,7 @@ fn managers_share_the_catalogue_but_keep_separate_selections_and_focus() {
     assert!(app.session_manager_focused());
     assert_eq!(app.sessions.catalog().len(), 2);
     assert_eq!(app.sessions.active_session_id().unwrap().as_str(), "first");
-    crate::tui_assert_snapshot!("fullscreen_manager_own_selection", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "fullscreen_manager_own_selection", render(&app));
 }
 
 #[test]
@@ -392,7 +392,7 @@ fn transferred_panel_takes_input_above_the_inline_preview() {
             ],
         )],
     )));
-    crate::tui_assert_snapshot!("fullscreen_panel_before_preview_handoff", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "fullscreen_panel_before_preview_handoff", render(&app));
     switch(&mut app, ScreenMode::Inline);
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
@@ -400,11 +400,11 @@ fn transferred_panel_takes_input_above_the_inline_preview() {
         Some(1)
     );
     assert!(app.session_preview().is_some());
-    crate::tui_assert_snapshot!("inline_panel_above_parked_preview", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "inline_panel_above_parked_preview", render(&app));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert!(app.session_preview().is_some());
-    crate::tui_assert_snapshot!("inline_preview_restored_after_panel", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "inline_preview_restored_after_panel", render(&app));
 }
 
 #[test]
@@ -435,13 +435,13 @@ fn preview_replies_with_equal_generations_stay_with_the_requesting_mode() {
         app.session_preview().unwrap().notice(),
         Some("Loading conversation…")
     );
-    crate::tui_assert_snapshot!("inline_preview_ignores_other_mode_reply", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "inline_preview_ignores_other_mode_reply", render(&app));
     switch(&mut app, ScreenMode::Fullscreen);
     assert_eq!(
         app.session_preview().unwrap().notice(),
         Some("fullscreen preview failed")
     );
-    crate::tui_assert_snapshot!("fullscreen_preview_receives_own_reply", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "fullscreen_preview_receives_own_reply", render(&app));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     switch(&mut app, ScreenMode::Inline);
     assert!(app.session_preview().is_some());
@@ -462,6 +462,7 @@ fn new_task_and_current_conversation_keep_distinct_shared_drafts() {
     assert!(app.fullscreen_home_visible());
     assert_eq!(app.input(), "new task draft");
     crate::tui_assert_snapshot!(
+        app = &app;
         "home_draft_is_separate_from_current_conversation",
         render(&app)
     );
@@ -501,7 +502,7 @@ fn issue_pages_and_their_async_results_are_owned_by_the_requesting_mode() {
     assert!(app.issue_manager().is_some());
     switch(&mut app, ScreenMode::Fullscreen);
     assert!(render(&app).contains("FULL-ISSUE-ERROR"));
-    crate::tui_assert_snapshot!("fullscreen_issues_receive_own_result", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "fullscreen_issues_receive_own_result", render(&app));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.issue_manager().is_none());
     switch(&mut app, ScreenMode::Inline);
@@ -533,7 +534,7 @@ fn an_async_clipboard_read_stays_with_its_logical_draft_after_switching_modes() 
     assert_eq!(app.input(), "current draft");
     switch(&mut app, ScreenMode::Fullscreen);
     assert_eq!(app.input(), "new task [Image #1] ");
-    crate::tui_assert_snapshot!("clipboard_result_belongs_to_new_task_draft", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "clipboard_result_belongs_to_new_task_draft", render(&app));
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(super::AppCommand::Sessions(
@@ -567,6 +568,7 @@ fn read_only_overlays_stay_in_their_own_modes_instead_of_following_editor_handof
     switch(&mut app, ScreenMode::Fullscreen);
     assert_eq!(app.overlay().unwrap().title(), "Fullscreen detail");
     crate::tui_assert_snapshot!(
+        app = &app;
         "fullscreen_detail_is_not_replaced_by_inline_detail",
         render(&app)
     );
@@ -635,7 +637,7 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
         let output = terminal.backend().to_string();
         assert!(output.contains("[Fast off]"));
         assert!(output.contains("[272k]"));
-        crate::tui_assert_snapshot!(format!("model_options_{mode:?}"), output);
+        crate::tui_assert_snapshot!(app = &app; format!("model_options_{mode:?}"), output);
         for modifiers in [KeyModifiers::NONE, KeyModifiers::SHIFT] {
             app.handle_key(KeyEvent::new(KeyCode::Char('/'), modifiers));
             assert!(
@@ -676,6 +678,7 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
             .draw(|frame| super::frame::draw(frame, &app))
             .unwrap();
         crate::tui_assert_snapshot!(
+            app = &app;
             format!("model_search_{mode:?}"),
             terminal.backend().to_string()
         );

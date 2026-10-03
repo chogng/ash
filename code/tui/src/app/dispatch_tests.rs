@@ -106,7 +106,7 @@ fn branch_persists_lineage_switches_threads_and_does_not_call_the_model() {
         .unwrap()
         .text()
         .replace(forked_thread_id.as_str(), "THREAD");
-    insta::assert_snapshot!("branch_switch_notice", notice);
+    crate::tui_assert_snapshot!("branch_switch_notice", notice);
     let persisted_session = client
         .read_session(SessionReadParams {
             session_id: original_session.clone(),

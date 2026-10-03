@@ -22,7 +22,7 @@ use serde_json::json;
 #[test]
 fn network_config_diagnostics_routes_the_rpc_renders_both_modes_and_copies_domains() {
     let mut app = open_config(Language::English, ScreenMode::Fullscreen);
-    crate::tui_assert_snapshot!("network_config_entry", render(&app, 100, 24));
+    crate::tui_assert_snapshot!(app = &app; "network_config_entry", render(&app, 100, 24));
     let command = app.handle_key(key(KeyCode::Enter)).unwrap();
     assert_ne!(
         super::requests::request_key(&command),
@@ -34,7 +34,7 @@ fn network_config_diagnostics_routes_the_rpc_renders_both_modes_and_copies_domai
     let AppCommand::Config(command) = command else {
         unreachable!()
     };
-    crate::tui_assert_snapshot!("network_diagnostics_loading", render(&app, 100, 24));
+    crate::tui_assert_snapshot!(app = &app; "network_diagnostics_loading", render(&app, 100, 24));
     let mut client = AppServerClient::new(Transport {
         response: json!({"result": report()}),
     });
@@ -47,11 +47,11 @@ fn network_config_diagnostics_routes_the_rpc_renders_both_modes_and_copies_domai
     );
     assert!(screen.contains("DNS lookup failed"), "{screen}");
     assert!(screen.contains("Account usage query failed"), "{screen}");
-    crate::tui_assert_snapshot!("network_diagnostics_fullscreen", screen);
+    crate::tui_assert_snapshot!(app = &app; "network_diagnostics_fullscreen", screen);
     let mut terminal = TerminalSettings::default();
     terminal.set_screen_mode(ScreenMode::Inline);
     app.update(ConfigEvent::SettingsReceived(terminal));
-    crate::tui_assert_snapshot!("network_diagnostics_inline", render(&app, 100, 24));
+    crate::tui_assert_snapshot!(app = &app; "network_diagnostics_inline", render(&app, 100, 24));
     terminal.set_screen_mode(ScreenMode::Fullscreen);
     app.update(ConfigEvent::SettingsReceived(terminal));
     app.handle_key(key(KeyCode::Down));
@@ -73,7 +73,7 @@ fn network_config_diagnostics_routes_the_rpc_renders_both_modes_and_copies_domai
     assert!(app.handle_key(key(KeyCode::Char('r'))).is_none());
     app.handle_key(key(KeyCode::Esc));
     assert_eq!(app.list_selection().unwrap().tabs().len(), 4);
-    crate::tui_assert_snapshot!("network_diagnostics_back_to_config", render(&app, 100, 24));
+    crate::tui_assert_snapshot!(app = &app; "network_diagnostics_back_to_config", render(&app, 100, 24));
     let AppCommand::Config(command) = refresh else {
         unreachable!()
     };
@@ -107,7 +107,7 @@ fn network_config_required_domains_stay_read_only_and_localize_chinese_inline() 
     assert!(screen.contains("复制所需域名"), "{screen}");
     assert!(screen.contains("usage.example.test"), "{screen}");
     assert!(!screen.contains("HTTP reachable"), "{screen}");
-    crate::tui_assert_snapshot!("network_required_domains_chinese_inline", screen);
+    crate::tui_assert_snapshot!(app = &app; "network_required_domains_chinese_inline", screen);
     app.handle_key(key(KeyCode::Esc));
     app.handle_key(key(KeyCode::Up));
     let Some(AppCommand::Config(command)) = app.handle_key(key(KeyCode::Enter)) else {
@@ -119,7 +119,7 @@ fn network_config_required_domains_stay_read_only_and_localize_chinese_inline() 
     app.update(config::execute(&mut client, command).unwrap());
     let screen = render(&app, 100, 24);
     assert!(!screen.contains("private details"), "{screen}");
-    crate::tui_assert_snapshot!("network_diagnostics_retry_chinese_inline", screen);
+    crate::tui_assert_snapshot!(app = &app; "network_diagnostics_retry_chinese_inline", screen);
     assert!(matches!(
         app.handle_key(key(KeyCode::Enter)),
         Some(AppCommand::Config(ConfigCommand::Network(_)))
@@ -293,6 +293,7 @@ fn network_diagnostics_reply_uses_the_current_language_after_a_pending_locale_ch
     assert!(screen.contains("HTTP 可达"), "{screen}");
     assert!(screen.contains("账号用量查询失败"), "{screen}");
     crate::tui_assert_snapshot!(
+        app = &app;
         "network_diagnostics_current_language_chinese_inline",
         screen
     );

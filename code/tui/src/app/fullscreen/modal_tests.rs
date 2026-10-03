@@ -158,7 +158,7 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
     assert!(rendered.contains("Diff preview"));
     assert!(rendered.contains("Syntax palette: Palette 1"));
     assert!(rendered.contains('╌'));
-    crate::tui_assert_snapshot!("theme_modal_preview", rendered);
+    crate::tui_assert_snapshot!(mode = crate::terminal::ScreenMode::Fullscreen; "theme_modal_preview", rendered);
     assert!(rendered.contains('┌'));
     assert!(rendered.contains('┘'));
     assert_eq!(title_row, usize::from(layout.surface.y));
@@ -308,7 +308,7 @@ fn project_branch_picker_shows_occupied_branch_and_pure_creation_in_both_modes()
                 ],
             },
         )));
-        crate::tui_assert_snapshot!(snapshot, frame_text(&app));
+        crate::tui_assert_snapshot!(app = &app; snapshot, frame_text(&app));
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         assert_eq!(
             app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -325,6 +325,7 @@ fn project_branch_picker_shows_occupied_branch_and_pure_creation_in_both_modes()
         );
         assert_eq!(app.list_selection().unwrap().title(), "New branch");
         crate::tui_assert_snapshot!(
+            app = &app;
             match mode {
                 crate::terminal::ScreenMode::Fullscreen => "project_branch_creation_fullscreen",
                 crate::terminal::ScreenMode::Inline => "project_branch_creation_inline",
@@ -347,6 +348,7 @@ fn project_branch_picker_shows_occupied_branch_and_pure_creation_in_both_modes()
             Some("branch already exists")
         );
         crate::tui_assert_snapshot!(
+            app = &app;
             match mode {
                 crate::terminal::ScreenMode::Fullscreen =>
                     "project_branch_creation_error_fullscreen",
@@ -417,7 +419,7 @@ fn project_branch_delete_confirms_and_restores_the_picker_in_both_modes() {
                 "Delete branch"
             }
         );
-        crate::tui_assert_snapshot!(confirm_snapshot, frame_text(&app));
+        crate::tui_assert_snapshot!(app = &app; confirm_snapshot, frame_text(&app));
         assert_eq!(
             app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
             None
@@ -444,7 +446,7 @@ fn project_branch_delete_confirms_and_restores_the_picker_in_both_modes() {
             app.list_selection().unwrap().message(),
             Some(crate::nls::localize(language, "Branch deleted.")).as_deref()
         );
-        crate::tui_assert_snapshot!(deleted_snapshot, frame_text(&app));
+        crate::tui_assert_snapshot!(app = &app; deleted_snapshot, frame_text(&app));
     }
 }
 
@@ -508,7 +510,7 @@ fn project_worktree_delete_confirms_and_restores_the_picker_in_both_modes() {
                 "Delete worktree"
             }
         );
-        crate::tui_assert_snapshot!(confirm_snapshot, frame_text(&app));
+        crate::tui_assert_snapshot!(app = &app; confirm_snapshot, frame_text(&app));
         assert_eq!(
             app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
             Some(AppCommand::Git(GitCommand::DeleteWorktree {
@@ -538,7 +540,7 @@ fn project_worktree_delete_confirms_and_restores_the_picker_in_both_modes() {
             app.list_selection().unwrap().message(),
             Some(crate::nls::localize(language, "Worktree deleted.")).as_deref()
         );
-        crate::tui_assert_snapshot!(deleted_snapshot, frame_text(&app));
+        crate::tui_assert_snapshot!(app = &app; deleted_snapshot, frame_text(&app));
     }
 }
 
@@ -603,7 +605,7 @@ fn managed_worktree_delete_confirms_session_removal_in_both_modes() {
                 "Delete session and worktrees"
             }
         );
-        crate::tui_assert_snapshot!(confirm_snapshot, frame_text(&app));
+        crate::tui_assert_snapshot!(app = &app; confirm_snapshot, frame_text(&app));
         assert_eq!(
             app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
             Some(AppCommand::Git(GitCommand::DeleteWorktree {
@@ -629,7 +631,7 @@ fn managed_worktree_delete_confirms_session_removal_in_both_modes() {
             ))
             .as_deref()
         );
-        crate::tui_assert_snapshot!(deleted_snapshot, frame_text(&app));
+        crate::tui_assert_snapshot!(app = &app; deleted_snapshot, frame_text(&app));
     }
 }
 
@@ -723,13 +725,13 @@ fn modal_restores_home_focus_and_survives_background_thread_updates() {
     assert!(app.command_panel().is_some());
     app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(app.input(), "preserved draft");
-    crate::tui_assert_snapshot!("settings_on_home", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "settings_on_home", frame_text(&app));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert_eq!(app.fullscreen.home.selected, None);
     assert!(app.chat_input_focused());
     assert_eq!(app.input(), "preserved draft");
-    crate::tui_assert_snapshot!("home_after_modal_closed", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "home_after_modal_closed", frame_text(&app));
 }
 
 #[test]
@@ -1459,7 +1461,7 @@ fn detail_tabs_use_the_same_mouse_routing_as_list_tabs() {
         crate::app::frame::process_resource_demand(&app, area),
         ash_memory_diagnostics::ProcessResourceDemand::Detailed
     );
-    crate::tui_assert_snapshot!("status_modal_processes", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "status_modal_processes", frame_text(&app));
 }
 
 #[test]
@@ -1488,7 +1490,7 @@ fn paste_targets_the_modal_and_home_instead_of_a_background_question() {
     assert_eq!(app.list_selection().unwrap().query(), "Screen mode");
     assert_eq!(app.input(), "");
     assert!(app.query_view().unwrap().custom_answer.is_none());
-    crate::tui_assert_snapshot!("modal_search_with_background_question", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "modal_search_with_background_question", frame_text(&app));
     app.open_home();
     app.handle_paste("new task".into());
     assert_eq!(app.input(), "new task");
@@ -1523,13 +1525,13 @@ fn memories_manager_edits_multiline_text_keeps_failed_drafts_and_restores_home()
             },
         }),
     });
-    crate::tui_assert_snapshot!("memories_management", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "memories_management", frame_text(&app));
     assert_memory_action_columns(&app);
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(crate::config::Event::SettingsReceived(settings.clone()));
     assert_memory_action_columns(&app);
-    crate::tui_assert_snapshot!("memories_inline_management", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "memories_inline_management", frame_text(&app));
     settings.set_screen_mode(crate::terminal::ScreenMode::Fullscreen);
     app.update(crate::config::Event::SettingsReceived(settings));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -1537,12 +1539,12 @@ fn memories_manager_edits_multiline_text_keeps_failed_drafts_and_restores_home()
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_paste("Use Rust\n保留  两个空格".into());
     assert_memory_editor_columns(&app);
-    crate::tui_assert_snapshot!("memories_multiline_editor", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "memories_multiline_editor", frame_text(&app));
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(crate::config::Event::SettingsReceived(settings.clone()));
     assert_memory_editor_columns(&app);
-    crate::tui_assert_snapshot!("memories_inline_editor", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "memories_inline_editor", frame_text(&app));
     settings.set_screen_mode(crate::terminal::ScreenMode::Fullscreen);
     app.update(crate::config::Event::SettingsReceived(settings));
     let Some(crate::app::AppCommand::Memories(command)) =
@@ -1560,7 +1562,7 @@ fn memories_manager_edits_multiline_text_keeps_failed_drafts_and_restores_home()
             message: "Could not save. Your draft is kept.".into(),
         }),
     });
-    crate::tui_assert_snapshot!("memories_failed_draft", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "memories_failed_draft", frame_text(&app));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL)),
         Some(crate::app::AppCommand::Memories(command.clone()))
@@ -1573,7 +1575,7 @@ fn memories_manager_edits_multiline_text_keeps_failed_drafts_and_restores_home()
         }),
     });
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    crate::tui_assert_snapshot!("memories_unsaved_draft", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "memories_unsaved_draft", frame_text(&app));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -1683,7 +1685,7 @@ fn memories_search_and_detail_show_scope_results_and_revision() {
             cursor: Some("next-page".into()),
         })),
     });
-    crate::tui_assert_snapshot!("memories_search_results", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "memories_search_results", frame_text(&app));
     let Some(crate::app::AppCommand::Memories(read)) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
@@ -1704,7 +1706,7 @@ fn memories_search_and_detail_show_scope_results_and_revision() {
             updated_at_unix_ms: 1_700_000_000_000,
         })),
     });
-    crate::tui_assert_snapshot!("memories_detail", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "memories_detail", frame_text(&app));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     let Some(crate::app::command_panel::CommandPanel::Memories(panel)) = app.command_panel() else {
         panic!("memory list remains open");
@@ -1756,7 +1758,7 @@ fn provider_mouse_input_and_parent_title_return_to_config() {
     app.handle_key(KeyEvent::new(KeyCode::Char('N'), KeyModifiers::NONE));
     assert!(frame_text(&app).contains("│ N"));
     assert_eq!(app.input(), "");
-    crate::tui_assert_snapshot!("provider_clicked_input", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "provider_clicked_input", frame_text(&app));
     let parent = super::parent_area(layout, "Config");
     for pressed in [None, Some(&super::Target::Parent)] {
         let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
@@ -1817,7 +1819,7 @@ fn provider_mouse_input_and_parent_title_return_to_config() {
         .map(str::trim_end)
         .collect::<Vec<_>>()
         .join("\n");
-    crate::tui_assert_snapshot!("provider_parent_restores_config", trimmed);
+    crate::tui_assert_snapshot!(app = &app; "provider_parent_restores_config", trimmed);
 }
 
 #[test]
@@ -1837,7 +1839,7 @@ fn config_descriptions_expand_below_items_and_keep_mouse_targets_aligned() {
             .is_none()
     );
     assert!(frame_text(&app).contains("Continuously collect bounded memory evidence"));
-    crate::tui_assert_snapshot!("config_expanded_description", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "config_expanded_description", frame_text(&app));
     let area = Rect::new(0, 0, 100, 30);
     let body = super::body_area(app.command_panel().unwrap(), super::layout(area).content);
     let first = body.y + crate::widgets::search_box::SEARCH_BOX_HEIGHT;
@@ -1986,6 +1988,7 @@ fn config_switches_keep_the_selected_language_after_saving() {
                 }
                 if language == Language::Chinese && id == "memories" {
                     crate::tui_assert_snapshot!(
+                        app = &app;
                         if enabled {
                             "config_chinese_switch_on"
                         } else {
@@ -2056,7 +2059,7 @@ fn config_double_click_changes_the_selected_item_once() {
             ));
         }
     }
-    crate::tui_assert_snapshot!("config_double_click_changes_item", frame_text(&app));
+    crate::tui_assert_snapshot!(app = &app; "config_double_click_changes_item", frame_text(&app));
     let Some(crate::app::AppCommand::Config(crate::config::Command::Edit(edit))) =
         app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))
     else {

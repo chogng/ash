@@ -46,7 +46,7 @@ fn usage_displays_xai_credits_without_rounding_or_inventing_missing_balances() {
     assert!(screen.contains("Not reported"));
     assert!(!screen.contains("Auto top-up"));
     assert!(!screen.contains("Manage billing"));
-    crate::tui_assert_snapshot!("usage_xai", screen);
+    crate::tui_assert_snapshot!(app = &app; "usage_xai", screen);
     app.handle_key(key(KeyCode::Esc));
     assert!(app.command_panel().is_none());
 }
@@ -73,7 +73,7 @@ fn usage_displays_kimi_plan_and_only_the_returned_quota_windows() {
     assert!(screen.contains("Not reported"));
     assert!(!screen.contains("Weekly limit"));
     assert!(!screen.contains("Credits"));
-    crate::tui_assert_snapshot!("usage_kimi", screen);
+    crate::tui_assert_snapshot!(app = &app; "usage_kimi", screen);
 }
 
 #[test]
@@ -104,7 +104,7 @@ fn usage_opens_bigmodel_and_zai_coding_plan_tabs_with_reported_limits() {
     let bigmodel_screen = render(&app, 80, 28);
     assert!(bigmodel_screen.contains("BigModel plan  ·  Not reported"));
     assert!(bigmodel_screen.contains("87% left (13% used)"));
-    crate::tui_assert_snapshot!("usage_bigmodel", bigmodel_screen);
+    crate::tui_assert_snapshot!(app = &app; "usage_bigmodel", bigmodel_screen);
     app.handle_key(key(KeyCode::Tab));
     assert_eq!(
         app.list_selection()
@@ -117,7 +117,7 @@ fn usage_opens_bigmodel_and_zai_coding_plan_tabs_with_reported_limits() {
     let zai_screen = render(&app, 80, 28);
     assert!(zai_screen.contains("Weekly limit"));
     assert!(zai_screen.contains("MCP limit"));
-    crate::tui_assert_snapshot!("usage_zai", zai_screen);
+    crate::tui_assert_snapshot!(app = &app; "usage_zai", zai_screen);
     assert_eq!(
         crate::nls::localize(crate::nls::Language::Chinese, "BigModel plan"),
         "BigModel 套餐"
@@ -177,7 +177,7 @@ fn usage_keeps_successful_accounts_when_another_provider_query_fails() {
             .description(),
         Some("Could not load account usage. Run /usage to retry.")
     );
-    crate::tui_assert_snapshot!("usage_partial_failure", render(&app, 100, 24));
+    crate::tui_assert_snapshot!(app = &app; "usage_partial_failure", render(&app, 100, 24));
     app.handle_key(key(KeyCode::Tab));
     assert_eq!(
         app.list_selection()
@@ -226,7 +226,7 @@ fn usage_keeps_successful_accounts_when_another_provider_query_fails() {
         screen.contains("无法读取账号额度，请运行 /usage 重试。"),
         "{screen}"
     );
-    crate::tui_assert_snapshot!("usage_partial_failure_chinese_inline", screen);
+    crate::tui_assert_snapshot!(app = &app; "usage_partial_failure_chinese_inline", screen);
     app.handle_key(key(KeyCode::Esc));
     assert!(app.command_panel().is_none());
 }
@@ -250,7 +250,7 @@ fn usage_displays_a_single_failed_account_in_its_own_panel() {
             .description(),
         Some("Account changed. Run /usage again.")
     );
-    crate::tui_assert_snapshot!("usage_account_changed", render(&app, 100, 20));
+    crate::tui_assert_snapshot!(app = &app; "usage_account_changed", render(&app, 100, 20));
 }
 
 #[test]
@@ -292,15 +292,15 @@ fn usage_command_reads_the_selected_account_and_renders_both_screen_modes() {
             );
         }
     }
-    crate::tui_assert_snapshot!("usage_fullscreen", render(&app, 80, 28));
-    crate::tui_assert_snapshot!("usage_narrow", render(&app, 48, 28));
+    crate::tui_assert_snapshot!(app = &app; "usage_fullscreen", render(&app, 80, 28));
+    crate::tui_assert_snapshot!(app = &app; "usage_narrow", render(&app, 48, 28));
     set_mode(&mut app, ScreenMode::Inline);
-    crate::tui_assert_snapshot!("usage_inline", render(&app, 80, 24));
+    crate::tui_assert_snapshot!(app = &app; "usage_inline", render(&app, 80, 24));
     assert!(app.handle_key(key(KeyCode::Enter)).is_none());
     assert!(matches!(app.command_panel(), Some(CommandPanel::Usage(_))));
     app.handle_key(key(KeyCode::Esc));
     assert!(app.command_panel().is_none());
-    crate::tui_assert_snapshot!("usage_dismissed", render(&app, 80, 16));
+    crate::tui_assert_snapshot!(app = &app; "usage_dismissed", render(&app, 80, 16));
 }
 
 #[test]
@@ -328,7 +328,7 @@ fn usage_keeps_chatgpt_and_xai_in_separate_keyboard_selectable_groups() {
     assert!(screen.contains("xAI plan"));
     assert!(screen.contains("105.125%"));
     assert!(screen.contains("Unavailable"));
-    crate::tui_assert_snapshot!("usage_subscriptions", screen);
+    crate::tui_assert_snapshot!(app = &app; "usage_subscriptions", screen);
 }
 
 #[test]
@@ -352,7 +352,7 @@ fn usage_missing_fields_stay_unknown_and_additional_limits_can_be_scrolled() {
         .visible_items();
     assert_eq!(items[2].description(), Some("Not reported"));
     assert_eq!(items.last().unwrap().description(), Some("Not reported"));
-    crate::tui_assert_snapshot!("usage_missing_and_exhausted", render(&app, 80, 28));
+    crate::tui_assert_snapshot!(app = &app; "usage_missing_and_exhausted", render(&app, 80, 28));
     for _ in 0..12 {
         app.handle_key(key(KeyCode::Down));
     }
@@ -367,7 +367,7 @@ fn usage_missing_fields_stay_unknown_and_additional_limits_can_be_scrolled() {
     let screen = render(&app, 48, 12);
     assert!(screen.contains("Credits"));
     assert!(!screen.contains("ChatGPT plan"));
-    crate::tui_assert_snapshot!("usage_scrolled", screen);
+    crate::tui_assert_snapshot!(app = &app; "usage_scrolled", screen);
 }
 
 #[test]
@@ -390,7 +390,7 @@ fn usage_requires_a_ready_chatgpt_account_before_querying_quota() {
         assert_eq!(requests.lock().unwrap().len(), 1);
         let screen = render(&app, 80, 20);
         assert!(screen.contains(expected));
-        crate::tui_assert_snapshot!(name, screen);
+        crate::tui_assert_snapshot!(app = &app; name, screen);
     }
 }
 
@@ -400,7 +400,7 @@ fn usage_loading_failure_and_late_results_preserve_the_current_panel() {
     let invocation = submit(&mut app);
     app.open_command_panel(CommandPanel::loading("Usage", "Loading…"));
     let generation = app.panels().generation();
-    crate::tui_assert_snapshot!("usage_loading", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "usage_loading", render(&app, 80, 20));
     let transport = ScriptedTransport {
         replies: VecDeque::from([json!({"error":{
             "code":-32030, "message":"AccountOperationFailed", "data":{"message":"ChatGPT usage query failed"}
@@ -418,7 +418,7 @@ fn usage_loading_failure_and_late_results_preserve_the_current_panel() {
             error,
         },
     );
-    crate::tui_assert_snapshot!("usage_failed", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "usage_failed", render(&app, 80, 20));
     app.handle_key(key(KeyCode::Esc));
     app.open_command_panel(CommandPanel::loading("Settings", "Loading…"));
     let (mut client, _) = self::client(vec![account("ready"), quota()]);
@@ -645,6 +645,6 @@ fn usage_displays_start_plan_model_buckets_in_both_screen_modes() {
         let screen = render(&app, 80, 28);
         assert!(screen.contains("Start Trial"));
         assert!(screen.contains("GLM-5.3-Flash"));
-        crate::tui_assert_snapshot!(snapshot, screen);
+        crate::tui_assert_snapshot!(app = &app; snapshot, screen);
     }
 }

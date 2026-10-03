@@ -274,7 +274,7 @@ fn marketplace_review_requires_confirmation_and_installs_the_reviewed_version() 
         details: details(),
         installation_id: None,
     }));
-    crate::tui_assert_snapshot!("marketplace_whole_package_review", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_whole_package_review", screen(&app));
     assert!(matches!(
         app.handle_key(key(KeyCode::Enter)),
         Some(AppCommand::Marketplace(marketplace::Command::Browse(_)))
@@ -333,11 +333,11 @@ fn marketplace_category_groups_packages_and_keeps_shortcuts_out_of_search_input(
         Some("来源：official\n描述：Installed bundle\n版本：1.0.0")
     );
     assert_eq!(state.selected_item().unwrap().label(), "ash");
-    crate::tui_assert_snapshot!("marketplace_category_sections", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_category_sections", screen(&app));
 
     focus(&mut app, "guide@ash");
     app.handle_key(key(KeyCode::Right));
-    crate::tui_assert_snapshot!("marketplace_expanded_package", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_expanded_package", screen(&app));
     assert_eq!(
         app.handle_key(key(KeyCode::Char('i'))),
         Some(AppCommand::Marketplace(marketplace::Command::Review {
@@ -373,7 +373,7 @@ fn marketplace_installed_versions_have_distinct_actions_and_offline_uninstall() 
         packages: vec![package("v1", "1.0.0"), package("v2", "2.0.0")],
         selected: Some("v1".into()),
     }));
-    crate::tui_assert_snapshot!("marketplace_installed_versions", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_installed_versions", screen(&app));
     assert_eq!(
         app.handle_key(key(KeyCode::Char('r'))),
         Some(AppCommand::Marketplace(marketplace::Command::Installed))
@@ -389,7 +389,7 @@ fn marketplace_installed_versions_have_distinct_actions_and_offline_uninstall() 
             .unwrap()
             .contains("Version: 2.0.0")
     );
-    crate::tui_assert_snapshot!("marketplace_installed_version_expanded", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_installed_version_expanded", screen(&app));
     focus(&mut app, "v1");
     // The shared typed mouse target follows the same action path as Enter.
     let outcome = app.panels_mut().command_mut().unwrap().handle_click(
@@ -400,7 +400,7 @@ fn marketplace_installed_versions_have_distinct_actions_and_offline_uninstall() 
     assert!(app.handle_command_panel_outcome(outcome).is_none());
     focus(&mut app, "remove");
     assert!(app.handle_key(key(KeyCode::Enter)).is_none());
-    crate::tui_assert_snapshot!("marketplace_confirm_exact_removal", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_confirm_exact_removal", screen(&app));
     focus(&mut app, "remove");
     let Some(AppCommand::Marketplace(command)) = app.handle_key(key(KeyCode::Enter)) else {
         panic!("expected removal")
@@ -473,7 +473,7 @@ fn marketplace_failed_search_keeps_offline_management_accessible_and_dismissal_r
     initialize(&mut client);
     let mut app = App::new();
     app.update(marketplace::execute(&mut client, marketplace::Command::browse(None)).unwrap());
-    crate::tui_assert_snapshot!("marketplace_catalog_offline", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_catalog_offline", screen(&app));
     assert!(
         app.list_selection()
             .unwrap()
@@ -502,7 +502,7 @@ fn marketplace_failed_search_keeps_offline_management_accessible_and_dismissal_r
 fn lsp_panel_preserves_revision_and_program_and_keeps_draft_after_conflict() {
     let mut app = App::new();
     app.update(lsp::Event(lsp_page()));
-    crate::tui_assert_snapshot!("lsp_available_servers", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "lsp_available_servers", screen(&app));
     focus(&mut app, "web-lsp");
     app.handle_key(key(KeyCode::Enter));
     focus(&mut app, "mode");
@@ -535,7 +535,7 @@ fn lsp_panel_preserves_revision_and_program_and_keeps_draft_after_conflict() {
     app.update_for_panel(generation, crate::thread::Event::FailureReported(error));
     assert_eq!(app.list_selection().unwrap().query(), "/tools/new web-lsp");
     assert_eq!(requests.lock().unwrap()[0]["params"]["expectedRevision"], 7);
-    crate::tui_assert_snapshot!("lsp_config_conflict_keeps_input", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "lsp_config_conflict_keeps_input", screen(&app));
 }
 
 #[test]
@@ -560,9 +560,9 @@ fn marketplace_and_lsp_panels_render_in_inline_mode() {
     let buffer = frame_buffer(&app);
     assert_eq!(buffer[(2, 28)].symbol(), "P");
     assert_eq!(buffer[(2, 29)].symbol(), "G");
-    crate::tui_assert_snapshot!("marketplace_inline_search", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_inline_search", screen(&app));
     app.update(lsp::Event(lsp_page()));
-    crate::tui_assert_snapshot!("lsp_inline_servers", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "lsp_inline_servers", screen(&app));
 }
 
 #[test]
@@ -618,7 +618,7 @@ fn skills_panel_with_empty_catalog_has_no_marketplace_action() {
     app.update(crate::skills::Event::SettingsOpened(
         crate::skills::skill_choices(&skills),
     ));
-    crate::tui_assert_snapshot!("skills_empty_panel", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "skills_empty_panel", screen(&app));
     let outcome = app.panels_mut().command_mut().unwrap().handle_click(
         &ListSelectionPointerTarget::Action,
         Rect::new(0, 0, 100, 32),
@@ -694,7 +694,7 @@ fn marketplace_tabs_open_management_features_and_support_pointer_navigation() {
             .unwrap(),
     )));
     assert_eq!(app.list_selection().unwrap().active_tab().label(), "插件");
-    crate::tui_assert_snapshot!("marketplace_chinese_tabs", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_chinese_tabs", screen(&app));
 }
 
 #[test]
@@ -715,7 +715,7 @@ fn marketplace_chinese_review_and_installed_actions_preserve_package_identity() 
             .iter()
             .any(|item| item.label() == "Available · {0}")
     );
-    crate::tui_assert_snapshot!("marketplace_chinese_review", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_chinese_review", screen(&app));
     focus(&mut app, "confirm");
     assert_eq!(
         app.handle_key(key(KeyCode::Enter)),
@@ -732,12 +732,12 @@ fn marketplace_chinese_review_and_installed_actions_preserve_package_identity() 
         app.list_selection().unwrap().active_tab().label(),
         "扩展市场"
     );
-    crate::tui_assert_snapshot!("marketplace_chinese_installed", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_chinese_installed", screen(&app));
     app.handle_key(key(KeyCode::Enter));
     focus(&mut app, "remove");
     app.handle_key(key(KeyCode::Enter));
     assert_eq!(app.list_selection().unwrap().title(), "确认卸载");
-    crate::tui_assert_snapshot!("marketplace_chinese_removal", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_chinese_removal", screen(&app));
     focus(&mut app, "remove");
     assert_eq!(
         app.handle_key(key(KeyCode::Enter)),
@@ -751,14 +751,14 @@ fn marketplace_chinese_review_and_installed_actions_preserve_package_identity() 
 fn lsp_chinese_details_and_input_stay_localized_after_navigation() {
     let mut app = chinese_app();
     app.update(lsp::Event(lsp_page()));
-    crate::tui_assert_snapshot!("lsp_chinese_servers", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "lsp_chinese_servers", screen(&app));
     focus(&mut app, "web-lsp");
     app.handle_key(key(KeyCode::Enter));
     assert_eq!(
         app.list_selection().unwrap().title(),
         "语言服务器 · web-lsp"
     );
-    crate::tui_assert_snapshot!("lsp_chinese_configuration", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "lsp_chinese_configuration", screen(&app));
     focus(&mut app, "mode");
     assert!(
         matches!(app.handle_key(key(KeyCode::Enter)), Some(AppCommand::Lsp(lsp::Command::Configure { revision: 7, server_id, config, .. })) if server_id == "web-lsp" && config.executable.as_deref() == Some("/tools/web-lsp"))
@@ -766,7 +766,7 @@ fn lsp_chinese_details_and_input_stay_localized_after_navigation() {
     focus(&mut app, "path");
     app.handle_key(key(KeyCode::Enter));
     app.handle_paste("/tools/程序 {0}".into());
-    crate::tui_assert_snapshot!("lsp_chinese_path", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "lsp_chinese_path", screen(&app));
     app.handle_key(key(KeyCode::Esc));
     assert_eq!(app.list_selection().unwrap().title(), "语言服务器");
     focus(&mut app, "find");
@@ -797,10 +797,10 @@ fn skills_and_config_chinese_panels_keep_distinct_responsibilities() {
         Some("Available · {0}")
     );
     assert!(!screen(&app).contains("Available · {0}"));
-    crate::tui_assert_snapshot!("skills_chinese_collapsed", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "skills_chinese_collapsed", screen(&app));
     app.handle_key(key(KeyCode::Right));
     assert!(screen(&app).contains("Available · {0}"));
-    crate::tui_assert_snapshot!("skills_chinese_expanded", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "skills_chinese_expanded", screen(&app));
     app.handle_key(key(KeyCode::Left));
     assert!(!screen(&app).contains("Available · {0}"));
     let mut terminal = crate::config::TerminalSettings::default();
@@ -822,7 +822,7 @@ fn skills_and_config_chinese_panels_keep_distinct_responsibilities() {
             .collect::<Vec<_>>(),
         ["通用", "提供商", "议题", "网络"]
     );
-    crate::tui_assert_snapshot!("config_chinese_without_lsp_tab", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "config_chinese_without_lsp_tab", screen(&app));
 }
 
 #[test]
@@ -844,6 +844,7 @@ fn marketplace_chinese_completion_and_argument_hint_keep_the_shared_command() {
         matches!(app.handle_key(key(KeyCode::Enter)), Some(AppCommand::Thread(crate::thread::Command::ExecuteProductCommand(invocation))) if invocation.command == TuiSlashCommandAction::Marketplace.definition() && invocation.display_arguments == "rust")
     );
     crate::tui_assert_snapshot!(
+        app = &app;
         "marketplace_chinese_command_completion",
         format!("{completion}\n\n{hint}")
     );
@@ -912,7 +913,7 @@ fn marketplace_sources_collapse_with_keyboard_and_pointer_and_keep_packages_unde
             .iter()
             .any(|item| item.label() == "Guide")
     );
-    crate::tui_assert_snapshot!("marketplace_sources_collapsed", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_sources_collapsed", screen(&app));
     app.handle_key(key(KeyCode::Right));
     assert!(
         app.list_selection()
@@ -935,7 +936,7 @@ fn marketplace_sources_collapse_with_keyboard_and_pointer_and_keep_packages_unde
             .any(|item| item.label() == "Guide")
     );
     app.handle_key(key(KeyCode::Enter));
-    crate::tui_assert_snapshot!("marketplace_sources_expanded", screen(&app));
+    crate::tui_assert_snapshot!(app = &app; "marketplace_sources_expanded", screen(&app));
     focus(&mut app, "guide@ash");
     assert!(
         matches!(app.handle_key(key(KeyCode::Char('i'))), Some(AppCommand::Marketplace(marketplace::Command::Review { package_id, .. })) if package_id == "guide@ash")
@@ -975,7 +976,7 @@ fn marketplace_plugins_toggle_exact_package_revision_and_render_disabled_suffix_
                 .unwrap();
             let context = app.render_context();
             assert!(marker.iter().all(|cell| cell.fg == context.danger()));
-            crate::tui_assert_snapshot!("plugins_chinese_disabled", screen(&app));
+            crate::tui_assert_snapshot!(app = &app; "plugins_chinese_disabled", screen(&app));
         }
         let command = match app.handle_key(key(KeyCode::Enter)).unwrap() {
             AppCommand::Marketplace(
@@ -1034,6 +1035,7 @@ fn mcp_management_opens_without_a_redundant_marketplace_action() {
         );
         assert!(state.tabs_focused());
         crate::tui_assert_snapshot!(
+            app = &app;
             match mode {
                 crate::terminal::ScreenMode::Fullscreen => "mcp_chinese_empty_fullscreen",
                 crate::terminal::ScreenMode::Inline => "mcp_chinese_empty_inline",
@@ -1054,6 +1056,7 @@ fn mcp_management_opens_without_a_redundant_marketplace_action() {
         assert!(state.items_focused());
         assert_eq!(state.selected_item().unwrap().label(), "Documentation");
         crate::tui_assert_snapshot!(
+            app = &app;
             match mode {
                 crate::terminal::ScreenMode::Fullscreen => "mcp_chinese_servers_fullscreen",
                 crate::terminal::ScreenMode::Inline => "mcp_chinese_servers_inline",

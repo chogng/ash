@@ -139,7 +139,7 @@ fn repeated_model_command_opens_the_fixed_catalog_without_loading() {
     terminal
         .draw(|frame| crate::app::frame::draw(frame, driver.app()))
         .unwrap();
-    crate::tui_assert_snapshot!(
+    crate::tui_assert_snapshot!(app = driver.app();
         "model_command_opens_fixed_catalog_immediately",
         terminal.backend().to_string()
     );

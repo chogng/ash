@@ -161,7 +161,7 @@ fn fork_command_preserves_selection_and_starts_only_when_prompted() {
         let message = messages.last().unwrap();
         let text = format!("{}\n{}", message.text(), message.detail().unwrap())
             .replace(copied_id.as_str(), "SESSION");
-        insta::assert_snapshot!(snapshot, text);
+        crate::tui_assert_snapshot!(snapshot, text);
         let copied =
             super::ActiveConversation::open(&mut client, copied_id.as_str(), None).unwrap();
         let thread = client

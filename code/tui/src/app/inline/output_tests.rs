@@ -45,7 +45,7 @@ fn unknown_slash_command_is_visible_in_inline_conversation() {
         app.render_context(),
         app.transcript_render_cache(),
     );
-    crate::tui_assert_snapshot!("unknown_slash_command", text(&buffer));
+    crate::tui_assert_snapshot!(app = &app; "unknown_slash_command", text(&buffer));
 }
 
 fn entry(id: &str, text: &str, transient: bool) -> ThreadTranscriptEntry {
@@ -133,7 +133,7 @@ fn inline_user_echo_committed_before_turn_start_is_not_drawn_again() {
         .unwrap();
     let rendered = text(terminal.backend().buffer());
     assert!(!rendered.contains("rebase"));
-    crate::tui_assert_snapshot!("committed_user_echo_stays_out_of_live_viewport", rendered);
+    crate::tui_assert_snapshot!(app = &app; "committed_user_echo_stays_out_of_live_viewport", rendered);
     app.update(ThreadEvent::TranscriptSnapshotReceived(snapshot(vec![
         user,
     ])));
@@ -180,7 +180,7 @@ fn inline_history_commits_final_blocks_once_and_keeps_the_active_turn_live() {
     assert!(reply_row < progress_row && progress_row < input_row);
     assert_eq!(output.tail(&app).len(), 1);
     assert!(!output.tail(&app)[0].text().contains("Working"));
-    crate::tui_assert_snapshot!("current_reply", rendered);
+    crate::tui_assert_snapshot!(app = &app; "current_reply", rendered);
     app.update(ThreadEvent::TurnCompleted);
     assert!(!text(&render(&app, 60, 24)).contains("Working"));
     app.clear_active_turn();

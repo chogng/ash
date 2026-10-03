@@ -43,7 +43,7 @@ fn composer_keeps_its_prompt_wrapped_text_and_cursor_between_rules() {
     assert_eq!(cursor, Position::new(12, input.y + 2));
     assert_eq!(buffer[(2, input.y)].symbol(), "─");
     assert_eq!(buffer[(21, input.y)].symbol(), "─");
-    crate::tui_assert_snapshot!("composer_wrapped_draft", text(&buffer));
+    crate::tui_assert_snapshot!(app = &app; "composer_wrapped_draft", text(&buffer));
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn composer_model_label_preserves_the_bottom_rule_and_right_margin() {
         assert_eq!(buffer[(78, y)].symbol(), " ");
         assert_eq!(buffer[(79, y)].symbol(), " ");
     }
-    crate::tui_assert_snapshot!("composer_focused", text(&buffer));
+    crate::tui_assert_snapshot!(app = &app; "composer_focused", text(&buffer));
 }
 
 #[test]

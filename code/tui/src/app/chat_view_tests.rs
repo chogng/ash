@@ -257,10 +257,10 @@ fn statusline_items_keep_their_configured_locations_and_switches_in_both_modes()
         assert!(row(&before, regions.tipline.y).trim().is_empty());
         match mode {
             ScreenMode::Fullscreen => {
-                crate::tui_assert_snapshot!("configured_statusline_fullscreen", text(&before))
+                crate::tui_assert_snapshot!(app = &app; "configured_statusline_fullscreen", text(&before))
             }
             ScreenMode::Inline => {
-                crate::tui_assert_snapshot!("configured_statusline_inline", text(&before))
+                crate::tui_assert_snapshot!(app = &app; "configured_statusline_inline", text(&before))
             }
         }
         for (item, label) in [
@@ -291,10 +291,10 @@ fn statusline_items_keep_their_configured_locations_and_switches_in_both_modes()
         assert!(!text(&hidden).contains("Shared model"));
         match mode {
             ScreenMode::Fullscreen => {
-                crate::tui_assert_snapshot!("disabled_statusline_fullscreen", text(&hidden))
+                crate::tui_assert_snapshot!(app = &app; "disabled_statusline_fullscreen", text(&hidden))
             }
             ScreenMode::Inline => {
-                crate::tui_assert_snapshot!("disabled_statusline_inline", text(&hidden))
+                crate::tui_assert_snapshot!(app = &app; "disabled_statusline_inline", text(&hidden))
             }
         }
         let mut terminal = crate::config::TerminalSettings::default();
@@ -348,11 +348,12 @@ fn accounting_stays_in_the_bottom_statusline_in_both_modes() {
         assert_eq!(text(&buffer).matches("cost $0.01008").count(), 1);
         match mode {
             ScreenMode::Fullscreen => crate::tui_assert_snapshot!(
+                app = &app;
                 "accounting_bottom_statusline_fullscreen",
                 text(&buffer)
             ),
             ScreenMode::Inline => {
-                crate::tui_assert_snapshot!("accounting_bottom_statusline_inline", text(&buffer))
+                crate::tui_assert_snapshot!(app = &app; "accounting_bottom_statusline_inline", text(&buffer))
             }
         }
     }
@@ -434,10 +435,10 @@ fn permission_survives_tips_dictation_and_narrow_widths_in_both_modes() {
         assert!(!row(&buffer, regions.hintline.y).contains("stop dictation"));
         match mode {
             ScreenMode::Fullscreen => {
-                crate::tui_assert_snapshot!("dictation_and_permission_fullscreen", text(&buffer))
+                crate::tui_assert_snapshot!(app = &app; "dictation_and_permission_fullscreen", text(&buffer))
             }
             ScreenMode::Inline => {
-                crate::tui_assert_snapshot!("dictation_and_permission_inline", text(&buffer))
+                crate::tui_assert_snapshot!(app = &app; "dictation_and_permission_inline", text(&buffer))
             }
         }
         assert_eq!(

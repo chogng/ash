@@ -894,6 +894,6 @@ fn start_plan_sign_in_panels_show_separate_region_actions_in_chinese() {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(text.contains(expected));
-        insta::assert_snapshot!(format!("{}_sign_in_chinese", provider.id()), text);
+        crate::tui_assert_snapshot!(format!("{}_sign_in_chinese", provider.id()), text);
     }
 }

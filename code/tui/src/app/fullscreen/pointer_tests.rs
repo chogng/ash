@@ -133,7 +133,7 @@ fn clearing_fullscreen_cancels_the_drag_before_a_fresh_click_at_the_new_size() {
         .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
-    crate::tui_assert_snapshot!("resized_completion_after_cancelled_selection", text);
+    crate::tui_assert_snapshot!(app = &app; "resized_completion_after_cancelled_selection", text);
 
     let row = crate::app::fullscreen::layout(&app, area).input.y - 1;
     assert_ne!(row, old_row);
@@ -219,7 +219,7 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
         } else {
             assert!(text.contains("clipboard unavailable"));
         }
-        crate::tui_assert_snapshot!(name, text);
+        crate::tui_assert_snapshot!(app = &app; name, text);
     }
 }
 
@@ -298,7 +298,7 @@ fn input_click_moves_the_cursor_and_drag_selects_editable_text() {
         .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
-    crate::tui_assert_snapshot!("input_pointer_selection", text);
+    crate::tui_assert_snapshot!(app = &app; "input_pointer_selection", text);
 
     app.handle_paste("X".into());
     assert_eq!(app.input(), "aXd");
@@ -861,6 +861,7 @@ fn mouse_wheel_scrolls_modal_list_by_rows_without_moving_keyboard_focus() {
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
     terminal.draw(|frame| frame::draw(frame, &app)).unwrap();
     crate::tui_assert_snapshot!(
+        app = &app;
         "modal_list_wheel_row_scroll",
         terminal.backend().to_string()
     );

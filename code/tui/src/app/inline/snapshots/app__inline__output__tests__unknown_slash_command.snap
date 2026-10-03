@@ -1,5 +1,0 @@
----
-source: code/tui/src/app/inline/output_tests.rs
-expression: text(&buffer)
----
-● Unknown command: /confg. Did you mean /config?

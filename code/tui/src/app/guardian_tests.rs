@@ -109,10 +109,10 @@ fn guardian_setup_scans_reviews_and_saves_in_both_screens_in_chinese() {
         assert_eq!(key(&mut app, KeyCode::Enter), None);
         match screen {
             crate::terminal::ScreenMode::Fullscreen => {
-                crate::tui_assert_snapshot!("guardian_setup_fullscreen_chinese", render(&app))
+                crate::tui_assert_snapshot!(app = &app; "guardian_setup_fullscreen_chinese", render(&app))
             }
             crate::terminal::ScreenMode::Inline => {
-                crate::tui_assert_snapshot!("guardian_setup_inline_chinese", render(&app))
+                crate::tui_assert_snapshot!(app = &app; "guardian_setup_inline_chinese", render(&app))
             }
         }
         key(&mut app, KeyCode::Up);
@@ -199,10 +199,10 @@ fn guardian_project_history_requires_selection_and_displays_provenance_in_both_s
         assert!(frame.contains("1970-01-01 00:00 UTC"));
         match screen {
             crate::terminal::ScreenMode::Fullscreen => {
-                crate::tui_assert_snapshot!("guardian_history_fullscreen_chinese", frame)
+                crate::tui_assert_snapshot!(app = &app; "guardian_history_fullscreen_chinese", frame)
             }
             crate::terminal::ScreenMode::Inline => {
-                crate::tui_assert_snapshot!("guardian_history_inline_chinese", frame)
+                crate::tui_assert_snapshot!(app = &app; "guardian_history_inline_chinese", frame)
             }
         }
         key(&mut app, KeyCode::Enter);
@@ -261,5 +261,5 @@ fn guardian_history_scope_changes_the_scan_request_and_exposes_partial_coverage(
             && frame.contains("facts. Budgets can leave coverage partial."),
         "{frame}"
     );
-    crate::tui_assert_snapshot!("guardian_history_scope_coverage", frame);
+    crate::tui_assert_snapshot!(app = &app; "guardian_history_scope_coverage", frame);
 }

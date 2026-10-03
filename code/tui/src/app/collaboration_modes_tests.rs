@@ -214,10 +214,10 @@ fn collaboration_effort_changes_update_status_without_a_notice() {
         }
         match screen {
             ScreenMode::Fullscreen => {
-                crate::tui_assert_snapshot!("effort_changed_fullscreen_chinese", render(&app))
+                crate::tui_assert_snapshot!(app = &app; "effort_changed_fullscreen_chinese", render(&app))
             }
             ScreenMode::Inline => {
-                crate::tui_assert_snapshot!("effort_changed_inline_chinese", render(&app))
+                crate::tui_assert_snapshot!(app = &app; "effort_changed_inline_chinese", render(&app))
             }
         }
     }
@@ -274,10 +274,10 @@ fn collaboration_effort_boundaries_are_silent_in_both_modes() {
         }
         match screen {
             ScreenMode::Fullscreen => {
-                crate::tui_assert_snapshot!("effort_boundary_fullscreen_chinese", render(&app))
+                crate::tui_assert_snapshot!(app = &app; "effort_boundary_fullscreen_chinese", render(&app))
             }
             ScreenMode::Inline => {
-                crate::tui_assert_snapshot!("effort_boundary_inline_chinese", render(&app))
+                crate::tui_assert_snapshot!(app = &app; "effort_boundary_inline_chinese", render(&app))
             }
         }
     }
@@ -341,10 +341,10 @@ fn collaboration_selector_selects_and_dismisses_in_both_screens() {
         app.insert_text("draft behind selector");
         match screen {
             ScreenMode::Fullscreen => {
-                crate::tui_assert_snapshot!("collaboration_fullscreen_selector", render(&app))
+                crate::tui_assert_snapshot!(app = &app; "collaboration_fullscreen_selector", render(&app))
             }
             ScreenMode::Inline => {
-                crate::tui_assert_snapshot!("collaboration_inline_selector", render(&app))
+                crate::tui_assert_snapshot!(app = &app; "collaboration_inline_selector", render(&app))
             }
         }
         key(&mut app, KeyCode::Down, KeyModifiers::NONE);
@@ -356,10 +356,10 @@ fn collaboration_selector_selects_and_dismisses_in_both_screens() {
         assert_eq!(app.top_tip().text(None), None);
         match screen {
             ScreenMode::Fullscreen => {
-                crate::tui_assert_snapshot!("collaboration_fullscreen_selected", render(&app))
+                crate::tui_assert_snapshot!(app = &app; "collaboration_fullscreen_selected", render(&app))
             }
             ScreenMode::Inline => {
-                crate::tui_assert_snapshot!("collaboration_inline_selected", render(&app))
+                crate::tui_assert_snapshot!(app = &app; "collaboration_inline_selected", render(&app))
             }
         }
         switch(
@@ -395,7 +395,7 @@ fn collaboration_policy_and_effort_commands_are_independent() {
     command(&mut app, "/mode unknown");
     assert_eq!(app.collaboration_mode(), CollaborationMode::Ask);
     assert!(render(&app).contains("Use /mode agent|plan|debug|multitask|ask"));
-    crate::tui_assert_snapshot!("collaboration_option_error_on_home", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "collaboration_option_error_on_home", render(&app));
     command(&mut app, "/permission");
     assert_eq!(
         app.list_selection().unwrap().selected_visible_index(),
@@ -426,10 +426,10 @@ fn permission_menu_uses_shared_copy_and_the_same_ids_in_both_screens() {
         let visible = render(&app);
         match screen {
             ScreenMode::Fullscreen => {
-                crate::tui_assert_snapshot!("permission_menu_fullscreen_chinese", visible)
+                crate::tui_assert_snapshot!(app = &app; "permission_menu_fullscreen_chinese", visible)
             }
             ScreenMode::Inline => {
-                crate::tui_assert_snapshot!("permission_menu_inline_chinese", visible)
+                crate::tui_assert_snapshot!(app = &app; "permission_menu_inline_chinese", visible)
             }
         }
         key(&mut app, KeyCode::Home, KeyModifiers::NONE);
@@ -497,7 +497,7 @@ fn collaboration_effort_selector_applies_a_supported_value_and_restores_focus() 
         app.list_selection().unwrap().selected_visible_index(),
         Some(1)
     );
-    crate::tui_assert_snapshot!("collaboration_effort_selector", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "collaboration_effort_selector", render(&app));
     key(&mut app, KeyCode::Down, KeyModifiers::NONE);
     assert_eq!(
         key(&mut app, KeyCode::Enter, KeyModifiers::NONE),
@@ -538,6 +538,7 @@ fn collaboration_inline_statusline_can_be_enabled_and_localized() {
         "Automatic model"
     );
     crate::tui_assert_snapshot!(
+        app = &app;
         "collaboration_inline_default_statusline_chinese",
         render(&app)
     );
@@ -549,7 +550,7 @@ fn collaboration_inline_statusline_can_be_enabled_and_localized() {
             .top_text_for_width(78, app.status_line_runtime())
             .contains("计划")
     );
-    crate::tui_assert_snapshot!("collaboration_inline_statusline_chinese", output);
+    crate::tui_assert_snapshot!(app = &app; "collaboration_inline_statusline_chinese", output);
     statusline.set(StatusLineItem::Mode, false);
     app.update(crate::status::Event::LineSettingsReceived(statusline));
     app.chat_panel.reset_top_tip();
@@ -563,7 +564,7 @@ fn collaboration_inline_statusline_can_be_enabled_and_localized() {
         app.list_selection().unwrap().selected_visible_index(),
         Some(1)
     );
-    crate::tui_assert_snapshot!("collaboration_selector_chinese", render(&app));
+    crate::tui_assert_snapshot!(app = &app; "collaboration_selector_chinese", render(&app));
 }
 
 fn running_turn(mode: CollaborationMode) -> Turn {

@@ -38,9 +38,9 @@ fn query_keeps_its_draft_and_renders_edit_submission_failure_and_retry() {
         .unwrap(),
     ));
     assert!(app.query_view().is_some());
-    crate::tui_assert_snapshot!("query_open", render(&app, 80, 20));
-    crate::tui_assert_snapshot!("query_open_narrow", render(&app, 42, 20));
-    crate::tui_assert_snapshot!("query_open_short", render(&app, 42, 16));
+    crate::tui_assert_snapshot!(app = &app; "query_open", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "query_open_narrow", render(&app, 42, 20));
+    crate::tui_assert_snapshot!(app = &app; "query_open_short", render(&app, 42, 16));
 
     app.handle_key(key(KeyCode::Down));
     app.handle_key(key(KeyCode::Enter));
@@ -49,7 +49,7 @@ fn query_keeps_its_draft_and_renders_edit_submission_failure_and_retry() {
         app.query_view().unwrap().custom_answer,
         Some("Keep the user draft")
     );
-    crate::tui_assert_snapshot!("query_custom_answer", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "query_custom_answer", render(&app, 80, 20));
 
     let Some(AppCommand::Thread(ThreadCommand::ResolveRequest(response))) =
         app.handle_key(key(KeyCode::Enter))
@@ -63,9 +63,9 @@ fn query_keeps_its_draft_and_renders_edit_submission_failure_and_retry() {
     assert_eq!(answers.answers["next"].value, "Keep the user draft");
     assert_eq!(app.input(), "chat draft stays here");
     assert!(app.query_view().unwrap().submitting);
-    crate::tui_assert_snapshot!("query_submitting", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "query_submitting", render(&app, 80, 20));
     set_screen_mode(&mut app, ScreenMode::Inline);
-    crate::tui_assert_snapshot!("query_submitting_inline", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "query_submitting_inline", render(&app, 80, 20));
     set_screen_mode(&mut app, ScreenMode::Fullscreen);
 
     app.update(ThreadEvent::RequestSubmissionFailed {
@@ -73,7 +73,7 @@ fn query_keeps_its_draft_and_renders_edit_submission_failure_and_retry() {
         error: "offline".into(),
     });
     assert_eq!(app.query_view().unwrap().error, Some("offline"));
-    crate::tui_assert_snapshot!("query_submission_failed", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "query_submission_failed", render(&app, 80, 20));
     assert_eq!(
         app.handle_key(key(KeyCode::Enter)),
         Some(AppCommand::Thread(ThreadCommand::ResolveRequest(response)))
@@ -91,7 +91,7 @@ fn approval_renders_submission_and_failure_while_preserving_the_chat_draft() {
             details: vec!["Process spawn  ·  cargo test".into()],
         },
     )));
-    crate::tui_assert_snapshot!("approval_open", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "approval_open", render(&app, 80, 20));
 
     let Some(AppCommand::Thread(ThreadCommand::ResolveRequest(response))) =
         app.handle_key(key(KeyCode::Enter))
@@ -101,9 +101,9 @@ fn approval_renders_submission_and_failure_while_preserving_the_chat_draft() {
     assert_eq!(response.kind, ThreadRequestKind::Approval);
     assert_eq!(app.input(), "unfinished chat draft");
     assert!(app.approval_view().unwrap().submitting);
-    crate::tui_assert_snapshot!("approval_submitting", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "approval_submitting", render(&app, 80, 20));
     set_screen_mode(&mut app, ScreenMode::Inline);
-    crate::tui_assert_snapshot!("approval_submitting_inline", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "approval_submitting_inline", render(&app, 80, 20));
     set_screen_mode(&mut app, ScreenMode::Fullscreen);
 
     app.update(ThreadEvent::RequestSubmissionFailed {
@@ -111,7 +111,7 @@ fn approval_renders_submission_and_failure_while_preserving_the_chat_draft() {
         error: "offline".into(),
     });
     assert_eq!(app.approval_view().unwrap().error, Some("offline"));
-    crate::tui_assert_snapshot!("approval_submission_failed", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "approval_submission_failed", render(&app, 80, 20));
     assert_eq!(
         app.handle_key(key(KeyCode::Enter)),
         Some(AppCommand::Thread(ThreadCommand::ResolveRequest(response)))
@@ -133,12 +133,12 @@ fn connection_recovery_restores_home_and_conversation_drafts() {
     restored.restore_recovery_drafts(drafts);
     assert!(restored.fullscreen_home_visible());
     assert_eq!(restored.input(), "new task draft");
-    crate::tui_assert_snapshot!("recovered_home_draft", render(&restored, 80, 20));
+    crate::tui_assert_snapshot!(app = &restored; "recovered_home_draft", render(&restored, 80, 20));
 
     restored.show_conversation();
     assert!(!restored.fullscreen_home_visible());
     assert_eq!(restored.input(), "conversation draft");
-    crate::tui_assert_snapshot!("recovered_conversation_draft", render(&restored, 80, 20));
+    crate::tui_assert_snapshot!(app = &restored; "recovered_conversation_draft", render(&restored, 80, 20));
 }
 
 #[test]
@@ -156,7 +156,7 @@ fn model_errors_keep_their_actions_visible_in_the_conversation() {
     assert!(frame.contains("Check your provider and model configuration in /config."));
     assert!(frame.contains("Authentication failed (401)."));
     assert!(frame.contains("Too many requests (429)."));
-    crate::tui_assert_snapshot!("model_errors_in_conversation", frame);
+    crate::tui_assert_snapshot!(app = &app; "model_errors_in_conversation", frame);
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn context_configuration_errors_show_the_cause_in_both_modes_in_chinese() {
         };
         assert!(frame.contains("请先在 /config 中设置模型上下文窗口，再发送消息。"));
         assert!(!frame.contains("Request failed"));
-        crate::tui_assert_snapshot!(format!("context_configuration_{mode:?}_chinese"), frame);
+        crate::tui_assert_snapshot!(app = &app; format!("context_configuration_{mode:?}_chinese"), frame);
     }
 }
 
@@ -207,7 +207,7 @@ fn misspelled_slash_command_shows_a_local_suggestion() {
         app.messages()[0].text(),
         "Unknown command: /confg. Did you mean /config?"
     );
-    crate::tui_assert_snapshot!("unknown_slash_command_fullscreen", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "unknown_slash_command_fullscreen", render(&app, 80, 20));
 }
 
 fn key(code: KeyCode) -> KeyEvent {

@@ -71,7 +71,7 @@ fn header_places_branch_and_path_without_repeating_them_below() {
     assert_eq!(buffer[(2, 0)].fg, app.render_context().foreground());
     assert!(!buffer[(2, 0)].modifier.contains(Modifier::BOLD));
     assert_eq!(buffer[(9, 0)].fg, app.render_context().muted());
-    crate::tui_assert_snapshot!("workspace_header_and_hintbar", text);
+    crate::tui_assert_snapshot!(app = &app; "workspace_header_and_hintbar", text);
 
     let area = Rect::new(0, 0, 80, 20);
     let header = super::super::layout(&app, area).top_statusline;
@@ -112,7 +112,7 @@ fn plain_glyph_set_updates_the_header_and_its_hit_targets() {
             .unwrap()
             .starts_with("  git main /work/ash")
     );
-    crate::tui_assert_snapshot!("workspace_header_plain_marker", text);
+    crate::tui_assert_snapshot!(app = &app; "workspace_header_plain_marker", text);
 
     let header = super::super::layout(&app, Rect::new(0, 0, 80, 20)).top_statusline;
     assert_eq!(

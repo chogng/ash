@@ -29,32 +29,32 @@ mod terminal;
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]
-// Keep the owning Rust module in each filename while omitting the crate name from TUI baselines.
+// Classify App frames by the rendered mode, even when the test lives under another mode's module.
 #[macro_export]
 macro_rules! tui_assert_snapshot {
     ($value:expr, @$snapshot:literal $(,)?) => {{
         ::insta::assert_snapshot!($value, @$snapshot)
     }};
-    ($name:expr, $value:expr, $debug_expr:expr $(,)?) => {{
-        let mut settings = ::insta::Settings::clone_current();
-        settings.set_prepend_module_to_snapshot(false);
-        let snapshot_name = $crate::test_support::snapshot_name($name, module_path!());
+    (app = $app:expr; $name:expr, $value:expr $(, $debug_expr:expr)? $(,)?) => {{
+        $crate::tui_assert_snapshot!(@external Some(($app).screen_mode()); $name, $value $(, $debug_expr)?);
+    }};
+    (mode = $mode:expr; $name:expr, $value:expr $(, $debug_expr:expr)? $(,)?) => {{
+        $crate::tui_assert_snapshot!(@external Some($mode); $name, $value $(, $debug_expr)?);
+    }};
+    (@external $mode:expr; $name:expr, $value:expr $(, $debug_expr:expr)? $(,)?) => {{
+        let settings = $crate::test_support::snapshot_settings(module_path!(), $mode);
+        let snapshot_name = $crate::test_support::snapshot_name($name);
         settings.bind(|| {
-            ::insta::assert_snapshot!(snapshot_name, $value, $debug_expr)
+            ::insta::assert_snapshot!(snapshot_name, $value $(, $debug_expr)?)
         });
     }};
-    ($name:expr, $value:expr $(,)?) => {{
-        let mut settings = ::insta::Settings::clone_current();
-        settings.set_prepend_module_to_snapshot(false);
-        let snapshot_name = $crate::test_support::snapshot_name($name, module_path!());
-        settings.bind(|| ::insta::assert_snapshot!(snapshot_name, $value));
+    ($name:expr, $value:expr $(, $debug_expr:expr)? $(,)?) => {{
+        $crate::tui_assert_snapshot!(@external None; $name, $value $(, $debug_expr)?);
     }};
     ($value:expr $(,)?) => {{
-        let mut settings = ::insta::Settings::clone_current();
-        settings.set_prepend_module_to_snapshot(false);
+        let settings = $crate::test_support::snapshot_settings(module_path!(), None);
         let snapshot_name = $crate::test_support::snapshot_name_for_function(
             ::insta::_function_name!(),
-            module_path!(),
         );
         settings.bind(|| ::insta::assert_snapshot!(snapshot_name, $value));
     }};

@@ -125,13 +125,13 @@ fn input_history_search_and_cancel_preserve_the_composer() {
         app.render_context().foreground()
     );
     assert_eq!(buffer[(area.x + 2, area.y + 1)].symbol(), ">");
-    crate::tui_assert_snapshot!("input_history_search", render(&app, 100, 20));
+    crate::tui_assert_snapshot!(app = &app; "input_history_search", render(&app, 100, 20));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
         None
     );
     assert_eq!(app.input(), "");
-    crate::tui_assert_snapshot!("input_history_search_cancelled", render(&app, 100, 20));
+    crate::tui_assert_snapshot!(app = &app; "input_history_search_cancelled", render(&app, 100, 20));
 }
 
 #[test]
@@ -155,7 +155,7 @@ fn pull_request_command_submits_an_ordinary_agent_task() {
     );
     assert!(submission.display_text.contains("pull request"));
     assert!(app.input().is_empty());
-    crate::tui_assert_snapshot!("pull_request_agent_task", render(&app, 100, 20));
+    crate::tui_assert_snapshot!(app = &app; "pull_request_agent_task", render(&app, 100, 20));
 }
 
 #[test]
@@ -251,7 +251,7 @@ fn completed_update_uses_the_existing_top_tip_notice_row() {
         "Ash 1.2.3 is ready · restart to use the update".into(),
     ));
 
-    crate::tui_assert_snapshot!("completed_update_notice", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "completed_update_notice", render(&app, 80, 20));
 }
 
 #[test]
@@ -276,7 +276,7 @@ fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
             .trim_end()
             .ends_with("image in clipboard · ctrl+v to paste")
     );
-    crate::tui_assert_snapshot!("clipboard_image_top_tip", rendered);
+    crate::tui_assert_snapshot!(app = &app; "clipboard_image_top_tip", rendered);
 
     app.update(HostEvent::ClipboardImageRead {
         target: app.draft_target(),
@@ -291,6 +291,7 @@ fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
     assert!(!rendered_after_paste.contains("image in clipboard"));
     assert!(rendered_after_paste.contains("[Image #1]"));
     crate::tui_assert_snapshot!(
+        app = &app;
         "clipboard_image_pasted_into_chat_input",
         rendered_after_paste
     );
@@ -425,7 +426,7 @@ fn modal_keeps_wrapped_tabs_between_title_and_body() {
     assert!(text.contains("First tab"));
     assert!(text.contains("Second tab"));
     assert!(text.contains("First item"));
-    crate::tui_assert_snapshot!("modal_wrapped_tabs", text);
+    crate::tui_assert_snapshot!(mode = crate::terminal::ScreenMode::Fullscreen; "modal_wrapped_tabs", text);
 }
 
 #[test]
@@ -594,7 +595,7 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
     assert!(rendered.contains("Thread"));
     assert!(rendered.contains("Processes"));
     assert!(rendered.contains("Tab to switch · Esc to close"));
-    crate::tui_assert_snapshot!("status_panel_adaptive_height", rendered);
+    crate::tui_assert_snapshot!(app = &app; "status_panel_adaptive_height", rendered);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
@@ -993,7 +994,7 @@ fn workspace_header_stays_fixed_while_scrolling_conversation_history() {
     assert!(!scrolled_to_start.contains("Ash Code v"));
     assert!(scrolled_to_start.contains("/work/ash"));
     assert!(scrolled_to_start.contains("Conversation started."));
-    crate::tui_assert_snapshot!("transcript_scrolled_to_first_message", scrolled_to_start);
+    crate::tui_assert_snapshot!(app = &app; "transcript_scrolled_to_first_message", scrolled_to_start);
 }
 
 #[test]
@@ -1202,7 +1203,7 @@ fn policy_changes_restart_the_fade_and_keep_current_and_next_modes_visible() {
     let visible = render(&app, 120, 20);
     assert!(visible.contains("current: Manual"));
     assert!(visible.contains("next: Auto"));
-    crate::tui_assert_snapshot!("policy_top_tip_current_and_next", visible);
+    crate::tui_assert_snapshot!(app = &app; "policy_top_tip_current_and_next", visible);
     assert!(app.handle_tick(started + Duration::from_secs(4)));
     app.cycle_next_approval_mode(started + Duration::from_secs(4));
     assert_eq!(
@@ -1215,7 +1216,7 @@ fn policy_changes_restart_the_fade_and_keep_current_and_next_modes_visible() {
     assert!(render(&app, 120, 20).contains("next: Bypass permissions"));
     assert!(!app.handle_tick(started + Duration::from_secs(7)));
     assert!(app.handle_tick(started + Duration::from_secs(9)));
-    crate::tui_assert_snapshot!("policy_top_tip_expired", render(&app, 120, 20));
+    crate::tui_assert_snapshot!(app = &app; "policy_top_tip_expired", render(&app, 120, 20));
 }
 
 #[test]
@@ -1452,7 +1453,7 @@ fn modal_covers_the_page_and_restores_its_transcript_and_draft() {
     assert!(!rendered.contains("Conversation remains visible."));
     assert_eq!(layout(&app, area).input, composer);
     assert_eq!(app.input(), "draft");
-    crate::tui_assert_snapshot!("help_modal", rendered);
+    crate::tui_assert_snapshot!(app = &app; "help_modal", rendered);
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert_eq!(render(&app, 80, 24), before);
 }
@@ -1587,7 +1588,7 @@ fn scrolled_transcript_shows_jump_control_at_the_bottom_of_the_content_area() {
         Rect::new(0, 0, 50, 16),
     );
 
-    crate::tui_assert_snapshot!("transcript_jump_to_bottom", render(&app, 50, 16));
+    crate::tui_assert_snapshot!(app = &app; "transcript_jump_to_bottom", render(&app, 50, 16));
     assert!(!app.transcript_selection_active());
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
@@ -1677,7 +1678,7 @@ fn hooks_slash_completion_is_visible() {
     app.insert_text("/hooks");
     let rendered = render(&app, 80, 20);
     assert!(rendered.contains("/hooks"));
-    crate::tui_assert_snapshot!("hooks_slash_completion", rendered);
+    crate::tui_assert_snapshot!(app = &app; "hooks_slash_completion", rendered);
 }
 
 #[test]
@@ -1688,7 +1689,7 @@ fn hooks_panel_opens_fullscreen_and_restores_input_after_close() {
         crate::test_support::hook_catalog(vec![]),
     ));
     assert_eq!(app.list_selection().unwrap().title(), "Extensions");
-    crate::tui_assert_snapshot!("hooks_fullscreen", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "hooks_fullscreen", render(&app, 80, 20));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert!(app.input().contains("keep this draft"));
@@ -1723,10 +1724,10 @@ fn hooks_event_details_and_configuration_render_fullscreen() {
     );
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(app.list_selection().unwrap().title(), "PreToolUse");
-    crate::tui_assert_snapshot!("hooks_event_picker", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "hooks_event_picker", render(&app, 80, 20));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(app.list_selection().unwrap().title(), "user:hook:review");
-    crate::tui_assert_snapshot!("hooks_detail", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "hooks_detail", render(&app, 80, 20));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     app.panels_mut()
         .command_mut()
@@ -1736,7 +1737,7 @@ fn hooks_event_details_and_configuration_render_fullscreen() {
         .focus_pointer(&crate::widgets::list_selection::ListSelectionPointerTarget::Action);
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(app.list_selection().unwrap().title(), "Configure Hooks");
-    crate::tui_assert_snapshot!("hooks_editor", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "hooks_editor", render(&app, 80, 20));
 }
 
 #[test]
@@ -1794,6 +1795,7 @@ fn slash_popup_clears_covered_transcript_rows_edge_to_edge() {
     assert_eq!(buffer[(79, popup_bottom - 1)].symbol(), "│");
     assert_eq!(buffer[(79, popup_bottom - 1)].fg, test_context().border());
     crate::tui_assert_snapshot!(
+        app = &app;
         "slash_popup_clears_covered_transcript_rows_edge_to_edge",
         render(&app, terminal_area.width, terminal_area.height)
     );
@@ -1917,7 +1919,7 @@ fn slash_popup_position_and_scrollbar_follow_keyboard_navigation() {
     let buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
     assert_eq!(buffer[(79, popup_bottom - 1)].symbol(), "┃");
     assert_eq!(buffer[(79, popup_bottom - 1)].fg, test_context().muted());
-    crate::tui_assert_snapshot!("slash_popup_scrolled_to_last_command", rendered);
+    crate::tui_assert_snapshot!(app = &app; "slash_popup_scrolled_to_last_command", rendered);
 }
 
 #[test]
@@ -2062,7 +2064,7 @@ fn slash_popup_suggests_a_command_when_the_query_omits_a_character() {
             .modifier
             .contains(Modifier::BOLD)
     );
-    crate::tui_assert_snapshot!("slash_popup_missing_character_match", rendered);
+    crate::tui_assert_snapshot!(app = &app; "slash_popup_missing_character_match", rendered);
 
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
@@ -2284,7 +2286,7 @@ fn config_general_tab_uses_localized_label() {
     for _ in 0..6 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
-    crate::tui_assert_snapshot!("config_general_tab", render(&app, 100, 21));
+    crate::tui_assert_snapshot!(app = &app; "config_general_tab", render(&app, 100, 21));
 }
 
 #[test]
@@ -2460,7 +2462,7 @@ fn config_providers_show_subscription_and_api_sections() {
             .unwrap();
         assert_eq!(item.description(), None);
     }
-    crate::tui_assert_snapshot!("config_providers_sections", render(&app, 100, 34));
+    crate::tui_assert_snapshot!(app = &app; "config_providers_sections", render(&app, 100, 34));
 }
 
 #[test]
@@ -2488,6 +2490,7 @@ fn config_issues_tab_shows_one_auto_refresh_value() {
     assert_eq!(selection.active_tab().label(), "Issues");
     assert_eq!(selection.selected_item().unwrap().label(), "Auto refresh");
     crate::tui_assert_snapshot!(
+        app = &app;
         "config_issues_tab_shows_one_auto_refresh_value",
         render(&app, 100, 20)
     );
@@ -2537,12 +2540,12 @@ fn short_provider_modal_scrolls_to_each_focused_field() {
     assert_eq!(buffer[(content.x, base_row + 1)].symbol(), "╭");
     assert_eq!(buffer[(content.x, base_row + 2)].symbol(), "│");
     assert!(output.contains("> Base URL"));
-    crate::tui_assert_snapshot!("short_provider_panel", output);
+    crate::tui_assert_snapshot!(app = &app; "short_provider_panel", output);
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let next = render(&app, 100, 17);
     assert!(next.contains("> API key"));
     assert!(next.contains("API key (optional)"));
-    crate::tui_assert_snapshot!("short_provider_modal_api_key", next);
+    crate::tui_assert_snapshot!(app = &app; "short_provider_modal_api_key", next);
 }
 
 #[test]
@@ -2805,7 +2808,7 @@ fn model_list_shows_configured_models_without_pins() {
     assert_eq!(selection.tabs().len(), 1);
     assert_eq!(selection.visible_items()[0].label(), "gateway-model");
     assert_eq!(selection.visible_items()[0].description(), None);
-    crate::tui_assert_snapshot!("model_list_unpinned", render(&app, 100, 18));
+    crate::tui_assert_snapshot!(app = &app; "model_list_unpinned", render(&app, 100, 18));
 }
 
 #[test]
@@ -2887,7 +2890,7 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_in_one_chinese_list() {
             .iter()
             .all(|item| item.description().is_none())
     );
-    crate::tui_assert_snapshot!("model_subscription_list", render(&app, 100, 18));
+    crate::tui_assert_snapshot!(app = &app; "model_subscription_list", render(&app, 100, 18));
 }
 
 #[test]
@@ -2915,7 +2918,7 @@ fn model_picker_without_configured_connections_shows_builtin_models() {
         app.list_selection().unwrap().visible_items()[0].label(),
         "Unconfigured model"
     );
-    crate::tui_assert_snapshot!("model_no_configured_models", render(&app, 100, 18));
+    crate::tui_assert_snapshot!(app = &app; "model_no_configured_models", render(&app, 100, 18));
 }
 
 #[test]
@@ -2958,7 +2961,7 @@ fn model_list_pins_without_changing_the_selected_model() {
         .unwrap() as u16;
     let buffer = render_buffer(&app, 100, 18);
     assert_eq!(buffer[(30, row)].bg, buffer[(30, row + 1)].bg);
-    crate::tui_assert_snapshot!("model_list_pinned", rendered);
+    crate::tui_assert_snapshot!(app = &app; "model_list_pinned", rendered);
 }
 
 #[test]
@@ -3094,6 +3097,7 @@ fn model_pins_preserve_catalog_order_and_focus_in_both_screen_modes() {
         assert!(app.command_panel().is_none());
         assert!(app.chat_input_focused());
         crate::tui_assert_snapshot!(
+            app = &app;
             match mode {
                 ScreenMode::Fullscreen => "model_pin_catalog_order_fullscreen",
                 ScreenMode::Inline => "model_pin_catalog_order_inline",
@@ -3154,7 +3158,7 @@ fn model_list_search_filters_models_and_escape_returns_to_list() {
     }
     assert_eq!(app.list_selection().unwrap().query(), "gat");
     assert_eq!(app.list_selection().unwrap().visible_items().len(), 1);
-    crate::tui_assert_snapshot!("model_list_search", render(&app, 100, 18));
+    crate::tui_assert_snapshot!(app = &app; "model_list_search", render(&app, 100, 18));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.list_selection().unwrap().items_focused());
     assert_eq!(
@@ -3321,7 +3325,7 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
         render(&app, 100, 18)
     );
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-    crate::tui_assert_snapshot!("model_effort_selected", render(&app, 100, 18));
+    crate::tui_assert_snapshot!(app = &app; "model_effort_selected", render(&app, 100, 18));
 
     app.update(ModelEvent::PickerUpdated(choices()));
     assert!(render(&app, 100, 18).contains("██ ██ ██"));
@@ -3376,7 +3380,7 @@ fn model_pointer_single_click_previews_and_double_click_confirms() {
             .label(),
         "Unconfigured model"
     );
-    crate::tui_assert_snapshot!("model_pointer_preview", render(&app, 100, 18));
+    crate::tui_assert_snapshot!(app = &app; "model_pointer_preview", render(&app, 100, 18));
     assert_eq!(
         super::modal::activate(
             &mut app,
@@ -3413,7 +3417,7 @@ fn chat_progress_follows_messages_without_hiding_top_tip() {
     assert!(working.contains("Working"));
     assert!(working.contains("ctrl+c to interrupt"));
     assert!(working.contains("Copied 42 chars"));
-    crate::tui_assert_snapshot!("chat_progress_with_notice", working);
+    crate::tui_assert_snapshot!(app = &app; "chat_progress_with_notice", working);
     app.update(ThreadEvent::TurnActivityChanged(
         TurnActivity::WaitingForUserInput,
     ));
@@ -3460,7 +3464,7 @@ fn running_tip_follows_chat_progress() {
     assert!(localized.contains("正在处理"));
     assert!(localized.contains("技巧：复杂任务可以请 Ash 先列出步骤"));
     assert!(!localized.contains("Working"));
-    crate::tui_assert_snapshot!("running_tip_after_language_change", localized);
+    crate::tui_assert_snapshot!(app = &app; "running_tip_after_language_change", localized);
 
     app.update(ThreadEvent::TurnActivityChanged(
         TurnActivity::WaitingForApproval,
@@ -3501,7 +3505,7 @@ fn persistent_queue_snapshot_distinguishes_pending_and_paused_messages() {
         messages,
         restore: None,
     });
-    crate::tui_assert_snapshot!("persistent_queue", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "persistent_queue", render(&app, 80, 20));
 }
 
 #[test]
@@ -3546,5 +3550,5 @@ fn dictation_model_preparation_shows_real_download_bytes_in_chinese() {
         render_buffer(&app, 80, 20)[(2, status_row as u16)].fg,
         app.render_context().muted()
     );
-    crate::tui_assert_snapshot!("dictation_model_downloading_zh", render(&app, 80, 20));
+    crate::tui_assert_snapshot!(app = &app; "dictation_model_downloading_zh", render(&app, 80, 20));
 }

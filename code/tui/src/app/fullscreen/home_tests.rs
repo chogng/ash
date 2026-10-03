@@ -90,6 +90,7 @@ fn home_dashboard_header_opens_the_session_manager() {
         assert!(!app.fullscreen_home_visible());
         assert!(app.session_manager_view().is_some());
         crate::tui_assert_snapshot!(
+            app = &app;
             "home_dashboard_session_manager",
             text(&render(&app, 80, 24))
         );
@@ -121,13 +122,14 @@ fn home_keeps_actions_above_the_fixed_composer() {
             .modifier
             .contains(Modifier::BOLD)
     );
-    crate::tui_assert_snapshot!("home_actions", text(&buffer));
+    crate::tui_assert_snapshot!(app = &app; "home_actions", text(&buffer));
     app.handle_key(key(KeyCode::Esc));
     assert_eq!(app.fullscreen.home.selected, None);
     app.insert_text("检查项目结构");
     assert!(app.fullscreen_home_visible());
     assert!(!app.fullscreen_welcome_visible());
     crate::tui_assert_snapshot!(
+        app = &app;
         "home_draft",
         text(&render(&app, terminal.width, terminal.height))
     );
@@ -148,7 +150,7 @@ fn home_shift_tab_cycles_mode_only_while_editing() {
     );
     assert!(app.fullscreen.input_focused());
     assert_eq!(app.fullscreen.home.selected, None);
-    crate::tui_assert_snapshot!("home_after_shift_tab", text(&render(&app, 80, 24)));
+    crate::tui_assert_snapshot!(app = &app; "home_after_shift_tab", text(&render(&app, 80, 24)));
     app.handle_key(key(KeyCode::Tab));
     assert_eq!(app.fullscreen.home.selected, Some(0));
     app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
@@ -186,7 +188,7 @@ fn home_and_shared_hints_use_the_selected_language() {
     assert!(compact.contains("帮助与快捷键"));
     assert!(compact.contains("Enter选择"));
     assert!(!rendered.contains("Resume session"));
-    crate::tui_assert_snapshot!("home_chinese", rendered);
+    crate::tui_assert_snapshot!(app = &app; "home_chinese", rendered);
 
     assert_eq!(
         app.handle_key(key(KeyCode::Enter)),
@@ -235,7 +237,7 @@ fn home_help_localizes_the_complete_selection_model() {
         vec!["快捷键", "命令", "自定义命令"]
     );
     assert_eq!(selection.search().unwrap().placeholder(), "搜索帮助");
-    crate::tui_assert_snapshot!("help_chinese", text(&render(&app, 90, 24)));
+    crate::tui_assert_snapshot!(app = &app; "help_chinese", text(&render(&app, 90, 24)));
 }
 
 #[test]
@@ -258,7 +260,7 @@ fn first_character_clears_welcome_and_keeps_the_workspace_header() {
     assert!(!rendered.contains("Ash Code v"));
     assert!(!rendered.contains("Resume session"));
     assert!(rendered.contains("> x"));
-    crate::tui_assert_snapshot!("home_after_first_character", rendered);
+    crate::tui_assert_snapshot!(app = &app; "home_after_first_character", rendered);
 
     app.handle_key(key(KeyCode::Backspace));
 
@@ -311,7 +313,7 @@ fn clicking_empty_home_space_keeps_the_composer_ready() {
         buffer[(input.x, areas.input.y)].fg,
         app.render_context().foreground()
     );
-    crate::tui_assert_snapshot!("home_empty_click_keeps_input", text(&buffer));
+    crate::tui_assert_snapshot!(app = &app; "home_empty_click_keeps_input", text(&buffer));
 
     app.handle_key(key(KeyCode::Char('x')));
     assert_eq!(app.input(), "x");
@@ -390,7 +392,7 @@ fn pasting_into_the_home_menu_returns_to_the_composer() {
     assert_eq!(app.fullscreen.home.selected, None);
     assert!(app.chat_input_focused());
     assert!(!app.fullscreen_welcome_visible());
-    crate::tui_assert_snapshot!("home_pasted_from_menu", text(&render(&app, 80, 24)));
+    crate::tui_assert_snapshot!(app = &app; "home_pasted_from_menu", text(&render(&app, 80, 24)));
 }
 
 #[test]
@@ -414,7 +416,7 @@ fn home_slash_command_starts_a_new_session_from_the_initial_page() {
     assert!(rendered.lines().next().unwrap().contains("  ."));
     assert!(rendered.contains("Ash Code v"));
     assert!(rendered.contains("Resume session"));
-    crate::tui_assert_snapshot!("home_restored_by_slash_command", rendered);
+    crate::tui_assert_snapshot!(app = &app; "home_restored_by_slash_command", rendered);
 
     for character in "start a fresh task".chars() {
         app.handle_key(key(KeyCode::Char(character)));
@@ -457,10 +459,10 @@ fn home_worktrees_can_create_and_open_without_starting_a_session() {
     )));
     assert_eq!(app.list_selection().unwrap().title(), "Project worktrees");
     assert!(app.fullscreen_home_visible());
-    crate::tui_assert_snapshot!("home_worktree_picker", text(&render(&app, 80, 24)));
+    crate::tui_assert_snapshot!(app = &app; "home_worktree_picker", text(&render(&app, 80, 24)));
     app.handle_key(key(KeyCode::Char('n')));
     assert_eq!(app.list_selection().unwrap().title(), "New worktree");
-    crate::tui_assert_snapshot!("home_new_worktree_prompt", text(&render(&app, 80, 24)));
+    crate::tui_assert_snapshot!(app = &app; "home_new_worktree_prompt", text(&render(&app, 80, 24)));
     for character in "topic".chars() {
         app.handle_key(key(KeyCode::Char(character)));
     }
@@ -489,7 +491,7 @@ fn home_worktrees_can_create_and_open_without_starting_a_session() {
         app.list_selection().unwrap().message(),
         Some("Worktree created. Enter to open it.")
     );
-    crate::tui_assert_snapshot!("home_worktree_created", text(&render(&app, 80, 24)));
+    crate::tui_assert_snapshot!(app = &app; "home_worktree_created", text(&render(&app, 80, 24)));
     assert_eq!(
         app.handle_key(key(KeyCode::Enter)),
         Some(AppCommand::Git(crate::git::Command::ResolveWorktree {
@@ -657,7 +659,7 @@ fn home_submission_failure_restores_the_complete_draft() {
     assert!(app.accepts_input());
     assert!(app.fullscreen_home_visible());
     assert!(!app.fullscreen_welcome_visible());
-    crate::tui_assert_snapshot!("home_submission_failed", text(&render(&app, 80, 24)));
+    crate::tui_assert_snapshot!(app = &app; "home_submission_failed", text(&render(&app, 80, 24)));
 }
 
 #[test]
@@ -668,7 +670,7 @@ fn home_menu_scrolls_to_every_action_on_short_terminals() {
         app.handle_key(key(KeyCode::Tab));
     }
     assert_eq!(app.fullscreen.home.selected, Some(4));
-    crate::tui_assert_snapshot!("home_narrow", text(&render(&app, 40, 16)));
+    crate::tui_assert_snapshot!(app = &app; "home_narrow", text(&render(&app, 40, 16)));
     assert_eq!(app.handle_key(key(KeyCode::Enter)), Some(AppCommand::Quit));
 }
 
@@ -705,5 +707,5 @@ fn short_home_keeps_the_input_and_selected_action_visible() {
     assert!(text(&buffer).contains("Ash Code"));
     assert!(!text(&buffer).contains("Quit Code"));
     assert_eq!(buffer[(areas.input.x, areas.input.y)].symbol(), "─");
-    crate::tui_assert_snapshot!("home_short", text(&buffer));
+    crate::tui_assert_snapshot!(app = &app; "home_short", text(&buffer));
 }
