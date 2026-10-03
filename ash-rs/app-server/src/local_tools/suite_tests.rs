@@ -17,6 +17,37 @@ use ash_shell_command::RipgrepExecutable;
 
 struct PassThroughBackend;
 
+#[test]
+fn patch_move_review_checks_both_paths_and_preserves_the_move_header() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("old.txt"), "old\n").unwrap();
+    let grant = authorization(directory.path());
+    let authorized = grant.authorize(Permission::MutateRepository).unwrap();
+    let source = directory.path().join("old.txt");
+    let target = directory.path().join("new.txt");
+    let patch = format!(
+        "*** Begin Patch\n*** Update File: {}\n*** Move to: {}\n*** End Patch\n",
+        source.display(),
+        target.display()
+    );
+    let (_, rewritten, targets) =
+        super::super::materialize_patch_targets(std::slice::from_ref(&authorized), &patch, &[])
+            .unwrap();
+    assert!(rewritten.contains("*** Update File: old.txt"));
+    assert!(rewritten.contains("*** Move to: new.txt"));
+    assert_eq!(targets.len(), 2);
+    assert!(targets.iter().any(|path| path.ends_with("old.txt")));
+    assert!(targets.iter().any(|path| path.ends_with("new.txt")));
+    let outside = tempfile::tempdir().unwrap();
+    let escaping = patch.replace(
+        &target.display().to_string(),
+        &outside.path().join("new.txt").display().to_string(),
+    );
+    assert!(super::super::materialize_patch_targets(&[authorized], &escaping, &[]).is_err());
+    assert_eq!(fs::read_to_string(source).unwrap(), "old\n");
+    assert!(!target.exists());
+}
+
 fn text_edit_suite(path: &std::path::Path) -> LocalToolSuite<PassThroughBackend> {
     let grant = authorization(path);
     let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();

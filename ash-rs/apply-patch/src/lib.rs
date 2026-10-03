@@ -1,21 +1,24 @@
 //! Validated dir patch application as one model-visible tool.
 //!
-//! The parser accepts a small explicit patch grammar. Every operation is prepared before any file
+//! The parser accepts a documented patch grammar with context anchors, EOF markers, and moves. Every operation is prepared before any file
 //! is changed, and replacement writes are atomic per file.
 //! Updates retain existing line endings and EOF conventions. New files use the selected
-//! directory's EditorConfig rules; text writes and replacements share [`TextFileFormat`].
+//! directory's EditorConfig rules, shared with text writes and replacements by the filesystem layer.
 
+mod file_update;
+mod parser;
 mod patch_commit;
-mod patch_format;
-mod text_file;
 
-pub use text_file::TextFileFormat;
-
-use crate::patch_commit::{ChangeKind, PreparedChange, commit};
-use crate::patch_format::{
-    PatchDocument, PatchError, PatchOperation, apply_hunks, new_file_content,
-};
+use crate::file_update::apply_hunks;
+use crate::file_update::new_file_content;
+use crate::parser::PatchDocument;
+use crate::parser::PatchError;
+use crate::parser::PatchOperation;
+use crate::patch_commit::commit;
 use ash_file_access::Dir;
+use ash_file_system::FileMutation;
+use ash_file_system::TextFileFormat;
+use ash_file_system::file_revision;
 use ash_tools::{
     ToolConcurrency, ToolConflictClass, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome,
     ToolExecutor, ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput,
@@ -24,7 +27,6 @@ use ash_tools::{
 use serde::Deserialize;
 use serde_json::json;
 use std::fmt;
-use std::fs;
 use std::future;
 
 const DEFAULT_MAX_PATCH_BYTES: usize = 512 * 1024;
@@ -101,25 +103,17 @@ pub fn changed_paths(
         return Err("patch exceeds the byte limit".into());
     }
     let document = PatchDocument::parse(patch).map_err(|error| error.to_string())?;
-    if document.operations.len() > limits.max_changed_files() {
+    if document.paths().len() > limits.max_changed_files() {
         return Err("patch exceeds the changed-file limit".into());
     }
-    Ok(document
-        .operations
-        .into_iter()
-        .map(|operation| match operation {
-            PatchOperation::Add { path, .. }
-            | PatchOperation::Update { path, .. }
-            | PatchOperation::Delete { path } => path,
-        })
-        .collect())
+    Ok(document.paths())
 }
 
 /// Applies a validated, dir-contained patch.
 ///
 /// The accepted grammar has `*** Begin Patch` / `*** End Patch` delimiters and `*** Update File:`,
 /// `*** Add File:`, and `*** Delete File:` operations. Every hunk is matched against the current
-/// file before any write begins. A partial multi-file commit is reported as an uncertain outcome.
+/// file before any write begins; commit checks its exact byte revision again. A partial multi-file commit is reported as an uncertain outcome.
 pub struct ApplyPatchTool {
     environment_id: ash_tools::EnvId,
     dir: Dir,
@@ -176,10 +170,10 @@ impl ApplyPatchTool {
             Ok(document) => document,
             Err(error) => return returned_error(format!("invalid patch: {error}")),
         };
-        if document.operations.len() > self.limits.max_changed_files() {
+        if document.paths().len() > self.limits.max_changed_files() {
             return returned_error(format!(
                 "patch changes {} files, exceeding the {}-file limit",
-                document.operations.len(),
+                document.paths().len(),
                 self.limits.max_changed_files()
             ));
         }
@@ -195,24 +189,29 @@ impl ApplyPatchTool {
             return not_started("patch application was cancelled before writes began");
         }
 
-        match commit(prepared) {
+        match commit(&dir, prepared) {
             Ok(summary) => returned_json(json!({
                 "tool": "apply_patch",
                 "result": {
                     "updated_files": summary.updated,
                     "added_files": summary.added,
                     "deleted_files": summary.deleted,
+                    "moved_files": summary.moved.into_iter().map(|(from, to)| json!({"from": from, "to": to})).collect::<Vec<_>>(),
                 }
             })),
+            Err(error) if !error.publication_started => returned_error(format!(
+                "patch commit rejected before any file changed: {error}"
+            )),
             Err(error) => {
                 ToolExecutionOutcome::OutcomeUncertain(ToolUncertainOutcome::new(format!(
-                    "patch commit failed after one or more changes may have been written: {error}"
+                    "patch commit failed; completed paths: {:?}; further changes may have been written: {error}",
+                    error.completed_paths
                 )))
             }
         }
     }
 
-    fn prepare(dir: &Dir, document: PatchDocument) -> Result<Vec<PreparedChange>, PatchError> {
+    fn prepare(dir: &Dir, document: PatchDocument) -> Result<Vec<FileMutation>, PatchError> {
         document
             .operations
             .into_iter()
@@ -220,68 +219,58 @@ impl ApplyPatchTool {
             .collect()
     }
 
-    fn prepare_operation(
-        dir: &Dir,
-        operation: PatchOperation,
-    ) -> Result<PreparedChange, PatchError> {
+    fn prepare_operation(dir: &Dir, operation: PatchOperation) -> Result<FileMutation, PatchError> {
         match operation {
-            PatchOperation::Update { path, hunks } => {
-                let target = dir.resolve_existing(&path).map_err(PatchError::sandbox)?;
-                let metadata = fs::metadata(&target).map_err(PatchError::io)?;
-                if !metadata.is_file() {
-                    return Err(PatchError::Message(format!(
-                        "update target is not a file: {}",
-                        path.display()
-                    )));
+            PatchOperation::Update {
+                path,
+                move_path,
+                hunks,
+            } => {
+                dir.resolve_existing(&path).map_err(PatchError::sandbox)?;
+                let bytes = dir
+                    .directory()
+                    .handle()
+                    .read(&path)
+                    .map_err(PatchError::io)?;
+                let expected_revision = file_revision(&bytes);
+                let original = String::from_utf8(bytes).map_err(PatchError::sandbox)?;
+                let content = apply_hunks(&original, &hunks)?.into_bytes();
+                match move_path {
+                    Some(target) => {
+                        dir.resolve_for_write(&target)
+                            .map_err(PatchError::sandbox)?;
+                        Ok(FileMutation::MoveAndReplace {
+                            path,
+                            target,
+                            content,
+                            expected_revision,
+                        })
+                    }
+                    None => Ok(FileMutation::Replace {
+                        path,
+                        content,
+                        expected_revision,
+                    }),
                 }
-                let original = fs::read_to_string(&target).map_err(PatchError::io)?;
-                let replacement = apply_hunks(&original, &hunks)?;
-                Ok(PreparedChange::Replace {
-                    target,
-                    output_path: path.display().to_string(),
-                    content: replacement,
-                    permissions: Some(metadata.permissions()),
-                    kind: ChangeKind::Updated,
-                })
             }
             PatchOperation::Add { path, lines } => {
-                let target = dir.resolve_for_write(&path).map_err(PatchError::sandbox)?;
-                if target.exists() {
-                    return Err(PatchError::Message(format!(
-                        "add target already exists: {}",
-                        path.display()
-                    )));
-                }
-                let parent = target.parent().ok_or_else(|| {
-                    PatchError::Message(format!("add target has no parent: {}", path.display()))
-                })?;
-                if !parent.is_dir() {
-                    return Err(PatchError::Message(format!(
-                        "add target parent does not exist: {}",
-                        path.display()
-                    )));
-                }
-                Ok(PreparedChange::Replace {
-                    target,
-                    output_path: path.display().to_string(),
-                    content: TextFileFormat::for_new_file(dir, &path)
-                        .map_err(PatchError::io)?
-                        .normalize(&new_file_content(&lines)),
-                    permissions: None,
-                    kind: ChangeKind::Added,
-                })
+                dir.resolve_for_write(&path).map_err(PatchError::sandbox)?;
+                let content = TextFileFormat::for_new_file(dir, &path)
+                    .map_err(PatchError::io)?
+                    .normalize(&new_file_content(&lines))
+                    .into_bytes();
+                Ok(FileMutation::Create { path, content })
             }
             PatchOperation::Delete { path } => {
-                let target = dir.resolve_existing(&path).map_err(PatchError::sandbox)?;
-                if !fs::metadata(&target).map_err(PatchError::io)?.is_file() {
-                    return Err(PatchError::Message(format!(
-                        "delete target is not a file: {}",
-                        path.display()
-                    )));
-                }
-                Ok(PreparedChange::Delete {
-                    target,
-                    output_path: path.display().to_string(),
+                dir.resolve_existing(&path).map_err(PatchError::sandbox)?;
+                let bytes = dir
+                    .directory()
+                    .handle()
+                    .read(&path)
+                    .map_err(PatchError::io)?;
+                Ok(FileMutation::Remove {
+                    path,
+                    expected_revision: file_revision(&bytes),
                 })
             }
         }
@@ -319,7 +308,7 @@ struct ApplyPatchInput {
 fn apply_patch_definition() -> Result<ToolDefinition, ApplyPatchError> {
     ToolDefinition::function(
         ToolName::new("apply_patch").map_err(definition_error)?,
-        "Apply a validated dir patch. Use *** Begin Patch and *** End Patch, with *** Update File:, *** Add File:, or *** Delete File: operations. Prefer this tool for general multi-hunk or multi-file code changes; use edit for one exact local replacement.",
+        "Apply a validated dir patch. Use *** Begin Patch and *** End Patch, with *** Update File:, *** Add File:, or *** Delete File: operations. Update hunks start with @@ or @@ followed by a context line; their lines start with a space (context), - (remove), or + (add). An update may use *** Move to: to move to an absent destination. *** End of File anchors a hunk at EOF; a hunk containing only additions appends to the file. Paths are relative to the selected directory and parents must exist. Prefer this tool for general multi-hunk or multi-file code changes; use edit for one exact local replacement.",
         ToolInputSchema::parse(json!({
             "type": "object",
             "properties": {

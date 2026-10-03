@@ -781,3 +781,47 @@ fn separate_services_serialize_conditional_writes() {
         1
     );
 }
+
+#[test]
+fn mutation_batches_serialize_with_ordinary_conditional_writes() {
+    let directory = TestDir::new();
+    fs::write(directory.path.join("file"), "old").unwrap();
+    let files = directory.file_system();
+    let dir = Dir::open_local(&directory.path).unwrap();
+    let revision = file_revision(b"old");
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let first_barrier = barrier.clone();
+    let first_revision = revision.clone();
+    let first = std::thread::spawn(move || {
+        first_barrier.wait();
+        commit_file_mutations(
+            &dir,
+            &[FileMutation::Replace {
+                path: PathBuf::from("file"),
+                content: b"batch".to_vec(),
+                expected_revision: first_revision,
+            }],
+        )
+        .map_err(|error| error.source)
+    });
+    let second = std::thread::spawn(move || {
+        barrier.wait();
+        files
+            .write_file_with_condition(
+                Path::new("file"),
+                b"ordinary",
+                100,
+                &FileWriteCondition::ExpectedRevision(revision),
+            )
+            .map(|_| ())
+    });
+    let results = [first.join().unwrap(), second.join().unwrap()];
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    assert_eq!(
+        results
+            .iter()
+            .filter(|result| matches!(result, Err(FileSystemError::RevisionConflict(_))))
+            .count(),
+        1
+    );
+}

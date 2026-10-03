@@ -456,3 +456,260 @@ fn changed_paths_uses_execution_grammar_and_limits() {
     assert!(changed_paths(patch, ApplyPatchLimits::new(1024, 1).unwrap()).is_err());
     assert!(changed_paths("*** Add File: new.rs", ApplyPatchLimits::default()).is_err());
 }
+
+#[test]
+fn context_anchors_select_the_requested_function_and_missing_anchors_reject_all_changes() {
+    for (anchor, succeeds) in [("fn second() {", true), ("fn absent() {", false)] {
+        let dir = TestDir::new();
+        let original = "fn first() {\nold\n}\nfn second() {\nold\n}\n";
+        dir.write("file.rs", original);
+        let tool =
+            ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
+        let patch = format!(
+            "*** Begin Patch\n*** Add File: new.txt\n+new\n*** Update File: file.rs\n@@ {anchor}\n-old\n+changed\n*** End Patch\n"
+        );
+        let outcome =
+            resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+        let ToolExecutionOutcome::Returned(output) = outcome else {
+            panic!("expected a tool result");
+        };
+        assert_eq!(
+            output.status(),
+            if succeeds {
+                ToolOutputStatus::Success
+            } else {
+                ToolOutputStatus::Error
+            }
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("file.rs")).unwrap(),
+            if succeeds {
+                "fn first() {\nold\n}\nfn second() {\nchanged\n}\n"
+            } else {
+                original
+            }
+        );
+        assert_eq!(dir.path().join("new.txt").exists(), succeeds);
+    }
+}
+
+#[test]
+fn eof_marker_targets_the_final_duplicate_and_rejects_nonfinal_context() {
+    for (original, expected, status) in [
+        (
+            "old\nother\nold\n",
+            "old\nother\nchanged\n",
+            ToolOutputStatus::Success,
+        ),
+        ("old\nother\n", "old\nother\n", ToolOutputStatus::Error),
+    ] {
+        let dir = TestDir::new();
+        dir.write("file.txt", original);
+        let tool =
+            ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
+        let patch = "*** Begin Patch\n*** Update File: file.txt\n@@\n-old\n+changed\n*** End of File\n*** End Patch\n";
+        let outcome =
+            resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+        assert!(
+            matches!(outcome, ToolExecutionOutcome::Returned(output) if output.status() == status)
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("file.txt")).unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn addition_only_hunks_append_with_the_existing_format() {
+    for (original, expected) in [
+        ("old\n", "old\nadded\n"),
+        ("old\r\n", "old\r\nadded\r\n"),
+        ("old", "old\nadded"),
+    ] {
+        let dir = TestDir::new();
+        dir.write("file.txt", original);
+        let tool =
+            ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
+        let patch = "*** Begin Patch\n*** Update File: file.txt\n@@\n+added\n*** End Patch\n";
+        let outcome =
+            resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+        assert!(
+            matches!(outcome, ToolExecutionOutcome::Returned(output) if output.status() == ToolOutputStatus::Success)
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("file.txt")).unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn moves_can_update_or_retain_content_and_review_both_paths() {
+    for (hunk, expected) in [
+        ("@@\n-old\n+changed\n", "changed\r\nlast"),
+        ("", "old\r\nlast"),
+    ] {
+        let dir = TestDir::new();
+        dir.write("old.txt", "old\r\nlast");
+        let tool =
+            ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
+        let patch = format!(
+            "*** Begin Patch\n*** Update File: old.txt\n*** Move to: new.txt\n{hunk}*** End Patch\n"
+        );
+        assert_eq!(
+            changed_paths(&patch, ApplyPatchLimits::default()).unwrap(),
+            vec![PathBuf::from("old.txt"), PathBuf::from("new.txt")]
+        );
+        assert!(changed_paths(&patch, ApplyPatchLimits::new(1024, 1).unwrap()).is_err());
+        let outcome =
+            resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+        assert!(
+            matches!(outcome, ToolExecutionOutcome::Returned(output) if output.status() == ToolOutputStatus::Success && format!("{:?}", output.content()).contains("moved_files"))
+        );
+        assert!(!dir.path().join("old.txt").exists());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("new.txt")).unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn moves_reject_existing_destinations_escape_and_overlapping_operations() {
+    for (target, extra) in [
+        ("existing.txt", ""),
+        ("../outside.txt", ""),
+        ("new.txt", "*** Add File: new.txt\n+other\n"),
+    ] {
+        let dir = TestDir::new();
+        dir.write("old.txt", "old\n");
+        dir.write("existing.txt", "existing\n");
+        let tool =
+            ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
+        let patch = format!(
+            "*** Begin Patch\n*** Add File: earlier.txt\n+earlier\n*** Update File: old.txt\n*** Move to: {target}\n{extra}*** End Patch\n"
+        );
+        let outcome =
+            resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+        assert!(
+            matches!(outcome, ToolExecutionOutcome::Returned(output) if output.status() == ToolOutputStatus::Error)
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("old.txt")).unwrap(),
+            "old\n"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("existing.txt")).unwrap(),
+            "existing\n"
+        );
+        assert!(!dir.path().join("earlier.txt").exists());
+    }
+}
+
+#[test]
+fn commit_checks_all_source_revisions_before_publishing_any_file() {
+    for operation in [
+        "*** Update File: old.txt\n@@\n-old\n+changed\n",
+        "*** Delete File: old.txt\n",
+        "*** Update File: old.txt\n*** Move to: moved.txt\n",
+    ] {
+        let dir = TestDir::new();
+        dir.write("old.txt", "old\n");
+        let patch = format!(
+            "*** Begin Patch\n*** Add File: earlier.txt\n+earlier\n{operation}*** End Patch\n"
+        );
+        let document = PatchDocument::parse(&patch).unwrap_or_else(|error| panic!("{error}"));
+        let prepared = ApplyPatchTool::prepare(&dir.root(), document)
+            .unwrap_or_else(|error| panic!("{error}"));
+        dir.write("old.txt", "external edit\n");
+        let error = match commit(&dir.root(), prepared) {
+            Ok(_) => panic!("stale patch must fail"),
+            Err(error) => error,
+        };
+        assert!(matches!(
+            error.source,
+            ash_file_system::FileSystemError::RevisionConflict(_)
+        ));
+        assert!(!error.publication_started);
+        assert!(error.completed_paths.is_empty());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("old.txt")).unwrap(),
+            "external edit\n"
+        );
+        assert!(!dir.path().join("earlier.txt").exists());
+        assert!(!dir.path().join("moved.txt").exists());
+    }
+}
+
+#[test]
+fn staging_failure_leaves_no_earlier_changes_or_temporary_files() {
+    let dir = TestDir::new();
+    let tool =
+        ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
+    let patch = "*** Begin Patch\n*** Add File: earlier.txt\n+earlier\n*** Add File: missing/later.txt\n+later\n*** End Patch\n";
+    let outcome = resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+    assert!(
+        matches!(outcome, ToolExecutionOutcome::Returned(output) if output.status() == ToolOutputStatus::Error)
+    );
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+}
+
+#[test]
+fn add_rejects_a_destination_created_after_preparation() {
+    let dir = TestDir::new();
+    let patch = "*** Begin Patch\n*** Add File: new.txt\n+model\n*** End Patch\n";
+    let document = PatchDocument::parse(patch).unwrap_or_else(|error| panic!("{error}"));
+    let prepared =
+        ApplyPatchTool::prepare(&dir.root(), document).unwrap_or_else(|error| panic!("{error}"));
+    dir.write("new.txt", "external\n");
+    let error = match commit(&dir.root(), prepared) {
+        Ok(_) => panic!("existing destination must fail"),
+        Err(error) => error,
+    };
+    assert!(matches!(
+        error.source,
+        ash_file_system::FileSystemError::AlreadyExists(_)
+    ));
+    assert!(!error.publication_started);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("new.txt")).unwrap(),
+        "external\n"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn failed_move_publication_reports_the_completed_destination() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let dir = TestDir::new();
+    dir.write("old.txt", "old\n");
+    // Permit the tool to read the source, but hold it open without delete sharing
+    // so failure happens after the destination has actually been published.
+    let _held_source = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(3)
+        .open(dir.path().join("old.txt"))
+        .unwrap();
+    let tool =
+        ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
+    let patch = "*** Begin Patch\n*** Add File: earlier.txt\n+earlier\n*** Update File: old.txt\n*** Move to: moved.txt\n*** End Patch\n";
+    let outcome = resolve(tool.execute(invocation(&tool.definition(), json!({"patch": patch}))));
+    let ToolExecutionOutcome::OutcomeUncertain(error) = outcome else {
+        panic!("partial publication must be reported");
+    };
+    let message = format!("{error:?}");
+    assert!(message.contains("earlier.txt") && message.contains("moved.txt"));
+    assert_eq!(
+        fs::read_to_string(dir.path().join("earlier.txt")).unwrap(),
+        "earlier\n"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("moved.txt")).unwrap(),
+        "old\n"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("old.txt")).unwrap(),
+        "old\n"
+    );
+}

@@ -1168,10 +1168,14 @@ fn materialize_patch_targets(
             ("*** Update File: ", true),
             ("*** Delete File: ", true),
             ("*** Add File: ", false),
+            ("*** Move to: ", false),
         ]
         .into_iter()
-        .find_map(|(prefix, existing)| line.strip_prefix(prefix).map(|path| (path, existing)));
-        let Some((path, existing)) = operation else {
+        .find_map(|(prefix, existing)| {
+            line.strip_prefix(prefix)
+                .map(|path| (path, existing, prefix))
+        });
+        let Some((path, existing, prefix)) = operation else {
             rewritten.push(line.to_owned());
             continue;
         };
@@ -1238,13 +1242,6 @@ fn materialize_patch_targets(
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         ensure_local_file_access(authorization.dir(), &resolved)?;
         targets.push(resolved.display().to_string());
-        let prefix = if existing && line.starts_with("*** Update File: ") {
-            "*** Update File: "
-        } else if existing {
-            "*** Delete File: "
-        } else {
-            "*** Add File: "
-        };
         rewritten.push(format!("{prefix}{}", relative.display()));
     }
     targets.sort();

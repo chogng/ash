@@ -23,6 +23,49 @@ pub struct FileContent {
     pub revision: String,
 }
 
+/// A prepared file mutation whose source bytes must still have the given revision.
+/// Creation and move destinations must be absent, including empty files.
+pub enum FileMutation {
+    Create {
+        path: std::path::PathBuf,
+        content: Vec<u8>,
+    },
+    Replace {
+        path: std::path::PathBuf,
+        content: Vec<u8>,
+        expected_revision: String,
+    },
+    Remove {
+        path: std::path::PathBuf,
+        expected_revision: String,
+    },
+    MoveAndReplace {
+        path: std::path::PathBuf,
+        target: std::path::PathBuf,
+        content: Vec<u8>,
+        expected_revision: String,
+    },
+}
+
+/// A batch failure records completed paths and whether publication has begun.
+/// An I/O error during publication can occur after the filesystem changed.
+#[derive(Debug)]
+pub struct FileMutationError {
+    pub source: FileSystemError,
+    pub completed_paths: Vec<std::path::PathBuf>,
+    pub publication_started: bool,
+}
+
+impl std::fmt::Display for FileMutationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.source.fmt(formatter)
+    }
+}
+
+impl std::error::Error for FileMutationError {}
+
+use crate::FileSystemError;
+
 /// Explicit write condition for callers that must not overwrite a newer file revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FileWriteCondition {

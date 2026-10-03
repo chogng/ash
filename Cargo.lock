@@ -834,9 +834,9 @@ version = "0.1.0"
 dependencies = [
  "ash-async-utils",
  "ash-file-access",
+ "ash-file-system",
  "ash-protocol",
  "ash-tools",
- "ec4rs",
  "serde",
  "serde_json",
 ]
@@ -1567,6 +1567,7 @@ dependencies = [
  "ash-file-identity",
  "cap-std",
  "clipboard-win",
+ "ec4rs",
  "sha2 0.10.9",
  "tempfile",
  "url",

@@ -1,7 +1,6 @@
 use ash_file_access::Dir;
 use ec4rs::PropertiesSource;
 use ec4rs::property::EndOfLine;
-use std::fs;
 use std::io;
 use std::ops::Range;
 use std::path::Path;
@@ -10,11 +9,16 @@ use std::path::Path;
 /// Existing content takes precedence over project settings so an ordinary edit
 /// cannot silently convert a file or add/remove its final newline.
 pub struct TextFileFormat {
-    pub(crate) eol: &'static str,
+    eol: &'static str,
     final_newline: Option<bool>,
 }
 
 impl TextFileFormat {
+    /// Preferred line ending for newly inserted text.
+    pub fn eol(&self) -> &'static str {
+        self.eol
+    }
+
     pub fn for_existing(text: &str) -> Self {
         let crlf = text.matches("\r\n").count();
         let lf = text.matches('\n').count() - crlf;
@@ -38,8 +42,8 @@ impl TextFileFormat {
         let mut configs = Vec::new();
         for parent in path.ancestors().skip(1) {
             let config = parent.join(".editorconfig");
-            let target = dir.resolve_for_write(&config).map_err(io::Error::other)?;
-            let bytes = match fs::read(target) {
+            dir.resolve_for_write(&config).map_err(io::Error::other)?;
+            let bytes = match dir.directory().handle().read(&config) {
                 Ok(bytes) => bytes,
                 Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
                 Err(error) => return Err(error),

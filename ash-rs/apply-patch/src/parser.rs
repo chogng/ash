@@ -1,4 +1,3 @@
-use crate::TextFileFormat;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::path::PathBuf;
@@ -10,6 +9,7 @@ pub(super) struct PatchDocument {
 pub(super) enum PatchOperation {
     Update {
         path: PathBuf,
+        move_path: Option<PathBuf>,
         hunks: Vec<PatchHunk>,
     },
     Add {
@@ -22,10 +22,12 @@ pub(super) enum PatchOperation {
 }
 
 pub(super) struct PatchHunk {
-    lines: Vec<PatchLine>,
+    pub(super) context: Option<String>,
+    pub(super) end_of_file: bool,
+    pub(super) lines: Vec<PatchLine>,
 }
 
-enum PatchLine {
+pub(super) enum PatchLine {
     Context(String),
     Remove(String),
     Add(String),
@@ -83,9 +85,31 @@ impl PatchDocument {
             index += 1;
             let operation = match kind {
                 PatchOperationKind::Update => {
+                    let move_path = lines
+                        .get(index)
+                        .and_then(|line| line.strip_prefix("*** Move to: "));
+                    let move_path = move_path.map(parse_path).transpose()?;
+                    if let Some(target) = &move_path {
+                        if !paths.insert(target.clone()) {
+                            return Err(PatchError::Message(format!(
+                                "patch changes a path more than once: {}",
+                                target.display()
+                            )));
+                        }
+                        index += 1;
+                    }
                     let (hunks, next) = parse_hunks(&lines, index)?;
+                    if hunks.is_empty() && move_path.is_none() {
+                        return Err(PatchError::Message(
+                            "update operation must contain at least one hunk".to_owned(),
+                        ));
+                    }
                     index = next;
-                    PatchOperation::Update { path, hunks }
+                    PatchOperation::Update {
+                        path,
+                        move_path,
+                        hunks,
+                    }
                 }
                 PatchOperationKind::Add => {
                     let (lines, next) = parse_added_lines(&lines, index)?;
@@ -113,6 +137,22 @@ impl PatchDocument {
         }
         Ok(Self { operations })
     }
+
+    pub(super) fn paths(&self) -> Vec<PathBuf> {
+        self.operations
+            .iter()
+            .flat_map(|operation| match operation {
+                PatchOperation::Update {
+                    path, move_path, ..
+                } => std::iter::once(path.clone())
+                    .chain(move_path.iter().cloned())
+                    .collect::<Vec<_>>(),
+                PatchOperation::Add { path, .. } | PatchOperation::Delete { path } => {
+                    vec![path.clone()]
+                }
+            })
+            .collect()
+    }
 }
 
 enum PatchOperationKind {
@@ -133,6 +173,10 @@ fn parse_operation_header(line: &str) -> Result<(PatchOperationKind, PathBuf), P
             "unknown patch operation: {line}"
         )));
     };
+    Ok((kind, parse_path(raw_path)?))
+}
+
+fn parse_path(raw_path: &str) -> Result<PathBuf, PatchError> {
     let path = PathBuf::from(raw_path);
     if raw_path.trim().is_empty()
         || path.is_absolute()
@@ -144,18 +188,22 @@ fn parse_operation_header(line: &str) -> Result<(PatchOperationKind, PathBuf), P
             "patch path must be relative and must not contain '..': {raw_path}"
         )));
     }
-    Ok((kind, path))
+    Ok(path)
 }
 
 fn parse_hunks(lines: &[&str], mut index: usize) -> Result<(Vec<PatchHunk>, usize), PatchError> {
     let mut hunks = Vec::new();
     while index < lines.len() && !lines[index].starts_with("*** ") {
-        if !lines[index].starts_with("@@") {
+        let header = lines[index];
+        let context = if header == "@@" {
+            None
+        } else if let Some(context) = header.strip_prefix("@@ ") {
+            Some(context.to_owned())
+        } else {
             return Err(PatchError::Message(format!(
-                "expected hunk header beginning with '@@', found: {}",
-                lines[index]
+                "expected '@@' or '@@ context', found: {header}"
             )));
-        }
+        };
         index += 1;
         let mut hunk_lines = Vec::new();
         while index < lines.len()
@@ -168,12 +216,18 @@ fn parse_hunks(lines: &[&str], mut index: usize) -> Result<(Vec<PatchHunk>, usiz
         if hunk_lines.is_empty() {
             return Err(PatchError::Message("patch hunk is empty".to_owned()));
         }
-        hunks.push(PatchHunk { lines: hunk_lines });
-    }
-    if hunks.is_empty() {
-        return Err(PatchError::Message(
-            "update operation must contain at least one hunk".to_owned(),
-        ));
+        let end_of_file = lines.get(index).copied() == Some("*** End of File");
+        if end_of_file {
+            index += 1;
+        }
+        hunks.push(PatchHunk {
+            context,
+            end_of_file,
+            lines: hunk_lines,
+        });
+        if end_of_file {
+            break;
+        }
     }
     Ok((hunks, index))
 }
@@ -208,123 +262,4 @@ fn parse_added_lines(lines: &[&str], mut index: usize) -> Result<(Vec<String>, u
         index += 1;
     }
     Ok((added, index))
-}
-
-pub(super) fn apply_hunks(original: &str, hunks: &[PatchHunk]) -> Result<String, PatchError> {
-    let format = TextFileFormat::for_existing(original);
-    let trailing_newline = original.ends_with(['\r', '\n']);
-    let mut lines = split_text_lines(original);
-    let mut cursor = 0;
-    for hunk in hunks {
-        let before = hunk
-            .lines
-            .iter()
-            .filter_map(|line| match line {
-                PatchLine::Context(text) | PatchLine::Remove(text) => Some(text.as_str()),
-                PatchLine::Add(_) => None,
-            })
-            .collect::<Vec<_>>();
-        let Some(position) = find_lines(&lines, &before, cursor) else {
-            return Err(PatchError::Message(
-                "patch hunk context does not match the current file".to_owned(),
-            ));
-        };
-        let mut source = position;
-        let mut replacement = Vec::new();
-        for line in &hunk.lines {
-            match line {
-                PatchLine::Context(_) => {
-                    replacement.push(lines[source].clone());
-                    source += 1;
-                }
-                PatchLine::Remove(_) => source += 1,
-                PatchLine::Add(text) => replacement.push(TextLine {
-                    text: text.clone(),
-                    ending: format.eol,
-                }),
-            }
-        }
-        let replacement_len = replacement.len();
-        lines.splice(position..position + before.len(), replacement);
-        cursor = position + replacement_len;
-    }
-    // Context and untouched lines retain their exact endings, including mixed
-    // files. Only inserted lines use the preferred format; EOF keeps its original
-    // convention even when the last line is replaced or becomes an interior line.
-    let last = lines.len().saturating_sub(1);
-    let mut result = String::new();
-    for (index, line) in lines.iter().enumerate() {
-        result.push_str(&line.text);
-        if index == last && !trailing_newline {
-            continue;
-        }
-        result.push_str(if line.ending.is_empty() {
-            format.eol
-        } else {
-            line.ending
-        });
-    }
-    Ok(result)
-}
-
-pub(super) fn new_file_content(lines: &[String]) -> String {
-    if lines.is_empty() {
-        String::new()
-    } else {
-        format!("{}\n", lines.join("\n"))
-    }
-}
-
-#[derive(Clone)]
-struct TextLine {
-    text: String,
-    ending: &'static str,
-}
-
-fn split_text_lines(text: &str) -> Vec<TextLine> {
-    let mut lines = Vec::new();
-    let mut start = 0;
-    let mut index = 0;
-    let bytes = text.as_bytes();
-    while index < bytes.len() {
-        let ending = match bytes[index] {
-            b'\r' if bytes.get(index + 1) == Some(&b'\n') => "\r\n",
-            b'\r' => "\r",
-            b'\n' => "\n",
-            _ => {
-                index += 1;
-                continue;
-            }
-        };
-        lines.push(TextLine {
-            text: text[start..index].to_owned(),
-            ending,
-        });
-        index += ending.len();
-        start = index;
-    }
-    if start < text.len() {
-        lines.push(TextLine {
-            text: text[start..].to_owned(),
-            ending: "",
-        });
-    }
-    lines
-}
-
-fn find_lines(lines: &[TextLine], needle: &[&str], start: usize) -> Option<usize> {
-    if needle.is_empty() {
-        return Some(start.min(lines.len()));
-    }
-    lines
-        .windows(needle.len())
-        .enumerate()
-        .skip(start)
-        .find_map(|(index, candidate)| {
-            candidate
-                .iter()
-                .zip(needle)
-                .all(|(line, expected)| line.text == *expected)
-                .then_some(index)
-        })
 }

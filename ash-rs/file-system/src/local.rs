@@ -3,6 +3,8 @@ use crate::ExistingTargetBehavior;
 use crate::FileContent;
 use crate::FileDeleteMode;
 use crate::FileMetadata;
+use crate::FileMutation;
+use crate::FileMutationError;
 use crate::FileSystem;
 use crate::FileSystemError;
 use crate::FileType;
@@ -841,6 +843,179 @@ fn copy_resource(
 /// Local implementation that confines all operations to one canonical directory.
 struct ScopedFiles {
     dir: Dir,
+}
+
+/// Commits mutations under the same directory lock as ordinary conditional writes.
+/// The host owns directory authorization for this entire operation.
+/// All revisions and temporary writes are prepared before the first publication.
+/// Filesystems do not offer a cross-file transaction: publication errors report
+/// completed paths rather than attempting a rollback over another writer's work.
+pub fn commit_file_mutations(
+    dir: &Dir,
+    mutations: &[FileMutation],
+) -> Result<(), FileMutationError> {
+    let files = ScopedFiles::new(dir.clone());
+    let mut completed_paths = Vec::new();
+    let mut publication_started = false;
+    let result = (|| {
+        let _guard = dir
+            .directory()
+            .lock_writes()
+            .map_err(|error| FileSystemError::Io(error.to_string()))?;
+        let staged = mutations
+            .iter()
+            .map(|mutation| {
+                validate_file_mutation(&files, mutation)?;
+                let (path, content, permissions) = match mutation {
+                    FileMutation::Create { path, content } => (path, content, None),
+                    FileMutation::Replace { path, content, .. } => {
+                        let source = files.resolve_existing(path)?;
+                        (
+                            path,
+                            content,
+                            Some(
+                                files
+                                    .handle()
+                                    .metadata(source)
+                                    .map_err(io_error)?
+                                    .permissions(),
+                            ),
+                        )
+                    }
+                    FileMutation::MoveAndReplace {
+                        path,
+                        target,
+                        content,
+                        ..
+                    } => {
+                        let source = files.resolve_existing(path)?;
+                        (
+                            target,
+                            content,
+                            Some(
+                                files
+                                    .handle()
+                                    .metadata(source)
+                                    .map_err(io_error)?
+                                    .permissions(),
+                            ),
+                        )
+                    }
+                    FileMutation::Remove { .. } => return Ok(None),
+                };
+                let target = files.resolve_for_write(path)?;
+                PreparedWrite::new(files.handle(), &target, content, permissions)
+                    .map(Some)
+                    .map_err(io_error)
+            })
+            .collect::<Result<Vec<_>, FileSystemError>>()?;
+        for (mutation, write) in mutations.iter().zip(staged) {
+            // Recheck changes made by other processes while temporary files were
+            // written. The directory lock serializes Ash writers, not external apps.
+            validate_file_mutation(&files, mutation)?;
+            match mutation {
+                FileMutation::Create { path, .. } => {
+                    publication_started = true;
+                    write
+                        .expect("create was staged")
+                        .publish(WritePublication::Create)
+                        .map_err(io_error)?;
+                    completed_paths.push(path.clone());
+                }
+                FileMutation::Replace { path, .. } => {
+                    publication_started = true;
+                    write
+                        .expect("replacement was staged")
+                        .publish(WritePublication::Replace)
+                        .map_err(io_error)?;
+                    completed_paths.push(path.clone());
+                }
+                FileMutation::Remove { path, .. } => {
+                    let source = files.resolve_existing(path)?;
+                    publication_started = true;
+                    files.handle().remove_file(source).map_err(io_error)?;
+                    completed_paths.push(path.clone());
+                }
+                FileMutation::MoveAndReplace {
+                    path,
+                    target,
+                    expected_revision,
+                    ..
+                } => {
+                    publication_started = true;
+                    write
+                        .expect("move was staged")
+                        .publish(WritePublication::Create)
+                        .map_err(io_error)?;
+                    completed_paths.push(target.clone());
+                    check_file_revision(&files, path, expected_revision)?;
+                    let source = files.resolve_existing(path)?;
+                    files.handle().remove_file(source).map_err(io_error)?;
+                    completed_paths.push(path.clone());
+                }
+            }
+        }
+        Ok(())
+    })();
+    result.map_err(|source| FileMutationError {
+        source,
+        completed_paths,
+        publication_started,
+    })
+}
+
+fn check_file_revision(
+    files: &ScopedFiles,
+    path: &Path,
+    expected: &str,
+) -> Result<(), FileSystemError> {
+    let resolved = files.resolve_existing(path)?;
+    let metadata = files.handle().metadata(&resolved).map_err(io_error)?;
+    if !metadata.is_file() {
+        return Err(FileSystemError::NotFile(path.to_path_buf()));
+    }
+    if metadata.permissions().readonly() {
+        return Err(FileSystemError::ReadOnly(path.to_path_buf()));
+    }
+    if file_revision(&files.handle().read(resolved).map_err(io_error)?) != expected {
+        return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
+    }
+    Ok(())
+}
+
+fn check_missing_file(files: &ScopedFiles, path: &Path) -> Result<(), FileSystemError> {
+    let target = files.resolve_for_write(path)?;
+    if files.handle().try_exists(target).map_err(io_error)? {
+        return Err(FileSystemError::AlreadyExists(path.to_path_buf()));
+    }
+    Ok(())
+}
+
+fn validate_file_mutation(
+    files: &ScopedFiles,
+    mutation: &FileMutation,
+) -> Result<(), FileSystemError> {
+    match mutation {
+        FileMutation::Create { path, .. } => check_missing_file(files, path),
+        FileMutation::Replace {
+            path,
+            expected_revision,
+            ..
+        }
+        | FileMutation::Remove {
+            path,
+            expected_revision,
+        } => check_file_revision(files, path, expected_revision),
+        FileMutation::MoveAndReplace {
+            path,
+            target,
+            expected_revision,
+            ..
+        } => {
+            check_file_revision(files, path, expected_revision)?;
+            check_missing_file(files, target)
+        }
+    }
 }
 
 impl ScopedFiles {

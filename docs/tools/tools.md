@@ -248,12 +248,12 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 - `ash-mcp → ash-tools`；
 - `ash-shell-command → ash-tools + ash-tool-executor + ash-sandboxing`；
 - local App Server composition → `ash-install-context + ash-shell-command`；
-- `ash-file-system → ash-tools + ash-sandboxing`；
+- `ash-file-system → ash-file-access + ash-file-identity`；
 - `ash-tui → ash-file-search`；后者提供只读路径索引，不依赖 `ash-tools`，也不注册为模型
   Tool；
 - catalog/runtime manager 可依赖 `ash-file-watcher` 获取 coarse invalidation hint；后者不依赖
   `ash-tools`，不读取文件内容，也不注册为模型 Tool；
-- `ash-apply-patch → ash-tools + ash-sandboxing`；
+- `ash-apply-patch → ash-tools + ash-file-access + ash-file-system`；
 - `ash-action-policy → ash-execpolicy + ash-sandboxing`；
 - `ash-execpolicy` 不依赖 sandbox、Core、Tool 或配置 I/O；
 - `ash-guardian-reviewer → ash-action-policy + ash-sandboxing`；
@@ -294,7 +294,7 @@ direct 工具名，不看到基础库或 legacy operation enum：
 | App Server `LocalToolSuite` / `shell-session` | 启动长任务；读取输出、写入 stdin、等待退出、调整 PTY 和终止已有进程 | 不允许其他 Session 或 Thread 操作该进程 |
 | App Server `LocalToolSuite` / `read_file`、`write_file`、`edit`、`grep`、`glob` | Thread-scoped 读后写入、conditional atomic 单文件写入和受控搜索 | 不暴露 operation enum；断线恢复后必须重读才能恢复内存中的文件 fingerprint |
 | `ash-file-system` / 非 Agent 基础库 | 提供 directory-scoped 条件写入与 host-only filesystem 能力 | 默认 coding profile 不暴露 `file-system` 工具 |
-| `ash-apply-patch` / `apply_patch` | 预检后更新、添加或删除普通文件；replacement 按文件原子写入 | 不接受绝对/`..` 路径，不直接提供任意写入 API；多文件提交不承诺事务性 |
+| `ash-apply-patch` / `apply_patch` | 预检后更新、添加、移动或删除普通文件；提交复用文件系统层的版本检查与单文件原子写入 | executor 不接受绝对/`..` 路径；移动目标必须不存在，父目录必须存在；多文件提交不承诺事务性 |
 
 Agent 通过这两个命令工具执行 Git、测试和构建；Workbench 的 Git UI 通过 Git RPC 调用 Rust
 Git 服务。通用命令工具不按 Git 子命令逐个注册，也不需要先打开可见终端。
@@ -303,8 +303,14 @@ Git 服务。通用命令工具不按 Git 子命令逐个注册，也不需要�
 工具注册表只接受与自身 `ToolDefinition` digest 相符的冻结 binding。host 根据当前 Session
 和 Thread 的目录授权选定工作目录。短命令和长任务共用同一目录校验，免沙箱权限只改变执行
 权限，不改变工作目录；显式 sandbox scope 必须与 host 选定的目录一致。
-`apply_patch` 在所有 hunk 校验完成前不写入；
-若多文件 commit 中途失败，返回 `OutcomeUncertain`，由 Core 决定后续恢复语义。
+`apply_patch` 的 `parser.rs` 解析补丁，`file_update.rs` 根据上下文生成修改内容。
+`@@ 上下文行` 从指定位置继续查找，`*** End of File` 限定片段匹配文件末尾，只有新增行的
+更新片段追加到文件末尾。移动操作的源路径和目标路径都进入 host 的授权与策略检查。
+文件系统层拥有三个编辑工具共享的换行、文件末尾和 EditorConfig 规则。
+
+`apply_patch` 在所有 hunk、源文件版本与临时写入准备完成前不修改目标文件；
+版本检查和提交使用与普通条件写入相同的目录锁。其他进程仍可修改文件，提交前再次检查版本。
+若多文件 commit 中途失败，返回包含已完成路径的 `OutcomeUncertain`，由 Core 决定后续恢复语义。
 
 `ash-file-system` 还提供 host-only 的 `find_nearest_ancestor_with_markers`，用于从一个本地路径
 向上发现最近的项目 marker。它不是模型 Tool，不读取 marker 配置，也不施加 `DirectoryRoot`

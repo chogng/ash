@@ -11,6 +11,7 @@ name = "ash_file_system"
 path = "src/lib.rs"
 
 [dependencies]
+ec4rs = { workspace = true }
 cap-std = { workspace = true }
 sha2 = { workspace = true }
 ash-file-access = { workspace = true }
