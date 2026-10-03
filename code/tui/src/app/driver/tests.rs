@@ -17,7 +17,6 @@ fn scheduled(command: AppCommand) -> ScheduledCommand {
     ScheduledCommand {
         command,
         origin: origin(),
-        voice_thread_id: None,
     }
 }
 
@@ -96,7 +95,6 @@ fn repeated_model_command_opens_the_fixed_catalog_without_loading() {
             ),
             server_slash_commands: Vec::new(),
             plugins_enabled: false,
-            profile_root: root.path().to_path_buf(),
             dictation_settings,
             model_picker,
         },

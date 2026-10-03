@@ -1,4 +1,4 @@
-- `../vscode` and `../codex` and `../zed` and `../warp`, `../marketplace`, `../mxc`
+- `../vscode` and `../codex` and `../zed` and `../warp`, `../marketplace`, `../mxc`, `../tgrep`
 
 # Ash Agent Instructions
 

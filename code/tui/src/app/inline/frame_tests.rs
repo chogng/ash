@@ -312,56 +312,65 @@ pub(super) fn text(buffer: &Buffer) -> String {
 }
 
 #[test]
-fn voice_status_is_visible_below_the_inline_input() {
+fn dictation_preparation_status_is_visible_below_the_inline_input() {
     let mut app = app();
     app.insert_text("/voice");
-    let Some(AppCommand::VoiceStart { resource_id }) =
+    let Some(AppCommand::DictationStart { resource_id }) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
-        panic!("expected voice mode to start");
+        panic!("expected dictation to start");
     };
-    app.update(AppEvent::VoiceStarted {
-        resource_id,
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
         error: None,
     });
-
+    app.dictation_model_progress(
+        &resource_id,
+        ash_app_server_protocol::protocol::dictation::DictationModelStage::Checking,
+    );
     let buffer = render(&app, 80, 20);
-    crate::tui_assert_snapshot!("voice_listening", text(&buffer));
-    let status = "Voice · listening · /voice to stop";
+    crate::tui_assert_snapshot!("dictation_preparation", text(&buffer));
+    let status = "Dictation · checking model files · ctrl+c to stop";
     let row = text(&buffer)
         .lines()
         .position(|line| line.contains(status))
-        .expect("voice status is visible");
+        .expect("dictation status is visible");
     assert_eq!(buffer[(2, row as u16)].fg, app.render_context().muted());
 }
 
 #[test]
-fn voice_model_preparation_shows_real_download_bytes_in_chinese() {
+fn dictation_model_preparation_shows_real_download_bytes_in_chinese() {
     let mut app = app();
     let mut settings = TerminalSettings::default();
     settings.set_screen_mode(ScreenMode::Inline);
     settings.set_language(crate::nls::Language::Chinese);
     app.update(ConfigEvent::SettingsReceived(settings));
     app.insert_text("/voice");
-    let Some(AppCommand::VoiceStart { resource_id }) =
+    let Some(AppCommand::DictationStart { resource_id }) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
-        panic!("expected voice start");
+        panic!("expected dictation start");
     };
-    app.voice_model_progress("another-resource", realtime_voice::ModelProgress::Loading);
-    assert!(app.voice_status().unwrap().contains("正在准备麦克风"));
-    app.voice_model_progress(
+    app.dictation_model_progress(
+        "another-resource",
+        ash_app_server_protocol::protocol::dictation::DictationModelStage::Loading,
+    );
+    assert_eq!(app.dictation_status(), None);
+    app.dictation_model_progress(
         &resource_id,
-        realtime_voice::ModelProgress::Downloading {
+        ash_app_server_protocol::protocol::dictation::DictationModelStage::Downloading {
             file: "encoder.onnx".into(),
             downloaded_bytes: 2 * 1024 * 1024,
         },
     );
     assert_eq!(
-        app.voice_status().unwrap(),
-        "语音 · 正在下载 encoder.onnx：2.0 MiB · ctrl+c 停止"
+        app.dictation_status().unwrap(),
+        "听写 · 正在下载 encoder.onnx：2.0 MiB · ctrl+c 停止"
     );
-    crate::tui_assert_snapshot!("voice_model_downloading_zh", text(&render(&app, 80, 20)));
+    crate::tui_assert_snapshot!(
+        "dictation_model_downloading_zh",
+        text(&render(&app, 80, 20))
+    );
 }
 
 #[test]

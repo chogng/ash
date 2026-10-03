@@ -28,7 +28,6 @@ mod status;
 mod terminal;
 #[cfg(test)]
 mod test_support;
-mod voice;
 #[cfg(test)]
 // Keep the owning Rust module in each filename while omitting the crate name from TUI baselines.
 #[macro_export]
@@ -103,6 +102,7 @@ pub fn client_capabilities() -> ClientCapabilities {
         }),
         browser: None,
         dir_permissions_host: Some(DirPermissionsHostCapability { version: 1 }),
+        text_documents: None,
     }
 }
 

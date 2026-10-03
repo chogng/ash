@@ -103,12 +103,11 @@ fn builtins_follow_enum_presentation_order() {
                 "plugins",
                 "lsp",
             ];
-            names.push("dictate");
             names.push("voice");
             names
         }
     );
-    assert_eq!(definitions.len(), 37);
+    assert_eq!(definitions.len(), 36);
 }
 
 #[test]

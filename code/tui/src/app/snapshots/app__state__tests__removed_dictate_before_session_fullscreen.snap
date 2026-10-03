@@ -1,6 +1,6 @@
 ---
-source: code/tui/src/app/fullscreen/frame_tests.rs
-expression: rendered
+source: code/tui/src/app/state_tests.rs
+expression: frame
 ---
   .                                                        [— / —] [Dashboard]  
                                                                                 
@@ -10,15 +10,19 @@ expression: rendered
                                                                                 
                                                                                 
                                                                                 
-  ───────────────────────────────────────────────────────────────────── 36/36   
-  /issue                     select issues to develop together                 │
-  /pr                        ask the Agent to create or inspect a pull request │
-  /marketplace               find and install Marketplace packages             │
-  /plugins                   manage installed packages and exact versions      │
-  /lsp                       manage language servers and find packages         │
-  /voice                     dictate into the current draft; run again to stop ┃
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                    Unknown command: /dictate.  
   ────────────────────────────────────────────────────────────────────────────  
-  > /                                                                           
+  >                                                                             
   ─────────────────────────────────────────────────────────── Automatic model   
                                                                                 
-  Enter send
+  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

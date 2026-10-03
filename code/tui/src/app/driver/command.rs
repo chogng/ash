@@ -32,17 +32,7 @@ use std::time::Instant;
 
 impl AppDriver {
     pub(in crate::app) fn execute(&mut self, scheduled: ScheduledCommand) -> CommandEffect {
-        let ScheduledCommand {
-            command,
-            origin,
-            voice_thread_id,
-        } = scheduled;
-        if voice_thread_id
-            .as_ref()
-            .is_some_and(|thread_id| self.app.thread_presentations.active_id() != thread_id)
-        {
-            return CommandEffect::None;
-        }
+        let ScheduledCommand { command, origin } = scheduled;
         let request_key = request_key(&command);
         match command {
             AppCommand::SetDictationShortcutSettings(settings) => {
@@ -60,22 +50,6 @@ impl AppDriver {
                     &mut self.app,
                     origin,
                 );
-            }
-            AppCommand::VoiceStart { resource_id } => {
-                if let Err(error) = self.voice.start() {
-                    self.app.update(crate::app::AppEvent::VoiceStarted {
-                        resource_id,
-                        error: Some(error),
-                    });
-                }
-            }
-            AppCommand::VoiceStop { resource_id } => {
-                if let Err(error) = self.voice.stop() {
-                    self.app.update(crate::app::AppEvent::VoiceStopped {
-                        resource_id,
-                        error: Some(error),
-                    });
-                }
             }
             AppCommand::DictationStart { resource_id } => {
                 let mut client = self.client.clone();
@@ -420,7 +394,7 @@ impl AppDriver {
                 );
             }
             AppCommand::Thread(command) => {
-                self.execute_thread_command(request_key, command, origin, voice_thread_id)
+                self.execute_thread_command(request_key, command, origin)
             }
             AppCommand::OpenWorkspace { path } => return CommandEffect::OpenWorkspace(path),
             AppCommand::Quit => return CommandEffect::Quit,
@@ -501,7 +475,6 @@ impl AppDriver {
         request_key: Option<RequestKey>,
         command: ThreadCommand,
         origin: RequestOrigin,
-        voice_thread_id: Option<ash_protocol::ThreadId>,
     ) {
         let preparation = thread::prepare_command(
             self.conversation
@@ -555,7 +528,6 @@ impl AppDriver {
                 self.queued_commands.push_front(ScheduledCommand {
                     command: command.into(),
                     origin,
-                    voice_thread_id,
                 });
             }
             ThreadCommandPreparation::None => {}

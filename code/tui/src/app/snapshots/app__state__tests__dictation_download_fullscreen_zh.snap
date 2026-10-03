@@ -4,7 +4,7 @@ expression: render_dictation_frame(&app)
 ---
   .                                                           [— / —] [仪 表 盘 ]  
                                                                                 
-> /dictate                                                                      
+> /voice                                                                        
                                                                                 
                                                                                 
                                                                                 
@@ -20,9 +20,9 @@ expression: render_dictation_frame(&app)
                                                                                 
                                                                                 
                                                                                 
-                                                  正 在 听 写 。 按  /dictate 停 止 。   
+                                                    正 在 听 写 。 按  /voice 停 止 。   
   ────────────────────────────────────────────────────────────────────────────  
   > keep draft                                                                  
   ────────────────────────────────────────────────────────────────── 自 动 模 型    
                                                                                 
-  语 音  · 正 在 下 载  model_quant.onnx： 2.0 MiB · ctrl+c 停 止
+  听 写  · 正 在 下 载  model_quant.onnx： 2.0 MiB · ctrl+c 停 止

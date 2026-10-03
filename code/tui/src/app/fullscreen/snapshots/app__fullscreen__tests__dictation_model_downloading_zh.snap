@@ -1,14 +1,10 @@
 ---
-source: code/tui/src/app/state_tests.rs
-expression: render_dictation_frame(&app)
+source: code/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, 80, 20)"
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                           [— / —] [仪 表 盘 ]  
                                                                                 
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
+> /voice                                                                        
                                                                                 
                                                                                 
                                                                                 
@@ -22,7 +18,7 @@ expression: render_dictation_frame(&app)
                                                                                 
                                                                                 
   ────────────────────────────────────────────────────────────────────────────  
-  > draft for later                                                             
-  ─────────────────────────────────────────────────────────── Automatic model   
+  >                                                                             
+  ────────────────────────────────────────────────────────────────── 自 动 模 型    
                                                                                 
-  Voice · heard: thinking
+  听 写  · 正 在 下 载  encoder.onnx： 2.0 MiB · ctrl+c 停 止

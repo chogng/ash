@@ -163,13 +163,6 @@ pub(crate) struct App {
     dictation_final_received: bool,
     dictation_next_id: u64,
     pub(super) dictation_shortcut_settings: crate::config::DictationShortcutSettings,
-    voice_resource_id: Option<String>,
-    voice_thread_id: Option<ash_protocol::ThreadId>,
-    voice_stopping: bool,
-    voice_ready: bool,
-    voice_model_progress: Option<realtime_voice::ModelProgress>,
-    voice_partial: String,
-    voice_next_id: u64,
     pub(super) chat_panel: ChatPanel,
     pub(super) app_keymap: AppKeymap,
     pub(super) thread: ThreadState,
@@ -207,13 +200,6 @@ impl App {
             dictation_final_received: false,
             dictation_next_id: 0,
             dictation_shortcut_settings: crate::config::DictationShortcutSettings::default(),
-            voice_resource_id: None,
-            voice_thread_id: None,
-            voice_stopping: false,
-            voice_ready: false,
-            voice_model_progress: None,
-            voice_partial: String::new(),
-            voice_next_id: 0,
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadState::default(),
@@ -317,13 +303,6 @@ impl App {
             dictation_final_received: false,
             dictation_next_id: 0,
             dictation_shortcut_settings: crate::config::DictationShortcutSettings::default(),
-            voice_resource_id: None,
-            voice_thread_id: None,
-            voice_stopping: false,
-            voice_ready: false,
-            voice_model_progress: None,
-            voice_partial: String::new(),
-            voice_next_id: 0,
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadState::default(),
@@ -492,8 +471,14 @@ impl App {
                 };
                 let mut message = message;
                 message.localize(self.language());
-                self.thread
-                    .update(ThreadPresentationEvent::NoticeReceived(message.to_string()));
+                let message = message.to_string();
+                // The new-session composer has no visible Thread history for this notice.
+                if self.starts_new_session() {
+                    self.chat_panel.show_notice(message, now);
+                } else {
+                    self.thread
+                        .update(ThreadPresentationEvent::NoticeReceived(message));
+                }
                 None
             }
             ChatComposerOutcome::Queued(input) => {
@@ -1047,68 +1032,23 @@ impl App {
         self.dismiss_fullscreen_welcome_on_input();
     }
 
-    pub(crate) fn voice_resource_id(&self) -> Option<&str> {
-        self.voice_resource_id.as_deref()
-    }
-
-    pub(crate) fn voice_status(&self) -> Option<String> {
-        if self.dictation_resource_id.is_some()
-            && (self.dictation_stop_requested
-                || self.dictation_request == DictationRequest::Stopping)
-        {
+    pub(crate) fn dictation_status(&self) -> Option<String> {
+        self.dictation_resource_id.as_ref()?;
+        if self.dictation_stop_requested || self.dictation_request == DictationRequest::Stopping {
             return Some(crate::nls::localize_owned(
                 self.language(),
-                "Voice · stopping",
+                "Dictation · stopping",
             ));
         }
-        if self.dictation_resource_id.is_some()
-            && let Some(stage) = &self.dictation_model_progress
-        {
-            use ash_app_server_protocol::protocol::dictation::DictationModelStage;
-            let progress = match stage {
-                DictationModelStage::Checking => realtime_voice::ModelProgress::Checking,
-                DictationModelStage::Downloading {
-                    file,
-                    downloaded_bytes,
-                } => realtime_voice::ModelProgress::Downloading {
-                    file: file.clone(),
-                    downloaded_bytes: *downloaded_bytes,
-                },
-                DictationModelStage::Loading => realtime_voice::ModelProgress::Loading,
-                DictationModelStage::Ready => realtime_voice::ModelProgress::Ready,
-                DictationModelStage::Cancelled => realtime_voice::ModelProgress::Cancelled,
-                DictationModelStage::Failed { error } => realtime_voice::ModelProgress::Failed {
-                    error: error.clone(),
-                },
-            };
-            if let Some(text) = self.model_preparation_status(&progress) {
-                return Some(text);
-            }
-        }
-        self.voice_resource_id.as_ref()?;
-        let status = if self.voice_stopping {
-            crate::nls::localize(self.language(), "Voice · stopping").into_owned()
-        } else if !self.voice_ready {
-            self.voice_model_progress
-                .as_ref()
-                .and_then(|progress| self.model_preparation_status(progress))
-                .unwrap_or_else(|| {
-                    crate::nls::localize(self.language(), "Voice · preparing microphone")
-                        .into_owned()
-                })
-        } else if self.voice_partial.is_empty() {
-            crate::nls::localize(self.language(), "Voice · listening · /voice to stop").into_owned()
-        } else {
-            format!(
-                "{} {}",
-                crate::nls::localize(self.language(), "Voice · heard:"),
-                self.voice_partial
-            )
-        };
-        Some(status)
+        self.dictation_model_progress
+            .as_ref()
+            .and_then(|progress| self.model_preparation_status(progress))
     }
 
-    fn model_preparation_status(&self, progress: &realtime_voice::ModelProgress) -> Option<String> {
+    fn model_preparation_status(
+        &self,
+        progress: &ash_app_server_protocol::protocol::dictation::DictationModelStage,
+    ) -> Option<String> {
         let status = model_progress_text(self.language(), progress)?;
         if let Some(key) = self.app_keymap.action_hint(
             AppKeymapAction::InterruptOrQuit,
@@ -1127,25 +1067,6 @@ impl App {
         Some(status)
     }
 
-    pub(crate) fn voice_partial(&mut self, resource_id: &str, text: String) {
-        if self.voice_resource_id.as_deref() == Some(resource_id)
-            && !self.voice_stopping
-            && self.voice_thread_id.as_ref() == Some(self.thread_presentations.active_id())
-        {
-            self.voice_partial = text;
-        }
-    }
-
-    pub(crate) fn voice_model_progress(
-        &mut self,
-        resource_id: &str,
-        progress: realtime_voice::ModelProgress,
-    ) {
-        if self.voice_resource_id.as_deref() == Some(resource_id) && !self.voice_stopping {
-            self.voice_model_progress = Some(progress);
-        }
-    }
-
     pub(crate) fn dictation_model_progress(
         &mut self,
         resource_id: &str,
@@ -1157,84 +1078,6 @@ impl App {
         {
             self.dictation_model_progress = Some(progress);
         }
-    }
-
-    pub(crate) fn voice_utterance(
-        &mut self,
-        resource_id: &str,
-        text: String,
-    ) -> Option<AppCommand> {
-        if self.voice_resource_id.as_deref() != Some(resource_id) {
-            return None;
-        }
-        if self.voice_thread_id.as_ref() != Some(self.thread_presentations.active_id()) {
-            return None;
-        }
-        let text = text.trim();
-        if text.is_empty() {
-            return None;
-        }
-        self.voice_partial.clear();
-        let submission = crate::thread::composer::ChatSubmission {
-            mode: self.collaboration_mode(),
-            command_id: crate::client::new_command_id("input"),
-            display_text: text.to_owned(),
-            input: vec![ChatInputItem::Text(text.to_owned())],
-        };
-        let outcome = if self.active_turn().is_some() || matches!(self.status, Status::Working) {
-            ChatComposerOutcome::Queued(crate::thread::composer::QueuedChatInput::from_submission(
-                submission,
-            ))
-        } else {
-            ChatComposerOutcome::Submit(submission)
-        };
-        self.handle_chat_composer_outcome(outcome, Instant::now())
-    }
-
-    pub(crate) fn stop_voice_if_scope_changed(&mut self) -> Option<AppCommand> {
-        (self.voice_resource_id.is_some()
-            && !self.voice_stopping
-            && self.voice_thread_id.as_ref() != Some(self.thread_presentations.active_id()))
-        .then(|| self.toggle_voice())
-        .flatten()
-    }
-
-    fn toggle_voice(&mut self) -> Option<AppCommand> {
-        if let Some(resource_id) = self.voice_resource_id.clone() {
-            if self.voice_stopping {
-                return None;
-            }
-            self.voice_stopping = true;
-            return Some(AppCommand::VoiceStop { resource_id });
-        }
-        if self.dictation_resource_id.is_some() {
-            self.chat_panel.show_notice(
-                crate::nls::localize_owned(
-                    self.language(),
-                    "Stop dictation before starting voice mode.",
-                ),
-                Instant::now(),
-            );
-            return None;
-        }
-        if self.starts_new_session() {
-            self.chat_panel.show_notice(
-                crate::nls::localize_owned(
-                    self.language(),
-                    "Start a chat before using voice mode.",
-                ),
-                Instant::now(),
-            );
-            return None;
-        }
-        self.voice_next_id += 1;
-        let resource_id = format!("tui-voice-{}", self.voice_next_id);
-        self.voice_thread_id = Some(self.thread_presentations.active_id().clone());
-        self.voice_resource_id = Some(resource_id.clone());
-        self.voice_ready = false;
-        self.voice_model_progress = None;
-        self.voice_partial.clear();
-        Some(AppCommand::VoiceStart { resource_id })
     }
 
     fn dictation_input_mut(&mut self) -> Option<&mut crate::thread::composer::ChatInput> {
@@ -1283,16 +1126,6 @@ impl App {
     }
 
     fn toggle_dictation(&mut self) -> Option<AppCommand> {
-        if self.voice_resource_id.is_some() {
-            self.chat_panel.show_notice(
-                crate::nls::localize_owned(
-                    self.language(),
-                    "Stop voice mode before starting dictation.",
-                ),
-                Instant::now(),
-            );
-            return None;
-        }
         match self.dictation_request {
             DictationRequest::Starting => {
                 self.dictation_stop_requested = true;
@@ -2655,7 +2488,7 @@ impl App {
                             let key = if self.dictation_shortcut_settings.enabled {
                                 self.dictation_shortcut_settings.shortcut.as_str()
                             } else {
-                                "/dictate"
+                                "/voice"
                             };
                             let mut text = crate::nls::Text::template(
                                 "Listening. Press {0} to stop.",
@@ -2709,47 +2542,6 @@ impl App {
                         Instant::now(),
                     );
                 }
-            }
-            AppEvent::VoiceStarted { resource_id, error } => {
-                if self.voice_resource_id.as_deref() != Some(resource_id.as_str()) {
-                    return;
-                }
-                if let Some(error) = error {
-                    self.voice_resource_id = None;
-                    self.voice_thread_id = None;
-                    self.voice_stopping = false;
-                    self.voice_ready = false;
-                    self.voice_partial.clear();
-                    self.chat_panel.show_notice(
-                        format!(
-                            "{} {error}",
-                            crate::nls::localize(self.language(), "Voice failed:")
-                        ),
-                        Instant::now(),
-                    );
-                } else if !self.voice_stopping {
-                    self.voice_ready = true;
-                }
-            }
-            AppEvent::VoiceStopped { resource_id, error } => {
-                if self.voice_resource_id.as_deref() != Some(resource_id.as_str()) {
-                    return;
-                }
-                self.voice_resource_id = None;
-                self.voice_thread_id = None;
-                self.voice_stopping = false;
-                self.voice_ready = false;
-                self.voice_partial.clear();
-                let notice = error.map_or_else(
-                    || crate::nls::localize_owned(self.language(), "Voice mode stopped."),
-                    |error| {
-                        format!(
-                            "{} {error}",
-                            crate::nls::localize(self.language(), "Voice failed:")
-                        )
-                    },
-                );
-                self.chat_panel.show_notice(notice, Instant::now());
             }
             AppEvent::Issues(event) => self.issues_mut().update(event),
             AppEvent::Dirs(event) => self.apply_dir_event(event),
@@ -3861,11 +3653,7 @@ impl App {
             && invocation.origin == SlashCommandOrigin::Local
             && !matches!(
                 local,
-                Some(
-                    TuiSlashCommandAction::Export
-                        | TuiSlashCommandAction::Dictate
-                        | TuiSlashCommandAction::Voice
-                )
+                Some(TuiSlashCommandAction::Export | TuiSlashCommandAction::Voice)
             )
         {
             self.thread.update(ThreadPresentationEvent::CommandFailed {
@@ -3875,10 +3663,9 @@ impl App {
             return None;
         }
         match (invocation.origin, local) {
-            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Dictate)) => {
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Voice)) => {
                 self.toggle_dictation()
             }
-            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Voice)) => self.toggle_voice(),
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Quit))
                 if invocation.arguments.is_empty() =>
             {
@@ -4027,9 +3814,6 @@ impl App {
             self.dictation_send_after_stop = false;
             return self.toggle_dictation();
         }
-        if self.voice_resource_id.is_some() {
-            return self.toggle_voice();
-        }
         match &self.status {
             Status::Working
             | Status::WaitingForApproval
@@ -4053,17 +3837,17 @@ fn is_advisor_config_argument(argument: &str) -> bool {
 
 fn model_progress_text(
     language: crate::nls::Language,
-    progress: &realtime_voice::ModelProgress,
+    progress: &ash_app_server_protocol::protocol::dictation::DictationModelStage,
 ) -> Option<String> {
-    use realtime_voice::ModelProgress;
+    use ash_app_server_protocol::protocol::dictation::DictationModelStage;
     let mut text = match progress {
-        ModelProgress::Checking => crate::nls::Text::from("Voice · checking model files"),
-        ModelProgress::Loading => crate::nls::Text::from("Voice · loading model"),
-        ModelProgress::Downloading {
+        DictationModelStage::Checking => crate::nls::Text::from("Dictation · checking model files"),
+        DictationModelStage::Loading => crate::nls::Text::from("Dictation · loading model"),
+        DictationModelStage::Downloading {
             file,
             downloaded_bytes,
         } => crate::nls::Text::template(
-            "Voice · downloading {0}: {1} MiB",
+            "Dictation · downloading {0}: {1} MiB",
             vec![
                 crate::nls::Text::literal(file),
                 crate::nls::Text::literal(format!(
@@ -4072,7 +3856,9 @@ fn model_progress_text(
                 )),
             ],
         ),
-        ModelProgress::Ready | ModelProgress::Cancelled | ModelProgress::Failed { .. } => {
+        DictationModelStage::Ready
+        | DictationModelStage::Cancelled
+        | DictationModelStage::Failed { .. } => {
             return None;
         }
     };

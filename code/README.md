@@ -28,7 +28,7 @@ ash-cli → code/tui → ash-app-server-client → shared App Server crates
 | 设置、主题、快捷键与界面语言 | [config](tui/src/config)、[theme](tui/src/theme)、[keymap](tui/src/keymap)、[nls.rs](tui/src/nls.rs) |
 | 扩展、Connector 与目录授权 | 对应功能模块；目录授权见 [dirs.rs](tui/src/dirs.rs) |
 | 状态、额度与内存诊断 | [status](tui/src/status)、[usage.rs](tui/src/usage.rs)、[memory.rs](tui/src/memory.rs) |
-| 语音识别与听写 | [voice.rs](tui/src/voice.rs)、[realtime-voice](../ash-rs/realtime-voice/README.md)；设备与音频由 `ash-voice-host` 处理 |
+| 听写 | [state.rs](tui/src/app/state.rs)、[请求调度](tui/src/app/driver/command.rs)；App Server 的 [realtime-voice](../ash-rs/realtime-voice/README.md) 负责识别与模型安装，`ash-voice-host` 负责音频 |
 | 终端、ANSI 转换与 Mermaid 排版 | [终端检测](terminal-detection/README.md)、[ansi-escape](ansi-escape/README.md)、[mermaid](mermaid/README.md) |
 
 功能模块维护自己的状态、交互与请求。跨功能命令经 `dispatch.rs` 调用功能接口，App 只做调度；共享 `widgets` 提供通用控件。公开接口与参数以 [lib.rs](tui/src/lib.rs) 为准。
@@ -196,9 +196,9 @@ dictationShortcut = "ctrl+g"
 
 `screenMode` 的配置、即时切换和终端行为见 [LAYOUT.md](LAYOUT.md#屏幕模式配置)。除听写快捷键外，TUI 设置沿用 App Server 的 Config 读写通路。
 
-`dictationShortcutEnabled` 缺省为 `false`。开启后，在 TUI 任意页面按 `dictationShortcut` 开始或停止听写，结果写入当前草稿；输入框聚焦时按 Enter 会结束听写，等最终文字返回后发送。`/dictate` 不受开关影响。默认键为 `ctrl+g`，可在 Config 修改为一个带修饰键的组合键。两个值读写运行 TUI 的本机 profile，连接远端 App Server 不改变它们。macOS 的媒体键不作为默认听写键。
+`dictationShortcutEnabled` 缺省为 `false`。开启后，在 TUI 任意页面按 `dictationShortcut` 开始或停止听写，结果写入当前草稿；输入框聚焦时按 Enter 会结束听写，等最终文字返回后发送。`/voice` 不受开关影响。默认键为 `ctrl+g`，可在 Config 修改为一个带修饰键的组合键。两个值读写运行 TUI 的本机 profile，连接远端 App Server 不改变它们。macOS 的媒体键不作为默认听写键。
 
-听写或 `/voice` 启动、下载模型和录音期间，中断键（默认 `Ctrl+C`）先停止语音会话，不退出 TUI。听写保留草稿，不触发发送；`/voice` 停止时仍提交最后一句识别结果。停止完成后，中断键恢复聊天任务中断或退出的原有行为。模型准备提示显示当前中断快捷键。下载期间输入 `/quit`，会先停止听写再退出。下载失败与停止同时发生时仍显示错误，不发送草稿。
+终端的 `/voice` 用于听写，将识别文字写入当前草稿，供用户审阅、编辑和发送；发送后沿用当前编码任务的模型、工具和权限。终端不提供独立语音对话或按停顿自动发送的入口。听写启动、下载模型和录音期间，中断键（默认 `Ctrl+C`）先停止听写并保留草稿，不触发发送、不退出 TUI。停止完成后，中断键恢复聊天任务中断或退出的原有行为。模型准备提示显示当前中断快捷键。下载期间输入 `/quit`，会先停止听写再退出。下载失败与停止同时发生时仍显示错误，不发送草稿。
 
 取消或下载失败会清理安装临时目录并释放模型锁；进程被强杀留下的临时目录在下次安装前清理，不会断点续传。已经结束的下载不会因网络恢复自动重启。模型被另一个进程安装时显示占用错误，保留对方的安装临时文件。
 
@@ -269,7 +269,9 @@ just test-tui
 | [config.rs](../ash-cli/tests/tui/config.rs) | 设置、供应商、账户、语言与配置面板导航 |
 | [issues.rs](../ash-cli/tests/tui/issues.rs) | Issue 选择、会话创建与 PR；目前仅 Unix 场景 |
 
-`just test-tui actual_tui_dictation_download` 用本地代理验证语音模型准备时的中断、断网重试、退出和跨进程模型锁；`/dictate` 与 `/voice` 的取消、断网和重试在 fullscreen、inline 分别验证。这组场景目前仅 Unix，不下载完整模型，也不使用真实麦克风。
+`just test-tui actual_tui_dictation_download` 用本地代理验证听写模型准备时的中断、断网重试、退出和跨进程模型锁；`/voice` 的取消、断网和重试在 fullscreen、inline 分别验证。这组场景目前仅 Unix，不下载完整模型，也不使用真实麦克风。
+
+`just test-tui actual_tui_removed_dictate_command` 验证两种模式下，首次启动和已有会话中输入 `/dictate` 都只显示未知命令提示，不启动模型下载、麦克风或编码请求；随后仍能正常提交编码任务。
 
 状态、请求和副作用断言与终端文本 snapshot 分别验证行为和显示；执行与基线审阅见 [test-tui](../.agents/skills/test-tui/SKILL.md)。两种模式的定向场景与终端兼容范围见 [LAYOUT.md](LAYOUT.md#验证入口与支持范围)。
 

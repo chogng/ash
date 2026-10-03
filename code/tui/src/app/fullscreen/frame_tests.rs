@@ -3464,27 +3464,27 @@ fn persistent_queue_snapshot_distinguishes_pending_and_paused_messages() {
 }
 
 #[test]
-fn voice_model_preparation_shows_real_download_bytes_in_chinese() {
+fn dictation_model_preparation_shows_real_download_bytes_in_chinese() {
     let mut app = App::new();
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_language(crate::nls::Language::Chinese);
     app.update(crate::config::Event::SettingsReceived(settings));
     app.insert_text("/voice");
-    let Some(AppCommand::VoiceStart { resource_id }) =
+    let Some(AppCommand::DictationStart { resource_id }) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
-        panic!("expected voice start");
+        panic!("expected dictation start");
     };
-    app.voice_model_progress(
+    app.dictation_model_progress(
         &resource_id,
-        realtime_voice::ModelProgress::Downloading {
+        ash_app_server_protocol::protocol::dictation::DictationModelStage::Downloading {
             file: "encoder.onnx".into(),
             downloaded_bytes: 2 * 1024 * 1024,
         },
     );
     assert_eq!(
-        app.voice_status().unwrap(),
-        "语音 · 正在下载 encoder.onnx：2.0 MiB · ctrl+c 停止"
+        app.dictation_status().unwrap(),
+        "听写 · 正在下载 encoder.onnx：2.0 MiB · ctrl+c 停止"
     );
-    crate::tui_assert_snapshot!("voice_model_downloading_zh", render(&app, 80, 20));
+    crate::tui_assert_snapshot!("dictation_model_downloading_zh", render(&app, 80, 20));
 }

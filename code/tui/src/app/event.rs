@@ -11,14 +11,6 @@ pub(crate) enum AppEvent {
         resource_id: String,
         result: Result<Option<String>, String>,
     },
-    VoiceStarted {
-        resource_id: String,
-        error: Option<String>,
-    },
-    VoiceStopped {
-        resource_id: String,
-        error: Option<String>,
-    },
     Config(crate::config::Event),
     Connectors(crate::connectors::Event),
     Dirs(crate::dirs::Event),

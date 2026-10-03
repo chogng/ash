@@ -62,10 +62,10 @@ fn actual_tui_dictation_download_cancels_recovers_and_restarts() {
         } else {
             "Manual"
         });
-        process.submit("/dictate");
-        process.wait_for_screen("Voice · checking model files");
+        process.submit("/voice");
+        process.wait_for_screen("Dictation · checking model files");
         let connection = proxy.connection();
-        process.wait_for_stable_screen("Voice · checking model files · ctrl+c to stop");
+        process.wait_for_stable_screen("Dictation · checking model files · ctrl+c to stop");
         assert_eq!(
             std::fs::metadata(staging.join("encoder.onnx.download"))
                 .unwrap()
@@ -87,15 +87,15 @@ fn actual_tui_dictation_download_cancels_recovers_and_restarts() {
         // must finish with an error instead of restarting the download in the background.
         process.send(&vec![0x7f; "KEEP-DICTATION-DRAFT".len()]);
         process.wait_for_screen_to_omit("KEEP-DICTATION-DRAFT");
-        process.submit("/dictate");
-        process.wait_for_screen("Voice · checking model files");
+        process.submit("/voice");
+        process.wait_for_screen("Dictation · checking model files");
         let connection = proxy.connection();
         drop(connection);
         process.wait_for_stable_screen("Dictation failed:");
         assert_dictation_download_released(&fixture);
         proxy.assert_no_pending_connections();
-        process.submit("/dictate");
-        process.wait_for_screen("Voice · checking model files");
+        process.submit("/voice");
+        process.wait_for_screen("Dictation · checking model files");
         let connection = proxy.connection();
         process.send(b"\x03");
         process.wait_for_stable_screen("Dictation stopped.");
@@ -111,24 +111,6 @@ fn actual_tui_dictation_download_cancels_recovers_and_restarts() {
         process.wait_for_stable_screen("AFTER-DICTATION-CANCEL");
         assert_eq!(server.request_count(), 1);
 
-        // /voice owns its worker in the CLI rather than through the App Server;
-        // exercise that separate shutdown path after establishing a chat.
-        for disconnect in [false, true, false] {
-            process.submit("/voice");
-            process.wait_for_screen("Voice · checking model files");
-            let connection = proxy.connection();
-            if disconnect {
-                drop(connection);
-                process.wait_for_stable_screen("Voice failed:");
-            } else {
-                process.send(b"\x03");
-                process.wait_for_stable_screen("Voice mode stopped.");
-                DownloadProxy::assert_disconnected(connection);
-            }
-            assert_dictation_download_released(&fixture);
-            proxy.assert_no_pending_connections();
-            assert_eq!(server.request_count(), 1);
-        }
         process.quit();
     }
 }
@@ -151,10 +133,10 @@ fn actual_tui_dictation_download_exit_releases_the_connection_owner() {
         fixture.write_config(&server.base_url());
         let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
         process.wait_for_stable_screen("Enter send");
-        process.submit("/dictate");
-        process.wait_for_screen("Voice · checking model files");
+        process.submit("/voice");
+        process.wait_for_screen("Dictation · checking model files");
         let connection = proxy.connection();
-        process.wait_for_stable_screen("Voice · checking model files · ctrl+c to stop");
+        process.wait_for_stable_screen("Dictation · checking model files · ctrl+c to stop");
         match exit {
             Exit::Command => process.exit_with_command(),
             Exit::TerminationSignal => process.terminate(),
@@ -192,7 +174,7 @@ fn actual_tui_dictation_download_respects_another_process_model_lock() {
 
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("Enter send");
-    process.submit("/dictate");
+    process.submit("/voice");
     process.wait_for_stable_screen("Dictation model is being prepared by another operation");
     assert_eq!(
         std::fs::read(&partial).unwrap(),
@@ -200,8 +182,8 @@ fn actual_tui_dictation_download_respects_another_process_model_lock() {
     );
     proxy.assert_no_pending_connections();
     drop(lock);
-    process.submit("/dictate");
-    process.wait_for_screen("Voice · checking model files");
+    process.submit("/voice");
+    process.wait_for_screen("Dictation · checking model files");
     let connection = proxy.connection();
     process.send(b"\x03");
     process.wait_for_stable_screen("Dictation stopped.");
@@ -1184,5 +1166,40 @@ fn wait_for_workspace_home(process: &mut TuiProcess, branch: &str) {
             "worktree did not open:\n{screen}"
         );
         std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn actual_tui_removed_dictate_command_does_not_start_speech_or_a_turn() {
+    use crate::scenario_http::DownloadProxy;
+    for mode in ["fullscreen", "inline"] {
+        let proxy = DownloadProxy::start();
+        let fixture = Fixture::new().with_model_download_proxy(proxy.address());
+        let server = ScenarioServer::start([HttpResponse::streaming(["NORMAL-CODING-TURN"], None)]);
+        fixture.write_config(&server.base_url());
+        fixture.append_config(&format!("\n[tui]\nscreenMode = \"{mode}\"\n"));
+        let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+        process.wait_for_stable_screen(if mode == "fullscreen" {
+            "Enter send"
+        } else {
+            "Manual"
+        });
+        process.submit("/dictate");
+        process.wait_for_stable_screen("Unknown command: /dictate.");
+        assert!(!fixture.profile().join("dictation-models").exists());
+        assert!(!fixture.profile().join("voice-host-started").exists());
+        proxy.assert_no_pending_connections();
+        assert_eq!(server.request_count(), 0);
+        process.submit("Continue the coding task");
+        process.wait_for_stable_screen("NORMAL-CODING-TURN");
+        assert_eq!(server.request_count(), 1);
+        process.submit("/dictate");
+        process.wait_for_stable_screen("Unknown command: /dictate.");
+        assert!(!fixture.profile().join("dictation-models").exists());
+        assert!(!fixture.profile().join("voice-host-started").exists());
+        proxy.assert_no_pending_connections();
+        assert_eq!(server.request_count(), 1);
+        process.quit();
     }
 }

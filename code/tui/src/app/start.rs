@@ -206,7 +206,6 @@ pub(super) fn start(
             theme_resource,
             server_slash_commands,
             plugins_enabled,
-            profile_root,
             dictation_settings,
             model_picker,
         },

@@ -7,8 +7,6 @@ pub(crate) enum AppCommand {
     SetDictationShortcutSettings(crate::config::DictationShortcutSettings),
     DictationStart { resource_id: String },
     DictationStop { resource_id: String },
-    VoiceStart { resource_id: String },
-    VoiceStop { resource_id: String },
     Config(crate::config::Command),
     Connectors(crate::connectors::Command),
     Dirs(crate::dirs::Command),

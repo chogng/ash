@@ -35,6 +35,7 @@ use crate::status::StatusViewData;
 use crate::status::status_line_choices;
 use crate::status::status_panel;
 use crate::terminal::MouseMode;
+use crate::terminal::ScreenMode;
 use crate::test_support::empty_config_snapshot;
 use crate::theme::Command as ThemeCommand;
 use crate::theme::Event as ThemeEvent;
@@ -799,9 +800,9 @@ fn render_dictation_frame(app: &App) -> String {
 }
 
 #[test]
-fn dictate_command_adds_recognized_text_to_the_draft_and_stops() {
+fn voice_command_adds_recognized_text_to_the_draft_and_stops() {
     let mut app = App::new();
-    app.insert_text("/dictate");
+    app.insert_text("/voice");
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     let Some(AppCommand::DictationStart { resource_id }) = action else {
         panic!("expected dictation start command");
@@ -848,7 +849,7 @@ fn interrupt_cancels_dictation_download_without_quitting_or_sending_the_draft() 
         settings.set_screen_mode(mode);
         settings.set_language(Language::Chinese);
         app.update(ConfigEvent::SettingsReceived(settings));
-        app.insert_text("/dictate");
+        app.insert_text("/voice");
         let Some(AppCommand::DictationStart { resource_id }) =
             app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
         else {
@@ -882,7 +883,7 @@ fn interrupt_cancels_dictation_download_without_quitting_or_sending_the_draft() 
             app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
             None
         );
-        assert_eq!(app.voice_status().as_deref(), Some("语音 · 正在停止"));
+        assert_eq!(app.dictation_status().as_deref(), Some("听写 · 正在停止"));
         app.update(AppEvent::DictationStopped {
             resource_id: resource_id.clone(),
             result: Ok(None),
@@ -890,9 +891,9 @@ fn interrupt_cancels_dictation_download_without_quitting_or_sending_the_draft() 
         assert_eq!(app.input(), "keep draft");
         assert_eq!(app.take_dictation_submission(), None);
         assert_eq!(app.take_dictation_stop_requested(), None);
-        assert_eq!(app.voice_status(), None);
+        assert_eq!(app.dictation_status(), None);
         app.dictation_model_progress(&resource_id, DictationModelStage::Loading);
-        assert_eq!(app.voice_status(), None);
+        assert_eq!(app.dictation_status(), None);
         let name = match mode {
             ScreenMode::Fullscreen => "dictation_download_cancelled_fullscreen_zh",
             ScreenMode::Inline => "dictation_download_cancelled_inline_zh",
@@ -906,7 +907,7 @@ fn interrupt_cancels_dictation_download_without_quitting_or_sending_the_draft() 
 }
 
 #[test]
-fn speech_preparation_hint_and_stop_use_the_configured_interrupt_binding() {
+fn dictation_preparation_hint_and_stop_use_the_configured_interrupt_binding() {
     let mut app = App::new();
     let settings = keymap_settings_from_tui(&FrontendConfigDto(BTreeMap::from([(
         "keybindings".into(),
@@ -918,19 +919,26 @@ fn speech_preparation_hint_and_stop_use_the_configured_interrupt_binding() {
     .unwrap();
     app.update(KeymapEvent::SettingsReceived(settings));
     app.insert_text("/voice");
-    let Some(AppCommand::VoiceStart { resource_id }) =
+    let Some(AppCommand::DictationStart { resource_id }) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
-        panic!("expected voice start");
+        panic!("expected dictation start");
     };
-    app.voice_model_progress(&resource_id, realtime_voice::ModelProgress::Checking);
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    app.dictation_model_progress(
+        &resource_id,
+        ash_app_server_protocol::protocol::dictation::DictationModelStage::Checking,
+    );
     assert_eq!(
-        app.voice_status().as_deref(),
-        Some("Voice · checking model files · ctrl+y to stop")
+        app.dictation_status().as_deref(),
+        Some("Dictation · checking model files · ctrl+y to stop")
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL)),
-        Some(AppCommand::VoiceStop { resource_id })
+        Some(AppCommand::DictationStop { resource_id })
     );
 }
 
@@ -967,7 +975,7 @@ fn interrupt_cancels_submission_while_dictation_stop_is_pending() {
 #[test]
 fn interrupt_during_dictation_start_stops_after_acknowledgement() {
     let mut app = App::new();
-    app.insert_text("/dictate");
+    app.insert_text("/voice");
     let Some(AppCommand::DictationStart { resource_id }) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
@@ -988,33 +996,25 @@ fn interrupt_during_dictation_start_stops_after_acknowledgement() {
 }
 
 #[test]
-fn interrupt_stops_speech_preparation_before_a_running_chat_turn() {
-    for command in ["/dictate", "/voice"] {
-        let mut app = App::new();
-        app.insert_text(command);
-        let start = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        let stop = match start {
-            Some(AppCommand::DictationStart { resource_id }) => {
-                app.update(AppEvent::DictationStarted {
-                    resource_id: resource_id.clone(),
-                    error: None,
-                });
-                AppCommand::DictationStop { resource_id }
-            }
-            Some(AppCommand::VoiceStart { resource_id }) => AppCommand::VoiceStop { resource_id },
-            other => panic!("expected speech start, got {other:?}"),
-        };
-        app.set_status(Status::Working);
-        assert_eq!(
-            app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
-            Some(stop)
-        );
-        assert_eq!(app.status(), &Status::Working);
-        assert_eq!(
-            app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
-            None
-        );
-    }
+fn interrupt_stops_dictation_preparation_before_a_running_chat_turn() {
+    let mut app = App::new();
+    let Some(AppCommand::DictationStart { resource_id }) = app.toggle_dictation() else {
+        panic!("expected dictation start");
+    };
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    app.set_status(Status::Working);
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+        Some(AppCommand::DictationStop { resource_id })
+    );
+    assert_eq!(app.status(), &Status::Working);
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+        None
+    );
 }
 
 #[test]
@@ -1245,105 +1245,6 @@ fn config_can_enable_and_change_the_local_dictation_shortcut() {
         app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL)),
         Some(AppCommand::DictationStart { .. })
     ));
-}
-
-#[test]
-fn voice_submits_completed_speech_as_text_without_consuming_the_draft() {
-    let mut app = App::new();
-    app.insert_text("draft for later");
-    let Some(AppCommand::VoiceStart { resource_id }) = app.toggle_voice() else {
-        panic!("expected voice start");
-    };
-    app.update(AppEvent::VoiceStarted {
-        resource_id: resource_id.clone(),
-        error: None,
-    });
-    app.voice_partial(&resource_id, "thinking".into());
-    assert_eq!(app.input(), "draft for later");
-    assert!(app.voice_status().unwrap().contains("thinking"));
-    crate::tui_assert_snapshot!("voice_hearing", render_dictation_frame(&app));
-    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
-    terminal
-        .draw(|frame| crate::app::frame::draw(frame, &app))
-        .unwrap();
-    assert_eq!(
-        terminal.backend().buffer()[(2, 23)].fg,
-        app.render_context().muted()
-    );
-
-    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) =
-        app.voice_utterance(&resource_id, "/quit".into())
-    else {
-        panic!("spoken text must be submitted to the Agent");
-    };
-    assert_eq!(submission.display_text, "/quit");
-    assert_eq!(submission.input, vec![ChatInputItem::Text("/quit".into())]);
-    assert_eq!(app.input(), "draft for later");
-    assert_eq!(
-        app.voice_status().unwrap(),
-        "Voice · listening · /voice to stop"
-    );
-}
-
-#[test]
-fn voice_slash_command_starts_and_stops_during_a_turn() {
-    let mut app = App::new();
-    app.set_active_turn(TurnId::new("voice-active-turn").unwrap());
-    app.insert_text("/voice");
-    let Some(AppCommand::VoiceStart { resource_id }) =
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-    else {
-        panic!("expected voice mode to start during a turn");
-    };
-    app.update(AppEvent::VoiceStarted {
-        resource_id: resource_id.clone(),
-        error: None,
-    });
-    app.insert_text("/voice");
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::VoiceStop { resource_id })
-    );
-}
-
-#[test]
-fn voice_stops_when_the_active_thread_changes() {
-    let mut app = App::new();
-    let Some(AppCommand::VoiceStart { resource_id }) = app.toggle_voice() else {
-        panic!("expected voice start");
-    };
-    app.thread_presentations
-        .switch(ThreadId::new("different-thread").unwrap());
-    assert_eq!(
-        app.stop_voice_if_scope_changed(),
-        Some(AppCommand::VoiceStop {
-            resource_id: resource_id.clone()
-        })
-    );
-    assert_eq!(
-        app.voice_utterance(&resource_id, "wrong thread".into()),
-        None
-    );
-}
-
-#[test]
-fn voice_stop_submits_the_final_utterance() {
-    let mut app = App::new();
-    let Some(AppCommand::VoiceStart { resource_id }) = app.toggle_voice() else {
-        panic!("expected voice start");
-    };
-    assert_eq!(
-        app.toggle_voice(),
-        Some(AppCommand::VoiceStop {
-            resource_id: resource_id.clone(),
-        })
-    );
-    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) =
-        app.voice_utterance(&resource_id, "final words".into())
-    else {
-        panic!("expected final spoken turn");
-    };
-    assert_eq!(submission.display_text, "final words");
 }
 
 #[test]
@@ -4351,5 +4252,93 @@ fn hooks_assistance_preserves_existing_draft_and_returns_to_input_without_submis
                 .iter()
                 .any(|item| matches!(item, ChatInputItem::Image { .. }))
         );
+    }
+}
+
+#[test]
+fn dictation_finished_text_stays_in_draft_until_explicit_submission() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        app.insert_text("Please ");
+        let Some(AppCommand::DictationStart { resource_id }) = app.toggle_dictation() else {
+            panic!("expected dictation start");
+        };
+        app.update(AppEvent::DictationStarted {
+            resource_id: resource_id.clone(),
+            error: None,
+        });
+        app.dictation_transcript(&resource_id, "fix", false);
+        app.dictation_transcript(&resource_id, "fix the parser", true);
+        app.dictation_ended(&resource_id, None);
+        assert_eq!(app.input(), "Please fix the parser");
+        assert_eq!(app.take_dictation_submission(), None);
+        app.insert_text(" and run tests");
+        if mode == ScreenMode::Fullscreen {
+            crate::tui_assert_snapshot!("dictation_ready_to_review", render_dictation_frame(&app));
+        }
+        let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) =
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        else {
+            panic!("explicit Enter must submit the reviewed draft to the existing Agent");
+        };
+        assert_eq!(
+            submission.display_text,
+            "Please fix the parser and run tests"
+        );
+        assert_eq!(
+            submission.input,
+            vec![ChatInputItem::Text(submission.display_text.clone())]
+        );
+    }
+}
+
+#[test]
+fn removed_dictate_command_is_reported_locally_in_both_modes() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        app.insert_text("/dictate");
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            None
+        );
+        assert!(app.dictation_resource_id.is_none());
+        assert_eq!(app.messages()[0].role(), MessageRole::Notice);
+        assert_eq!(app.messages()[0].text(), "Unknown command: /dictate.");
+    }
+}
+
+#[test]
+fn removed_dictate_command_is_visible_before_session_creation() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::for_dir_with_input_catalog_and_startup_context(
+            std::path::Path::new("."),
+            crate::thread::composer::ChatInputCatalog::default(),
+            crate::TuiStartupContext::new("."),
+        );
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        app.insert_text("/dictate");
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            None
+        );
+        assert!(app.starts_new_session());
+        assert!(app.messages().is_empty());
+        assert!(app.dictation_resource_id.is_none());
+        assert!(app.input().is_empty());
+        let frame = render_dictation_frame(&app);
+        assert!(frame.contains("Unknown command: /dictate."));
+        let snapshot = match mode {
+            ScreenMode::Fullscreen => "removed_dictate_before_session_fullscreen",
+            ScreenMode::Inline => "removed_dictate_before_session_inline",
+        };
+        crate::tui_assert_snapshot!(snapshot, frame);
     }
 }
