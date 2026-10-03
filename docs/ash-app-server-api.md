@@ -157,7 +157,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```json
 {
   "serverInfo": { "name": "ash-app-server", "version": "0.1.0" },
-  "protocolVersion": { "major": 7, "revision": 9 },
+  "protocolVersion": { "major": 7, "revision": 10 },
   "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,
@@ -177,10 +177,10 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "typst": true,
     "updateReplay": true,
     "contracts": {
-      "sessions": { "version": 12 },
-      "threads": { "version": 12 },
-      "turns": { "version": 12 },
-      "projects": { "version": 12 }
+      "sessions": { "version": 13 },
+      "threads": { "version": 13 },
+      "turns": { "version": 13 },
+      "projects": { "version": 13 }
     }
   },
   "slashCommands": [
@@ -194,6 +194,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```
 
 客户端必须拒绝不同 protocol major、缺失的 required capability 或不支持的 capability version。
+capability 13 增加 Guardian 的 `observations` 响应字段，旧客户端须先升级再连接。
 权限 ID 在 capability 12 中统一为 `manual / auto / bypassPermissions`，旧 capability 11
 使用不同 ID，因此必须在初始化时拒绝。名称、说明、翻译 key 与确认标记由共享 Rust 定义生成到
 `ApprovalModes.ts`，界面通过领域适配层渲染，不需要新增一次菜单查询 RPC。
@@ -282,7 +283,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `session/thread/subscribe` | Session + Thread + connection | Thread 与正文快照，加上 `afterSequence` 之后的 durable gap |
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
 | `config/read` | config | 读取配置 |
-| `approval/environment/read` | Guardian Environment | 按实际 Thread 或已授权目录读取资料，返回实际根目录和当前来源状态 |
+| `approval/environment/read` | Guardian Environment + State | 按实际 Thread 或已授权目录读取，刷新已选来源，返回实际根目录、用户描述 `entries` 和未确认当前观察 `observations`；实际变化递增资料 revision |
 | `approval/environment/scan` | Guardian Environment | 按范围生成待确认草稿；`operationId` 绑定取消；可使用当前任务模型整理，模型没有工具 |
 | `approval/environment/save` | Guardian Environment + State | 带 `commandId`、`expectedRevision` 和可选 `draftId` 保存用户选中的条目；版本冲突不覆盖 |
 | `approval/environment/cancel` | 当前 connection | 取消所属 `operationId` 的扫描；断开 connection 同样取消 |

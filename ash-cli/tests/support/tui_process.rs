@@ -286,6 +286,10 @@ model = "ash-real-scenario"
 [providers."openai-compatible"]
 provider = "openai-compatible"
 baseUrl = "{base_url}"
+
+# The fixture model is not in a provider catalog; its budget must be declared explicitly.
+[providers."openai-compatible".modelContext."ash-real-scenario"]
+contextWindow = 128000
 "#,
             ),
         )
@@ -527,10 +531,10 @@ impl TuiProcess {
     pub fn refresh_policy_tip(&mut self) {
         // Confirming the current policy refreshes the hint without changing its value.
         self.wait_for_clipboard_tip_to_expire();
-        self.submit("/policy");
+        self.submit("/permission");
         self.wait_for_stable_screen("Bypass permissions");
         self.enter();
-        self.wait_for_stable_screen("/policy to change permissions");
+        self.wait_for_stable_screen("/permission to change permissions");
     }
 
     pub fn up(&mut self) {

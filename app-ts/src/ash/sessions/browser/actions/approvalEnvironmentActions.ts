@@ -8,15 +8,17 @@ import { IQuickInputService, type IQuickPickItem } from '../../../platform/quick
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 
 interface Item extends IQuickPickItem { readonly id: string }
 
 registerAction2(class PrepareApprovalEnvironment extends Action2 {
 	constructor() {
-		super({ id: 'sessions.chat.permission.environment', title: localize2('approvalEnvironment.title', 'Prepare review environment…') });
+		super({ id: OPEN_GUARDIAN_SETUP_COMMAND_ID, title: localize2('approvalEnvironment.title', 'Prepare review environment…') });
 	}
-	override async run(accessor: ServicesAccessor, model: IChatWidgetModel): Promise<void> {
+	override async run(accessor: ServicesAccessor, model: IChatWidgetModel, argument = ''): Promise<void> {
+		if (argument.trim() && argument.trim() !== 'setup') { throw new Error(localize('approvalEnvironment.commandUsage', 'Use /guardian or /guardian setup to prepare review background.')); }
 		const input = accessor.get(IQuickInputService);
 		const service = accessor.get(IApprovalEnvironmentService);
 		const notifications = accessor.get(INotificationService);
@@ -46,7 +48,7 @@ registerAction2(class PrepareApprovalEnvironment extends Action2 {
 				{ id: 'scan', label: localize('approvalEnvironment.scan', 'Scan project…'), description: localize('approvalEnvironment.scanDetail', 'Choose scope and create a draft; nothing is accepted automatically') },
 				{ id: 'add', label: localize('approvalEnvironment.add', 'Add a description…') },
 				...entries.map(entry => ({ id: entry.id, label: entry.title, picked: entry.accepted && entry.current, description: entry.current ? entry.accepted ? localize('approvalEnvironment.accepted', 'Accepted') : localize('approvalEnvironment.pending', 'Pending review') : localize('approvalEnvironment.stale', 'Source changed — excluded from review'), detail: `${sourceLabel(entry)}\n${entry.content}` })),
-				{ id: 'save', label: localize('approvalEnvironment.save', 'Save accepted entries'), description: localize('approvalEnvironment.boundary', 'Background helps Auto understand actions. Permission rules and access limits still apply.') },
+				{ id: 'save', label: localize('approvalEnvironment.save', 'Save accepted entries'), description: localize('approvalEnvironment.following', 'Saved project sources refresh before review. New observations remain unconfirmed; changed target descriptions need confirmation.') },
 			]);
 			if (!choice) { return; }
 			if (choice.id === 'scan') {

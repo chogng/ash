@@ -84,10 +84,14 @@ Grant 后立即失效。
 
 ### 每个 Turn 的交互模式
 
-TUI 当前在 footer 最左侧显示权限模式，通过 `/policy` 菜单或
-`/policy manual|auto|bypassPermissions` 选择。菜单中的左右键可以展开和收起完整说明，
+TUI 当前在 footer 最左侧显示权限模式，通过 `/permission` 菜单或
+`/permission manual|auto|bypassPermissions` 选择。菜单中的左右键可以展开和收起完整说明，
 名称和说明使用同一份共享文案。模式在提交时冻结到 `TurnAccepted`，所以运行中切换只影响后续
 Turn，包括排队的 follow-up。
+
+Sessions 也支持 `/permission` 和相同的行内参数。`/guardian setup` 管理项目审核资料；
+`/init` 生成的 `ASH.md` 提供背景，不能替代权限规则。资料跟随及确认边界见
+[准备项目审核环境](guardian.md#准备项目审核环境)。旧 `/policy` 已退出命令目录。
 
 | Footer 文案 | 枚举 / 协议 ID | authoritative policy 返回 `AskUser` 时 |
 | --- | --- | --- |

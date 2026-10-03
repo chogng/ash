@@ -23,7 +23,7 @@ fn policy_tip_replaces_navigation_then_disappears() {
 
     assert_eq!(
         top_tip.text(Some("← Dashboard")),
-        Some("/policy to change permissions")
+        Some("/permission to change permissions")
     );
     assert!(!top_tip.poll(started + TRANSIENT_TIP_DURATION - Duration::from_millis(1)));
     assert!(top_tip.poll(started + TRANSIENT_TIP_DURATION));
@@ -42,7 +42,7 @@ fn showing_policy_tip_again_restarts_its_lifetime() {
     assert!(!top_tip.poll(started + TRANSIENT_TIP_DURATION));
     assert_eq!(
         top_tip.text(Some("← Dashboard")),
-        Some("/policy to change permissions")
+        Some("/permission to change permissions")
     );
     assert!(top_tip.poll(shown_again + TRANSIENT_TIP_DURATION));
     assert_eq!(top_tip.text(Some("← Dashboard")), None);
@@ -210,6 +210,6 @@ fn hiding_clipboard_image_restores_the_underlying_tip() {
     top_tip.hide_clipboard_image();
     assert_eq!(
         top_tip.text(Some("← Dashboard")),
-        Some("/policy to change permissions")
+        Some("/permission to change permissions")
     );
 }

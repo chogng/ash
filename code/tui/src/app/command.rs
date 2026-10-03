@@ -21,6 +21,7 @@ pub(crate) enum AppCommand {
     Mcp(crate::mcp::Command),
     Hooks(crate::hooks::Command),
     Memories(crate::memories::Command),
+    Guardian(crate::guardian::Command),
     Models(crate::models::Command),
     Projects(crate::projects::Command),
     Sessions(crate::sessions::Command),
@@ -36,6 +37,7 @@ pub(crate) enum AppCommand {
 impl AppCommand {
     pub(super) fn panel_title(&self) -> Option<&'static str> {
         match self {
+            Self::Guardian(_) => Some("Guardian"),
             Self::Config(crate::config::Command::OpenEditor) => Some("Settings"),
             Self::Git(crate::git::Command::OpenPicker) => Some("Project branches"),
             Self::Git(crate::git::Command::OpenWorktrees) => Some("Project worktrees"),
@@ -61,6 +63,7 @@ impl AppCommand {
                     TuiSlashCommandAction::Resume => Some("Resume session"),
                     TuiSlashCommandAction::Skills => Some("Skills"),
                     TuiSlashCommandAction::Memories => Some("Memories"),
+                    TuiSlashCommandAction::Guardian => Some("Guardian"),
                     TuiSlashCommandAction::Mcp => Some("MCP"),
                     TuiSlashCommandAction::Hooks => Some("Hooks"),
                     TuiSlashCommandAction::Connectors => Some("Connectors"),
@@ -107,3 +110,5 @@ app_command_from!(crate::thread::Command, Thread);
 app_command_from!(crate::issues::Command, Issues);
 
 app_command_from!(crate::memories::Command, Memories);
+
+app_command_from!(crate::guardian::Command, Guardian);

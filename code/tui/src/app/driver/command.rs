@@ -313,6 +313,16 @@ impl AppDriver {
             AppCommand::Sessions(command) => {
                 self.execute_session_command(request_key, command, origin)
             }
+            AppCommand::Guardian(command) => {
+                let mut client = self.client.clone();
+                self.requests.spawn_presentation(
+                    request_key,
+                    "ash-tui-guardian",
+                    move || crate::guardian::execute(&mut client, command),
+                    &mut self.app,
+                    origin,
+                );
+            }
             AppCommand::Memories(command) => {
                 let mut client = self.client.clone();
                 let thread_id = self

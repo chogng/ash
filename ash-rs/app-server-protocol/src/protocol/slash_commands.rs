@@ -37,10 +37,19 @@ pub enum ProductSlashCommand {
     Plugins,
     Skills,
     Lsp,
+    Permission,
+    Guardian,
 }
 
 impl ProductSlashCommand {
-    pub const ALL: [Self; 4] = [Self::Marketplace, Self::Plugins, Self::Skills, Self::Lsp];
+    pub const ALL: [Self; 6] = [
+        Self::Marketplace,
+        Self::Plugins,
+        Self::Skills,
+        Self::Lsp,
+        Self::Permission,
+        Self::Guardian,
+    ];
 
     pub fn definition(self) -> SlashCommandDefinition {
         let (name, description, argument_hint) = match self {
@@ -60,12 +69,24 @@ impl ProductSlashCommand {
                 "manage language servers and find packages",
                 Some("<language-id>"),
             ),
+            Self::Permission => (
+                "permission",
+                "choose permissions for the next Turn",
+                Some("<manual|auto|bypassPermissions>"),
+            ),
+            Self::Guardian => (
+                "guardian",
+                "prepare and review project background for Guardian",
+                Some("[setup]"),
+            ),
         };
         SlashCommandDefinition {
             name: name.into(),
             description: description.into(),
             argument_mode: match self {
-                Self::Marketplace | Self::Lsp => SlashCommandArgumentModeDto::Optional,
+                Self::Marketplace | Self::Lsp | Self::Permission | Self::Guardian => {
+                    SlashCommandArgumentModeDto::Optional
+                }
                 Self::Plugins | Self::Skills => SlashCommandArgumentModeDto::None,
             },
             argument_hint: argument_hint.map(Into::into),

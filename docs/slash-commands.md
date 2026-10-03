@@ -98,6 +98,8 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 | `/export` | `required` | `<path>` | 导出当前对话内容 |
 | `/model` | `optional` | `<model> [effort]` | 切换模型与思考量级别（如 `openai/o3-mini high` 或 `clear`），无参数打开选择器 |
 | `/theme` | `optional` | `<theme>` | 切换主题，带参数直接设置，无参数打开选择器 |
+| `/permission` | `optional` | `<manual\|auto\|bypassPermissions>` | 选择下一轮权限，无参数打开菜单；替代 `/policy` |
+| `/guardian` | `optional` | `[setup]` | 打开项目审核资料管理；`/guardian setup` 使用同一入口 |
 | `/resume` | `required` | `<session-id>` | 恢复指定会话 |
 | `/rewind` | `required` | `<checkpoint>` | 回退到指定检查点 |
 | `/branch` | `optional` | `<name>` | 从当前节点复制分支并立即切换；不启动模型 |

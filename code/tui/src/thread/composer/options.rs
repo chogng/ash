@@ -106,7 +106,7 @@ pub(crate) fn policy_choices(current: ApprovalMode) -> ComposerOptions {
 
 pub(crate) fn parse_policy(value: &str) -> Result<ApprovalMode, String> {
     serde_json::from_value(serde_json::Value::String(value.to_owned()))
-        .map_err(|_| "Use /policy manual|auto|bypassPermissions".into())
+        .map_err(|_| "Use /permission manual|auto|bypassPermissions".into())
 }
 
 pub(crate) fn choices(

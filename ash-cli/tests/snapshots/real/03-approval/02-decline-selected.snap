@@ -23,7 +23,7 @@ expression: screen
 
 
 ○ Waiting for approval · 0m 00s total · ctrl+c to interrupt
-                                                                     /policy to change permissions
+                                                                 /permission to change permissions
 ┌Approval required─────────────────────────────────────────────────────────────────────────────────┐
 │the action requires user approval                                                                 │
 │File read  ·  <FIXTURE>/profile/worktrees│

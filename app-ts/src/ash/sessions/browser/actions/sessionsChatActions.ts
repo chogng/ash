@@ -3,7 +3,8 @@ import { DisposableStore } from "../../../base/common/lifecycle.js";
 import { Action2, registerAction2 } from "../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
-import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { ICommandService } from '../../../platform/commands/common/commands.js';
 import type { SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
@@ -13,6 +14,17 @@ import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ModelReasoningEffort } from '../../../workbench/services/chat/common/modelCatalog.js';
 
+
+registerAction2(class ChoosePermission extends Action2 {
+	constructor() { super({ id: OPEN_CHAT_PERMISSIONS_COMMAND_ID, title: localize2('sessions.chat.permissions', 'Permissions') }); }
+	override async run(accessor: ServicesAccessor, model: IChatWidgetModel, argument = ''): Promise<void> {
+		const value = argument.trim();
+		const definition = value ? approvalModeDefinitions.find(mode => mode.id === value) : undefined;
+		if (value && !definition) { throw new Error(localize('sessions.chat.permission.commandUsage', 'Use /permission manual|auto|bypassPermissions.')); }
+		const selected = definition?.id ?? (await selectReviewItem(accessor.get(IQuickInputService), localize('sessions.chat.permissions', 'Permissions'), approvalModeDefinitions.map(mode => ({ id: mode.id, label: localize(mode.label.key, mode.label.text), description: localize(mode.description.key, mode.description.text) }))))?.id;
+		if (selected) { await accessor.get(ICommandService).executeCommand(`sessions.chat.permission.${selected}`, model); }
+	}
+});
 
 for (const definition of approvalModeDefinitions) {
 	const mode = definition.id;

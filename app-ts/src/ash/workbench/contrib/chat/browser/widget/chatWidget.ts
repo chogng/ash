@@ -22,7 +22,7 @@ import type { IEditorService } from "../../../../services/editor/common/editorSe
 import { URI } from "../../../../../base/common/uri.js";
 import { Schemas } from "../../../../../base/common/network.js";
 import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
-import { OPEN_CHAT_SETTINGS_COMMAND_ID } from "../../common/chat.js";
+import { OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from "../../common/chat.js";
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
@@ -100,7 +100,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		}));
 		const inputDelegate: ChatInputDelegate = {
 			send: (text, mode, skills, contexts) => this.send(text, mode, skills, contexts),
-			executeCommand: (invocation) => invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
+			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
+				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
+				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
 				executeServerCommand: (invocation) => invocation.name === "advisor" && !invocation.argumentsText.trim()
 					? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
 					: this.model.executeServerCommand(invocation.name, invocation.argumentsText),

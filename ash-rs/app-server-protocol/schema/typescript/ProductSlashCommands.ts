@@ -23,5 +23,17 @@ export const PRODUCT_SLASH_COMMANDS = {
     "description": "manage language servers and find packages",
     "argumentMode": "optional",
     "argumentHint": "<language-id>"
+  },
+  "permission": {
+    "name": "permission",
+    "description": "choose permissions for the next Turn",
+    "argumentMode": "optional",
+    "argumentHint": "<manual|auto|bypassPermissions>"
+  },
+  "guardian": {
+    "name": "guardian",
+    "description": "prepare and review project background for Guardian",
+    "argumentMode": "optional",
+    "argumentHint": "[setup]"
   }
 } as const satisfies Readonly<Record<string, SlashCommandDefinition>>;

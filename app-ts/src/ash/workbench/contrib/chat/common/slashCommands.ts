@@ -2,7 +2,7 @@ import { OPEN_LANGUAGE_SERVERS_COMMAND_ID } from "../../../../platform/language/
 import { localize } from "../../../../nls.js";
 import { OPEN_SKILLS_COMMAND_ID } from "../../../../platform/skills/common/skillService.js";
 import { ProductSlashCommands, type SlashCommandDefinition } from "../../../services/chat/common/chatService.js";
-import { NEW_CHAT_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "./chat.js";
+import { NEW_CHAT_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from "./chat.js";
 
 import { OPEN_MARKETPLACE_COMMAND_ID, OPEN_PLUGINS_COMMAND_ID } from "../../../../platform/marketplace/common/marketplaceService.js";
 
@@ -183,13 +183,24 @@ const productActions: Record<keyof typeof ProductSlashCommands, string> = {
 	plugins: OPEN_PLUGINS_COMMAND_ID,
 	skills: OPEN_SKILLS_COMMAND_ID,
 	lsp: OPEN_LANGUAGE_SERVERS_COMMAND_ID,
+	permission: OPEN_CHAT_PERMISSIONS_COMMAND_ID,
+	guardian: OPEN_GUARDIAN_SETUP_COMMAND_ID,
 };
 
 export const DesktopSlashCommands: readonly LocalSlashCommandRegistration[] = Object.freeze([
 	localCommand("new", "Start a new chat", NEW_CHAT_COMMAND_ID),
 	localCommand("history", "Show chat history", SHOW_CHAT_HISTORY_COMMAND_ID),
 	localCommand("config", localize('chat.settings.openCommand', 'Open chat settings'), OPEN_CHAT_SETTINGS_COMMAND_ID),
-	...Object.entries(productActions).map(([id, actionId]) => ({ definition: ProductSlashCommands[id as keyof typeof ProductSlashCommands], actionId })),
+	...Object.entries(productActions).map(([id, actionId]) => {
+		const definition = ProductSlashCommands[id as keyof typeof ProductSlashCommands];
+		let description = definition.description;
+		if (id === 'permission') {
+			description = localize('slash.permission.description', description);
+		} else if (id === 'guardian') {
+			description = localize('slash.guardian.description', description);
+		}
+		return { definition: { ...definition, description }, actionId };
+	}),
 ]);
 
 export function parseSlashCommandInput(value: string, catalog: SlashCommandCatalog): SlashCommandInput {

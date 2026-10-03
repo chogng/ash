@@ -1,5 +1,6 @@
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use guardian_environment::EnvironmentEntry;
 use guardian_environment::EnvironmentError;
 use guardian_environment::EnvironmentProfile;
 use guardian_environment::EnvironmentStore;
@@ -55,6 +56,48 @@ impl EnvironmentStore for SqliteEnvironmentStore {
             .lock()
             .map_err(|_| EnvironmentError::Storage("environment lock poisoned".into()))?;
         load(&connection, project)
+    }
+
+    fn refresh(
+        &self,
+        project: &str,
+        expected_revision: u64,
+        observations: &[EnvironmentEntry],
+    ) -> Result<EnvironmentProfile, EnvironmentError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| EnvironmentError::Storage("environment lock poisoned".into()))?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage_error)?;
+        let mut profile = load(&transaction, project)?;
+        if profile.revision != expected_revision {
+            return Err(EnvironmentError::Conflict);
+        }
+        if profile.revision == 0 || profile.observations == observations {
+            return Ok(profile);
+        }
+        profile.observations = observations.to_vec();
+        profile.revision = profile
+            .revision
+            .checked_add(1)
+            .ok_or_else(|| EnvironmentError::Storage("revision exhausted".into()))?;
+        let json = serde_json::to_string(&profile)
+            .map_err(|error| EnvironmentError::Storage(error.to_string()))?;
+        transaction
+            .execute(
+                "UPDATE approval_environments SET revision=?2,profile=?3 WHERE project=?1",
+                params![
+                    project,
+                    i64::try_from(profile.revision)
+                        .map_err(|error| EnvironmentError::Storage(error.to_string()))?,
+                    json
+                ],
+            )
+            .map_err(storage_error)?;
+        transaction.commit().map_err(storage_error)?;
+        Ok(profile)
     }
 
     fn save(

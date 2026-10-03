@@ -268,7 +268,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	async acceptInput(value?: string): Promise<void> {
-		if (this.submitting || this.state.phase === 'loading' || this.state.phase === 'submitting') return;
+		const intent = parseSlashCommandInput(value ?? this.input.value, this.slashCommands);
+		// Local product settings must remain available while the model catalog is loading.
+		const localCommand = intent.kind === 'command' && intent.binding.origin === 'local';
+		if (this.submitting || this.state.phase === 'submitting' || (this.state.phase === 'loading' && !localCommand)) return;
 		if (value !== undefined) this.input.value = value;
 		if (!this.input.value.trim() && this.attachmentModel.size === 0) return;
 		this.submitting = true;
@@ -334,9 +337,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private renderToolbar(): void {
 		const input = parseSlashCommandInput(this.input.value, this.slashCommands);
 		const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 || this.attachmentModel.size > 0 : this.input.value.trim().length > 0;
+		const localCommand = input.kind === 'command' && input.binding.origin === 'local';
 		const state: ChatInputToolbarState = {
 			mode: this.mode,
-			canSubmit: canSubmitIntent && !this.submitting && (this.state.phase === 'ready' || this.state.phase === 'error'),
+			canSubmit: canSubmitIntent && !this.submitting && this.state.phase !== 'submitting' && (localCommand || this.state.phase === 'ready' || this.state.phase === 'error'),
 			hasInput: canSubmitIntent,
 			canInterrupt: this.state.canInterrupt,
 			inputKind: input.kind === "message" ? "message" : "command",

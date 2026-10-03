@@ -65,7 +65,12 @@ fn shared_management_commands_have_translated_descriptions_and_argument_hints() 
                 definition.description
             );
             if let Some(hint) = &definition.argument_hint {
-                assert_ne!(&*localize(language, hint), hint);
+                if command == ash_slash_commands::ProductSlashCommand::Permission {
+                    // Permission arguments are persistent IDs and must stay usable in every locale.
+                    assert_eq!(&*localize(language, hint), hint);
+                } else {
+                    assert_ne!(&*localize(language, hint), hint);
+                }
             }
         }
     }

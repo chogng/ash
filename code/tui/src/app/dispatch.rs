@@ -100,6 +100,22 @@ where
                     .into(),
             );
         }
+        TuiSlashCommandAction::Guardian => {
+            if !arguments.is_empty() && arguments != "setup" {
+                return Err(CommandExecutionError(
+                    "Use /guardian or /guardian setup".into(),
+                ));
+            }
+            let scope = conversation.as_ref().map_or_else(
+                || ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentScope::Directory { root: workspace.display().to_string() },
+                |conversation| ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentScope::Thread { thread_id: conversation.thread_id().clone() },
+            );
+            output.events.push(
+                crate::guardian::execute(client, crate::guardian::Command::Open(scope))
+                    .map_err(CommandExecutionError)?
+                    .into(),
+            );
+        }
         TuiSlashCommandAction::Memories => {
             let command = if arguments.is_empty() {
                 crate::memories::Command::Scopes
@@ -163,9 +179,13 @@ where
                 .push(mcp::Event::SettingsOpened(mcp::load_selection(client)?).into());
         }
         TuiSlashCommandAction::Hooks => {
-            output
-                .events
-                .push(hooks::Event::Opened(hooks::load(client, conversation.as_ref().map(ActiveConversation::session_id))?).into());
+            output.events.push(
+                hooks::Event::Opened(hooks::load(
+                    client,
+                    conversation.as_ref().map(ActiveConversation::session_id),
+                )?)
+                .into(),
+            );
         }
         TuiSlashCommandAction::Connectors => {
             output.events.push(
@@ -347,7 +367,7 @@ where
             ));
         }
         TuiSlashCommandAction::Mode
-        | TuiSlashCommandAction::Policy
+        | TuiSlashCommandAction::Permission
         | TuiSlashCommandAction::Effort => unreachable!("composer selectors are handled locally"),
         TuiSlashCommandAction::Model => unreachable!("model commands are handled by AppDriver"),
         TuiSlashCommandAction::Theme => unreachable!("theme commands are handled locally"),

@@ -10,6 +10,37 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[test]
+fn actual_tui_guardian_setup_saves_project_background_through_the_app_server() {
+    let fixture = Fixture::new();
+    let source = fixture.workspace().join("ASH.md");
+    std::fs::write(&source, "Build with pnpm build").unwrap();
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("Automatic model");
+    process.submit("/guardian setup");
+    process.wait_for_stable_screen("Unconfirmed observation");
+    process.down();
+    process.down();
+    process.enter();
+    process.wait_for_stable_screen("Accepted");
+    process.right();
+    process.wait_for_stable_screen("Build with pnpm build");
+    process.assert_snapshot("real/guardian/reviewed-ash-background");
+    process.up();
+    process.enter();
+    process.wait_for_stable_screen("Accepted");
+    process.escape();
+    process.wait_for_screen_to_omit("Save reviewed background");
+    process.submit("/guardian setup");
+    process.wait_for_stable_screen("Accepted");
+    assert_eq!(
+        std::fs::read_to_string(source).unwrap(),
+        "Build with pnpm build"
+    );
+    process.escape();
+    process.quit();
+}
+
+#[test]
 fn actual_tui_permission_ids_select_the_shared_menu_without_changing_plan() {
     let fixture = Fixture::new();
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
@@ -21,8 +52,8 @@ fn actual_tui_permission_ids_select_the_shared_menu_without_changing_plan() {
         ("manual", "Manual"),
         ("bypassPermissions", "Bypass permissions"),
     ] {
-        process.submit(&format!("/policy {id}"));
-        process.submit("/policy");
+        process.submit(&format!("/permission {id}"));
+        process.submit("/permission");
         process.wait_for_stable_screen("Permissions");
         assert!(
             process
@@ -472,7 +503,7 @@ fn actual_tui_input_keeps_its_row_without_blank_line_growth() {
             loop {
                 let screen = process.screen();
                 if !screen.contains("image in clipboard")
-                    && !screen.contains("/policy to change permissions")
+                    && !screen.contains("/permission to change permissions")
                 {
                     break;
                 }
@@ -635,7 +666,7 @@ fn actual_tui_sandbox_process_details_show_enforcement() {
     process.wait_for_screen("Start a task below, or continue a previous session.");
     process.submit("start a session before changing permissions");
     process.wait_for_stable_screen("SANDBOX-SETUP-DONE");
-    process.submit("/policy bypassPermissions");
+    process.submit("/permission bypassPermissions");
     process.wait_for_screen("Bypass permissions");
     process.submit("尝试在工作区外创建 sandbox-must-not-write.txt");
     process.wait_for_stable_screen("目标文件没有生成");

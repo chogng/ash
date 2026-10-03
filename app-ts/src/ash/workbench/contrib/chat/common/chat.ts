@@ -2,6 +2,8 @@ import { RawContextKey } from "../../../../platform/contextkey/common/contextkey
 
 export const CHAT_VIEW_CONTAINER_ID = "ash.chat";
 export const CHAT_VIEW_ID = "ash.chat.view";
+export const OPEN_CHAT_PERMISSIONS_COMMAND_ID = 'chat.permission';
+export const OPEN_GUARDIAN_SETUP_COMMAND_ID = 'chat.guardian.setup';
 export const OPEN_CHAT_COMMAND_ID = "workbench.action.chat.open";
 export const NEW_CHAT_COMMAND_ID = "workbench.action.chat.new";
 export const SHOW_CHAT_HISTORY_COMMAND_ID =

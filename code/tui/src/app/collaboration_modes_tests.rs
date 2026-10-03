@@ -379,7 +379,7 @@ fn collaboration_policy_and_effort_commands_are_independent() {
     let mut app = App::new();
     app.open_home();
     command(&mut app, "/mode ask");
-    command(&mut app, "/policy auto");
+    command(&mut app, "/permission auto");
     assert_eq!(app.collaboration_mode(), CollaborationMode::Ask);
     assert_eq!(app.approval_mode(), ApprovalMode::Auto);
     assert_eq!(
@@ -396,7 +396,7 @@ fn collaboration_policy_and_effort_commands_are_independent() {
     assert_eq!(app.collaboration_mode(), CollaborationMode::Ask);
     assert!(render(&app).contains("Use /mode agent|plan|debug|multitask|ask"));
     crate::tui_assert_snapshot!("collaboration_option_error_on_home", render(&app));
-    command(&mut app, "/policy");
+    command(&mut app, "/permission");
     assert_eq!(
         app.list_selection().unwrap().selected_visible_index(),
         Some(0)
@@ -416,7 +416,7 @@ fn permission_menu_uses_shared_copy_and_the_same_ids_in_both_screens() {
         settings.set_screen_mode(screen);
         app.update(ConfigEvent::SettingsReceived(settings));
         command(&mut app, "/mode plan");
-        command(&mut app, "/policy");
+        command(&mut app, "/permission");
         assert_eq!(
             app.list_selection().unwrap().selected_visible_index(),
             Some(1)
@@ -441,7 +441,7 @@ fn permission_menu_uses_shared_copy_and_the_same_ids_in_both_screens() {
             ("auto", ApprovalMode::Auto),
             ("bypassPermissions", ApprovalMode::BypassPermissions),
         ] {
-            command(&mut app, &format!("/policy {id}"));
+            command(&mut app, &format!("/permission {id}"));
             assert_eq!(app.approval_mode(), mode);
             assert_eq!(app.collaboration_mode(), CollaborationMode::Plan);
         }

@@ -238,7 +238,9 @@
 		"memories.reference": "原始引用，修订版本 {0}。",
 		"memories.saved": "记忆已保存。",
 		"memories.source": "由 {0} 保存，修订版本 {1}。编辑后，该记忆归你维护。",
-		"color.chat.tabBackground": "非活动聊天会话标签页的背景色。"
+		"color.chat.tabBackground": "非活动聊天会话标签页的背景色。",
+		"slash.permission.description": "选择下一轮的权限",
+		"slash.guardian.description": "准备和检查 Guardian 的项目背景"
 	},
 	"ash.workbench": {
 		"command.OpenAutomations": "打开自动化",

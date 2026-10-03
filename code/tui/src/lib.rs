@@ -7,6 +7,7 @@ mod connectors;
 mod dirs;
 mod extensions;
 mod git;
+mod guardian;
 mod hooks;
 mod host;
 mod issues;

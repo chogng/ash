@@ -12,7 +12,7 @@ expression: screen
 
 ● 第二轮排队消息已经执行。
 
-  ⏸ ask permissions on       /policy to change permissions
+  ⏸ Manual               /permission to change permissions
   ────────────────────────────────────────────────────────
   >
   ───────────────────────────────────── ash-real-scenario

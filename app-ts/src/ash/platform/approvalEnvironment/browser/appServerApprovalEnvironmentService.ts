@@ -24,7 +24,7 @@ export class AppServerApprovalEnvironmentService implements IApprovalEnvironment
 function entry(value: EntryDto): ReviewEnvironmentEntry {
 	return { id: value.id, kind: value.kind, title: value.title, content: value.content, accepted: value.accepted, current: value.current, source: { id: value.source.id, kind: value.source.kind, label: value.source.label, revision: value.source.revision } };
 }
-function profile(value: ProfileDto): ReviewEnvironmentProfile { return { root: value.root, revision: value.profile.revision, entries: value.profile.entries.map(entry) }; }
+function profile(value: ProfileDto): ReviewEnvironmentProfile { return { root: value.root, revision: value.profile.revision, entries: [...value.profile.entries, ...value.profile.observations.filter(observation => !value.profile.entries.some(accepted => accepted.current && accepted.source.id === observation.source.id))].map(entry) }; }
 function draft(value: DraftDto): ReviewEnvironmentDraft { return { root: value.root, id: value.draft.id, baseRevision: value.draft.baseRevision, entries: value.draft.entries.map(entry) }; }
 function explain(error: unknown): never {
 	if (error instanceof AppServerRemoteError) {

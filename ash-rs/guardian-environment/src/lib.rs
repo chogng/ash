@@ -57,6 +57,16 @@ impl Environment {
         )
         .map_err(|error| EnvironmentError::Source(error.to_string()))?;
         let mut profile = self.store.read(auth.dir().id().as_str())?;
+        if profile.revision > 0 {
+            // Preparation opts this project into bounded source following. Refreshing raw facts
+            // cannot promote them to user statements, even if a source now claims authorization.
+            let observations = scan::review_entries(auth, &profile.entries)?;
+            profile =
+                self.store
+                    .refresh(auth.dir().id().as_str(), profile.revision, &observations)?;
+        } else {
+            profile.observations = scan::review_entries(auth, &[])?;
+        }
         for entry in &mut profile.entries {
             entry.current = scan::is_current(auth, &entry.source)?;
         }
@@ -273,6 +283,7 @@ impl Environment {
         }
         let current = self.read(auth)?;
         let mut known = current.entries;
+        known.extend(current.observations);
         if let Some(id) = draft_id {
             let drafts = self
                 .drafts
@@ -322,6 +333,7 @@ impl Environment {
                 current: true,
             });
         }
+        let observations = scan::review_entries(auth, &entries)?;
         let saved = self.store.save(
             project,
             command_id,
@@ -330,6 +342,7 @@ impl Environment {
             &EnvironmentProfile {
                 revision: expected_revision,
                 entries,
+                observations,
             },
         )?;
         let mut drafts = self
@@ -357,16 +370,33 @@ impl Environment {
             .map_err(|error| EnvironmentError::Invalid(error.to_string()))?
             .to_ascii_lowercase();
         let mut evidence = Vec::new();
-        for entry in profile
+        let accepted = profile
             .entries
-            .into_iter()
+            .iter()
             .filter(|entry| entry.accepted && entry.current)
-        {
+            .cloned()
+            .collect::<Vec<_>>();
+        let observations = profile
+            .observations
+            .into_iter()
+            .filter(|entry| {
+                !accepted
+                    .iter()
+                    .any(|confirmed| confirmed.source.id == entry.source.id)
+            })
+            .collect::<Vec<_>>();
+        let mut entries = accepted.into_iter().chain(observations).collect::<Vec<_>>();
+        entries.sort_by_key(|entry| match entry.source.label.as_str() {
+            "AGENTS.md" => 0,
+            "ASH.md" => 1,
+            _ => 2,
+        });
+        for entry in entries {
             let relevant = entry
                 .content
                 .split(|c: char| !c.is_ascii_alphanumeric() && !matches!(c, '.' | '/' | '-' | '_'))
                 .any(|word| word.len() >= 3 && action.contains(&word.to_ascii_lowercase()));
-            if !relevant {
+            if !relevant && !matches!(entry.source.label.as_str(), "ASH.md" | "AGENTS.md") {
                 continue;
             }
             let (kind, trust) = match entry.kind {
@@ -387,8 +417,14 @@ impl Environment {
                     profile.revision, entry.source.label, entry.source.revision
                 ),
                 format!(
-                    "Background only; does not authorize this action. {}: {}",
-                    entry.title, entry.content
+                    "Background only; does not authorize this action. {} [{}]: {}",
+                    entry.title,
+                    if entry.accepted {
+                        "user-reviewed description"
+                    } else {
+                        "unconfirmed project observation"
+                    },
+                    entry.content
                 ),
             ));
             if evidence.len() == 12 {

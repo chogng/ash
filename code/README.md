@@ -67,7 +67,7 @@ CLI 将已初始化的 `AppServerSession` 和 `TuiOptions` 交给 `run`：
 
 任务模式通过 `/mode` 或输入框中的 Shift+Tab 选择。按键、颜色和两种屏幕模式的显示见 [LAYOUT.md](LAYOUT.md#任务模式选择与显示)；五种任务模式、队列与 Multitask 的共享行为见 [模式 crate](../ash-rs/collaboration-mode-templates/README.md)。
 
-`/policy` 选择下一轮的权限策略，也支持 `manual`、`auto`、`bypassPermissions` 参数。权限策略不再占用 Shift+Tab；已有用户自定义的权限快捷键仍可使用。
+`/permission` 选择下一轮的权限策略，也支持 `manual`、`auto`、`bypassPermissions` 参数。权限策略不再占用 Shift+Tab；已有用户自定义的权限快捷键仍可使用。
 
 运行中 Steer 不能改变 Skill；遇到这种草稿应保留输入，让用户排队或下一轮提交。权限模式的选择用于下一次 Turn，不直接改变当前任务或 Session 权限。
 
@@ -275,7 +275,9 @@ just test-tui
 - `/lsp [language-id]` 查看当前目录可用服务器，修改启用状态、程序路径或恢复配置默认值。
 - `/skills` 管理已发现的技能，`/marketplace` 搜索可安装包；`/mcp`、`/connectors`、`/lsp` 的获取入口共用包管理服务，Config 不重复提供语言服务器页签。
 - Marketplace 展示返回包的来源；发行配置已提供 `ash`，增加独立来源才需要配置新的 metadata/targets 地址与信任根。
-- `marketplace.rs` 和 `lsp.rs` 拥有终端状态与交互，后端继续拥有安装、解析和配置。共享契约见 [Slash Commands](../docs/slash-commands.md#marketplace-与领域管理入口)。
+- `marketplace.rs`、`lsp.rs` 和 `guardian.rs` 拥有终端状态与交互，后端继续拥有业务和存储。
+  `/guardian setup` 扫描当前项目、逐项审核并保存背景资料；`/permission` 选择权限模式，`/init`
+  生成的 `ASH.md` 同时作为 Guardian 的项目说明。共享契约见 [Slash Commands](../docs/slash-commands.md#marketplace-与领域管理入口)。
 - 定向验证：`just test ash-tui marketplace`；真实终端流程：`just test-tui actual_tui_marketplace_and_lsp_commands`。
 
 ## Hooks

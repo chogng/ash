@@ -801,6 +801,36 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::SessionSubscribe, params)
     }
 
+    pub fn read_approval_environment(
+        &mut self,
+        params: ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentReadParams,
+    ) -> Result<
+        ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentReadResult,
+        ClientError,
+    > {
+        self.call(ClientMethod::ApprovalEnvironmentRead, params)
+    }
+
+    pub fn scan_approval_environment(
+        &mut self,
+        params: ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentScanParams,
+    ) -> Result<
+        ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentScanResult,
+        ClientError,
+    > {
+        self.call(ClientMethod::ApprovalEnvironmentScan, params)
+    }
+
+    pub fn save_approval_environment(
+        &mut self,
+        params: ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentSaveParams,
+    ) -> Result<
+        ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentReadResult,
+        ClientError,
+    > {
+        self.call(ClientMethod::ApprovalEnvironmentSave, params)
+    }
+
     /// Sends the canonical typed mutation request scoped to one product Session.
     pub fn request_session(
         &mut self,

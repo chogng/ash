@@ -164,6 +164,31 @@ function edit(part: ChatInputPart, text: string): void {
 	input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+test('Local permission and Guardian commands work before the model catalog is ready while Turn input waits', async () => {
+	const commands: Array<{ commandId: string; argumentsText: string }> = [];
+	let sends = 0;
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		executeCommand: async invocation => { commands.push(invocation); },
+		send: async () => { sends++; },
+		executeServerCommand: async () => { assert.fail('server commands require a ready conversation'); },
+	});
+	for (const text of ['/permission auto', '/guardian setup']) {
+		edit(part, text);
+		assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button')?.disabled, false);
+		await part.acceptInput();
+		assert.equal(part.element.querySelector('textarea')?.value, '');
+	}
+	assert.deepEqual(commands, [{ commandId: 'chat.permission', argumentsText: 'auto' }, { commandId: 'chat.guardian.setup', argumentsText: 'setup' }]);
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [{ name: 'compact', description: 'Compact context', argumentMode: 'none' }], skillSelectors: [], canSelectAgent: false });
+	for (const text of ['Create a file', '/compact']) {
+		edit(part, text);
+		assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button')?.disabled, true);
+		await part.acceptInput();
+		assert.equal(part.element.querySelector('textarea')?.value, text);
+	}
+	assert.equal(sends, 0);
+});
+
 test('Chat configuration requests append without sending or replacing draft attachments', async () => {
 	let sends = 0;
 	using part = inputPart(sharedNotifications, undefined, 'debug', { send: async () => { sends++; } });

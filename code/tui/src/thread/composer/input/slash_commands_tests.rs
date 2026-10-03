@@ -90,7 +90,8 @@ fn builtins_follow_enum_presentation_order() {
                 "model",
                 "mode",
                 "effort",
-                "policy",
+                "permission",
+                "guardian",
                 "theme",
                 "new",
                 "quit",
@@ -107,7 +108,7 @@ fn builtins_follow_enum_presentation_order() {
             names
         }
     );
-    assert_eq!(definitions.len(), 36);
+    assert_eq!(definitions.len(), 37);
 }
 
 #[test]

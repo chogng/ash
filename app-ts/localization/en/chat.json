@@ -25,6 +25,8 @@
 		"chat.connections.ready": "Ready",
 		"chat.connections.notReady": "Sign in or save a key",
 		"chat.providerKeys.aria": "Model provider API keys",
-		"chat.providerKeys.select": "Choose a provider to enter or replace its API key"
+		"chat.providerKeys.select": "Choose a provider to enter or replace its API key",
+		"slash.permission.description": "choose permissions for the next Turn",
+		"slash.guardian.description": "prepare and review project background for Guardian"
 	}
 }

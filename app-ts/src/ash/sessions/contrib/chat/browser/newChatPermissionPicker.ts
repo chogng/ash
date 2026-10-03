@@ -13,6 +13,7 @@ import { IContextViewService } from '../../../../platform/contextview/browser/co
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { approvalModeDefinitions } from '../../../../platform/sessions/common/approvalModes.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../../workbench/contrib/chat/common/chat.js';
 import { SessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 
 /** Owns only the open popup's input; numeric keys never register against the editor or window. */
@@ -109,7 +110,7 @@ export class NewChatPermissionPicker extends Disposable {
 			environment.className = 'ash-sessions-permission-settings';
 			environment.setAttribute('role', 'menuitem');
 			environment.textContent = localize('approvalEnvironment.title', 'Prepare review environment…');
-			this.listeners.add(addDisposableListener(environment, 'click', () => activate('sessions.chat.permission.environment')));
+			this.listeners.add(addDisposableListener(environment, 'click', () => activate(OPEN_GUARDIAN_SETUP_COMMAND_ID)));
 			menu.append(environment);
 			buttons.push(environment);
 		}

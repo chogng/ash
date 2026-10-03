@@ -1,5 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+import { Editor } from '../../../automation/editor.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -15,6 +16,16 @@ test('Sessions review environment scans a draft, accepts entries, and excludes c
 		page = await opened;
 	}
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true }).click();
+	const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('/permission auto');
+	await editor.waitForEditorContents(text => text === '/permission auto');
+	await page.keyboard.press('Enter');
+	await expect(page.locator('.ash-sessions-chat-input').first().getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeVisible();
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('/permission manual');
+	await editor.waitForEditorContents(text => text === '/permission manual');
+	await page.keyboard.press('Enter');
 	const permissions = page.locator('.ash-sessions-chat-input').first().getByRole('button', { name: 'Permissions: Manual', exact: true });
 	await permissions.press('ArrowDown');
 	const menu = page.getByRole('menu', { name: 'Permissions', exact: true });
@@ -46,13 +57,17 @@ test('Sessions review environment scans a draft, accepts entries, and excludes c
 	await quick.select('Save accepted entries');
 	await expect(quick.element).toBeHidden();
 	expect(await readFile(file, 'utf8')).toBe(original);
-	await permissions.press('ArrowDown');
-	await menu.getByRole('menuitem', { name: 'Prepare review environment…', exact: true }).click();
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('/guardian setup');
+	await editor.waitForEditorContents(text => text === '/guardian setup');
+	await page.keyboard.press('Enter');
 	await expect(entry).toContainText('Accepted');
 	await quick.close();
 	await writeFile(file, '{"name":"review-fixture","scripts":{"build":"cargo build"}}');
 	await permissions.press('ArrowDown');
 	await menu.getByRole('menuitem', { name: 'Prepare review environment…', exact: true }).click();
-	await expect(entry).toContainText('Source changed — excluded from review');
+	await expect(entry.filter({ hasText: 'Source changed — excluded from review' })).toHaveCount(1);
+	await expect(entry.filter({ hasText: 'Pending review' })).toContainText('cargo build');
+	await expect(entry.filter({ hasText: 'Pending review' })).not.toContainText('Accepted');
 	await quick.close();
 });

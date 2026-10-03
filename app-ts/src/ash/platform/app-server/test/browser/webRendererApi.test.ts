@@ -88,7 +88,7 @@ test('review environment adapter preserves scope, provenance, cancellation, and 
 	const entry = { id: 'entry-1', kind: 'fact' as const, title: 'Build', content: 'pnpm build', source: { id: 'source-1', kind: 'projectFile' as const, label: 'package.json', revision: 'sha256-version' }, accepted: false, current: true };
 	const read = environment.read(scope);
 	assert.deepEqual(transport.requests.at(-1)?.params, { scope });
-	transport.respondAt(-1, { root: '/own-worktree', profile: { revision: 3, entries: [entry] } });
+	transport.respondAt(-1, { root: '/own-worktree', profile: { revision: 3, entries: [entry], observations: [] } });
 	assert.deepEqual(await read, { root: '/own-worktree', revision: 3, entries: [entry] });
 	const options = { recentCommands: false, shellHistory: false, otherRepositories: false, summarizeWithModel: true };
 	const model = { provider: 'openai', model: 'task-model' };

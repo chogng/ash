@@ -42,7 +42,8 @@ pub(crate) enum TuiSlashCommandAction {
     Model,
     Mode,
     Effort,
-    Policy,
+    Permission,
+    Guardian,
     Theme,
     New,
     Quit,
@@ -114,7 +115,8 @@ impl TuiSlashCommandAction {
             Self::Model => "show or set the preferred provider/model",
             Self::Mode => "choose how the next task is handled",
             Self::Effort => "choose the thinking effort for the current model",
-            Self::Policy => "choose permissions for the next Turn",
+            Self::Permission => return ProductSlashCommand::Permission.definition(),
+            Self::Guardian => return ProductSlashCommand::Guardian.definition(),
             Self::Theme => "show or set the terminal color theme",
             Self::New => "start a new chat",
             Self::Quit => "quit Ash",
@@ -143,7 +145,8 @@ impl TuiSlashCommandAction {
             | Self::Model
             | Self::Mode
             | Self::Effort
-            | Self::Policy
+            | Self::Permission
+            | Self::Guardian
             | Self::Theme
             | Self::New => SlashCommandArgumentMode::Optional,
             _ => SlashCommandArgumentMode::None,
@@ -156,7 +159,8 @@ impl TuiSlashCommandAction {
             Self::Model => Some("<model> [effort]"),
             Self::Mode => Some("<agent|plan|debug|multitask|ask>"),
             Self::Effort => Some("<effort>"),
-            Self::Policy => Some("<manual|auto|bypassPermissions>"),
+            Self::Permission => Some("<manual|auto|bypassPermissions>"),
+            Self::Guardian => Some("[setup]"),
             Self::Theme => Some("<theme>"),
             Self::Resume => Some("<session-id>"),
             Self::Rewind => Some("<checkpoint>"),

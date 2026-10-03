@@ -19,6 +19,9 @@ mod event_loop;
 mod event_pump;
 mod frame;
 mod fullscreen;
+#[cfg(test)]
+#[path = "app/guardian_tests.rs"]
+mod guardian_tests;
 mod help;
 mod inline;
 #[cfg(test)]
@@ -30,6 +33,9 @@ mod mermaid_preview_tests;
 #[cfg(test)]
 #[path = "app/mode_tests.rs"]
 mod mode_tests;
+#[cfg(test)]
+#[path = "app/network_tests.rs"]
+mod network_tests;
 mod recovery;
 mod redraw;
 mod requests;
@@ -42,9 +48,6 @@ mod top_tip;
 #[cfg(test)]
 #[path = "app/usage_tests.rs"]
 mod usage_tests;
-#[cfg(test)]
-#[path = "app/network_tests.rs"]
-mod network_tests;
 mod welcome;
 
 pub(crate) use crate::sessions::ActiveConversation;

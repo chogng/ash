@@ -12,6 +12,26 @@ import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/w
 import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import '../../browser/actions/approvalEnvironmentActions.js';
+import '../../browser/actions/sessionsChatActions.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
+
+test('permission command uses stable IDs and keeps bypass confirmation on the requesting composer', async () => {
+	using services = new InstantiationService();
+	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
+	const choices: string[] = [];
+	const model = { selectApprovalMode: (mode: string) => choices.push(mode) } as unknown as IChatWidgetModel;
+	await commands.executeCommand('chat.permission', model, 'auto');
+	await assert.rejects(commands.executeCommand('chat.permission', model, '1'), /Use \/permission/);
+	let confirmed = false;
+	services.registerInstance(IDialogService, { confirm: async () => ({ confirmed }) } as unknown as IDialogService);
+	await commands.executeCommand('chat.permission', model, 'bypassPermissions');
+	assert.deepEqual(choices, ['auto']);
+	confirmed = true;
+	await commands.executeCommand('chat.permission', model, 'bypassPermissions');
+	assert.deepEqual(choices, ['auto', 'bypassPermissions']);
+});
 
 class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<T> {
 	private readonly accepted = this._register(new Emitter<T>());
@@ -62,7 +82,7 @@ test('Chinese environment preparation keeps scan scope explicit and saves only r
 	services.registerInstance(INotificationService, { info: (message: string) => notices.push(message), error: (error: unknown) => { throw error; } } as unknown as INotificationService);
 	using commands = new CommandService(services);
 	try {
-		await commands.executeCommand('sessions.chat.permission.environment', { untitledSessionId: 'chosen', inputState: {} } as IChatWidgetModel);
+		await commands.executeCommand('chat.guardian.setup', { untitledSessionId: 'chosen', inputState: {} } as IChatWidgetModel);
 		assert.deepEqual(scans, [{ recentCommands: false, shellHistory: false, otherRepositories: false, summarizeWithModel: false }]);
 		assert.deepEqual(writes, [{ root: '/chosen', entries: [{ id: 'package', kind: 'fact', title: 'package.json', content: 'pnpm build', sourceId: 'source' }] }]);
 		assert.ok(seen.includes('审核环境：/chosen'));
@@ -91,7 +111,7 @@ test('closing a running environment scan calls the backend cancellation API and 
 			else { picker.choose(choices.shift()!); }
 		}), input: async () => undefined,
 	} satisfies QuickInput);
-	await commands.executeCommand('sessions.chat.permission.environment', { sessionId: 'chosen', threadId: 'thread-chosen', inputState: {} } as IChatWidgetModel);
+	await commands.executeCommand('chat.guardian.setup', { sessionId: 'chosen', threadId: 'thread-chosen', inputState: {} } as IChatWidgetModel);
 	assert.ok(cancelledId);
 });
 
@@ -116,7 +136,7 @@ test('rescanning replaces untouched observations while retaining explicit edits 
 			input: async () => 'pnpm build with pinned Node',
 		} satisfies QuickInput);
 		using commands = new CommandService(services);
-		await commands.executeCommand('sessions.chat.permission.environment', { untitledSessionId: 'chosen', inputState: {} } as IChatWidgetModel);
+		await commands.executeCommand('chat.guardian.setup', { untitledSessionId: 'chosen', inputState: {} } as IChatWidgetModel);
 		assert.equal(scans, 2);
 		assert.equal(choices.length, 0);
 	}

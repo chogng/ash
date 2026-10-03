@@ -61,6 +61,9 @@ pub struct EnvironmentProfile {
     #[ts(type = "number")]
     pub revision: u64,
     pub entries: Vec<EnvironmentEntry>,
+    /// Latest bounded project observations. They never inherit user acceptance or target trust.
+    #[serde(default)]
+    pub observations: Vec<EnvironmentEntry>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -98,6 +101,15 @@ pub enum EnvironmentError {
 /// Durable state belongs to the host's State implementation; the domain owns validation.
 pub trait EnvironmentStore: Send + Sync {
     fn read(&self, project: &str) -> Result<EnvironmentProfile, EnvironmentError>;
+    /// Atomically refresh factual observations of the selected profile revision. A concurrent
+    /// user edit invalidates this scan so excluded sources cannot be restored by a late reader.
+    /// An unprepared project (revision zero) remains inactive. Unchanged sources do not write.
+    fn refresh(
+        &self,
+        project: &str,
+        expected_revision: u64,
+        observations: &[EnvironmentEntry],
+    ) -> Result<EnvironmentProfile, EnvironmentError>;
     /// A committed command remains replayable after its draft expires or its sources change.
     fn receipt(
         &self,

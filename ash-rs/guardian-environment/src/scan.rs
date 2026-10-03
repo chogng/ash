@@ -15,8 +15,8 @@ use std::io::SeekFrom;
 const MAX_SOURCE_BYTES: u64 = 32 * 1024;
 pub(crate) const PROJECT_FILES: &[&str] = &[
     "README.md",
-    "CLAUDE.md",
     "AGENTS.md",
+    "ASH.md",
     "package.json",
     "Cargo.toml",
     "pyproject.toml",
@@ -125,8 +125,41 @@ pub(crate) fn project_entries(
     auth: &Authorization,
     token: &CancellationToken,
 ) -> Result<Vec<EnvironmentEntry>, EnvironmentError> {
+    entries_from(auth, PROJECT_FILES, token)
+}
+
+/// Only prepared sources are followed automatically. Ash/shared instructions are already
+/// always-on project context; excluding another entry must stop its use in future reviews.
+pub(crate) fn review_entries(
+    auth: &Authorization,
+    entries: &[EnvironmentEntry],
+) -> Result<Vec<EnvironmentEntry>, EnvironmentError> {
+    let paths = PROJECT_FILES
+        .iter()
+        .copied()
+        .filter(|path| {
+            matches!(*path, "ASH.md" | "AGENTS.md")
+                || entries.iter().any(|entry| {
+                    entry.accepted
+                        && entry.source.kind == SourceKind::ProjectFile
+                        && entry.source.label == *path
+                })
+        })
+        .collect::<Vec<_>>();
+    entries_from(
+        auth,
+        &paths,
+        &async_utils::CancellationSource::new().token(),
+    )
+}
+
+fn entries_from(
+    auth: &Authorization,
+    paths: &[&str],
+    token: &CancellationToken,
+) -> Result<Vec<EnvironmentEntry>, EnvironmentError> {
     let mut entries = Vec::new();
-    for path in PROJECT_FILES {
+    for path in paths {
         check(token)?;
         let Some(text) = source_text(auth, path)? else {
             continue;

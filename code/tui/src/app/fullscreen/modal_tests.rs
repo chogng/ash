@@ -2156,7 +2156,8 @@ fn network_config_mouse_actions_use_the_keyboard_path_and_results_have_no_hit_ta
             ))) = super::target_at(&app, area, Position::new(x, y))
             {
                 assert!(
-                    id == ListSelectionItemId::new("network-refresh") || id == ListSelectionItemId::new("network-copy-domains"),
+                    id == ListSelectionItemId::new("network-refresh")
+                        || id == ListSelectionItemId::new("network-copy-domains"),
                     "read-only results must not be clickable: {id:?}"
                 );
                 if id == ListSelectionItemId::new("network-copy-domains") {

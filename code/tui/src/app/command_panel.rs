@@ -102,6 +102,7 @@ pub(crate) enum CommandPanel {
     Mcp(ListSelection<McpSelectionAction>),
     Hooks(crate::hooks::Panel),
     Memories(crate::memories::Panel),
+    Guardian(crate::guardian::Panel),
     Model(ListSelection<ModelSelectionAction>),
     ComposerOptions(ListSelection<crate::thread::composer::options::ComposerOption>),
     ProjectRoots(ListSelection<RootSelectionAction>),
@@ -128,6 +129,7 @@ pub(crate) enum CommandPanelOutcome {
     Mcp(McpSelectionAction),
     Hooks(crate::hooks::Outcome),
     Memories(crate::memories::Command),
+    Guardian(crate::guardian::Command),
     Model(ModelSelectionAction),
     ComposerOption(crate::thread::composer::options::ComposerOption),
     ProjectRoot(RootSelectionAction),
@@ -392,6 +394,9 @@ impl CommandPanel {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Connectors)
             }
             Self::Keymap(content) => CommandPanelOutcome::Keymap(content.handle_key(key)),
+            Self::Guardian(content) => {
+                map_selection(content.handle_key(key), CommandPanelOutcome::Guardian)
+            }
             Self::Memories(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Memories)
             }
@@ -449,6 +454,7 @@ impl CommandPanel {
             Self::Connectors(content) => content.handle_paste(pasted),
             Self::Keymap(content) => content.handle_paste(pasted),
             Self::Memories(content) => content.paste(pasted),
+            Self::Guardian(content) => content.paste(pasted),
             Self::Marketplace(content) => content.handle_paste(pasted),
             Self::Lsp(content) => content.handle_paste(pasted),
             Self::Mcp(content) => content.handle_paste(pasted),
@@ -495,6 +501,7 @@ impl CommandPanel {
                     selection.localize(language);
                 }
             }
+            Self::Guardian(content) => content.localize(language),
             Self::Memories(content) => {
                 content.localize(language);
             }
@@ -514,6 +521,7 @@ impl CommandPanel {
             Self::Config(editor) => editor.selection(),
             Self::Connectors(selection) => Some(selection.state()),
             Self::Keymap(editor) => editor.selection(),
+            Self::Guardian(selection) => Some(selection.state()),
             Self::Memories(_) => None,
             Self::Marketplace(selection) => Some(selection.state()),
             Self::Lsp(selection) => Some(selection.state()),
@@ -542,6 +550,7 @@ impl CommandPanel {
             Self::Config(editor) => editor.selection_mut(),
             Self::Connectors(selection) => Some(selection.state_mut()),
             Self::Keymap(editor) => editor.selection_mut(),
+            Self::Guardian(selection) => Some(selection.state_mut()),
             Self::Memories(_) => None,
             Self::Marketplace(selection) => Some(selection.state_mut()),
             Self::Lsp(selection) => Some(selection.state_mut()),
@@ -630,6 +639,7 @@ impl CommandPanel {
                 KeymapEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
                 KeymapEditorPage::Capture(capture) => CommandPanelBody::KeyCapture(capture),
             },
+            Self::Guardian(panel) => CommandPanelBody::Selection(panel.state()),
             Self::Memories(panel) => CommandPanelBody::Memories(panel),
             Self::Marketplace(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Lsp(selection) => CommandPanelBody::Selection(selection.state()),
@@ -690,6 +700,7 @@ impl CommandPanel {
             Self::Connectors(content) => content.key_hints(),
             Self::Keymap(content) => content.key_hints(),
             Self::Memories(panel) => panel.key_hints(),
+            Self::Guardian(panel) => panel.key_hints(),
             Self::Marketplace(content) => content.key_hints(),
             Self::Lsp(content) => content.key_hints(),
             Self::Mcp(content) => content.key_hints(),

@@ -13,8 +13,8 @@ expression: screen
 ● Updated file
 └─ write_file [call-bypass]
    {
-     "path": "permission-bypassed.txt",
-     "content": "written with permission bypass\n"
+     "content": "written with permission bypass\n",
+     "path": "permission-bypassed.txt"
    }
    wrote permission-bypassed.txt
    view full
@@ -28,7 +28,7 @@ expression: screen
 
 
 
-                                                                     /policy to change permissions
+                                                                 /permission to change permissions
   ────────────────────────────────────────────────────────────────────────────────────────────────
   > Build anything
   ───────────────────────────────────────────────────────────────────────────── ash-real-scenario

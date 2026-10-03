@@ -828,6 +828,7 @@ impl App {
                 None
             }
             CommandPanelOutcome::Memories(command) => Some(command.into()),
+            CommandPanelOutcome::Guardian(command) => Some(command.into()),
             CommandPanelOutcome::Skills(SkillSelectionAction::SetEnablement {
                 skill_id,
                 enablement,
@@ -2804,6 +2805,7 @@ impl App {
                 self.open_command_panel(CommandPanel::usage(model));
             }
             AppEvent::Connectors(event) => self.apply_connector_event(event),
+            AppEvent::Guardian(event) => self.open_command_panel(CommandPanel::Guardian(event.0)),
             AppEvent::Memories(event) => match event {
                 crate::memories::Event::Changed(changed) => {
                     if let Some(CommandPanel::Memories(panel)) = self.panels_mut().command_mut() {
@@ -2991,6 +2993,7 @@ impl App {
             | AppEvent::Marketplace(_)
             | AppEvent::Lsp(_)
             | AppEvent::Memories(_)
+            | AppEvent::Guardian(_)
             | AppEvent::Mcp(McpEvent::SettingsOpened(_) | McpEvent::SettingsUpdated(_))
             | AppEvent::Hooks(HooksEvent::Opened(_) | HooksEvent::Updated(_))
             | AppEvent::Theme(ThemeEvent::PickerOpened(_))
@@ -3697,7 +3700,7 @@ impl App {
                 action,
                 TuiSlashCommandAction::Quit
                     | TuiSlashCommandAction::Mode
-                    | TuiSlashCommandAction::Policy
+                    | TuiSlashCommandAction::Permission
                     | TuiSlashCommandAction::Effort
             )
         {
@@ -3711,7 +3714,7 @@ impl App {
             use crate::thread::composer::options;
             if matches!(
                 local,
-                Some(TuiSlashCommandAction::Mode | TuiSlashCommandAction::Policy)
+                Some(TuiSlashCommandAction::Mode | TuiSlashCommandAction::Permission)
             ) {
                 let arguments = match invocation.text_arguments() {
                     Ok(arguments) => arguments,

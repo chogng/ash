@@ -277,13 +277,13 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     auto.wait_for_screen("Start a task below, or continue a previous session.");
     auto.submit("start a session before automatic review");
     auto.wait_for_stable_screen("AUTO-SETUP-DONE");
-    auto.submit("/policy auto");
+    auto.submit("/permission auto");
     auto.wait_for_screen("Auto");
     auto.submit("请通过自动审查创建 auto-reviewed.txt");
     auto.wait_for_screen("自动审查拒绝了工具");
     auto_gate.wait_until_reached();
     assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
-    auto.submit("/policy bypassPermissions");
+    auto.submit("/permission bypassPermissions");
     auto.wait_for_screen("current: Auto");
     // Inspect the review result after the follow-up turn can finish.
     auto_gate.release();
@@ -316,7 +316,7 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     bypass.wait_for_screen("Start a task below, or continue a previous session.");
     bypass.submit("start a session before permission bypass");
     bypass.wait_for_stable_screen("BYPASS-SETUP-DONE");
-    bypass.submit("/policy bypassPermissions");
+    bypass.submit("/permission bypassPermissions");
     bypass.wait_for_screen("Bypass permissions");
     bypass.submit("请直接创建 permission-bypassed.txt");
     bypass.wait_for_stable_screen("文件直接写入完成");
@@ -328,7 +328,7 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     bypass.space();
     bypass.wait_for_screen("written with permission bypass");
     bypass.refresh_policy_tip();
-    bypass.wait_for_stable_screen("/policy to change permissions");
+    bypass.wait_for_stable_screen("/permission to change permissions");
     bypass.assert_snapshot("real/03-approval/08-bypass-details");
     let bypassed_thread_path = bypass_fixture.find_file("permission-bypassed.txt").unwrap();
     assert_eq!(

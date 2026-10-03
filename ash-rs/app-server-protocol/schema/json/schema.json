@@ -19644,6 +19644,14 @@
           },
           "type": "array"
         },
+        "observations": {
+          "default": [],
+          "description": "Latest bounded project observations. They never inherit user acceptance or target trust.",
+          "items": {
+            "$ref": "#/$defs/EnvironmentEntry"
+          },
+          "type": "array"
+        },
         "revision": {
           "format": "uint64",
           "minimum": 0,

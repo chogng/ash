@@ -86,6 +86,31 @@ fn real_rpc_scan_confirm_save_and_changed_source_flow_preserves_project_boundari
         json!({"scope":scope}),
     );
     assert_eq!(read["result"]["profile"]["entries"][0]["current"], false);
+    assert_eq!(read["result"]["profile"]["revision"], 2);
+    assert_eq!(
+        read["result"]["profile"]["observations"][0]["content"],
+        "build with cargo"
+    );
+    assert_eq!(
+        read["result"]["profile"]["observations"][0]["accepted"],
+        false
+    );
+    std::fs::write(
+        root.path().join("ASH.md"),
+        "Use cargo test. New uploads need user approval.",
+    )
+    .unwrap();
+    let with_instructions = rpc(
+        &server,
+        &mut connection,
+        "approval/environment/read",
+        json!({"scope":scope}),
+    );
+    assert_eq!(with_instructions["result"]["profile"]["revision"], 3);
+    assert_eq!(
+        with_instructions["result"]["profile"]["observations"][0]["source"]["label"],
+        "ASH.md"
+    );
     // Replaying an already committed command neither reaccepts the changed source nor needs its draft.
     assert_eq!(
         rpc(

@@ -31,6 +31,7 @@ pub(crate) enum AppEvent {
     Mcp(crate::mcp::Event),
     Hooks(crate::hooks::Event),
     Memories(crate::memories::Event),
+    Guardian(crate::guardian::Event),
     Models(crate::models::Event),
     Projects(crate::projects::Event),
     Sessions(crate::sessions::Event),
@@ -76,3 +77,5 @@ app_event_from!(crate::thread::Event, Thread);
 app_event_from!(crate::issues::Event, Issues);
 
 app_event_from!(crate::memories::Event, Memories);
+
+app_event_from!(crate::guardian::Event, Guardian);
