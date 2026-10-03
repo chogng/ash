@@ -1872,12 +1872,19 @@ fn user_network_config_is_loaded_before_start_and_reconciled_on_edit() {
             .check_url("https://other.example.com/v1")
             .is_err()
     );
+    let directory_config = profile.path().join("directory.toml");
+    std::fs::write(&directory_config, "").unwrap();
     let _server = open_app_server(
         AppServerOptions::new(profile.path())
             .with_profile_runtime(Arc::clone(&runtime))
+            .with_dir_config(LocalDirConfigOptions::new(
+                &directory_config,
+                Dir::open_local(profile.path()).unwrap().id(),
+            ))
             .without_built_in_skills(),
     )
     .unwrap();
+    std::fs::write(&directory_config, "[broken").unwrap();
     std::fs::write(
         &config_path,
         format!(
@@ -2033,7 +2040,7 @@ fn shared_profile_runtime_owns_exactly_one_marketplace_authority() {
 }
 
 #[test]
-fn live_plugin_authority_reconciles_connector_projection() {
+fn live_plugin_authority_reconciles_connectors_despite_invalid_directory_config() {
     let profile = tempfile::tempdir().unwrap();
     let source = tempfile::tempdir().unwrap();
     let plugin_root = profile.path().join("plugins");
@@ -2051,7 +2058,13 @@ fn live_plugin_authority_reconciles_connector_projection() {
             },
         ))
         .unwrap();
+    let directory_config = profile.path().join("directory.toml");
+    std::fs::write(&directory_config, "").unwrap();
     let options = AppServerOptions::new(profile.path())
+        .with_dir_config(LocalDirConfigOptions::new(
+            &directory_config,
+            Dir::open_local(profile.path()).unwrap().id(),
+        ))
         .without_built_in_skills()
         .with_session_state_mode(SessionStateMode::Ephemeral)
         .with_plugin_authority(authority.clone(), Arc::new(MemorySecretStore::default()))
@@ -2086,14 +2099,27 @@ fn live_plugin_authority_reconciles_connector_projection() {
         .unwrap();
     wait_for_connector_count(&server, &mut connection, 1, &mut request_id);
 
+    std::fs::write(&directory_config, "[broken").unwrap();
+    // Let the directory poll reject this edit before sending an independent authority change.
+    std::thread::sleep(Duration::from_millis(250));
     authority
         .apply(plugin_request(
             &authority,
             "disable-live",
-            PluginAuthorityCommand::Disable { package: installed },
+            PluginAuthorityCommand::Disable {
+                package: installed.clone(),
+            },
         ))
         .unwrap();
     wait_for_connector_count(&server, &mut connection, 0, &mut request_id);
+    authority
+        .apply(plugin_request(
+            &authority,
+            "re-enable-live",
+            PluginAuthorityCommand::Enable { package: installed },
+        ))
+        .unwrap();
+    wait_for_connector_count(&server, &mut connection, 1, &mut request_id);
 }
 
 struct LocalSemanticEmbedding;

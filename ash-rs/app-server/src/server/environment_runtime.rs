@@ -46,6 +46,7 @@ use ash_core::MultiAgentCoordinator;
 use ash_core::ThreadController;
 use ash_core::TurnActionPolicy;
 use ash_core::TurnExecutor;
+use ash_file_access::Authorization;
 use ash_file_access::Dir;
 use ash_file_access::Grant;
 use ash_file_access::GrantSource;
@@ -1890,29 +1891,7 @@ impl AppServer {
             .map(|snapshot| snapshot.authorizations().to_vec())
             .unwrap_or_default();
         if let Some(host) = &self.local_env_host {
-            let hook_dirs = access
-                .snapshot_for(session_id, Permission::DiscoverHooks)
-                .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?
-                .into_iter()
-                .flat_map(|snapshot| snapshot.authorizations().to_vec())
-                .filter_map(|discovery| {
-                    access
-                        .authorize(
-                            session_id,
-                            discovery.dir().canonical_path(),
-                            Permission::ExecuteCommands,
-                        )
-                        .transpose()
-                        .map(|execution| execution.map(|execution| (discovery, execution)))
-                })
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?
-                .into_iter()
-                .map(|(discovery, execution)| {
-                    read_dir_config(discovery.dir())
-                        .map(|document| (document.hooks, discovery, execution))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+            let hook_dirs = session_hook_bindings(&access, session_id)?;
             host.hooks
                 .replace_session_dirs(session_id.clone(), hook_dirs)
                 .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
@@ -2998,6 +2977,36 @@ impl AppServer {
         }
         Ok(())
     }
+}
+
+/// Loads the complete authorized Hook set before either registration or filesystem refresh
+/// commits it. A rejected document must not be interpreted as an empty declaration set.
+pub(super) fn session_hook_bindings(
+    access: &DirGrants,
+    session_id: &SessionId,
+) -> Result<Vec<(ash_config::HooksConfig, Authorization, Authorization)>, EnvRuntimeError> {
+    let discoveries = access
+        .snapshot_for(session_id, Permission::DiscoverHooks)
+        .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+    let mut bindings = Vec::new();
+    for discovery in discoveries
+        .into_iter()
+        .flat_map(|snapshot| snapshot.authorizations().to_vec())
+    {
+        let Some(execution) = access
+            .authorize(
+                session_id,
+                discovery.dir().canonical_path(),
+                Permission::ExecuteCommands,
+            )
+            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?
+        else {
+            continue;
+        };
+        let document = read_dir_config(discovery.dir())?;
+        bindings.push((document.hooks, discovery, execution));
+    }
+    Ok(bindings)
 }
 
 pub(super) fn read_dir_config(

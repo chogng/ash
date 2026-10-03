@@ -486,30 +486,14 @@ impl DirContributions {
         else {
             return;
         };
-        let authorizations = self
-            .dir_grants
-            .snapshot_for(session_id, ash_file_access::Permission::DiscoverHooks)
-            .ok()
-            .flatten()
-            .into_iter()
-            .flat_map(|snapshot| snapshot.authorizations().to_vec())
-            .filter_map(|discovery| {
-                self.dir_grants
-                    .authorize(
-                        session_id,
-                        discovery.dir().canonical_path(),
-                        ash_file_access::Permission::ExecuteCommands,
-                    )
-                    .ok()
-                    .flatten()
-                    .map(|execution| (discovery, execution))
-            })
-            .filter_map(|(discovery, execution)| {
-                super::environment_runtime::read_dir_config(discovery.dir())
-                    .ok()
-                    .map(|document| (document.hooks, discovery, execution))
-            })
-            .collect();
+        let authorizations =
+            match super::environment_runtime::session_hook_bindings(&self.dir_grants, session_id) {
+                Ok(bindings) => bindings,
+                Err(error) => {
+                    log::warn!("failed to refresh directory Hooks: {error}");
+                    return;
+                }
+            };
         if let Err(error) = hooks.replace_session_dirs(session_id.clone(), authorizations) {
             log::warn!("failed to refresh directory Hooks: {error}");
         }

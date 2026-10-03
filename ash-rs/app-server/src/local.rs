@@ -1924,6 +1924,7 @@ impl ToolConfigWatcher {
                     .as_ref()
                     .and_then(|dir| dir.read().ok().map(|(_, revision)| revision));
                 let mut config_dirty = false;
+                let mut env_config_dirty = false;
                 let mut connector_dirty = false;
                 let mut mcp_dirty = false;
                 let mut mcp_runtime_intent_dirty = false;
@@ -1933,7 +1934,7 @@ impl ToolConfigWatcher {
                     if shutdown_receiver.try_recv().is_ok() {
                         break;
                     }
-                    config_dirty |= match changes.recv_timeout(Duration::from_millis(100)) {
+                    let config_changed = match changes.recv_timeout(Duration::from_millis(100)) {
                         Ok(_) => {
                             while changes.try_recv().is_ok() {}
                             true
@@ -1941,19 +1942,28 @@ impl ToolConfigWatcher {
                         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => false,
                         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
                     };
-                    if let Some(dir_config) = &dir_config {
+                    config_dirty |= config_changed;
+                    env_config_dirty |= config_changed;
+                    let dir_document = if let Some(dir_config) = &dir_config {
                         match dir_config.read() {
-                            Ok((_, revision)) if dir_revision != Some(revision) => {
-                                dir_revision = Some(revision);
-                                config_dirty = true;
+                            Ok((document, revision)) => {
+                                if dir_revision != Some(revision) {
+                                    dir_revision = Some(revision);
+                                    env_config_dirty = true;
+                                }
+                                Some((document, revision))
                             }
-                            Ok(_) => {}
                             Err(error) => {
                                 env_tools.record_reconcile_failure(error.to_string());
-                                continue;
+                                None
                             }
                         }
-                    }
+                    } else {
+                        None
+                    };
+                    // Only environment configuration depends on this directory document.
+                    // A rejected edit must not prevent committed profile or package updates.
+                    let env_config_ready = dir_config.is_none() || dir_document.is_some();
                     if let Some(connector_changes) = &connector_changes {
                         while connector_changes.try_recv().is_ok() {
                             connector_dirty = true;
@@ -1979,6 +1989,7 @@ impl ToolConfigWatcher {
                         }
                     }
                     if !config_dirty
+                        && !(env_config_dirty && env_config_ready)
                         && !connector_dirty
                         && !mcp_dirty
                         && !plugin_dirty
@@ -2021,17 +2032,27 @@ impl ToolConfigWatcher {
                             }
                             semantic_binding = Some(next_semantic_binding);
                         }
-                        let runtime_config =
-                            match resolve_local_config(&snapshot, dir_config.as_deref()) {
-                                Ok(config) => config,
-                                Err(error) => {
-                                    env_tools.record_reconcile_failure(error.to_string());
-                                    continue;
+                    }
+                    if env_config_dirty && env_config_ready {
+                        // Resolve the document already validated during this iteration; rereading
+                        // it here would let an intervening edit change the observed revision.
+                        let input = dir_config.as_ref().zip(dir_document.as_ref()).map(
+                            |(dir, (document, revision))| {
+                                DirConfigInput::new(dir.scope(), *revision, document)
+                            },
+                        );
+                        match resolve_scoped_config(&snapshot, input) {
+                            Ok(resolved) => {
+                                match env_runtime.reconcile_env_config(&resolved.values) {
+                                    Ok(()) => env_config_dirty = false,
+                                    Err(error) => {
+                                        env_tools.record_reconcile_failure(error.to_string());
+                                    }
                                 }
-                            };
-                        if let Err(error) = env_runtime.reconcile_env_config(&runtime_config) {
-                            env_tools.record_reconcile_failure(error.to_string());
-                            continue;
+                            }
+                            Err(error) => {
+                                env_tools.record_reconcile_failure(error.to_string());
+                            }
                         }
                     }
                     if plugin_dirty

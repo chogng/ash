@@ -725,3 +725,163 @@ fn instruction_reader_exposes_only_catalog_files_and_rechecks_revocation() {
     grant.revoke();
     assert!(contributions.read_instruction(&session, &project).is_none());
 }
+
+#[test]
+fn invalid_directory_config_preserves_hooks_until_a_valid_refresh() {
+    struct Policy;
+    impl core_api::ActionPolicyService for Policy {
+        fn revision(&self) -> String {
+            "directory-hook-test".into()
+        }
+        fn decide(
+            &self,
+            _: &ash_action_policy::ActionReviewRequest,
+            _: &ash_async_utils::CancellationToken,
+        ) -> Result<ash_action_policy::ExecutionDecision, core_api::CoreError> {
+            unreachable!("registration test does not execute hooks")
+        }
+    }
+    let cwd = TempDir::new().unwrap();
+    let directory = TempDir::new().unwrap();
+    let root = Dir::open_local(directory.path()).unwrap();
+    let session = SessionId::new("hook-refresh").unwrap();
+    let grants = Arc::new(crate::dir_grants::DirGrants::default());
+    grants
+        .add_dir(
+            session.clone(),
+            Grant::for_session_tree(
+                session.clone(),
+                root.clone(),
+                GrantSource::ExplicitUser,
+                ash_file_access::Permissions::new([
+                    ash_file_access::Permission::DiscoverHooks,
+                    ash_file_access::Permission::ExecuteCommands,
+                    ash_file_access::Permission::WatchFiles,
+                ]),
+            ),
+        )
+        .unwrap();
+    let contributions = DirContributions::discover(cwd.path(), grants, None, None).unwrap();
+    let hooks = Arc::new(ash_hooks::DeclarativeHookRuntime::new(
+        ash_config::HooksConfig::default(),
+        Arc::new(Policy),
+    ));
+    contributions.bind_hooks(Arc::clone(&hooks));
+    let id = format!("dir:{}:hook:review", root.id());
+    fs::create_dir(directory.path().join(".ash")).unwrap();
+    let config = directory.path().join(".ash/config.toml");
+    fs::write(
+        &config,
+        format!(
+            r#"[hooks.hooks."{id}"]
+id = "{id}"
+event = "beforeTool"
+enablement = "enabled"
+[hooks.hooks."{id}".action]
+type = "process"
+program = "test-hook"
+"#
+        ),
+    )
+    .unwrap();
+    contributions.refresh_session_hooks(&session);
+    assert!(hooks.has_enabled_event(ash_protocol::HookEvent::BeforeTool));
+    fs::write(&config, "[broken").unwrap();
+    assert!(
+        super::super::environment_runtime::session_hook_bindings(
+            &contributions.dir_grants,
+            &session
+        )
+        .is_err()
+    );
+    contributions.dir_files_changed(
+        &session,
+        root.canonical_path(),
+        &FsChanged::PathsChanged {
+            dir_id: None,
+            paths: vec![PathBuf::from(".ash/config.toml")],
+        },
+    );
+    assert!(
+        hooks.has_enabled_event(ash_protocol::HookEvent::BeforeTool),
+        "invalid TOML silently removed active session Hook"
+    );
+    fs::write(&config, "").unwrap();
+    contributions.dir_files_changed(
+        &session,
+        root.canonical_path(),
+        &FsChanged::PathsChanged {
+            dir_id: None,
+            paths: vec![PathBuf::from(".ash/config.toml")],
+        },
+    );
+    assert!(!hooks.has_enabled_event(ash_protocol::HookEvent::BeforeTool));
+}
+
+#[test]
+fn live_agent_watcher_discovers_creation_edits_and_recreation() {
+    let cwd = TempDir::new().unwrap();
+    let directory = TempDir::new().unwrap();
+    let root = Dir::open_local(directory.path()).unwrap();
+    let session = SessionId::new("agent-refresh").unwrap();
+    let grants = Arc::new(crate::dir_grants::DirGrants::default());
+    grants
+        .add_dir(
+            session.clone(),
+            Grant::for_session_tree(
+                session.clone(),
+                root.clone(),
+                GrantSource::ExplicitUser,
+                ash_file_access::Permissions::new([
+                    ash_file_access::Permission::LoadInstructions,
+                    ash_file_access::Permission::WatchFiles,
+                ]),
+            ),
+        )
+        .unwrap();
+    let contributions =
+        DirContributions::discover(cwd.path(), Arc::clone(&grants), None, None).unwrap();
+    contributions.reconcile_session(
+        &session,
+        grants
+            .snapshot_for(&session, ash_file_access::Permission::LoadInstructions)
+            .unwrap()
+            .unwrap()
+            .authorizations()
+            .to_vec(),
+    );
+    let watcher = crate::server::fs_watcher::FileSystemWatcher::start_for_session_directory(
+        root,
+        Arc::new(crate::server::update_broker::UpdateBroker::default()),
+        session.clone(),
+        contributions.clone(),
+    )
+    .unwrap();
+    let wait_for = |description: Option<&str>| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let snapshots = contributions.agent_snapshots_for(&session);
+            let actual = snapshots
+                .first()
+                .and_then(|snapshot| snapshot.entries().first())
+                .map(|entry| entry.description().to_owned());
+            if actual.as_deref() == description {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "agent watcher did not reach {description:?}; got {actual:?}"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    };
+    write_agent(directory.path(), "reviewer", "Created", "Review");
+    wait_for(Some("Created"));
+    write_agent(directory.path(), "reviewer", "Edited", "Review");
+    wait_for(Some("Edited"));
+    fs::remove_dir_all(directory.path().join(".ash/agents")).unwrap();
+    wait_for(None);
+    write_agent(directory.path(), "reviewer", "Recreated", "Review");
+    wait_for(Some("Recreated"));
+    drop(watcher);
+}
