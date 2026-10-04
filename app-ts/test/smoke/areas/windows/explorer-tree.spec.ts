@@ -132,6 +132,55 @@ test('Explorer scrollbar stays at the pane edge while rows remain inset', async 
 	await settings.locator('.ash-modal-editor-close').click();
 });
 
+test('Explorer keeps logical row focus when scrolling removes the focused row from the DOM', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
+	const names = Array.from({ length: 100 }, (_, index) => `focus-${String(index).padStart(3, '0')}.txt`);
+	if (target.appServerMode === 'required') {
+		await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
+	}
+	const page = workbench.page;
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
+		await page.evaluate(async names => {
+			const root = await navigator.storage.getDirectory();
+			const workspace = await root.getDirectoryHandle(`focus-scroll-${crypto.randomUUID()}`, { create: true });
+			for (const name of names) await workspace.getFileHandle(name, { create: true });
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
+		}, names);
+		await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+	}
+	const explorer = page.locator('.ash-explorer');
+	const tree = explorer.getByRole('tree');
+	const viewport = explorer.locator('.ash-scrollbar-viewport');
+	await expect(tree.getByRole('treeitem', { name: names[0], exact: true })).toBeVisible();
+	for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		await workbench.quickaccess.select(theme);
+		await page.keyboard.press('Tab');
+		await tree.focus();
+		await tree.press('Home');
+		const focused = tree.locator('.ash-tree-row.focused');
+		const focusedRowId = await focused.getAttribute('id');
+		await expect(focused).toHaveCSS('outline-style', 'solid');
+		await expect(tree).toHaveCSS('outline-style', 'none');
+		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
+		await expect(focused).toHaveCount(0);
+		await expect(tree).toBeFocused();
+		expect(await tree.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+		await expect(tree).toHaveCSS('outline-style', 'none');
+		await viewport.evaluate(element => { element.scrollTop = 0; });
+		await expect(focused).toHaveAttribute('id', focusedRowId!);
+		await expect(focused).toHaveCSS('outline-style', 'solid');
+		await tree.press('End');
+		await expect(focused).toBeVisible();
+		expect(await focused.getAttribute('id')).not.toBe(focusedRowId);
+		await expect(focused).toHaveCSS('outline-style', 'solid');
+		await tree.press('Home');
+		await expect(focused).toHaveAttribute('id', focusedRowId!);
+	}
+});
+
 test('Explorer tree guides align with ancestor arrows and settings update without replacing rows', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code Explorer');
 	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');

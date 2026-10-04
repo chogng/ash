@@ -246,6 +246,8 @@ export class List<T> extends Disposable {
 	}
 
 	private syncRows(): void {
+		// Logical focus survives virtualized rows leaving the DOM during scrolling.
+		this.element.classList.toggle("has-focused-item", this.activeItem !== undefined);
 		this.view.reveal(this._activeIndex);
 		const rows = this.element.querySelectorAll<HTMLElement>(":scope > .ash-list-row");
 		rows.forEach((row) => {
