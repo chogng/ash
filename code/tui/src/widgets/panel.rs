@@ -15,12 +15,17 @@ const CONTENT_HORIZONTAL_MARGIN: u16 = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct PanelLayout {
+    pub(crate) title: Rect,
     pub(crate) tabs: Rect,
     pub(crate) body: Rect,
 }
 
 impl PanelLayout {
     pub(crate) fn new(area: Rect, tab_rows: u16) -> Self {
+        let title = crate::render::horizontal_margin(
+            Rect::new(area.x, area.y, area.width, TITLE_BAR_ROWS.min(area.height)),
+            CONTENT_HORIZONTAL_MARGIN,
+        );
         let header_rows = HEADER_ROWS.min(area.height);
         let available_rows = area.height.saturating_sub(header_rows);
         let tab_rows = tab_rows.min(available_rows);
@@ -42,7 +47,7 @@ impl PanelLayout {
             ),
             CONTENT_HORIZONTAL_MARGIN,
         );
-        Self { tabs, body }
+        Self { title, tabs, body }
     }
 
     pub(crate) fn content_width(width: u16) -> u16 {

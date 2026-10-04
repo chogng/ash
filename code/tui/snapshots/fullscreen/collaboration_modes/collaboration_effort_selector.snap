@@ -17,8 +17,8 @@ expression: render_effort(&app)
 
 
 
-────────────────────────────────────────────────────────────────────────────────
-  Thinking effort
+─ Thinking effort ──────────────────────────────────────────────────────────────
+
                Faster                  Smarter
                ───────────────▲───────────────    Multitask  off
                  low        high         max

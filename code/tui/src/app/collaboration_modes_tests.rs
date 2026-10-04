@@ -592,6 +592,66 @@ fn collaboration_effort_selector_applies_a_supported_value_and_restores_focus() 
 }
 
 #[test]
+fn effort_selector_title_shares_the_separator_in_both_screen_modes() {
+    use ratatui::style::Modifier;
+
+    for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        for (language, title) in [
+            (crate::nls::Language::English, "Thinking effort"),
+            (crate::nls::Language::Chinese, "推理强度"),
+        ] {
+            for width in [40, 80] {
+                let mut app = App::new();
+                let mut settings = TerminalSettings::default();
+                settings.set_screen_mode(screen);
+                settings.set_language(language);
+                app.update(ConfigEvent::SettingsReceived(settings));
+                app.insert_text("keep this draft");
+                app.open_command_panel(super::command_panel::CommandPanel::Effort(
+                    effort_data()
+                        .effort_selector(app.collaboration_mode())
+                        .unwrap(),
+                ));
+                let mut terminal =
+                    ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, 24)).unwrap();
+                terminal
+                    .draw(|frame| super::frame::draw(frame, &app))
+                    .unwrap();
+                let buffer = terminal.backend().buffer();
+                let text = frame_text(buffer);
+                let rows: Vec<_> = text.lines().collect();
+                let title_y = rows.iter().position(|row| row.contains(title)).unwrap();
+                assert!(rows[title_y].starts_with(&format!("─ {title} ")));
+                assert!(rows[title_y].ends_with('─'));
+                assert!(rows[title_y + 1].trim().is_empty());
+                let cell = &buffer[(2, title_y as u16)];
+                assert_eq!(cell.fg, app.render_context().focus());
+                assert!(cell.modifier.contains(Modifier::BOLD));
+                if screen == ScreenMode::Fullscreen {
+                    for y in title_y as u16 + 1..24 {
+                        assert_eq!(buffer[(0, y)].symbol(), " ");
+                        assert_eq!(buffer[(width - 1, y)].symbol(), " ");
+                    }
+                }
+                if screen == ScreenMode::Inline
+                    && language == crate::nls::Language::Chinese
+                    && width == 40
+                {
+                    crate::tui_assert_snapshot!(app = &app; "effort_selector_inline_narrow_chinese_header", text);
+                }
+                app.handle_key_in_area(
+                    KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+                    buffer.area,
+                );
+                assert!(app.command_panel().is_none());
+                assert!(app.chat_input_focused());
+                assert_eq!(app.input(), "keep this draft");
+            }
+        }
+    }
+}
+
+#[test]
 fn fullscreen_effort_drag_copy_keeps_tip_above_panel_and_hints_below() {
     use crossterm::event::MouseButton;
     use crossterm::event::MouseEvent;

@@ -1,8 +1,12 @@
 ---
 source: code/tui/src/app/collaboration_modes_tests.rs
-expression: frame_text(buffer)
+expression: text
 ---
-  .                           [仪表盘]
+
+    ▄  ▄     Ash Code v0.1.0
+  ▗█▛██▜█▖   Automatic model
+  ▝▜████▛▘   .
+    ▝  ▘
 
 
 
@@ -10,9 +14,6 @@ expression: frame_text(buffer)
 
 
 
-
-
-           Copied 2 chars to clipboard
 ─ 推理强度 ─────────────────────────────
 
     更快                     更聪明
@@ -24,5 +25,4 @@ expression: frame_text(buffer)
   使用更多推理，适合复杂任务和仔细验证
                    。
 
-  ←/→ 选择  ·  Tab 切换多任务协作  ·
-  Enter 应用  ·  Esc 取消
+  ←/→ 选择 · Tab 切换多任务协作

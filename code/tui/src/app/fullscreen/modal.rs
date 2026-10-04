@@ -9,6 +9,7 @@ use crate::render::InteractionState;
 use crate::render::RenderContext;
 use crate::widgets::modal::ModalLayout;
 use crate::widgets::navigation::Navigation;
+use crate::widgets::panel::PanelLayout;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use ratatui::Frame;
@@ -38,8 +39,7 @@ pub(super) fn layout_for(app: &App, available: Rect) -> ModalLayout {
     if app.overlay().is_none()
         && let Some(CommandPanel::Effort(selector)) = app.command_panel()
     {
-        let inset = 2.min(available.width);
-        let width = available.width.saturating_sub(inset * 2);
+        let width = PanelLayout::content_width(available.width);
         let body_rows = selector.body_rows(width, app.render_context());
         let hint_rows = crate::render::wrap_lines(
             vec![crate::widgets::key_hint::line(
@@ -51,8 +51,9 @@ pub(super) fn layout_for(app: &App, available: Rect) -> ModalLayout {
             width.into(),
         )
         .len() as u16;
+        let chrome_rows = crate::widgets::panel::HEADER_ROWS + 1 + hint_rows;
         let height = body_rows
-            .saturating_add(3 + hint_rows)
+            .saturating_add(chrome_rows)
             // The dock replaces the input and bottom chrome, but keeps feedback above it.
             .min(
                 available
@@ -65,20 +66,14 @@ pub(super) fn layout_for(app: &App, available: Rect) -> ModalLayout {
             available.width,
             height,
         );
-        let content = Rect::new(
-            surface.x + inset,
-            surface.y + 2.min(height),
-            width,
-            body_rows.min(height.saturating_sub(3 + hint_rows)),
-        );
+        let panel = PanelLayout::new(surface, 0);
+        let content = Rect {
+            height: body_rows.min(height.saturating_sub(chrome_rows)),
+            ..panel.body
+        };
         return ModalLayout {
             surface,
-            title: Rect::new(
-                content.x,
-                surface.y + 1.min(height),
-                width,
-                u16::from(height > 1),
-            ),
+            title: panel.title,
             close: Rect::default(),
             content,
             footer: Rect::new(
@@ -321,24 +316,14 @@ pub(super) fn draw_panel(
     if matches!(panel, CommandPanel::Effort(_)) {
         frame.render_widget(ratatui::widgets::Clear, layout.surface);
         frame.render_widget(
-            ratatui::widgets::Block::default()
-                .borders(ratatui::widgets::Borders::TOP)
-                .border_style(ratatui::style::Style::default().fg(context.focus()))
-                .style(
-                    ratatui::style::Style::default()
-                        .fg(context.foreground())
-                        .bg(context.background()),
-                ),
-            layout.surface,
-        );
-        frame.render_widget(
-            ratatui::widgets::Paragraph::new(title).style(
+            ratatui::widgets::Block::default().style(
                 ratatui::style::Style::default()
                     .fg(context.foreground())
-                    .add_modifier(ratatui::style::Modifier::BOLD),
+                    .bg(context.background()),
             ),
-            layout.title,
+            layout.surface,
         );
+        crate::widgets::panel::draw_header(frame, layout.surface, &title, context.focus());
         let lines = crate::render::wrap_lines(
             vec![crate::widgets::key_hint::line(
                 hints,
