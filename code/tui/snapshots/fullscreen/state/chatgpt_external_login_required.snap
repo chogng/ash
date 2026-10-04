@@ -15,8 +15,8 @@ expression: screen
           │                                                                          │
           │  Sign in to ChatGPT in Codex, then reconnect here.                       │
           │                                                                          │
-          │  Enter/Esc to close                                                      │
           └──────────────────────────────────────────────────────────────────────────┘
+
 
 
 
@@ -24,3 +24,5 @@ expression: screen
   ────────────────────────────────────────────────────────────────────────────────────────────
   > Build anything
   ─────────────────────────────────────────────────────────────────────────── Automatic model
+
+  Enter/Esc to close

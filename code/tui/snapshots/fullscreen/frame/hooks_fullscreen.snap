@@ -18,5 +18,7 @@ expression: "render(&app, 80, 20)"
         │  PostToolUseFailure (0)  ·  After tool execution fails       │        
         │  PostToolBatch (0)  ·  After a batch of tool calls resolves  │        
   ──────│  29 more below                                               │──────  
-  > keep│  Enter confirm · Tab tabs · / search · r refresh · Esc close │        
-  ──────└──────────────────────────────────────────────────────────────┘model
+  > keep└──────────────────────────────────────────────────────────────┘        
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  Enter confirm · Tab tabs · / search · r refresh · Esc close

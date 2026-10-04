@@ -292,7 +292,7 @@ pub(crate) fn overlay_contains(
     }
     let areas = super::layout(app, terminal_area);
     if super::modal::is_open(app) {
-        return super::modal::layout(terminal_area)
+        return super::modal::layout_for(app, terminal_area)
             .surface
             .contains(position);
     }

@@ -25,6 +25,8 @@ expression: "render(&app, 48, 28)"
   │                                          │
   │                                          │
   │                                          │
-  │  Esc to close  ·  Run /usage to refresh  │
   └──────────────────────────────────────────┘
+  > Build anything
   ─────────────────────────── Automatic model
+
+  Esc to close  ·  Run /usage to refresh

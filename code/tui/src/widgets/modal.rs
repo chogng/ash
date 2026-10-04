@@ -18,7 +18,6 @@ pub(crate) struct ModalLayout {
     pub(crate) title: Rect,
     pub(crate) close: Rect,
     pub(crate) content: Rect,
-    pub(crate) footer: Rect,
 }
 
 impl ModalLayout {
@@ -36,22 +35,12 @@ impl ModalLayout {
         let inset = 3.min(width);
         let content_x = surface.x + inset;
         let content_width = width.saturating_sub(inset.saturating_add(2));
-        let footer_rows = u16::from(height >= 4);
-        let footer = Rect::new(
-            content_x,
-            surface
-                .bottom()
-                .saturating_sub(1 + footer_rows)
-                .max(surface.y),
-            content_width,
-            footer_rows,
-        );
         let content_y = surface.y + 2.min(height);
         let content = Rect::new(
             content_x,
             content_y,
             content_width,
-            footer.y.saturating_sub(content_y),
+            surface.bottom().saturating_sub(1).saturating_sub(content_y),
         );
         let close = if width >= 8 && height > 0 {
             Rect::new(surface.right() - 5, surface.y, 3, 1)
@@ -69,7 +58,6 @@ impl ModalLayout {
             title,
             close,
             content,
-            footer,
         }
     }
 }
@@ -78,10 +66,8 @@ pub(crate) fn draw(
     frame: &mut Frame<'_>,
     layout: ModalLayout,
     title: &str,
-    hints: &crate::widgets::key_hint::KeyHints,
     close: InteractionState,
     blocked_alert: bool,
-    hint_style: crate::config::KeyHintStyle,
     context: RenderContext<'_>,
 ) {
     frame.render_widget(Clear, layout.surface);
@@ -113,7 +99,6 @@ pub(crate) fn draw(
         .fg(context.muted())
         .patch(interaction_style(context, close));
     frame.render_widget(Paragraph::new("[✗]").style(close_style), layout.close);
-    crate::widgets::key_hint::draw_content(frame, layout.footer, hints, hint_style, context);
 }
 
 #[cfg(test)]

@@ -15,4 +15,4 @@ expression: "text(&render(&app, 48, 14))"
 > Edit configuration                            
   Ask Ash to configure                          
                                                 
-  Enter confirm · PgUp/PgDn scroll · r refresh
+  Enter confirm · Esc return

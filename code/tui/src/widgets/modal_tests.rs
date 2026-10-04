@@ -12,12 +12,12 @@ fn chrome_remains_inside_resized_terminals() {
             let available = Rect::new(3, 5, width, height);
             let layout = ModalLayout::new(available, 100, 32);
             assert_eq!(layout.surface.intersection(available), layout.surface);
-            for area in [layout.content, layout.footer, layout.title, layout.close] {
+            for area in [layout.content, layout.title, layout.close] {
                 if !area.is_empty() {
                     assert_eq!(area.intersection(layout.surface), area);
                 }
             }
-            assert!(layout.content.bottom() <= layout.footer.y.max(layout.content.y));
+            assert!(layout.content.bottom() <= layout.surface.bottom());
         }
     }
 }
@@ -33,10 +33,8 @@ fn border_uses_the_modal_theme_color() {
                 frame,
                 layout,
                 "Config",
-                &crate::widgets::key_hint::KeyHints::new().with_action("Esc", "close"),
                 InteractionState::default(),
                 false,
-                crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
         })
@@ -59,10 +57,8 @@ fn border_uses_warning_color_when_blocked_alert_is_active() {
                 frame,
                 layout,
                 "Config",
-                &crate::widgets::key_hint::KeyHints::new().with_action("Esc", "close"),
                 InteractionState::default(),
                 true,
-                crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
         })
@@ -101,18 +97,7 @@ fn close_uses_shared_hover_and_pressed_theme_states() {
 
     for (state, foreground, background) in states {
         terminal
-            .draw(|frame| {
-                super::draw(
-                    frame,
-                    layout,
-                    "Config",
-                    &crate::widgets::key_hint::KeyHints::new().with_action("Esc", "close"),
-                    state,
-                    false,
-                    crate::config::KeyHintStyle::Contrast,
-                    context,
-                )
-            })
+            .draw(|frame| super::draw(frame, layout, "Config", state, false, context))
             .unwrap();
 
         let buffer = terminal.backend().buffer();

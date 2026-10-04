@@ -59,8 +59,6 @@ pub(super) fn draw(
             .patch(crate::render::interaction_style(context, interaction));
         frame.render_widget(Paragraph::new(labels.mode).style(style), labels.mode_area);
     }
-    super::footer::draw(frame, areas, app, context);
-    super::footer::draw_tip(frame, areas.session.tipline, app, context);
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

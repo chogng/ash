@@ -17,10 +17,10 @@ fourth pinned=true
             │  first model                                                            │             
             │  second model                                                           │             
   ──────────│  third model                                                            │───────────  
-  > Build an│  ↑↓ select · / search · p unpin · Enter apply · Esc cancel              │             
-  ──────────└─────────────────────────────────────────────────────────────────────────┘atic model   
+  > Build an└─────────────────────────────────────────────────────────────────────────┘             
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
                                                                                                     
-                                                                                                    
+  ↑↓ select · / search · p unpin · Enter apply · Esc cancel                                         
 
 third pinned=true
   .                                                                                    [Dashboard]  
@@ -37,10 +37,10 @@ third pinned=true
             │  Other models ───────────────────────────────────────────────────────── │             
             │  first model                                                            │             
   ──────────│  second model                                                           │───────────  
-  > Build an│  ↑↓ select · / search · p unpin · Enter apply · Esc cancel              │             
-  ──────────└─────────────────────────────────────────────────────────────────────────┘atic model   
+  > Build an└─────────────────────────────────────────────────────────────────────────┘             
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
                                                                                                     
-                                                                                                    
+  ↑↓ select · / search · p unpin · Enter apply · Esc cancel                                         
 
 third pinned=false
   .                                                                                    [Dashboard]  
@@ -57,10 +57,10 @@ third pinned=false
             │  first model                                                            │             
             │  second model                                                           │             
   ──────────│> third model                                                            │───────────  
-  > Build an│  ↑↓ select · / search · p pin · Enter apply · Esc cancel                │             
-  ──────────└─────────────────────────────────────────────────────────────────────────┘atic model   
+  > Build an└─────────────────────────────────────────────────────────────────────────┘             
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
                                                                                                     
-                                                                                                    
+  ↑↓ select · / search · p pin · Enter apply · Esc cancel                                           
 
 fourth pinned=false
   .                                                                                    [Dashboard]  
@@ -77,5 +77,7 @@ fourth pinned=false
             │                                                                         │             
             │                                                                         │             
   ──────────│                                                                         │───────────  
-  > Build an│  ↑↓ select · / search · p pin · Enter apply · Esc cancel                │             
-  ──────────└─────────────────────────────────────────────────────────────────────────┘atic model
+  > Build an└─────────────────────────────────────────────────────────────────────────┘             
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
+                                                                                                    
+  ↑↓ select · / search · p pin · Enter apply · Esc cancel

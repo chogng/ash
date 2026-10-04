@@ -36,30 +36,23 @@ pub(super) fn layout(available: Rect) -> ModalLayout {
 }
 
 pub(super) fn layout_for(app: &App, available: Rect) -> ModalLayout {
+    let header_rows = super::layout::header_rows(available);
+    let available = Rect {
+        height: super::layout::modal_hintline(app, available)
+            .y
+            .saturating_sub(available.y),
+        ..available
+    };
     if app.overlay().is_none()
         && let Some(CommandPanel::Effort(selector)) = app.command_panel()
     {
         let width = PanelLayout::content_width(available.width);
         let body_rows = selector.body_rows(width, app.render_context());
-        let hint_rows = crate::render::wrap_lines(
-            vec![crate::widgets::key_hint::line(
-                selector.key_hints(),
-                usize::MAX,
-                app.key_hint_style(),
-                app.render_context(),
-            )],
-            width.into(),
-        )
-        .len() as u16;
-        let chrome_rows = crate::widgets::panel::HEADER_ROWS + 1 + hint_rows;
+        let chrome_rows = crate::widgets::panel::HEADER_ROWS + 1;
         let height = body_rows
             .saturating_add(chrome_rows)
             // The dock replaces the input and bottom chrome, but keeps feedback above it.
-            .min(
-                available
-                    .height
-                    .saturating_sub(super::layout::header_rows(available) + 1),
-            );
+            .min(available.height.saturating_sub(header_rows + 1));
         let surface = Rect::new(
             available.x,
             available.bottom() - height,
@@ -76,12 +69,6 @@ pub(super) fn layout_for(app: &App, available: Rect) -> ModalLayout {
             title: panel.title,
             close: Rect::default(),
             content,
-            footer: Rect::new(
-                content.x,
-                surface.bottom().saturating_sub(hint_rows),
-                width,
-                hint_rows.min(height),
-            ),
         };
     }
     if app.overlay().is_none()
@@ -92,7 +79,7 @@ pub(super) fn layout_for(app: &App, available: Rect) -> ModalLayout {
         let content_width = ModalLayout::new(available, width, available.height)
             .content
             .width;
-        let height = dialog.body_rows(content_width).saturating_add(4).max(6);
+        let height = dialog.body_rows(content_width).saturating_add(3).max(5);
         return ModalLayout::new(available, width, height);
     }
     layout(available)
@@ -145,6 +132,10 @@ pub(super) fn target_at(
     position: ratatui::layout::Position,
 ) -> Option<Target> {
     if !available.contains(position) {
+        return None;
+    }
+    // Hints belong to the page, so they neither dismiss nor alert the modal backdrop.
+    if super::layout::modal_hintline(app, available).contains(position) {
         return None;
     }
     let layout = layout_for(app, available);
@@ -242,17 +233,12 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
         .pointer
         .interaction_state(&super::pointer::PointerTarget::Modal(Target::Close));
     if let Some(detail) = app.overlay() {
-        let hints = crate::widgets::key_hint::KeyHints::new()
-            .with_compact_action("↑/↓", "scroll")
-            .with_action("Esc", "close");
         crate::widgets::modal::draw(
             frame,
             layout,
             &context.localize(detail.title()),
-            &hints,
             close,
             false,
-            app.key_hint_style(),
             context,
         );
         detail.draw_body(frame, layout.content, context);
@@ -265,9 +251,6 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
             Some(super::pointer::PointerTarget::Modal(target)) => Some(target),
             _ => None,
         };
-        let blocked_alert = app.fullscreen.modal_alert
-            || app.fullscreen.pointer.pressed()
-                == Some(&super::pointer::PointerTarget::Modal(Target::Blocked));
         draw_panel(
             frame,
             panel,
@@ -275,20 +258,16 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
             hovered,
             pressed,
             close,
-            blocked_alert,
-            app.key_hint_style(),
+            blocked_alert(app),
             context,
         );
-        if matches!(panel, CommandPanel::Effort(_)) {
-            crate::app::footer::draw_tip(
-                frame,
-                super::layout(app, frame.area()).session.tipline,
-                app,
-                None,
-                context,
-            );
-        }
     }
+}
+
+pub(super) fn blocked_alert(app: &App) -> bool {
+    app.fullscreen.modal_alert
+        || app.fullscreen.pointer.pressed()
+            == Some(&super::pointer::PointerTarget::Modal(Target::Blocked))
 }
 
 pub(super) fn draw_panel(
@@ -299,20 +278,10 @@ pub(super) fn draw_panel(
     pressed: Option<&Target>,
     close: InteractionState,
     blocked_alert: bool,
-    hint_style: crate::config::KeyHintStyle,
     context: RenderContext<'_>,
 ) {
     let body = panel.body();
     let title = panel.navigation_title(context.language());
-    let alert_hints;
-    let hints = if blocked_alert {
-        alert_hints = crate::widgets::key_hint::KeyHints::new()
-            .with_note("editing in progress")
-            .with_action("Esc", "cancel");
-        &alert_hints
-    } else {
-        panel.key_hints()
-    };
     if matches!(panel, CommandPanel::Effort(_)) {
         frame.render_widget(ratatui::widgets::Clear, layout.surface);
         frame.render_widget(
@@ -324,27 +293,8 @@ pub(super) fn draw_panel(
             layout.surface,
         );
         crate::widgets::panel::draw_header(frame, layout.surface, &title, context.focus());
-        let lines = crate::render::wrap_lines(
-            vec![crate::widgets::key_hint::line(
-                hints,
-                usize::MAX,
-                hint_style,
-                context,
-            )],
-            layout.footer.width.into(),
-        );
-        frame.render_widget(ratatui::widgets::Paragraph::new(lines), layout.footer);
     } else {
-        crate::widgets::modal::draw(
-            frame,
-            layout,
-            &title,
-            hints,
-            close,
-            blocked_alert,
-            hint_style,
-            context,
-        );
+        crate::widgets::modal::draw(frame, layout, &title, close, blocked_alert, context);
     }
     if let Some(parent) = panel.parent_title() {
         let localized_parent = context.localize(parent);
@@ -459,7 +409,7 @@ pub(super) fn close(app: &mut App) {
 pub(super) fn process_resources_visible(app: &App, available: Rect) -> bool {
     app.overlay().is_none()
         && app.command_panel().is_some_and(|panel| {
-            panel.process_resources_visible(body_area(panel, layout(available).content))
+            panel.process_resources_visible(body_area(panel, layout_for(app, available).content))
         })
 }
 

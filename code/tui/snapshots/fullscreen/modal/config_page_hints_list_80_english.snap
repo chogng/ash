@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/fullscreen/modal_tests.rs
+expression: text
+---
+  .                                                                [Dashboard]  
+                                                                                
+        ┌── Config ────────────────────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │   General    Providers    Issues    Network                  │        
+        │                                                              │        
+        │  ╭─────────────────────────────────────────────────────────╮ │        
+        │  │ Search configuration                                    │ │        
+        │  ╰─────────────────────────────────────────────────────────╯ │        
+        │> Vim mode                                              off   │        
+        │  Show tips                                              on   │        
+        │  Memory diagnostics                                    off + │        
+        │  Automatic updates                                  Latest   │        
+        │  Show Git changes as diff                              off + │        
+        │  Language                                          English   │        
+        │  Status bar style                                   Simple   │        
+        │  Key hint style                                   Contrast   │        
+        │  Screen mode                                    fullscreen   │        
+        │  7 more below                                                │        
+  ──────└──────────────────────────────────────────────────────────────┘──────  
+  > keep this draft                                                             
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  Enter change · r reset · Tab tabs · / search · Esc close

@@ -8,6 +8,24 @@ use crate::thread::composer as chat_input;
 use ratatui::layout::Rect;
 
 pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
+    let mut areas = page_layout(app, terminal_area);
+    if super::modal::is_open(app) {
+        areas.session.hintline = modal_hintline(app, terminal_area);
+    }
+    areas
+}
+
+/// The page reserves hints independently of modal chrome, including wrapped localized text.
+pub(super) fn modal_hintline(app: &App, area: Rect) -> Rect {
+    let available = Rect {
+        height: area.height.saturating_sub(header_rows(area) + 1),
+        ..area
+    };
+    let height = super::footer::modal_hint_lines(app, available).len() as u16;
+    Rect::new(area.x, area.bottom() - height, area.width, height)
+}
+
+fn page_layout(app: &App, terminal_area: Rect) -> Layout {
     let screen_area = terminal_area;
     let header_rows = header_rows(terminal_area);
     let header = Rect::new(
@@ -38,7 +56,6 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
                     ..terminal_area
                 },
                 tipline: Rect::new(terminal_area.x, tip_y, terminal_area.width, tip_rows),
-                hintline: dock.footer,
                 ..SessionAreas::default()
             },
         };

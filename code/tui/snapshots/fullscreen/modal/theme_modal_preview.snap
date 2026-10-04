@@ -18,6 +18,7 @@ expression: rendered
         │                                                              │        
         │                                                              │        
         │                                                              │        
+        │                                                              │        
         │  ╌╌ Diff preview ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ │        
         │  1   fn greet(ash: &str) -> String {                         │        
         │  2  -    format!("Hello, {}!", ash)                          │        
@@ -25,5 +26,4 @@ expression: rendered
         │  3   }                                                       │        
         │  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ │        
         │  Syntax palette: Palette 1                                   │        
-        │  Enter to apply  ·  Esc to close                             │        
         └──────────────────────────────────────────────────────────────┘

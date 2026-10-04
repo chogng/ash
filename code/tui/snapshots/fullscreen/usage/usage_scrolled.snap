@@ -2,14 +2,14 @@
 source: code/tui/src/app/usage_tests.rs
 expression: screen
 ---
-  .                                [Dashboard]
   ┌── Usage ─────────────────────────────[✗]─┐
   │                                          │
-  │  3 more above                            │
+  │  2 more above                            │
+  │  Windows  ·  Not reported                │
   │  Code review                             │
   │  Availability  ·  Limit reached          │
   │  7d window  ·  0% left (100% used)       │
   │  Resets  ·  2033-05-18 03:33 UTC         │
   │> Credits  ·  Not reported                │
-  │  Esc to close  ·  Run /usage to refresh  │
   └──────────────────────────────────────────┘
+  Esc to close  ·  Run /usage to refresh

@@ -136,7 +136,6 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
                 None,
                 crate::render::InteractionState::default(),
                 false,
-                crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
         })
@@ -181,7 +180,6 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
                 None,
                 crate::render::InteractionState::default(),
                 false,
-                crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
         })
@@ -206,15 +204,12 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
         .iter()
         .position(|row| row.contains("Syntax palette"))
         .unwrap();
-    let key_hint_row = rows
-        .iter()
-        .position(|row| row.contains("Enter to apply  ·  Esc to close"))
-        .unwrap();
     assert!(
         preview_row >= custom_row + 2,
         "the preview is separated from the selectable list"
     );
-    assert!(key_hint_row > palette_row);
+    assert!(palette_row > preview_row);
+    assert!(!rendered.contains("Esc to close"));
     assert_eq!(
         buffer[(layout.title.x + 1, layout.title.y)].fg,
         test_context().foreground()
@@ -253,18 +248,170 @@ fn config_choices() -> crate::config::ConfigChoices {
 }
 
 fn frame_text(app: &crate::app::App) -> String {
-    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
-    terminal
-        .draw(|frame| crate::app::frame::draw(frame, app))
-        .unwrap();
-    terminal
-        .backend()
-        .buffer()
+    frame_buffer(app, Rect::new(0, 0, 100, 30))
         .content
         .chunks(100)
         .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn frame_buffer(app: &crate::app::App, area: Rect) -> ratatui::buffer::Buffer {
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, app))
+        .unwrap();
+    terminal.backend().buffer().clone()
+}
+
+#[test]
+fn short_page_hintline_keeps_exit_visible_without_covering_the_modal() {
+    let mut app = crate::app::App::new();
+    app.update(crate::config::Event::EditorOpened(config_choices()));
+    let area = Rect::new(0, 0, 20, 4);
+    let hintline = crate::app::fullscreen::layout(&app, area).session.hintline;
+    let modal = super::layout_for(&app, area);
+    assert_eq!(hintline.height, 1);
+    assert_eq!(hintline.bottom(), area.bottom());
+    assert!(modal.surface.bottom() <= hintline.y);
+    let buffer = frame_buffer(&app, area);
+    let text = buffer
+        .content
+        .chunks(20)
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(text.lines().last().unwrap().contains("Esc close"));
+    crate::tui_assert_snapshot!(app = &app; "short_modal_page_hintline", text);
+    app.handle_key_in_area(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), area);
+    assert!(app.command_panel().is_none());
+    assert!(app.chat_input_focused());
+}
+
+#[test]
+fn page_hintline_follows_modal_focus_wraps_and_restores_input() {
+    use ratatui::layout::Position;
+
+    for (language, suffix) in [
+        (crate::nls::Language::English, "english"),
+        (crate::nls::Language::Chinese, "chinese"),
+    ] {
+        for (width, height) in [(80, 24), (40, 12)] {
+            let area = Rect::new(0, 0, width, height);
+            let mut app = crate::app::App::new();
+            let mut settings = crate::config::TerminalSettings::default();
+            settings.set_language(language);
+            app.update(crate::config::Event::SettingsReceived(settings));
+            app.insert_text("keep this draft");
+            let hint_text = |buffer: &ratatui::buffer::Buffer, hintline: Rect| {
+                (hintline.y..hintline.bottom())
+                    .flat_map(|y| (hintline.x..hintline.right()).map(move |x| (x, y)))
+                    .map(|position| buffer[position].symbol())
+                    .collect::<String>()
+                    .chars()
+                    .filter(|ch| !ch.is_whitespace())
+                    .collect::<String>()
+            };
+            let original_hints = hint_text(
+                &frame_buffer(&app, area),
+                crate::app::fullscreen::layout(&app, area).session.hintline,
+            );
+            app.update(crate::config::Event::EditorOpened(
+                crate::config::config_choices(
+                    &crate::test_support::empty_config_snapshot(),
+                    &ash_app_server_protocol::protocol::provider::ProviderListResult {
+                        providers: Vec::new(),
+                    },
+                    settings,
+                    crate::status::StatusLineSettings::default(),
+                ),
+            ));
+            let list_hints = app.command_panel().unwrap().key_hints().clone();
+            for state in ["list", "search"] {
+                if state == "search" {
+                    app.handle_key_in_area(
+                        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+                        area,
+                    );
+                    assert_ne!(app.command_panel().unwrap().key_hints(), &list_hints);
+                }
+                let hintline = crate::app::fullscreen::layout(&app, area).session.hintline;
+                let modal = super::layout_for(&app, area);
+                assert_eq!(hintline.bottom(), area.bottom());
+                assert!(modal.surface.bottom() <= hintline.y);
+                if width == 40 && state == "list" {
+                    assert!(hintline.height > 1);
+                }
+                let buffer = frame_buffer(&app, area);
+                let expected = app
+                    .command_panel()
+                    .unwrap()
+                    .key_hints()
+                    .localized_text(language);
+                assert_eq!(
+                    hint_text(&buffer, hintline),
+                    expected
+                        .chars()
+                        .filter(|ch| !ch.is_whitespace())
+                        .collect::<String>()
+                );
+                assert_eq!(
+                    buffer[(hintline.x + 2, hintline.y)].fg,
+                    app.render_context().foreground()
+                );
+                assert!(
+                    buffer[(hintline.x + 2, hintline.y)]
+                        .modifier
+                        .contains(Modifier::BOLD)
+                );
+                let text = buffer
+                    .content
+                    .chunks(width.into())
+                    .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                assert_eq!(text.matches("Esc").count(), 1);
+                crate::tui_assert_snapshot!(app = &app; format!("config_page_hints_{state}_{width}_{suffix}"), text);
+                for position in [
+                    Position::new(area.x, hintline.y),
+                    Position::new(area.right() - 1, area.bottom() - 1),
+                ] {
+                    assert_eq!(super::target_at(&app, area, position), None);
+                    for kind in [
+                        MouseEventKind::Down(MouseButton::Left),
+                        MouseEventKind::Up(MouseButton::Left),
+                    ] {
+                        crate::app::fullscreen::pointer::handle_mouse(
+                            &mut app,
+                            area,
+                            MouseEvent {
+                                kind,
+                                column: position.x,
+                                row: position.y,
+                                modifiers: KeyModifiers::NONE,
+                            },
+                        );
+                    }
+                    assert!(app.command_panel().is_some());
+                    assert!(!app.fullscreen.modal_alert);
+                    assert_eq!(app.input(), "keep this draft");
+                }
+            }
+            app.handle_key_in_area(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), area);
+            assert_eq!(app.command_panel().unwrap().key_hints(), &list_hints);
+            app.handle_key_in_area(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), area);
+            assert!(app.command_panel().is_none());
+            assert!(app.chat_input_focused());
+            assert_eq!(app.input(), "keep this draft");
+            assert_eq!(
+                hint_text(
+                    &frame_buffer(&app, area),
+                    crate::app::fullscreen::layout(&app, area).session.hintline
+                ),
+                original_hints
+            );
+        }
+    }
 }
 
 #[test]
@@ -894,7 +1041,7 @@ fn modal_backdrop_click_closes_modal_and_drag_cancels() {
     app.update(crate::sessions::Event::PickerOpened(choices));
     assert!(app.command_panel().is_some());
     let area = Rect::new(0, 0, 100, 30);
-    let modal = super::layout(area).surface;
+    let modal = super::layout_for(&app, area).surface;
     let outside = (area.x, area.y);
     let inside = (modal.x + 2, modal.y + 2);
     assert!(!modal.contains(ratatui::layout::Position::new(outside.0, outside.1)));
@@ -1285,7 +1432,7 @@ fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
     });
     assert!(super::allows_backdrop_dismiss(&app));
     let area = Rect::new(0, 0, 100, 30);
-    let modal = super::layout(area).surface;
+    let modal = super::layout_for(&app, area).surface;
     let outside = (area.x, area.y);
     assert!(!modal.contains(ratatui::layout::Position::new(outside.0, outside.1)));
 
@@ -1308,6 +1455,21 @@ fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
         row,
         modifiers: KeyModifiers::NONE,
     };
+
+    let hintline = crate::app::fullscreen::layout(&app, area).session.hintline;
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        crate::app::fullscreen::pointer::handle_mouse(
+            &mut app,
+            area,
+            mouse(kind, (area.x, hintline.y)),
+        );
+    }
+    assert!(app.command_panel().is_some());
+    assert!(!app.fullscreen.modal_alert);
+    assert!(!super::allows_backdrop_dismiss(&app));
 
     // Pressing down on the blocked backdrop immediately triggers transient alert.
     crate::app::fullscreen::pointer::handle_mouse(
@@ -1772,7 +1934,6 @@ fn provider_mouse_input_and_parent_title_return_to_config() {
                     pressed,
                     Default::default(),
                     false,
-                    Default::default(),
                     test_context(),
                 )
             })

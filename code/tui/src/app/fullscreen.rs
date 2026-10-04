@@ -204,6 +204,10 @@ pub(super) fn draw(
             context,
         );
     }
+    footer::draw(frame, &areas, app, context);
+    if app.session_preview().is_none() {
+        footer::draw_tip(frame, areas.session.tipline, app, context);
+    }
     let selection_area = modal::selectable_text_area(app, frame.area()).unwrap_or(frame.area());
     app.fullscreen
         .selection

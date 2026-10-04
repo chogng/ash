@@ -25,6 +25,8 @@ expression: zai_screen
         │                                                              │
         │                                                              │
         │                                                              │
-  ──────│  Tab/Shift+Tab to switch · Esc to close                      │──────
-  > Buil└──────────────────────────────────────────────────────────────┘
+  ──────└──────────────────────────────────────────────────────────────┘──────
+  > Build anything
   ─────────────────────────────────────────────────────────── Automatic model
+
+  Tab/Shift+Tab to switch  ·  Esc to close  ·  Run /usage to refresh

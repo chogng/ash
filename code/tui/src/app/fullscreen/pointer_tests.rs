@@ -539,7 +539,7 @@ fn input_focus_follows_clicks_and_clicking_modal_backdrop_closes_modal() {
         )],
     )));
     assert!(!app.chat_input_focused());
-    let modal = super::super::modal::layout(area).surface;
+    let modal = super::super::modal::layout_for(&app, area).surface;
     let outside = ratatui::layout::Position::new(area.x, area.y);
     assert!(!modal.contains(outside));
     handle_mouse(
@@ -575,7 +575,7 @@ fn command_modals_capture_mouse_and_keep_keyboard_navigation() {
         .with_search(SearchBoxModel::new("Search")),
     ));
     for area in [Rect::new(0, 0, 80, 24), Rect::new(0, 0, 12, 3)] {
-        let surface = super::super::modal::layout(area).surface;
+        let surface = super::super::modal::layout_for(&app, area).surface;
         assert!(super::overlay_contains(
             &app,
             area,
@@ -684,8 +684,8 @@ fn detail_overlay_captures_only_its_surface_and_releases_mouse_on_close() {
         before
     );
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
-    let surface = super::super::modal::layout(area).surface;
-    let close = super::super::modal::layout(area).close;
+    let surface = super::super::modal::layout_for(&app, area).surface;
+    let close = super::super::modal::layout_for(&app, area).close;
     update_pointer_hover(&mut app, area, close.x, close.y);
     let mut terminal =
         ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
@@ -710,15 +710,17 @@ fn detail_overlay_captures_only_its_surface_and_releases_mouse_on_close() {
                     Some(PointerTarget::Modal(super::super::modal::Target::Close))
                 );
             } else if surface.contains(position) {
-                let expected = super::super::modal::layout(area)
+                let expected = super::super::modal::layout_for(&app, area)
                     .content
                     .contains(position)
                     .then_some(PointerTarget::Modal(super::super::modal::Target::Text));
                 assert_eq!(super::target_at(&app, area, column, row), expected);
             } else {
+                let hintline = super::super::layout(&app, area).session.hintline;
                 assert_eq!(
                     super::target_at(&app, area, column, row),
-                    Some(PointerTarget::Modal(super::super::modal::Target::Backdrop))
+                    (!hintline.contains(position))
+                        .then_some(PointerTarget::Modal(super::super::modal::Target::Backdrop))
                 );
             }
         }
@@ -817,7 +819,7 @@ fn mouse_wheel_scrolls_modal_list_by_rows_without_moving_keyboard_focus() {
     let area = Rect::new(0, 0, 80, 24);
     let body = super::super::modal::body_area(
         app.command_panel().unwrap(),
-        super::super::modal::layout(area).content,
+        super::super::modal::layout_for(&app, area).content,
     );
     let selected = app
         .command_panel()
@@ -910,7 +912,7 @@ fn mouse_wheel_scrolls_config_providers_without_switching_tabs() {
         .to_owned();
     let body = super::super::modal::body_area(
         app.command_panel().unwrap(),
-        super::super::modal::layout(area).content,
+        super::super::modal::layout_for(&app, area).content,
     );
     handle_mouse(
         &mut app,
@@ -1251,7 +1253,7 @@ fn detail_overlay_still_scrolls_its_own_content_with_the_mouse() {
                 .join("\n"),
         )],
     ));
-    let surface = super::super::modal::layout(area).surface;
+    let surface = super::super::modal::layout_for(&app, area).surface;
     let render = |app: &App| {
         let mut terminal =
             ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))

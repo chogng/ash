@@ -111,19 +111,6 @@ impl KeyHints {
     }
 }
 
-pub(crate) fn draw_content(
-    frame: &mut Frame<'_>,
-    content: Rect,
-    hints: &KeyHints,
-    style: KeyHintStyle,
-    context: RenderContext<'_>,
-) {
-    frame.render_widget(
-        Paragraph::new(line(hints, content.width.into(), style, context)),
-        content,
-    );
-}
-
 pub(crate) fn line(
     hints: &KeyHints,
     width: usize,
@@ -186,9 +173,8 @@ fn visible_entries(
                 entries.iter().rposition(|entry| {
                     !matches!(
                         entry,
-                        KeyHint::Action { keys, suffix }
+                        KeyHint::Action { keys, .. }
                             if keys.split('/').any(|key| key == crate::keymap::bindings::CLOSE.keys())
-                                && suffix.starts_with(" to ")
                     )
                 })
             });

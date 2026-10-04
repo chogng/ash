@@ -1,11 +1,23 @@
 use super::KeyHints;
-use super::draw_content;
 use super::draw_right;
 use crate::config::KeyHintStyle;
 use crate::render::test_context;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::style::Modifier;
+
+fn draw_content(
+    frame: &mut ratatui::Frame<'_>,
+    area: ratatui::layout::Rect,
+    hints: &KeyHints,
+    style: KeyHintStyle,
+    context: crate::render::RenderContext<'_>,
+) {
+    frame.render_widget(
+        ratatui::widgets::Paragraph::new(super::line(hints, area.width.into(), style, context)),
+        area,
+    );
+}
 
 fn visible(hints: &KeyHints, width: usize) -> String {
     let (entries, shortened) = super::visible_entries(hints, width, crate::nls::Language::English);
@@ -32,6 +44,13 @@ fn narrow_hints_keep_the_exit_action_whole() {
     let hints = &crate::keymap::bindings::INLINE_SESSION_HINTS;
     assert_eq!(visible(hints, 32), "Enter to open · →/Esc to return");
     assert_eq!(visible(hints, 16), "→/Esc to return");
+    let hints = KeyHints::compact()
+        .with_compact_action("Enter", "change")
+        .with_compact_action("r", "reset")
+        .with_compact_action("Tab", "tabs")
+        .with_compact_action("/", "search")
+        .with_compact_action("Esc", "close");
+    assert_eq!(visible(&hints, 16), "Esc close");
 }
 
 #[test]

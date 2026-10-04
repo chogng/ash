@@ -3,7 +3,6 @@ source: code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
   .                                  [Dashboard]  
-                                                  
   ┌── Help ────────────────────────────────[✗]─┐  
   │                                            │  
   │   Commands                                 │  
@@ -14,5 +13,8 @@ expression: render(&app)
   │                                            │  
   │                                            │  
   │                                            │  
-  │  Tab/Shift+Tab to switch  ·  Esc to close  │  
-  └────────────────────────────────────────────┘
+  │                                            │  
+  └────────────────────────────────────────────┘  
+  ───────────────────────────── Automatic model   
+                                                  
+  Tab/Shift+Tab to switch  ·  Esc to close

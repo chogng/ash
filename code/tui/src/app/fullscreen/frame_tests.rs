@@ -370,7 +370,7 @@ fn status_command_panel_uses_the_shared_title_and_close_hint() {
     let mut app = App::new();
     app.open_command_panel(panel);
     let area = Rect::new(0, 0, 80, 20);
-    let modal = super::modal::layout(area);
+    let modal = super::modal::layout_for(&app, area);
     let buffer = render_buffer(&app, 80, 20);
     assert_eq!(buffer[(modal.surface.x, modal.surface.y)].symbol(), "┌");
     assert_eq!(buffer[(modal.title.x + 1, modal.title.y)].symbol(), "S");
@@ -413,7 +413,6 @@ fn modal_keeps_wrapped_tabs_between_title_and_body() {
                 None,
                 crate::render::InteractionState::default(),
                 false,
-                crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
         })
@@ -1500,7 +1499,7 @@ fn theme_candidate_focus_changes_content_without_repainting_modal_chrome() {
     )));
 
     let area = Rect::new(0, 0, 80, 24);
-    let modal = super::modal::layout(area);
+    let modal = super::modal::layout_for(&app, area);
     let body = super::modal::body_area(app.command_panel().unwrap(), modal.content);
     let first = render_buffer(&app, 80, 24);
     assert_eq!(first[(body.x, body.y)].fg, Color::LightRed);
@@ -2529,7 +2528,7 @@ fn short_provider_modal_scrolls_to_each_focused_field() {
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let output = render(&app, 100, 17);
     let buffer = render_buffer(&app, 100, 17);
-    let content = super::modal::layout(Rect::new(0, 0, 100, 17)).content;
+    let content = super::modal::layout_for(&app, Rect::new(0, 0, 100, 17)).content;
     let base_row = output
         .lines()
         .position(|line| line.contains("> Base URL"))
@@ -2667,7 +2666,7 @@ fn configured_model_summary() -> ModelSummary {
 }
 
 #[test]
-fn detail_modal_keeps_scrolled_content_above_its_own_footer() {
+fn detail_modal_keeps_scrolled_content_above_page_hintline() {
     use crate::widgets::detail_list::DetailList;
     use crate::widgets::detail_list::DetailListRow;
     for height in [2, 3, 4, 8, 24] {
@@ -2683,15 +2682,16 @@ fn detail_modal_keeps_scrolled_content_above_its_own_footer() {
             )],
         ));
         let area = Rect::new(0, 0, 80, height);
-        let modal = super::modal::layout(area);
-        assert!(modal.content.bottom() <= modal.footer.y.max(modal.content.y));
+        let modal = super::modal::layout_for(&app, area);
+        let hintline = layout(&app, area).session.hintline;
+        assert!(modal.content.bottom() <= hintline.y);
         app.handle_key_in_area(KeyEvent::new(KeyCode::End, KeyModifiers::NONE), area);
         let rendered = render(&app, 80, height);
-        if !modal.footer.is_empty() {
+        if !hintline.is_empty() {
             assert!(
                 rendered
                     .lines()
-                    .nth(usize::from(modal.footer.y))
+                    .nth(usize::from(hintline.y))
                     .unwrap()
                     .contains("Esc to close")
             );

@@ -41,7 +41,6 @@ pub(super) fn draw(
                 areas.session.tipline,
             );
         }
-        super::footer::draw(frame, areas, app, context);
     } else if let Some(manager) = app.issue_manager() {
         let hovered = match app.fullscreen.pointer.hovered() {
             Some(super::pointer::PointerTarget::Issues(target)) => Some(target),

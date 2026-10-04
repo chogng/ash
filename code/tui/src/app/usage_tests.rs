@@ -364,7 +364,7 @@ fn usage_missing_fields_stay_unknown_and_additional_limits_can_be_scrolled() {
             .selected_visible_index(),
         Some(7)
     );
-    let screen = render(&app, 48, 12);
+    let screen = render(&app, 48, 11);
     assert!(screen.contains("Credits"));
     assert!(!screen.contains("ChatGPT plan"));
     crate::tui_assert_snapshot!(app = &app; "usage_scrolled", screen);
