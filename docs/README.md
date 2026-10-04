@@ -83,6 +83,12 @@
 [`code/README.md`](../code/README.md)、[`workbench-modes.md`](workbench-modes.md)、
 [`product-lines.md`](product-lines.md)、[`remote-development.md`](remote-development.md)、[`git.md`](git.md)
 
+## 产品研究
+
+| 文档 | 类型 | 一句话 |
+| --- | --- | --- |
+| [`delta.md`](delta.md) | 参考 / 体验指南 | Delta 核心能力、评论与审查操作、GitHub 与 Land 边界、完整体验请求及证据记录 |
+
 ## 计划与迁移
 
 | 文档 | 状态 |

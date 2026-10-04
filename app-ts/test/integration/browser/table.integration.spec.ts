@@ -1,5 +1,33 @@
 import { expect, test } from '@playwright/test';
 
+for (const scale of [1, 1.25, 1.5, 2]) {
+	test.describe(`Table layout at ${scale * 100}% display scale`, () => {
+		test.use({ deviceScaleFactor: scale });
+		test('table resizes without spurious overflow or resize observation errors', async ({ page }) => {
+			const errors: string[] = [];
+			page.on('pageerror', error => errors.push(error.message));
+			await page.goto('/table.html');
+			expect(await page.evaluate(() => devicePixelRatio)).toBe(scale);
+			const grid = page.getByRole('grid', { name: 'Local dictation models' });
+			await expect(grid.getByRole('row')).toHaveCount(3);
+			for (const theme of ['light', 'hcDark', 'hcLight']) {
+				await page.evaluate(name => window.ashTableIntegration.theme(name), theme);
+				for (const width of [760, 340, 760]) {
+					await page.evaluate(width => { document.getElementById('models')!.style.width = `${width}px`; }, width);
+					const headerWidth = Math.max(590, await grid.evaluate(element => element.clientWidth));
+					await expect.poll(() => grid.evaluate(element => ({
+						overflow: element.scrollWidth > element.clientWidth,
+						headerWidth: Math.round([...element.querySelectorAll('[role="columnheader"]')].reduce((width, header) => width + header.getBoundingClientRect().width, 0)),
+					}))).toEqual({ overflow: width === 340, headerWidth });
+				}
+			}
+			await page.evaluate(() => window.ashTableIntegration.dispose());
+			await expect(grid).toHaveCount(0);
+			expect(errors).toEqual([]);
+		});
+	});
+}
+
 test('dictation inserts at the rich editor selection and preserves undo', async ({ page }) => {
 	await page.goto('/table.html');
 	const editor = page.getByRole('textbox', { name: 'Dictation draft' });

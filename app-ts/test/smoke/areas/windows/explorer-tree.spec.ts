@@ -89,14 +89,16 @@ test('Explorer scrollbar stays at the pane edge while rows remain inset', async 
 	const sidebar = page.locator('.ash-workbench-sidebar');
 	const geometry = () => sidebar.evaluate(sidebar => {
 		const bounds = sidebar.getBoundingClientRect();
-		const edge = bounds.right - parseFloat(getComputedStyle(sidebar).borderRightWidth);
+		const content = sidebar.querySelector(':scope > .ash-workbench-part-content')!.getBoundingClientRect();
+		// Fractional borders and SplitView sizing can quantize differently; compare rendered device-pixel edges.
+		const edge = Math.round(content.right * devicePixelRatio);
 		const track = sidebar.querySelector('.ash-explorer .ash-scrollbar-track-vertical')!.getBoundingClientRect();
 		const tree = sidebar.querySelector('.ash-explorer [role="tree"]')!.getBoundingClientRect();
 		const row = sidebar.querySelector('.ash-explorer [role="treeitem"]')!.getBoundingClientRect();
 		const header = sidebar.querySelector('.ash-explorer-view-pane > .ash-pane-view-header')!.getBoundingClientRect();
 		return {
-			trackGap: edge - track.right,
-			treeGap: edge - tree.right,
+			trackGap: edge - Math.round(track.right * devicePixelRatio),
+			treeGap: edge - Math.round(tree.right * devicePixelRatio),
 			rowInset: row.left - tree.left,
 			rowRightInset: tree.right - row.right,
 			headerInset: header.left - bounds.left,
@@ -104,6 +106,16 @@ test('Explorer scrollbar stays at the pane edge while rows remain inset', async 
 		};
 	});
 	await expect.poll(geometry).toEqual({ trackGap: 0, treeGap: 0, rowInset: 8, rowRightInset: 8, headerInset: 8, outerScroll: 0 });
+	const originalTransform = await track.evaluate(element => {
+		const transform = element.style.transform;
+		element.style.transform = `translateX(-${1 / devicePixelRatio}px)`;
+		return transform;
+	});
+	try {
+		await expect.poll(async () => (await geometry()).trackGap).toBe(1);
+	} finally {
+		await track.evaluate((element, transform) => { element.style.transform = transform; }, originalTransform);
+	}
 	await expect(track).toHaveAttribute('aria-valuemax', /[1-9]\d*/u);
 	await first.hover();
 	await page.mouse.wheel(0, 400);

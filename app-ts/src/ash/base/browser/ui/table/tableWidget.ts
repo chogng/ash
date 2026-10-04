@@ -1,6 +1,7 @@
 import './table.css';
 import { addDisposableListener, h } from '../../dom.js';
 import { observeElementSize } from '../../observer.js';
+import { AnimationFrameScheduler } from '../../scheduler.js';
 import { Emitter } from '../../../common/event.js';
 import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import { ListView } from '../list/listView.js';
@@ -148,7 +149,14 @@ export class Table<TRow> extends Disposable {
 			}
 		}));
 		this._register(this.header.onDidSashReset(index => this.resizeColumn(index, columns[index]!.weight / columns.reduce((sum, column) => sum + column.weight, 0) * 100)));
-		this._register(observeElementSize(container, size => this.layout(undefined, size.width)));
+		let observedWidth = 0;
+		const resizeLayout = this._register(new AnimationFrameScheduler(document.defaultView!, () => this.layout(undefined, observedWidth)));
+		// Column sizing can change horizontal overflow and ancestor heights; write outside resize observation.
+		this._register(observeElementSize(this.domNode, size => {
+			if (size.width === observedWidth) { return; }
+			observedWidth = size.width;
+			resizeLayout.schedule();
+		}, { box: 'content-box' }));
 	}
 
 	public get length(): number { return this.view.items.length; }
