@@ -57,21 +57,22 @@ screenMode = "fullscreen" # 或 "inline"
 | 名称 | 内容 | fullscreen | inline |
 | --- | --- | --- | --- |
 | statusline | 模型、权限、环境与统计等状态信息 | 顶部 `top_statusline` 显示环境信息；底部一行显示权限与统计；模型靠近输入框 | 底部第一行显示模型等信息，第二行平时显示权限 |
-| hintline | 当前操作快捷键、等待结果或待完成快捷键提示 | 输入框下方独立一行，位于底部 statusline 之后 | 按需覆盖 statusline 第二行，与权限互斥显示，不增加第三行 |
+| hintline | 当前操作快捷键、等待结果或待完成快捷键提示 | 输入框下方独立一行，位于底部 statusline 之后 | 空输入时在第二行右侧显示 Dashboard 入口；其他交互按需覆盖第二行的权限，不增加第三行 |
 | progress | 本轮运行状态、耗时、中断键与长任务技巧 | 输入控制区，位于 tipline 上方；运行时占一至两行 | 活动视口的输入控制区，位于 tipline 上方；运行时占一至两行 |
-| tipline | 听写、临时反馈与导航提示 | 输入框上方一行 | 输入框上方一行 |
+| tipline | 听写、临时反馈与首页引导 | 输入框上方一行 | 输入框上方一行 |
 
-fullscreen 的权限和 hintline 可以同时显示。inline 第二行在权限与 hintline 之间切换，第一行的模型、统计等聊天状态信息保持原位。命令面板、正文详情和管理页使用自己的容器，背景聊天 statusline 隐藏，操作提示由页面 hintline 统一显示，功能容器提供当前可用动作。
+fullscreen 的权限和 hintline 可以同时显示。inline 空输入时在第二行左侧显示权限，右侧显示 Dashboard 入口；其他交互在权限与 hintline 之间切换，第一行的模型、统计等聊天状态信息保持原位。命令面板、正文详情和管理页使用自己的容器，背景聊天 statusline 隐藏，操作提示由页面 hintline 统一显示，功能容器提供当前可用动作。
 
 fullscreen 的 hintline 从内容区左侧开始，与底部 statusline 对齐；inline 的聊天 hintline 保持右对齐。
 
 ### Inline 第二行的覆盖与恢复
 
-**普通聊天时显示两行 statusline；需要操作提示时，hintline 替换第二行的整行内容。** 权限与操作提示不在这一行拼接，也不同时显示。覆盖只改变显示内容，不改变当前权限策略或 StatusLine 配置。
+**普通聊天时显示两行 statusline；空输入的 Dashboard 入口与权限共用第二行，需要处理其他交互时，hintline 替换第二行的整行内容。** 覆盖只改变显示内容，不改变当前权限策略或 StatusLine 配置。
 
 | 当前状态 | inline 第二行显示什么 |
 | --- | --- |
 | 普通输入、聊天运行、听写，或显示 tipline 临时反馈 | 权限模式；`permissions` 关闭时留空 |
+| 输入框聚焦且没有文字、附件，也未进入输入历史搜索 | 左侧显示权限，右侧显示 `← Dashboard`；`permissions` 关闭时仍显示入口 |
 | 仅显示 `/`、`@`、`$` 补全候选 | 保持权限显示；候选列表放在自己的补全区域 |
 | 待回答问题或待审批请求 | 对应 hintline，例如 `Enter to answer`、`Enter to confirm` |
 | 答案或审批结果正在提交 | hintline 显示 `Waiting for the request result` |
@@ -79,7 +80,7 @@ fullscreen 的 hintline 从内容区左侧开始，与底部 statusline 对齐�
 | 查看已结束的子任务 | hintline 提示选择 Main 或其他 Subagent |
 | 打开命令面板、正文详情、管理页或预览 | 当前容器的操作提示，聊天权限暂时隐藏 |
 
-返回普通聊天输入状态后，第二行恢复权限；若 `permissions` 已关闭，则恢复为空行。关闭面板后若仍有后台到达的提问或审批，先显示该请求的 hintline，处理完请求并返回普通输入后再恢复权限。权限显示开关只控制权限文字，不控制操作提示是否出现；关闭状态项也不缩减预留的底部行数。
+返回普通聊天输入状态后，第二行恢复权限和适用的 Dashboard 入口；若 `permissions` 已关闭，则只显示适用的入口。关闭面板后若仍有后台到达的提问或审批，先显示该请求的 hintline，处理完请求并返回普通输入后再恢复。权限显示开关只控制权限文字，不控制操作提示是否出现；关闭状态项也不缩减预留的底部行数。
 
 下面四个状态中的第一、第二行，始终对应同两个屏幕位置：
 
@@ -229,13 +230,13 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
 | 提问区 | `request` | Agent 向用户提出的问题和答案选项 | [interaction/query.rs](tui/src/thread/interaction/query.rs) |
 | 底部 statusline | `statusline` | 输入框下方、hintline 上方的一行；显示权限、缓存命中率、费用、资源和运行摘要 | [footer.rs](tui/src/app/fullscreen/footer.rs) |
 | 本轮运行状态行 | `progress` | 固定在 tipline 上方；显示阶段、耗时、中断键和可选技巧 | [chat_view.rs](tui/src/app/chat_view.rs)、[progress.rs](tui/src/thread/progress.rs) |
-| 输入框上方提示行 | `tipline` | 听写、临时提示和导航提示；正常布局预留一行 | [footer.rs](tui/src/app/fullscreen/footer.rs) 的 `draw_tip()`、[top_tip.rs](tui/src/app/top_tip.rs) |
+| 输入框上方提示行 | `tipline` | 听写、临时提示和首页引导；正常布局预留一行 | [footer.rs](tui/src/app/fullscreen/footer.rs) 的 `draw_tip()`、[top_tip.rs](tui/src/app/top_tip.rs) |
 | 输入区域 | `composer` | 容纳输入框；需要审批时改为显示审批选项 | [fullscreen/composer.rs](tui/src/app/fullscreen/composer.rs) |
 | 实际输入框 | `input` | 普通情况下位于 `composer` 内；审批时高度为零 | [composer/surface.rs](tui/src/thread/composer/surface.rs) |
 | hintline | `hintline` | `Enter send` 等当前操作提示；普通布局预留一行 | [footer.rs](tui/src/app/footer.rs) |
 | Agent 切换栏 | `agent_thread_switcher` | Main / Subagent 会话切换，位于快捷键区下方 | [thread.rs](tui/src/thread.rs) 的 `draw_agent_thread_switcher` 入口 |
 
-顶部右侧显示工作区/会话状态摘要；聊天进度与听写状态的位置见[聊天进度与听写状态](#聊天进度与听写状态)。`tipline` 优先显示听写，其余时间显示临时提示或导航提示；权限在 statusline 持续显示。输入区下分隔线上的模型与任务模式标签由 [fullscreen/composer.rs](tui/src/app/fullscreen/composer.rs) 绘制。
+顶部右侧显示工作区/会话状态摘要；聊天进度与听写状态的位置见[聊天进度与听写状态](#聊天进度与听写状态)。`tipline` 优先显示听写，其余时间显示临时提示或首页引导；Dashboard 入口提示在底部 hintline，权限在 statusline 持续显示。输入区下分隔线上的模型与任务模式标签由 [fullscreen/composer.rs](tui/src/app/fullscreen/composer.rs) 绘制。
 
 顶部 statusline 的分支、工作目录、上下文和 Dashboard 是彼此独立的交互项。点击分支打开本地分支选择；点击工作目录打开同一 Project、同一 Environment 下的根目录选择并由 CLI host 重建 workspace 连接；上下文静止时显示 `已用 / 容量`，hover 或键盘焦点时复用 StatusLine 的 Context 进度条；Dashboard 打开 Session 管理页。空输入时按 `F6` 聚焦标题栏，左右键移动，`Enter` 激活，`Esc` 返回输入。
 
@@ -338,7 +339,7 @@ Dashboard 分组之间空一行，组内保持连续；标题加粗、数量淡�
 
 会话身份颜色由 `sessions::color` 负责，只接受 `SessionId` 和 `RenderContext` 并返回颜色；主题层按固定顺序提供已经过终端色深转换的 accent、keyword、string、function、variable 颜色，配色模块用完整 ID 的固定 FNV-1a 哈希选择其中一个。改名、排序、切换分组和重启不改变分配，切换主题会更新具体颜色，不同会话可以同色。列表和右侧概要使用相同身份颜色；列表的 view 再叠加共享 `render::interaction_style`，处理选中、悬停、按下与无色模式反馈。
 
-inline 空输入时按 ← 打开 Dashboard，按 → 或 Esc 返回当前会话。聚焦管理列表的会话条目时，→ 同样返回；聚焦分组标题时，左右键仍用于展开、收起分组。预览、详情和命令面板先处理自己的按键。输入框正在编辑非空草稿时，左右键继续移动输入光标。
+fullscreen 和 inline 在首页或会话页的输入框聚焦且没有文字、附件时，按 ← 打开 Dashboard；两种模式都在底部 hintline 显示 `← Dashboard`，输入或焦点离开输入框后隐藏，提示不随临时消息到期消失。Esc 返回进入前的首页或会话并恢复输入焦点。inline 聚焦管理列表的会话条目时，→ 也可返回；聚焦分组标题时，左右键仍用于展开、收起分组。预览、详情、命令面板和输入历史搜索先处理自己的按键。输入框正在编辑非空草稿时，即使光标已在最左端，左右键仍只移动输入光标。
 
 ## 鼠标与横向对齐
 

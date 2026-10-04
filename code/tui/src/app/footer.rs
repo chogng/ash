@@ -123,22 +123,26 @@ fn input_hints(app: &App) -> KeyHints {
                 .with_compact_action("↑↓", "actions")
                 .with_compact_action("Esc", "input");
         }
-        let hints = KeyHints::new().with_compact_action("Enter", "send");
-        return if app.fullscreen_welcome_visible() {
+        let hints = with_dashboard_hint(app, KeyHints::new().with_compact_action("Enter", "send"));
+        let hints = if app.fullscreen_welcome_visible() {
             hints
                 .with_compact_action("Tab", "actions")
                 .with_compact_action("/", "commands")
         } else {
             hints.with_compact_action("/", "commands")
         };
+        return hints;
     }
-    let mut hints = KeyHints::new().with_compact_action(
-        "Enter",
-        if app.active_turn().is_some() {
-            "queue"
-        } else {
-            "send"
-        },
+    let mut hints = with_dashboard_hint(
+        app,
+        KeyHints::new().with_compact_action(
+            "Enter",
+            if app.active_turn().is_some() {
+                "queue"
+            } else {
+                "send"
+            },
+        ),
     );
     if let Some(keys) = app.app_keymap.action_hint(
         crate::keymap::AppKeymapAction::CycleCollaborationMode,
@@ -171,6 +175,14 @@ fn input_hints(app: &App) -> KeyHints {
         (None, None) => {}
     }
     hints
+}
+
+fn with_dashboard_hint(app: &App, hints: KeyHints) -> KeyHints {
+    if app.can_open_dashboard_from_input() {
+        hints.with_compact_action(bindings::DASHBOARD_OPEN.keys(), "Dashboard")
+    } else {
+        hints
+    }
 }
 
 fn bottom_content(app: &App) -> BottomContent<'_> {

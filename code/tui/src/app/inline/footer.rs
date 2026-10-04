@@ -46,9 +46,29 @@ pub(super) fn draw(
             context,
         );
         if !context_hints {
+            let mut area = crate::render::horizontal_margin(areas.session.hintline, 2);
+            if app.can_open_dashboard_from_input() {
+                let hint = crate::widgets::key_hint::line(
+                    &crate::keymap::bindings::DASHBOARD_HINTS,
+                    area.width.into(),
+                    app.key_hint_style(),
+                    context,
+                );
+                let width = hint.width() as u16;
+                frame.render_widget(
+                    ratatui::widgets::Paragraph::new(hint),
+                    Rect::new(
+                        area.right().saturating_sub(width),
+                        area.y,
+                        width,
+                        area.height,
+                    ),
+                );
+                area.width = area.width.saturating_sub(width + 2);
+            }
             crate::status::draw_policy(
                 frame,
-                crate::render::horizontal_margin(areas.session.hintline, 2),
+                area,
                 app.status_line(),
                 app.approval_mode_status(),
                 context,
@@ -66,5 +86,5 @@ pub(super) fn draw_tip(
     app: &App,
     context: crate::render::RenderContext<'_>,
 ) {
-    crate::app::footer::draw_tip(frame, area, app, app.screen_navigation_tip(), context);
+    crate::app::footer::draw_tip(frame, area, app, None, context);
 }

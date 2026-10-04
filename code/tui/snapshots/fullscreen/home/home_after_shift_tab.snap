@@ -25,4 +25,4 @@ expression: "text(&render(&app, 80, 24))"
   >                                                                             
   ─────────────────────────────────────────────────────────── Automatic model   
   ⏸ Manual                                                                      
-  Enter send  ·  Tab actions  ·  / commands
+  Enter send  ·  ← Dashboard  ·  Tab actions  ·  / commands

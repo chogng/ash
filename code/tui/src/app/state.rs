@@ -2258,15 +2258,16 @@ impl App {
             .finish_preview(generation, result);
     }
 
-    pub(crate) fn screen_navigation_tip(&self) -> Option<&'static str> {
-        match self.screen_mode() {
-            crate::terminal::ScreenMode::Fullscreen => {
-                super::fullscreen::navigation::screen_navigation_tip(self)
-            }
-            crate::terminal::ScreenMode::Inline => {
-                super::inline::navigation::screen_navigation_tip(self)
-            }
-        }
+    pub(crate) fn can_open_dashboard_from_input(&self) -> bool {
+        self.chat_input_focused()
+            && self.input().is_empty()
+            && self.input_state().is_empty()
+            && self.completion().is_none()
+            && self.session_manager_view().is_none()
+            && self.session_preview().is_none()
+            && self.issue_manager().is_none()
+            && self.sessions.pending_submission.is_none()
+            && !self.input_state().searching_history()
     }
 
     pub(crate) fn agent_thread_switcher_view(&self) -> Option<AgentThreadSwitcherView<'_>> {

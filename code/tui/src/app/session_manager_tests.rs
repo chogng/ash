@@ -22,6 +22,170 @@ const WIDTH: u16 = 100;
 const HEIGHT: u16 = 32;
 
 #[test]
+fn dashboard_empty_input_entry_and_escape_restore_home_and_conversation_in_both_modes() {
+    let mut snapshots = Vec::new();
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        for home in [false, true] {
+            let mut app = active_session_app();
+            let mut settings = crate::config::TerminalSettings::default();
+            settings.set_screen_mode(mode);
+            settings.set_language(crate::nls::Language::Chinese);
+            app.update(crate::config::Event::SettingsReceived(settings));
+            if home {
+                app.open_home();
+            }
+            let starts_new_session = app.starts_new_session();
+            assert_eq!(starts_new_session, home);
+            assert!(app.chat_input_focused());
+            assert!(app.can_open_dashboard_from_input());
+            assert!(
+                dashboard_hintline(&app)
+                    .replace(' ', "")
+                    .contains("←仪表盘")
+            );
+            let buffer = render_buffer(&app, WIDTH, HEIGHT);
+            let hint_key = buffer
+                .content
+                .iter()
+                .find(|cell| cell.symbol() == "←")
+                .unwrap();
+            assert_eq!(hint_key.fg, app.render_context().foreground());
+            assert!(hint_key.modifier.contains(ratatui::style::Modifier::BOLD));
+            // The entry remains available after transient tips expire.
+            app.handle_tick(std::time::Instant::now() + std::time::Duration::from_secs(60));
+            assert!(
+                dashboard_hintline(&app)
+                    .replace(' ', "")
+                    .contains("←仪表盘")
+            );
+            let mut frames = vec![format!("Before entry\n{}", render(&app))];
+            assert_eq!(app.handle_key(key(KeyCode::Left)), None);
+            assert!(app.session_manager_view().is_some());
+            assert!(app.session_manager_focused());
+            assert!(!app.fullscreen_home_visible());
+            frames.push(format!("Dashboard\n{}", render(&app)));
+            assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
+            assert!(app.session_manager_view().is_none());
+            assert!(app.chat_input_focused());
+            assert_eq!(app.starts_new_session(), starts_new_session);
+            app.handle_key(key(KeyCode::Char('x')));
+            assert_eq!(app.input(), "x");
+            assert!(!app.can_open_dashboard_from_input());
+            assert!(
+                !dashboard_hintline(&app)
+                    .replace(' ', "")
+                    .contains("←仪表盘")
+            );
+            frames.push(format!("Returned and typing\n{}", render(&app)));
+            snapshots.push(format!("{mode:?} · home={home}\n{}", frames.join("\n\n")));
+        }
+    }
+    crate::tui_assert_snapshot!(
+        "dashboard_entry_and_return_in_both_modes",
+        snapshots.join("\n\n")
+    );
+}
+
+#[test]
+fn dashboard_entry_keeps_text_attachments_and_home_menu_keys_with_their_owner() {
+    let mut snapshots = Vec::new();
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        for home in [false, true] {
+            let mut app = active_session_app();
+            let mut settings = crate::config::TerminalSettings::default();
+            settings.set_screen_mode(mode);
+            app.update(crate::config::Event::SettingsReceived(settings));
+            if home {
+                app.open_home();
+            }
+            app.insert_text("draft");
+            app.handle_key(key(KeyCode::Home));
+            app.handle_key(key(KeyCode::Left));
+            assert!(app.session_manager_view().is_none());
+            assert_eq!(app.input(), "draft");
+            assert!(!app.can_open_dashboard_from_input());
+            app.handle_key(key(KeyCode::End));
+            for _ in 0..5 {
+                app.handle_key(key(KeyCode::Backspace));
+            }
+            assert_eq!(app.input(), "");
+            app.update(crate::host::Event::ClipboardImageRead {
+                target: app.draft_target(),
+                result: Ok(crate::host::clipboard::ClipboardImage {
+                    png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
+                    fingerprint: crate::host::clipboard::ClipboardImageFingerprint(1),
+                    width: 1,
+                    height: 1,
+                }),
+            });
+            assert!(!app.input_state().is_empty());
+            assert!(!app.can_open_dashboard_from_input());
+            assert_eq!(app.handle_key(key(KeyCode::Left)), None);
+            assert!(app.session_manager_view().is_none());
+            assert!(render(&app).contains("[Image #1]"));
+            snapshots.push(format!("{mode:?} · home={home}\n{}", render(&app)));
+        }
+    }
+    let mut app = active_session_app();
+    app.open_home();
+    app.handle_key(key(KeyCode::Tab));
+    assert!(!app.chat_input_focused());
+    assert!(!app.can_open_dashboard_from_input());
+    app.handle_key(key(KeyCode::Left));
+    assert!(app.session_manager_view().is_none());
+    assert!(!app.chat_input_focused());
+    assert!(
+        render(&app)
+            .lines()
+            .last()
+            .unwrap()
+            .contains("Enter select")
+    );
+    crate::tui_assert_snapshot!(
+        "dashboard_attachments_keep_input_in_both_modes",
+        snapshots.join("\n\n")
+    );
+}
+
+#[test]
+fn dashboard_startup_entry_returns_to_the_empty_new_task_input() {
+    let mut frames = Vec::new();
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = App::for_dir_with_input_catalog_and_startup_context(
+            std::path::Path::new("."),
+            crate::thread::composer::ChatInputCatalog::default(),
+            crate::TuiStartupContext::new("."),
+        );
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.open_home();
+        assert!(app.sessions.active_session_id().is_none());
+        assert!(app.can_open_dashboard_from_input());
+        frames.push(format!("{mode:?} initial page\n{}", render(&app)));
+        assert_eq!(app.handle_key(key(KeyCode::Left)), None);
+        assert!(app.session_manager_view().is_some());
+        assert!(app.session_manager_focused());
+        assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
+        assert!(app.session_manager_view().is_none());
+        assert!(app.starts_new_session());
+        assert!(app.chat_input_focused());
+        assert!(app.can_open_dashboard_from_input());
+        frames.push(format!("{mode:?} after Escape\n{}", render(&app)));
+    }
+    crate::tui_assert_snapshot!("dashboard_startup_entry_and_return", frames.join("\n\n"));
+}
+
+#[test]
 fn dashboard_simulates_navigation_and_transient_details() {
     let mut app = active_session_app();
 
@@ -76,7 +240,7 @@ fn dashboard_simulates_navigation_and_transient_details() {
 
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
     assert!(app.session_manager_view().is_none());
-    assert_eq!(app.screen_navigation_tip(), Some("← Dashboard"));
+    assert!(app.can_open_dashboard_from_input());
 }
 
 #[test]
@@ -98,7 +262,7 @@ fn resuming_selected_session_restores_manager_navigation() {
 
     app.show_conversation();
     assert!(!app.session_manager_focused());
-    assert_eq!(app.screen_navigation_tip(), Some("← Dashboard"));
+    assert!(app.can_open_dashboard_from_input());
     crate::tui_assert_snapshot!(
         app = &app;
         "agents_session_after_resume_restores_manager_tip",
@@ -123,7 +287,7 @@ fn dashboard_command_opens_the_manager() {
 
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
     assert!(app.session_manager_view().is_none());
-    assert_eq!(app.screen_navigation_tip(), Some("← Dashboard"));
+    assert!(app.can_open_dashboard_from_input());
 }
 
 #[test]
@@ -182,7 +346,7 @@ fn inline_dashboard_arrows_return_from_the_session_list() {
     );
     assert_eq!(app.screen_thread_id().as_str(), "current");
     assert!(app.input().is_empty());
-    assert_eq!(app.screen_navigation_tip(), Some("← Dashboard"));
+    assert!(app.can_open_dashboard_from_input());
     frames.push(format!("Conversation after →\n{}", render(&app)));
     assert_eq!(app.handle_key(key(KeyCode::Left)), None);
     assert!(app.session_manager_focused());
@@ -642,11 +806,23 @@ fn render(app: &App) -> String {
     render_at(app, WIDTH, HEIGHT)
 }
 
+fn dashboard_hintline(app: &App) -> String {
+    let area = ratatui::layout::Rect::new(0, 0, WIDTH, HEIGHT);
+    let row = match app.screen_mode() {
+        crate::terminal::ScreenMode::Fullscreen => {
+            super::fullscreen::layout(app, area).session.hintline.y
+        }
+        crate::terminal::ScreenMode::Inline => super::inline::layout(app, area).session.hintline.y,
+    };
+    render(app)
+        .lines()
+        .nth(usize::from(row))
+        .unwrap()
+        .to_owned()
+}
+
 fn render_at(app: &App, width: u16, height: u16) -> String {
-    let backend = TestBackend::new(width, height);
-    let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|frame| draw(frame, app)).unwrap();
-    let buffer = terminal.backend().buffer();
+    let buffer = render_buffer(app, width, height);
     (0..height)
         .map(|row| {
             (0..width)
@@ -657,6 +833,13 @@ fn render_at(app: &App, width: u16, height: u16) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn render_buffer(app: &App, width: u16, height: u16) -> ratatui::buffer::Buffer {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|frame| draw(frame, app)).unwrap();
+    terminal.backend().buffer().clone()
 }
 
 #[test]

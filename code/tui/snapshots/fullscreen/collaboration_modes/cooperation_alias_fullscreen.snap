@@ -20,9 +20,9 @@ expression: render_effort(&app)
 
 
 
-                                                                   ← Dashboard
+
   ────────────────────────────────────────────────────────────────────────────
   >
   ───────────────────────────────────────────────────────── test-model (high)
   ⏸ Manual
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  Enter send  ·  ← Dashboard  ·  shift+tab mode  ·  shift+↓/↑ effort

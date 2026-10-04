@@ -182,7 +182,7 @@ fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() 
             .last()
             .unwrap()
             .trim_end()
-            .starts_with("  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort")
+            .starts_with("  Enter send  ·  ← Dashboard  ·  shift+tab mode  ·  shift+↓/↑ effort")
     );
 }
 
@@ -211,7 +211,7 @@ fn effort_hint_shares_arrow_modifiers_only_when_both_bindings_match() {
                 .unwrap()
                 .trim_end()
                 .starts_with(&format!(
-                    "  Enter send  ·  shift+tab mode  ·  {expected} effort"
+                    "  Enter send  ·  ← Dashboard  ·  shift+tab mode  ·  {expected} effort"
                 ))
         );
     }
@@ -652,7 +652,8 @@ fn empty_session_input_offers_manager_navigation() {
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[top_tip_row].contains("← Dashboard"));
+    assert!(rows[19].contains("← Dashboard"));
+    assert!(!rows[top_tip_row].contains("← Dashboard"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
     assert!(!rows[19].contains("permissions on"));
     assert!(
@@ -664,6 +665,7 @@ fn empty_session_input_offers_manager_navigation() {
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
     assert!(rows[top_tip_row].trim().is_empty());
+    assert!(rows[19].contains("← Dashboard"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
 
     app.insert_text("draft");
@@ -1051,13 +1053,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     let top_tip_row = areas.tipline.y;
 
     let before = render(&app, 80, 20);
-    assert!(
-        before
-            .lines()
-            .nth(usize::from(top_tip_row))
-            .unwrap()
-            .contains("← Dashboard")
-    );
+    assert!(before.lines().last().unwrap().contains("← Dashboard"));
 
     app.insert_text("hello");
     assert!(matches!(
@@ -1324,7 +1320,7 @@ fn policy_change_shows_the_new_mode_before_the_first_submission() {
     app.cycle_next_approval_mode(Instant::now());
 
     let rendered = render(&app, 80, 20);
-    assert!(!rendered.contains("← Dashboard"));
+    assert!(rendered.lines().last().unwrap().contains("← Dashboard"));
     assert!(rendered.contains("Auto"));
     assert!(rendered.contains("/permission to change permissions"));
 }

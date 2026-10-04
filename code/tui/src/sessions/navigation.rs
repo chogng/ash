@@ -41,6 +41,8 @@ pub(crate) struct SessionNavigation {
     pub(crate) preview: Option<ConversationPreview>,
     preview_generation: u64,
     screen: Option<SessionScreen>,
+    // Dashboard dismissal returns to a new-task page even when a session is active.
+    manager_return_home: bool,
     manager: SessionManagerState,
 }
 
@@ -272,6 +274,9 @@ impl SessionNavigation {
     }
 
     pub(crate) fn show_manager(&mut self, model: &SessionsState) {
+        if !matches!(self.screen, Some(SessionScreen::Manager)) {
+            self.manager_return_home = matches!(self.screen, None | Some(SessionScreen::Home));
+        }
         self.preview = None;
         self.screen = Some(SessionScreen::Manager);
         self.manager.reconcile(model.catalog());
@@ -305,6 +310,7 @@ impl SessionNavigation {
 
     pub(crate) fn next_screen(&self, model: &SessionsState) -> Option<SessionScreen> {
         match self.screen()? {
+            SessionScreen::Manager if self.manager_return_home => Some(SessionScreen::Home),
             SessionScreen::Manager => model
                 .active_session_id()
                 .cloned()

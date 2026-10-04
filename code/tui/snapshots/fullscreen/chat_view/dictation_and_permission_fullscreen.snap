@@ -19,4 +19,4 @@ expression: text(&buffer)
   >                                                                             
   ──────────────────────────────────────────────── Shared model (high) · Plan   
   ⏸ Manual                                                                      
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  Enter send  ·  ← Dashboard  ·  shift+tab mode  ·  shift+↓/↑ effort

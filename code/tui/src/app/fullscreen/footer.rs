@@ -108,7 +108,7 @@ pub(super) fn draw_tip(
                 "Type a task to begin, or use Tab to choose an action."
             })
     } else {
-        app.screen_navigation_tip()
+        None
     };
     if !super::modal::is_open(app) {
         crate::app::footer::draw_tip(frame, area, app, navigation, context);

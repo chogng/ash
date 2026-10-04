@@ -25,4 +25,4 @@ expression: render_dictation_frame(&app)
   >                                                                             
   ─────────────────────────────────────────────────────────── Automatic model   
   ⏸ Manual                                                                      
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  Enter send  ·  ← Dashboard  ·  shift+tab mode  ·  shift+↓/↑ effort

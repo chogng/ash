@@ -47,6 +47,7 @@ pub(in crate::app) fn handle_key(
     if key.kind == KeyEventKind::Press
         && bindings::RETURN_INPUT.matches(key)
         && !app.fullscreen.input_focused()
+        && app.session_preview().is_none()
     {
         focus_input(app);
         return None;
@@ -82,6 +83,11 @@ pub(in crate::app) fn handle_key(
             && let Some(action) = app.app_keymap.resolve_single(&key, context)
         {
             return app.apply_app_keymap_action(action, now);
+        }
+        if bindings::DASHBOARD_OPEN.matches(key)
+            && let Some(command) = handle_screen_navigation_key(app, key)
+        {
+            return command;
         }
         if !app.accepts_input() {
             return None;
@@ -415,12 +421,18 @@ pub(in crate::app) fn handle_screen_navigation_key(
             _ => None,
         };
     }
-    if !key.modifiers.is_empty() || !chat_input_focused(app) || !app.input().is_empty() {
+    if !key.modifiers.is_empty()
+        || !chat_input_focused(app)
+        || !app.input().is_empty()
+        || !app.input_state().is_empty()
+    {
         return None;
     }
-    if key.code == KeyCode::Left && app.session_manager_view().is_none() {
-        close_transient_surfaces(app);
-        app.fullscreen.sessions.show_manager(&app.sessions);
+    if bindings::DASHBOARD_OPEN.matches(key) && app.session_manager_view().is_none() {
+        if !app.can_open_dashboard_from_input() {
+            return None;
+        }
+        show_manager(app);
         return Some(None);
     }
     if key.code == KeyCode::Right && app.session_manager_view().is_none() {
@@ -724,16 +736,6 @@ pub(in crate::app) fn transcript_selection_active(app: &App) -> bool {
         && app.fullscreen.viewports.active().selected_cell.is_some()
 }
 
-pub(in crate::app) fn screen_navigation_tip(app: &App) -> Option<&'static str> {
-    if !chat_input_focused(app) || !app.input().is_empty() {
-        return None;
-    }
-    match app.fullscreen.sessions.previous_screen()? {
-        SessionScreen::Manager => Some("← Dashboard"),
-        SessionScreen::Home | SessionScreen::Session(_) => None,
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum EmptyInputNavigation {
     PreviousScreen,
@@ -827,8 +829,8 @@ pub(in crate::app) fn open_home(app: &mut App) {
     close_transient_surfaces(app);
     app.fullscreen.issues.close();
     app.fullscreen.agent_thread_switcher.blur();
-    app.fullscreen.sessions.manager_mut().blur();
     app.fullscreen.home.show_welcome();
+    app.fullscreen.sessions.show_home();
     if !draft_is_empty {
         app.fullscreen.home.dismiss_welcome();
     }
@@ -861,6 +863,10 @@ pub(in crate::app) fn open_issues(app: &mut App) -> Option<AppCommand> {
 pub(in crate::app) fn exit_manager(app: &mut App) -> Option<Option<AppCommand>> {
     let target = app.fullscreen.sessions.next_screen(&app.sessions);
     match target {
+        Some(SessionScreen::Home) => {
+            open_home(app);
+            Some(None)
+        }
         Some(SessionScreen::Session(session_id)) => {
             if app.sessions.active_session_id() == Some(&session_id) {
                 if let Some(thread_id) = app.sessions.restorable_thread(&session_id)

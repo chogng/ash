@@ -4620,6 +4620,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("custom", "カスタム", "自定义", "personnalisé"),
     translation(
+        "open Dashboard when the input is focused and has no text or attachments",
+        "入力欄にフォーカスがあり、テキストも添付もない場合にダッシュボードを開く",
+        "输入框聚焦且没有文字或附件时，打开仪表盘",
+        "ouvrir le tableau de bord lorsque la saisie a le focus et ne contient ni texte ni pièce jointe",
+    ),
+    translation(
         "return from inline Dashboard; group arrows expand or collapse",
         "inline のダッシュボードから戻る；グループの矢印キーは展開・折りたたみ",
         "从 inline 仪表盘返回；分组上的方向键用于展开或收起",

@@ -28,9 +28,9 @@ expression: render(&app)
 
 
 
-                                                                                       ← Dashboard
+
   ────────────────────────────────────────────────────────────────────────────────────────────────
   >
   ─────────────────────────────────────────────────────────────────────────────── Automatic model
   ⏸ Manual
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  Enter send  ·  ← Dashboard  ·  shift+tab mode  ·  shift+↓/↑ effort

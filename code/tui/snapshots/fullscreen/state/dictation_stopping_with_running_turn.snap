@@ -25,4 +25,4 @@ expression: render_dictation_frame(&app)
   >                                                                             
   ─────────────────────────────────────────────────────────── Automatic model   
   ⏸ Manual                                                                      
-  Enter queue  ·  shift+tab mode  ·  shift+↓/↑ effort
+  Enter queue  ·  ← Dashboard  ·  shift+tab mode  ·  shift+↓/↑ effort

@@ -640,6 +640,8 @@ pub(crate) const CANCEL: Keybinding = Keybinding::new(
 pub(crate) const CANCEL_ANSWER: Keybinding = Keybinding::new(ESC, "cancel");
 pub(crate) const RETURN_INPUT: Keybinding = Keybinding::new(ESC, "return to input");
 pub(crate) const ESC_RETURN: Keybinding = Keybinding::new(ESC, "return");
+pub(crate) const DASHBOARD_OPEN: Keybinding =
+    Keybinding::new(&[(NONE, KeyCode::Left)], "Dashboard");
 pub(crate) const INLINE_DASHBOARD_RETURN: Keybinding =
     Keybinding::new(&[(NONE, KeyCode::Right), (NONE, KeyCode::Esc)], "return");
 pub(crate) const HOOK_REFRESH: Keybinding =
@@ -827,6 +829,8 @@ fn app_keys(action: AppKeymapAction) -> &'static str {
 
 pub(crate) static POLICY_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| KeyHints::compact().with_action("/permission", "change permissions"));
+pub(crate) static DASHBOARD_HINTS: LazyLock<KeyHints> =
+    LazyLock::new(|| KeyHints::new().with_compact_action(DASHBOARD_OPEN.keys(), "Dashboard"));
 pub(crate) static CLIPBOARD_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     KeyHints::compact()
         .with_note("image in clipboard")
@@ -836,6 +840,10 @@ pub(crate) static CLIPBOARD_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
 pub(crate) fn fixed_bindings() -> impl Iterator<Item = (&'static str, &'static str)> {
     static ENTRIES: LazyLock<Vec<(String, &'static str)>> = LazyLock::new(|| {
         vec![
+            (
+                DASHBOARD_OPEN.keys(),
+                "open Dashboard when the input is focused and has no text or attachments",
+            ),
             (
                 "ctrl+r".into(),
                 "search input history; Enter edits the match, Esc restores the draft",
