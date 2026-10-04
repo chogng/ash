@@ -61,7 +61,7 @@ export default defineConfig(() => {
           },
         },
       },
-      ...(process.env.ASH_DESKTOP_STARTUP_TRACE === '1' ? [desktopStartupTracePlugin(desktopRoot)] : []),
+      ...(process.env.ASH_DESKTOP_STARTUP_TRACE === '1' ? [desktopStartupTracePlugin()] : []),
       ...(webAppServerEnabled ? [webAppServerVitePlugin()] : []),
     ],
     optimizeDeps: {

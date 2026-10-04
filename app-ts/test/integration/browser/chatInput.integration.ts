@@ -20,7 +20,7 @@ import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void }; }
+	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -85,6 +85,14 @@ const state: ChatInputState = {
 	} } },
 };
 part.render(state);
-window.ashChatInputIntegration = { refresh: () => part.render({ ...state, queuedMessages: 1 }) };
+window.ashChatInputIntegration = {
+	refresh: () => part.render({ ...state, queuedMessages: 1 }),
+	showQuestions: () => part.render({ ...state, interaction: {
+		requestId: 'questions', request: { type: 'userInput', request: { questions: [
+			{ id: 'text', header: 'Answer', question: 'Your answer', allowFreeForm: true },
+			{ id: 'choice', header: 'Choice', question: 'Your choice', allowFreeForm: false, options: [{ label: 'First', description: 'First option' }] },
+		] } },
+	} }),
+};
 part.setVisible(true);
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

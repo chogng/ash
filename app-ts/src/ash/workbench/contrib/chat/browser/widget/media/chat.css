@@ -121,7 +121,7 @@
   padding: 6px;
   border: var(--ash-stroke-thickness) solid var(--ash-border);
   color: inherit;
-  background: var(--stanza-editor-background);
+  background: var(--ash-editor-background);
 }
 
 .ash-chat-input-container {

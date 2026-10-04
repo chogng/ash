@@ -1,3 +1,5 @@
+import { createTestEditorServices } from '../common/testEditorServices.js';
+import { IUntitledTextEditorService } from '../../services/untitled/common/untitledTextEditorService.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { noFileIconTheme } from '../../../platform/theme/common/themeService.js';
 import assert from 'node:assert/strict';
@@ -12,7 +14,7 @@ import { OperatingSystem } from '../../../base/common/platform.js';
 import { LabelService } from '../../../platform/label/common/labelService.js';
 import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
 import { DecorationsService } from '../../services/decorations/browser/decorationsService.js';
-import { DEFAULT_LABELS_CONTAINER, ResourceLabels, type IResourceIconRenderer } from '../../browser/labels.js';
+import { DEFAULT_LABELS_CONTAINER, IResourceLabelService, ResourceLabels, type IResourceIconRenderer } from '../../browser/labels.js';
 
 test('ResourceLabels formats files and reacts to icon and decoration changes', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -131,5 +133,26 @@ test('a label group updates icon visibility and releases all of its labels', () 
 		changes.fire();
 		assert.equal(renders, before + 1);
 		assert.equal(dom.window.document.body.childElementCount, 0);
+	} finally { dom.window.close(); }
+});
+
+test('untitled resource labels follow the draft name and keep the resource identity', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
+		const untitled = services.get(IUntitledTextEditorService);
+		using labels = services.get(IResourceLabelService).createGroup();
+		const draft = untitled.create();
+		const fileLabel = labels.create(dom.window.document.body);
+		const resourceLabel = labels.create(dom.window.document.body);
+		fileLabel.setFile(draft.resource);
+		resourceLabel.setResource({ resource: draft.resource, name: draft.name });
+		untitled.rename(draft.resource, 'Scratch');
+
+		assert.deepEqual({
+			name: fileLabel.element.querySelector('.ash-icon-label-text')?.textContent,
+			resource: draft.resource.toString(),
+			accessibleLabel: resourceLabel.element.getAttribute('aria-label'),
+		}, { name: 'Scratch', resource: 'untitled:/Untitled-1', accessibleLabel: 'Scratch • /Untitled-1' });
 	} finally { dom.window.close(); }
 });

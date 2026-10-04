@@ -1,6 +1,6 @@
 ---
 description: Ash design philosophy — the shared Values→Principles→Moves vocabulary for reasoning about UI in design terms rather than raw pixels. Use when creating, editing, or reviewing any visual surface (CSS, DOM, theming, icons, motion). Name the value/principle before reaching for a token.
-applyTo: "src/ash/**/browser/**/*.{ts,css}"
+applyTo: "app-ts/src/ash/**/browser/**/*.{ts,css}"
 ---
 
 # Design philosophy
@@ -22,4 +22,4 @@ Work in three layers - name the **feeling**, find the **principle** it breaks, t
 
 Reach for a **move** only *after* naming the feeling and the principle - never instead. Describe a bug by its role/tier/ramp (*"this overlay is rounded at the control tier"*), not its number (*"border-radius should be 6"*).
 
-**Full reference** (values, principles, moves, worked examples, phrasebook, and feedback guidance): the [`design-philosophy` skill](../.agents/skills/design-philosophy/SKILL.md). **Token mechanics:** [design-tokens.instructions.md](./design-tokens.instructions.md).
+**Full reference** (values, principles, moves, worked examples, phrasebook, and feedback guidance): the [`design-philosophy` skill](../../.agents/skills/design-philosophy/SKILL.md). **Token mechanics:** [design-tokens.instructions.md](./design-tokens.instructions.md).

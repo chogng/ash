@@ -1,5 +1,5 @@
 set working-directory := "."
-set positional-arguments
+set positional-arguments := true
 set shell := ["sh", "-cu"]
 set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-CommandWithArgs"]
 
@@ -35,6 +35,18 @@ install-python:
 # Run repository-owned Python tests, optionally selecting scripts, code, or build.
 test-python *args:
     {{ python }} -B scripts/test-python.py {{ recipe_args }}
+
+# Show file ownership, matching instructions, and referenced skills.
+context *args:
+    {{ python }} -B scripts/workflow.py context {{ recipe_args }}
+
+# Check, test, and reject warnings for one Cargo package using one profile.
+verify *args:
+    {{ python }} -B scripts/workflow.py verify {{ recipe_args }}
+
+# Group TUI snapshots by test; accept only explicitly listed reviewed files.
+snapshot *args:
+    {{ python }} -B scripts/workflow.py snapshot {{ recipe_args }}
 
 # Reject dependency declaration, ownership, version, and unused-dependency violations.
 dependencies *args:

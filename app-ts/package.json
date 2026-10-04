@@ -43,7 +43,7 @@
     "package:darwin:bundle": "node ../build/app_ts/package-darwin.ts",
     "package:darwin:verify": "node ../build/app_ts/verify-darwin.ts",
     "build:stanza": "pnpm run typecheck:stanza && vite build --config ../build/app_ts/vite/editor.vite.config.ts",
-    "test:main": "pnpm run test:build-tools && pnpm run test:unit",
+    "test:main": "pnpm run stylelint && pnpm run test:build-tools && pnpm run test:unit",
     "test:build-tools": "pnpm --dir ../build test",
     "test:extensions": "node test/unit/clean.ts && tsc -p tsconfig.extensions-test.json && node test/unit/extensions.ts",
     "test:unit": "node test/unit/clean.ts && tsc -p tsconfig.test.json && node --test test/unit/mocha.test.ts && node test/unit/run.ts",
@@ -100,7 +100,9 @@
     "start": "node ../build/app_ts/launch/electron.ts",
     "typecheck:memories": "tsc -p tsconfig.memories-check.json --noEmit",
     "localization:generate": "node ../build/resources/localization.ts",
-    "localization:check": "node ../build/resources/localization.ts --check"
+    "localization:check": "node ../build/resources/localization.ts --check",
+    "stylelint": "node ../build/stylelint.ts",
+    "hygiene": "node ../build/hygiene.ts"
   },
   "devDependencies": {
     "@electron/rebuild": "4.2.0",

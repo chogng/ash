@@ -43,7 +43,7 @@ RENDERER_STAGES = (
     ("ash.workbench.constructor-start", "ash.workbench.services-ready"),
     ("ash.workbench.services-ready", "ash.workbench.shell-ready"),
     ("ash.workbench.shell-ready", "ash.workbench.views-restored"),
-    ("ash.workbench.views-restored", "ash.workbench.constructor-done"),
+    ("ash.workbench.shell-ready", "ash.workbench.constructor-done"),
     ("ash.desktop.workbench-start", "ash.desktop.workbench-created"),
     ("ash.desktop.workbench-created", "ash.desktop.lifecycle-ready"),
 )

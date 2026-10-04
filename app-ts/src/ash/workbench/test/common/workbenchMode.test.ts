@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { migrateAcademicWorkbenchSettings, migrateAcademicWorkbenchUrl, resolveWorkbenchModeIdFromUrl, WorkbenchModeId, WorkbenchModeRegistry, withWorkbenchModeId } from '../../common/workbenchMode.js';
+import { migrateAcademicWorkbenchSettings, migrateAcademicWorkbenchUrl } from '../../common/workbenchModeMigration.js';
+import { resolveWorkbenchModeIdFromUrl, WorkbenchModeId, WorkbenchModeRegistry, withWorkbenchModeId } from '../../common/workbenchMode.js';
 
 test('Workbench mode registry is the complete owner of built-in definitions', () => {
 	assert.equal(WorkbenchModeRegistry.resolveModeId(undefined), WorkbenchModeId.Code);

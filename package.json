@@ -55,7 +55,10 @@
     "dev:web:full": "pnpm --dir app-ts dev:web:full",
     "package:runtime": "just runtime-package",
     "generate:protocol": "just generate-protocol",
-    "verify:protocol": "cargo test --manifest-path Cargo.toml -p ash-app-server-protocol"
+    "verify:protocol": "cargo test --manifest-path Cargo.toml -p ash-app-server-protocol",
+    "stylelint": "node build/stylelint.ts",
+    "hygiene": "node build/hygiene.ts",
+    "stylelint:update": "pnpm --dir app-ts test:unit --run src/ash/workbench/contrib/themes/test/node/colorRegistry.releaseTest.ts"
   },
   "devDependencies": {
     "sirv": "^3.0.2"

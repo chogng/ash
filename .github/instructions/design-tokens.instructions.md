@@ -1,15 +1,16 @@
 ---
 description: Design-system size tokens (spacing, corner radius, font size, lxicon size, stroke). Use when writing or editing CSS to size, space, or round UI — prefer the `--ash-*` token vars over hardcoded px values.
-applyTo: src/ash/**/*.css
+applyTo: app-ts/src/ash/**/*.css
 ---
 
 # Design tokens for sizing, spacing & radii
 
-> **These tokens are the *moves*, not the reasoning.** They implement the **design philosophy** (Values → Principles → Moves): reach for a token *after* naming the feeling and the principle it serves - a radius is an *elevation tier*, a font is a *type role*, not a number. See the [`design-philosophy` skill](../skills/design-philosophy/SKILL.md) for the full vocabulary, worked examples, and how to give UI feedback in design terms.
+> **These tokens are the *moves*, not the reasoning.** They implement the **design philosophy** (Values → Principles → Moves): reach for a token *after* naming the feeling and the principle it serves - a radius is an *elevation tier*, a font is a *type role*, not a number. See the [`design-philosophy` skill](../../.agents/skills/design-philosophy/SKILL.md) for the full vocabulary, worked examples, and how to give UI feedback in design terms.
 
-Ash ships a design-system **size** ramp. These tokens are registered in [baseSizes.ts](../../src/ash/platform/theme/common/sizes/baseSizes.ts) and emitted as `--ash-*` CSS variables. **When generating or editing CSS, use the token variable instead of a raw `px` value** wherever a token exists for that value. This keeps new UI visually consistent with the design system.
+Ash ships a design-system **size** ramp. These tokens are registered in [baseSizes.ts](../../app-ts/src/ash/platform/theme/common/sizes/baseSizes.ts) and emitted as `--ash-*` CSS variables. **When generating or editing CSS, use the token variable instead of a raw `px` value** wherever a token exists for that value. This keeps new UI visually consistent with the design system.
 
 > Every `--ash-*` size var you reference must already exist in [ash-known-variables.json](../../build/lib/stylelint/ash-known-variables.json) (`"sizes"` array, alphabetically sorted) or stylelint/hygiene fails. Adding a *new* token means adding it both in `baseSizes.ts` and that JSON file.
+> Run `pnpm stylelint:update` after changing registrations, review the generated diff, then run `pnpm stylelint` and `pnpm hygiene`. `stylelint` checks CSS references without changing the manifest; `hygiene` also checks the manifest against the live color and size registries. Component-owned variables belong in the `"others"` list only after their defining owner is verified.
 
 ## Spacing — padding, margin, gap
 

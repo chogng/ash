@@ -8,4 +8,5 @@ import { WorkbenchModeId } from "../../../../workbench/common/workbenchMode.js";
 import "../../../../workbench/contrib/chat/electron-browser/chat.contribution.js";
 import { main } from "../../../../workbench/electron-browser/desktop.main.js";
 
+performance.mark('ash.desktop.contributions-ready');
 await main(WorkbenchModeId.Code, [createAppServerDebugAdapterCapability]);

@@ -1,22 +1,24 @@
 import type { JsonValue } from './jsonValue.js';
 
-export enum JsonTokenKind {
-	OpenBrace = 'openBrace',
-	CloseBrace = 'closeBrace',
-	OpenBracket = 'openBracket',
-	CloseBracket = 'closeBracket',
-	Comma = 'comma',
-	Colon = 'colon',
-	String = 'string',
-	Number = 'number',
-	True = 'true',
-	False = 'false',
-	Null = 'null',
-	LineComment = 'lineComment',
-	BlockComment = 'blockComment',
-	Trivia = 'trivia',
-	Unknown = 'unknown',
-}
+export const JsonTokenKind = {
+	OpenBrace: 'openBrace',
+	CloseBrace: 'closeBrace',
+	OpenBracket: 'openBracket',
+	CloseBracket: 'closeBracket',
+	Comma: 'comma',
+	Colon: 'colon',
+	String: 'string',
+	Number: 'number',
+	True: 'true',
+	False: 'false',
+	Null: 'null',
+	LineComment: 'lineComment',
+	BlockComment: 'blockComment',
+	Trivia: 'trivia',
+	Unknown: 'unknown',
+} as const;
+
+export type JsonTokenKind = typeof JsonTokenKind[keyof typeof JsonTokenKind];
 
 export interface JsonToken {
 	readonly kind: JsonTokenKind;
@@ -381,16 +383,20 @@ function isJsonWhitespace(character: string): boolean {
 }
 
 class JsonParser {
+	private readonly source: string;
+	private readonly options: JsonParseOptions;
 	private readonly significantTokens: readonly JsonToken[];
 	private readonly errors: JsonParseError[];
 	private index = 0;
 
 	constructor(
-		private readonly source: string,
+		source: string,
 		tokens: readonly JsonToken[],
 		scanErrors: readonly JsonParseError[],
-		private readonly options: JsonParseOptions,
+		options: JsonParseOptions,
 	) {
+		this.source = source;
+		this.options = options;
 		this.significantTokens = tokens.filter(candidate => !isTrivia(candidate.kind));
 		this.errors = [...scanErrors];
 	}
@@ -632,35 +638,39 @@ export * from './jsonEdit.js';
 export * from './jsonErrorMessages.js';
 export * from './jsonFormatter.js';
 
-export enum ScanError {
-	None = 0,
-	UnexpectedEndOfComment = 1,
-	UnexpectedEndOfString = 2,
-	UnexpectedEndOfNumber = 3,
-	InvalidUnicode = 4,
-	InvalidEscapeCharacter = 5,
-	InvalidCharacter = 6,
-}
+export const ScanError = {
+	None: 0,
+	UnexpectedEndOfComment: 1,
+	UnexpectedEndOfString: 2,
+	UnexpectedEndOfNumber: 3,
+	InvalidUnicode: 4,
+	InvalidEscapeCharacter: 5,
+	InvalidCharacter: 6,
+} as const;
 
-export enum SyntaxKind {
-	OpenBraceToken = 1,
-	CloseBraceToken = 2,
-	OpenBracketToken = 3,
-	CloseBracketToken = 4,
-	CommaToken = 5,
-	ColonToken = 6,
-	NullKeyword = 7,
-	TrueKeyword = 8,
-	FalseKeyword = 9,
-	StringLiteral = 10,
-	NumericLiteral = 11,
-	LineCommentTrivia = 12,
-	BlockCommentTrivia = 13,
-	LineBreakTrivia = 14,
-	Trivia = 15,
-	Unknown = 16,
-	EOF = 17,
-}
+export type ScanError = typeof ScanError[keyof typeof ScanError];
+
+export const SyntaxKind = {
+	OpenBraceToken: 1,
+	CloseBraceToken: 2,
+	OpenBracketToken: 3,
+	CloseBracketToken: 4,
+	CommaToken: 5,
+	ColonToken: 6,
+	NullKeyword: 7,
+	TrueKeyword: 8,
+	FalseKeyword: 9,
+	StringLiteral: 10,
+	NumericLiteral: 11,
+	LineCommentTrivia: 12,
+	BlockCommentTrivia: 13,
+	LineBreakTrivia: 14,
+	Trivia: 15,
+	Unknown: 16,
+	EOF: 17,
+} as const;
+
+export type SyntaxKind = typeof SyntaxKind[keyof typeof SyntaxKind];
 
 export interface JSONScanner {
 	setPosition(position: number): void;
@@ -679,24 +689,26 @@ export interface ParseError {
 	readonly length: number;
 }
 
-export enum ParseErrorCode {
-	InvalidSymbol = 1,
-	InvalidNumberFormat = 2,
-	PropertyNameExpected = 3,
-	ValueExpected = 4,
-	ColonExpected = 5,
-	CommaExpected = 6,
-	CloseBraceExpected = 7,
-	CloseBracketExpected = 8,
-	EndOfFileExpected = 9,
-	InvalidCommentToken = 10,
-	UnexpectedEndOfComment = 11,
-	UnexpectedEndOfString = 12,
-	UnexpectedEndOfNumber = 13,
-	InvalidUnicode = 14,
-	InvalidEscapeCharacter = 15,
-	InvalidCharacter = 16,
-}
+export const ParseErrorCode = {
+	InvalidSymbol: 1,
+	InvalidNumberFormat: 2,
+	PropertyNameExpected: 3,
+	ValueExpected: 4,
+	ColonExpected: 5,
+	CommaExpected: 6,
+	CloseBraceExpected: 7,
+	CloseBracketExpected: 8,
+	EndOfFileExpected: 9,
+	InvalidCommentToken: 10,
+	UnexpectedEndOfComment: 11,
+	UnexpectedEndOfString: 12,
+	UnexpectedEndOfNumber: 13,
+	InvalidUnicode: 14,
+	InvalidEscapeCharacter: 15,
+	InvalidCharacter: 16,
+} as const;
+
+export type ParseErrorCode = typeof ParseErrorCode[keyof typeof ParseErrorCode];
 
 export type NodeType = 'object' | 'array' | 'property' | 'string' | 'number' | 'boolean' | 'null';
 
@@ -726,9 +738,9 @@ export interface ParseOptions {
 	readonly allowEmptyContent?: boolean;
 }
 
-export namespace ParseOptions {
-	export const DEFAULT: ParseOptions = Object.freeze({ allowTrailingComma: true });
-}
+export const ParseOptions = {
+	DEFAULT: Object.freeze<ParseOptions>({ allowTrailingComma: true }),
+};
 
 export interface JSONVisitor {
 	onObjectBegin?: (offset: number, length: number) => void;
@@ -749,9 +761,9 @@ export function createScanner(text: string, ignoreTrivia = false): JSONScanner {
 	if (typeof text !== 'string') throw new TypeError('JSON source must be text');
 	let position = 0;
 	let tokenOffset = 0;
-	let token = SyntaxKind.Unknown;
+	let token: SyntaxKind = SyntaxKind.Unknown;
 	let tokenValue = '';
-	let scanError = ScanError.None;
+	let scanError: ScanError = ScanError.None;
 
 	const setPosition = (newPosition: number): void => {
 		position = Math.max(0, Math.min(text.length, newPosition));
@@ -1015,7 +1027,7 @@ export function parse(text: string, errors: ParseError[] = [], options: ParseOpt
 export function parseTree(text: string, errors: ParseError[] = [], options: ParseOptions = ParseOptions.DEFAULT): Node | undefined {
 	let currentParent: MutableNode = { type: 'array', offset: -1, length: -1, children: [] };
 	const visitor: JSONVisitor = {
-		onObjectBegin: (offset, length) => {
+		onObjectBegin: offset => {
 			currentParent = append({ type: 'object', offset, length: -1, parent: currentParent, children: [] });
 		},
 		onObjectProperty: (name, offset, length) => {
@@ -1028,7 +1040,7 @@ export function parseTree(text: string, errors: ParseError[] = [], options: Pars
 			currentParent = currentParent.parent ?? currentParent;
 			completeProperty(offset + length);
 		},
-		onArrayBegin: (offset, length) => { currentParent = append({ type: 'array', offset, length: -1, parent: currentParent, children: [] }); },
+		onArrayBegin: offset => { currentParent = append({ type: 'array', offset, length: -1, parent: currentParent, children: [] }); },
 		onArrayEnd: (offset, length) => {
 			currentParent.length = offset + length - currentParent.offset;
 			currentParent = currentParent.parent ?? currentParent;

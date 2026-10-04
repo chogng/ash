@@ -35,7 +35,7 @@ import { BrowserLifecycleService } from '../services/lifecycle/browser/lifecycle
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { EMPTY_WORKSPACE_ID_KEY } from '../services/host/browser/browserHostService.js';
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
-import { migrateAcademicWorkbenchSettings } from '../common/workbenchMode.js';
+import { migrateAcademicWorkbenchSettings } from '../common/workbenchModeMigration.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
 export async function createWebWorkbench(

@@ -124,3 +124,37 @@ for (const packageState of ['selected', 'other'] as const) {
 		}
 	});
 }
+
+
+test('startup marks record shell readiness and completed restoration in the running workbench', async ({ target, workbench }) => {
+	const page = workbench.page;
+	await expect.poll(() => page.evaluate(() => performance.getEntriesByName('ash.workbench.restored').length)).toBe(1);
+	const timings = await page.evaluate(() => Object.fromEntries(performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.')).map(mark => [mark.name, mark.startTime])));
+	const workbenchStages = ['constructor-start', 'services-ready', 'shell-ready', 'constructor-done', 'restored'];
+	for (const stage of [...workbenchStages, 'views-restored']) {
+		expect(timings[`ash.workbench.${stage}`], stage).toBeDefined();
+	}
+	for (let index = 1; index < workbenchStages.length; index++) {
+		expect(timings[`ash.workbench.${workbenchStages[index]}`]).toBeGreaterThanOrEqual(timings[`ash.workbench.${workbenchStages[index - 1]}`]!);
+	}
+	expect(timings['ash.workbench.restored']).toBeGreaterThanOrEqual(timings['ash.workbench.views-restored']!);
+	if (target.kind === 'electron') {
+		const desktopStages = ['contributions-start', 'contributions-ready', 'open-start', 'api-ready', 'themes-ready', 'workspace-ready', 'configuration-ready', 'workbench-start', 'workbench-created', 'lifecycle-ready'];
+		for (let index = 0; index < desktopStages.length; index++) {
+			const mark = timings[`ash.desktop.${desktopStages[index]}`];
+			expect(mark, desktopStages[index]).toBeDefined();
+			if (index > 0) { expect(mark).toBeGreaterThanOrEqual(timings[`ash.desktop.${desktopStages[index - 1]}`]!); }
+		}
+		if (target.appServerMode === 'required') {
+			const connectionStages = ['start', 'acquire-start', 'acquired', 'initialized', 'workspace-initialized'];
+			for (let index = 0; index < connectionStages.length; index++) {
+				const mark = timings[`ash.rendererApi.${connectionStages[index]}`];
+				expect(mark, connectionStages[index]).toBeDefined();
+				if (index > 0) { expect(mark).toBeGreaterThanOrEqual(timings[`ash.rendererApi.${connectionStages[index - 1]}`]!); }
+			}
+		} else {
+			expect(timings['ash.rendererApi.initialized']).toBeUndefined();
+			expect(timings['ash.rendererApi.workspace-initialized']).toBeUndefined();
+		}
+	}
+});

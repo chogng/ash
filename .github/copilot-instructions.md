@@ -18,6 +18,8 @@ Before changing a file, identify its owner and read every matching scoped instru
 
 Scoped instructions contain implementation rules. Architecture documents contain design, status, and rationale.
 
+When starting from a file path, `just context <file>` lists its Cargo owner, matching instructions, and referenced skills; snapshot paths also include their test source. Read the applicable files and check each skill's scope before modifying code. Command details are in [fixed development steps](../docs/build.md#固定开发步骤).
+
 ### Finding Related Code
 1. **Semantic search first**: Use file search for general concepts
 2. **Grep for exact strings**: Use grep for error messages or specific function names

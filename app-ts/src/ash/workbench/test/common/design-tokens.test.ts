@@ -1,3 +1,13 @@
+import '../../../platform/theme/common/colors/chartsColors.js';
+import '../../../platform/theme/common/colors/componentColors.js';
+import '../../../platform/theme/common/colors/editorColors.js';
+import '../../../platform/theme/common/colors/inputColors.js';
+import '../../../platform/theme/common/colors/listColors.js';
+import '../../../platform/theme/common/colors/menuColors.js';
+import '../../../platform/theme/common/colors/minimapColors.js';
+import '../../../platform/theme/common/colors/miscColors.js';
+import '../../../platform/theme/common/colors/quickpickColors.js';
+import '../../../platform/theme/common/colors/searchColors.js';
 import '../../contrib/welcomeGettingStarted/browser/gettingStartedColors.js';
 import '../../../sessions/contrib/design/browser/widget/designToolsWidget.js';
 import '../../../platform/theme/common/colors/baseColors.js';
@@ -19,24 +29,14 @@ import "../../contrib/preferences/common/settingsEditorColorRegistry.js";
 import "../../contrib/terminal/common/terminalColorRegistry.js";
 import "../../../sessions/common/sessionsColors.js";
 
-test("CSS consumes registered design tokens and isolates intentional color samples", async () => {
-	const registered = new Set([...Colors.getColors().map(({ id }) => colorCssVariable(id)), ...Sizes.getSizes().map(({ id }) => asCssVariableName(id))]);
-	const platformVariables = new Set(["--ash-font-family", "--ash-font-family-monospace", "--ash-context-view-layer", "--ash-z-index-context-view", "--ash-z-index-quick-input", "--ash-z-index-sash"]);
-	const componentPresentationVariables = new Set([
-		"--ash-color-picker-hue",
-		"--ash-color-picker-opaque",
-		"--ash-color-picker-saturation",
-		"--ash-color-picker-brightness",
-		"--ash-color-picker-value",
-		"--ash-design-fill",
-		"--ash-editor-token-foreground",
-		"--ash-scrollbar-slider-size",
-		"--ash-icon-label-text-overflow",
-		"--ash-sash-inset-gap",
-		"--ash-split-view-separator-border",
-		"--ash-tab-list-inactive-background",
-		"--ash-terminal-command-gutter-width",
-	]);
+test('CSS variable manifest matches registered colors and sizes', async () => {
+	const path = join(process.cwd(), '../build/lib/stylelint/ash-known-variables.json');
+	const variables = JSON.parse(await readFile(path, 'utf8'));
+	assert.deepEqual(variables.colors, Colors.getColors().map(({ id }) => colorCssVariable(id)).sort(), 'Run pnpm stylelint:update and review the manifest.');
+	assert.deepEqual(variables.sizes, Sizes.getSizes().map(({ id }) => asCssVariableName(id)).sort(), 'Run pnpm stylelint:update and review the manifest.');
+});
+
+test("CSS isolates intentional color samples", async () => {
 	const intentionalColorFiles = new Set([
 		"base/browser/ui/colorPicker/colorPicker.css",
 		"base/browser/ui/lxicons/lxicon.css",
@@ -45,30 +45,16 @@ test("CSS consumes registered design tokens and isolates intentional color sampl
 		"editor/contrib/colorPicker/browser/colorPicker.css",
 	]);
 	const sourceRoot = join(process.cwd(), "src", "ash");
-	// Component geometry and presentation variables are owned by CSS or TS,
-	// while shared color and size tokens must come from the registries.
-	for (const file of await presentationFiles(sourceRoot)) {
-		const source = await readFile(file, 'utf8');
-		for (const match of source.matchAll(/["']?(--ash-[a-zA-Z0-9-]+)["']?\s*:|setProperty\(\s*["'](--ash-[a-zA-Z0-9-]+)["']/gu)) {
-			componentPresentationVariables.add(match[1] ?? match[2]!);
-		}
-	}
-	platformVariables.add('--ash-shadow-lg');
-	const unknownVariables: string[] = [];
 	const rawColors: string[] = [];
 	for (const file of (await presentationFiles(sourceRoot)).filter(file => file.endsWith(".css"))) {
 		const source = await readFile(file, "utf8");
 		const name = relative(sourceRoot, file).replaceAll("\\", "/");
-		for (const match of source.matchAll(/var\((--ash-[a-zA-Z0-9-]+)/g)) {
-			if (!registered.has(match[1]!) && !platformVariables.has(match[1]!) && !componentPresentationVariables.has(match[1]!)) unknownVariables.push(`${name}: ${match[1]}`);
-		}
 		if (!intentionalColorFiles.has(name)) {
 			for (const [index, line] of source.split(/\r?\n/).entries()) {
 				if (/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/.test(line)) rawColors.push(`${name}:${index + 1}`);
 			}
 		}
 	}
-	assert.deepEqual(unknownVariables, []);
 	assert.deepEqual(rawColors, []);
 });
 

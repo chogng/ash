@@ -135,6 +135,41 @@ class JustTests(unittest.TestCase):
         self.assertEqual(len(commands), 1)
         self.assertEqual(commands[0][0], "build")
 
+    def test_workflow_recipes_forward_paths_and_options_literally(self) -> None:
+        arguments = ["path with spaces/a'b.snap", "--features", "one,two", "--plan"]
+        with tempfile.TemporaryDirectory(prefix="ash workflow recipes ") as directory:
+            folder = Path(directory)
+            (folder / "justfile").write_text(
+                (ROOT / "justfile").read_text(), encoding="utf-8"
+            )
+            (folder / "scripts").mkdir()
+            (folder / "scripts/workflow.py").write_text(
+                "import json, sys; print(json.dumps(sys.argv[1:]))", encoding="utf-8"
+            )
+            environment = os.environ.copy()
+            environment["PATH"] = (
+                str(Path(sys.executable).parent)
+                + os.pathsep
+                + environment.get("PATH", "")
+            )
+            for recipe in ("snapshot", "context", "verify"):
+                with self.subTest(recipe=recipe):
+                    result = subprocess.run(
+                        [
+                            "just",
+                            "--justfile",
+                            str(folder / "justfile"),
+                            recipe,
+                            *arguments,
+                        ],
+                        capture_output=True,
+                        text=True,
+                        env=environment,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(json.loads(result.stdout), [recipe, *arguments])
+
     def run_recipe(self, script: str, *args: str) -> subprocess.CompletedProcess[str]:
         environment = os.environ.copy()
         environment["PATH"] = (

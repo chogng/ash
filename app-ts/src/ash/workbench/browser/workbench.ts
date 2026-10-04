@@ -466,6 +466,7 @@ export class Workbench extends Disposable {
 		createURLService: IStartWorkbenchOptions['createURLService'],
 	) {
 		super();
+		performance.mark('ash.workbench.constructor-start');
 		this._register(themes);
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 		const mode = WorkbenchModeRegistry.get(modeId);
@@ -867,6 +868,7 @@ export class Workbench extends Disposable {
 			WorkbenchContributionsRegistry.createHost(services),
 		);
 		this.contributions = contributions;
+		performance.mark('ash.workbench.services-ready');
 		contributions.advance(WorkbenchPhase.BlockStartup);
 
 		const sidebar = this._register(new SidebarPart(workbenchRoot, {
@@ -1075,18 +1077,29 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(instantiationService.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
+		// Workspace switches reuse this operation; startup marks describe only its first run.
+		let isStartupRestoration = true;
 		this.restoreActiveViewContainers = async () => {
+			const isStartup = isStartupRestoration;
+			isStartupRestoration = false;
 			const openings: Promise<unknown>[] = [];
 			for (const [location, part] of paneParts) {
 				if (location === ViewContainerLocation.AgentSidebar && !layout.isPartVisible('agentSidebar')) { continue; }
 				const visible = layout.isPartVisible(panes.getPartId(location));
 				const container = requiredViewContainerToRestore(viewDescriptors, location, part.getCompositeIdToRestore());
 				// Restore retained content without changing the saved visibility of its region.
+				if (isStartup) {
+					if (location === ViewContainerLocation.Sidebar) { performance.mark('ash.workbench.sidebar-restore-start'); }
+					if (location === ViewContainerLocation.Panel) { performance.mark('ash.workbench.panel-restore-start'); }
+					if (location === ViewContainerLocation.AuxiliaryBar) { performance.mark('ash.workbench.auxiliary-restore-start'); }
+				}
 				openings.push(views.openViewContainer(container.id));
 				if (!visible) { views.closeViewContainer(container.id); }
 			}
 			await Promise.all(openings);
+			if (isStartup) { performance.mark('ash.workbench.views-restored'); }
 		};
+		performance.mark('ash.workbench.shell-ready');
 		const paneRestoration = this.restoreActiveViewContainers();
 		for (const [location, part] of paneParts) {
 			this._register(part.onDidSelectComposite(({ compositeId }) => {
@@ -1111,6 +1124,7 @@ export class Workbench extends Disposable {
 				contributions.advance(WorkbenchPhase.Eventually);
 			}, 2_000));
 		});
+		performance.mark('ash.workbench.constructor-done');
 	}
 
 	private registerErrorHandler(logService: ILogService): void {
@@ -1146,6 +1160,7 @@ export class Workbench extends Disposable {
 		saveFontInfo();
 		this.lifecycleService.phase = LifecyclePhase.Restored;
 		contributions.advance(WorkbenchPhase.AfterRestored);
+		performance.mark('ash.workbench.restored');
 		this.logService.info('lifecycle', 'Workbench restored');
 	}
 

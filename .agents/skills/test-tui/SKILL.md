@@ -1,6 +1,6 @@
 ---
 name: test-tui
-description: Test Ash Code TUI behavior in process with ash-tui component and App tests and insta snapshots. Use test-tui-pty for real CLI, PTY, or host-terminal boundaries.
+description: Test Ash Code TUI behavior in process with ash-tui component and App tests; locate, run, and review insta snapshots through the repository snapshot workflow. Use test-tui-pty for real CLI, PTY, or host-terminal boundaries.
 ---
 
 # Test Ash Code TUI behavior
@@ -42,8 +42,16 @@ Use `insta::assert_snapshot!` for substantial external snapshots. Inline snapsho
 Start with the smallest package and test filter that owns the behavior:
 
 ```bash
-just test ash-tui <test-filter>
+just test-tui-unit <test-filter>
 ```
+
+When starting from an external snapshot under `code/tui/snapshots/` whose assertion has a literal name, prefer the snapshot-path workflow:
+
+```bash
+just snapshot code/tui/snapshots/fullscreen/composer/composer_focused.snap
+```
+
+Pass multiple snapshot paths to group them by owning test, or use `just snapshot --pending` to discover pending TUI snapshots. Duplicate paths and screen modes sharing a test run only once. The command resolves source functions, checks that the compiled test list contains exactly one match per group, runs each test, and shows selected pending changes and newly generated files. A failed test does not prevent the remaining selected tests from running; the command preserves a failure exit code. Snapshot names can differ from test names; do not use the snapshot basename as a test filter. Use `--plan` to inspect the source function without compiling, and `--features in-process-tests` when the owning test needs the in-process App Server. For dynamic names, shared assertion helpers, or inline snapshots, select the owning test directly with `just test-tui-unit`; real PTY snapshots use [test-tui-pty](../test-tui-pty/SKILL.md).
 
 An intentional new or changed external snapshot should fail first and leave a `.snap.new` file. Inspect pending snapshots and open each affected file directly:
 
@@ -54,7 +62,15 @@ cargo insta show path/to/snapshot.snap.new
 
 Read every changed row, including whitespace, wrapping, clipping, and omitted content. Confirm that the test reached the intended state and that no host path, credential, generated identity, unstable duration, or unrelated UI churn entered the baseline. Treat a snapshot diff as evidence, not approval; trace unexpected output to the state and renderer owner. If many unrelated snapshots change, inspect shared theme, width, wrapping, or normalization behavior instead of bulk-accepting unexplained churn.
 
-Accept a reviewed snapshot by its exact expected path:
+For the snapshot-path workflow, explicitly list the reviewed files to accept and rerun their tests:
+
+```bash
+just snapshot code/tui/snapshots/fullscreen/composer/composer_focused.snap --accept
+```
+
+You may list several reviewed files with `--accept`; never combine it with `--pending`. The command checks all selected pending files and compiled test owners before accepting, shows every selected diff, accepts only the listed files, and reruns each owning test once without inherited `INSTA_*` settings. A single test may emit several snapshots, including both screen modes; review every affected file. The command lists all pending snapshots under `code/tui/snapshots/` and returns nonzero while any remain, even when the selected test passes. Check the test result and pending-file list separately.
+
+When using the owning test directly, accept a reviewed snapshot by its exact repository-relative expected path:
 
 ```bash
 cargo insta accept --snapshot path/to/snapshot.snap

@@ -2,7 +2,8 @@ import { showStartupError } from '../../../workbench/browser/startupError.js';
 import { IndexedDbConfigurationApi } from '../../../platform/configuration/browser/indexedDbConfigurationApi.js';
 import { BrowserLanguagePackStore } from '../../../platform/languagePacks/browser/languagePackStore.js';
 import { initializeBrowserLocalization } from '../../../workbench/services/localization/browser/localizationBootstrap.js';
-import { migrateAcademicWorkbenchUrl, resolveWorkbenchModeIdFromUrl, WorkbenchModeId } from "../../../workbench/common/workbenchMode.js";
+import { migrateAcademicWorkbenchUrl } from "../../../workbench/common/workbenchModeMigration.js";
+import { resolveWorkbenchModeIdFromUrl, WorkbenchModeId } from "../../../workbench/common/workbenchMode.js";
 
 declare const __ASH_WORKBENCH_MODE__: WorkbenchModeId;
 

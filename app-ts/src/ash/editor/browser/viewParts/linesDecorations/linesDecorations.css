@@ -10,7 +10,5 @@
 */
 .stanza-editor .margin-view-overlays .cldr {
 	position: absolute;
-	left: calc(var(--stanza-editor-line-decorations-left) + var(--stanza-editor-line-decoration-offset));
-	width: var(--stanza-editor-line-decoration-width);
 	height: 100%;
 }

@@ -57,7 +57,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 		cache: 'new user data for every sample; operating-system file cache is not cleared',
 		profileState: 'fresh profiles include Playwright trust selection; stopped, reused, and UI-only use an authorized profile',
 		milestoneClock: 'Playwright worker performance.now; each elapsed time is relative to launch-requested in the same process',
-		rendererClock: 'Renderer performance timeline; marks and navigation responseEnd share one window clock',
+		rendererClock: 'Renderer performance timeline; source-owned startup marks v2 and navigation responseEnd share one window clock',
 	};
 	const stop = async (profile: string): Promise<void> => {
 		await execFileAsync(daemon, ['stop'], { env: { ...process.env, ASH_HOME: profile }, windowsHide: true, timeout: 30_000 });
@@ -152,7 +152,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 			await measure('ui-only', index, stoppedProfile, false);
 		}
 		expect(samples.filter(sample => sample.error)).toEqual([]);
-		expect(samples.filter(sample => !sample.renderer?.marks.some(mark => mark.name === 'ash.desktop.trace-build-v1'))).toEqual([]);
+		expect(samples.filter(sample => !sample.renderer?.marks.some(mark => mark.name === 'ash.workbench.restored'))).toEqual([]);
 		expect(samples.filter(sample => !sample.renderer?.marks.some(mark => mark.name === 'ash.desktop.lifecycle-ready'))).toEqual([]);
 		expect(metadata.reusedDaemonSameProcess).toBe(true);
 	} catch (cause) {

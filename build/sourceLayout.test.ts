@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 
@@ -49,7 +50,14 @@ test("frontend Node tools and backend package builders have separate language ow
     assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === ".py"), [], directory);
   }
   for (const directory of ["ash_rs", "app_rs", "code", "download", "lib", "darwin", "win32", "linux"]) {
-    assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === ".ts"), [], directory);
+    const files = walk(join(import.meta.dirname, directory)).filter(path => extname(path) === ".ts");
+    const cssTooling = new Set([
+      join(import.meta.dirname, 'lib/stylelint/validateVariableNames.ts'),
+      join(import.meta.dirname, 'lib/stylelint/validateHasSelectors.ts'),
+      join(import.meta.dirname, 'lib/stylelint/validateDesignTokens.ts'),
+      join(import.meta.dirname, 'lib/test/stylelint.test.ts'),
+    ]);
+    assert.deepEqual(files.filter(path => !cssTooling.has(path)), [], directory);
   }
   const scripts = join(repositoryRoot, "scripts");
   assert.deepEqual(readdirSync(scripts, { withFileTypes: true }).filter(entry => entry.isFile() && extname(entry.name) === ".ts").map(entry => entry.name), []);
@@ -81,3 +89,20 @@ function walk(directory: string): string[] {
     return entry.isDirectory() ? walk(path) : [path];
   });
 }
+
+
+test('build mode catalog loads without frontend runtime or settings migration modules', () => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import assert from 'node:assert/strict';
+    import { registerHooks } from 'node:module';
+    const loaded = [];
+    registerHooks({ load(url, context, nextLoad) {
+      if (url.includes('/app-ts/src/')) loaded.push(url);
+      return nextLoad(url, context);
+    } });
+    const { WorkbenchModeRegistry } = await import('./app-ts/src/ash/workbench/common/workbenchMode.ts');
+    assert.equal(WorkbenchModeRegistry.get(WorkbenchModeRegistry.defaultModeId).dedicatedSessions.rendererEntry, 'sessions-code');
+    assert.deepEqual(loaded.map(url => url.split('/').at(-1)), ['workbenchMode.ts']);
+  `], { cwd: repositoryRoot, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+});

@@ -68,7 +68,16 @@
 | `just lint` | 检查 Python 代码 |
 | `just fmt` / `just fmt-check` | 格式化或检查 Just、Rust 和第一方 Python 源码 |
 | `pnpm typecheck:build` | 检查 TypeScript 构建工具 |
+| `pnpm stylelint` | 只读检查生产 CSS 的变量和选择器，报告文件、行和列；可追加文件、目录或 glob |
+| `pnpm hygiene` | 检查 CSS 变量和选择器，再用前端单测验证变量清单与注册表一致 |
+| `pnpm stylelint:update` | 用真实颜色、尺寸注册表更新变量清单，保留组件变量；审阅生成差异后再检查 |
 | `pnpm clean` | 清理本地产物和 Python 缓存 |
+
+`stylelint` 默认排除测试和测试数据中的 CSS，显式路径没有匹配生产 CSS 时返回失败。清单位于 [ash-known-variables.json](../build/lib/stylelint/ash-known-variables.json)，`colors`、`sizes` 来自注册表，`others` 仅收录已确认由组件或平台设置的变量；三类列表都需排序，不能重复。清单更新通过显式选择 `colorRegistry.releaseTest.ts` 完成，该文件不进入日常单测的默认选择。前端 `test:main` 和 CI 都运行这些检查。
+
+变量不存在、在低层 CSS 中引用 `.ash-workbench`、在页面根上使用 `:has()`、使用 `[class*=...]` 等 class 子串选择器都会使检查失败。设计提示覆盖间距、字重、字体角色、图标、圆角和标准描边，不修改 CSS，也不影响退出码；默认检查 Sessions，显式指定路径时检查所选文件。圆角提示要求按表面层级选择，圆形或胶囊不能按最近的数字机械替换。
+
+桌面启动步骤在对应源码中直接记录 `performance.mark`，普通构建也保留这些打点。`ASH_DESKTOP_STARTUP_TRACE=1` 让构建检查追踪所需的打点是否进入 JavaScript 产物，并启用 `Desktop startup trace` 场景；插件不改写启动源码。构造完成、视图恢复完成和整体恢复完成是不同的时间点；切换工作区不重复记录启动打点。构建使用的 Workbench 模式清单不加载设置迁移，持久化设置与旧链接迁移由 `workbenchModeMigration.ts` 承担。
 
 验证完整开发包时使用 `just ash-package`，需要让 Code TUI 运行该包时使用 `just ash-package-run`。日常 `just ash` 只准备源码运行所需程序。
 
@@ -87,6 +96,39 @@
 | `pnpm test:build` | TypeScript 构建工具单测 |
 
 Electron、Browser、编辑器的构建和测试命令，以及测试是否启动 App Server，见 [前端验证命令](../app-ts/README.md#常用命令)。
+
+#### 固定开发步骤
+
+以下入口由 [`scripts/workflow.py`](../scripts/workflow.py) 组织现有命令：
+
+| 命令 | 完成的步骤 |
+| --- | --- |
+| `just context <file>` | 列出文件与快照源码所属的 Cargo 包、适用的 `AGENTS.md` 和 scoped instructions，以及这些规范引用的 skill；是否调用 skill 仍按其适用范围判断 |
+| `just verify <package>` | 使用同一 `ci-test` profile，依次执行该包的 `check`、`test` 和 `rust-warnings`；任一步失败就停止，测试没有通过任何用例也视为失败 |
+| `just snapshot <path.snap>...` | 定位快照源码中带字面量名称的 `tui_assert_snapshot!`，按所属测试分组，从已编译列表确认唯一测试，每个测试精确运行一次；有待审阅基线时展示差异并返回非零退出码 |
+| `just snapshot --pending` | 汇总 TUI 的 `.snap.new`，按测试分组复跑并展示差异 |
+
+`verify` 支持 `--filter <test-name>`、`--features <features>` 和 `--profile <profile>`；过滤条件只传给测试，feature 与 profile 传给三个步骤。`verify` 和 `snapshot` 支持 `--plan`，只解析并展示命令，不编译或运行。路径可以使用仓库根目录下的相对路径或绝对路径。
+
+```sh
+just context code/tui/snapshots/fullscreen/composer/composer_focused.snap
+just snapshot code/tui/snapshots/fullscreen/composer/composer_focused.snap
+just snapshot code/tui/snapshots/inline/state/config_english_punctuation_chinese.snap code/tui/snapshots/fullscreen/state/config_english_punctuation_chinese.snap
+just snapshot --pending --plan
+just verify ash-utils-home-dir
+```
+
+`snapshot` 当前覆盖 `code/tui/snapshots/` 下由带字面量名称的断言生成的外部快照，接受 `.snap` 和 `.snap.new` 路径；动态名称、共享 helper 中的断言和真实 PTY 快照使用所属测试入口。需要进程内 App Server 的测试传入 `--features in-process-tests`。脚本清除继承的 `INSTA_*` 设置，运行时生成 `.snap.new`，避免环境设置直接覆盖基线或隐藏失败。
+
+可以显式传入多份快照，也可以用 `--pending` 汇总所有待审阅文件；重复路径和同一测试产生的多个模式会合并，同一测试只运行一次。某个测试失败后继续运行其他已选测试，最后保留失败退出码。脚本展示选中的待审阅文件及本轮新产生的文件。
+
+按 [test-tui](../.agents/skills/test-tui/SKILL.md) 逐份审阅后，显式列出要接受的具体文件：
+
+```sh
+just snapshot code/tui/snapshots/fullscreen/composer/composer_focused.snap --accept
+```
+
+`--accept` 可接受多份已审阅文件，必须显式列出路径，不能与 `--pending` 同用。命令先确认全部指定文件都有待审阅基线、全部测试都能唯一定位，再展示全部指定差异，逐份接受，最后不带快照更新环境设置按组复跑。其他待审阅快照保留；只要 `code/tui/snapshots/` 中还有 `.snap.new`，命令返回非零退出码并列出路径。
 
 Windows Cargo 的测试 Job 禁止子进程脱离，而共享 App Server 必须独立于启动者存活。验证这种进程生命周期时，使用 `just test-processes ash-app-server --test managed_lifecycle`：Cargo 负责编译，仓库脚本按 Cargo 报告的路径独立运行测试程序，保留后台的脱离标志。该入口只接受显式选择的集成测试，不包含库单测或文档测试；普通测试继续使用 `just test`。
 

@@ -1,6 +1,6 @@
 ---
 description: Ash best practices — reusing common UI primitives and patterns. Reference when writing or reviewing code.
-applyTo: src/ash/**
+applyTo: app-ts/src/ash/**
 ---
 
 # Best Practices

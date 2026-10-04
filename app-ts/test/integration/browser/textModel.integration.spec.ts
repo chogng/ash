@@ -1790,6 +1790,10 @@ test('model decorations render through the standard overlay in Chromium', async 
 	await expect(lineDecoration).toHaveCount(2);
 	await expect(firstLineDecoration).toHaveCount(1);
 	await expect(lineDecoration.first()).toHaveAttribute('title', 'Model line decoration');
+	expect(await lineDecoration.first().evaluate(element => ({
+		left: getComputedStyle(element).left === (element as HTMLElement).style.left,
+		width: getComputedStyle(element).width === (element as HTMLElement).style.width,
+	}))).toEqual({ left: true, width: true });
 	await expect(blockDecoration).toHaveCount(1);
 	const geometry = await page.locator('.stanza-editor').evaluate(element => {
 		const inlineDecoration = element.querySelector<HTMLElement>('.ash-model-decoration-inline');

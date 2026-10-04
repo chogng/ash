@@ -2,42 +2,102 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import test from 'node:test';
+import ts from 'typescript';
 import { desktopStartupTracePlugin } from './desktopStartupTracePlugin.ts';
 
 const desktopRoot = resolve(import.meta.dirname, '../../../app-ts');
-const plugin = desktopStartupTracePlugin(desktopRoot);
-const transform = plugin.transform as (code: string, id: string) => { code: string } | undefined;
 
-for (const [lineEndingName, lineEnding] of [['LF', '\n'], ['CRLF', '\r\n']] as const) {
-	test(`Desktop trace build injects marks into startup steps with ${lineEndingName} source`, () => {
-		for (const [path, marks] of [
-			['src/ash/code/electron-browser/workbench/workbench.ts', ['ash.desktop.trace-build-v1', 'ash.desktop.contributions-start']],
-			['src/ash/code/electron-browser/workbench/modes/code.ts', ['ash.desktop.contributions-ready']],
-			['src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.ts', ['ash.decoder.schema-start', 'ash.decoder.schema-ready']],
-			['src/ash/platform/native/electron-browser/rendererApi.ts', ['ash.rendererApi.start', 'ash.rendererApi.acquire-start', 'ash.rendererApi.acquired', 'ash.rendererApi.initialized', 'ash.rendererApi.workspace-initialized']],
-			['src/ash/workbench/electron-browser/desktop.main.ts', ['ash.desktop.open-start', 'ash.desktop.api-ready', 'ash.desktop.workbench-start', 'ash.desktop.lifecycle-ready']],
-			['src/ash/workbench/browser/workbench.ts', ['ash.workbench.constructor-start', 'ash.workbench.auxiliary-restore-start', 'ash.workbench.constructor-done']],
-		] as const) {
-			const file = resolve(desktopRoot, path);
-			const source = readFileSync(file, 'utf8').replaceAll('\r\n', '\n').replaceAll('\n', lineEnding);
-			assert.doesNotMatch(source, /performance\.mark\('ash\./u);
-			const output = transform(source, file)?.code;
-			assert.ok(output, path);
-			for (const mark of marks) assert.ok(output.includes(`performance.mark('${mark}')`), `${path}: ${mark}`);
-			if (path.endsWith('/rendererApi.ts')) {
-				const backendStart = output.indexOf('backend = createRendererHost(');
-				const initialized = 'await initialize();';
-				const initializationEnd = output.lastIndexOf(initialized, backendStart) + initialized.length;
-				assert.equal(output.slice(initializationEnd, backendStart).trim(), "performance.mark('ash.rendererApi.initialized');");
-				assert.equal(output.split("performance.mark('ash.rendererApi.initialized');").length - 1, 1);
-			}
-		}
+test('Desktop trace checks emitted marks without rewriting startup source', () => {
+	const plugin = desktopStartupTracePlugin();
+	assert.equal(plugin.transform, undefined);
+	const generateBundle = plugin.generateBundle as (_options: unknown, bundle: unknown) => void;
+	const files = [
+		'src/ash/code/electron-browser/workbench/workbench.ts',
+		'src/ash/code/electron-browser/workbench/modes/code.ts',
+		'src/ash/platform/native/electron-browser/rendererApi.ts',
+		'src/ash/workbench/electron-browser/desktop.main.ts',
+		'src/ash/workbench/browser/workbench.ts',
+	];
+	const bundle = Object.fromEntries(files.map(path => [path, { type: 'chunk', code: readFileSync(resolve(desktopRoot, path), 'utf8') }]));
+	assert.doesNotThrow(() => generateBundle({}, bundle));
+	assert.throws(() => generateBundle({}, { 'entry.js': { type: 'chunk', code: 'export const ready = true;' } }), /startup marks missing/u);
+	assert.throws(() => generateBundle({}, { 'source.txt': { type: 'asset', source: Object.values(bundle).map(chunk => chunk.code).join('\n') } }), /startup marks missing/u);
+});
+
+test('Desktop trace marks each restored region and waits for asynchronous view creation', async () => {
+	const file = resolve(desktopRoot, 'src/ash/workbench/browser/workbench.ts');
+	const output = readFileSync(file, 'utf8');
+	const start = output.indexOf('let isStartupRestoration = true;');
+	const end = output.indexOf('const paneRestoration =', start);
+	const restoration = ts.transpileModule(output.slice(start, end), { compilerOptions: { target: ts.ScriptTarget.ES2024 } }).outputText;
+	const locations = { Sidebar: 0, Panel: 1, AuxiliaryBar: 2, AgentSidebar: 3 };
+	const marks: string[] = [];
+	const opened: string[] = [];
+	let finish: () => void = () => assert.fail('view creation was not requested');
+	const pending = new Promise<void>(resolvePromise => { finish = resolvePromise; });
+	const context: { restoreActiveViewContainers?: () => Promise<void> } = {};
+	const install = new Function('paneParts', 'layout', 'panes', 'viewDescriptors', 'requiredViewContainerToRestore', 'views', 'ViewContainerLocation', 'performance', restoration);
+	install.call(context,
+		new Map(Object.values(locations).map(location => [location, { getCompositeIdToRestore: () => `view-${location}` }])),
+		{ isPartVisible: (part: string) => part !== 'agentSidebar' },
+		{ getPartId: (location: number) => `part-${location}` },
+		{},
+		(_service: unknown, _location: number, id: string) => ({ id }),
+		{ openViewContainer: (id: string) => { opened.push(id); return pending; }, closeViewContainer: () => assert.fail('all restored regions are visible') },
+		locations,
+		{ mark: (name: string) => marks.push(name) },
+	);
+	const restored = context.restoreActiveViewContainers!();
+	assert.deepEqual({ opened, marks }, {
+		opened: ['view-0', 'view-1', 'view-2'],
+		marks: ['ash.workbench.shell-ready', 'ash.workbench.sidebar-restore-start', 'ash.workbench.panel-restore-start', 'ash.workbench.auxiliary-restore-start'],
 	});
-}
+	finish();
+	await restored;
+	assert.equal(marks.at(-1), 'ash.workbench.views-restored');
+	assert.equal(marks.filter(mark => mark === 'ash.workbench.views-restored').length, 1);
+	const startupMarks = [...marks];
+	await context.restoreActiveViewContainers!();
+	assert.deepEqual(marks, startupMarks, 'workspace restoration must not repeat startup marks');
+	assert.equal(opened.length, 6);
+});
 
-test('Desktop trace build rejects moved anchors and ignores unrelated modules', () => {
-	const file = resolve(desktopRoot, 'src/ash/code/electron-browser/workbench/workbench.ts');
-	assert.throws(() => transform('await renamed();', file), /anchor is missing or ambiguous/u);
-	assert.throws(() => transform('await modeLoaders[modeId]();\r\nawait modeLoaders[modeId]();', file), /anchor is missing or ambiguous/u);
-	assert.equal(transform('export const value = 1;', resolve(desktopRoot, 'src/ash/unrelated.ts')), undefined);
+test('Workbench completion mark waits for services, editor restoration, and backup restoration', async () => {
+	const path = resolve(desktopRoot, 'src/ash/workbench/browser/workbench.ts');
+	const source = readFileSync(path, 'utf8');
+	const ast = ts.createSourceFile(path, source, ts.ScriptTarget.ES2024, true);
+	const owner = ast.statements.find(statement => ts.isClassDeclaration(statement) && statement.name?.text === 'Workbench') as ts.ClassDeclaration;
+	const method = owner.members.find(member => ts.isMethodDeclaration(member) && member.name.getText(ast) === 'completeStartupRestoration')!;
+	const code = ts.transpileModule(`class Restoration { ${method.getText(ast)} }`, { compilerOptions: { target: ts.ScriptTarget.ES2024 } }).outputText;
+	const marks: string[] = [];
+	const events: string[] = [];
+	let finishServices!: () => void;
+	let finishEditors!: () => void;
+	let finishBackups!: () => void;
+	const services = new Promise<void>(resolvePromise => { finishServices = resolvePromise; });
+	const editors = new Promise<void>(resolvePromise => { finishEditors = resolvePromise; });
+	const backups = new Promise<void>(resolvePromise => { finishBackups = resolvePromise; });
+	const Restoration = new Function('LifecyclePhase', 'WorkbenchPhase', 'performance', `${code}\nreturn Restoration;`)({ Restored: 3 }, { AfterRestored: 3 }, { mark: (name: string) => marks.push(name) });
+	const context = Object.assign(new Restoration(), {
+		isDisposed: false,
+		restoreEditorParts: () => { events.push('editors'); return editors; },
+		restoreWorkingCopyBackups: () => { events.push('backups'); return backups; },
+		lifecycleService: { phase: 2 },
+		logService: { info: () => events.push('logged') },
+	});
+	const restored = context.completeStartupRestoration([services], {}, {}, {}, { advance: () => events.push('phase') }, () => events.push('fonts'));
+	assert.deepEqual({ marks, events }, { marks: [], events: [] });
+	finishServices();
+	await new Promise<void>(resolvePromise => setImmediate(resolvePromise));
+	assert.deepEqual({ marks, events }, { marks: [], events: ['editors'] });
+	finishEditors();
+	await new Promise<void>(resolvePromise => setImmediate(resolvePromise));
+	assert.deepEqual({ marks, events }, { marks: [], events: ['editors', 'backups'] });
+	finishBackups();
+	await restored;
+	assert.deepEqual({ marks, events, phase: context.lifecycleService.phase }, {
+		marks: ['ash.workbench.restored'],
+		events: ['editors', 'backups', 'fonts', 'phase', 'logged'],
+		phase: 3,
+	});
 });

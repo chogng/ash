@@ -27,3 +27,14 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(errors).toEqual([]);
 	});
 }
+
+
+test('question controls resolve the editor background variable for each palette', async ({ page }) => {
+	await page.goto('/chatInput.html');
+	await page.evaluate(() => window.ashChatInputIntegration.showQuestions());
+	for (const background of ['rgb(30, 30, 30)', 'rgb(255, 255, 255)', 'rgb(0, 0, 0)']) {
+		await page.locator('main').evaluate((element, value) => element.style.setProperty('--ash-editor-background', value), background);
+		await expect(page.getByRole('textbox', { name: 'Your answer' })).toHaveCSS('background-color', background);
+		await expect(page.getByRole('combobox', { name: 'Your choice' })).toHaveCSS('background-color', background);
+	}
+});

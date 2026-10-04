@@ -305,14 +305,10 @@ class ResourceLabelWidget extends Disposable {
 		const resource = resourceOf(label);
 		const name = applyNameAffixes(label.name, options.namePrefix, options.nameSuffix);
 		let description = label.description;
-		let title = options.title;
+		const title = options.title;
 		if (resource && !options.forceLabel && resource.scheme === 'untitled') {
 			const untitled = this.services.untitledTextEditorService?.get(resource);
 			if (untitled) {
-				if (typeof name === 'string') {
-					const untitledName = untitled.name;
-					if (name === '' || name === basenameOrAuthority(resource)) title = `${untitledName} • ${resource.path}`;
-				}
 				if (typeof name === 'string' && name === basenameOrAuthority(resource)) description = resource.path;
 			}
 		}
@@ -395,6 +391,10 @@ class ResourceLabelWidget extends Disposable {
 		this.decoration.value = decoration;
 		const extraClasses = decorationClasses(options, decoration);
 		let title = this.currentTitle ?? (resource ? pathLabel(resource, this.services.workspaceContextService, this.services.labelService) : undefined);
+		if (resource?.scheme === 'untitled' && !options.forceLabel && typeof current.name === 'string' && (current.name === '' || current.name === basenameOrAuthority(resource))) {
+			const untitled = this.services.untitledTextEditorService?.get(resource);
+			if (untitled) title = `${untitled.name} • ${resource.path}`;
+		}
 		if (decoration?.tooltip) title = title ? `${title} • ${decoration.tooltip}` : decoration.tooltip;
 		const hideIcon = !this.iconsVisible || options.hideIcon === true;
 		const hasFileIcons = this.services.resourceIconRenderer.getFileIconTheme().hasFileIcons;

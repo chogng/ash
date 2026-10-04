@@ -11,6 +11,7 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
   const manifest = JSON.parse(await readFile(resolve(import.meta.dirname, "../../app-ts/package.json"), "utf8"));
   const scripts = { ...manifest.scripts };
   for (const [name, operation] of Object.entries({
+    "stylelint": "styles",
     "test:build-tools": "tools",
     "test:unit": "unit",
     "test:editor:unit": "editor",
@@ -33,11 +34,12 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
   const executable = script ? process.execPath : pnpm;
   const prefix = script ? [pnpm] : [];
   for (const [command, expected, failure] of [
-    ["test:main", ["tools", "output", "localization", "extensions", "protocol", "common", "icons", "unit"], ""],
+    ["test:main", ["styles", "tools", "output", "localization", "extensions", "protocol", "common", "icons", "unit"], ""],
+    ["test:main", ["styles"], "styles"],
     ["test:unit", ["output", "localization", "extensions", "protocol", "common", "icons", "unit"], ""],
     ["test:editor:unit", ["output", "localization", "extensions", "protocol", "common", "icons", "editor"], ""],
-    ["test:main", ["tools", "output", "localization", "extensions", "protocol", "common"], "common"],
-    ["test:main", ["tools", "output", "localization", "extensions", "protocol"], "protocol"],
+    ["test:main", ["styles", "tools", "output", "localization", "extensions", "protocol", "common"], "common"],
+    ["test:main", ["styles", "tools", "output", "localization", "extensions", "protocol"], "protocol"],
   ] as const) {
     await writeFile(join(directory, "operations.jsonl"), "");
     const result = spawnSync(executable, [...prefix, "run", command], {

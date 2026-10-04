@@ -47,6 +47,7 @@ export type ElectronRendererCapabilityContribution = RendererCapabilityContribut
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
 export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService): Promise<AshElectronRendererApi & IDisposable> {
+	performance.mark('ash.rendererApi.start');
 	const resources = new DisposableStore();
 	let connecting: Promise<void> = Promise.resolve();
 	const transport = resources.add(new AppServerMessagePortTransport(() => {
@@ -99,10 +100,13 @@ export async function createElectronRendererApi(contributions: readonly Electron
 	};
 	resources.add(client.onStateChange(state => { if (state === 'crashed') { scheduleRecovery(); } }));
 	try {
+		performance.mark('ash.rendererApi.acquire-start');
 		const enabled = await transport.acquire();
+		performance.mark('ash.rendererApi.acquired');
 		let backend: IRendererHost;
 		if (enabled) {
 			await initialize();
+			performance.mark('ash.rendererApi.initialized');
 			backend = createRendererHost(client, {
 				externalOpener: { openExternal: target => invoke<boolean>('ash:host:openExternal', target) },
 				callbackHost: {
@@ -139,6 +143,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				resources.add(toDisposable(() => replacement.dispose()));
 			}
 			await initializeWorkspace(client, workspaceTrust);
+			performance.mark('ash.rendererApi.workspace-initialized');
 			started = true;
 		} else {
 			backend = createDisconnectedRendererApi();
