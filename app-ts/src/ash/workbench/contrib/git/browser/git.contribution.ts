@@ -20,7 +20,7 @@ import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js
 import { URI } from '../../../../base/common/uri.js';
 
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { IOpenerService } from '../../../../platform/opener/common/openerService.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { SCMHistoryItemViewModelTreeElement, ISCMHistoryItemComparison, ISCMHistoryItemRef } from '../../scm/common/history.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -558,7 +558,7 @@ async function runGraphAction(accessor: ServicesAccessor, kind: GraphActionKind,
 		case 'openRemote': {
 			const links = commit.remoteLinks ?? [];
 			const selected = links.length === 1 ? links[0] : (await pickGitItem(input, links.map(link => ({ label: link.name, description: link.uri.toString(), link })), localize('git.graph.chooseRemote', 'Choose a hosting remote')))?.link;
-			if (selected) { await accessor.get(IOpenerService).openExternal(selected.uri.toString()); }
+			if (selected) { await accessor.get(IOpenerService).open(selected.uri, { openExternal: true, fromUserGesture: true }); }
 			return;
 		}
 		case 'checkoutBranch': {

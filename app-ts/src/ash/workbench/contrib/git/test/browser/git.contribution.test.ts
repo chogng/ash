@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
@@ -7,7 +8,10 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { IOpenerService } from '../../../../../platform/opener/common/openerService.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { OpenerService } from '../../../../../editor/browser/services/openerService.js';
+import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { StandaloneCodeEditorService } from '../../../../../editor/standalone/browser/standaloneCodeEditorService.js';
 import { IQuickInputService, type IQuickPickItem, type IQuickPick } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IEditorService, type EditorInput } from '../../../../services/editor/common/editorService.js';
@@ -62,6 +66,8 @@ function registerGraphServices(services: InstantiationService, git: Partial<IGit
 	} as INotificationService);
 }
 
+ensureNoDisposablesAreLeakedInTestSuite();
+
 test('Graph copies the full message and opens the selected commit on its hosting platform', async () => {
 	const writes: string[] = [];
 	const reads: unknown[][] = [];
@@ -69,7 +75,11 @@ test('Graph copies the full message and opens the selected commit on its hosting
 	registerGraphServices(services, { commitMessage: async (...args) => { reads.push(args); return 'Selected\n\nThe complete body.'; } });
 	services.registerInstance(IQuickInputService, inputSelecting(0));
 	services.registerInstance(IClipboardService, { writeText: async text => { writes.push(text); } } as IClipboardService);
-	services.registerInstance(IOpenerService, { openExternal: async url => { writes.push(url); } });
+	using codeEditors = new StandaloneCodeEditorService();
+	services.registerInstance(ICodeEditorService, codeEditors);
+	using opener = services.createInstance(OpenerService);
+	opener.setDefaultExternalOpener({ openExternal: async url => { writes.push(url); return true; } });
+	services.registerInstance(IOpenerService, opener);
 	using commands = new CommandService(services);
 	const url = `https://gitlab.example/team/project/-/commit/${selectedId}`;
 	const element = historyElement({ remoteLinks: [{ name: 'origin', uri: URI.parse(url) }] });

@@ -65,6 +65,7 @@ test('desktop window commands reach the window host', async () => {
 	let zoom = 0;
 	let alwaysOnTop = false;
 	services.registerInstance(INativeHostService, {
+		openExternal: async () => { throw new Error('unused'); },
 		showNativeDialog: async () => { throw new Error('unused'); },
 		installShellCommand: async () => '',
 		uninstallShellCommand: async () => '',

@@ -1,13 +1,15 @@
+import { CancellationToken } from '../../../base/common/cancellation.js';
+import { URI } from '../../../base/common/uri.js';
 import type { AccountLoginStartResult } from '../../app-server/common/generated/index.js';
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
 import type { IAccountApi } from '../common/accountApi.js';
 import type { IClipboardService } from '../../clipboard/common/clipboardService.js';
-import type { IOpenerService } from '../../opener/common/openerService.js';
+import type { IExternalOpener } from '../../opener/common/opener.js';
 
 export interface BrowserAccountLoginHostServices {
-	readonly openerService: IOpenerService;
+	readonly externalOpener: IExternalOpener;
 	readonly clipboardService: IClipboardService;
 }
 
@@ -35,7 +37,8 @@ async function startLogin(connection: AppServerProtocolClient, params: Parameter
 		return started;
 	}
 	try {
-		await hostServices.openerService.openExternal(started.type === 'browser' ? started.authorizationUrl : started.verificationUrl);
+		const target = started.type === 'browser' ? started.authorizationUrl : started.verificationUrl;
+		await hostServices.externalOpener.openExternal(target, { sourceUri: URI.parse(target) }, CancellationToken.None);
 		if (started.type === 'deviceCode') await hostServices.clipboardService.writeText(started.userCode);
 		return started;
 	} catch (error) {

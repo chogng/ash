@@ -2,6 +2,7 @@ import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js'
 import { getErrorMessage, isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { Action2, IMenuService, MenuId, MenuItemAction, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -22,15 +23,28 @@ export class CommandsQuickAccessProvider implements IQuickAccessProvider {
 		@IMenuService private readonly menuService: IMenuService,
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
 		@IDialogService private readonly dialogService: IDialogService,
+		@ICodeEditorService private readonly codeEditorService: ICodeEditorService,
 	) {}
 
 	provide(picker: IQuickPick<IQuickPickItem>): DisposableStore {
 		const disposables = new DisposableStore();
 		const menu = disposables.add(this.menuService.createMenu(MenuId.CommandPalette));
 		const updateItems = (): void => {
-			picker.items = menu.getActions()
+			const editorCommands = this.codeEditorService.getActiveCodeEditor()?.getSupportedActions().map(action => {
+				const keybinding = this.keybindingService.lookupKeybinding(action.id);
+				return {
+					commandId: action.id,
+					label: action.label,
+					description: action.id,
+					detail: action.alias !== action.label ? action.alias : undefined,
+					keybinding: keybinding ? getKeybindingLabel(keybinding) : undefined,
+				};
+			}) ?? [];
+			const editorCommandIds = new Set(editorCommands.map(command => command.commandId));
+			const globalCommands = menu.getActions()
 				.flatMap(([, actions]) => actions)
 				.filter((action): action is MenuItemAction => action instanceof MenuItemAction && action.enabled)
+				.filter(action => !editorCommandIds.has(action.id))
 				.map(action => {
 					const keybinding = this.keybindingService.lookupKeybinding(action.id);
 					const original = typeof action.item.title === 'string' ? undefined : action.item.title.original;
@@ -42,6 +56,7 @@ export class CommandsQuickAccessProvider implements IQuickAccessProvider {
 						keybinding: keybinding ? getKeybindingLabel(keybinding) : undefined,
 					};
 				});
+			picker.items = [...editorCommands, ...globalCommands];
 		};
 		disposables.add(menu.onDidChange(updateItems));
 		disposables.add(this.keybindingService.onDidUpdateKeybindings(updateItems));

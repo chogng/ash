@@ -14,7 +14,7 @@ test('a system event wins over an older startup read and disposed windows ignore
 	const host: INativeHostApi = {
 		getOSColorScheme: () => new Promise(resolve => pending.push(resolve)),
 		onDidChangeColorScheme: listener => events.event(listener),
-		showNativeDialog: unexpected, installShellCommand: unexpected, uninstallShellCommand: unexpected,
+		openExternal: unexpected, showNativeDialog: unexpected, installShellCommand: unexpected, uninstallShellCommand: unexpected,
 		listWindows: unexpected, focusWindowById: unexpected, focusWindow: unexpected, closeWindow: unexpected, closeOtherWindows: unexpected,
 		getZoomLevel: unexpected, onDidChangeZoomLevel: unexpected, setZoomLevel: unexpected,
 		isAlwaysOnTop: unexpected, setAlwaysOnTop: unexpected, performNativeTabAction: unexpected, openNewWindowTab: unexpected,

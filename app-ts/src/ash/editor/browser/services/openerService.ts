@@ -1,45 +1,23 @@
 import { LinkedList } from '../../../base/common/linkedList.js';
-import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { AbstractDisposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { type ITextEditorOptions } from '../../../platform/editor/common/editor.js';
-import { type ICodeEditorService } from './codeEditorService.js';
-
-export interface OpenOptions {
-	readonly openExternal?: boolean;
-	readonly openToSide?: boolean;
-	readonly fromUserGesture?: boolean;
-	readonly editorOptions?: ITextEditorOptions;
-	readonly skipValidation?: boolean;
-	readonly allowContributedOpeners?: boolean | string;
-}
-
-export interface IOpener {
-	open(target: URI | string, options?: OpenOptions): boolean | Promise<boolean>;
-}
-
-export interface IValidator {
-	shouldOpen(target: URI | string, options?: OpenOptions): boolean | Promise<boolean>;
-}
-
-export interface ResolveExternalUriOptions {
-	readonly allowTunneling?: boolean;
-}
-
-export interface IResolvedExternalUri {
-	readonly resolved: URI;
-	dispose?(): void;
-}
-
-export interface IExternalUriResolver {
-	resolveExternalUri(resource: URI, options?: ResolveExternalUriOptions): IResolvedExternalUri | undefined | Promise<IResolvedExternalUri | undefined>;
-}
-
-export interface IExternalOpener {
-	openExternal(href: string, options: { readonly sourceUri: URI; readonly preferredOpenerId?: string }, signal: AbortSignal): boolean | Promise<boolean>;
-}
+import { CancellationToken } from '../../../base/common/cancellation.js';
+import { getWindow, windowOpenNoOpener } from '../../../base/browser/dom.js';
+import { normalizeExternalUrl } from '../../../platform/opener/common/opener.js';
+import type {
+	IExternalOpener,
+	IExternalUriResolver,
+	IOpener,
+	IOpenerService,
+	IResolvedExternalUri,
+	IValidator,
+	OpenOptions,
+	ResolveExternalUriOptions,
+} from '../../../platform/opener/common/opener.js';
+import { ICodeEditorService } from './codeEditorService.js';
 
 /** Orders validation, URI resolution and editor/external opening without host policy. */
-export class OpenerService {
+export class OpenerService extends AbstractDisposable implements IOpenerService {
 	declare readonly _serviceBrand: undefined;
 	private readonly _openers = new LinkedList<IOpener>();
 	private readonly _validators = new LinkedList<IValidator>();
@@ -48,7 +26,20 @@ export class OpenerService {
 	private _defaultExternalOpener: IExternalOpener | undefined;
 	private readonly _externalOpeners = new LinkedList<IExternalOpener>();
 
-	constructor(editorService: ICodeEditorService) {
+	constructor(@ICodeEditorService editorService: ICodeEditorService) {
+		super();
+		this._defaultExternalOpener = {
+			openExternal: async href => {
+				const url = normalizeExternalUrl(href);
+				if (URI.parse(url).scheme === 'mailto') {
+					// Mail handlers should launch without leaving an empty browser tab.
+					getWindow().location.href = url;
+				} else {
+					windowOpenNoOpener(url);
+				}
+				return true;
+			},
+		};
 		this._openers.push({
 			open: async (target, options) => {
 				const resource = typeof target === 'string' ? URI.parse(target) : target;
@@ -123,14 +114,14 @@ export class OpenerService {
 		if (options?.allowContributedOpeners) {
 			const preferredOpenerId = typeof options.allowContributedOpeners === 'string' ? options.allowContributedOpeners : undefined;
 			for (const opener of this._externalOpeners) {
-				if (await opener.openExternal(href, { sourceUri, preferredOpenerId }, new AbortController().signal)) return true;
+				if (await opener.openExternal(href, { sourceUri, preferredOpenerId }, CancellationToken.None)) return true;
 			}
 		}
 		if (!this._defaultExternalOpener) throw new Error('No default external opener is registered');
-		return this._defaultExternalOpener.openExternal(href, { sourceUri }, new AbortController().signal);
+		return this._defaultExternalOpener.openExternal(href, { sourceUri }, CancellationToken.None);
 	}
 
-	dispose(): void {
+	protected override disposeCore(): void {
 		this._openers.clear();
 		this._validators.clear();
 		this._resolvers.clear();

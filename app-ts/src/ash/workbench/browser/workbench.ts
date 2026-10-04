@@ -285,8 +285,8 @@ import { IKeybindingService } from "../../platform/keybinding/common/keybinding.
 import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { IQuickAccessController } from "../../platform/quickinput/common/quickAccess.js";
 import { QuickAccessController } from "../../platform/quickinput/browser/quickAccess.js";
-import { IOpenerService } from "../../platform/opener/common/openerService.js";
-import { BrowserOpenerService } from "../../platform/opener/browser/browserOpenerService.js";
+import { IOpenerService } from "../../platform/opener/common/opener.js";
+import { OpenerService } from '../../editor/browser/services/openerService.js';
 import { CommandService } from "../services/commands/common/commandService.js";
 import { BrowserKeyboardLayoutService } from "../services/keybinding/browser/keyboardLayoutService.js";
 import { WorkbenchKeybindingService } from "../services/keybinding/browser/keybindingService.js";
@@ -790,7 +790,13 @@ export class Workbench extends Disposable {
 			IWorkbenchDialogHandler,
 			dialogHandler ?? new BrowserDialogHandler(workbenchRoot),
 		);
-		services.registerInstance(IOpenerService, new BrowserOpenerService(ownerWindow));
+		services.registerSingleton(IOpenerService, () => {
+			const openerService = services.createInstance(OpenerService);
+			if (nativeHostApi) {
+				openerService.setDefaultExternalOpener({ openExternal: href => nativeHostApi.openExternal(href) });
+			}
+			return openerService;
+		});
 		const userKeyboardLayoutService = userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
 		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
 		const commandService = this._register(new CommandService(services));

@@ -18,6 +18,7 @@ import { CommandsQuickAccessProvider } from '../../../src/ash/workbench/contrib/
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { DialogSeverity, type IDialogOutcome } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { StandaloneCodeEditorService } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditorService.js';
 
 declare global {
 	interface Window {
@@ -114,7 +115,8 @@ window.ashDialogIntegration = {
 			lookupKeybinding: () => undefined,
 			onDidUpdateKeybindings: Event.None,
 		} as unknown as IKeybindingService;
-		const provider = new CommandsQuickAccessProvider(commands, new MenuService(commands, contexts), keybindings, dialogs);
+		const editors = commandResources.add(services.createInstance(StandaloneCodeEditorService));
+		const provider = new CommandsQuickAccessProvider(commands, new MenuService(commands, contexts), keybindings, dialogs, editors);
 		const accept = commandResources.add(new Emitter<IQuickPickItem>());
 		const picker = {
 			items: [] as readonly IQuickPickItem[],

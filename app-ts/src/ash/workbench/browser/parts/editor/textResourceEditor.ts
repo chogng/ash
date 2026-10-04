@@ -125,7 +125,6 @@ export interface EditorPaneOptions {
 	readonly indentation?: CodeEditorWidgetOptions["indentation"];
 	/** Browser paragraph direction forwarded to every created editor part. */
 	readonly textDirection?: EditorTextDirection;
-	readonly onOpenLink?: (target: string) => void | Promise<void>;
 	readonly onExecuteEditorCommand?: CodeEditorWidgetOptions["onExecuteEditorCommand"];
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>;
@@ -293,7 +292,6 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				find: this.options.find,
 				indentation: this.options.indentation,
 				textDirection: this.options.textDirection,
-				onOpenLink: this.options.onOpenLink,
 				onExecuteEditorCommand: this.options.onExecuteEditorCommand,
 				onOpenLocation: this.options.onOpenLocation,
 				onApplyWorkspaceEdit: this.options.onApplyWorkspaceEdit,

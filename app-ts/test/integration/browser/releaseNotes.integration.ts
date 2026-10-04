@@ -1,7 +1,7 @@
 import '../../../src/ash/workbench/browser/parts/titlebar/commandCenterOnboarding.contribution.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
-import type { IOpenerService } from '../../../src/ash/platform/opener/common/openerService.js';
+import type { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import type { ILocaleService } from '../../../src/ash/workbench/services/localization/common/locale.js';
 import type { IOnboardingTryoutService } from '../../../src/ash/workbench/contrib/onboarding/common/onboardingTryout.js';
 import { ReleaseNotesEditor, releaseNotesResource } from '../../../src/ash/workbench/contrib/update/browser/releaseNotesEditor.js';
@@ -16,7 +16,7 @@ const opened: string[] = [];
 window.ashReleaseNotesIntegration = { get opened() { return opened; } };
 const locale = { locale: 'en' } as unknown as ILocaleService;
 const tryouts = { async run(id: string) { opened.push(id); return 'completed' as const; } } as IOnboardingTryoutService;
-const opener = { async openExternal() {} } as IOpenerService;
+const opener = { async open(): Promise<boolean> { return true; } } as unknown as IOpenerService;
 const editor = new ReleaseNotesEditor(locale, tryouts, opener);
 editor.create(document.querySelector('main')!);
 void editor.setInput({ resource: URI.parse(releaseNotesResource) }, new AbortController().signal);

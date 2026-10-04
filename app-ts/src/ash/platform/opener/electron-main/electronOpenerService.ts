@@ -1,9 +1,10 @@
 import { shell } from "electron";
-import { normalizeExternalUrl, type IOpenerService } from "../common/openerService.js";
+import { normalizeExternalUrl, type IExternalOpener } from '../common/opener.js';
 
 /** Electron shell adapter for validated external URLs. */
-export class ElectronOpenerService implements IOpenerService {
-	openExternal(target: string): Promise<void> {
-		return shell.openExternal(normalizeExternalUrl(target));
+export class ElectronOpenerService implements IExternalOpener {
+	async openExternal(target: string): Promise<boolean> {
+		await shell.openExternal(normalizeExternalUrl(target));
+		return true;
 	}
 }

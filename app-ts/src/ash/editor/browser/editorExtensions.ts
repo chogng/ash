@@ -559,7 +559,6 @@ export interface TextEditorContributionContext extends SharedTextContext {
 		| 'occurrencesHighlightDelay'
 		| 'onApplyWorkspaceEdit'
 		| 'onExecuteEditorCommand'
-		| 'onOpenLink'
 		| 'onOpenLocation'
 		| 'parameterHints'
 		| 'sectionHeaders'

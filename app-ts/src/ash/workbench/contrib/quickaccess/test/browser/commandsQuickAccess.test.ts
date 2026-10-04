@@ -17,6 +17,9 @@ import { CommandService } from '../../../../services/commands/common/commandServ
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { CommandsQuickAccessProvider } from '../../browser/commandsQuickAccess.js';
+import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { CodeEditorService } from '../../../../services/editor/browser/codeEditorService.js';
+import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 
 test('Command Palette finds localized commands by their English title and reports command errors', async () => {
 	using resources = new DisposableStore();
@@ -31,6 +34,8 @@ test('Command Palette finds localized commands by their English title and report
 			command: { id: 'test.commandFailure', title: localize2('debug.start', 'Start Debugging') },
 		}));
 		using services = new InstantiationService();
+		services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
+		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 		const commands = resources.add(new CommandService(services, registry));
 		const contexts = resources.add(new ContextKeyService());
 		const dialogs = resources.add(new DialogService());
@@ -79,6 +84,8 @@ test('Command Palette does not show a dialog for cancelled commands', async () =
 		command: { id: 'test.cancelCommand', title: 'Cancelled command' },
 	}));
 	using services = new InstantiationService();
+	services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
+	services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 	const commands = resources.add(new CommandService(services, registry));
 	const contexts = resources.add(new ContextKeyService());
 	const dialogs = resources.add(new DialogService());

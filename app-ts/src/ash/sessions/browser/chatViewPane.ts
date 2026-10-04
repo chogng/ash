@@ -13,7 +13,7 @@ import { ChatWidget, resolveMarkdownWorkspaceResource } from "../../workbench/co
 import { ChatViewTitleControl } from "../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js";
 import { addDisposableListener, h, isHTMLElement } from "../../base/browser/dom.js";
 import { type ChatContextAttachment, type IChatContextTarget } from "../../workbench/services/chat/common/chatContextService.js";
-import { IOpenerService } from "../../platform/opener/common/openerService.js";
+import { IOpenerService } from "../../platform/opener/common/opener.js";
 import { IEditorService } from "../../workbench/services/editor/common/editorService.js";
 import { IFileService } from '../../platform/files/common/files.js';
 import { URI } from '../../base/common/uri.js';

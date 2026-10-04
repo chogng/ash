@@ -1,5 +1,6 @@
 {
 	"ash": {
+		"editor.openLink": "Open Link",
 		"settings.sessions.layout.group.label": "Sessions layout",
 		"settings.sessions.layout.group.description": "Configure the Sessions window layout.",
 		"editorWelcome.openFolder": "Open folder",

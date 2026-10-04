@@ -15,7 +15,7 @@ function fixture(started: AccountLoginStartResult, rejectOpen = false): { api: I
 		},
 	} as unknown as AppServerProtocolClient;
 	const hosts = {
-		openerService: { async openExternal(url: string): Promise<void> { calls.push(['open', url]); if (rejectOpen) { throw new Error('browser unavailable'); } } },
+		externalOpener: { async openExternal(url: string): Promise<boolean> { calls.push(['open', url]); if (rejectOpen) { throw new Error('browser unavailable'); } return true; } },
 		clipboardService: { async writeText(text: string): Promise<void> { calls.push(['copy', text]); } },
 	} as unknown as BrowserAccountLoginHostServices;
 	return { api: createAppServerAccountApi(connection, hosts), calls };

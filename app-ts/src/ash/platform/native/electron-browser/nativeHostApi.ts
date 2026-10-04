@@ -53,6 +53,7 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		openWindow: options => invoke<void>(NATIVE_HOST_OPEN_WINDOW_CHANNEL, options),
 		openAgentsWindow: options => invoke<void>(NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, options),
 		syncSystemWideKeybindings: async keybindings => validateSystemWideKeybindingsResult(await invoke<unknown>(NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, keybindings)),
+		openExternal: target => invoke<boolean>('ash:host:openExternal', target),
 		revealFile: path => invoke<void>(NATIVE_HOST_REVEAL_FILE_CHANNEL, path),
 		setWindowTheme: (theme) => invoke<void>(NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, theme),
 		setWindowDimmed: dimmed => invoke<void>(NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL, dimmed),

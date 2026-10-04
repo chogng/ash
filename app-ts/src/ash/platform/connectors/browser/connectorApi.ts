@@ -1,13 +1,15 @@
+import { CancellationToken } from '../../../base/common/cancellation.js';
+import { URI } from '../../../base/common/uri.js';
 import { timeout } from "../../../base/common/async.js";
 import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
 import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IConnectorApi } from "../common/connectorApi.js";
 import type { IClipboardService } from "../../clipboard/common/clipboardService.js";
-import type { IOpenerService } from "../../opener/common/openerService.js";
+import type { IExternalOpener } from "../../opener/common/opener.js";
 
 export interface BrowserConnectorHostServices {
-	readonly openerService: IOpenerService;
+	readonly externalOpener: IExternalOpener;
 	readonly clipboardService: IClipboardService;
 	readonly callbackHost?: {
 		listen(): Promise<{ readonly id: string; readonly redirectUri: string }>;
@@ -53,7 +55,7 @@ async function connectDeviceOAuth(connection: AppServerProtocolClient, params: P
 	const started = await appServerRequest(connection, "connector/connect/oauth/device/start", params);
 	let completed = false;
 	try {
-		await hostServices.openerService.openExternal(started.verificationUri);
+		await hostServices.externalOpener.openExternal(started.verificationUri, { sourceUri: URI.parse(started.verificationUri) }, CancellationToken.None);
 		await hostServices.clipboardService.writeText(started.userCode);
 		let waitSeconds = started.pollIntervalSeconds;
 		for (;;) {
@@ -77,7 +79,7 @@ async function connectBrowserOAuth(connection: AppServerProtocolClient, params: 
 	try {
 		const started = await appServerRequest(connection, 'connector/connect/oauth/start', { ...params, redirectUri: callback.redirectUri });
 		flowId = started.flowId;
-		await host.openerService.openExternal(started.authorizationUrl);
+		await host.externalOpener.openExternal(started.authorizationUrl, { sourceUri: URI.parse(started.authorizationUrl) }, CancellationToken.None);
 		const values = await callbacks.wait(callback.id);
 		const result = await appServerRequest(connection, 'connector/connect/oauth/complete', { flowId, state: values.state, authorizationCode: values.code });
 		completed = true;

@@ -61,9 +61,3 @@
   color: var(--ash-description-foreground);
   font-style: italic;
 }
-
-.ash-output-link {
-  color: var(--ash-accent-foreground);
-  text-decoration: underline;
-  cursor: pointer;
-}

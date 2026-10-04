@@ -1,10 +1,10 @@
-import { addDisposableListener } from '../../base/browser/dom.js';
+import { addDisposableListener, windowOpenNoOpener } from '../../base/browser/dom.js';
 import { toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
 import { authenticateWebAppServer, type AppServerWebSocketTransport } from '../../platform/app-server/browser/appServerWebSocketTransport.js';
 import { connectWebRendererApi, type RendererCapabilityContribution } from '../../platform/app-server/browser/webRendererApi.js';
 import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
-import { BrowserOpenerService } from '../../platform/opener/browser/browserOpenerService.js';
+import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
 import { AppServerWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
 
 declare const __ASH_WEB_APP_SERVER__: boolean;
@@ -20,7 +20,12 @@ export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly
 		if (ticket) { history.replaceState(history.state, '', window.location.pathname + window.location.search); }
 		transport = await authenticateWebAppServer(endpoint, sessionStorage, ticket);
 		const connected = await connectWebRendererApi(transport, {
-			openerService: new BrowserOpenerService(window),
+			externalOpener: {
+				openExternal: async href => {
+					windowOpenNoOpener(normalizeExternalUrl(href));
+					return true;
+				},
+			},
 			clipboardService: new BrowserClipboardService(window.navigator.clipboard),
 		}, { capabilities: textDocuments ? { textDocuments: { version: 2 } } : {} }, rendererCapabilities);
 		globalThis.ashWebWorkbenchHost = {

@@ -55,6 +55,7 @@ class Fixture extends Disposable {
 		const host: INativeHostApi = {
 			getOSColorScheme: async () => ({ dark: false, highContrast: false }),
 			onDidChangeColorScheme: () => Disposable.None,
+			openExternal: async () => { throw new Error('unused'); },
 			showNativeDialog: async () => { throw new Error('unused'); },
 			installShellCommand: async () => '',
 			uninstallShellCommand: async () => '',

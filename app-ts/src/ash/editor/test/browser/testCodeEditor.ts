@@ -47,6 +47,8 @@ import { InMemoryConfigurationService } from '../../../platform/configuration/co
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { QuickInputController } from '../../../platform/quickinput/browser/quickInputController.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
+import { IOpenerService } from '../../../platform/opener/common/opener.js';
+import { OpenerService } from '../../browser/services/openerService.js';
 
 interface TestCodeEditorOptions extends CodeEditorWidgetOptions {
 	readonly instantiationService?: IInstantiationService;
@@ -96,6 +98,9 @@ export function registerCodeEditorServices(services: InstantiationService): void
 	}
 	if (!services.has(ICodeEditorService)) {
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
+	}
+	if (!services.has(IOpenerService)) {
+		services.registerSingleton(IOpenerService, () => services.createInstance(OpenerService));
 	}
 	if (!services.has(ICommandService)) {
 		services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));

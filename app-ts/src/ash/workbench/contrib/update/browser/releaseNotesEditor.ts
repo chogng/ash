@@ -2,7 +2,7 @@ import './releaseNotesEditor.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { IOpenerService } from '../../../../platform/opener/common/openerService.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { MarkdownDocumentView } from '../../markdown/browser/markdownDocumentRenderer.js';
 import { ILocaleService } from '../../../services/localization/common/locale.js';
@@ -67,6 +67,6 @@ export class ReleaseNotesEditor extends Disposable implements IEditorPane {
 			await this.tryouts.run(id);
 			return;
 		}
-		if (/^https?:\/\//.test(href)) await this.opener.openExternal(href);
+		if (/^https?:\/\//.test(href)) await this.opener.open(href, { openExternal: true, fromUserGesture: true });
 	}
 }

@@ -1127,27 +1127,7 @@ export class AshApplication extends Disposable {
 		const rendererEntry = this.resolveRendererEntry("workbench");
 
 		const windowDisposables = resources;
-		const auxiliaryWindows = windowDisposables.add(new DisposableMap<number, IDisposable>());
-		// Apply restored popup bounds before creation; Chromium ignores its position features here.
-		window.webContents.setWindowOpenHandler(details => {
-			if (details.url !== 'about:blank') return { action: 'allow' };
-			const features = new URLSearchParams(details.features.replaceAll(',', '&'));
-			const x = Number(features.get('x'));
-			const y = Number(features.get('y'));
-			const width = Number(features.get('width'));
-			const height = Number(features.get('height'));
-			if (!features.has('x') || !features.has('y') || !Number.isSafeInteger(x) || !Number.isSafeInteger(y) || !Number.isSafeInteger(width) || !Number.isSafeInteger(height)) return { action: 'allow' };
-			return { action: 'allow', overrideBrowserWindowOptions: { x, y, width, height } };
-		});
-		const onDidCreateWindow = (child: BrowserWindow, details: { readonly url: string }): void => {
-			if (details.url !== 'about:blank') return;
-			auxiliaryWindows.set(child.id, this.windowsMainService.registerAuxiliaryWindow(child));
-			child.once('closed', () => auxiliaryWindows.deleteAndDispose(child.id));
-		};
-		// BrowserWindow releases its webContents getter on close; cleanup owns the original emitter.
-		const webContents = window.webContents;
-		webContents.on('did-create-window', onDidCreateWindow);
-		windowDisposables.add(toDisposable(() => webContents.off('did-create-window', onDidCreateWindow)));
+		this.configureWindowNavigation(window, windowDisposables);
 		const workspaceHost = windowDisposables.add(new RendererWorkspaceHost(window.webContents));
 		windowDisposables.add(record.windowStateTracking);
 		const remoteTunnelService = new SshRemoteTunnelService({
@@ -1420,6 +1400,41 @@ export class AshApplication extends Disposable {
 		};
 	}
 
+	private configureWindowNavigation(window: BrowserWindow, windowDisposables: DisposableStore): void {
+		const auxiliaryWindows = windowDisposables.add(new DisposableMap<number, IDisposable>());
+		const externalOpener = new ElectronOpenerService();
+		// Apply restored popup bounds before creation; Chromium ignores its position features here.
+		window.webContents.setWindowOpenHandler(details => {
+			if (details.url !== 'about:blank') {
+				void externalOpener.openExternal(details.url).catch(error => console.error('Could not open external link', error));
+				return { action: 'deny' };
+			}
+			const features = new URLSearchParams(details.features.replaceAll(',', '&'));
+			const x = Number(features.get('x'));
+			const y = Number(features.get('y'));
+			const width = Number(features.get('width'));
+			const height = Number(features.get('height'));
+			if (!features.has('x') || !features.has('y') || !Number.isSafeInteger(x) || !Number.isSafeInteger(y) || !Number.isSafeInteger(width) || !Number.isSafeInteger(height)) return { action: 'allow' };
+			return { action: 'allow', overrideBrowserWindowOptions: { x, y, width, height } };
+		});
+		const onDidCreateWindow = (child: BrowserWindow, details: { readonly url: string }): void => {
+			if (details.url !== 'about:blank') return;
+			const childResources = new DisposableStore();
+			childResources.add(this.windowsMainService.registerAuxiliaryWindow(child));
+			auxiliaryWindows.set(child.id, childResources);
+			this.configureWindowNavigation(child, childResources);
+			child.once('closed', () => auxiliaryWindows.deleteAndDispose(child.id));
+		};
+		// BrowserWindow releases its webContents getter on close; cleanup owns the original emitter.
+		const webContents = window.webContents;
+		// Product pages never navigate to link destinations; Browser views own separate webContents.
+		const preventNavigation = (event: ElectronEvent): void => event.preventDefault();
+		webContents.on('will-navigate', preventNavigation);
+		windowDisposables.add(toDisposable(() => webContents.off('will-navigate', preventNavigation)));
+		webContents.on('did-create-window', onDidCreateWindow);
+		windowDisposables.add(toDisposable(() => webContents.off('did-create-window', onDidCreateWindow)));
+	}
+
 	private openSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, modeId: WorkbenchModeId, handoff?: IOpenAgentsWindowOptions): Promise<void> {
 		const opening = this.sessionsWindowOpenQueue.then(() => this.performOpenSessionsWindow(workspace, resolvedWorkspace, modeId, handoff));
 		this.sessionsWindowOpenQueue = opening.then(() => undefined, () => undefined);
@@ -1460,6 +1475,7 @@ export class AshApplication extends Disposable {
 				state: sessionsWindowState.restoreWindowState(),
 				webPreferences: this.createSandboxWebPreferences(),
 				initialize: async (window, windowDisposables) => {
+					this.configureWindowNavigation(window, windowDisposables);
 					const tracking = windowDisposables.add(sessionsWindowState.trackWindow(window));
 					session.windowState = { window, handler: sessionsWindowState, tracking };
 					windowDisposables.add(toDisposable(() => this.globalKeybindings.removeWindow(window.id)));

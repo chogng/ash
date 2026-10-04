@@ -510,7 +510,7 @@ Folding 仍为 9 个生产文件：8 个同路径、1 个既有 Ash 文件，大
 | `contrib/find/browser/findController.ts` | 双方都有；editor.all 与查找动作 | 标准 find / replace 动作及快捷键进入原控件 |
 | `contrib/suggest/browser/suggestController.ts` | 双方都有；editor.all 与补全动作 | 标准 triggerSuggest 动作及快捷键进入原请求、会话和控件 |
 | `contrib/inlineCompletions/browser/controller/commands.ts`、`inlineCompletionContextKeys.ts` | 仅上游；editor.all 与 Inline 控制器 | trigger / commit / hide 操作原控制器；控制器维护实际消费的可见状态键，接受和隐藏快捷键受该状态约束 |
-| `contrib/links/browser/links.ts` | 仅上游；editor.all 与 host onOpenLink | 原链接检测、provider 查询和打开职责合并；消费 links 配置及与多光标相反的修饰键，普通点击定位光标；关闭时取消请求、拒绝迟到结果 |
+| `contrib/links/browser/links.ts` | 仅上游；editor.all 与 IOpenerService | 链接检测与 provider 查询由唯一 LinkDetector 持有，打开通过 IOpenerService；消费 links 配置及与多光标相反的修饰键，普通点击定位光标；键盘 Open Link 使用同一结果，内容变化按语言特性服务合并计算，关闭时取消请求、拒绝迟到结果 |
 | `standalone/browser/quickAccess/standaloneGotoLineQuickAccess.ts` | 仅上游；editor.main | 标准 gotoLine 动作调用用户确认保留的 Ash 输入框 |
 | `editor.all.ts`、`editor.main.ts` | 双方都有；产品入口 | 更新贡献注册；Go to Line 从完整入口加载，最小 standalone API 不装入贡献 |
 
@@ -1633,7 +1633,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `browser/services/editorWorkerService.ts` | 8 / 3 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
 | `browser/services/inlineCompletionsService.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `browser/services/markerDecorations.ts` | 1 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
-| `browser/services/openerService.ts` | 1 / 1 | 人工追踪：外部 URI 解析结果释放缺失；现有装配创建实例，实际 open 调用链待确认。 |
+| `browser/services/openerService.ts` | 1 / 1 | 按 VS Code 分工：`platform/opener/common/opener.ts` 拥有公开契约，editor 拥有通用分发及默认浏览器打开，桌面窗口设置系统执行器；Workbench、Sessions 与 Standalone 注册同一实现，正文 LinkDetector、Git、Chat 与发布说明的外链通过 `open()` 打开。经用户确认，`platform/opener/browser/browserOpenerService.ts` 删除；浏览器窗口操作复用 `base/browser/dom.ts` 的 windowOpenNoOpener，Web 登录宿主不依赖 editor。Ash 的 URL 校验函数经用户确认迁入 `platform/opener/common/opener.ts`，测试迁入 `platform/opener/test/common/opener.test.ts`，两个旧 openerService 文件删除；该函数继续采用现有 HTTP(S)/mailto 范围，不计为上游标准 API。普通 UI 的 `platform/opener/browser/link.ts` 与同路径样式已实现，Output 文件链接为生产调用方；控件拥有鼠标、键盘、触摸、禁用态和托管悬停，默认调用 IOpenerService，Output 提供文件位置打开操作并随每次重绘释放控件。正文退出 host onOpenLink 回调；修饰键点击与 Open Link 命令共用结果，Workbench 命令面板收集活动编辑器的可用 Action。可信域名归 `workbench/contrib/url`，打开方式选择归 `workbench/contrib/externalUriOpener`，两项尚未实现；远程解析与解析结果释放也尚未完成。 |
 | `browser/services/renameSymbolTrackerService.ts` | 1 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
 | `browser/stableEditorScroll.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `browser/triggerInlineEditCommandsRegistry.ts` | 2 / 2 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |

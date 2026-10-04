@@ -46,7 +46,7 @@ test('Git ignore preserves the server result when completion wins the cancellati
 });
 
 const connectorHostServices = {
-	openerService: { openExternal: async () => undefined },
+	externalOpener: { openExternal: async () => true },
 	clipboardService: { readText: async () => '', writeText: async () => undefined, readResources: async () => ({ resources: [], operation: 'copy' as const }), writeResources: async () => undefined, hasResources: async () => false },
 };
 

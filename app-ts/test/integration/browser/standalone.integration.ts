@@ -13,6 +13,8 @@ import type { ICodeEditor } from '../../../src/ash/editor/browser/editorBrowser.
 import { CommandsRegistry, ICommandService, type ICommandMetadata } from '../../../src/ash/platform/commands/common/commands.js';
 import { IContextKeyService } from "../../../src/ash/platform/contextkey/browser/contextKeyService.js";
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
+import { LinkDetector } from '../../../src/ash/editor/contrib/links/browser/links.js';
 import { observableCodeEditor } from '../../../src/ash/editor/browser/observableCodeEditor.js';
 import { FindController, FindStartFocusAction } from '../../../src/ash/editor/contrib/find/browser/findController.js';
 import { StickyScrollController } from '../../../src/ash/editor/contrib/stickyScroll/browser/stickyScrollController.js';
@@ -253,6 +255,7 @@ interface StandaloneHarness {
 	cancelInlineRequests(reason: 'position' | 'provider' | 'snooze' | 'dispose' | 'model' | 'blur' | 'language'): void;
 	prepareLinks(): void;
 	readOpenedLinks(): string[];
+	readLinkAtCursor(): string | undefined;
 	setSemanticProvider(tokenType: string | null): void;
 	prepareLanguageWorkers(): void;
 	readLanguageWorkers(): { tokens: string[]; diagnostics: string[]; current: boolean };
@@ -439,10 +442,12 @@ const listener = stanza.editor.onDidCreateEditor(editor => {
 });
 const callerModel = stanza.editor.createModel('caller', 'plaintext', callerResource);
 const openedLinks: string[] = [];
+StandaloneServices.get(IOpenerService).setDefaultExternalOpener({
+	openExternal: async target => { openedLinks.push(target); return true; },
+});
 const callerEditor = stanza.editor.create(callerContainer, {
 	model: callerModel,
 	placeholder: 'Caller model',
-	onOpenLink: target => { openedLinks.push(target); },
 	folding: !new URL(location.href).searchParams.has('contributionsOff'),
 	colorDecorators: !new URL(location.href).searchParams.has('contributionsOff'),
 	occurrencesHighlight: new URL(location.href).searchParams.has('contributionsOff') ? 'off' : 'singleFile',
@@ -1364,6 +1369,7 @@ window.ashStandaloneIntegration = {
 		callerEditor.setValue('https://example.test/path');
 	},
 	readOpenedLinks: () => [...openedLinks],
+	readLinkAtCursor: () => LinkDetector.get(callerEditor)?.getLinkOccurrence(callerEditor.getPosition())?.target,
 	setSemanticProvider: tokenType => {
 		semanticRegistration?.dispose();
 		semanticRegistration = undefined;

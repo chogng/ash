@@ -399,6 +399,8 @@ export class SCMHistoryViewPane extends ViewPane {
 					return card.domNode;
 				},
 				groupId: 'scm.history.items',
+				// Commit details contain actions, so crossing the gap must not dismiss them.
+				persistence: 'sticky',
 				anchorAlignment: AnchorAlignment.Left,
 				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
 				anchorPosition: AnchorPosition.Below,
@@ -686,7 +688,8 @@ export class SCMHistoryViewPane extends ViewPane {
 			ariaLabel: localize('scm.history.commitActions', 'Commit actions'),
 			contextKeyService: scope,
 			menuOptions: { arg: target, renderShortTitle: true },
-			actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: action.tooltip }),
+			// Action tooltips share the ContextView and would replace their own details card.
+			actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: action.tooltip, tooltip: '' }),
 			toolbarOptions: { primaryGroup: 'inline' },
 		}));
 		if (hint) toolbar.element.setAttribute('aria-description', hint);

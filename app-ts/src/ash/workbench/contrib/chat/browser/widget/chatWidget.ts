@@ -17,7 +17,7 @@ import type { IChatListItem } from "./chatListItems.js";
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import { h } from "../../../../../base/browser/dom.js";
 import type { ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
-import type { IOpenerService } from "../../../../../platform/opener/common/openerService.js";
+import type { IOpenerService } from "../../../../../platform/opener/common/opener.js";
 import type { IEditorService } from "../../../../services/editor/common/editorService.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Schemas } from "../../../../../base/common/network.js";
@@ -277,7 +277,7 @@ export async function openChatMarkdownLink(
 		if (workspaceResource && editorService) await editorService.openEditor({ resource: workspaceResource });
 		return;
 	}
-	if (openerService) await openerService.openExternal(target);
+	if (openerService) await openerService.open(target, { openExternal: true, fromUserGesture: true });
 }
 
 function isEditorResourceScheme(scheme: string): boolean {

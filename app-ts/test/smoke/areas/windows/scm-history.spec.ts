@@ -183,8 +183,59 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	await expect(openOnGitHub).toBeVisible();
 	await expect(openOnGitHub).toHaveText('Open on GitHub');
 	await expect(openOnGitHub.locator('.ash-icon')).toHaveAttribute('aria-hidden', 'true');
+	const pointerCopy = hover.getByRole('button', { name: 'Copy Commit Hash', exact: true });
+	const hoverId = await hover.getAttribute('id');
+	const commitBounds = (await commit.boundingBox())!;
+	const hoverBounds = (await hover.boundingBox())!;
+	expect(hoverBounds.x).toBeGreaterThan(commitBounds.x + commitBounds.width);
+	await page.mouse.move((commitBounds.x + commitBounds.width + hoverBounds.x) / 2, commitBounds.y + commitBounds.height / 2);
+	// A deliberate pause in the gap reproduces a slow move from the row to its actions.
+	await page.waitForTimeout(150);
+	await expect(hover).toHaveAttribute('id', hoverId!);
+	await pointerCopy.hover();
+	// Hold past the action-tooltip delay to detect replacement of the details card.
+	await page.waitForTimeout(700);
+	await expect(hover).toHaveAttribute('id', hoverId!);
+	await pointerCopy.click();
+	const pointerCopied = () => target.kind === 'electron'
+		? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())
+		: page.evaluate(() => navigator.clipboard.readText());
+	await expect.poll(pointerCopied).toBe(hash);
+	await openOnGitHub.hover();
+	await page.waitForTimeout(700);
+	await expect(hover).toHaveAttribute('id', hoverId!);
+	if (target.kind === 'electron') {
+		const electron = application as ElectronApplication;
+		await electron.evaluate(({ shell }) => {
+			const original = shell.openExternal;
+			const state = globalThis as typeof globalThis & { scmHistoryLink?: { url?: string; restore: () => void } };
+			state.scmHistoryLink = { restore: () => { shell.openExternal = original; } };
+			shell.openExternal = async url => { state.scmHistoryLink!.url = url; };
+		});
+		try {
+			await openOnGitHub.click();
+			await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { scmHistoryLink?: { url?: string } }).scmHistoryLink?.url)).toBe(`https://github.com/ash-test/history/commit/${hash}`);
+		} finally {
+			await electron.evaluate(() => (globalThis as typeof globalThis & { scmHistoryLink?: { restore: () => void } }).scmHistoryLink!.restore());
+		}
+	} else {
+		const url = `https://github.com/ash-test/history/commit/${hash}`;
+		await page.context().route(url, route => route.fulfill({ body: 'Commit link opened' }));
+		try {
+			const opened = page.context().waitForEvent('page');
+			await openOnGitHub.click();
+			const external = await opened;
+			try { await expect(external).toHaveURL(url); } finally { await external.close(); }
+		} finally {
+			await page.context().unroute(url);
+		}
+	}
 	await hover.locator('.ash-scm-graph-hover-message').hover();
 	await expect(hover).toBeVisible();
+	await page.getByRole('textbox', { name: 'Commit message', exact: true }).click();
+	await expect(hover).toHaveCount(0);
+	await commit.locator('.ash-scm-graph-subject').hover();
+	await expect(hover.locator('.ash-scm-graph-hover-message')).toHaveText(body);
 	await page.keyboard.press('Escape');
 	await expect(hover).toHaveCount(0);
 	await header.hover();

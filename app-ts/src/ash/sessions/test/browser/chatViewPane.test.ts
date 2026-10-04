@@ -65,7 +65,7 @@ import { h } from "../../../base/browser/dom.js";
 import type { IFileService } from '../../../platform/files/common/files.js';
 import { URI } from "../../../base/common/uri.js";
 import { ICommandService } from "../../../platform/commands/common/commands.js";
-import type { IOpenerService } from "../../../platform/opener/common/openerService.js";
+import type { IOpenerService } from "../../../platform/opener/common/opener.js";
 import type { IEditorService } from "../../../workbench/services/editor/common/editorService.js";
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
@@ -165,7 +165,7 @@ test("Chat Markdown links route resource, command, and external targets through 
 		openEditor: async ({ resource }: { readonly resource: URI }) => { editorResources.push(resource); },
 	} as unknown as IEditorService;
 	const openerService = {
-		openExternal: async (target: string) => { externalTargets.push(target); },
+		open: async (target: string) => { externalTargets.push(target); },
 	} as unknown as IOpenerService;
 	const commandService = {
 		executeCommand: async (id: string, ...args: readonly unknown[]) => { commands.push({ id, args }); },

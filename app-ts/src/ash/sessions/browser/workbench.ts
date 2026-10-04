@@ -140,8 +140,8 @@ import { IKeybindingsResourceService } from "../../platform/keybinding/common/ke
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import { IQuickAccessController } from "../../platform/quickinput/common/quickAccess.js";
 import { QuickAccessController } from "../../platform/quickinput/browser/quickAccess.js";
-import { IOpenerService } from "../../platform/opener/common/openerService.js";
-import { BrowserOpenerService } from "../../platform/opener/browser/browserOpenerService.js";
+import { IOpenerService } from "../../platform/opener/common/opener.js";
+import { OpenerService } from '../../editor/browser/services/openerService.js';
 import { CommandService } from "../../workbench/services/commands/common/commandService.js";
 import { BrowserKeyboardLayoutService } from "../../workbench/services/keybinding/browser/keyboardLayoutService.js";
 import { WorkbenchKeybindingService } from "../../workbench/services/keybinding/browser/keybindingService.js";
@@ -402,7 +402,11 @@ export class Workbench extends Disposable {
 		feedbackHost.className = "ash-feedback-host";
 		this.domNode.append(feedbackHost);
 		this._register(toDisposable(() => feedbackHost.remove()));
-		services.registerInstance(IOpenerService, new BrowserOpenerService(ownerWindow));
+		const openerService = this._register(services.createInstance(OpenerService));
+		if (options.nativeHostApi) {
+			openerService.setDefaultExternalOpener({ openExternal: options.nativeHostApi.openExternal.bind(options.nativeHostApi) });
+		}
+		services.registerInstance(IOpenerService, openerService);
 		services.registerInstance(IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService);
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);

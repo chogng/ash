@@ -219,6 +219,11 @@ export function getDocument(source?: Node | Document | UIEvent | Window | null):
 	return getWindow(source).document;
 }
 
+/** Opens a separate browsing context without granting it access to this window. */
+export function windowOpenNoOpener(url: string): void {
+	getWindow().open(url, '_blank', 'noopener,noreferrer');
+}
+
 export function $<T extends HTMLElement>(description: string, attrs?: { [key: string]: any }, ...children: Array<Node | string>): T {
 	const match = /^([a-zA-Z][\w-]*)?(?:#([\w-]+))?((?:\.[\w-]+)*)$/.exec(description);
 	if (!match) throw new Error(`Invalid DOM description '${description}'`);

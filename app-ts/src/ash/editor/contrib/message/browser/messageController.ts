@@ -7,7 +7,7 @@ import { isMarkdownString } from '../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { RawContextKey, type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { IOpenerService } from '../../../../platform/opener/common/openerService.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import { EditorCommand, EditorContributionInstantiation, registerEditorCommand, registerEditorContribution } from '../../../browser/editorExtensions.js';
@@ -100,7 +100,7 @@ export class MessageController extends Disposable implements IEditorContribution
 					}
 					if (target.startsWith(`${Schemas.internal}:`)) return;
 					const opener = this.editor.invokeWithinContext(accessor => accessor.getOptional(IOpenerService));
-					if (opener) void opener.openExternal(target).catch(error => console.error('Could not open Markdown link', error));
+					if (opener) void opener.open(target, { openExternal: true, fromUserGesture: true }).catch(error => console.error('Could not open Markdown link', error));
 				},
 			});
 			content = markdown.element;

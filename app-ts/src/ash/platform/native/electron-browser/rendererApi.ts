@@ -104,7 +104,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		if (enabled) {
 			await initialize();
 			backend = createRendererHost(client, {
-				openerService: { openExternal: target => invoke<void>('ash:host:openExternal', target) },
+				externalOpener: { openExternal: target => invoke<boolean>('ash:host:openExternal', target) },
 				callbackHost: {
 					listen: () => invoke('ash:oauth-callback:listen'),
 					wait: id => invoke('ash:oauth-callback:wait', { id }),

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Link integration</title>
+    <style>
+      body { margin: 24px; color: var(--ash-foreground); background: var(--ash-editor-background); }
+      section { margin-block: 24px; }
+      #output { height: 240px; }
+    </style>
+  </head>
+  <body>
+    <button id="before">Before links</button>
+    <section id="default-link"></section>
+    <section id="custom-link"></section>
+    <button id="after">After links</button>
+    <section id="output"></section>
+    <script type="module" src="./link.integration.ts"></script>
+  </body>
+</html>

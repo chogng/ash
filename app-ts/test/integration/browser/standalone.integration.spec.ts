@@ -1152,7 +1152,9 @@ test.describe('contribution lifecycle', () => {
 			await page.mouse.move(point.x + 1, point.y);
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toHaveLength(1);
 			await page.evaluate(reason => window.ashStandaloneIntegration.changeContributionState(reason), reason);
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([{ languageId: 'typescript', aborted: true }]);
+			const expected = [{ languageId: 'typescript', aborted: true }];
+			if (reason === 'language') expected.push({ languageId: 'javascript', aborted: false });
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual(expected);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
 			await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(0);
 		});
@@ -1389,7 +1391,24 @@ test.describe('inlay hints', () => {
 	});
 });
 
-test('detected document links reach the editor host without a language provider', async ({ page }) => {
+test('Open Link opens the provider target from the keyboard without hovering', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLinkCandidates());
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('ControlOrMeta+Home');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLinkAtCursor())).toBe('https://resolved.test');
+	await page.keyboard.press('F1');
+	const picker = page.locator('#caller .ash-quick-pick');
+	await picker.getByRole('combobox').fill('Open Link');
+	await expect(picker.locator('.ash-quick-pick-row-label').filter({ hasText: /^Open Link$/u })).toBeVisible();
+	await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual(['https://resolved.test/']);
+	await expect(input).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('detected document links reach the editor opener without a language provider', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareLinks());
 	const link = page.locator('#caller .view-line > span > span').filter({ hasText: 'https://example.test/path' }).first();
@@ -1432,7 +1451,7 @@ test('links combine provider targets and detected URLs and honor disabled state 
 	await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(1);
 	await page.mouse.click(second.x, second.y);
 	await page.keyboard.up('Alt');
-	expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual(['https://resolved.test', 'https://two.test']);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual(['https://resolved.test/', 'https://two.test/']);
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 

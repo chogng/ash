@@ -167,6 +167,7 @@ test("desktop commands are available from the command palette", async () => {
 	const services = new InstantiationService();
 	let toggles = 0;
 	services.registerInstance(INativeHostService, {
+		openExternal: async () => { throw new Error('unused'); },
 		showNativeDialog: async () => { throw new Error('unused'); },
 		installShellCommand: async () => '',
 		uninstallShellCommand: async () => '',

@@ -21,6 +21,8 @@ import { type LanguageCompletionWorkerFactory, type SyntaxWorkerFactory } from '
 import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from "../../browser/services/editorWorkerService.js";
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
+import { IOpenerService } from '../../../platform/opener/common/opener.js';
+import { OpenerService } from '../../browser/services/openerService.js';
 import { ILanguageService, type IAshLanguageService } from '../../common/languages/language.js';
 import { LanguageService } from '../../common/services/languageService.js';
 import { ILanguageConfigurationService, LanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
@@ -180,6 +182,7 @@ export class StandaloneServiceCollection extends InstantiationService {
 		this.registerSingleton(IMarkerDecorationsService, () => this.createInstance(MarkerDecorationsService));
 		this.registerInstance(IClipboardService, new BrowserClipboardService(window.navigator.clipboard));
 		this.registerSingleton(ICodeEditorService, () => this.createInstance(StandaloneCodeEditorService));
+		this.registerSingleton(IOpenerService, () => this.createInstance(OpenerService));
 		this.registerSingleton(ILayoutService, () => this.createInstance(StandaloneLayoutService));
 		this.registerSingleton(IQuickInputService, () => this.createInstance(StandaloneQuickInputService));
 		this.registerSingleton(IBulkEditService, () => this.createInstance(StandaloneBulkEditService));

@@ -175,6 +175,7 @@ export interface INativeHostApi {
 	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
 	syncSystemWideKeybindings(keybindings: readonly INativeSystemWideKeybinding[]): Promise<INativeSystemWideKeybindingResult>;
+	openExternal(target: string): Promise<boolean>;
 	revealFile(path: string): Promise<void>;
 	setWindowTheme(theme: INativeWindowTheme): Promise<void>;
 	setWindowDimmed(dimmed: boolean): Promise<void>;

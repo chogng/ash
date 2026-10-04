@@ -1,15 +1,14 @@
-import { addDisposableListener, h, isElement, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h, stopEvent } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { ActionViewItem, ActionViewItemOptions } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { DropdownMenuActionViewItem } from "../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
 import { Separator, SubmenuAction, type IAction } from "../../../../base/common/actions.js";
 import type { Icon } from "../../../../base/common/icon.js";
-import { MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableStore, MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { URI } from "../../../../base/common/uri.js";
-import { Position } from "../../../../editor/common/core/position.js";
-import { Range } from "../../../../editor/common/core/range.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { Link } from "../../../../platform/opener/browser/link.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
@@ -33,6 +32,7 @@ const MaximumRenderedEntries = 5_000;
 /** Generic Output channel projection with filtering, navigation, and export. */
 export class OutputViewPane extends ViewPane {
 	private readonly activeChannelListener = this._register(new MutableDisposable<IDisposable>());
+	private readonly linkResources = this._register(new DisposableStore());
 	private readonly filters: OutputFilterState;
 	private readonly filterInput: HTMLInputElement;
 	private readonly content: HTMLDivElement;
@@ -40,7 +40,17 @@ export class OutputViewPane extends ViewPane {
 	private autoScroll: boolean;
 	private titleStateKey = "";
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @IOutputService private readonly outputService: IOutputService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IStorageService private readonly storageService?: IStorageService, @IEditorService private readonly editorService?: IEditorService, @IWorkspaceContextService private readonly workspaceContextService?: IWorkspaceContextService, @IWorkbenchHostService private readonly hostService?: IWorkbenchHostService) {
+	constructor(
+		container: HTMLElement,
+		options: IViewPaneOptions,
+		@IOutputService private readonly outputService: IOutputService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IStorageService private readonly storageService?: IStorageService,
+		@IEditorService private readonly editorService?: IEditorService,
+		@IWorkspaceContextService private readonly workspaceContextService?: IWorkspaceContextService,
+		@IWorkbenchHostService private readonly hostService?: IWorkbenchHostService,
+	) {
 		super(container, options);
 		this.contentElement.classList.add("ash-output");
 		this.filters = this._register(new OutputFilterState(storageService));
@@ -76,7 +86,6 @@ export class OutputViewPane extends ViewPane {
 			this.filterInput.select();
 		}));
 		this._register(addDisposableListener(this.content, "scroll", () => this.acceptScrollPosition()));
-		this._register(addDisposableListener(this.content, "click", event => this.openLink(event)));
 		this._register(outputService.onDidChangeChannels(() => this.render()));
 		this._register(outputService.onDidChangeActiveChannel(channel => this.bindActiveChannel(channel)));
 		this._register(this.filters.onDidChange(() => this.render()));
@@ -91,6 +100,7 @@ export class OutputViewPane extends ViewPane {
 	}
 
 	private render(): void {
+		this.linkResources.clear();
 		const active = this.outputService.activeChannel;
 		const categories = active ? categoriesOf(active.entries) : [];
 		const titleStateKey = [this.outputService.channels.map(channel => channel.id).join("\0"), active?.id ?? "", (active?.entries.length ?? 0) > 0, this.autoScroll, this.filters.text, ...OutputSeverities.map(severity => this.filters.isSeverityVisible(severity)), ...categories.map(category => `${category}:${this.filters.isCategoryVisible(category)}`)].join("\u0001");
@@ -127,15 +137,17 @@ export class OutputViewPane extends ViewPane {
 		let offset = 0;
 		for (const link of links) {
 			row.append(entry.text.slice(offset, link.startIndex));
-			const anchor = h(row.ownerDocument, "a");
-			anchor.className = "ash-output-link";
-			anchor.href = link.resource.toString();
-			anchor.textContent = link.label;
-			anchor.title = `Open ${link.resource.toString()}`;
-			anchor.dataset.resource = link.resource.toString();
-			anchor.dataset.line = String(link.selection.getStartPosition().lineNumber);
-			anchor.dataset.column = String(link.selection.getStartPosition().column);
-			row.append(anchor);
+			const control = this.linkResources.add(this.instantiationService.createInstance(Link, row, {
+				label: link.label,
+				href: link.resource.toString(),
+				title: link.resource.toString(),
+			}, {
+				opener: () => {
+					// The detector already returns an editor range; do not convert it through DOM data.
+					void this.editorService?.openEditor({ resource: link.resource }, { selection: link.selection });
+				},
+			}));
+			control.enabled = Boolean(this.editorService);
 			offset = link.endIndex;
 		}
 		row.append(entry.text.slice(offset));
@@ -147,17 +159,6 @@ export class OutputViewPane extends ViewPane {
 		empty.className = "ash-output-empty";
 		empty.textContent = message;
 		this.content.replaceChildren(empty);
-	}
-
-	private openLink(event: MouseEvent): void {
-		const target = isElement(event.target) ? event.target.closest<HTMLAnchorElement>(".ash-output-link") : null;
-		const resourceValue = target?.dataset.resource;
-		if (!target || !resourceValue || !this.editorService) return;
-		stopEvent(event);
-		const line = Number.parseInt(target.dataset.line ?? "0", 10);
-		const column = Number.parseInt(target.dataset.column ?? "0", 10);
-		const selection = Range.fromPositions(new Position((Number.isSafeInteger(line) ? line : 0) + 1, (Number.isSafeInteger(column) ? column : 0) + 1));
-		void this.editorService.openEditor({ resource: URI.parse(resourceValue) }, { selection });
 	}
 
 	private createActionViewItem(action: IAction, options: ActionViewItemOptions): ActionViewItem | undefined {

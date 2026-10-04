@@ -5,6 +5,7 @@ import type { IAction } from "../../../../../base/common/actions.js";
 import { Event } from "../../../../../base/common/event.js";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
+import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { OutputService } from "../../../../../workbench/services/output/browser/outputService.js";
 import type { ITaskService } from "../../../../../workbench/services/tasks/common/taskService.js";
 import type { ITerminalService } from "../../../../../workbench/services/terminal/common/terminal.js";
@@ -27,7 +28,8 @@ test("Output projects channel selection and active-channel clearing into the Pan
 		rust.append({ severity: "warning", text: "check failed" });
 		typescript.append({ severity: "log", text: "server ready" });
 		const { OutputViewPane } = await import("../../../../../workbench/contrib/output/browser/outputViewPane.js");
-		using pane = new OutputViewPane(browser.window.document.body, { id: "ash.output.test", title: "Output" }, output, contextMenus);
+		using services = new InstantiationService();
+		using pane = new OutputViewPane(browser.window.document.body, { id: "ash.output.test", title: "Output" }, output, contextMenus, services);
 		const titleActions = pane.partTitleProjection?.actions;
 		assert.ok(titleActions);
 		browser.window.document.body.append(pane.element, titleActions);

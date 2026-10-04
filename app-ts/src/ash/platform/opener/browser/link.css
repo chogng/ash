@@ -1,0 +1,19 @@
+.ash-link {
+	color: var(--ash-link-foreground, var(--ash-accent-foreground));
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.ash-link:not(.disabled):hover {
+	color: var(--ash-text-link-active-foreground);
+}
+
+.ash-link:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: var(--ash-spacing-size20);
+}
+
+.ash-link.disabled {
+	color: var(--ash-description-foreground);
+	cursor: default;
+}

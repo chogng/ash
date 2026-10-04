@@ -68,7 +68,6 @@ export interface CodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
 	readonly languageDiagnosticsService?: LanguageDiagnosticsHost;
 	readonly onLanguageError?: (error: unknown) => void;
-	readonly onOpenLink?: (target: string) => void | Promise<void>;
 	readonly onExecuteEditorCommand?: (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>;
