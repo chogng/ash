@@ -2,12 +2,11 @@
 source: code/tui/src/models/effort_selector_tests.rs
 expression: text(&buffer)
 ---
-Less reasoning → More reasoning
-─────────────────────────────────▲──────
-low     medium  high    xhigh   max
-Current: max
-Multitask  off
-Ash coordinates
+Faster                          Smarter
+──────────────────────────────────▲────
+ medium     high      xhigh      max
+
+             Multitask  off
 
 Maximum reasoning. May use more tokens
 and take longer; use for the hardest

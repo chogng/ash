@@ -18,6 +18,8 @@ use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use std::time::Instant;
 
+const LEVEL_CENTER_SPACING: u16 = 12;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Target {
     Level(usize),
@@ -37,7 +39,6 @@ pub(crate) enum Outcome {
 #[derive(Debug)]
 pub(crate) struct EffortSelector {
     levels: Vec<ReasoningEffort>,
-    current: Option<ReasoningEffort>,
     selected: usize,
     original_mode: CollaborationMode,
     multitask: bool,
@@ -56,7 +57,6 @@ impl EffortSelector {
         assert!(!levels.is_empty());
         Self {
             levels: levels.to_vec(),
-            current,
             selected: current
                 .and_then(|value| levels.iter().position(|level| *level == value))
                 .unwrap_or(0),
@@ -122,10 +122,10 @@ impl EffortSelector {
     }
 
     pub(crate) fn tick(&mut self, now: Instant) -> bool {
-        if self.levels[self.selected] != ReasoningEffort::Max {
+        if self.levels[self.selected] != ReasoningEffort::Max && !self.multitask {
             return false;
         }
-        let phase = (now.saturating_duration_since(self.opened).as_millis() / 160 % 6) as usize;
+        let phase = (now.saturating_duration_since(self.opened).as_millis() / 80 % 48) as usize;
         if phase == self.phase {
             return false;
         }
@@ -149,61 +149,97 @@ impl EffortSelector {
     }
 
     pub(crate) fn body_rows(&self, width: u16, context: RenderContext<'_>) -> u16 {
-        self.description_row(width)
+        let layout = self.layout(Rect::new(0, 0, width, 0), context);
+        layout.description.y
             + crate::render::wrap_lines(
                 vec![Line::raw(context.localize(self.description()).into_owned())],
-                width as usize,
+                layout.description.width as usize,
             )
             .len() as u16
     }
 
-    fn description_row(&self, width: u16) -> u16 {
-        if width >= 70 { 5 } else { 7 }
-    }
-
     fn layout(&self, area: Rect, context: RenderContext<'_>) -> Layout {
-        let scale_width = if area.width >= 70 {
-            area.width - 26
+        // Catalog order sets the ticks. Label clearance sets the minimum spacing;
+        // a narrow viewport compresses evenly, then scrolls to keep the edit visible.
+        let label_width = self
+            .levels
+            .iter()
+            .map(|level| level.as_str().len() as u16)
+            .max()
+            .unwrap();
+        let label_span = (label_width / 2 + 1) * 2 + 1;
+        let visible = (1 + usize::from(area.width.saturating_sub(label_span) / label_span))
+            .min(self.levels.len());
+        let intervals = (visible - 1) as u16;
+        let spacing = if intervals == 0 {
+            0
         } else {
-            area.width
+            LEVEL_CENTER_SPACING.min(area.width.saturating_sub(label_span) / intervals)
         };
-        let slots = (scale_width / 8).max(1) as usize;
-        let visible = slots.min(self.levels.len());
-        let first = self.selected.saturating_sub(visible - 1);
-        let step = if visible > 1 {
-            scale_width.saturating_sub(7) / (visible - 1) as u16
+        let end_labels_width = (crate::render::display_width(&context.localize("Faster"))
+            + crate::render::display_width(&context.localize("Smarter"))
+            + 2) as u16;
+        let scale_width = (label_span + spacing * intervals)
+            .max(end_labels_width)
+            .min(area.width);
+        let toggle_width = (crate::render::display_width(&context.localize("Multitask"))
+            + 2
+            + crate::render::display_width(&context.localize("on"))
+                .max(crate::render::display_width(&context.localize("off"))))
+            as u16;
+        let alongside = area.width >= scale_width + 4 + toggle_width;
+        let group_width = if alongside {
+            scale_width + 4 + toggle_width
         } else {
             scale_width
         };
+        let x = area.x + (area.width - group_width) / 2;
+        let first = self.selected.saturating_sub(visible - 1);
+        let first_center = x + scale_width.saturating_sub(spacing * intervals + 1) / 2;
         let levels = (first..first + visible)
             .map(|index| {
-                let x = area.x + (index - first) as u16 * step;
-                let width = if index + 1 == first + visible {
-                    area.x + scale_width - x
+                let center = first_center + (index - first) as u16 * spacing;
+                // Click ownership changes halfway between ticks, regardless of label length.
+                let left = if index == first {
+                    x
                 } else {
-                    step
+                    center - spacing / 2
                 };
-                (index, Rect::new(x, area.y + 2, width, 1))
+                let right = if index + 1 == first + visible {
+                    x + scale_width
+                } else {
+                    center + spacing.div_ceil(2)
+                };
+                let width = (self.levels[index].as_str().len() as u16).min(scale_width);
+                let label_x = center
+                    .saturating_sub(width / 2)
+                    .max(x)
+                    .min(x + scale_width - width);
+                LevelLayout {
+                    index,
+                    hit_area: Rect::new(left, area.y + 2, right - left, 1),
+                    label: Rect::new(label_x, area.y + 2, width, 1),
+                    marker: Position::new(center, area.y + 1),
+                }
             })
             .collect();
-        let toggle_width = crate::render::display_width(&format!(
-            "{}  {}",
-            context.localize("Multitask"),
-            context.localize(if self.multitask { "on" } else { "off" })
-        )) as u16;
+        let description_row = if alongside { 4 } else { 6 };
+        let description_width = area.width.min(84);
         Layout {
             levels,
-            toggle: if area.width >= 70 {
-                Rect::new(
-                    area.x + scale_width + 4,
-                    area.y + 1,
-                    toggle_width.min(22),
-                    1,
-                )
+            toggle: if alongside {
+                Rect::new(x + scale_width + 4, area.y + 1, toggle_width, 1)
             } else {
-                Rect::new(area.x, area.y + 4, toggle_width.min(area.width), 1)
+                let width = toggle_width.min(area.width);
+                Rect::new(area.x + (area.width - width) / 2, area.y + 4, width, 1)
             },
-            scale_width,
+            axis: Rect::new(x, area.y + 1, scale_width, 1),
+            description: Rect::new(
+                area.x + (area.width - description_width) / 2,
+                area.y + description_row,
+                description_width,
+                area.height.saturating_sub(description_row),
+            ),
         }
     }
 
@@ -220,10 +256,12 @@ impl EffortSelector {
         if layout.toggle.contains(position) {
             return Some(Target::Multitask);
         }
-        layout
-            .levels
-            .iter()
-            .find_map(|(index, rect)| rect.contains(position).then_some(Target::Level(*index)))
+        layout.levels.iter().find_map(|level| {
+            level
+                .hit_area
+                .contains(position)
+                .then_some(Target::Level(level.index))
+        })
     }
 
     pub(crate) fn draw(
@@ -235,17 +273,35 @@ impl EffortSelector {
         context: RenderContext<'_>,
     ) {
         let layout = self.layout(area, context);
-        let row = |offset, height| Rect::new(area.x, area.y + offset, area.width, height);
         let muted = Style::default().fg(context.muted());
+        let faster = context.localize("Faster");
+        let smarter = context.localize("Smarter");
+        let smarter_width = (crate::render::display_width(&smarter) as u16).min(layout.axis.width);
         frame.render_widget(
-            Paragraph::new(context.localize("Less reasoning → More reasoning")).style(muted),
-            Rect::new(area.x, area.y, layout.scale_width, 1).intersection(area),
+            Paragraph::new(faster).style(muted),
+            Rect::new(layout.axis.x, area.y, layout.axis.width, 1).intersection(area),
         );
         frame.render_widget(
-            Paragraph::new("─".repeat(layout.scale_width as usize)).style(muted),
-            Rect::new(area.x, area.y + 1, layout.scale_width, 1).intersection(area),
+            Paragraph::new(smarter).style(muted),
+            Rect::new(
+                layout.axis.right() - smarter_width,
+                area.y,
+                smarter_width,
+                1,
+            )
+            .intersection(area),
         );
-        for (index, rect) in layout.levels {
+        frame.render_widget(
+            Paragraph::new("─".repeat(layout.axis.width as usize)).style(muted),
+            layout.axis.intersection(area),
+        );
+        for LevelLayout {
+            index,
+            hit_area,
+            label,
+            marker,
+        } in layout.levels
+        {
             let target = Target::Level(index);
             let selected = self.selected == index;
             let level = self.levels[index];
@@ -272,14 +328,15 @@ impl EffortSelector {
                     context.function(),
                     context.mode_color(CollaborationMode::Multitask),
                 ];
-                "max"
+                level
+                    .as_str()
                     .chars()
                     .enumerate()
                     .map(|(index, ch)| {
                         Span::styled(
                             ch.to_string(),
                             style
-                                .fg(colors[(self.phase + index) % colors.len()])
+                                .fg(colors[(self.phase / 2 + index) % colors.len()])
                                 .add_modifier(Modifier::BOLD),
                         )
                     })
@@ -294,74 +351,88 @@ impl EffortSelector {
                     },
                 )]
             };
-            frame.render_widget(Paragraph::new(Line::from(spans)), rect.intersection(area));
+            frame.render_widget(
+                ratatui::widgets::Block::default().style(style),
+                hit_area.intersection(area),
+            );
+            frame.render_widget(Paragraph::new(Line::from(spans)), label.intersection(area));
             if selected {
                 frame.render_widget(
                     Paragraph::new("▲").style(Style::default().fg(context.focus())),
-                    Rect::new(rect.x + level.as_str().len() as u16 / 2, area.y + 1, 1, 1)
-                        .intersection(area),
+                    Rect::new(marker.x, marker.y, 1, 1).intersection(area),
                 );
             }
         }
-        let value = self.current.map_or_else(
-            || crate::nls::Text::from("Default"),
-            |level| crate::nls::Text::literal(level.as_str()),
-        );
-        let mut current = crate::nls::Text::template("Current: {0}", vec![value]);
-        current.localize(context.language());
-        frame.render_widget(
-            Paragraph::new(current.to_string()).style(muted),
-            row(3, 1).intersection(area),
-        );
         let toggle = format!(
             "{}  {}",
             context.localize("Multitask"),
             context.localize(if self.multitask { "on" } else { "off" })
         );
-        let style =
-            Style::default()
-                .fg(context.foreground())
-                .patch(crate::render::interaction_style(
-                    context,
-                    InteractionState {
-                        selected: self.multitask,
-                        hovered: hovered == Some(Target::Multitask),
-                        pressed: pressed == Some(Target::Multitask),
-                        ..Default::default()
-                    },
-                ));
-        frame.render_widget(
-            Paragraph::new(toggle).style(style),
-            layout.toggle.intersection(area),
-        );
-        let coordinator = if area.width >= 70 {
-            Rect::new(layout.toggle.x, area.y + 2, 22, 1)
+        let style = Style::default().fg(if self.multitask {
+            context.mode_color(CollaborationMode::Multitask)
         } else {
-            row(5, 1)
-        };
-        frame.render_widget(
-            Paragraph::new(context.localize("Ash coordinates")).style(muted),
-            coordinator.intersection(area),
+            context.foreground()
+        });
+        let interaction = crate::render::interaction_style(
+            context,
+            InteractionState {
+                hovered: hovered == Some(Target::Multitask),
+                pressed: pressed == Some(Target::Multitask),
+                ..Default::default()
+            },
         );
+        let toggle = if self.multitask {
+            // The wave blends two theme text colors, independent of whether the
+            // host terminal reported its background. Text and the on/off value stay stable.
+            Line::from(
+                toggle
+                    .chars()
+                    .enumerate()
+                    .map(|(index, ch)| {
+                        let wave = (self.phase as f32 * std::f32::consts::TAU / 48.0
+                            - index as f32 * 0.5)
+                            .cos();
+                        let amount = (1.0 - wave) / 2.0;
+                        Span::styled(
+                            ch.to_string(),
+                            context
+                                .blend_style(
+                                    style.add_modifier(Modifier::BOLD),
+                                    context.function(),
+                                    amount,
+                                )
+                                .patch(interaction),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            Line::from(Span::styled(toggle, style.patch(interaction)))
+        };
+        frame.render_widget(Paragraph::new(toggle), layout.toggle.intersection(area));
         let lines = crate::render::wrap_lines(
             vec![Line::raw(context.localize(self.description()).into_owned())],
-            area.width as usize,
+            layout.description.width as usize,
         );
         frame.render_widget(
             Paragraph::new(lines).style(muted),
-            row(
-                self.description_row(area.width),
-                area.height.saturating_sub(self.description_row(area.width)),
-            )
-            .intersection(area),
+            layout.description.intersection(area),
         );
     }
 }
 
 struct Layout {
-    levels: Vec<(usize, Rect)>,
+    levels: Vec<LevelLayout>,
     toggle: Rect,
-    scale_width: u16,
+    axis: Rect,
+    description: Rect,
+}
+
+struct LevelLayout {
+    index: usize,
+    hit_area: Rect,
+    label: Rect,
+    marker: Position,
 }
 
 #[cfg(test)]

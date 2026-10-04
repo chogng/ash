@@ -15,9 +15,9 @@ expression: frame_text(buffer)
            Copied 2 chars to clipboard
 ────────────────────────────────────────
   推理强度
-  更快                          更聪明
-  ──────────────────▲─────────────────
-  low             high             max
+    更快                     更聪明
+    ───────────────▲───────────────
+      low        high         max
 
               多任务  关闭
 

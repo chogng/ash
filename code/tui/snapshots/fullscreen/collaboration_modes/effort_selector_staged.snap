@@ -18,9 +18,9 @@ expression: render_effort(&app)
 
 ────────────────────────────────────────────────────────────────────────────────
   Thinking effort
-   Faster                                           Smarter
-   ──────────────────────────────────────────────────────▲─    Multitask  on
-   low                       high                       max
+               Faster                  Smarter
+               ───────────────────────────▲───    Multitask  on
+                 low        high         max
 
   Maximum reasoning. May use more tokens and take longer; use for the hardest
   tasks.
