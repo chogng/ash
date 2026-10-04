@@ -8,17 +8,24 @@ import { ElectronPlaywrightDriver } from "./electronDriver.js";
 import { WorkbenchDiagnostics } from './playwrightDriver.js';
 import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./electron.js";
 
-export interface ElectronLaunchResult {
+export interface ElectronApplicationLaunchResult {
 	readonly application: ElectronApplication;
+	readonly diagnostics: WorkbenchDiagnostics;
+	/** Runs the product quit handshake, including renderer shutdown participants and state saves. */
+	quit(): Promise<void>;
+	/** Destroys windows for fixture cleanup, including failed startup and tests that leave a quit veto. */
+	close(): Promise<void>;
+}
+
+export interface ElectronLaunchResult extends ElectronApplicationLaunchResult {
 	readonly driver: ElectronPlaywrightDriver;
 	readonly videoStartedAt?: number;
-	close(): Promise<void>;
 }
 
 export type ElectronLaunchMilestone = 'electron-launch-resolved' | 'first-window' | 'trust-accepted' | 'workbench-ready';
 
-/** Launches Ash Desktop through Playwright's Electron adapter. */
-export async function launchElectron(options: ElectronLaunchOptions, onMilestone?: (milestone: ElectronLaunchMilestone) => void): Promise<ElectronLaunchResult> {
+/** Owns an Electron process independently of whether its first window is Workbench or Agents. */
+export async function launchElectronApplication(options: ElectronLaunchOptions): Promise<ElectronApplicationLaunchResult> {
 	const configuration = resolveElectronConfiguration(options);
 	const startupDeadline = Date.now() + (options.startupTimeout ?? 30_000);
 	const application = await _electron.launch({
@@ -30,11 +37,10 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 		timeout: Math.max(1, startupDeadline - Date.now()),
 	});
 	const diagnostics = new WorkbenchDiagnostics(application.context());
-	onMilestone?.('electron-launch-resolved');
 	// Playwright releases the application channel on exit; retain the child process for startup diagnostics and cleanup.
 	const electronProcess = application.process();
 	let closing: Promise<void> | undefined;
-	const close = (): Promise<void> => closing ??= (async () => {
+	const shutdown = (kind: 'quit' | 'destroy'): Promise<void> => closing ??= (async () => {
 		const exited = electronProcess.exitCode !== null || electronProcess.signalCode !== null
 			? Promise.resolve() : new Promise<void>(resolveExit => electronProcess.once('exit', () => resolveExit()));
 		let termination: Promise<void> | undefined;
@@ -42,12 +48,22 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 		try {
 			try {
 				// End the renderer before stopping its daemon, so it cannot reconnect.
-				await application.evaluate(({ BrowserWindow }) => {
-					for (const window of BrowserWindow.getAllWindows()) window.destroy();
-				});
+				if (kind === 'destroy' && electronProcess.exitCode === null && electronProcess.signalCode === null) {
+					try {
+						await application.evaluate(({ BrowserWindow }) => {
+							for (const window of BrowserWindow.getAllWindows()) window.destroy();
+						});
+					} catch (error) {
+						// Closing the last window can exit Main before its inspector sends the reply.
+						// Only a confirmed clean process exit acknowledges that lost shutdown reply.
+						if (!(error instanceof Error) || !error.message.includes('Target page, context or browser has been closed')) throw error;
+						await exited;
+						if (electronProcess.exitCode !== 0) throw error;
+					}
+				}
 			} finally {
-				// A daemon can retain inherited stdio after Electron exits. Stop it once
-				// renderers are gone instead of waiting for Node's pipe-close event first.
+				// Electron's process exit ends its renderers. A daemon can keep inherited
+				// pipes open, so stop it on exit instead of awaiting Playwright's pipe-close event.
 				const stopDaemon = async (): Promise<void> => {
 					if (options.appServerMode !== 'required' || options.profileDirectory !== undefined) return;
 					const daemon = appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: options.packagedBundle !== undefined, platform: process.platform, resourcesPath: configuration.resourcesPath });
@@ -55,7 +71,10 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 						throw new Error(`Test daemon shutdown failed: code=${error.code}; signal=${error.signal}; killed=${error.killed}; stdout=${error.stdout}; stderr=${error.stderr}`, { cause: error });
 					});
 				};
-				await Promise.all([application.close(), stopDaemon()]);
+				await Promise.all([application.close(), exited.then(async () => {
+					clearTimeout(shutdownTimer);
+					await stopDaemon();
+				})]);
 			}
 		} catch (error) {
 			if (termination) throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated', { cause: error });
@@ -66,6 +85,16 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 		}
 		if (termination) throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
 	})();
+	return { application, diagnostics, quit: () => shutdown('quit'), close: () => shutdown('destroy') };
+}
+
+/** Launches Ash Desktop through Playwright's Electron adapter and waits for Workbench readiness. */
+export async function launchElectron(options: ElectronLaunchOptions, onMilestone?: (milestone: ElectronLaunchMilestone) => void): Promise<ElectronLaunchResult> {
+	const startupDeadline = Date.now() + (options.startupTimeout ?? 30_000);
+	const session = await launchElectronApplication(options);
+	const { application, diagnostics, close } = session;
+	onMilestone?.('electron-launch-resolved');
+	const electronProcess = application.process();
 	const startupResources = new DisposableStore();
 	let processErrors = '';
 	const onProcessError = (chunk: Buffer): void => { processErrors = (processErrors + chunk.toString()).slice(-16_384); };
@@ -108,7 +137,7 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 		}
 		await ready;
 		onMilestone?.('workbench-ready');
-		return { application, driver, videoStartedAt, close };
+		return { ...session, driver, videoStartedAt };
 	};
 	try {
 		return await beforeDeadline(start(), startupDeadline, 'Electron Workbench startup timed out');

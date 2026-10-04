@@ -114,6 +114,60 @@ try {
 	});
 }
 
+for (const boundary of ['readiness', 'initialization'] as const) {
+	test(`Desktop quit during ${boundary} drains startup before closing services`, async ({}, testInfo) => {
+		const userDataDirectory = testInfo.outputPath('user-data');
+		await mkdir(userDataDirectory, { recursive: true });
+		const statePath = join(userDataDirectory, 'state.json');
+		const savedSession = { windowSession: { pendingRestoration: true } };
+		await writeFile(statePath, JSON.stringify(savedSession));
+		const resultPath = testInfo.outputPath('shutdown.json');
+		const entry = testInfo.outputPath('quit-during-startup.mjs');
+		await writeFile(entry, `
+import { app, BrowserWindow } from 'electron/main';
+import { writeFileSync } from 'node:fs';
+import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
+import { LoggerService } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/log/node/loggerService.js')).href)};
+bootstrapElectronMain();
+app.setAppPath(${JSON.stringify(desktop)});
+const events = [];
+const initialize = LoggerService.prototype.initialize;
+const close = LoggerService.prototype.close;
+LoggerService.prototype.close = async function() {
+	events.push('closed-services');
+	await close.call(this);
+};
+app.on('quit', () => writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify({ events, windows: BrowserWindow.getAllWindows().length })));
+void app.whenReady().then(async () => {
+	const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)});
+	if (${JSON.stringify(boundary)} === 'readiness') {
+		let releaseReady;
+		app.whenReady = () => new Promise(resolve => { releaseReady = resolve; });
+		await startElectronApplication({ initialModeId: 'code' });
+		events.push('quit-before-ready');
+		app.quit();
+		releaseReady();
+	} else {
+		LoggerService.prototype.initialize = async function() {
+			events.push('initializing');
+			app.quit();
+			await initialize.call(this);
+			events.push('initialized');
+		};
+		await startElectronApplication({ initialModeId: 'code' });
+	}
+});
+`);
+		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
+		const result = await runUntilExit({ ...configuration, args: configuration.args.map(argument => argument === desktop ? entry : argument) });
+		expect(result.code, result.output).toBe(0);
+		expect(result.output).not.toContain('Failed to start Ash');
+		expect(result.output).not.toContain('disposed');
+		expect(JSON.parse(await readFile(resultPath, 'utf8'))).toEqual({ events: boundary === 'readiness' ? ['quit-before-ready', 'closed-services'] : ['initializing', 'initialized', 'closed-services'], windows: 0 });
+		expect(JSON.parse(await readFile(statePath, 'utf8'))).toEqual(savedSession);
+	});
+}
+
 test('Desktop starts when its application entry loads after Electron is ready', async ({}, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
@@ -335,7 +389,8 @@ test('Desktop exits with a failure status when persistent services cannot start'
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
 	const result = await runUntilExit(configuration);
 	expect(result.code).toBe(1);
-	expect(result.output).toContain('Failed to start Ash');
+	expect(result.output).toContain('Failed to initialize Ash');
+	expect(result.output).toContain('StateService.load');
 });
 
 async function runUntilExit(configuration: ElectronConfiguration): Promise<{ code: number | null; output: string }> {

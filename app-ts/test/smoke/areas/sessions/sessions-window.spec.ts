@@ -1,3 +1,4 @@
+import { waitForElectronWindowState } from "../../../automation/electronDriver.js";
 import { Menus } from '../../../automation/menus.js';
 import { expect, test } from "../../../automation/test.js";
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
@@ -2537,11 +2538,12 @@ test('Agents macOS fullscreen hides window controls and restores them on exit', 
 		app.focus({ steal: true });
 		window.focus();
 	});
-	await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('sessions-code.html'))!.isFocused())).toBe(true);
+	await waitForElectronWindowState(application, sessionsPage, { focused: true });
 	await application.evaluate(({ BrowserWindow }) => {
 		const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL().includes('sessions-code.html'))!;
 		window.setFullScreen(true);
 	});
+	await waitForElectronWindowState(application, sessionsPage, { fullScreen: true });
 	await expect(sessionsPage.locator('#app')).toHaveClass(/ash-sessions-fullscreen/u);
 	await expect(spacer).toBeHidden();
 	await application.evaluate(({ BrowserWindow }) => {
@@ -2549,6 +2551,7 @@ test('Agents macOS fullscreen hides window controls and restores them on exit', 
 		if (!window) throw new Error('Sessions window is missing');
 		window.setFullScreen(false);
 	});
+	await waitForElectronWindowState(application, sessionsPage, { fullScreen: false });
 	await expect(spacer).toBeVisible();
 });
 

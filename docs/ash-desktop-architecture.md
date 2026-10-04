@@ -199,12 +199,21 @@ app-ts/
 `AshApplication`，`code/electron-main/app.ts` 持有服务、窗口、IPC 与退出生命周期。
 Workbench 功能不得反向进入根 bootstrap。
 
-Desktop 主进程入口同步注册 Electron `ready` 监听器；异步启动链只能从该监听器触发，
-不得在 ESM 顶层等待一个内部再调用 `app.whenReady()` 的 Promise。
-`AshApplication.startupAfterReady()` 断言 Ready 前置条件，并在不创建业务窗口的状态下
+Desktop 主进程创建应用后启动异步启动任务，不在 ESM 顶层等待 Electron `ready`。
+`LifecycleMainService` 持有启动任务和取消信号，等待 `app.whenReady()` 后调用应用的初始化。
+启动中退出时，先取消后续初始化，再等待正在执行的初始化结束，最后关闭服务；不能通过
+抢先释放服务来结束启动。窗口打开前取消必须保留待恢复的窗口会话；窗口开始打开后，先完成
+窗口设置，再进入可被窗口否决的正常退出。
+`AshApplication.startupAfterReady()` 断言 Ready 前置条件，并在创建业务窗口前
 完成 App Server gate。gate 成功后才创建 Workbench；主窗口在 `ready-to-show` 前保持隐藏，
-启动过程不创建额外的 splash 窗口。gate 失败时，原生 Retry/Quit 对话框允许 supervisor
+启动过程不创建额外的 splash 窗口。gate 失败时，Retry/Quit 对话框允许 supervisor
 回到 stopped 后重新初始化，或按正常退出生命周期关闭应用。
+
+Electron 自动化共用 `test/automation/playwrightElectron.ts` 的进程启动、诊断和退出管理。
+恢复场景使用 `quit()` 完成窗口关闭参与者和状态保存，测试结束及启动失败使用 `close()` 销毁窗口。
+窗口状态等待按页面对应的窗口 ID 检查实际焦点和全屏状态，独立于 Renderer 就绪；系统报告
+桌面锁定时直接报告环境错误，不把它当作窗口切换成功。进程退出后才停止测试 daemon，
+进程退出和 daemon 停止分别使用各自的期限。
 
 `app-ts/src/ash/platform/app-server/common/generated/` 消费 Rust 协议 crate 的生成快照，不手写 wire DTO。纯前端构建只同步快照，协议修改通过 `pnpm generate:protocol` 更新；职责和验证见 [App Server 协议来源](ash-app-server-api.md#12-权威来源)。
 生成的 `APP_SERVER_SCHEMA_HASH` 是 bundled Desktop 的 exact-schema 基线；Electron Main

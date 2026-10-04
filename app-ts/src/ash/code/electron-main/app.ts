@@ -17,6 +17,7 @@ import { promisify } from 'node:util';
 import { access, chmod, lstat, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { constants, readFileSync, watch } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { throwIfCancelled, type CancellationToken } from "../../base/common/cancellation.js";
 import { isCancellationError } from "../../base/common/errors.js";
 import { createUuid } from '../../base/common/uuid.js';
 import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableDisposable, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
@@ -285,8 +286,9 @@ export class AshApplication extends Disposable {
 		showSaveDialog: (options, window) => window ? dialog.showSaveDialog(window, options) : dialog.showSaveDialog(options),
 	}));
 	private themeMainService!: ThemeMainService;
-	private lifecycleMainService!: LifecycleMainService<BrowserWindow>;
-	private windowSessionStateHandler!: WindowSessionStateHandler<WindowSessionEntry>;
+	private readonly lifecycleMainService: LifecycleMainService<BrowserWindow>;
+	private startupWindowOpeningStarted = false;
+	private readonly windowSessionStateHandler: WindowSessionStateHandler<WindowSessionEntry>;
 	private readonly pendingWindowLaunches: IStartArguments[] = [];
 	private launchMainService!: LaunchMainService;
 	private workspacesHistory!: WorkspacesHistoryMainService;
@@ -305,6 +307,7 @@ export class AshApplication extends Disposable {
 
 	private constructor(
 		options: AshApplicationOptions,
+		private readonly stateService: StateService,
 		disposableTracker: DisposableTracker | undefined,
 		tracking: globalThis.Disposable | undefined,
 	) {
@@ -341,6 +344,16 @@ export class AshApplication extends Disposable {
 			? join(app.getAppPath(), '..', 'resources', 'win32', 'ash.ico')
 			: undefined;
 
+		this.lifecycleMainService = this._register(new LifecycleMainService<BrowserWindow>(async (window, message) => {
+			this.cancelQuit();
+			this.windowsMainService.failManagedWindowClose(window, message);
+			await this.dialogs.showMessageBox({ type: 'error', message }, window);
+		}, window => {
+			this.cancelQuit();
+			this.windowsMainService.failManagedWindowClose(window, 'Window close was vetoed');
+		}, this.stateService, app.getVersion()));
+		this.windowSessionStateHandler = new WindowSessionStateHandler(this.stateService, () => this.getOpenWindowSessions(), isWindowSessionEntry);
+
 		app.on('second-instance', this.onSecondInstance);
 		app.on('open-file', this.onOpenFile);
 		app.on('open-url', this.onOpenUrl);
@@ -363,17 +376,27 @@ export class AshApplication extends Disposable {
 		}));
 	}
 
-	static create(options: AshApplicationOptions): AshApplication {
+	static async create(options: AshApplicationOptions): Promise<AshApplication> {
+		const state = await StateService.create(join(app.getPath("userData"), "state.json"));
 		const disposableTracker = app.isPackaged
 			? undefined
 			: new DisposableTracker();
 		const tracking = disposableTracker
 			? installDisposableTracker(disposableTracker)
 			: undefined;
-		return new AshApplication(options, disposableTracker, tracking);
+		try { return new AshApplication(options, state, disposableTracker, tracking); }
+		catch (error) {
+			await state.close();
+			tracking?.[Symbol.dispose]();
+			throw error;
+		}
 	}
 
-	async startupAfterReady(): Promise<void> {
+	startup(): Promise<void> {
+		return this.lifecycleMainService.startup(app.whenReady(), token => this.startupAfterReady(token));
+	}
+
+	private async startupAfterReady(token: CancellationToken): Promise<void> {
 		if (!app.isReady()) {
 			throw new Error("Ash application startup requires Electron to be ready");
 		}
@@ -388,17 +411,22 @@ export class AshApplication extends Disposable {
 		}
 
 		await this.loggerService.initialize();
+		throwIfCancelled(token);
 		this.mainProcessIpcServer.registerChannel('logger', new LoggerChannel(this.loggerService));
 		this.logService.info('lifecycle', 'Desktop startup', { mode: this.defaultModeId, appServer: this.appServerStartupMode });
-		await this.createPersistentServices();
+		await this.createPersistentServices(token);
+		throwIfCancelled(token);
 		const localeValue = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
 		const locale = typeof localeValue === 'string' ? normalizeLocale(localeValue) : 'en';
 		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale.toLowerCase() === locale.toLowerCase()) ?? await new LanguagePackStore(this.profileRoot).read(locale);
+		throwIfCancelled(token);
 		if (!catalog) { throw new Error(`Display language '${locale}' is not installed locally`); }
 		this.activeLanguagePack = catalog;
 		const storage = this.storageMainService = this._register(new StorageMainService(join(app.getPath('userData'), 'workbench-state.json')));
 		await storage.initialize();
+		throwIfCancelled(token);
 		const academicStateConflicts = await storage.migrateApplicationStorage('academic', 'code');
+		throwIfCancelled(token);
 		if (academicStateConflicts.length > 0) { this.logService.warn('storage', 'Academic state migration retained conflicting entries', { keys: academicStateConflicts }); }
 		this.mainProcessIpcServer.registerChannel('storage', new StorageDatabaseChannel(storage));
 		const launchServices = this._register(new InstantiationService());
@@ -414,20 +442,13 @@ export class AshApplication extends Disposable {
 		}
 		this.themeMainService = this._register(new ThemeMainService(nativeTheme, this.services.state));
 		this.mainProcessIpcServer.registerChannel('colorScheme', colorSchemeChannel(this.themeMainService));
-		this.lifecycleMainService = this._register(new LifecycleMainService<BrowserWindow>(async (window, message) => {
-			this.cancelQuit();
-			this.windowsMainService.failManagedWindowClose(window, message);
-			await this.dialogs.showMessageBox({ type: 'error', message }, window);
-		}, window => {
-			this.cancelQuit();
-			this.windowsMainService.failManagedWindowClose(window, 'Window close was vetoed');
-		}, this.services.state, app.getVersion()));
-		this.windowSessionStateHandler = new WindowSessionStateHandler(this.services.state, () => this.getOpenWindowSessions(), isWindowSessionEntry);
 		const wasUpdated = this.lifecycleMainService.wasRestarted;
 		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;
 		launchServices.registerInstance(IWindowsMainService, this.windowsMainService);
 		this.launchMainService = this._register(launchServices.createInstance(LaunchMainService));
+		// Once windows can accept user input, finish their setup before requesting normal, vetoable shutdown.
+		this.startupWindowOpeningStarted = true;
 		{
 			using restoration = this.windowSessionStateHandler.beginRestoration();
 			await this.openStartupWindows(workspaces, wasUpdated);
@@ -742,10 +763,7 @@ export class AshApplication extends Disposable {
 		if (this.quitRequested || process.platform !== 'darwin') app.quit();
 	}
 
-	private async createPersistentServices(): Promise<void> {
-		const state = await StateService.create(
-			join(app.getPath("userData"), "state.json"),
-		);
+	private async createPersistentServices(token: CancellationToken): Promise<void> {
 		let configuration: ConfigurationMainService | undefined;
 		let keybindings: KeybindingsResourceMainService | undefined;
 		let userKeyboardLayout: UserKeyboardLayoutMainService | undefined;
@@ -756,12 +774,14 @@ export class AshApplication extends Disposable {
 					console.error("Failed to process configuration", error);
 				},
 			});
+			throwIfCancelled(token);
 			keybindings = await KeybindingsResourceMainService.create({
 				filePath: join(this.profileRoot, "keybindings.json"),
 				onError: (error) => {
 					console.error("Failed to process keybindings resource", error);
 				},
 			});
+			throwIfCancelled(token);
 			userKeyboardLayout = await UserKeyboardLayoutMainService.create({
 				filePath: join(this.profileRoot, "keyboard-layout.json"),
 				openResource: (filePath) => shell.openPath(filePath),
@@ -769,10 +789,10 @@ export class AshApplication extends Disposable {
 					console.error("Failed to process user keyboard layout", error);
 				},
 			});
-			this.persistentServices = { state, configuration, keybindings, userKeyboardLayout };
+			throwIfCancelled(token);
+			this.persistentServices = { state: this.stateService, configuration, keybindings, userKeyboardLayout };
 		} catch (error) {
 			await Promise.all([
-				state.close(),
 				configuration?.close(),
 				keybindings?.close(),
 				userKeyboardLayout?.close(),
@@ -1862,9 +1882,24 @@ export class AshApplication extends Disposable {
 
 	private readonly onBeforeQuit = (event: ElectronEvent): void => {
 		this.quitRequested = true;
+		if (this.quitAfterStateSaved) { return; }
+		if (this.lifecycleMainService.isStarting) {
+			event.preventDefault();
+			if (this.quitSaveStarted) { return; }
+			this.quitSaveStarted = true;
+			void this.lifecycleMainService.stopStartup().catch(error => {
+				console.error('Failed to stop Desktop startup before quit', error);
+			}).finally(() => {
+				// Cancelling before any window opens must preserve the session awaiting restoration.
+				if (!this.startupWindowOpeningStarted) { this.quitAfterStateSaved = true; }
+				this.quitSaveStarted = false;
+				app.quit();
+			});
+			return;
+		}
 		if (this.persistentServices) this.windowSessionStateHandler.stopAutomaticSaves();
 		const records = [...this.workbenchWindowData.values()];
-		if (this.quitAfterStateSaved || !this.persistentServices) {
+		if (!this.persistentServices) {
 			return;
 		}
 		event.preventDefault();
@@ -1939,8 +1974,8 @@ export class AshApplication extends Disposable {
 		const services = this.persistentServices;
 		this.closePersistentServicesPromise ??= Promise.all([
 			this.storageMainService?.close(),
+			this.stateService.close(),
 			...(services ? [
-				services.state.close(),
 				services.configuration.close(),
 				services.keybindings.close(),
 				services.userKeyboardLayout.close(),

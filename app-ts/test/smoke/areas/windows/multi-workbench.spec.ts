@@ -6,6 +6,8 @@ import { expect, test } from "../../../automation/test.js";
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "../../../automation/testWorkspace.js";
 import { Workbench } from "../../../automation/workbench.js";
 
+import { waitForElectronWindowState } from "../../../automation/electronDriver.js";
+
 const workspacesToDispose: TestWorkspace[] = [];
 test.afterAll(async () => {
 	for (const workspace of workspacesToDispose) await disposeTestWorkspace(workspace);
@@ -96,14 +98,14 @@ test('Open in Agents reuses one window across Workbench workspaces', async ({ ap
 		const agentsWindow = await application.browserWindow(agentsPage);
 		const agentsWindowId = await agentsWindow.evaluate(window => window.id);
 		// Renderer restoration and the OS focus transition complete independently.
-		await expect.poll(() => agentsWindow.evaluate(window => window.isFocused())).toBe(true);
+		await waitForElectronWindowState(application, agentsPage, { focused: true });
 		await expect.poll(() => readWindowLogs(application, agentsWindowId!)).toContainEqual(expect.objectContaining({ source: `window-${agentsWindowId}`, category: 'lifecycle', message: 'Agents restored' }));
 		await secondPage.evaluate(async () => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<void> } } }).ash.ipcRenderer;
 			await ipc.invoke('ash:native-host:open-agents-window');
 		});
 
-		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(agentsWindowId);
+		await waitForElectronWindowState(application, agentsPage, { focused: true });
 		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter(window => window.webContents.getURL().includes('sessions-code.html')).length)).toBe(1);
 		await expect.poll(() => application.windows().length).toBe(3);
 		await expect.poll(() => canonicalWorkspacePath(agentsPage)).toBe(await realpath(secondWorkspace.directory));

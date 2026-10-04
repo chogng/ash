@@ -1,3 +1,4 @@
+import { waitForElectronWindowState } from "../../../automation/electronDriver.js";
 import { expect, test } from '../../../automation/test.js';
 
 for (const windowKind of ['Workbench', 'Agents'] as const) {
@@ -60,7 +61,7 @@ test('window picker data includes the Agents window and can focus it', async ({ 
 	try {
 		const agentsWindow = await application.browserWindow(childPage);
 		const agentsWindowId = await agentsWindow.evaluate(window => window.id);
-		await expect.poll(() => agentsWindow.evaluate(window => window.isFocused())).toBe(true);
+		await waitForElectronWindowState(application, childPage, { focused: true });
 		const windows = await workbench.page.evaluate(async () => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
 			return ipc.invoke('ash:window:operation', { kind: 'list' }) as Promise<readonly { id: number; focused: boolean }[]>;
@@ -75,12 +76,12 @@ test('window picker data includes the Agents window and can focus it', async ({ 
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
 			await ipc.invoke('ash:window:operation', { kind: 'focus', windowId: id });
 		}, workbenchWindow!.id);
-		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(workbenchWindow!.id);
+		await waitForElectronWindowState(application, workbench.page, { focused: true });
 		await workbench.page.evaluate(async id => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
 			await ipc.invoke('ash:window:operation', { kind: 'focus', windowId: id });
 		}, agents!.id);
-		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(agents!.id);
+		await waitForElectronWindowState(application, childPage, { focused: true });
 		await expect(childPage.locator('.ash-sessions-window')).toBeVisible();
 	} finally {
 		if (!childPage.isClosed()) await childPage.close();

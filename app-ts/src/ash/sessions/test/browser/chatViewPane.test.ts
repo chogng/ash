@@ -644,7 +644,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 
 test("Empty chat transcripts do not render a redundant placeholder", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	using list = new ChatListWidget(dom.window.document.body);
+	using listServices = createTestEditorServices(undefined, undefined, dom.window.document);
+	using list = listServices.createInstance(ChatListWidget, dom.window.document.body, {});
 
 	list.render([]);
 
@@ -655,7 +656,8 @@ test("Empty chat transcripts do not render a redundant placeholder", () => {
 
 test("Chat transcript reuses unchanged messages while replacing changed content", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	using list = new ChatListWidget(dom.window.document.body);
+	using listServices = createTestEditorServices(undefined, undefined, dom.window.document);
+	using list = listServices.createInstance(ChatListWidget, dom.window.document.body, {});
 	const first = { id: "first", type: "agentMessage" as const, text: "Original **answer**", transient: false };
 	const second = { id: "second", type: "userMessage" as const, text: "Question", transient: false };
 	list.render([first, second]);
@@ -676,7 +678,8 @@ test("Chat transcript reuses unchanged messages while replacing changed content"
 
 test("Chat transcript keeps the first visible message in place when history is prepended", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	using list = new ChatListWidget(dom.window.document.body);
+	using listServices = createTestEditorServices(undefined, undefined, dom.window.document);
+	using list = listServices.createInstance(ChatListWidget, dom.window.document.body, {});
 	const viewport = list.element.querySelector<HTMLElement>(".ash-scrollbar-viewport")!;
 	const transcript = list.element.querySelector<HTMLElement>(".ash-chat-transcript")!;
 	Object.defineProperties(viewport, {
@@ -706,8 +709,9 @@ test("Chat transcript keeps the first visible message in place when history is p
 test("Turn error cards invoke their typed action without interpreting message text", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	let requestedAction: ChatTurnErrorAction | undefined;
-	using list = new ChatListWidget(dom.window.document.body, {
-		onDidRequestErrorAction: (action) => { requestedAction = action; },
+	using listServices = createTestEditorServices(undefined, undefined, dom.window.document);
+	using list = listServices.createInstance(ChatListWidget, dom.window.document.body, {
+		onDidRequestErrorAction: (action: ChatTurnErrorAction) => { requestedAction = action; },
 	});
 	const item = chatTurnErrorListItem(failedTurn("providerAuth", false, "same opaque message"));
 	assert.ok(item);
@@ -2815,7 +2819,8 @@ function recordingDialogService(messages: IMessageDialogOptions[]): IDialogServi
 
 test("Audio history identifies the sender and recording duration", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	using list = new ChatListWidget(dom.window.document.body);
+	using listServices = createTestEditorServices(undefined, undefined, dom.window.document);
+	using list = listServices.createInstance(ChatListWidget, dom.window.document.body, {});
 	list.render([chatListItem({
 		type: "userAudioAttachment", itemId: "audio", turnId: "turn",
 		attachment: { contentDigest: "sha256:audio", mediaType: "wav", encodedBytes: 32044, durationMs: 1001 },
@@ -3014,7 +3019,8 @@ test("Advisor transcript groups the call and renders advice as a disclosure", ()
 	assert.equal(items.length, 1);
 	assert.equal(items[0]?.type, "advisor");
 	const container = document.createElement("div");
-	using widget = new ChatListWidget(container);
+	using listServices = createTestEditorServices(undefined, undefined, container.ownerDocument);
+	using widget = listServices.createInstance(ChatListWidget, container, {});
 	widget.render(items);
 	assert.equal(container.querySelector("summary")?.textContent, "Advisor · test/reviewer");
 	assert.equal(container.querySelector("strong")?.textContent, "cancellation");

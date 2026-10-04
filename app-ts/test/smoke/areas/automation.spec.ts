@@ -10,6 +10,7 @@ import { launchElectron } from '../../automation/playwrightElectron.js';
 import { launchBrowser } from '../../automation/playwrightBrowser.js';
 import { Workbench } from '../../automation/workbench.js';
 import { captureElectronMenu } from '../../automation/menus.js';
+import { ElectronPlaywrightDriver, waitForElectronWindowState } from '../../automation/electronDriver.js';
 
 test('all smoke projects collect without fixture dependency cycles', async () => {
 	const directory = resolve(import.meta.dirname, '../../..');
@@ -177,6 +178,40 @@ test('an Electron restoration timeout closes its process before rejecting launch
 		_electron.launch = launch;
 		Workbench.prototype.waitForReady = waitForReady;
 		await rm(directory, { force: true, recursive: true });
+	}
+});
+
+test('Electron window sizing controls the selected page when another window is open', async ({ application, target, workbench, driver }) => {
+	test.skip(target.kind !== 'electron', 'Checks Electron window identity.');
+	if (!('windows' in application)) throw new Error('Expected Electron application');
+	const agents = await workbench.openAgentsWindow(target.kind);
+	const workbenchWindow = await application.browserWindow(workbench.page);
+	try {
+		const before = await workbenchWindow.evaluate(window => window.getBounds());
+		const agentsDriver = new ElectronPlaywrightDriver(application, agents, driver.diagnostics);
+		const size = await agentsDriver.setWindowSize({ width: 960, height: 720 });
+		const agentsWindow = await application.browserWindow(agents);
+		try {
+			expect(await agentsWindow.evaluate(window => {
+				const bounds = window.getBounds();
+				return { width: bounds.width, height: bounds.height };
+			})).toEqual(size);
+		} finally { await agentsWindow.dispose(); }
+		expect(await workbenchWindow.evaluate(window => window.getBounds())).toEqual(before);
+	} finally { await workbenchWindow.dispose(); }
+});
+
+test('Electron window waits report a locked desktop instead of a focus timeout', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron', 'Checks desktop state diagnostics.');
+	if (!('windows' in application)) throw new Error('Expected Electron application');
+	const original = await application.evaluateHandle(({ powerMonitor }) => powerMonitor.getSystemIdleState);
+	try {
+		await application.evaluate(({ powerMonitor }) => { powerMonitor.getSystemIdleState = () => 'locked'; });
+		expect(await application.evaluate(({ powerMonitor }) => powerMonitor.getSystemIdleState(60))).toBe('locked');
+		await expect(waitForElectronWindowState(application, workbench.page, { focused: true })).rejects.toThrow('Desktop is locked; window focus and fullscreen cannot be verified');
+	} finally {
+		await application.evaluate(({ powerMonitor }, original) => { powerMonitor.getSystemIdleState = original; }, original);
+		await original.dispose();
 	}
 });
 

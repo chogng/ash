@@ -1,4 +1,7 @@
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { raceCancellationError } from '../../../base/common/async.js';
+import { CancellationTokenSource, throwIfCancelled, type CancellationToken } from '../../../base/common/cancellation.js';
+import { isCancellationError } from '../../../base/common/errors.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { IStateService } from '../../state/node/state.js';
 import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, validateWindowCloseResponse, type WindowCloseResponse } from '../../window/common/window.js';
@@ -23,13 +26,17 @@ interface ILifecycleWindow {
 	};
 }
 
-/** Owns the main-process close handshake for Workbench and Sessions windows. */
+/** Owns startup cancellation and the close handshake for Workbench and Sessions windows. */
 export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disposable {
 	private static readonly updateRestartStateKey = 'updateRestartVersion';
 	private readonly windowRegistrations = this._register(new DisposableMap<TWindow, IDisposable>());
 	private readonly closeStates = new Map<TWindow, WindowCloseState>();
 	private nextCloseToken = 0;
+	private readonly startupCancellation = this._register(new CancellationTokenSource());
+	private startupTask: Promise<void> | undefined;
+	private starting = false;
 	public readonly wasRestarted: boolean;
+	public get isStarting(): boolean { return this.starting; }
 
 	constructor(
 		private readonly reportCloseFailure: (window: TWindow, message: string) => void | Promise<void>,
@@ -40,6 +47,29 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 		super();
 		this.wasRestarted = stateService.getItem(LifecycleMainService.updateRestartStateKey) === currentVersion;
 		if (this.wasRestarted) stateService.removeItem(LifecycleMainService.updateRestartStateKey);
+	}
+
+	public startup(ready: Promise<void>, initialize: (token: CancellationToken) => Promise<void>): Promise<void> {
+		this.assertNotDisposed();
+		if (this.startupTask) { throw new Error('Desktop startup has already started'); }
+		this.starting = true;
+		this.startupTask = (async () => {
+			try {
+				await raceCancellationError(ready, this.startupCancellation.token);
+				throwIfCancelled(this.startupCancellation.token);
+				await initialize(this.startupCancellation.token);
+			} finally {
+				this.starting = false;
+			}
+		})();
+		return this.startupTask;
+	}
+
+	/** Initialization must settle before its resources can be closed; racing it would leave live writers behind. */
+	public async stopStartup(): Promise<void> {
+		this.startupCancellation.cancel();
+		try { await this.startupTask; }
+		catch (error) { if (!isCancellationError(error)) { throw error; } }
 	}
 
 	public async prepareUpdateRestart(version: string): Promise<void> {

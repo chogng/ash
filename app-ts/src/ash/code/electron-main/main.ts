@@ -1,4 +1,5 @@
 import { AshApplication, type AppServerStartupMode } from "./app.js";
+import { isCancellationError } from '../../base/common/errors.js';
 import { app } from 'electron/main';
 import { basename, dirname, join } from 'node:path';
 import { AshApplicationId, AshApplicationName, AshRendererDirectory, AshUserDataFolderName } from '../common/application.js';
@@ -67,7 +68,7 @@ export async function startElectronApplication(options: StartElectronApplication
 		return;
 	}
 
-	const application = AshApplication.create({
+	const application = await AshApplication.create({
 		initialModeId,
 		rendererRoot,
 		appServerStartupMode,
@@ -104,9 +105,9 @@ async function waitForMarkerDeletion(marker: string): Promise<void> {
 
 async function startup(application: AshApplication): Promise<void> {
 	try {
-		await app.whenReady();
-		await application.startupAfterReady();
+		await application.startup();
 	} catch (error) {
+		if (isCancellationError(error)) { return; }
 		console.error('Failed to start Ash', error);
 		try {
 			await application.disposeAfterStartupFailure();

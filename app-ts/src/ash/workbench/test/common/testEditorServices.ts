@@ -19,11 +19,14 @@ import { IWorkspaceContextService } from '../../../platform/workspace/common/wor
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from '../../browser/labels.js';
 import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
+import { ILinkPresentationService } from '../../../platform/dataChannel/common/dataChannel.js';
+import { LinkPresentationService } from '../../services/dataChannel/browser/dataChannelService.js';
 
 /** Assembles the real label owner for editor tests without an extension icon theme. */
 export function createTestEditorServices(configuration?: IConfigurationService, parent?: InstantiationService, document: Document = globalThis.document): InstantiationService {
 	const services = parent ? parent.createChild() : new InstantiationService();
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	if (!services.has(ILinkPresentationService)) services.registerSingleton(ILinkPresentationService, () => services.createInstance(LinkPresentationService));
 	if (configuration) {
 		services.registerInstance(IConfigurationService, configuration);
 	} else if (!services.has(IConfigurationService)) {

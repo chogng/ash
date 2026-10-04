@@ -473,6 +473,9 @@ export class Workbench extends Disposable {
 			serviceCollection.set(id, descriptor);
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
+		// Editor contributions can resolve data-channel enablement while Parts are being constructed.
+		const contextKeys = this._register(new ContextKeyService());
+		services.registerInstance(IContextKeyService, contextKeys);
 		if (browserViewApi) { services.registerInstance(IBrowserViewApi, browserViewApi); }
 		const instantiationService = services;
 		const logService = this._register(logger);
@@ -792,8 +795,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
-		const contextKeys = this._register(new ContextKeyService());
-		services.registerInstance(IContextKeyService, contextKeys);
 		const notificationsCenter = this._register(new NotificationsCenter(workbenchRoot, feedbackHost, notificationService, statusbarService, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({

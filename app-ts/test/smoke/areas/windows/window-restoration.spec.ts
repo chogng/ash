@@ -1,8 +1,8 @@
-import { _electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
-import { resolveElectronConfiguration } from '../../../automation/electron.js';
+import { launchElectronApplication, type ElectronApplicationLaunchResult } from '../../../automation/playwrightElectron.js';
 import { Workbench } from '../../../automation/workbench.js';
 
 test.beforeEach(({}, testInfo) => {
@@ -15,8 +15,10 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(userDataDirectory, { recursive: true });
 		let application: ElectronApplication | undefined;
+		let session: ElectronApplicationLaunchResult | undefined;
 		try {
-			application = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
+			session = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
+			application = session.application;
 			const page = await application.firstWindow();
 			await new Workbench(page).waitForReady();
 			const defaults = await application.evaluate(({ screen }) => {
@@ -58,7 +60,7 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 			// Fractional DPI rounds the operating-system frame to physical pixels.
 			await expect.poll(() => geometryDelta(application!, requested, 'current')).toBeLessThanOrEqual(2);
 			const expected = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getBounds());
-			await application.close();
+			await session.quit();
 			application = undefined;
 
 			const statePath = join(userDataDirectory, 'state.json');
@@ -82,7 +84,8 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 				}
 			}
 			await writeFile(statePath, JSON.stringify(saved));
-			application = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
+			session = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
+			application = session.application;
 			await expect.poll(() => application!.windows().length).toBe(2);
 			for (const page of application.windows()) {
 				await expect(page.locator('.ash-workbench, .ash-sessions-window').first()).toBeVisible();
@@ -97,9 +100,10 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 			});
 			await expect.poll(() => geometryDelta(application!, expected, 'current')).toBeLessThanOrEqual(2);
 			for (let restart = 0; restart < 2; restart++) {
-				await application.close();
+				await session.quit();
 				application = undefined;
-				application = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
+				session = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
+				application = session.application;
 				await expect.poll(() => application!.windows().length).toBe(2);
 				for (const page of application.windows()) {
 					await expect(page.locator('.ash-workbench, .ash-sessions-window').first()).toBeVisible();
@@ -107,7 +111,7 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 				await expect.poll(() => geometryDelta(application!, expected, 'current')).toBeLessThanOrEqual(2);
 			}
 		} finally {
-			await application?.close();
+			await session?.close();
 		}
 	});
 }
@@ -115,7 +119,8 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 test('Desktop places a new Agents window on the primary display of a simulated mixed-DPI desktop', async ({}, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
-	const application = await launch(userDataDirectory);
+	const session = await launch(userDataDirectory);
+	const application = session.application;
 	try {
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
@@ -164,14 +169,15 @@ test('Desktop places a new Agents window on the primary display of a simulated m
 			context.restoreTestDisplay?.();
 			delete context.restoreTestDisplay;
 		});
-		await application.close();
+		await session.close();
 	}
 });
 
 test('Desktop adapts open Workbench and Agents windows to display changes without changing zoom or focus', async ({}, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
-	const application = await launch(userDataDirectory, undefined, ['--force-device-scale-factor=1']);
+	const session = await launch(userDataDirectory, undefined, ['--force-device-scale-factor=1']);
+	const application = session.application;
 	try {
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
@@ -221,7 +227,7 @@ test('Desktop adapts open Workbench and Agents windows to display changes withou
 			context.restoreTestDisplay?.();
 			delete context.restoreTestDisplay;
 		});
-		await application.close();
+		await session.close();
 	}
 });
 
@@ -232,35 +238,40 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 	await mkdir(userDataDirectory, { recursive: true });
 	await mkdir(folder, { recursive: true });
 	let application: ElectronApplication | undefined;
+	let session: ElectronApplicationLaunchResult | undefined;
 	try {
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		const workbench = await application.firstWindow();
 		await new Workbench(workbench).waitForReady();
 		const opened = application.waitForEvent('window');
 		await workbench.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		const agents = await opened;
 		await expect(agents.locator('.ash-sessions-window')).toBeVisible();
-		await application.close();
+		await session.quit();
 		application = undefined;
 
 		const saved = JSON.parse(await readFile(join(userDataDirectory, 'state.json'), 'utf8')) as { windowSession: { active: number; windows: readonly { kind: string }[] } };
 		expect(saved.windowSession.windows.map(window => window.kind)).toEqual(['workbench', 'sessions']);
 		expect(saved.windowSession.active).toBe(1);
 
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		await expect.poll(() => application!.windows().length).toBe(2);
 		await expect(application.windows().find(page => page !== application!.windows()[0])!.locator('.ash-sessions-window')).toBeVisible();
 		await application.windows()[0]!.close();
 		await expect.poll(() => application!.windows().length).toBe(1);
-		await application.close();
+		await session.quit();
 		application = undefined;
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		await expect.poll(() => application!.windows().length).toBe(1);
 		await expect((await application.firstWindow()).locator('.ash-sessions-window')).toBeVisible();
-		await application.close();
+		await session.quit();
 		application = undefined;
 
-		application = await launch(userDataDirectory, folder);
+		session = await launch(userDataDirectory, folder);
+		application = session.application;
 		await expect.poll(() => application!.windows().length).toBe(1);
 		const targeted = await application.firstWindow();
 		await new Workbench(targeted).waitForReady();
@@ -269,10 +280,11 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 		await targeted.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		await expect((await reopenedAgents).locator('.ash-sessions-window')).toBeVisible();
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"window.restoreWindows":"one"}\n');
-		await application.close();
+		await session.quit();
 		application = undefined;
 
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		await expect.poll(() => application!.windows().length).toBe(1);
 		const restoredAgents = await application.firstWindow();
 		await expect(restoredAgents.locator('.ash-sessions-window')).toBeVisible();
@@ -284,10 +296,11 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 		await new Workbench(await returned).waitForReady();
 		await expect.poll(() => application!.windows().length).toBe(1);
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"window.restoreWindows":"none"}\n');
-		await application.close();
+		await session.quit();
 		application = undefined;
 
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		await expect.poll(() => application!.windows().length).toBe(1);
 		const emptyWorkbench = await application.firstWindow();
 		await new Workbench(emptyWorkbench).waitForReady();
@@ -295,26 +308,28 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 		await emptyWorkbench.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		await expect((await preservedAgents).locator('.ash-sessions-window')).toBeVisible();
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"window.restoreWindows":"preserve"}\n');
-		await application.close();
+		await session.quit();
 		application = undefined;
 
-		application = await launch(userDataDirectory, folder);
+		session = await launch(userDataDirectory, folder);
+		application = session.application;
 		await expect.poll(() => application!.windows().length).toBe(3);
 		await expect.poll(async () => {
 			const windows = application!.windows();
 			return (await Promise.all(windows.map(page => page.locator('.ash-sessions-window').count()))).reduce((sum, count) => sum + count, 0);
 		}).toBe(1);
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"window.restoreWindows":"folders"}\n');
-		await application.close();
+		await session.quit();
 		application = undefined;
 
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		await expect.poll(() => application!.windows().length).toBe(1);
 		const folderWorkbench = await application.firstWindow();
 		await new Workbench(folderWorkbench).waitForReady();
 		await expect.poll(() => workspaceFolder(folderWorkbench)).toBe(folder);
 	} finally {
-		await application?.close();
+		await session?.close();
 	}
 });
 
@@ -325,8 +340,10 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 	await mkdir(folder, { recursive: true });
 	let application: ElectronApplication | undefined;
+	let session: ElectronApplicationLaunchResult | undefined;
 	try {
-		application = await launch(userDataDirectory, folder);
+		session = await launch(userDataDirectory, folder);
+		application = session.application;
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
 		await expect(page.locator('.ash-getting-started')).toBeVisible();
@@ -338,19 +355,21 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
 		await expect(page.locator('[data-part="editor"] .ash-tab')).toHaveCount(2);
 		await expect.poll(async () => (await readFile(join(userDataDirectory, 'workbench-state.json'), 'utf8')).includes('editorparts.state')).toBe(true);
-		await application.close();
+		await session.quit();
 		application = undefined;
 
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		const restored = await application.firstWindow();
 		await new Workbench(restored).waitForReady();
 		await expect(restored.locator('[data-part="editor"] .ash-tab')).toHaveCount(2);
 		await expect(restored.locator('.ash-getting-started')).toHaveCount(0);
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"workbench.startupEditor":"none","workbench.editor.restoreEditors":false}\n');
-		await application.close();
+		await session.quit();
 		application = undefined;
 
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		const disabled = await application.firstWindow();
 		await new Workbench(disabled).waitForReady();
 		await expect(disabled.locator('[data-part="editor"] .ash-tab')).toHaveCount(0);
@@ -358,16 +377,17 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 		const input = disabled.locator('[data-part="editor"] .stanza-editor-input');
 		await input.focus();
 		await input.type('unsaved after restart');
-		await application.close();
+		await session.quit();
 		application = undefined;
 
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		const dirty = await application.firstWindow();
 		await new Workbench(dirty).waitForReady();
 		await expect(dirty.locator('[data-part="editor"] .ash-tab')).toHaveCount(1);
 		await expect(dirty.locator('[data-part="editor"] .stanza-editor')).toContainText('unsaved after restart');
 	} finally {
-		await application?.close();
+		await session?.close();
 	}
 });
 
@@ -377,8 +397,10 @@ test('Workbench reopens detached editor windows with their tabs', async ({}, tes
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"workbench.startupEditor":"none"}\n');
 	let application: ElectronApplication | undefined;
+	let session: ElectronApplicationLaunchResult | undefined;
 	try {
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
 		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
@@ -394,16 +416,17 @@ test('Workbench reopens detached editor windows with their tabs', async ({}, tes
 			const saved = await readFile(join(userDataDirectory, 'workbench-state.json'), 'utf8');
 			return saved.includes('editorparts.state') && saved.includes('Untitled-1');
 		}).toBe(true);
-		await application.close();
+		await session.quit();
 		application = undefined;
 
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		await expect.poll(() => application!.windows().length).toBe(2);
 		const windows = application.windows();
 		const reopened = windows.find(window => window !== windows[0] && !window.isClosed());
 		await expect(reopened!.locator('.ash-auxiliary-window-container .ash-tab')).toHaveCount(1);
 	} finally {
-		await application?.close();
+		await session?.close();
 	}
 });
 
@@ -413,43 +436,40 @@ test('updated version restores all windows once despite a none preference', asyn
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"window.restoreWindows":"none"}\n');
 	let application: ElectronApplication | undefined;
+	let session: ElectronApplicationLaunchResult | undefined;
 	try {
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
 		const version = await application.evaluate(({ app }) => app.getVersion());
 		const opened = application.waitForEvent('window');
 		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		await expect((await opened).locator('.ash-sessions-window')).toBeVisible();
-		await application.close();
+		await session.quit();
 		application = undefined;
 
 		const statePath = join(userDataDirectory, 'state.json');
 		const state = JSON.parse(await readFile(statePath, 'utf8')) as Record<string, unknown>;
 		await writeFile(statePath, JSON.stringify({ ...state, updateRestartVersion: version }));
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		await expect.poll(() => application!.windows().length).toBe(2);
 		await expect.poll(async () => (JSON.parse(await readFile(statePath, 'utf8')) as Record<string, unknown>).updateRestartVersion).toBeUndefined();
-		await application.close();
+		await session.quit();
 		application = undefined;
 
-		application = await launch(userDataDirectory);
+		session = await launch(userDataDirectory);
+		application = session.application;
 		await expect.poll(() => application!.windows().length).toBe(1);
 		await new Workbench(await application.firstWindow()).waitForReady();
 	} finally {
-		await application?.close();
+		await session?.close();
 	}
 });
 
-async function launch(userDataDirectory: string, folder?: string, extraArgs?: readonly string[]): Promise<ElectronApplication> {
-	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory, workspaceDirectory: folder, extraArgs });
-	return _electron.launch({
-		executablePath: configuration.executablePath,
-		args: [...configuration.args],
-		cwd: configuration.cwd,
-		env: configuration.env,
-		timeout: 30_000,
-	});
+async function launch(userDataDirectory: string, folder?: string, extraArgs?: readonly string[]): Promise<ElectronApplicationLaunchResult> {
+	return launchElectronApplication({ appServerMode: 'disabled', userDataDirectory, workspaceDirectory: folder, extraArgs });
 }
 
 async function geometryDelta(application: ElectronApplication, expected: { x: number; y: number; width: number; height: number }, kind: 'normal' | 'current'): Promise<number> {

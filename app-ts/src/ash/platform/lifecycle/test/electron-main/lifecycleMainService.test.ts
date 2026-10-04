@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL } from '../../../window/common/window.js';
 import type { IStateService } from '../../../state/node/state.js';
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../electron-main/lifecycleMainService.js';
@@ -40,6 +44,9 @@ function createStateService(): IStateService {
 		close: async () => {},
 	};
 }
+
+suite('LifecycleMainService', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
 
 test('loading a workspace shares the shutdown handshake without closing the window', async () => {
 	const window = new TestWindow();
@@ -136,4 +143,44 @@ test('update restart marker is consumed once by the matching version', async () 
 	assert.equal(updated.wasRestarted, true);
 	using nextLaunch = new LifecycleMainService<TestWindow>(() => {}, () => {}, state, '2.0.0');
 	assert.equal(nextLaunch.wasRestarted, false);
+});
+
+});
+
+suite('Desktop startup shutdown', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('quit before Electron readiness cancels startup without waiting for ready', async () => {
+		using service = new LifecycleMainService<TestWindow>(() => {}, () => {}, createStateService(), '1.0.0');
+		const ready = new DeferredPromise<void>();
+		let initialized = false;
+		const startup = service.startup(ready.p, async () => { initialized = true; });
+		const cancelled = assert.rejects(startup, isCancellationError);
+		await service.stopStartup();
+		await cancelled;
+		await ready.complete();
+		assert.deepEqual({ initialized, starting: service.isStarting }, { initialized: false, starting: false });
+	});
+
+	test('quit waits for in-flight initialization before allowing resource cleanup', async () => {
+		using service = new LifecycleMainService<TestWindow>(() => {}, () => {}, createStateService(), '1.0.0');
+		const entered = new DeferredPromise<void>();
+		const initialized = new DeferredPromise<void>();
+		const events: string[] = [];
+		const startup = service.startup(Promise.resolve(), async token => {
+			await entered.complete();
+			await initialized.p;
+			events.push('initialized');
+			throwIfCancelled(token);
+			events.push('opened-window');
+		});
+		const cancelled = assert.rejects(startup, isCancellationError);
+		await entered.p;
+		const stopped = service.stopStartup().then(() => { events.push('closed-services'); });
+		assert.equal(service.isStarting, true);
+		await initialized.complete();
+		await stopped;
+		await cancelled;
+		assert.deepEqual(events, ['initialized', 'closed-services']);
+	});
 });
