@@ -423,6 +423,19 @@ impl App {
         {
             return self.toggle_dictation();
         }
+        if bindings::SHORTCUT_HELP.matches(key) && self.can_open_shortcut_help() {
+            if key.kind != crossterm::event::KeyEventKind::Press {
+                return None;
+            }
+            let panel = super::help::Shortcuts::new(
+                &self.app_keymap,
+                self.dictation_shortcut_settings
+                    .enabled
+                    .then_some(self.dictation_shortcut_settings.shortcut.as_str()),
+            );
+            self.open_command_panel(CommandPanel::Shortcuts(panel));
+            return None;
+        }
         let command = match self.screen_mode() {
             crate::terminal::ScreenMode::Fullscreen => {
                 super::fullscreen::navigation::handle_key(self, key, now, terminal_area)
@@ -2256,6 +2269,16 @@ impl App {
     ) {
         self.session_navigation_in_mut(mode)
             .finish_preview(generation, result);
+    }
+
+    pub(crate) fn can_open_shortcut_help(&self) -> bool {
+        self.accepts_input()
+            && self.chat_input_focused()
+            && self.input().is_empty()
+            && self.input_state().is_empty()
+            && self.completion().is_none()
+            && !self.input_state().searching_history()
+            && self.pending_key_chord_label().is_none()
     }
 
     pub(crate) fn can_open_dashboard_from_input(&self) -> bool {

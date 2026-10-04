@@ -878,6 +878,100 @@ pub(crate) fn spinner_verb(index: usize) -> &'static str {
 /// Product-owned TUI chrome. Server-provided names, user content, model output, paths, command
 /// identifiers, and code are intentionally absent so they remain byte-for-byte source text.
 const UI_TRANSLATIONS: &[Translation] = &[
+    translation(
+        "Keyboard shortcuts",
+        "キーボードショートカット",
+        "键盘快捷键",
+        "Raccourcis clavier",
+    ),
+    translation(
+        "for shortcuts",
+        "でショートカット",
+        "查看快捷键",
+        "pour les raccourcis",
+    ),
+    translation("Compose", "入力", "输入", "Rédaction"),
+    translation(
+        "Mention files and plugins",
+        "ファイルやプラグインを参照",
+        "引用文件和插件",
+        "Mentionner des fichiers et plugins",
+    ),
+    translation(
+        "Select a skill",
+        "スキルを選択",
+        "选择技能",
+        "Choisir une compétence",
+    ),
+    translation(
+        "Send message",
+        "メッセージを送信",
+        "发送消息",
+        "Envoyer le message",
+    ),
+    translation("New line", "改行", "换行", "Nouvelle ligne"),
+    translation(
+        "Search input history",
+        "入力履歴を検索",
+        "搜索输入历史",
+        "Rechercher dans l’historique de saisie",
+    ),
+    translation(
+        "Dashboard (empty input)",
+        "ダッシュボード（空の入力）",
+        "仪表盘（空输入）",
+        "Tableau de bord (saisie vide)",
+    ),
+    translation(
+        "Toggle dictation",
+        "音声入力を切り替え",
+        "切换听写",
+        "Activer ou arrêter la dictée",
+    ),
+    translation("Transcript", "会話ログ", "正文", "Transcription"),
+    translation(
+        "Scroll transcript",
+        "会話ログをスクロール",
+        "滚动正文",
+        "Faire défiler la transcription",
+    ),
+    translation(
+        "Oldest / latest",
+        "最初 / 最新",
+        "最早 / 最新",
+        "Début / fin",
+    ),
+    translation(
+        "Select a message",
+        "メッセージを選択",
+        "选择消息",
+        "Sélectionner un message",
+    ),
+    translation(
+        "Expand selected message",
+        "選択したメッセージを展開",
+        "展开选中的消息",
+        "Développer le message sélectionné",
+    ),
+    translation(
+        "View selected message details",
+        "選択したメッセージの詳細を表示",
+        "查看选中消息的详情",
+        "Voir les détails du message sélectionné",
+    ),
+    translation(
+        "Return to input",
+        "入力に戻る",
+        "返回输入",
+        "Revenir à la saisie",
+    ),
+    translation("customize", "カスタマイズ", "自定义", "personnaliser"),
+    translation(
+        "show keyboard shortcuts when the input is empty",
+        "入力が空のときにショートカットを表示",
+        "输入为空时查看键盘快捷键",
+        "Afficher les raccourcis lorsque la saisie est vide",
+    ),
     translation("Working", "処理中", "正在处理", "Traitement en cours"),
     translation(
         "Model or provider configuration is missing or invalid",

@@ -109,11 +109,20 @@ pub(super) fn line(app: &App, width: usize, context: RenderContext<'_>) -> Line<
 }
 
 fn input_line(app: &App, width: usize, context: RenderContext<'_>) -> Line<'static> {
-    let hint = key_hint::line(&input_hints(app), width, app.key_hint_style(), context);
+    let hints = input_hints(app);
     if !chat_visible(app) || !app.chat_input_focused() {
-        return hint;
+        return key_hint::line(&hints, width, app.key_hint_style(), context);
     }
-    // Reserve the available action before shortening permission text on narrow terminals.
+    let policy = crate::status::policy_line(
+        app.status_line(),
+        usize::MAX,
+        app.approval_mode_status(),
+        context,
+    );
+    // Preserve the effective permission alongside the first input action; secondary
+    // hints disappear before either becomes unreadable on a narrow terminal.
+    let hint_width = width.saturating_sub(policy.width() + usize::from(policy.width() > 0) * 3);
+    let hint = key_hint::line(&hints, hint_width, app.key_hint_style(), context);
     let mut line = crate::status::policy_line(
         app.status_line(),
         width.saturating_sub(hint.width() + usize::from(hint.width() > 0) * 3),
@@ -238,7 +247,15 @@ fn input_hints(app: &App) -> KeyHints {
             .with_compact_action("↑↓", "actions")
             .with_compact_action("Esc", "input");
     }
-    with_dashboard_hint(app, KeyHints::new())
+    let hints = with_dashboard_hint(app, KeyHints::compact());
+    if app.can_open_shortcut_help() {
+        hints.with_compact_action(
+            bindings::SHORTCUT_HELP.keys(),
+            bindings::SHORTCUT_HELP.action(),
+        )
+    } else {
+        hints
+    }
 }
 
 fn with_dashboard_hint(app: &App, hints: KeyHints) -> KeyHints {

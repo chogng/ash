@@ -90,6 +90,7 @@ fn keymap_choices_lists_keys_before_responsibilities() {
             "ctrl+d",
             "ctrl+o",
             "ctrl+z",
+            "?",
             "←",
             "ctrl+r",
             "Esc Esc",

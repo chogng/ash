@@ -180,7 +180,7 @@ fn home_and_shared_hints_use_the_selected_language() {
     let rendered = text(&render(&app, 80, 24));
     assert_eq!(
         rendered.lines().last().unwrap().replace(' ', ""),
-        "⏸手动·←仪表盘"
+        "⏸手动·←仪表盘·?查看快捷键"
     );
     crate::tui_assert_snapshot!(app = &app; "home_input_chinese", rendered);
     app.handle_key(key(KeyCode::Tab));
@@ -243,7 +243,12 @@ fn home_help_localizes_the_complete_selection_model() {
         vec!["快捷键", "命令", "自定义命令"]
     );
     assert_eq!(selection.search().unwrap().placeholder(), "搜索帮助");
-    crate::tui_assert_snapshot!(app = &app; "help_chinese", text(&render(&app, 90, 24)));
+    let rendered = text(&render(&app, 90, 24))
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
+    crate::tui_assert_snapshot!(app = &app; "help_chinese", rendered);
 }
 
 #[test]

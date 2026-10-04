@@ -71,7 +71,7 @@ impl AppKeymapAction {
         Self::Suspend,
     ];
 
-    const fn label(self) -> &'static str {
+    pub(crate) const fn label(self) -> &'static str {
         match self {
             Self::CycleApprovalMode => "Cycle approval mode",
             Self::CycleCollaborationMode => "Cycle task mode",
@@ -640,6 +640,12 @@ pub(crate) const CANCEL: Keybinding = Keybinding::new(
 pub(crate) const CANCEL_ANSWER: Keybinding = Keybinding::new(ESC, "cancel");
 pub(crate) const RETURN_INPUT: Keybinding = Keybinding::new(ESC, "return to input");
 pub(crate) const ESC_RETURN: Keybinding = Keybinding::new(ESC, "return");
+// Terminals may preserve Shift for punctuation produced by the keyboard layout.
+pub(crate) const SHORTCUT_HELP: Keybinding = Keybinding::new(
+    &[(NONE, KeyCode::Char('?')), (SHIFT, KeyCode::Char('?'))],
+    "for shortcuts",
+)
+.primary();
 pub(crate) const DASHBOARD_OPEN: Keybinding =
     Keybinding::new(&[(NONE, KeyCode::Left)], "Dashboard");
 pub(crate) const INLINE_DASHBOARD_RETURN: Keybinding =
@@ -838,6 +844,10 @@ pub(crate) static CLIPBOARD_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
 pub(crate) fn fixed_bindings() -> impl Iterator<Item = (&'static str, &'static str)> {
     static ENTRIES: LazyLock<Vec<(String, &'static str)>> = LazyLock::new(|| {
         vec![
+            (
+                SHORTCUT_HELP.keys(),
+                "show keyboard shortcuts when the input is empty",
+            ),
             (
                 DASHBOARD_OPEN.keys(),
                 "open Dashboard when the input is focused and has no text or attachments",

@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/help_tests.rs
+expression: "text(&render(&app, area))"
+---
+  .                                                                [Dashboard]
+  ┌── Keyboard shortcuts ────────────────────────────────────────────────[✗]─┐
+  │                                                                          │
+  │  Compose                                                                 │
+  │  /                     Commands                                          │
+  │  @                     Mention files and plugins                         │
+  │  $                     Select a skill                                    │
+  │  Enter                 Send message                                      │
+  │  Shift+Enter / Ctrl+J  New line                                          │
+  │  Ctrl+R                Search input history                              │
+  │  ctrl+v                Attach clipboard image                            │
+  │                                                                          │
+  │  Session                                                                 │
+  │  ?          Keyboard shortcuts                                           │
+  │  ←          Dashboard (empty input)                                      │
+  │  Esc Esc    Open rewind checkpoints                                      │
+  │  shift+tab  Cycle task mode                                              │
+  │  shift+↓    Decrease thinking effort                                     │
+  │  shift+↑    Increase thinking effort                                     │
+  │  ctrl+o     Copy last response                                           │
+  │  ctrl+c     Interrupt or quit                                            │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  ↑/↓ scroll · Esc to close

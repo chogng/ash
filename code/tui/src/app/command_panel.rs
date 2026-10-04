@@ -68,6 +68,7 @@ pub(super) enum CommandPanelBody<'a> {
     Provider(&'a crate::config::provider::Panel),
     KeyCapture(&'a KeyCapture),
     Status(&'a StatusPanel),
+    Shortcuts(&'a super::help::Shortcuts),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -82,7 +83,11 @@ pub(super) enum CommandPanelPointerTarget {
 impl CommandPanelBody<'_> {
     pub(super) fn allows_backdrop_dismiss(&self) -> bool {
         match self {
-            Self::Selection(_) | Self::Effort(_) | Self::Status(_) | Self::Details { .. } => true,
+            Self::Selection(_)
+            | Self::Effort(_)
+            | Self::Status(_)
+            | Self::Shortcuts(_)
+            | Self::Details { .. } => true,
             Self::Memories(panel) => panel.allows_backdrop_dismiss(),
             Self::Prompt(_) | Self::Provider(_) | Self::KeyCapture(_) | Self::Dialog(_) => false,
         }
@@ -93,6 +98,7 @@ impl CommandPanelBody<'_> {
 pub(crate) enum CommandPanel {
     Loading(ListSelection<()>),
     Help(ListSelection<()>),
+    Shortcuts(super::help::Shortcuts),
     Dirs(DirPanel),
     GitBranches(BranchPanel),
     GitWorktrees(WorktreePanel),
@@ -389,6 +395,7 @@ impl CommandPanel {
     pub(crate) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> CommandPanelOutcome {
         let previous = self.extension_tab();
         let outcome = match self {
+            Self::Shortcuts(content) => content.handle_key(key, area),
             Self::Help(content) | Self::Loading(content) | Self::Usage(content) => {
                 map_read_only(content.handle_key(key))
             }
@@ -478,7 +485,7 @@ impl CommandPanel {
             Self::Rewind(content) => content.handle_paste(pasted),
             Self::Sessions(content) => content.handle_paste(pasted),
             Self::Skills(content) => content.handle_paste(pasted),
-            Self::Status(_) | Self::Effort(_) => {}
+            Self::Status(_) | Self::Effort(_) | Self::Shortcuts(_) => {}
             Self::StatusLine(content) => content.handle_paste(pasted),
             Self::Theme(content) => content.handle_paste(pasted),
         }
@@ -519,6 +526,7 @@ impl CommandPanel {
                 content.localize(language);
             }
             Self::Effort(_) => {}
+            Self::Shortcuts(panel) => panel.localize(language),
             Self::Status(content) => content.localize(language),
             Self::Theme(content) => content.selection_mut().localize(language),
         }
@@ -547,7 +555,7 @@ impl CommandPanel {
             Self::Rewind(selection) => Some(selection.state()),
             Self::Sessions(selection) => Some(selection.state()),
             Self::Skills(selection) => Some(selection.state()),
-            Self::Status(_) | Self::Effort(_) => None,
+            Self::Status(_) | Self::Effort(_) | Self::Shortcuts(_) => None,
             Self::StatusLine(selection) => Some(selection.state()),
             Self::Theme(picker) => Some(picker.selection()),
         }
@@ -578,7 +586,7 @@ impl CommandPanel {
             Self::Skills(selection) => Some(selection.state_mut()),
             Self::StatusLine(selection) => Some(selection.state_mut()),
             Self::Theme(picker) => Some(picker.selection_mut()),
-            Self::Status(_) | Self::Effort(_) => None,
+            Self::Status(_) | Self::Effort(_) | Self::Shortcuts(_) => None,
         }
     }
 
@@ -674,6 +682,7 @@ impl CommandPanel {
             Self::Sessions(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Skills(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Status(panel) => CommandPanelBody::Status(panel),
+            Self::Shortcuts(panel) => CommandPanelBody::Shortcuts(panel),
             Self::StatusLine(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Theme(picker) => CommandPanelBody::Selection(picker.selection()),
         }
@@ -728,6 +737,7 @@ impl CommandPanel {
             Self::Sessions(content) => content.key_hints(),
             Self::Skills(content) => content.key_hints(),
             Self::Status(content) => content.key_hints(),
+            Self::Shortcuts(content) => content.key_hints(),
             Self::StatusLine(content) => content.key_hints(),
             Self::Theme(content) => content.key_hints(),
         }
@@ -932,6 +942,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Prompt(prompt) => prompt.title(),
             Self::Dialog(dialog) => dialog.title(),
             Self::Effort(_) => "Thinking effort",
+            Self::Shortcuts(_) => "Keyboard shortcuts",
             Self::Provider(_) => "Custom provider",
             Self::KeyCapture(capture) => capture.title(),
             Self::Status(panel) => panel.title(),
@@ -941,7 +952,7 @@ impl<'a> CommandPanelBody<'a> {
 
     pub(super) fn tab_rows(self, width: u16) -> u16 {
         match self {
-            Self::Details { .. } => 0,
+            Self::Details { .. } | Self::Shortcuts(_) => 0,
             Self::Selection(selection) => selection.tab_rows(width),
             Self::Status(panel) => panel.tab_rows(width),
             Self::Memories(panel) => panel.tab_rows(width),
@@ -962,6 +973,7 @@ impl<'a> CommandPanelBody<'a> {
                 .saturating_add(actions.body_rows(width)),
             Self::Selection(selection) => selection.body_rows(width),
             Self::Effort(selector) => selector.body_rows(width, context),
+            Self::Shortcuts(panel) => panel.body_rows(width, context),
             Self::Memories(panel) => panel.body_rows(width),
             Self::Prompt(prompt) => prompt.desired_height(),
             Self::Dialog(dialog) => dialog.body_rows(width),
@@ -976,6 +988,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Selection(selection) => selection.presentation_focus(),
             Self::Details { .. }
             | Self::Effort(_)
+            | Self::Shortcuts(_)
             | Self::Memories(_)
             | Self::Prompt(_)
             | Self::Dialog(_)
@@ -1003,6 +1016,7 @@ impl<'a> CommandPanelBody<'a> {
             }
             Self::Details { .. }
             | Self::Effort(_)
+            | Self::Shortcuts(_)
             | Self::Provider(_)
             | Self::Prompt(_)
             | Self::KeyCapture(_)
@@ -1066,6 +1080,7 @@ impl<'a> CommandPanelBody<'a> {
                     context,
                 );
             }
+            Self::Shortcuts(panel) => panel.draw(frame, area, context),
             Self::Effort(selector) => {
                 let target = |target: Option<&CommandPanelPointerTarget>| match target {
                     Some(CommandPanelPointerTarget::Effort(target)) => Some(*target),

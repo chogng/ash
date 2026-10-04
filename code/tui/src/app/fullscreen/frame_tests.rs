@@ -179,7 +179,7 @@ fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() 
     );
     assert_eq!(
         rendered.lines().last().unwrap().trim(),
-        "⏸ Manual · ← Dashboard"
+        "⏸ Manual · ← Dashboard · ? for shortcuts"
     );
 }
 
@@ -1381,7 +1381,7 @@ fn turn_activity_does_not_replace_the_permission_mode_in_the_final_row() {
     assert!(!statusline.contains("Working"));
     assert_eq!(
         rows[usize::from(areas.footer.hintline.y)].trim(),
-        "⏸ Manual · ← Dashboard"
+        "⏸ Manual · ← Dashboard · ? for shortcuts"
     );
 }
 

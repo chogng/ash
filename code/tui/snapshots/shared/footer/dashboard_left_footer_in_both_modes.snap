@@ -16,7 +16,7 @@ Fullscreen · width=80 · permissions=true
   >                                                                             
   ────────────────────────────────────────────────────────────────────────────  
                                                                                 
-  ⏸ 手 动  · ← 仪 表 盘
+  ⏸ 手 动  · ← 仪 表 盘  · ? 查 看 快 捷 键
 
 Fullscreen · width=80 · permissions=false
   .                                                                   [仪 表 盘 ]  
@@ -32,7 +32,7 @@ Fullscreen · width=80 · permissions=false
   >                                                                             
   ────────────────────────────────────────────────────────────────────────────  
                                                                                 
-  ← 仪 表 盘
+  ← 仪 表 盘  · ? 查 看 快 捷 键
 
 Fullscreen · width=32 · permissions=true
   .                   [仪 表 盘 ]  
@@ -64,7 +64,7 @@ Fullscreen · width=32 · permissions=false
   >                             
   ────────────────────────────  
                                 
-  ← 仪 表 盘
+  ← 仪 表 盘  · ? 查 看 快 捷 键
 
 Inline · width=80 · permissions=true
                                                                                 
@@ -80,7 +80,7 @@ Inline · width=80 · permissions=true
 >                                                                               
 ────────────────────────────────────────────────────────────────────────────────
                                                                                 
-  ⏸ 手 动  · ← 仪 表 盘
+  ⏸ 手 动  · ← 仪 表 盘  · ? 查 看 快 捷 键
 
 Inline · width=80 · permissions=false
                                                                                 
@@ -96,7 +96,7 @@ Inline · width=80 · permissions=false
 >                                                                               
 ────────────────────────────────────────────────────────────────────────────────
                                                                                 
-  ← 仪 表 盘
+  ← 仪 表 盘  · ? 查 看 快 捷 键
 
 Inline · width=32 · permissions=true
                                 
@@ -128,4 +128,4 @@ Inline · width=32 · permissions=false
 >                               
 ────────────────────────────────
                                 
-  ← 仪 表 盘
+  ← 仪 表 盘  · ? 查 看 快 捷 键

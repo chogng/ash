@@ -69,10 +69,10 @@ fn dashboard_shares_the_left_hint_row_and_permission_switch_in_both_modes() {
                     "{mode:?}: {hints}"
                 );
                 assert_ne!(buffer[(2, footer.hintline.y)].symbol(), " ");
-                let expected = if permissions {
-                    "  ⏸ 手动 · ← 仪表盘"
-                } else {
-                    "  ← 仪表盘"
+                let expected = match (permissions, width) {
+                    (true, 32) => "  ⏸ 手动 · ← 仪表盘",
+                    (true, _) => "  ⏸ 手动 · ← 仪表盘 · ? 查看快捷键",
+                    (false, _) => "  ← 仪表盘 · ? 查看快捷键",
                 };
                 assert_eq!(
                     hints.replace(' ', ""),
@@ -172,7 +172,7 @@ fn permission_keeps_its_position_and_shows_only_the_effective_mode() {
         let footer = areas(&app, running.area);
         assert_eq!(
             row(&running, footer.hintline.y).trim(),
-            "⏸ Manual · ← Dashboard"
+            "⏸ Manual · ← Dashboard · ? for shortcuts"
         );
         assert_eq!(
             running[(2, footer.hintline.y)].fg,
@@ -188,7 +188,7 @@ fn permission_keeps_its_position_and_shows_only_the_effective_mode() {
         assert_eq!(areas(&app, idle.area), footer);
         assert_eq!(
             row(&idle, footer.hintline.y).trim(),
-            "▶ Bypass permissions · ← Dashboard"
+            "▶ Bypass permissions · ← Dashboard · ? for shortcuts"
         );
         assert_eq!(
             idle[(2, footer.hintline.y)].fg,

@@ -56,6 +56,8 @@ CLI 将已初始化的 `AppServerSession` 和 `TuiOptions` 交给 `run`：
 
 ## 输入如何提交
 
+输入框聚焦且草稿为空时，底部第二行显示 `? for shortcuts`。按 `?` 直接打开键盘快捷键速查，按输入、会话、正文分组；宽终端并排显示，窄终端纵向排列并支持上下键、PageUp/PageDown、Home/End 滚动。Esc 或再次按 `?` 关闭并返回输入框。已有文字、附件、补全或历史搜索时，`?` 保持输入字符的含义。速查使用生效的自定义按键，`/shortcuts` 用于编辑绑定，`/help` 继续浏览命令与完整说明。
+
 `ChatInput` 管理文字与原子元素，`ChatComposer` 根据任务状态产生 Submit、Queue 或 Steer。补全打开时，Enter/Tab 先处理候选，不能同时发送消息。
 
 | 后端任务状态 | 发送行为 |

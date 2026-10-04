@@ -45,6 +45,18 @@ pub(super) fn layout_for(app: &App, available: Rect) -> ModalLayout {
         ..available
     };
     if app.overlay().is_none()
+        && let Some(CommandPanel::Shortcuts(panel)) = app.command_panel()
+    {
+        let width = available.width.saturating_sub(4).min(164);
+        let content_width = ModalLayout::new(available, width, available.height)
+            .content
+            .width;
+        let height = panel
+            .body_rows(content_width, app.render_context())
+            .saturating_add(3);
+        return ModalLayout::new(available, width, height);
+    }
+    if app.overlay().is_none()
         && let Some(CommandPanel::Effort(selector)) = app.command_panel()
     {
         let width = PanelLayout::content_width(available.width);

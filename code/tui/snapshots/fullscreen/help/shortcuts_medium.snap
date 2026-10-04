@@ -1,0 +1,36 @@
+---
+source: code/tui/src/app/help_tests.rs
+expression: output
+---
+  .                                                                          [Dashboard]
+
+  ┌── Keyboard shortcuts ──────────────────────────────────────────────────────────[✗]─┐
+  │                                                                                    │
+  │  Compose                                   Session                                 │
+  │  /                     Commands            ?          Keyboard shortcuts           │
+  │  @                     Mention files       ←          Dashboard (empty input)      │
+  │                        and plugins         Esc Esc    Open rewind checkpoints      │
+  │  $                     Select a skill      shift+tab  Cycle task mode              │
+  │  Enter                 Send message        shift+↓    Decrease thinking effort     │
+  │  Shift+Enter / Ctrl+J  New line            shift+↑    Increase thinking effort     │
+  │  Ctrl+R                Search input        ctrl+o     Copy last response           │
+  │                        history             ctrl+c     Interrupt or quit            │
+  │  ctrl+v                Attach clipboard    ctrl+z     Suspend Ash                  │
+  │                        image                                                       │
+  │                                                                                    │
+  │  Transcript                                                                        │
+  │  PageUp / PageDown     Scroll                                                      │
+  │                        transcript                                                  │
+  │  Ctrl+Home / Ctrl+End  Oldest / latest                                             │
+  │  Ctrl+↑ / Ctrl+↓       Select a message                                            │
+  │  Space                 Expand selected                                             │
+  │                        message                                                     │
+  │  Enter                 View selected                                               │
+  │                        message details                                             │
+  │  Esc                   Return to input                                             │
+  │                                                                                    │
+  │  /shortcuts customize                                                              │
+  └────────────────────────────────────────────────────────────────────────────────────┘
+  ───────────────────────────────────────────────────────────────────── Automatic model
+
+  ↑/↓ scroll · Esc to close

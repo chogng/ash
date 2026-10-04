@@ -1,0 +1,22 @@
+---
+source: code/tui/src/app/help_tests.rs
+expression: "text(&render(&app, narrow))"
+---
+─ Keyboard shortcuts ───────────────────────
+
+  Compose
+  /                     Commands
+  @                     Mention files and
+                        plugins
+  $                     Select a skill
+  Enter                 Send message
+  Shift+Enter / Ctrl+J  New line
+  Ctrl+R                Search input
+                        history
+  ctrl+v                Attach clipboard
+                        image
+
+  Session
+  ?          Keyboard shortcuts
+
+  ↑/↓ scroll · Esc to close
