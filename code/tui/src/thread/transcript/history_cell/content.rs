@@ -4,7 +4,6 @@ use super::CellView;
 use super::HistoryCell;
 use super::MessageRole;
 use super::cache::ChatHistoryRenderCache;
-use super::finish_lines;
 use super::prefixed_body;
 use crate::render::RenderContext;
 use crate::thread::transcript::message_response::MessageResponse;
@@ -72,7 +71,7 @@ impl HistoryCell for ContentCell {
             _ => ("●", context.muted()),
         };
         let rich = matches!(self.role, MessageRole::Agent | MessageRole::Plan);
-        let (mut lines, hyperlinks) = if rich {
+        let (lines, hyperlinks) = if rich {
             let source = view.text();
             let mut highlight = |index, language: &str, code: &str| {
                 if let Some(cache) = cache {
@@ -87,7 +86,8 @@ impl HistoryCell for ContentCell {
                     crate::render::highlight_code(code, language, context.into())
                 }
             };
-            let body_width = usize::from(width.saturating_sub(2)).max(1);
+            let gutter_width = usize::from(width.saturating_sub(1)).min(2);
+            let body_width = usize::from(width) - gutter_width;
             let mut rows = if let Some(cache) = cache {
                 cache.markdown(
                     view.cell_id.as_deref(),
@@ -110,11 +110,14 @@ impl HistoryCell for ContentCell {
             }
             for (index, row) in rows.iter_mut().enumerate() {
                 row.prefix(ratatui::text::Span::styled(
-                    if index == 0 {
-                        format!("{marker} ")
-                    } else {
-                        "  ".into()
-                    },
+                    crate::render::truncate_to_width(
+                        &if index == 0 {
+                            format!("{marker} ")
+                        } else {
+                            "  ".into()
+                        },
+                        gutter_width,
+                    ),
                     ratatui::style::Style::default().fg(color),
                 ));
                 if view.selected {
@@ -138,30 +141,25 @@ impl HistoryCell for ContentCell {
                 Cow::Borrowed(summary.as_ref())
             };
             (
-                prefixed_body(&summary, marker, color, view, context),
+                prefixed_body(&summary, marker, color, view, context, width),
                 Vec::new(),
             )
         };
-        let input_lines = if self.role == MessageRole::User {
+        let input_rows = if self.role == MessageRole::User {
             lines.len()
         } else {
             0
         };
-        if let Some(detail) = self.detail(view.mode) {
-            MessageResponse::plain(&detail, context).append_to(&mut lines, width, context);
-        }
-        let details_action = finish_lines(&mut lines, view, context, width);
-        CellLines {
-            wrapping: if rich {
-                super::LineWrapping::Prewrapped
-            } else {
-                super::LineWrapping::Words
-            },
+        let mut rendered = CellLines {
             hyperlinks,
             lines,
-            user_input_lines: input_lines,
-            details_action,
+            user_input_rows: input_rows,
+            details_action: None,
+        };
+        if let Some(detail) = self.detail(view.mode) {
+            rendered.append_response(MessageResponse::plain(&detail).layout(width, context));
         }
+        rendered.finish(view, context, width)
     }
 }
 

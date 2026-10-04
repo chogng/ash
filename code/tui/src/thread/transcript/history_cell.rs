@@ -11,6 +11,7 @@ pub(super) use text::prefixed_body;
 
 use super::message_response::MessageResponse;
 use super::message_response::ResponseAction;
+use super::message_response::ResponseLayout;
 use super::model::TranscriptCell;
 use crate::render::RenderContext;
 use ratatui::text::Line;
@@ -49,38 +50,49 @@ pub(super) struct CellLayout {
     pub(super) details_action: Option<ResponseAction>,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub(super) enum LineWrapping {
-    Words,
-    Prewrapped,
-}
-
+/// Every row is already wrapped for the requested width. Measurement, input
+/// backgrounds, actions and viewport offsets all use this one screen-row unit.
+#[derive(Debug, Default)]
 pub(super) struct CellLines {
-    pub(super) wrapping: LineWrapping,
     pub(super) lines: Vec<Line<'static>>,
     pub(super) hyperlinks: Vec<Vec<crate::terminal::hyperlinks::Hyperlink>>,
-    pub(super) user_input_lines: usize,
+    pub(super) user_input_rows: usize,
     pub(super) details_action: Option<ResponseAction>,
 }
 
 impl CellLines {
-    fn line_height(&self, lines: &[Line<'_>], width: u16) -> usize {
-        match self.wrapping {
-            LineWrapping::Words => crate::render::wrapped_height(lines, width),
-            LineWrapping::Prewrapped => lines.len(),
+    pub(super) fn layout(&self) -> CellLayout {
+        CellLayout {
+            height: self.lines.len(),
+            details_action: self.details_action.clone(),
         }
     }
 
-    pub(super) fn layout(&self, width: u16) -> CellLayout {
-        CellLayout {
-            height: self.line_height(&self.lines, width),
-            details_action: self.details_action.clone().map(|mut action| {
-                for row in &mut action.rows {
-                    row.row = self.line_height(&self.lines[..row.row], width);
-                }
-                action
-            }),
+    pub(super) fn append_response(&mut self, response: ResponseLayout) {
+        if let Some(mut action) = response.details_action {
+            for row in &mut action.rows {
+                row.row += self.lines.len();
+            }
+            self.details_action = Some(action);
         }
+        self.lines.extend(response.lines);
+    }
+
+    pub(super) fn finish(
+        mut self,
+        view: &CellView<'_>,
+        context: RenderContext<'_>,
+        width: u16,
+    ) -> Self {
+        if view.expanded && view.has_details {
+            self.append_response(
+                MessageResponse::styled(Vec::new())
+                    .with_full_details_action()
+                    .layout(width, context),
+            );
+        }
+        self.lines.push(Line::default());
+        self
     }
 }
 
@@ -178,18 +190,9 @@ impl CellView<'_> {
         cache: Option<&ChatHistoryRenderCache>,
         width: u16,
     ) -> CellLines {
+        if width == 0 {
+            return CellLines::default();
+        }
         self.owner().lines(self, context, cache, width)
     }
-}
-
-pub(super) fn finish_lines(
-    lines: &mut Vec<Line<'static>>,
-    view: &CellView<'_>,
-    context: RenderContext<'_>,
-    width: u16,
-) -> Option<ResponseAction> {
-    let details_action = (view.expanded && view.has_details)
-        .then(|| MessageResponse::append_full_details_action(lines, width, context));
-    lines.push(Line::default());
-    details_action
 }

@@ -26,10 +26,12 @@ fn unchanged_cell_reuses_the_rendered_buffer() {
     let render = || {
         renders.set(renders.get() + 1);
         CellLines {
-            wrapping: crate::thread::transcript::history_cell::LineWrapping::Words,
             hyperlinks: Vec::new(),
-            lines: styled_text_lines("cached text", Style::default()),
-            user_input_lines: 0,
+            lines: crate::render::wrap_lines(
+                styled_text_lines("cached text", Style::default()),
+                20,
+            ),
+            user_input_rows: 0,
             details_action: None,
         }
     };
@@ -40,7 +42,52 @@ fn unchanged_cell_reuses_the_rendered_buffer() {
     assert!(matches!(first, PreparedCell::Buffered(_)));
     assert!(matches!(second, PreparedCell::Buffered(_)));
     assert_eq!(renders.get(), 1);
-    assert_eq!(cache.entry_count(), 1);
+    assert_eq!(cache.buffered_entry_count(), 1);
+}
+
+#[test]
+fn measuring_then_drawing_a_visible_cell_reuses_the_same_screen_rows() {
+    let cache = ChatHistoryRenderCache::default();
+    let message = message(1);
+    let layouts = Cell::new(0);
+    let render = || {
+        layouts.set(layouts.get() + 1);
+        message.lines(test_context(), Some(&cache), 20)
+    };
+    let measured = cache.measure(&message, 20, test_context(), render);
+    assert_eq!(cache.buffered_entry_count(), 0);
+    let first = cache.prepare(&message, 20, test_context(), render);
+    let second = cache.prepare(&message, 20, test_context(), render);
+    assert_eq!(layouts.get(), 1);
+    assert!(matches!(first, PreparedCell::Buffered(_)));
+    assert!(matches!(second, PreparedCell::Buffered(_)));
+    assert_eq!(
+        cache.measure(&message, 20, test_context(), render).height,
+        measured.height
+    );
+    assert_eq!(layouts.get(), 1);
+}
+
+#[test]
+fn measured_rows_and_screen_buffers_share_the_existing_cache_budget() {
+    let cache = ChatHistoryRenderCache::default();
+    for index in 0..super::MAX_CACHE_ENTRIES + 5 {
+        let message = message(1).with_cell_id(format!("cell-{index}"));
+        cache.measure(&message, 20, test_context(), || {
+            message.lines(test_context(), Some(&cache), 20)
+        });
+    }
+    let entries = cache.entries.borrow();
+    assert!(entries.entries.len() <= super::MAX_CACHE_ENTRIES);
+    assert!(entries.cells <= super::MAX_CACHE_CELLS);
+    assert!(
+        entries
+            .entries
+            .iter()
+            .all(|entry| matches!(entry.cell, super::CachedCell::Rows(_)))
+    );
+    drop(entries);
+    assert_eq!(cache.buffered_entry_count(), 0);
 }
 
 #[test]
@@ -58,10 +105,12 @@ fn revision_width_theme_and_mode_replace_the_same_cell_entry() {
             || {
                 renders.set(renders.get() + 1);
                 CellLines {
-                    wrapping: crate::thread::transcript::history_cell::LineWrapping::Words,
                     hyperlinks: Vec::new(),
-                    lines: styled_text_lines("cached text", Style::default()),
-                    user_input_lines: 0,
+                    lines: crate::render::wrap_lines(
+                        styled_text_lines("cached text", Style::default()),
+                        usize::from(width),
+                    ),
+                    user_input_rows: 0,
                     details_action: None,
                 }
             },
@@ -76,7 +125,7 @@ fn revision_width_theme_and_mode_replace_the_same_cell_entry() {
     prepare(&selected, 10, 1);
 
     assert_eq!(renders.get(), 5);
-    assert_eq!(cache.entry_count(), 1);
+    assert_eq!(cache.buffered_entry_count(), 1);
 }
 
 #[test]
@@ -88,17 +137,16 @@ fn messages_without_a_content_revision_are_not_cached() {
         cache.prepare(&message, 20, test_context(), || {
             renders.set(renders.get() + 1);
             CellLines {
-                wrapping: crate::thread::transcript::history_cell::LineWrapping::Words,
                 hyperlinks: Vec::new(),
                 lines: styled_text_lines("temporary", Style::default()),
-                user_input_lines: 0,
+                user_input_rows: 0,
                 details_action: None,
             }
         });
     }
 
     assert_eq!(renders.get(), 2);
-    assert_eq!(cache.entry_count(), 0);
+    assert_eq!(cache.buffered_entry_count(), 0);
 }
 
 #[test]
@@ -110,18 +158,17 @@ fn oversized_cells_are_rendered_without_entering_the_cache() {
         .with_render_revision(1);
 
     let prepared = cache.prepare(&message, 20, test_context(), || CellLines {
-        wrapping: crate::thread::transcript::history_cell::LineWrapping::Words,
         hyperlinks: Vec::new(),
         lines: text
             .lines()
             .map(|line| ratatui::text::Line::from(line.to_owned()))
             .collect(),
-        user_input_lines: 0,
+        user_input_rows: 0,
         details_action: None,
     });
 
     assert!(matches!(prepared, PreparedCell::Lines { .. }));
-    assert_eq!(cache.entry_count(), 0);
+    assert_eq!(cache.buffered_entry_count(), 0);
 }
 
 #[test]

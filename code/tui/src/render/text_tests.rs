@@ -6,6 +6,7 @@ use super::push_owned_lines;
 use super::styled_text_lines;
 use super::truncate_to_width;
 use super::truncate_with_ellipsis;
+use super::wrap_line;
 use super::wrapped_height;
 use ratatui::layout::Alignment;
 use ratatui::style::Color;
@@ -80,4 +81,46 @@ fn truncation_keeps_combined_terminal_glyphs_whole() {
     assert_eq!(truncate_to_width(text, 3), "abｶﾞ");
     assert_eq!(truncate_to_width(text, 4), text);
     assert_eq!(truncate_with_ellipsis(text, 3), "ab…");
+}
+
+#[test]
+fn wrapping_keeps_words_and_graphemes_whole_across_style_boundaries() {
+    let plain = Line::from("ab abcde");
+    let colored = Line::from(vec![
+        Span::raw("ab a"),
+        Span::styled("bcde", Style::default().fg(Color::Red)),
+    ]);
+    let text = |line: &Line<'_>| {
+        wrap_line(line, 6)
+            .iter()
+            .map(|row| row.line.to_string())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(text(&plain), ["ab ", "abcde"]);
+    assert_eq!(text(&colored), text(&plain));
+
+    let combined = Line::from(vec![
+        Span::raw("x👩"),
+        Span::styled("\u{200d}💻", Style::default().fg(Color::Red)),
+        Span::raw("z"),
+    ]);
+    let rows = wrap_line(&combined, 3);
+    assert_eq!(
+        rows.iter()
+            .map(|row| row.line.to_string())
+            .collect::<Vec<_>>(),
+        ["x👩‍💻", "z"]
+    );
+    assert_eq!(rows[0].line.width(), 3);
+    assert_eq!(rows[0].source_columns, [0, 1, 2]);
+    assert_eq!(rows[1].source_columns, [3]);
+}
+
+#[test]
+fn soft_wrap_separators_do_not_create_an_extra_empty_row() {
+    let rows = wrap_line(&Line::from("view "), 4);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].line.to_string(), "view");
+    assert_eq!(wrap_line(&Line::default(), 4).len(), 1);
+    assert!(wrap_line(&Line::from("view"), 0).is_empty());
 }

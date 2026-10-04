@@ -34,6 +34,8 @@ pub(crate) use text::push_owned_lines;
 pub(crate) use text::styled_text_lines;
 pub(crate) use text::truncate_to_width;
 pub(crate) use text::truncate_with_ellipsis;
+pub(crate) use text::wrap_line;
+pub(crate) use text::wrap_lines;
 pub(crate) use text::wrapped_height;
 
 /// A terminal surface that can measure and draw itself from immutable presentation state.

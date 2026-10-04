@@ -1,13 +1,11 @@
 use super::CellLayout;
 use super::CellLines;
 use super::CellView;
-use super::LineWrapping;
 use crate::render::RenderContext;
 use crate::render::StreamingCodeHighlighter;
 use crate::render::code_within_limits;
 use crate::render::highlight_code;
 use crate::render::line_to_borrowed;
-use crate::render::wrapped_height;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -15,7 +13,6 @@ use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
-use ratatui::widgets::Wrap;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -72,8 +69,14 @@ impl CacheKey {
 #[derive(Debug)]
 struct CacheEntry {
     key: CacheKey,
-    cell: Arc<RenderedCell>,
+    cell: CachedCell,
     cost: usize,
+}
+
+#[derive(Debug)]
+enum CachedCell {
+    Rows(Box<CellLines>),
+    Buffered(Arc<RenderedCell>),
 }
 
 #[derive(Debug)]
@@ -148,9 +151,17 @@ impl ChatHistoryRenderCache {
         {
             return height;
         }
-        let height = render().layout(width);
+        let rendered = render();
+        let height = rendered.layout();
         if let Some(key) = key {
-            self.insert_layout(key, height.clone());
+            self.insert_layout(key.clone(), height.clone());
+            // Keep rows within the existing cell budget until a visible cell needs
+            // its buffer. Measuring offscreen records must not allocate screen buffers.
+            if let Some(cost) = usize::from(width).checked_mul(height.height)
+                && cost <= MAX_CELL_CELLS
+            {
+                self.insert(key, CachedCell::Rows(Box::new(rendered)), cost);
+            }
         }
         height
     }
@@ -163,29 +174,35 @@ impl ChatHistoryRenderCache {
         render: impl FnOnce() -> CellLines,
     ) -> PreparedCell {
         let key = CacheKey::for_cell(cell, width, context);
-        if let Some(key) = key.as_ref()
-            && let Some(cell) = self.cached(key)
-        {
-            return PreparedCell::Buffered(cell);
-        }
-
-        let rendered = render();
-        let layout = rendered.layout(width);
+        let stored = key.as_ref().and_then(|key| self.take(key));
+        let rendered = match stored {
+            Some(CachedCell::Buffered(cell)) => {
+                let cost =
+                    usize::from(cell.buffer.area.width) * usize::from(cell.buffer.area.height);
+                self.insert(
+                    key.expect("a cached cell has a key"),
+                    CachedCell::Buffered(Arc::clone(&cell)),
+                    cost,
+                );
+                return PreparedCell::Buffered(cell);
+            }
+            Some(CachedCell::Rows(rows)) => *rows,
+            None => render(),
+        };
+        let layout = rendered.layout();
         let height = layout.height;
         let CellLines {
-            wrapping,
             lines,
-            user_input_lines,
+            user_input_rows,
             hyperlinks,
             ..
         } = rendered;
-        let user_input_rows = wrapped_height(&lines[..user_input_lines.min(lines.len())], width);
         if let Some(key) = key.as_ref() {
             self.insert_layout(key.clone(), layout);
         }
         let Some(cost) = usize::from(width).checked_mul(height) else {
             return PreparedCell::Lines {
-                wrapping,
+                foreground: context.foreground(),
                 hyperlinks,
                 lines,
                 background: context.background(),
@@ -195,7 +212,7 @@ impl ChatHistoryRenderCache {
         };
         let Some(buffer_height) = u16::try_from(height).ok() else {
             return PreparedCell::Lines {
-                wrapping,
+                foreground: context.foreground(),
                 hyperlinks,
                 lines,
                 background: context.background(),
@@ -205,7 +222,7 @@ impl ChatHistoryRenderCache {
         };
         if key.is_none() || cost > MAX_CELL_CELLS {
             return PreparedCell::Lines {
-                wrapping,
+                foreground: context.foreground(),
                 hyperlinks,
                 lines,
                 background: context.background(),
@@ -229,31 +246,25 @@ impl ChatHistoryRenderCache {
             user_input_rows,
             context.user_message_background(),
         );
-        let paragraph = Paragraph::new(lines);
-        let paragraph = match wrapping {
-            LineWrapping::Words => paragraph.wrap(Wrap { trim: false }),
-            LineWrapping::Prewrapped => paragraph,
-        };
-        paragraph.render(area, &mut buffer);
+        Paragraph::new(lines).render(area, &mut buffer);
         let cell = Arc::new(RenderedCell { buffer, hyperlinks });
         self.insert(
             key.expect("cacheable messages have a key"),
-            Arc::clone(&cell),
+            CachedCell::Buffered(Arc::clone(&cell)),
             cost,
         );
         PreparedCell::Buffered(cell)
     }
 
-    fn cached(&self, key: &CacheKey) -> Option<Arc<RenderedCell>> {
+    fn take(&self, key: &CacheKey) -> Option<CachedCell> {
         let mut cache = self.entries.borrow_mut();
         let index = cache.entries.iter().position(|entry| entry.key == *key)?;
         let entry = cache
             .entries
             .remove(index)
             .expect("the matching cache entry exists");
-        let cell = Arc::clone(&entry.cell);
-        cache.entries.push_back(entry);
-        Some(cell)
+        cache.cells -= entry.cost;
+        Some(entry.cell)
     }
 
     fn cached_layout(&self, key: &CacheKey) -> Option<CellLayout> {
@@ -320,7 +331,7 @@ impl ChatHistoryRenderCache {
         lines
     }
 
-    fn insert(&self, key: CacheKey, cell: Arc<RenderedCell>, cost: usize) {
+    fn insert(&self, key: CacheKey, cell: CachedCell, cost: usize) {
         let mut cache = self.entries.borrow_mut();
         if let Some(index) = cache
             .entries
@@ -341,8 +352,13 @@ impl ChatHistoryRenderCache {
     }
 
     #[cfg(test)]
-    pub(crate) fn entry_count(&self) -> usize {
-        self.entries.borrow().entries.len()
+    pub(crate) fn buffered_entry_count(&self) -> usize {
+        self.entries
+            .borrow()
+            .entries
+            .iter()
+            .filter(|entry| matches!(entry.cell, CachedCell::Buffered(_)))
+            .count()
     }
 }
 
@@ -483,7 +499,7 @@ fn complete_source(source: &str) -> (&str, &str) {
 pub(crate) enum PreparedCell {
     Buffered(Arc<RenderedCell>),
     Lines {
-        wrapping: LineWrapping,
+        foreground: Color,
         hyperlinks: Vec<Vec<crate::terminal::hyperlinks::Hyperlink>>,
         lines: Vec<Line<'static>>,
         background: Color,
@@ -510,14 +526,14 @@ impl PreparedCell {
         match self {
             Self::Buffered(cell) => cell.render(target, area, source_row),
             Self::Lines {
-                wrapping,
                 lines,
+                foreground,
                 background,
                 user_input_background,
                 user_input_rows,
                 ..
             } => {
-                target.set_style(area, Style::default().bg(*background));
+                target.set_style(area, Style::default().fg(*foreground).bg(*background));
                 fill_user_input_background(
                     target,
                     area,
@@ -525,17 +541,12 @@ impl PreparedCell {
                     *user_input_rows,
                     *user_input_background,
                 );
-                let (lines, source_row) = match wrapping {
-                    LineWrapping::Words => visible_lines(lines, area.width, source_row),
-                    LineWrapping::Prewrapped => (&lines[source_row.min(lines.len())..], 0),
-                };
-                let lines = lines.iter().map(line_to_borrowed).collect::<Vec<_>>();
-                let paragraph = Paragraph::new(lines).scroll((source_row, 0));
-                let paragraph = match wrapping {
-                    LineWrapping::Words => paragraph.wrap(Wrap { trim: false }),
-                    LineWrapping::Prewrapped => paragraph,
-                };
-                paragraph.render(area, target);
+                let lines = lines[source_row.min(lines.len())..]
+                    .iter()
+                    .take(usize::from(area.height))
+                    .map(line_to_borrowed)
+                    .collect::<Vec<_>>();
+                Paragraph::new(lines).render(area, target);
             }
         }
     }
@@ -589,26 +600,6 @@ impl RenderedCell {
             }
         }
     }
-}
-
-fn visible_lines<'a>(
-    lines: &'a [Line<'static>],
-    width: u16,
-    mut source_row: usize,
-) -> (&'a [Line<'static>], u16) {
-    let mut first = 0;
-    while first < lines.len() {
-        let height = wrapped_height(std::slice::from_ref(&lines[first]), width);
-        if source_row < height {
-            break;
-        }
-        source_row -= height;
-        first += 1;
-    }
-    (
-        &lines[first..],
-        source_row.min(usize::from(u16::MAX)) as u16,
-    )
 }
 
 #[cfg(test)]

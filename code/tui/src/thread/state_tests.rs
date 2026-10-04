@@ -430,7 +430,7 @@ fn streaming_deadlines_change_the_visible_panel_without_changing_message_text() 
         phases.push(format!("{elapsed} ms\n{}", terminal.backend()));
     }
     assert!(state.stream_deadline().is_none());
-    assert_eq!(cache.entry_count(), 1);
+    assert_eq!(cache.buffered_entry_count(), 1);
     crate::tui_assert_snapshot!("streaming_commit_phases", phases.join("\n"));
 }
 

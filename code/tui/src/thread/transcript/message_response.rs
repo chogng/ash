@@ -10,13 +10,26 @@ use ash_ansi_escape::ansi_text;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
-use unicode_segmentation::UnicodeSegmentation;
 
 /// Tool results, command receipts and expanded message details share this container.
 /// It has no execution, expansion or scrolling state, and accepts already styled content
 /// so callers retain ownership of failure labels and other semantic colors.
-pub(super) struct MessageResponse {
-    body: Vec<Line<'static>>,
+pub(super) struct MessageResponse<'a> {
+    content: ResponseContent<'a>,
+    full_details: bool,
+}
+
+enum ResponseContent<'a> {
+    Plain(&'a str),
+    Ansi(&'a str),
+    Styled(Vec<Line<'static>>),
+}
+
+/// Final screen rows and component-relative action bounds, independent of the
+/// caller's existing rows. The transcript applies the row offset once on composition.
+pub(super) struct ResponseLayout {
+    pub(super) lines: Vec<Line<'static>>,
+    pub(super) details_action: Option<ResponseAction>,
 }
 
 /// Cell-relative action rows. Drawing and pointer handling consume these same bounds,
@@ -40,70 +53,85 @@ impl ResponseAction {
     }
 }
 
-impl MessageResponse {
-    pub(super) fn plain(text: &str, context: RenderContext<'_>) -> Self {
-        let mut body = Vec::new();
-        crate::render::push_owned_lines(
-            &styled_text_lines(text, Style::default().fg(context.muted())),
-            &mut body,
-        );
-        Self::styled(body)
+impl<'a> MessageResponse<'a> {
+    pub(super) fn plain(text: &'a str) -> Self {
+        Self {
+            content: ResponseContent::Plain(text),
+            full_details: false,
+        }
     }
 
-    pub(super) fn ansi(text: &str, context: RenderContext<'_>) -> Self {
-        let mut body = ansi_text(text).lines;
-        if body.is_empty() {
-            body.push(Line::default());
+    pub(super) fn ansi(text: &'a str) -> Self {
+        Self {
+            content: ResponseContent::Ansi(text),
+            full_details: false,
         }
-        for line in &mut body {
-            for span in &mut line.spans {
-                if span.style.fg.is_none() {
-                    span.style.fg = Some(context.muted());
-                }
-            }
-        }
-        Self::styled(body)
     }
 
     pub(super) fn styled(body: Vec<Line<'static>>) -> Self {
-        Self { body }
+        Self {
+            content: ResponseContent::Styled(body),
+            full_details: false,
+        }
     }
 
-    pub(super) fn append_to(
-        self,
-        lines: &mut Vec<Line<'static>>,
-        width: u16,
-        context: RenderContext<'_>,
-    ) {
-        lines.extend(PrefixedBlock::new(" └─ ", "    ").wrap(
-            self.body,
+    pub(super) fn with_full_details_action(mut self) -> Self {
+        self.full_details = true;
+        self
+    }
+
+    pub(super) fn layout(self, width: u16, context: RenderContext<'_>) -> ResponseLayout {
+        let body = match self.content {
+            ResponseContent::Plain(text) => {
+                let mut body = Vec::new();
+                crate::render::push_owned_lines(
+                    &styled_text_lines(text, Style::default().fg(context.muted())),
+                    &mut body,
+                );
+                body
+            }
+            ResponseContent::Ansi(text) => {
+                let mut body = ansi_text(text).lines;
+                if body.is_empty() {
+                    body.push(Line::default());
+                }
+                for line in &mut body {
+                    for span in &mut line.spans {
+                        if span.style.fg.is_none() {
+                            span.style.fg = Some(context.muted());
+                        }
+                    }
+                }
+                body
+            }
+            ResponseContent::Styled(body) => body,
+        };
+        let mut lines = PrefixedBlock::new(" └─ ", "    ").wrap(
+            body,
             width,
             Style::default().fg(context.muted()),
-        ));
-    }
-
-    /// The caller decides whether this action exists. Its label, indentation and
-    /// physical row widths are kept together rather than inferred by the view.
-    pub(super) fn append_full_details_action(
-        lines: &mut Vec<Line<'static>>,
-        width: u16,
-        context: RenderContext<'_>,
-    ) -> ResponseAction {
-        let action_lines = PrefixedBlock::new("    ", "    ").wrap(
-            vec![Line::from(Span::styled("view full", action_style(context)))],
-            width,
-            Style::default(),
         );
-        let rows = action_lines
-            .iter()
-            .enumerate()
-            .map(|(index, line)| ResponseActionRow {
-                row: lines.len() + index,
-                width: line.width() as u16,
-            })
-            .collect();
-        lines.extend(action_lines);
-        ResponseAction { rows }
+        let details_action = self.full_details.then(|| {
+            let action = PrefixedBlock::new("    ", "    ").wrap(
+                vec![Line::from(Span::styled("view full", action_style(context)))],
+                width,
+                Style::default(),
+            );
+            let rows = action
+                .iter()
+                .enumerate()
+                .map(|(row, line)| ResponseActionRow {
+                    row: lines.len() + row,
+                    width: line.width() as u16,
+                })
+                .collect();
+            lines.extend(action);
+            ResponseAction { rows }
+        });
+        ResponseLayout {
+            lines,
+            details_action,
+        }
     }
 }
 
@@ -132,43 +160,7 @@ impl PrefixedBlock {
             .max(display_width(self.continuation))
             .min(usize::from(width - 1));
         let body_width = usize::from(width) - gutter;
-        let mut rows = Vec::new();
-        for line in body {
-            let mut row = Line::default();
-            let mut used = 0;
-            for span in line.spans {
-                let style = line.style.patch(span.style);
-                for word in span.content.split_word_bounds() {
-                    let word_width = display_width(word);
-                    if used > 0 && word_width <= body_width && used + word_width > body_width {
-                        rows.push(std::mem::take(&mut row));
-                        used = 0;
-                        if word.chars().all(char::is_whitespace) {
-                            continue;
-                        }
-                    }
-                    for glyph in word.graphemes(true) {
-                        let glyph_width = display_width(glyph);
-                        if used > 0 && used + glyph_width > body_width {
-                            rows.push(std::mem::take(&mut row));
-                            used = 0;
-                            if glyph.chars().all(char::is_whitespace) {
-                                continue;
-                            }
-                        }
-                        if glyph_width <= body_width {
-                            if let Some(last) = row.spans.last_mut().filter(|s| s.style == style) {
-                                last.content.to_mut().push_str(glyph);
-                            } else {
-                                row.push_span(Span::styled(glyph.to_owned(), style));
-                            }
-                            used += glyph_width;
-                        }
-                    }
-                }
-            }
-            rows.push(row);
-        }
+        let mut rows = crate::render::wrap_lines(body, body_width);
         for (index, row) in rows.iter_mut().enumerate() {
             let prefix = if index == 0 {
                 self.initial

@@ -10,7 +10,6 @@ use std::collections::BTreeMap;
 use std::io;
 use std::io::Write;
 use std::ops::Range;
-use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 use url::Url;
 
@@ -56,7 +55,7 @@ impl HyperlinkLine {
         destination: Option<&str>,
     ) {
         let start = if destination.is_some() {
-            self.line.width()
+            self.line.to_string().width()
         } else {
             0
         };
@@ -110,40 +109,34 @@ pub(crate) fn web_destination(value: &str) -> Option<String> {
 
 /// Wrap text and its links in one pass; destinations never participate in width measurement.
 pub(crate) fn wrap(line: &HyperlinkLine, width: usize) -> Vec<HyperlinkLine> {
-    if width == 0 {
-        return Vec::new();
-    }
-    let mut result = Vec::new();
-    let mut row = HyperlinkLine::default();
-    let mut column = 0;
-    for span in &line.line.spans {
-        for word in span.content.split_word_bounds() {
-            let word_width = word.width();
-            if row.line.width() > 0 && word_width <= width && row.line.width() + word_width > width
-            {
-                result.push(std::mem::take(&mut row));
-            }
-            for glyph in word.graphemes(true) {
-                let glyph_width = glyph.width();
-                let destination = line
+    crate::render::wrap_line(&line.line, width)
+        .into_iter()
+        .map(|wrapped| {
+            let mut links: Vec<Hyperlink> = Vec::new();
+            for (column, source) in wrapped.source_columns.into_iter().enumerate() {
+                if let Some(link) = line
                     .links
                     .iter()
-                    .find(|link| link.columns.contains(&column))
-                    .map(|link| link.destination.as_str());
-                if row.line.width() > 0 && row.line.width() + glyph_width > width {
-                    result.push(std::mem::take(&mut row));
+                    .find(|link| link.columns.contains(&source))
+                {
+                    if let Some(last) = links.last_mut().filter(|last| {
+                        last.columns.end == column && last.destination == link.destination
+                    }) {
+                        last.columns.end += 1;
+                    } else {
+                        links.push(Hyperlink {
+                            columns: column..column + 1,
+                            destination: link.destination.clone(),
+                        });
+                    }
                 }
-                if glyph_width <= width {
-                    row.push_validated(glyph, line.line.style.patch(span.style), destination);
-                }
-                column += glyph_width;
             }
-        }
-    }
-    if !row.line.spans.is_empty() || result.is_empty() {
-        result.push(row);
-    }
-    result
+            HyperlinkLine {
+                line: wrapped.line,
+                links,
+            }
+        })
+        .collect()
 }
 
 /// Links for physical cells of a single frame. Rebuilt for every frame, including overlays.

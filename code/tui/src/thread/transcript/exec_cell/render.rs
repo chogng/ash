@@ -8,7 +8,6 @@ use crate::thread::transcript::history_cell::CellView;
 use crate::thread::transcript::history_cell::ChatHistoryRenderCache;
 use crate::thread::transcript::history_cell::HistoryCell;
 use crate::thread::transcript::history_cell::MessageRole;
-use crate::thread::transcript::history_cell::finish_lines;
 use crate::thread::transcript::history_cell::prefixed_body;
 use crate::thread::transcript::message_response::MessageResponse;
 use ash_ansi_escape::ansi_text;
@@ -58,7 +57,20 @@ impl HistoryCell for ExecCell {
             CommandStatus::Failed => context.danger(),
             CommandStatus::Succeeded => context.muted(),
         };
-        let mut lines = prefixed_body(&self.summary(context.language()), "●", color, view, context);
+        let lines = prefixed_body(
+            &self.summary(context.language()),
+            "●",
+            color,
+            view,
+            context,
+            width,
+        );
+        let mut rendered = CellLines {
+            lines,
+            hyperlinks: Vec::new(),
+            user_input_rows: 0,
+            details_action: None,
+        };
         if view.mode == CellMode::Collapsed {
             for call in self.calls.iter().filter(|call| call.failed) {
                 let label = call.failure_label(context.language());
@@ -80,21 +92,15 @@ impl HistoryCell for ExecCell {
                         Style::default().fg(context.muted()),
                     ));
                 }
-                MessageResponse::styled(vec![Line::from(spans)])
-                    .append_to(&mut lines, width, context);
+                rendered.append_response(
+                    MessageResponse::styled(vec![Line::from(spans)]).layout(width, context),
+                );
             }
         }
         if let Some(detail) = self.detail(view.mode) {
-            MessageResponse::ansi(&detail, context).append_to(&mut lines, width, context);
+            rendered.append_response(MessageResponse::ansi(&detail).layout(width, context));
         }
-        let details_action = finish_lines(&mut lines, view, context, width);
-        CellLines {
-            wrapping: crate::thread::transcript::history_cell::LineWrapping::Words,
-            hyperlinks: Vec::new(),
-            lines,
-            user_input_lines: 0,
-            details_action,
-        }
+        rendered.finish(view, context, width)
     }
 }
 

@@ -5,7 +5,6 @@ use super::CommandStatus;
 use super::HistoryCell;
 use super::MessageRole;
 use super::cache::ChatHistoryRenderCache;
-use super::finish_lines;
 use super::prefixed_body;
 use crate::render::RenderContext;
 use crate::thread::transcript::message_response::MessageResponse;
@@ -41,19 +40,18 @@ impl HistoryCell for LocalCommandCell {
         } else {
             (">", context.muted())
         };
-        let mut lines = prefixed_body(&self.command, marker, color, view, context);
-        let input_lines = lines.len();
-        if let Some(result) = &self.result {
-            MessageResponse::ansi(result, context).append_to(&mut lines, width, context);
-        }
-        let details_action = finish_lines(&mut lines, view, context, width);
-        CellLines {
-            wrapping: crate::thread::transcript::history_cell::LineWrapping::Words,
+        let lines = prefixed_body(&self.command, marker, color, view, context, width);
+        let input_rows = lines.len();
+        let mut rendered = CellLines {
             hyperlinks: Vec::new(),
             lines,
-            user_input_lines: input_lines,
-            details_action,
+            user_input_rows: input_rows,
+            details_action: None,
+        };
+        if let Some(result) = &self.result {
+            rendered.append_response(MessageResponse::ansi(result).layout(width, context));
         }
+        rendered.finish(view, context, width)
     }
 }
 

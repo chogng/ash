@@ -17,6 +17,7 @@ pub(in crate::thread::transcript) fn prefixed_body(
     color: ratatui::style::Color,
     view: &CellView<'_>,
     context: RenderContext<'_>,
+    width: u16,
 ) -> Vec<Line<'static>> {
     let body = styled_text_lines(text, selected_style(view.selected, context));
     let prefixed = prefix_lines(
@@ -29,7 +30,7 @@ pub(in crate::thread::transcript) fn prefixed_body(
     );
     let mut lines = Vec::new();
     push_owned_lines(&prefixed, &mut lines);
-    lines
+    crate::render::wrap_lines(lines, usize::from(width))
 }
 pub(super) fn selected_style(selected: bool, context: RenderContext<'_>) -> Style {
     if selected {

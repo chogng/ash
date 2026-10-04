@@ -66,6 +66,28 @@ fn renderable_measurement_uses_the_same_wrapped_message_rows_as_drawing() {
 }
 
 #[test]
+fn final_screen_rows_fit_the_requested_width_and_empty_width_has_no_rows() {
+    for message in [
+        CellView::plain(MessageRole::Agent, "abc".into()),
+        CellView::plain(MessageRole::User, "abc".into()),
+        CellView::local_command("/x".into(), CommandStatus::Succeeded, None).with_detail("abc"),
+    ] {
+        for width in [0, 1, 2, 3, 10] {
+            let rendered = message.lines(test_context(), None, width);
+            assert!(
+                rendered
+                    .lines
+                    .iter()
+                    .all(|line| line.width() <= usize::from(width))
+            );
+            if width == 0 {
+                assert_eq!(rendered.layout().height, 0);
+            }
+        }
+    }
+}
+
+#[test]
 fn multiline_content_uses_the_same_continuation_prefix_for_measurement_and_drawing() {
     let messages = vec![CellView::plain(
         MessageRole::Agent,
@@ -357,8 +379,56 @@ fn wrapped_command_response_preserves_gutter_unicode_and_ansi_with_and_without_c
         assert_eq!(buffer[(0, 1)].bg, test_context().background());
         rendered.push(buffer.clone());
     }
-    assert_eq!(visible_buffer(&rendered[0]), visible_buffer(&rendered[1]));
+    assert_eq!(rendered[0], rendered[1]);
     crate::tui_assert_snapshot!("wrapped_command_response", visible_buffer(&rendered[0]));
+}
+
+#[test]
+fn ansi_colors_inside_a_word_do_not_change_response_wrapping_or_height() {
+    let mut visible = Vec::new();
+    for (text, colored) in [("ab abcde", false), ("ab a\x1b[31mbcde", true)] {
+        let messages = vec![
+            CellView::local_command("/out".into(), CommandStatus::Succeeded, None)
+                .with_detail(text)
+                .with_cell_id("command")
+                .with_render_revision(1),
+        ];
+        let scroll = ChatHistoryScroll::default();
+        let cache = ChatHistoryRenderCache::default();
+        let view = ChatHistoryView {
+            jump_label: "Jump to bottom",
+            header: None,
+            messages: &messages,
+            scroll: &scroll,
+            render_cache: &cache,
+            pointer: Default::default(),
+        };
+        assert_eq!(view.desired_height(10, test_context()), 4);
+        let mut terminal = Terminal::new(TestBackend::new(10, 4)).unwrap();
+        terminal
+            .draw(|frame| view.render(frame, frame.area(), test_context()))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        assert_eq!(buffer[(4, 2)].symbol(), "a");
+        assert_eq!(buffer[(4, 2)].fg, test_context().muted());
+        for column in 5..9 {
+            assert_eq!(
+                buffer[(column, 2)].fg,
+                if colored {
+                    Color::Red
+                } else {
+                    test_context().muted()
+                }
+            );
+        }
+        visible.push(visible_buffer(buffer));
+    }
+    assert_eq!(visible[0], visible[1]);
+    insta::assert_snapshot!(visible[0], @"
+    > /out
+     └─ ab
+        abcde
+    ");
 }
 
 #[test]
@@ -622,7 +692,7 @@ fn long_transcripts_buffer_only_visible_cells() {
         .draw(|frame| view.render(frame, frame.area(), test_context()))
         .unwrap();
 
-    assert!(render_cache.entry_count() <= 3);
+    assert!(render_cache.buffered_entry_count() <= 3);
 }
 
 #[test]

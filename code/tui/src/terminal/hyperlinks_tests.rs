@@ -17,7 +17,7 @@ fn links_wrap_with_wide_text_and_never_enter_the_visible_buffer() {
         rows.iter()
             .map(|row| row.line.to_string())
             .collect::<String>(),
-        "中文🙂 alpha"
+        "中文🙂alpha"
     );
     let mut links = FrameLinks::default();
     links.place(
@@ -39,6 +39,42 @@ fn links_wrap_with_wide_text_and_never_enter_the_visible_buffer() {
     );
     links.clear(Rect::new(2, 3, 6, 1));
     assert!(links.cells.keys().all(|&(_, y)| y == 4));
+}
+
+#[test]
+fn links_follow_source_columns_when_styles_split_words_or_wide_glyphs_are_clipped() {
+    let mut line = HyperlinkLine::default();
+    line.push("ab a", Style::default(), None);
+    line.push(
+        "bcde",
+        Style::default().fg(ratatui::style::Color::Red),
+        Some("https://example.com/word"),
+    );
+    let rows = wrap(&line, 6);
+    assert_eq!(
+        rows.iter()
+            .map(|row| row.line.to_string())
+            .collect::<Vec<_>>(),
+        ["ab ", "abcde"]
+    );
+    assert!(rows[0].links.is_empty());
+    assert_eq!(rows[1].links[0].columns, 1..5);
+    assert_eq!(rows[1].links[0].destination, "https://example.com/word");
+
+    let mut narrow = HyperlinkLine::default();
+    narrow.push("中", Style::default(), Some("https://example.com/wide"));
+    narrow.push("x y", Style::default(), Some("https://example.com/letters"));
+    let rows = wrap(&narrow, 1);
+    assert_eq!(
+        rows.iter()
+            .map(|row| row.line.to_string())
+            .collect::<Vec<_>>(),
+        ["x", "y"]
+    );
+    for row in rows {
+        assert_eq!(row.links[0].columns, 0..1);
+        assert_eq!(row.links[0].destination, "https://example.com/letters");
+    }
 }
 
 #[test]
