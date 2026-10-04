@@ -47,3 +47,19 @@ fn cursor_uses_the_same_cell_wrapping_as_the_rendered_text() {
         (vec!["a".into(), "中".into()], 1, 0)
     );
 }
+
+#[test]
+fn english_punctuation_preserves_pasted_memory_text() {
+    let mut editor = Editor::new(String::new(), String::new());
+    for character in "中文，".chars() {
+        let mut key = KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE);
+        key.set_english_punctuation(true);
+        editor.handle_key(key);
+    }
+    editor.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    editor.paste("粘贴，".into());
+    let mut key = KeyEvent::new(KeyCode::Char('。'), KeyModifiers::NONE);
+    key.set_english_punctuation(true);
+    editor.handle_key(key);
+    assert_eq!(editor.values(), ("中文,", "粘贴，."));
+}

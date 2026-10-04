@@ -1,9 +1,9 @@
 use super::ChatComposer;
 use super::ChatComposerOutcome;
+use crate::keymap::KeyEvent;
 use crate::thread::composer::ChatInput;
 use crate::thread::composer::ChatInputItem;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
 #[test]

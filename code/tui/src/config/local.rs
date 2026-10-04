@@ -16,6 +16,60 @@ pub(crate) struct LocalTuiSettings {
 }
 
 impl LocalTuiSettings {
+    pub(crate) fn read_punctuation(&self) -> Result<super::PunctuationSettings, String> {
+        let snapshot = self
+            .store
+            .read_snapshot()
+            .map_err(|error| error.to_string())?;
+        let mut settings = super::TuiSettings::from_tui(
+            &ash_app_server_protocol::protocol::config::FrontendConfigDto(snapshot.values.tui),
+        )?
+        .punctuation;
+        settings.revision = snapshot.revision;
+        Ok(settings)
+    }
+
+    pub(crate) fn write_punctuation(
+        &self,
+        candidate: super::PunctuationSettings,
+    ) -> Result<super::PunctuationSettings, String> {
+        let snapshot = self
+            .store
+            .read_snapshot()
+            .map_err(|error| error.to_string())?;
+        if candidate.revision != snapshot.revision {
+            return Err("local configuration changed; reopen Config and try again".into());
+        }
+        let mut tui = snapshot.values.tui;
+        tui.insert("englishPunctuation".into(), Value::Bool(candidate.enabled));
+        super::TuiSettings::from_tui(
+            &ash_app_server_protocol::protocol::config::FrontendConfigDto(tui.clone()),
+        )?;
+        let saved = self
+            .store
+            .apply(ConfigCommandRequest {
+                command_id: crate::client::new_command_id("tui-english-punctuation"),
+                expected_revision: snapshot.revision,
+                command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    tui: Patch::Value(tui),
+                    ..PreferencesUpdate::default()
+                }),
+            })
+            .map_err(|error| match error {
+                ConfigCommandError::Config(error) => error.to_string(),
+                ConfigCommandError::CommandConflict => {
+                    "local configuration update conflicts with an earlier command".into()
+                }
+                ConfigCommandError::RevisionConflict { .. } => {
+                    "local configuration changed; reopen Config and try again".into()
+                }
+            })?;
+        Ok(super::PunctuationSettings {
+            revision: saved.revision,
+            ..candidate
+        })
+    }
+
     pub(crate) fn read_grouping(&self) -> Result<crate::sessions::SessionGrouping, String> {
         let snapshot = self
             .store

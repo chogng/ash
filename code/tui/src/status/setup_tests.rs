@@ -148,7 +148,7 @@ fn setup_aligns_items_and_switches_without_details() {
     );
 
     let collapsed_rows = state.body_rows(100);
-    state.handle_key(crossterm::event::KeyEvent::new(
+    state.handle_key(crate::keymap::KeyEvent::new(
         crossterm::event::KeyCode::Right,
         crossterm::event::KeyModifiers::NONE,
     ));

@@ -1,8 +1,8 @@
 use super::super::editor::TextArea;
 use super::VimOutcome;
 use super::VimState;
+use crate::keymap::KeyEvent;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
 #[test]

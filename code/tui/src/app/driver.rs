@@ -124,6 +124,7 @@ impl AppDriver {
     ) -> Result<Self, String> {
         let persisted_session_grouping = resources.local_settings.read_grouping()?;
         app.set_session_grouping(persisted_session_grouping);
+        app.set_punctuation_settings(resources.local_settings.read_punctuation()?);
         let local_settings_changes = resources.local_settings.subscribe_changes();
         let initial =
             ScheduledCommand::new(HostCommand::RefreshClipboardImageAvailability.into(), &app);
@@ -203,6 +204,12 @@ impl AppDriver {
     pub(super) fn poll_request_completions(&mut self) -> bool {
         let local_settings_changed = self.local_settings_changes.try_iter().last().is_some();
         if local_settings_changed {
+            match self.local_settings.read_punctuation() {
+                Ok(settings) => self.app.set_punctuation_settings(settings),
+                Err(error) => self
+                    .app
+                    .update(crate::host::Event::TopTipNoticeShown(error)),
+            }
             match self.local_settings.read() {
                 Ok(settings) => self.app.set_dictation_shortcut_settings(settings),
                 Err(error) => self

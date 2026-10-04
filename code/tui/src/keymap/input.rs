@@ -7,7 +7,7 @@ use ash_keybinding::ShortcutModifiers;
 use ash_keybinding::parse_key_sequence;
 use ash_keybinding::serialize_key_sequence;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
+use crossterm::event::KeyEvent as TerminalKeyEvent;
 use crossterm::event::KeyModifiers;
 
 pub(crate) fn key_event_to_config_key(key: &KeyEvent) -> Result<String, String> {
@@ -82,4 +82,76 @@ fn logical_key_name(code: KeyCode) -> Option<String> {
         _ => return None,
     };
     Some(name.to_owned())
+}
+
+/// Carries the original terminal key through shortcut resolution and a separate text policy.
+/// Only text insertion consumes the converted character, so punctuation cannot become a command.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct KeyEvent {
+    event: TerminalKeyEvent,
+    english_punctuation: bool,
+}
+
+impl KeyEvent {
+    pub(crate) fn new(code: KeyCode, modifiers: KeyModifiers) -> Self {
+        TerminalKeyEvent::new(code, modifiers).into()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_with_kind(
+        code: KeyCode,
+        modifiers: KeyModifiers,
+        kind: crossterm::event::KeyEventKind,
+    ) -> Self {
+        TerminalKeyEvent::new_with_kind(code, modifiers, kind).into()
+    }
+
+    pub(crate) fn set_english_punctuation(&mut self, enabled: bool) {
+        self.english_punctuation = enabled;
+    }
+
+    pub(crate) fn text_character(self, character: char) -> char {
+        if !self.english_punctuation {
+            return character;
+        }
+        match character {
+            '，' => ',',
+            '。' | '．' => '.',
+            '；' => ';',
+            '：' => ':',
+            '！' => '!',
+            '？' => '?',
+            '（' => '(',
+            '）' => ')',
+            '［' => '[',
+            '］' => ']',
+            '｛' => '{',
+            '｝' => '}',
+            '“' | '”' | '＂' => '"',
+            '‘' | '’' | '＇' => '\'',
+            _ => character,
+        }
+    }
+}
+
+impl From<TerminalKeyEvent> for KeyEvent {
+    fn from(event: TerminalKeyEvent) -> Self {
+        Self {
+            event,
+            english_punctuation: false,
+        }
+    }
+}
+
+impl std::ops::Deref for KeyEvent {
+    type Target = TerminalKeyEvent;
+    fn deref(&self) -> &Self::Target {
+        &self.event
+    }
+}
+
+impl std::ops::DerefMut for KeyEvent {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.event
+    }
 }

@@ -12,6 +12,7 @@ pub(crate) struct TuiSettings {
     pub(crate) status_line: crate::status::StatusLineSettings,
     pub(crate) keymap: crate::keymap_setup::KeymapSettings,
     pub(crate) dictation: super::DictationShortcutSettings,
+    pub(crate) punctuation: PunctuationSettings,
 }
 
 impl TuiSettings {
@@ -28,6 +29,7 @@ impl TuiSettings {
                         | "statusLine"
                         | "statusLineStyle"
                         | "showGitChangesAsDiff"
+                        | "englishPunctuation"
                         | "dictationShortcutEnabled"
                         | "dictationShortcut"
                 )
@@ -43,6 +45,7 @@ impl TuiSettings {
         let status_line = crate::status::StatusLineSettings::from_tui(section)?;
         let keymap = crate::keymap_setup::settings_from_tui(section)?;
         let dictation = super::DictationShortcutSettings::from_tui(&section.0)?;
+        let punctuation = PunctuationSettings::from_tui(section)?;
         crate::models::pinned_models(section)?;
         crate::theme::preference_from_tui(section)
             .map_err(|message| crate::nls::localize(terminal.language(), &message).into_owned())?;
@@ -54,6 +57,7 @@ impl TuiSettings {
             status_line,
             keymap,
             dictation,
+            punctuation,
         })
     }
 }
@@ -257,3 +261,39 @@ impl Default for TerminalSettings {
 #[cfg(test)]
 #[path = "settings_tests.rs"]
 mod tests;
+
+/// Profile-local input preference; its revision never comes from the connected server.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct PunctuationSettings {
+    pub(crate) enabled: bool,
+    pub(crate) revision: ash_config::ConfigRevision,
+}
+
+impl PunctuationSettings {
+    fn from_tui(section: &FrontendConfigDto) -> Result<Self, String> {
+        let enabled = match section.0.get("englishPunctuation") {
+            None => false,
+            Some(serde_json::Value::Bool(enabled)) => *enabled,
+            Some(_) => {
+                return Err(crate::nls::localize(
+                    TerminalSettings::from_tui(section)?.language(),
+                    "Invalid [tui].englishPunctuation: expected boolean.",
+                )
+                .into_owned());
+            }
+        };
+        Ok(Self {
+            enabled,
+            ..Self::default()
+        })
+    }
+}
+
+impl Default for PunctuationSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            revision: ash_config::ConfigRevision::INITIAL,
+        }
+    }
+}

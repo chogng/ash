@@ -12,10 +12,10 @@ use super::vim::ChatInputMode;
 use super::vim::VimOutcome;
 use super::vim::VimState;
 use super::wrap::wrap_input;
+use crate::keymap::KeyEvent;
 use ash_protocol::SkillRef;
 use ash_slash_commands::SlashCommandOrigin;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use message_history::MessageHistory;
 use message_history::MessageHistoryKind as InputKind;
@@ -837,7 +837,7 @@ impl ChatInput {
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 let mut query = self.history.query().unwrap().to_owned();
-                query.push(ch);
+                query.push(key.text_character(ch));
                 self.history.search(query)
             }
             KeyCode::Backspace => {

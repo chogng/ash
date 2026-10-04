@@ -1,6 +1,6 @@
 use super::editor::TextArea;
+use crate::keymap::KeyEvent;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use serde::Deserialize;
 use serde::Serialize;

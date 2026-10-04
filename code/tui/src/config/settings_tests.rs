@@ -347,3 +347,40 @@ fn obsolete_pointer_settings_do_not_affect_screen_mode_and_are_removed_on_write(
         }
     }
 }
+
+#[test]
+fn english_punctuation_defaults_off_and_rejects_non_boolean_values() {
+    assert!(
+        !TuiSettings::from_tui(&FrontendConfigDto(BTreeMap::new()))
+            .unwrap()
+            .punctuation
+            .enabled
+    );
+    let section = FrontendConfigDto(BTreeMap::from([(
+        "englishPunctuation".into(),
+        serde_json::json!(true),
+    )]));
+    assert!(TuiSettings::from_tui(&section).unwrap().punctuation.enabled);
+    // The terminal settings writer must preserve this independently owned preference.
+    assert_eq!(
+        TerminalSettings::default()
+            .write_to_tui(&section)
+            .unwrap()
+            .0["englishPunctuation"],
+        true
+    );
+    for value in [
+        serde_json::json!("true"),
+        serde_json::json!(1),
+        serde_json::Value::Null,
+    ] {
+        let section = FrontendConfigDto(BTreeMap::from([
+            ("language".into(), serde_json::json!("zh-CN")),
+            ("englishPunctuation".into(), value),
+        ]));
+        assert_eq!(
+            TuiSettings::from_tui(&section).err().unwrap(),
+            "[tui].englishPunctuation 必须是布尔值。"
+        );
+    }
+}

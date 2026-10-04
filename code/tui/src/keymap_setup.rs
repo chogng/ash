@@ -2,6 +2,7 @@
 
 mod settings;
 
+use crate::keymap::KeyEvent;
 use crate::keymap::KeymapActionSnapshot;
 use crate::keymap::bindings;
 use crate::keymap::compose_config_chord;
@@ -16,7 +17,6 @@ use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionOutcome;
 use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 pub(crate) use settings::KeymapCaptureMode;
 pub(crate) use settings::KeymapEdit;

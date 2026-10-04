@@ -3,6 +3,7 @@ use crate::app::App;
 use crate::app::command::AppCommand;
 use crate::app::command_panel::CommandPanel;
 use crate::keymap::AppChordMatch;
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::sessions::Command as SessionCommand;
 use crate::sessions::SessionManagerInputOutcome;
@@ -18,7 +19,6 @@ use crate::widgets::navigation::Navigation;
 use crate::widgets::overlay::DetailOverlay;
 use crate::widgets::overlay::OverlayInputOutcome;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use ratatui::layout::Rect;
@@ -451,10 +451,9 @@ pub(in crate::app) fn handle_transcript_selection_key(app: &mut App, key: KeyEve
     let navigation_key = if key.modifiers == KeyModifiers::CONTROL
         && matches!(key.code, KeyCode::Up | KeyCode::Down)
     {
-        KeyEvent {
-            modifiers: KeyModifiers::NONE,
-            ..key
-        }
+        let mut navigation_key = key;
+        navigation_key.modifiers = KeyModifiers::NONE;
+        navigation_key
     } else {
         key
     };

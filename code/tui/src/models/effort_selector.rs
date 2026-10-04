@@ -1,12 +1,12 @@
 //! A staged effort edit. The catalog owns the levels; the host owns dismissal and placement.
 
+use crate::keymap::KeyEvent;
 use crate::render::InteractionState;
 use crate::render::RenderContext;
 use crate::widgets::key_hint::KeyHints;
 use ash_protocol::CollaborationMode;
 use ash_protocol::ReasoningEffort;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use ratatui::Frame;
 use ratatui::layout::Alignment;

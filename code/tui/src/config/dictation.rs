@@ -1,7 +1,7 @@
+use crate::keymap::KeyEvent;
 use ash_config::ConfigRevision;
 use ash_keybinding::parse_key_sequence;
 use ash_keybinding::serialize_key_sequence;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use serde_json::Value;
 use std::collections::BTreeMap;

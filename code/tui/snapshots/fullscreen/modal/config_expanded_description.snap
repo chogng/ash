@@ -26,7 +26,7 @@ expression: frame_text(&app)
             │  Automatic Git fetch                                              Off + │             
             │  Git fetch interval                                              180s   │             
             │  Git branch marker                                          Powerline   │             
-            │  3 more below                                                           │             
+            │  4 more below                                                           │             
   ──────────└─────────────────────────────────────────────────────────────────────────┘───────────  
   > Build anything                                                                                  
   ─────────────────────────────────────────────────────────────────────────────── Automatic model   

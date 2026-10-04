@@ -1,8 +1,8 @@
 use super::TextPrompt;
 use super::TextPromptOutcome;
 use super::TextPromptSpec;
+use crate::keymap::KeyEvent;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
 #[test]

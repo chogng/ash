@@ -1,10 +1,10 @@
 use super::App;
 use super::AppCommand;
+use crate::keymap::KeyEvent;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use serde_json::Value;
 use serde_json::json;

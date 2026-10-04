@@ -1,3 +1,4 @@
+use crate::keymap::KeyEvent;
 use crate::render::test_context;
 use crate::theme::ThemePickerCatalog;
 use crate::theme::ThemePickerChoice;
@@ -7,7 +8,6 @@ use crate::theme::theme_choices;
 use crate::widgets::list_selection::ListSelectionInputOutcome;
 use crate::widgets::list_selection::ListSelectionState;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use crossterm::event::MouseButton;
 use crossterm::event::MouseEvent;

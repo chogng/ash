@@ -1,7 +1,7 @@
 //! Keys shared by focused lists and read-only surfaces, never by text editors.
 
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

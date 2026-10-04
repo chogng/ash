@@ -1,5 +1,6 @@
 //! Read-only detail layer rendered without changing the current screen layout.
 
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::render::RenderContext;
 use crate::render::bottom_anchored_area;
@@ -7,7 +8,6 @@ use crate::render::horizontal_margin;
 use crate::widgets::detail_list;
 use crate::widgets::detail_list::DetailList;
 use crate::widgets::navigation::Navigation;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use ratatui::Frame;
 use ratatui::layout::Rect;

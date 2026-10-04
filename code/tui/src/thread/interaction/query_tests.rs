@@ -3,8 +3,8 @@ use super::QueryChoice;
 use super::QueryCustomAnswer;
 use super::QueryOutcome;
 use super::QueryQuestion;
+use crate::keymap::KeyEvent;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -217,4 +217,34 @@ fn question(id: &str) -> QueryQuestion {
         }],
         custom_answer: QueryCustomAnswer::Unavailable,
     }
+}
+
+#[test]
+fn english_punctuation_converts_typed_custom_answers_and_preserves_paste() {
+    let mut query = Query::new(vec![QueryQuestion {
+        id: "custom".into(),
+        header: "Choice".into(),
+        prompt: "Choose".into(),
+        choices: vec![],
+        custom_answer: QueryCustomAnswer::Allowed,
+    }])
+    .unwrap();
+    query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    query.handle_paste("粘贴，".into());
+    for character in "中文。".chars() {
+        let modifiers = if character == '。' {
+            KeyModifiers::SHIFT
+        } else {
+            KeyModifiers::NONE
+        };
+        let mut key = KeyEvent::new(KeyCode::Char(character), modifiers);
+        key.set_english_punctuation(true);
+        query.handle_key(key);
+    }
+    let QueryOutcome::Completed(answers) =
+        query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("custom answer must submit")
+    };
+    assert_eq!(answers[0].value, "粘贴，中文.");
 }

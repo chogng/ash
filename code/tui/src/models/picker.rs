@@ -1,3 +1,4 @@
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionAdjustment;
@@ -18,7 +19,6 @@ use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_protocol::ReasoningEffort;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use std::collections::BTreeMap;

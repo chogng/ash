@@ -1,6 +1,7 @@
 mod request;
 pub(crate) use request::execute;
 
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::nls::Language;
 use crate::nls::Text;
@@ -18,7 +19,6 @@ use ash_app_server_protocol::protocol::environment::SessionDirSelector;
 use ash_app_server_protocol::protocol::language::LanguageServerDescriptorDto;
 use ash_app_server_protocol::protocol::marketplace::MarketplaceCapabilityKindDto;
 use ash_app_server_protocol::protocol::marketplace::MarketplaceSearchParams;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use std::collections::BTreeMap;
 

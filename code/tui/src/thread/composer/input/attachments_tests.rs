@@ -75,11 +75,11 @@ fn deleting_an_image_relabels_remaining_placeholders() {
     let mut textarea = TextArea::new();
     attachments.try_attach_pasted_path(&mut textarea, first_path.to_string_lossy().as_ref());
     attachments.try_attach_pasted_path(&mut textarea, second_path.to_string_lossy().as_ref());
-    textarea.handle_key(crossterm::event::KeyEvent::new(
+    textarea.handle_key(crate::keymap::KeyEvent::new(
         crossterm::event::KeyCode::Home,
         crossterm::event::KeyModifiers::NONE,
     ));
-    textarea.handle_key(crossterm::event::KeyEvent::new(
+    textarea.handle_key(crate::keymap::KeyEvent::new(
         crossterm::event::KeyCode::Delete,
         crossterm::event::KeyModifiers::NONE,
     ));

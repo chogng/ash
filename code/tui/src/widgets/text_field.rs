@@ -1,3 +1,4 @@
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::render::RenderContext;
 use crate::widgets::key_hint::KeyHints;
@@ -5,7 +6,6 @@ use crate::widgets::search_box;
 use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::search_box::SearchBoxState;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use ratatui::Frame;

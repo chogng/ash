@@ -3,9 +3,9 @@ use super::ListSelectionInputOutcome;
 use super::ListSelectionItemId;
 use super::ListSelectionModel;
 use super::ListSelectionState;
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::widgets::key_hint::KeyHints;
-use crossterm::event::KeyEvent;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

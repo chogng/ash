@@ -1,8 +1,8 @@
 use super::SearchBoxInputOutcome;
 use super::SearchBoxModel;
 use super::SearchBoxState;
+use crate::keymap::KeyEvent;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
 fn key(code: KeyCode) -> KeyEvent {

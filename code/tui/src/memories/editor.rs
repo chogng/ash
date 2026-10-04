@@ -1,7 +1,7 @@
+use crate::keymap::KeyEvent;
 use crate::render::RenderContext;
 use crate::render::{InteractionState, interaction_style, selection_marker};
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -96,7 +96,7 @@ impl Editor {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                self.paste(ch.to_string())
+                self.paste(key.text_character(ch).to_string())
             }
             _ => self.input_mut().handle_key(key),
         }

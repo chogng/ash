@@ -3,6 +3,7 @@ pub(crate) use request::execute;
 pub(crate) use request::start;
 
 use crate::client::new_command_id;
+use crate::keymap::KeyEvent;
 use crate::render::RenderContext;
 use crate::widgets::key_hint::KeyHints;
 use crate::widgets::list_selection::item_style;
@@ -18,7 +19,6 @@ use crate::widgets::tab_list::TabListItem;
 use crate::widgets::tab_list::TabListState;
 use ash_protocol::CommandId;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use ratatui::Frame;

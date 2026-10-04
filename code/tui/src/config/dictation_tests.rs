@@ -1,6 +1,6 @@
 use super::DictationShortcutSettings;
+use crate::keymap::KeyEvent;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use serde_json::json;
 use std::collections::BTreeMap;

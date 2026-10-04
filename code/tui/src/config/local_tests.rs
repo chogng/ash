@@ -103,3 +103,40 @@ fn dashboard_grouping_rejects_invalid_local_candidates_without_overwriting_the_d
     );
     assert_eq!(std::fs::read_to_string(&path).unwrap(), document);
 }
+
+#[test]
+fn english_punctuation_persists_locally_reloads_and_rejects_revision_conflicts() {
+    let profile = tempfile::tempdir().unwrap();
+    let path = profile.path().join("config.toml");
+    let database = profile.path().join("state.db");
+    std::fs::write(&path, "[tui]\nshowTips = false\ntheme = \"graphite\"\n").unwrap();
+    let store = LocalTuiSettings::open(profile.path(), &database).unwrap();
+    let mut candidate = store.read_punctuation().unwrap();
+    assert!(!candidate.enabled);
+    candidate.enabled = true;
+    let saved = store.write_punctuation(candidate).unwrap();
+    assert!(saved.revision > candidate.revision);
+    let reopened = LocalTuiSettings::open(profile.path(), &database).unwrap();
+    assert_eq!(reopened.read_punctuation().unwrap(), saved);
+    let document = std::fs::read_to_string(&path).unwrap();
+    assert!(document.contains("showTips = false"));
+    assert!(document.contains("theme = \"graphite\""));
+    assert!(store.write_punctuation(candidate).is_err());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), document);
+    std::fs::write(
+        &path,
+        document.replace("englishPunctuation = true", "englishPunctuation = false"),
+    )
+    .unwrap();
+    assert!(!store.read_punctuation().unwrap().enabled);
+    let valid = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(
+        &path,
+        valid.replace("englishPunctuation = false", "englishPunctuation = \"yes\""),
+    )
+    .unwrap();
+    assert!(store.read_punctuation().is_err());
+    let invalid = std::fs::read_to_string(&path).unwrap();
+    assert!(store.write_punctuation(saved).is_err());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), invalid);
+}

@@ -25,6 +25,7 @@ pub(crate) use editor::ProviderApiKeyEdit;
 pub(crate) use editor::advisor_choices;
 pub(crate) use editor::config_choices;
 pub(crate) use editor::with_dictation_shortcut;
+pub(crate) use editor::with_punctuation_settings;
 pub(crate) use local::LocalTuiSettings;
 pub(crate) use request::execute;
 #[cfg(test)]
@@ -32,6 +33,7 @@ pub(crate) use request::execute;
 pub(crate) use request::set_settings;
 pub(crate) use settings::GlyphSet;
 pub(crate) use settings::KeyHintStyle;
+pub(crate) use settings::PunctuationSettings;
 pub(crate) use settings::TerminalSettings;
 pub(crate) use settings::TuiSettings;
 
@@ -49,6 +51,7 @@ pub(crate) struct ConfigEditResult {
 
 /// A completed configuration operation delivered to the TUI state owner.
 pub(crate) enum Event {
+    PunctuationSaved(PunctuationSettings, ConfigChoices),
     DictationShortcutSaved(DictationShortcutSettings, ConfigChoices),
     AdvisorOpened {
         root: ConfigChoices,

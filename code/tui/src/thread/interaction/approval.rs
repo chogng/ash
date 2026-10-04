@@ -1,3 +1,4 @@
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::thread::ThreadRequestKind;
 use crate::thread::ThreadRequestResponse;
@@ -11,7 +12,6 @@ use ash_protocol::AgentResponse;
 use ash_protocol::RequestId;
 use ash_protocol::TurnId;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

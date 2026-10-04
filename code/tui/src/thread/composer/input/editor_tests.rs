@@ -1,6 +1,6 @@
 use super::TextArea;
+use crate::keymap::KeyEvent;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::layout::Position;
 use std::time::Duration;
@@ -365,7 +365,7 @@ fn arrows_and_backspace_treat_joined_emoji_as_one_editing_unit() {
     assert_eq!(editor.cursor(), 1);
     editor.move_right();
     assert_eq!(editor.cursor(), 12);
-    editor.handle_key(crossterm::event::KeyEvent::new(
+    editor.handle_key(crate::keymap::KeyEvent::new(
         crossterm::event::KeyCode::Backspace,
         crossterm::event::KeyModifiers::NONE,
     ));

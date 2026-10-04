@@ -1,9 +1,9 @@
 use super::draw;
+use crate::keymap::KeyEvent;
 use crate::render::test_context;
 use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::search_box::SearchBoxState;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;

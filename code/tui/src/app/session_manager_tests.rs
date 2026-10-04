@@ -1,6 +1,7 @@
 use super::App;
 use super::AppCommand;
 use super::frame::draw;
+use crate::keymap::KeyEvent;
 use crate::sessions::Command as SessionCommand;
 use crate::sessions::Event as SessionEvent;
 use crate::thread::Event as ThreadEvent;
@@ -13,7 +14,6 @@ use ash_protocol::SessionThread;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadStatus;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;

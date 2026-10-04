@@ -2,6 +2,7 @@ use super::App;
 use super::AppCommand;
 use crate::config::Event as ConfigEvent;
 use crate::config::TerminalSettings;
+use crate::keymap::KeyEvent;
 use crate::terminal::ScreenMode;
 use crate::thread::Command as ThreadCommand;
 use crate::thread::Event as ThreadEvent;
@@ -12,7 +13,6 @@ use ash_protocol::Turn;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
 fn key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) -> Option<AppCommand> {

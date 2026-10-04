@@ -23,6 +23,7 @@ pub(crate) use bindings::fixed_bindings;
 pub(crate) use chords::AppChordMatch;
 #[cfg(test)]
 use chords::KEY_CHORD_TIMEOUT;
+pub(crate) use input::KeyEvent;
 pub(crate) use input::compose_config_chord;
 pub(crate) use input::key_event_to_config_key;
 

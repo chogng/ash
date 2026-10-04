@@ -1,12 +1,12 @@
 use crate::app::App;
 use crate::config::KeyHintStyle;
 use crate::config::TerminalSettings;
+use crate::keymap::KeyEvent;
 use crate::nls::Language;
 use crate::status::StatusLineItem;
 use crate::status::StatusLineSettings;
 use crate::terminal::ScreenMode;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;

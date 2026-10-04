@@ -1,5 +1,6 @@
 use super::top_tip::TopTip;
 use crate::host::clipboard::ClipboardImageFingerprint;
+use crate::keymap::KeyEvent;
 use crate::status::StatusLineModel;
 use crate::thread::ThreadRequestIdentity;
 use crate::thread::ThreadRequestKind;
@@ -18,7 +19,6 @@ use crate::thread::interaction::query::QueryOutcome;
 use crate::thread::interaction::query::QueryView;
 use ash_protocol::RequestId;
 use ash_protocol::TurnId;
-use crossterm::event::KeyEvent;
 use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

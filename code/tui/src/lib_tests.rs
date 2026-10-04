@@ -1,6 +1,7 @@
 use super::app::App;
 use super::app::Status;
 use crate::app::apply_active_turn_snapshot;
+use crate::keymap::KeyEvent;
 use crate::thread::Command as ThreadCommand;
 use crate::thread::Event as ThreadEvent;
 use crate::thread::composer::chat_input_catalog_snapshot;
@@ -30,7 +31,6 @@ use ash_protocol::Turn;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use std::path::PathBuf;
 

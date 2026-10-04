@@ -12,6 +12,7 @@ use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImage;
 use crate::host::clipboard::ClipboardImageFingerprint;
+use crate::keymap::KeyEvent;
 use crate::keymap_setup::Command as KeymapCommand;
 use crate::keymap_setup::Event as KeymapEvent;
 use crate::keymap_setup::KeymapEditIntent;
@@ -95,7 +96,6 @@ use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
 use ash_terminal_detection::ColorLevel;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -4401,5 +4401,124 @@ fn removed_dictate_command_is_visible_before_session_creation() {
             ScreenMode::Inline => "removed_dictate_before_session_inline",
         };
         crate::tui_assert_snapshot!(app = &app; snapshot, frame);
+    }
+}
+
+#[test]
+fn english_punctuation_preserves_chinese_paste_and_drafts_in_both_modes() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut terminal = TerminalSettings::default();
+        terminal.set_screen_mode(mode);
+        app.update(ConfigEvent::SettingsReceived(terminal));
+        app.insert_text("已有，");
+        app.set_punctuation_settings(crate::config::PunctuationSettings {
+            enabled: true,
+            ..Default::default()
+        });
+        for character in "中文，。；：！？（）［］｛｝“”‘’＂＇．Ａ１　 、……——《》".chars()
+        {
+            assert_eq!(
+                app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE)),
+                None
+            );
+        }
+        assert_eq!(
+            app.input(),
+            "已有，中文,.;:!?()[]{}\"\"''\"'.Ａ１　 、……——《》"
+        );
+        app.handle_paste("粘贴，。".into());
+        assert!(app.input().ends_with("粘贴，。"));
+        let before = app.input().to_owned();
+        app.set_punctuation_settings(crate::config::PunctuationSettings::default());
+        app.handle_key(KeyEvent::new(KeyCode::Char('，'), KeyModifiers::NONE));
+        assert_eq!(app.input(), format!("{before}，"));
+    }
+}
+
+#[test]
+fn english_punctuation_does_not_trigger_shortcuts_or_vim_commands() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut terminal = TerminalSettings::default();
+        terminal.set_screen_mode(mode);
+        app.update(ConfigEvent::SettingsReceived(terminal));
+        app.set_punctuation_settings(crate::config::PunctuationSettings {
+            enabled: true,
+            ..Default::default()
+        });
+        app.handle_key(KeyEvent::new(KeyCode::Char('？'), KeyModifiers::NONE));
+        assert_eq!(app.input(), "?");
+        assert!(app.command_panel().is_none());
+        terminal.set_input_mode(ChatInputMode::Vim);
+        app.update(ConfigEvent::SettingsReceived(terminal));
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('？'), KeyModifiers::NONE));
+        assert_eq!(app.input(), "?");
+        assert_eq!(app.thread_presentations.active().input.prompt(), "N ");
+        app.handle_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('，'), KeyModifiers::SHIFT));
+        assert_eq!(app.input(), "?,");
+    }
+}
+
+#[test]
+fn english_punctuation_config_toggles_and_resets_in_both_modes_in_chinese() {
+    use crate::widgets::list_selection::ListSelectionItemId;
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut terminal = TerminalSettings::default();
+        terminal.set_screen_mode(mode);
+        terminal.set_language(Language::Chinese);
+        app.update(ConfigEvent::SettingsReceived(terminal));
+        let choices = || {
+            config_choices(
+                &empty_config_snapshot(),
+                &ProviderListResult { providers: vec![] },
+                terminal,
+                StatusLineSettings::default(),
+            )
+        };
+        app.update(ConfigEvent::EditorOpened(choices()));
+        for _ in 0..24 {
+            if app.list_selection().unwrap().selected_item().unwrap().id()
+                == Some(&ListSelectionItemId::new("english-punctuation"))
+            {
+                break;
+            }
+            app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        }
+        assert_eq!(
+            app.list_selection().unwrap().selected_item().unwrap().id(),
+            Some(&ListSelectionItemId::new("english-punctuation"))
+        );
+        assert_eq!(
+            app.list_selection()
+                .unwrap()
+                .selected_item()
+                .unwrap()
+                .label(),
+            "输入时使用英文标点"
+        );
+        let Some(AppCommand::SetPunctuationSettings(settings)) =
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        else {
+            panic!("the toggle must save to the local profile")
+        };
+        assert!(settings.enabled);
+        assert!(!app.punctuation_settings.enabled);
+        app.update(ConfigEvent::PunctuationSaved(settings, choices()));
+        assert!(app.punctuation_settings.enabled);
+        crate::tui_assert_snapshot!(app = &app; "config_english_punctuation_chinese", render_dictation_frame(&app));
+        let Some(AppCommand::SetPunctuationSettings(reset)) =
+            app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))
+        else {
+            panic!("reset must use the local profile")
+        };
+        assert!(!reset.enabled);
+        app.update(ConfigEvent::PunctuationSaved(reset, choices()));
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('，'), KeyModifiers::NONE));
+        assert_eq!(app.input(), "，");
     }
 }

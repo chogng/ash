@@ -12,6 +12,7 @@ use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImage;
 use crate::host::clipboard::ClipboardImageAvailability;
 use crate::host::clipboard::ClipboardImageFingerprint;
+use crate::keymap::KeyEvent;
 use crate::models::Event as ModelEvent;
 use crate::models::ModelSummary;
 use crate::render::test_context;
@@ -57,7 +58,6 @@ use ash_protocol::ThreadStatus;
 use ash_slash_commands::SlashCommandArgumentMode;
 use ash_slash_commands::SlashCommandDefinition;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -2679,7 +2679,7 @@ fn issue_manager_reserves_page_height_when_the_transcript_is_empty() {
     let mut app = App::new();
     app.insert_text("/issue");
     assert!(matches!(
-        app.handle_key(crossterm::event::KeyEvent::new(
+        app.handle_key(crate::keymap::KeyEvent::new(
             crossterm::event::KeyCode::Enter,
             crossterm::event::KeyModifiers::NONE
         )),

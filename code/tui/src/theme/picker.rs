@@ -74,7 +74,7 @@ impl ThemePicker {
             .state()
     }
 
-    pub(crate) fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> ThemePickerOutcome {
+    pub(crate) fn handle_key(&mut self, key: crate::keymap::KeyEvent) -> ThemePickerOutcome {
         let outcome = self
             .pages
             .last_mut()

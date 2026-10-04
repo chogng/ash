@@ -337,10 +337,10 @@ fn configured_model_is_selected_when_picker_opens() {
 
 #[test]
 fn model_hints_follow_selected_pin_state_capabilities_and_search_focus() {
+    use crate::keymap::KeyEvent;
     use crate::widgets::list_selection::ListSelection;
     use crate::widgets::list_selection::ListSelectionOutcome;
     use crossterm::event::KeyCode;
-    use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
 
     let mut adjustable = catalog_entry("openai", "adjustable", "Adjustable");
@@ -404,11 +404,13 @@ fn malformed_or_duplicate_pins_are_rejected() {
 
 #[test]
 fn model_controls_share_keyboard_and_pointer_actions_without_consuming_search_input() {
+    use crate::keymap::KeyEvent;
     use crate::widgets::list_selection::ListSelection;
     use crate::widgets::list_selection::ListSelectionClick;
     use crate::widgets::list_selection::ListSelectionOutcome;
     use crate::widgets::list_selection::ListSelectionPointerTarget;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
     let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
     entry.maximum_context_window = Some(1_050_000);
@@ -547,12 +549,14 @@ fn assert_model_controls(width: u16, language: crate::nls::Language) {
 
 #[test]
 fn other_provider_controls_follow_capabilities_and_saved_preferences() {
+    use crate::keymap::KeyEvent;
     use crate::widgets::list_selection::ListSelection;
     use crate::widgets::list_selection::ListSelectionClick;
     use crate::widgets::list_selection::ListSelectionItemId;
     use crate::widgets::list_selection::ListSelectionOutcome;
     use crate::widgets::list_selection::ListSelectionPointerTarget;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
     let rows = [
         (
             "anthropic",
@@ -713,13 +717,13 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
 
 #[test]
 fn model_tab_cycles_only_editable_settings_resets_on_movement_and_removes_none() {
+    use crate::keymap::KeyEvent;
     use crate::widgets::list_selection::ListSelection;
     use crate::widgets::list_selection::ListSelectionItemFocus;
     use crate::widgets::list_selection::ListSelectionItemId;
     use crate::widgets::list_selection::ListSelectionOutcome;
     use ash_protocol::ReasoningEffort;
     use crossterm::event::KeyCode;
-    use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
     let mut models = Vec::new();
     for bits in (0..8).rev() {
@@ -853,13 +857,13 @@ fn model_tab_cycles_only_editable_settings_resets_on_movement_and_removes_none()
 
 #[test]
 fn model_settings_refresh_keeps_field_focus_and_unconfirmed_effort() {
+    use crate::keymap::KeyEvent;
     use crate::widgets::list_selection::ListSelection;
     use crate::widgets::list_selection::ListSelectionItemFocus;
     use crate::widgets::list_selection::ListSelectionItemId;
     use crate::widgets::list_selection::ListSelectionOutcome;
     use ash_protocol::ReasoningEffort;
     use crossterm::event::KeyCode;
-    use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
     let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
     entry.supported_reasoning_efforts = vec![ReasoningEffort::Low, ReasoningEffort::High];
@@ -910,12 +914,12 @@ fn model_settings_refresh_keeps_field_focus_and_unconfirmed_effort() {
 
 #[test]
 fn model_tab_focus_is_visible_for_each_setting_in_chinese_and_on_narrow_terminals() {
+    use crate::keymap::KeyEvent;
     use crate::widgets::list_selection::ListSelection;
     use crate::widgets::list_selection::ListSelectionPointerTarget;
     use crate::widgets::list_selection::pointer_target_at;
     use ash_protocol::ReasoningEffort;
     use crossterm::event::KeyCode;
-    use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
     use ratatui::layout::Position;
     use ratatui::layout::Rect;

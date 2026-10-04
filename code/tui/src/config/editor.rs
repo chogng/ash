@@ -44,6 +44,7 @@ pub(crate) struct ConfigEdit {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
+    SetPunctuation(super::PunctuationSettings),
     ToggleDictationShortcut(DictationShortcutSettings),
     EditDictationShortcut(DictationShortcutSettings),
     OpenAdvisor,
@@ -319,7 +320,7 @@ impl ConfigEditor {
         self.replace(spec);
     }
 
-    pub(crate) fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> ConfigEditorOutcome {
+    pub(crate) fn handle_key(&mut self, key: crate::keymap::KeyEvent) -> ConfigEditorOutcome {
         if let Some(panel) = &mut self.network_panel {
             let outcome = panel.handle_key(key);
             if matches!(outcome, ConfigEditorOutcome::Dismiss) {
@@ -472,7 +473,7 @@ impl ConfigEditor {
         if general && click == crate::widgets::list_selection::ListSelectionClick::Single {
             return ConfigEditorOutcome::Consumed;
         }
-        self.handle_key(crossterm::event::KeyEvent::new(
+        self.handle_key(crate::keymap::KeyEvent::new(
             crossterm::event::KeyCode::Enter,
             crossterm::event::KeyModifiers::NONE,
         ))
@@ -483,7 +484,8 @@ impl ConfigEditor {
         let action = self.selection.action(id)?;
         matches!(
             action,
-            ConfigSelectionAction::SetVimMode(_)
+            ConfigSelectionAction::SetPunctuation(_)
+                | ConfigSelectionAction::SetVimMode(_)
                 | ConfigSelectionAction::SetLanguage(_)
                 | ConfigSelectionAction::SetUpdatePolicy(_)
                 | ConfigSelectionAction::SetShowGitChangesAsDiff(_)
@@ -502,6 +504,7 @@ impl ConfigEditor {
         let defaults = TerminalSettings::default();
         let status_defaults = StatusLineSettings::default();
         match &mut action {
+            ConfigSelectionAction::SetPunctuation(settings) => settings.enabled = false,
             ConfigSelectionAction::SetMemories(edit) => {
                 for state in &mut edit.server_config.features {
                     if state.feature == features::Feature::Memories {
@@ -915,6 +918,38 @@ impl ConfigEditor {
                 .with_binding(bindings::CANCEL),
         });
     }
+}
+
+pub(crate) fn with_punctuation_settings(
+    choices: &mut ConfigChoices,
+    settings: super::PunctuationSettings,
+    language: Language,
+) {
+    let id = ListSelectionItemId::new("english-punctuation");
+    choices.actions.insert(
+        id.clone(),
+        ConfigSelectionAction::SetPunctuation(super::PunctuationSettings {
+            enabled: !settings.enabled,
+            ..settings
+        }),
+    );
+    let label = nls::localize(language, "English punctuation").into_owned();
+    let description = nls::localize(
+        language,
+        "Convert typed punctuation; preserve Chinese text and pasted punctuation",
+    )
+    .into_owned();
+    choices.model.append_item(
+        0,
+        ListSelectionItem::new(label.as_str())
+            .with_id(id)
+            .with_details(description.as_str())
+            .with_columns(
+                label.as_str(),
+                description.as_str(),
+                nls::localize(language, switch_value(settings.enabled)),
+            ),
+    );
 }
 
 pub(crate) fn with_dictation_shortcut(

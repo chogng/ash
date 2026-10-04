@@ -52,7 +52,7 @@ CLI 将已初始化的 `AppServerSession` 和 `TuiOptions` 交给 `run`：
 
 输入、请求完成和后端控制事件不能相互长期阻塞。同一资源的写请求保序，不同资源可以并发；中断、批准和回答使用独立控制请求。具体功能解释自己的响应，事件循环只负责转交和调度。
 
-`with_remote_dir` 只设置远程展示目录并关闭本地文件补全；导出仍受本机目录约束。`with_profile_root` 指定本机主题和听写设置的 profile，其余设置从后端读取。终端启动失败保留原始 I/O 错误，附加终端检测结果，并恢复已获取的终端状态。
+`with_remote_dir` 只设置远程展示目录并关闭本地文件补全；导出仍受本机目录约束。`with_profile_root` 指定本机主题、标点输入和听写设置的 profile，其余设置从后端读取。终端启动失败保留原始 I/O 错误，附加终端检测结果，并恢复已获取的终端状态。
 
 ## 输入如何提交
 
@@ -200,6 +200,7 @@ TUI 设置保存在 `<profile>/config.toml` 的根级 `[tui]` 表：
 screenMode = "fullscreen"
 theme = "graphite"
 inputMode = "standard"
+englishPunctuation = false
 keyHintStyle = "contrast"
 glyphSet = "powerline"
 memoryDiagnostics = false
@@ -212,9 +213,11 @@ dictationShortcut = "ctrl+g"
 sessionGrouping = "status"
 ```
 
-`screenMode` 的配置、即时切换和终端行为见 [LAYOUT.md](LAYOUT.md#屏幕模式配置)。除听写快捷键与仪表盘分组外，TUI 设置沿用 App Server 的 Config 读写通路。
+`screenMode` 的配置、即时切换和终端行为见 [LAYOUT.md](LAYOUT.md#屏幕模式配置)。除标点输入、听写快捷键与仪表盘分组外，TUI 设置沿用 App Server 的 Config 读写通路。
 
 `/dashboard` 打开会话总览。页面打开即聚焦列表，按 `g`，依次切换状态、模型、项目分组；列表顶部显示当前方式。`sessionGrouping` 只接受 `project`、`status`、`model`，缺省为 `status`，保存到运行 TUI 的本机 profile，重启后在首次显示前恢复；连接远端 App Server 不改变保存位置。项目分组使用 Session 执行目录，远端目录同时区分主机；模型分组使用 Session 主线程的当前模型，子线程或 fork 的模型不改变所在分组。未指定目录或模型的 Session 明确显示在对应未指定组。置顶任务排在前面，已归档任务独立收起；切换方式保留选中的 Session。保存失败保留当前分组并提示错误，外部有效配置修改会更新两种终端模式，无效修改保留当前分组。焦点、展开状态和滚动位置不写入此配置。
+
+`englishPunctuation` 缺省为 `false`，可在 Config 的“通用”页切换“输入时使用英文标点”，按 `r` 恢复关闭。开启后，TUI 文本框将新键入的 `，。．；：！？（）［］｛｝“”‘’＂＇` 转成对应英文标点；中文文字、字母、数字、空格和 `、……——《》` 保持原样。转换在文字插入时发生，快捷键、Vim 操作、粘贴、听写、历史记录和已有草稿不变。该值保存到运行 TUI 的本机 profile，切换远程连接不改变偏好，保存成功和有效外部修改后立即生效；无效值或保存冲突保留当前有效设置。
 
 `dictationShortcutEnabled` 缺省为 `false`。开启后，在 TUI 任意页面按 `dictationShortcut` 开始或停止听写，结果写入当前草稿；输入框聚焦时按 Enter 会结束听写，等最终文字返回后发送。`/voice` 不受开关影响。默认键为 `ctrl+g`，可在 Config 修改为一个带修饰键的组合键。两个值读写运行 TUI 的本机 profile，连接远端 App Server 不改变它们。macOS 的媒体键不作为默认听写键。
 

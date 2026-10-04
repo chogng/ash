@@ -1,3 +1,4 @@
+use crate::keymap::KeyEvent;
 use crate::thread::composer::ChatInput;
 use crate::thread::composer::ChatInputOutcome;
 use crate::thread::composer::ChatInputQueueOutcome;
@@ -9,7 +10,6 @@ use crate::thread::composer::Steer;
 use crate::thread::composer::SteerId;
 use crate::thread::composer::UnknownSlashCommand;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
 pub(crate) struct ChatComposerView<'a> {

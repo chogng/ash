@@ -429,7 +429,7 @@ pub(in crate::app) fn handle_mouse(
                     }
                     return MouseAction::Selection(None);
                 }
-                let key = crossterm::event::KeyEvent::new(
+                let key = crate::keymap::KeyEvent::new(
                     if mouse.kind == MouseEventKind::ScrollUp {
                         crossterm::event::KeyCode::Up
                     } else {
@@ -473,7 +473,7 @@ pub(in crate::app) fn handle_mouse(
                 app.fullscreen.focus_page();
                 app.fullscreen.sessions.handle_manager_key(
                     &app.sessions,
-                    crossterm::event::KeyEvent::new(
+                    crate::keymap::KeyEvent::new(
                         if mouse.kind == MouseEventKind::ScrollUp {
                             crossterm::event::KeyCode::Up
                         } else {
@@ -663,7 +663,7 @@ pub(super) fn activate_pointer_item(
             }
             super::navigation::handle_queue_key(
                 app,
-                crossterm::event::KeyEvent::new(
+                crate::keymap::KeyEvent::new(
                     crossterm::event::KeyCode::Enter,
                     crossterm::event::KeyModifiers::NONE,
                 ),
@@ -735,7 +735,7 @@ fn scroll_pointer_item(
     };
     app.fullscreen.clear();
     app.handle_key_in_area(
-        crossterm::event::KeyEvent::new(key, crossterm::event::KeyModifiers::NONE),
+        crate::keymap::KeyEvent::new(key, crossterm::event::KeyModifiers::NONE),
         area,
     )
 }

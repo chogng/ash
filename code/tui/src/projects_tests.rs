@@ -1,5 +1,6 @@
 use super::RootSelectionAction;
 use super::root_choices;
+use crate::keymap::KeyEvent;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionOutcome;
 use ash_app_server_protocol::protocol::projects::ProjectDto;
@@ -9,7 +10,6 @@ use ash_file_access::DirId;
 use ash_file_access::EnvId;
 use ash_protocol::ProjectId;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use std::path::Path;
 

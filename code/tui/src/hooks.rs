@@ -1,5 +1,6 @@
 //! Read-only Hook event browser and configuration handoff.
 
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::nls::Text;
 use crate::widgets::detail_list::{DetailList, DetailListRow};
@@ -23,7 +24,6 @@ use ash_app_server_protocol::protocol::config::HookListParams;
 use ash_app_server_protocol::protocol::config::HookListResult;
 use ash_app_server_protocol::protocol::config::HookSourceDto;
 use ash_protocol::SessionId;
-use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 use std::collections::BTreeMap;
 use std::path::PathBuf;

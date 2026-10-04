@@ -121,3 +121,18 @@ fn masked_field_hides_both_confirmed_and_edited_values_in_debug_and_rendering() 
     assert!(!output.contains("secret"));
     assert!(output.contains('•'));
 }
+
+#[test]
+fn english_punctuation_applies_only_to_typed_text_in_an_editing_field() {
+    let mut field = TextField::new("原文，", SearchBoxModel::new("Name"));
+    let mut punctuation = key(KeyCode::Char('；'));
+    punctuation.set_english_punctuation(true);
+    assert_eq!(field.handle_key(punctuation), TextFieldOutcome::Unhandled);
+    assert_eq!(field.query(), "原文，");
+    field.handle_key(key(KeyCode::Enter));
+    field.handle_key(punctuation);
+    field.handle_paste("粘贴。".into());
+    assert_eq!(field.query(), "原文，;粘贴。");
+    field.handle_key(key(KeyCode::Esc));
+    assert_eq!(field.query(), "原文，");
+}

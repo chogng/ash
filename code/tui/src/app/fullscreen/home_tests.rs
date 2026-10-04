@@ -1,9 +1,9 @@
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::fullscreen::pointer::PointerTarget;
+use crate::keymap::KeyEvent;
 use crate::sessions::Command as SessionCommand;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use crossterm::event::MouseButton;
 use crossterm::event::MouseEvent;

@@ -1,6 +1,7 @@
 use super::App;
 use super::AppCommand;
 use super::CommandPanel;
+use crate::keymap::KeyEvent;
 use crate::lsp;
 use crate::marketplace;
 use crate::thread::composer::ChatInputItem;
@@ -23,7 +24,6 @@ use ash_app_server_protocol::protocol::marketplace::MarketplaceInstalledPackageD
 use ash_app_server_protocol::protocol::marketplace::MarketplacePackageDetailsDto;
 use ash_app_server_protocol::protocol::marketplace::MarketplaceSearchParams;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;

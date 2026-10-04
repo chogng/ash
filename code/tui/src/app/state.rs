@@ -35,6 +35,7 @@ use crate::host::mermaid_preview::MermaidPreviews;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
 use crate::keymap::AppKeymapContext;
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::keymap_setup::Command as KeymapCommand;
 use crate::keymap_setup::Event as KeymapEvent;
@@ -118,7 +119,6 @@ use ash_protocol::ApprovalMode;
 use ash_protocol::Turn;
 use ash_protocol::TurnId;
 use ash_terminal_detection::ColorLevel;
-use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 use std::path::Path;
 use std::path::PathBuf;
@@ -162,6 +162,7 @@ pub(crate) struct App {
     /// The final notification and stop response may carry the same text in either order.
     dictation_final_received: bool,
     dictation_next_id: u64,
+    pub(super) punctuation_settings: crate::config::PunctuationSettings,
     pub(super) dictation_shortcut_settings: crate::config::DictationShortcutSettings,
     pub(super) chat_panel: ChatPanel,
     pub(super) app_keymap: AppKeymap,
@@ -199,6 +200,7 @@ impl App {
             dictation_submission_ready: false,
             dictation_final_received: false,
             dictation_next_id: 0,
+            punctuation_settings: crate::config::PunctuationSettings::default(),
             dictation_shortcut_settings: crate::config::DictationShortcutSettings::default(),
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
@@ -302,6 +304,7 @@ impl App {
             dictation_submission_ready: false,
             dictation_final_received: false,
             dictation_next_id: 0,
+            punctuation_settings: crate::config::PunctuationSettings::default(),
             dictation_shortcut_settings: crate::config::DictationShortcutSettings::default(),
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
@@ -408,6 +411,8 @@ impl App {
         now: Instant,
         terminal_area: Rect,
     ) -> Option<AppCommand> {
+        let mut key = key;
+        key.set_english_punctuation(self.punctuation_settings.enabled);
         if key.kind == crossterm::event::KeyEventKind::Press
             && key.code == crossterm::event::KeyCode::Enter
             && key.modifiers.is_empty()
@@ -932,6 +937,9 @@ impl App {
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::Subscription(
                 command,
             )) => self.begin_subscription_command(command),
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetPunctuation(
+                settings,
+            )) => Some(AppCommand::SetPunctuationSettings(settings)),
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::SetTerminalSettings(edit)
                 | ConfigSelectionAction::SetUpdatePolicy(edit),
@@ -1459,7 +1467,19 @@ impl App {
         self.dictation_shortcut_settings = settings;
     }
 
+    pub(super) fn set_punctuation_settings(
+        &mut self,
+        settings: crate::config::PunctuationSettings,
+    ) {
+        self.punctuation_settings = settings;
+    }
+
     fn decorate_config(&self, choices: &mut crate::config::ConfigChoices) {
+        crate::config::with_punctuation_settings(
+            choices,
+            self.punctuation_settings,
+            self.language(),
+        );
         crate::config::with_dictation_shortcut(
             choices,
             &self.dictation_shortcut_settings,
@@ -2835,6 +2855,9 @@ impl App {
                 self.update(ConfigEvent::SettingsReceived(result.terminal));
                 self.update(StatusEvent::LineSettingsReceived(result.status_line));
             }
+            AppEvent::Config(ConfigEvent::PunctuationSaved(settings, _)) => {
+                self.set_punctuation_settings(settings);
+            }
             AppEvent::Config(ConfigEvent::DictationShortcutSaved(settings, _)) => {
                 self.set_dictation_shortcut_settings(settings);
             }
@@ -3223,6 +3246,12 @@ impl App {
                 self.sessions.input.set_input_mode(settings.input_mode());
                 self.thread_presentations
                     .set_input_mode(settings.input_mode());
+            }
+            ConfigEvent::PunctuationSaved(settings, mut choices) => {
+                self.set_punctuation_settings(settings);
+                self.decorate_config(&mut choices);
+                self.panels_mut().replace_config(choices);
+                self.set_status(Status::Ready);
             }
             ConfigEvent::DictationShortcutSaved(settings, mut choices) => {
                 self.set_dictation_shortcut_settings(settings);

@@ -4,6 +4,7 @@ use super::Command;
 use super::SessionsState;
 use super::manager::SessionManagerState;
 use super::manager::SessionManagerTarget;
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::thread::preview::ConversationPreview;
 use crate::widgets::navigation::Navigation;
@@ -11,7 +12,6 @@ use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
 use ash_app_server_protocol::protocol::session::SessionThreadReadResult;
 use ash_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use ash_protocol::SessionId;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use std::time::Instant;
 

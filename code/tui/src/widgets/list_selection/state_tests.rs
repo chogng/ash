@@ -5,12 +5,12 @@ use super::ListSelectionItem;
 use super::ListSelectionItemId;
 use super::ListSelectionModel;
 use super::ListSelectionState;
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionPointerTarget;
 use crate::widgets::search_box::SearchBoxModel;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
 fn state() -> ListSelectionState {

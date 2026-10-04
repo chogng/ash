@@ -1,12 +1,12 @@
 use super::DirSelectionAction;
 use super::choices;
+use crate::keymap::KeyEvent;
 use crate::widgets::list_selection::ListSelectionInputOutcome;
 use crate::widgets::list_selection::ListSelectionState;
 use ash_app_server_protocol::protocol::environment::PermissionDto;
 use ash_app_server_protocol::protocol::environment::SessionDirDto;
 use ash_app_server_protocol::protocol::environment::SessionDirListResult;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use std::path::PathBuf;
 

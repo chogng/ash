@@ -183,9 +183,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     Event::FocusGained => {
                         Some(HostCommand::RefreshClipboardImageAvailability.into())
                     }
-                    Event::Key(key) if key.kind != KeyEventKind::Release => {
-                        driver.app_mut().handle_key_in_area(key, terminal.area()?)
-                    }
+                    Event::Key(key) if key.kind != KeyEventKind::Release => driver
+                        .app_mut()
+                        .handle_key_in_area(key.into(), terminal.area()?),
                     Event::Mouse(mouse)
                         if driver.app().screen_mode() == terminal::ScreenMode::Fullscreen =>
                     {

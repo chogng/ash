@@ -1,6 +1,7 @@
 use super::SessionSelectionAction;
 use super::session_choices;
 use super::session_choices_at;
+use crate::keymap::KeyEvent;
 use crate::widgets::list_selection::ListSelectionInputOutcome;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionState;
@@ -11,7 +12,6 @@ use ash_protocol::SessionThread;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadStatus;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
 #[test]

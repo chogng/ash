@@ -203,7 +203,7 @@ fn effort_command_opens_the_supported_selector_without_loading() {
     config.model_reasoning_effort = entry.supported_reasoning_efforts.last().copied();
     driver.model_picker.update_config(config);
     driver.app_mut().insert_text("/effort");
-    let command = driver.app_mut().handle_key(crossterm::event::KeyEvent::new(
+    let command = driver.app_mut().handle_key(crate::keymap::KeyEvent::new(
         crossterm::event::KeyCode::Enter,
         crossterm::event::KeyModifiers::NONE,
     ));
@@ -555,7 +555,7 @@ fn dashboard_grouping_saves_and_restores_at_driver_startup_independently_of_serv
         .focus();
     let command = driver
         .app_mut()
-        .handle_key(crossterm::event::KeyEvent::new(
+        .handle_key(crate::keymap::KeyEvent::new(
             crossterm::event::KeyCode::Char('g'),
             crossterm::event::KeyModifiers::NONE,
         ))
@@ -601,7 +601,7 @@ fn dashboard_grouping_saves_and_restores_at_driver_startup_independently_of_serv
     std::fs::create_dir(&local_path).unwrap();
     let command = restarted
         .app_mut()
-        .handle_key(crossterm::event::KeyEvent::new(
+        .handle_key(crate::keymap::KeyEvent::new(
             crossterm::event::KeyCode::Char('g'),
             crossterm::event::KeyModifiers::NONE,
         ))
@@ -661,4 +661,101 @@ fn dashboard_grouping_saves_and_restores_at_driver_startup_independently_of_serv
         crate::sessions::SessionGrouping::Model
     );
     assert_eq!(restarted.app().status(), &crate::app::Status::Ready);
+}
+
+#[test]
+#[cfg(feature = "in-process-tests")]
+fn english_punctuation_driver_uses_local_profile_and_applies_external_changes() {
+    let _guard = crate::test_support::in_process_test_guard();
+    let server_root = tempfile::tempdir().unwrap();
+    let local_root = tempfile::tempdir().unwrap();
+    let path = local_root.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "[tui]\nenglishPunctuation = false\nshowTips = false\n",
+    )
+    .unwrap();
+    let session = AppServerSession::start_embedded(InProcessClientOptions::new(
+        server_root.path(),
+        ClientInfo {
+            name: "ash-tui-punctuation-test".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+    let mut client = session.client();
+    let catalog = client.list_models().unwrap();
+    let remote_config = client.read_config().unwrap();
+    let runtime = state::StateRuntime::open(local_root.path()).unwrap();
+    let store = Arc::new(
+        crate::config::LocalTuiSettings::open(local_root.path(), runtime.database_path()).unwrap(),
+    );
+    let make_driver = || {
+        AppDriver::new(
+            App::new(),
+            client.clone(),
+            None,
+            AppDriverResources {
+                file_search: None,
+                host_dir_root: local_root.path().into(),
+                theme_resource: crate::theme::ThemeResource::in_product_root(
+                    local_root.path().into(),
+                    None,
+                ),
+                server_slash_commands: Vec::new(),
+                plugins_enabled: false,
+                local_settings: Arc::clone(&store),
+                model_picker: crate::models::ModelPickerData::new(
+                    catalog.clone(),
+                    remote_config.clone(),
+                ),
+            },
+        )
+        .unwrap()
+    };
+    let mut driver = make_driver();
+    let mut candidate = driver.app().punctuation_settings;
+    candidate.enabled = true;
+    driver.execute(scheduled(AppCommand::SetPunctuationSettings(candidate)));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !driver
+        .requests
+        .is_idle(Some(crate::app::requests::RequestKey::Config))
+    {
+        driver.poll_request_completions();
+        assert!(
+            std::time::Instant::now() < deadline,
+            "local save did not reach the App"
+        );
+        std::thread::yield_now();
+    }
+    assert!(driver.app().punctuation_settings.enabled);
+    assert_eq!(driver.app().status(), &crate::app::Status::Ready);
+    assert!(store.read_punctuation().unwrap().enabled);
+    assert_eq!(client.clone().read_config().unwrap().tui, remote_config.tui);
+    drop(driver);
+    let mut restarted = make_driver();
+    assert!(restarted.app().punctuation_settings.enabled);
+    restarted.poll_request_completions();
+    let document = std::fs::read_to_string(&path).unwrap();
+    assert!(document.contains("showTips = false"));
+    std::fs::write(
+        &path,
+        document.replace("englishPunctuation = true", "englishPunctuation = false"),
+    )
+    .unwrap();
+    assert!(!store.read_punctuation().unwrap().enabled);
+    restarted.poll_request_completions();
+    assert!(!restarted.app().punctuation_settings.enabled);
+    restarted.app_mut().insert_text("草稿，");
+    let valid = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(
+        &path,
+        valid.replace("englishPunctuation = false", "englishPunctuation = \"bad\""),
+    )
+    .unwrap();
+    assert!(store.read_punctuation().is_err());
+    restarted.poll_request_completions();
+    assert!(!restarted.app().punctuation_settings.enabled);
+    assert_eq!(restarted.app().input(), "草稿，");
 }

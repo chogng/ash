@@ -5,6 +5,7 @@ use super::QUEUE_HINTS;
 use super::SESSION_ARCHIVE;
 use super::TAB_PREVIOUS;
 use super::TABS;
+use crate::keymap::KeyEvent;
 use crate::widgets::key_hint::KeyHints;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionInputOutcome;
@@ -14,7 +15,6 @@ use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::search_box::SearchBoxModel;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 

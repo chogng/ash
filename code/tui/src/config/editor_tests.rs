@@ -3,6 +3,7 @@ use super::config_choices;
 use super::provider_api_key_prompt;
 use crate::config::ConfigSelectionAction;
 use crate::config::TerminalSettings;
+use crate::keymap::KeyEvent;
 use crate::nls::Language;
 use crate::status::StatusLineSettings;
 use crate::test_support::empty_config_snapshot;
@@ -15,7 +16,6 @@ use ash_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
 fn providers() -> ProviderListResult {

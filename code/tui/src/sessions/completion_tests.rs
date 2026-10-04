@@ -92,10 +92,12 @@ fn fork_command_preserves_selection_and_starts_only_when_prompted() {
     use super::SessionCompletion;
     use crate::app::App;
     use crate::app::AppCommand;
+    use crate::keymap::KeyEvent;
     use ash_app_server_client::{AppServerSession, InProcessClientOptions};
     use ash_app_server_protocol::protocol::common::ClientInfo;
     use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
     let _guard = crate::test_support::in_process_test_guard();
     let root = tempfile::tempdir().unwrap();
     let session = AppServerSession::start_embedded(

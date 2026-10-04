@@ -91,10 +91,10 @@ fn thread(messages: &[&str]) -> Thread {
 
 #[test]
 fn message_checkpoints_offer_before_and_after_and_keep_unavailable_rows_read_only() {
+    use crate::keymap::KeyEvent;
     use crate::widgets::list_selection::ListSelection;
     use crate::widgets::list_selection::ListSelectionOutcome;
     use crossterm::event::KeyCode;
-    use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
     let mut thread = thread(&["Investigate the failure"]);
     let turn_id = thread.turns[0].turn_id.clone();

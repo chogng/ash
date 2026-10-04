@@ -1,10 +1,10 @@
 use super::DetailOverlay;
 use super::draw;
+use crate::keymap::KeyEvent;
 use crate::render::test_context;
 use crate::widgets::detail_list::DetailList;
 use crate::widgets::detail_list::DetailListRow;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;

@@ -1,3 +1,4 @@
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
@@ -8,7 +9,6 @@ use crate::thread::composer::ChatInput;
 use crate::thread::composer::ChatSubmission;
 use crate::thread::composer::QueuedChatInput;
 use crate::widgets::navigation::Navigation;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use ratatui::Frame;
 use ratatui::layout::Rect;

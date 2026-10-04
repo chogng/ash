@@ -199,7 +199,7 @@ impl Panel {
             .replace(model(items, self.language, true), actions);
     }
 
-    pub fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> super::ConfigEditorOutcome {
+    pub fn handle_key(&mut self, key: crate::keymap::KeyEvent) -> super::ConfigEditorOutcome {
         if REFRESH.matches(key) && self.selection.state().items_focused() && self.pending.is_none()
         {
             return super::ConfigEditorOutcome::Network(self.begin(self.operation));

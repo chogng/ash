@@ -1,10 +1,10 @@
+use crate::keymap::KeyEvent;
 use crate::test_support::empty_config_snapshot;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_protocol::protocol::provider::ProviderListResult;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use std::collections::VecDeque;
 use std::sync::Arc;

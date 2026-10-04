@@ -42,6 +42,22 @@ impl AppDriver {
                 }
             }
 
+            AppCommand::SetPunctuationSettings(settings) => {
+                let store = std::sync::Arc::clone(&self.local_settings);
+                let mut client = self.client.clone();
+                self.requests.spawn_presentation(
+                    request_key,
+                    "ash-tui-set-english-punctuation",
+                    move || {
+                        let saved = store.write_punctuation(settings)?;
+                        let choices = config::request::read_config_choices(&mut client)
+                            .map_err(|error| error.to_string())?;
+                        Ok::<_, String>(config::Event::PunctuationSaved(saved, choices))
+                    },
+                    &mut self.app,
+                    origin,
+                );
+            }
             AppCommand::SetDictationShortcutSettings(settings) => {
                 let store = std::sync::Arc::clone(&self.local_settings);
                 let mut client = self.client.clone();

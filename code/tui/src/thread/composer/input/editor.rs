@@ -1,8 +1,8 @@
 //! Unicode-safe chat_input editor state and atomic element handling.
 
+use crate::keymap::KeyEvent;
 use crate::render::display_width;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::layout::Position;
 use std::ops::Range;
@@ -124,6 +124,7 @@ impl TextArea {
                 TextAreaOutcome::Consumed
             }
             KeyCode::Char(character) => {
+                let character = key.text_character(character);
                 let mut encoded = [0; 4];
                 self.insert_text(character.encode_utf8(&mut encoded));
                 TextAreaOutcome::Consumed

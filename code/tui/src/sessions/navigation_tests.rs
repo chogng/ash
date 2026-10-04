@@ -1,6 +1,7 @@
 use super::SessionManagerInputOutcome;
 use super::SessionNavigation;
 use super::SessionScreen;
+use crate::keymap::KeyEvent;
 use crate::sessions::Command;
 use crate::sessions::SessionsState;
 use ash_protocol::Session;
@@ -9,7 +10,6 @@ use ash_protocol::SessionManagerStatus;
 use ash_protocol::SessionStatus;
 use ash_protocol::ThreadId;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 

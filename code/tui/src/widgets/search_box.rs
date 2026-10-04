@@ -1,5 +1,5 @@
+use crate::keymap::KeyEvent;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use std::fmt;
@@ -138,6 +138,7 @@ impl SearchBoxState {
                 SearchBoxInputOutcome::Ignored
             }
             KeyCode::Char(character) if !character.is_ascii_control() => {
+                let character = key.text_character(character);
                 self.query.insert(self.cursor, character);
                 self.cursor += character.len_utf8();
                 SearchBoxInputOutcome::QueryChanged

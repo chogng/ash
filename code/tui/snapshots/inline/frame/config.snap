@@ -9,7 +9,6 @@ expression: text(&buffer)
     ▝  ▘                                                                                            
                                                                                                     
                                                                                                     
-                                                                                                    
 ─ Config ───────────────────────────────────────────────────────────────────────────────────────────
                                                                                                     
    General    Providers    Issues    Network                                                        
@@ -30,6 +29,7 @@ expression: text(&buffer)
   Git fetch interval                                                                        180s    
   Git branch marker                                                                    Powerline    
   Advisor                                                                                    Off    
+  English punctuation                                                                        off +  
   Dictation shortcut                                                                         off    
   Dictation key                                                                           ctrl+g    
                                                                                                     

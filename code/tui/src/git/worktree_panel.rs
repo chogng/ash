@@ -1,3 +1,4 @@
+use crate::keymap::KeyEvent;
 use crate::nls::Language;
 use crate::nls::Text;
 use crate::widgets::key_hint::KeyHints;
@@ -14,7 +15,6 @@ use ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode;
 use ash_app_server_protocol::protocol::git::GitWorktreeListResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeStateDto;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use std::collections::BTreeMap;

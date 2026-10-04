@@ -1,10 +1,10 @@
 use crate::app::App;
 use crate::app::command_panel::CommandPanel;
 use crate::config::TerminalSettings;
+use crate::keymap::KeyEvent;
 use crate::nls::Language;
 use crate::terminal::ScreenMode;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;

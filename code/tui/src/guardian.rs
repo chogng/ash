@@ -1,3 +1,4 @@
+use crate::keymap::KeyEvent;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
@@ -11,7 +12,6 @@ use ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironment
 use ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentSaveParams;
 use ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentScanParams;
 use ash_app_server_protocol::protocol::approval_environment::ApprovalEnvironmentScope;
-use crossterm::event::KeyEvent;
 use guardian_environment::EntryInput;
 use guardian_environment::EntryKind;
 use guardian_environment::EnvironmentEntry;

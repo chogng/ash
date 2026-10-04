@@ -158,11 +158,11 @@ fn fixed_footer_and_tip_stay_bounded_on_short_terminals() {
 
 use crate::app::App;
 use crate::app::AppCommand;
+use crate::keymap::KeyEvent;
 use crate::status::StatusLineItem;
 use crate::status::StatusLineSettings;
 use crate::terminal::ScreenMode;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;

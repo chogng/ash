@@ -1,7 +1,7 @@
 use crate::app::command_panel::CommandPanel;
 use crate::app::command_panel::CommandPanelOutcome;
+use crate::keymap::KeyEvent;
 use crate::widgets::panel::PanelLayout;
-use crossterm::event::KeyEvent;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::Line;

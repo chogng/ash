@@ -1,3 +1,4 @@
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
@@ -14,8 +15,8 @@ use ash_protocol::RequestUserInputResponse;
 use ash_protocol::TurnId;
 use ash_protocol::UserInputAnswer;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -158,8 +159,10 @@ impl Query {
         }
         if let Some(custom_answer) = self.custom_answer.as_mut() {
             return match key.code {
-                KeyCode::Char(character) if key.modifiers.is_empty() => {
-                    custom_answer.push(character);
+                KeyCode::Char(character)
+                    if key.modifiers.is_empty() || key.modifiers == KeyModifiers::SHIFT =>
+                {
+                    custom_answer.push(key.text_character(character));
                     QueryOutcome::Consumed
                 }
                 KeyCode::Backspace if key.modifiers.is_empty() => {

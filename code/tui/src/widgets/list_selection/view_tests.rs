@@ -1,5 +1,6 @@
 use super::draw_body_with_pointer;
 use super::draw_tabs;
+use crate::keymap::KeyEvent;
 use crate::render::horizontal_margin;
 use crate::render::test_context;
 use crate::widgets::list_selection::ListSelectionGroup;
@@ -10,7 +11,6 @@ use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::search_box::SearchBoxModel;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;

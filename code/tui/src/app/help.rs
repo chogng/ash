@@ -191,7 +191,7 @@ impl Shortcuts {
 
     pub(crate) fn handle_key(
         &mut self,
-        key: crossterm::event::KeyEvent,
+        key: crate::keymap::KeyEvent,
         area: ratatui::layout::Rect,
     ) -> super::command_panel::CommandPanelOutcome {
         use super::command_panel::CommandPanelOutcome;

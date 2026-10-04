@@ -1,8 +1,8 @@
+use crate::keymap::KeyEvent;
 use crate::keymap::bindings;
 use crate::keymap::bindings::Keybinding;
 use crate::nls::Text;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use ratatui::style::Color;
 
