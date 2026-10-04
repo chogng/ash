@@ -1,3 +1,4 @@
+import { onUnexpectedError } from '../../../../base/common/errors.js';
 import './media/activityBarPart.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button, type ButtonOptions } from '../../../../base/browser/ui/button/button.js';
@@ -13,21 +14,25 @@ import { WorkbenchPart } from '../../../../workbench/browser/part.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { ActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { autorun } from '../../../../base/common/observable.js';
+import { autorun, observableValue } from '../../../../base/common/observable.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { ISessionsPageService, type ISessionsPageDescriptor } from '../../../common/pages.js';
+import { IMenuService } from '../../../../platform/actions/common/actions.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { Menus } from '../../menus.js';
 
 export interface ActivityBarPartDelegate {
-	focusList(): void;
 	showAccountMenu(anchor: HTMLElement): void;
 }
 
 /** Primary view selector and account entry for the Sessions window. */
 export class ActivityBarPart extends WorkbenchPart {
 	private readonly navigation: ActionBar;
-	private readonly pageActions = new Map<string, IAction>();
-	private draggedPageId: string | undefined;
+	private readonly actions = new Map<string, ActivityAction>();
+	private order: string[];
+	private orderedActions: ActivityAction[] = [];
+	private draggedActionId: string | undefined;
 
 	private compact = false;
 
@@ -41,57 +46,66 @@ export class ActivityBarPart extends WorkbenchPart {
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IHoverService private readonly hoverService: IHoverService,
-		@ISessionsPageService private readonly pages: ISessionsPageService,
+		@IMenuService menus: IMenuService,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@IStorageService private readonly storage: IStorageService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super(container, 'activitybar');
 		this.domNode.classList.replace('ash-workbench-activitybar', 'ash-sessions-activitybar');
 		this.contentDomNode.classList.add('ash-sessions-activity-content');
+		this.order = this.readOrder();
+		const menu = this._register(menus.createMenu(Menus.ActivityBar, contextKeys));
 		const top = h(container.ownerDocument, 'div');
 		top.className = 'ash-sessions-activity-top';
 		const bottom = h(container.ownerDocument, 'div');
 		bottom.className = 'ash-sessions-activity-bottom';
 
 		this.navigation = this._register(new ActionBar(top, {
-			ariaLabel: localize('sessions.activity.navigation', 'Pages'),
+			ariaLabel: localize('sessions.activity.navigation', 'Navigation'),
 			orientation: 'vertical',
-			actionViewItemProvider: action => instantiation.createInstance(PageActivityActionViewItem, action, pages.getPage(action.id)),
+			actionViewItemProvider: action => instantiation.createInstance(ActivityActionViewItem, action as ActivityAction),
 			dragAndDrop: {
-				canDrop: () => this.draggedPageId !== undefined,
+				canDrop: () => this.draggedActionId !== undefined,
 				onDragStart: (action, event) => {
-					this.draggedPageId = action.id;
+					this.draggedActionId = action.id;
 					event.dataTransfer!.setData('text/plain', action.id);
 					event.dataTransfer!.effectAllowed = 'move';
 				},
 				onDrop: (target, position) => {
-					const id = this.draggedPageId!;
-					this.draggedPageId = undefined;
-					this.pages.movePage(id, target?.id, position);
+					const id = this.draggedActionId!;
+					this.draggedActionId = undefined;
+					this.moveAction(id, target?.id, position);
 				},
-				onDragEnd: () => { this.draggedPageId = undefined; },
+				onDragEnd: () => { this.draggedActionId = undefined; },
 			},
 		}));
-		this.navigation.element.classList.add('ash-sessions-page-navigation');
-		this._register(autorun(reader => {
-			const registered = pages.pages.read(reader);
-			for (const id of this.pageActions.keys()) {
-				if (!registered.some(page => page.id === id)) {
-					this.pageActions.delete(id);
-				}
+		this.navigation.element.classList.add('ash-sessions-navigation');
+		const updateActions = (): void => {
+			const entries = menu.getActions().flatMap(([, actions]) => actions);
+			for (const id of this.actions.keys()) {
+				if (!entries.some(action => action.id === id)) { this.actions.delete(id); }
 			}
-			for (const page of registered) {
-				if (!this.pageActions.has(page.id)) {
-					this.pageActions.set(page.id, {
-						id: page.id, label: localize(page.titleKey, page.title), tooltip: localize(page.titleKey, page.title), icon: page.icon, enabled: true,
-						run: () => {
-							pages.openPage(page.id);
-							if (page.layout.conversation === 'chat') { delegate.focusList(); }
-						},
-					});
-				}
+			for (const action of entries) {
+				const retained = this.actions.get(action.id);
+				if (retained) { retained.current.set(action); }
+				else { this.actions.set(action.id, new ActivityAction(action)); }
 			}
-			this.navigation.setActions(registered.map(page => this.pageActions.get(page.id)!));
+			const registered = entries.map(action => this.actions.get(action.id)!);
+			this.orderedActions = [
+				...this.order.filter(id => this.actions.has(id)).map(id => this.actions.get(id)!),
+				...registered.filter(action => !this.order.includes(action.id)),
+			];
+			this.navigation.setActions(this.orderedActions);
+		};
+		this._register(menu.onDidChange(updateActions));
+		this._register(storage.onDidChangeValue(event => {
+			if (event.external && event.scope === StorageScope.PROFILE && event.key === 'sessions.activityBar.actionOrder') {
+				this.order = this.readOrder();
+				updateActions();
+			}
 		}));
+		updateActions();
 
 		const accountLabel = localize('workbench.accounts', 'Accounts');
 		const accountButton = this.createActivityButton(bottom, {
@@ -138,7 +152,7 @@ export class ActivityBarPart extends WorkbenchPart {
 			getAnchor: () => event.type === 'contextmenu'
 				? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: this.domNode.ownerDocument.defaultView ?? undefined }
 				: event.target as HTMLElement,
-			getActions: () => Separator.join([...this.getPageOrderActions(event.target as Element)], [...this.getContextMenuActions()]),
+			getActions: () => Separator.join([...this.getOrderActions(event.target as Element)], [...this.getContextMenuActions()]),
 			getCheckedActionsRepresentation: () => 'radio',
 		});
 	}
@@ -174,55 +188,96 @@ export class ActivityBarPart extends WorkbenchPart {
 		return button;
 	}
 
-	private getPageOrderActions(target: Element): readonly IAction[] {
+	private getOrderActions(target: Element): readonly IAction[] {
 		const id = target.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
-		const pages = this.pages.pages.get();
-		const index = pages.findIndex(page => page.id === id);
+		const actions = this.orderedActions;
+		const index = actions.findIndex(action => action.id === id);
 		if (index < 0) { return []; }
 		return [
-			{ id: 'sessions.activity.moveBefore', label: localize('sessions.activity.moveBefore', 'Move earlier'), tooltip: '', enabled: index > 0, run: () => this.movePage(id!, pages[index - 1]!.id, 'before') },
-			{ id: 'sessions.activity.moveAfter', label: localize('sessions.activity.moveAfter', 'Move later'), tooltip: '', enabled: index < pages.length - 1, run: () => this.movePage(id!, pages[index + 1]!.id, 'after') },
+			{ id: 'sessions.activity.moveBefore', label: localize('sessions.activity.moveBefore', 'Move earlier'), tooltip: '', enabled: index > 0, run: () => this.moveAction(id!, actions[index - 1]!.id, 'before') },
+			{ id: 'sessions.activity.moveAfter', label: localize('sessions.activity.moveAfter', 'Move later'), tooltip: '', enabled: index < actions.length - 1, run: () => this.moveAction(id!, actions[index + 1]!.id, 'after') },
 		];
 	}
 
-	private movePage(id: string, targetId: string, position: 'before' | 'after'): void {
-		this.pages.movePage(id, targetId, position);
+	private moveAction(id: string, targetId: string | undefined, position: 'before' | 'after'): void {
+		if (id === targetId) { return; }
+		const actions = this.orderedActions.filter(action => action.id !== id);
+		const index = targetId === undefined ? actions.length : actions.findIndex(action => action.id === targetId) + (position === 'after' ? 1 : 0);
+		actions.splice(index, 0, this.actions.get(id)!);
+		this.orderedActions = actions;
+		this.order = actions.map(action => action.id);
+		this.storage.store('sessions.activityBar.actionOrder', JSON.stringify(this.order), StorageScope.PROFILE, StorageTarget.USER);
+		this.navigation.setActions(actions);
 		this.navigation.setTabStop(id);
 		this.navigation.focus();
-		status(localize('sessions.activity.moved', '{0}, position {1} of {2}', localize(this.pages.getPage(id).titleKey, this.pages.getPage(id).title), this.pages.pages.get().findIndex(page => page.id === id) + 1, this.pages.pages.get().length));
+		status(localize('sessions.activity.moved', '{0}, position {1} of {2}', this.actions.get(id)!.label, actions.findIndex(action => action.id === id) + 1, actions.length));
+	}
+
+	private readOrder(): string[] {
+		const saved = this.storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE);
+		const legacy = saved === undefined ? this.storage.get('sessions.activityBar.pageOrder', StorageScope.PROFILE) : undefined;
+		if (saved === undefined && legacy === undefined) { return []; }
+		const order: unknown = JSON.parse((saved ?? legacy)!);
+		if (!Array.isArray(order) || !order.every(id => typeof id === 'string') || new Set(order).size !== order.length) {
+			throw new TypeError(localize('sessions.activity.invalidOrder', 'Saved navigation order is invalid.'));
+		}
+		if (legacy !== undefined) {
+			const migrated = order.map(id => `sessions.open.${id === 'colab' ? 'teams' : id}`);
+			this.storage.store('sessions.activityBar.actionOrder', JSON.stringify(migrated), StorageScope.PROFILE, StorageTarget.USER);
+			this.storage.remove('sessions.activityBar.pageOrder', StorageScope.PROFILE);
+			return migrated;
+		}
+		return order;
 	}
 
 	public updateHelpHint(hint: string | undefined): void {
-		const label = localize('sessions.activity.navigation', 'Pages');
+		const label = localize('sessions.activity.navigation', 'Navigation');
 		this.navigation.element.setAttribute('aria-label', hint ? localize('sessions.activity.helpHint', '{0}. {1}', label, hint) : label);
 	}
 }
 
-class PageActivityActionViewItem extends ActionViewItem {
+/** Retain the button identity while menus resolve changing context keys. */
+class ActivityAction implements IAction {
+	public readonly current;
+	public readonly id: string;
+	constructor(action: IAction) {
+		this.id = action.id;
+		this.current = observableValue<IAction>(this, action);
+	}
+	public get label(): string { return this.current.get().label; }
+	public get tooltip(): string { return this.current.get().tooltip; }
+	public get icon(): IAction['icon'] { return this.current.get().icon; }
+	public get enabled(): boolean { return this.current.get().enabled; }
+	public get checked(): boolean | undefined { return this.current.get().checked; }
+	public run(...args: readonly unknown[]): unknown { return this.current.get().run(...args); }
+}
+
+class ActivityActionViewItem extends ActionViewItem {
 	private button!: Button;
 
 	constructor(
-		action: IAction,
-		private readonly page: ISessionsPageDescriptor,
-		@ISessionsPageService private readonly pages: ISessionsPageService,
+		private readonly activityAction: ActivityAction,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IHoverService private readonly hover: IHoverService,
 	) {
-		super(action, { draggable: true });
+		super(activityAction, { draggable: true });
 	}
 
 	public override render(container: HTMLElement): void {
 		this.button = this._register(new Button(container, {
-			label: localize(this.page.titleKey, this.page.title), icon: this.page.icon, iconOnly: true, ariaLabel: localize(this.page.titleKey, this.page.title), onClick: () => this.action.run(),
+			label: this.action.label, icon: this.action.icon, iconOnly: true, onClick: () => { void Promise.resolve(this.action.run()).catch(onUnexpectedError); },
 		}));
 		this.button.domNode.classList.add('ash-sessions-activity-item');
 		this._register(this.hover.setupDelayedHover(this.button.domNode, () => ({
-			content: localize(this.page.titleKey, this.page.title),
+			content: this.action.label,
 			position: { hoverPosition: getActivityHoverPosition(this.configuration.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
 		}), { groupId: 'actions' }));
 		this._register(autorun(reader => {
-			const selected = this.pages.activePage.read(reader) === this.page.id;
-			this.button.icon = selected ? this.page.activeIcon ?? this.page.icon : this.page.icon;
+			const action = this.activityAction.current.read(reader);
+			this.button.label = action.label;
+			this.button.icon = action.icon;
+			this.button.enabled = action.enabled;
+			const selected = action.checked === true;
 			this.button.toggleClassName('selected', selected);
 			if (selected) { this.button.domNode.setAttribute('aria-current', 'page'); }
 			else { this.button.domNode.removeAttribute('aria-current'); }

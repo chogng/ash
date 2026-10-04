@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { observableValue, transaction, type IObservable, type IReader, type ITransaction } from "../../../../base/common/observable.js";
+import { observableValue, transaction, type IReader, type ITransaction } from "../../../../base/common/observable.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { isRecord } from '../../../../base/common/types.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -13,19 +13,15 @@ export type SessionsViewSelection =
 	| { readonly kind: "session"; readonly active: IActiveSessionThread }
 	| { readonly kind: "untitled"; readonly session: IUntitledChatSession };
 
-export type SessionsPage = 'chat' | 'code';
-
-export interface SessionsPageSelection {
+export interface SessionsSelection {
 	readonly visibleSelections: readonly SessionsViewSelection[];
 	readonly activeSelection: SessionsViewSelection | undefined;
 }
 
-/** Owns each page's visibility, active selection, and navigation history. */
+/** Owns window-local visibility, active selection, and navigation history. */
 export interface ISessionsService {
 	readonly onDidChange: Event<void>;
-	readonly page: IObservable<SessionsPage>;
-	selectPage(page: SessionsPage): void;
-	getPageSelection(page: SessionsPage, reader?: IReader): SessionsPageSelection;
+	getSelection(reader?: IReader): SessionsSelection;
 	readonly visibleSelections: readonly SessionsViewSelection[];
 	readonly activeSelection: SessionsViewSelection | undefined;
 	readonly canNavigateBack: boolean;
@@ -34,9 +30,9 @@ export interface ISessionsService {
 	openThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	openSession(sessionId: SessionId, threadId: ThreadId): void;
 	openUntitledSession(untitledSessionId: string): void;
-	openNewSession(title?: string, page?: SessionsPage): IUntitledChatSession;
-	activateSelection(selection: SessionsViewSelection, page?: SessionsPage): void;
-	closeVisibleSelection(selection: SessionsViewSelection, page?: SessionsPage): void;
+	openNewSession(title?: string, options?: { readonly sideBySide: boolean }): IUntitledChatSession;
+	activateSelection(selection: SessionsViewSelection): void;
+	closeVisibleSelection(selection: SessionsViewSelection): void;
 	navigateBack(): void;
 	navigateForward(): void;
 }
@@ -51,19 +47,17 @@ type SessionsViewReference =
 export class SessionsService extends Disposable implements ISessionsService {
 	private readonly sessionService: ISessionsManagementService;
 	private readonly _onDidChange = this._register(new Emitter<void>());
-	readonly page = observableValue<SessionsPage>(this, 'chat');
-	private readonly pages = { chat: new SessionsPageState(), code: new SessionsPageState() };
+	private readonly current = new SessionsViewState();
+	private navigationRevision = 0;
 	private initialized = false;
 	private readonly storedState: StoredSessionsViewState | undefined;
-
-	private get current(): SessionsPageState { return this.pages[this.page.get()]; }
 
 	readonly onDidChange = this._onDidChange.event;
 
 	constructor(@ISessionsManagementService sessionService: ISessionsManagementService, @IStorageService private readonly storage: IStorageService) {
 		// Validate persisted input before allocating subscriptions that a failed constructor cannot release.
 		const raw = storage.get('sessions.viewState', StorageScope.WORKSPACE);
-		const storedState = raw === undefined ? undefined : parseStoredSessionsViewState(JSON.parse(raw));
+		const storedState = raw === undefined ? undefined : parseStoredSessionsViewState(JSON.parse(raw), storage.get('sessions.activityBar.activePage', StorageScope.WORKSPACE) === 'code');
 		super();
 		this.sessionService = sessionService;
 		this.storedState = storedState;
@@ -77,51 +71,35 @@ export class SessionsService extends Disposable implements ISessionsService {
 	get canNavigateBack(): boolean { return this.findNavigableIndex(this.current.historyIndex, -1) !== undefined; }
 	get canNavigateForward(): boolean { return this.findNavigableIndex(this.current.historyIndex, 1) !== undefined; }
 
-	selectPage(page: SessionsPage): void {
-		if (page === this.page.get()) return;
-		this.page.set(page);
-		if (!this.activeSelection) this.openNewSession(page === 'code' ? 'New code session' : 'New chat');
-		this.saveState();
-		this._onDidChange.fire();
-	}
-
-	getPageSelection(page: SessionsPage, reader?: IReader): SessionsPageSelection {
-		return { visibleSelections: this.pages[page].visibleSelections.read(reader), activeSelection: this.pages[page].activeSelection.read(reader) };
+	getSelection(reader?: IReader): SessionsSelection {
+		return { visibleSelections: this.current.visibleSelections.read(reader), activeSelection: this.current.activeSelection.read(reader) };
 	}
 
 	async initialize(): Promise<void> {
 		await this.sessionService.initialize();
 		if (!this.initialized) {
-			if (this.storedState) {
-				for (const page of ['chat', 'code'] as const) {
-					const state = this.pages[page];
-					// A user choice made while the catalog loads supersedes that page's saved arrangement.
-					if (state.visibleReferences.length > 0) {
-						continue;
-					}
-					const saved = this.storedState.pages[page];
-					for (const reference of saved.visible) {
-						if (reference.kind === 'untitled') {
-							this.sessionService.restoreUntitledSession(reference.session);
-						}
-					}
-					state.visibleReferences = saved.visible.map(storedReference);
-					state.activeReference.set(state.visibleReferences[saved.active]);
-					state.activeSelection.set(this.resolve(state.activeReference.get()));
-					this.projectVisibleSelections(state);
-					if (!state.activeSelection.get()) {
-						state.activeSelection.set(state.visibleSelections.get()[0]);
-					}
-					const active = state.activeSelection.get();
-					if (active) {
-						this.record(referenceForSelection(active), state);
-					}
+			const state = this.current;
+			for (const draft of this.storedState?.drafts ?? []) {
+				if (!this.sessionService.untitledSessions.some(current => current.untitledSessionId === draft.untitledSessionId)) {
+					this.sessionService.restoreUntitledSession(draft);
 				}
 			}
+			// An explicit choice made while the catalog loads supersedes the saved arrangement.
+			if (this.storedState && state.visibleReferences.length === 0) {
+				const saved = this.storedState;
+				state.visibleReferences = saved.visible.map(storedReference);
+				state.activeReference.set(state.visibleReferences[saved.active]);
+				state.activeSelection.set(this.resolve(state.activeReference.get()));
+				this.projectVisibleSelections(state);
+				if (!state.activeSelection.get()) { state.activeSelection.set(state.visibleSelections.get()[0]); }
+				const active = state.activeSelection.get();
+				if (active) { this.record(referenceForSelection(active), state); }
+			}
+
 			const restored = activeSelection(this.sessionService);
-			const alreadyOpen = restored && Object.values(this.pages).some(state => state.visibleReferences.some(reference => referenceKey(reference) === selectionKey(restored)));
-			if (!this.storedState && restored && !alreadyOpen && !this.pages.chat.activeSelection.get()) {
-				this.select(restored, this.pages.chat);
+			const alreadyOpen = restored && this.current.visibleReferences.some(reference => referenceKey(reference) === selectionKey(restored));
+			if (!this.storedState && restored && !alreadyOpen && !this.current.activeSelection.get()) {
+				this.select(restored);
 			}
 			if (this.activeSelection && this.sessionService.state !== 'error') {
 				this.activate(referenceForSelection(this.activeSelection), this.current, 'focus');
@@ -134,19 +112,19 @@ export class SessionsService extends Disposable implements ISessionsService {
 
 	openSession(sessionId: SessionId, threadId: ThreadId): void { this.activate({ kind: 'session', sessionId, threadId }); }
 	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
-		const state = this.current;
+		const revision = ++this.navigationRevision;
 		await this.sessionService.openThread(sessionId, threadId);
-		this.activate({ kind: 'session', sessionId, threadId }, state);
+		if (revision === this.navigationRevision) { this.activate({ kind: 'session', sessionId, threadId }); }
 	}
 	openUntitledSession(untitledSessionId: string): void { this.activate({ kind: 'untitled', untitledSessionId }); }
-	openNewSession(title = this.page.get() === 'code' ? 'New code session' : 'New chat', page = this.page.get()): IUntitledChatSession {
+	openNewSession(title = 'New chat', options?: { readonly sideBySide: boolean }): IUntitledChatSession {
 		const session = this.sessionService.createUntitledSession(title);
-		this.select({ kind: 'untitled', session }, this.pages[page]);
+		this.select({ kind: 'untitled', session }, this.current, options?.sideBySide ? 'add' : 'open');
 		return session;
 	}
-	activateSelection(selection: SessionsViewSelection, page = this.page.get()): void { this.activate(referenceForSelection(selection), this.pages[page], 'focus'); }
-	closeVisibleSelection(selection: SessionsViewSelection, page = this.page.get()): void {
-		const state = this.pages[page];
+	activateSelection(selection: SessionsViewSelection): void { this.activate(referenceForSelection(selection), this.current, 'focus'); }
+	closeVisibleSelection(selection: SessionsViewSelection): void {
+		const state = this.current;
 		const key = visibilityKey(referenceForSelection(selection));
 		const index = state.visibleReferences.findIndex(reference => visibilityKey(reference) === key);
 		if (index < 0) return;
@@ -164,7 +142,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		}
 		if (wasActive && replacement) this.activate(replacement, state, 'focus');
 		else if (wasActive) {
-			const session = this.sessionService.createUntitledSession(page === 'code' ? 'New code session' : 'New chat');
+			const session = this.sessionService.createUntitledSession('New chat');
 			this.select({ kind: 'untitled', session }, state);
 		}
 		this.projectVisibleSelections(state);
@@ -175,18 +153,17 @@ export class SessionsService extends Disposable implements ISessionsService {
 	navigateForward(): void { this.navigate(1); }
 
 	private syncFromSessionService(): void {
-		// Catalog changes refresh identities; foreground selection belongs to the page that opened them.
-		for (const state of Object.values(this.pages)) {
-			state.visibleReferences = state.visibleReferences.map(reference => this.materializedReference(reference));
-			state.history = state.history.map(reference => this.materializedReference(reference));
-			const reference = state.activeReference.get();
-			state.activeReference.set(reference ? this.materializedReference(reference) : undefined);
-			this.projectVisibleSelections(state);
-			if (this.sessionService.state !== 'loading' && this.sessionService.state !== 'error' && !this.resolve(state.activeReference.get())) {
-				state.activeReference.set(state.visibleReferences[0]);
-			}
-			state.activeSelection.set(this.resolve(state.activeReference.get()) ?? state.visibleSelections.get()[0]);
+		// Catalog changes refresh identities without changing the foreground selection.
+		const state = this.current;
+		state.visibleReferences = state.visibleReferences.map(reference => this.materializedReference(reference));
+		state.history = state.history.map(reference => this.materializedReference(reference));
+		const reference = state.activeReference.get();
+		state.activeReference.set(reference ? this.materializedReference(reference) : undefined);
+		this.projectVisibleSelections(state);
+		if (this.sessionService.state !== 'loading' && this.sessionService.state !== 'error' && !this.resolve(state.activeReference.get())) {
+			state.activeReference.set(state.visibleReferences[0]);
 		}
+		state.activeSelection.set(this.resolve(state.activeReference.get()) ?? state.visibleSelections.get()[0]);
 		this.saveState();
 		this._onDidChange.fire();
 	}
@@ -196,8 +173,8 @@ export class SessionsService extends Disposable implements ISessionsService {
 		if (!this.initialized) {
 			return;
 		}
-		const snapshot = (page: SessionsPage): StoredSessionsPageState => {
-			const state = this.pages[page];
+		const snapshot = (): StoredSessionsSelection => {
+			const state = this.current;
 			return {
 				visible: state.visibleReferences.map(reference => {
 					if (reference.kind === 'session') {
@@ -209,7 +186,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 				active: state.visibleReferences.findIndex(reference => visibilityKey(reference) === visibilityKey(state.activeReference.get())),
 			};
 		};
-		const state: StoredSessionsViewState = { version: 1, pages: { chat: snapshot('chat'), code: snapshot('code') } };
+		const state: StoredSessionsViewState = { version: 2, drafts: this.sessionService.untitledSessions, ...snapshot() };
 		this.storage.store('sessions.viewState', JSON.stringify(state), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 
@@ -218,11 +195,13 @@ export class SessionsService extends Disposable implements ISessionsService {
 		return active ? { kind: 'session', sessionId: active.sessionId, threadId: active.threadId } : reference;
 	}
 
-	private select(selection: SessionsViewSelection, state = this.current, mode: 'open' | 'focus' = 'open'): void {
+	private select(selection: SessionsViewSelection, state = this.current, mode: 'open' | 'focus' | 'add' = 'open'): void {
+		this.navigationRevision++;
 		const reference = referenceForSelection(selection);
 		const previous = state.activeSelection.get();
 		const existing = state.visibleReferences.findIndex(candidate => visibilityKey(candidate) === visibilityKey(reference));
-		if (mode === 'focus' && existing >= 0) state.visibleReferences[existing] = reference;
+		if (mode !== 'open' && existing >= 0) state.visibleReferences[existing] = reference;
+		else if (mode === 'add') state.visibleReferences.push(reference);
 		else {
 			// List and history navigation show only the requested Session, even when it already occupies a restored split.
 			state.visibleReferences = [reference];
@@ -237,7 +216,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		this._onDidChange.fire();
 	}
 
-	private projectVisibleSelections(state: SessionsPageState, tx?: ITransaction): void {
+	private projectVisibleSelections(state: SessionsViewState, tx?: ITransaction): void {
 		// A disconnected catalog cannot prove that a saved conversation was deleted.
 		const catalogUnavailable = this.sessionService.state === 'loading' || this.sessionService.state === 'error';
 		state.visibleReferences = state.visibleReferences.filter(reference => this.resolve(reference) !== undefined || reference.kind === 'session' && catalogUnavailable);
@@ -247,7 +226,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		}), tx);
 	}
 
-	private record(reference: SessionsViewReference, state: SessionsPageState): void {
+	private record(reference: SessionsViewReference, state: SessionsViewState): void {
 		const key = referenceKey(reference);
 		if (referenceKey(state.history[state.historyIndex]) === key) return;
 		state.history.splice(state.historyIndex + 1);
@@ -281,7 +260,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		return undefined;
 	}
 
-	private activate(reference: SessionsViewReference, state = this.current, mode: 'open' | 'focus' = 'open'): void {
+	private activate(reference: SessionsViewReference, state = this.current, mode: 'open' | 'focus' | 'add' = 'open'): void {
 		if (reference.kind === "session") this.sessionService.selectThread(reference.sessionId, reference.threadId);
 		else this.sessionService.selectUntitledSession(reference.untitledSessionId);
 		this.select(this.resolve(reference)!, state, mode);
@@ -299,7 +278,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 	}
 }
 
-class SessionsPageState {
+class SessionsViewState {
 	// Keep the chosen identity while an unavailable catalog prevents a rendered selection.
 	readonly activeReference = observableValue<SessionsViewReference | undefined>(this, undefined);
 	readonly activeSelection = observableValue<SessionsViewSelection | undefined>(this, undefined);
@@ -343,30 +322,33 @@ function visibilityKey(reference: SessionsViewReference | undefined): string | u
 
 type StoredSessionsViewReference = Extract<SessionsViewReference, { kind: 'session' }> | { readonly kind: 'untitled'; readonly session: IUntitledChatSession };
 
-interface StoredSessionsPageState {
+interface StoredSessionsSelection {
 	readonly visible: readonly StoredSessionsViewReference[];
 	readonly active: number;
 }
 
-interface StoredSessionsViewState {
-	readonly version: 1;
-	readonly pages: Readonly<Record<SessionsPage, StoredSessionsPageState>>;
+interface StoredSessionsViewState extends StoredSessionsSelection {
+	readonly version: 2;
+	readonly drafts: readonly IUntitledChatSession[];
 }
 
 function storedReference(reference: StoredSessionsViewReference): SessionsViewReference {
 	return reference.kind === 'session' ? reference : { kind: 'untitled', untitledSessionId: reference.session.untitledSessionId };
 }
 
-function parseStoredSessionsViewState(value: unknown): StoredSessionsViewState {
-	if (!isRecord(value) || value.version !== 1 || !isRecord(value.pages)) {
-		throw new TypeError('Invalid stored Sessions view state');
+function parseStoredSessionsViewState(value: unknown, preferCode: boolean): StoredSessionsViewState {
+	if (!isRecord(value) || (value.version !== 1 && value.version !== 2)) { throw new TypeError('Invalid stored Sessions view state'); }
+	let states: unknown[];
+	if (value.version === 1) {
+		if (!isRecord(value.pages)) { throw new TypeError('Invalid stored Sessions view state'); }
+		states = preferCode ? [value.pages.code, value.pages.chat] : [value.pages.chat, value.pages.code];
+	} else {
+		states = [value];
 	}
-	const untitledIds = new Set<string>();
-	for (const page of ['chat', 'code'] as const) {
-		const state = value.pages[page];
+	for (const state of states) {
 		if (!isRecord(state) || !Array.isArray(state.visible) || !Number.isInteger(state.active)
 			|| (state.visible.length === 0 ? state.active !== -1 : (state.active as number) < 0 || (state.active as number) >= state.visible.length)) {
-			throw new TypeError('Invalid stored Sessions page selection');
+			throw new TypeError('Invalid stored Sessions selection');
 		}
 		const keys = new Set<string>();
 		for (const reference of state.visible) {
@@ -378,10 +360,9 @@ function parseStoredSessionsViewState(value: unknown): StoredSessionsViewState {
 					throw new TypeError('Invalid stored Session identity');
 				}
 			} else if (reference.kind === 'untitled') {
-				if (!isUntitledSession(reference.session) || untitledIds.has(reference.session.untitledSessionId)) {
+				if (!isUntitledSession(reference.session)) {
 					throw new TypeError('Invalid stored untitled Session');
 				}
-				untitledIds.add(reference.session.untitledSessionId);
 			} else {
 				throw new TypeError('Invalid stored Sessions reference kind');
 			}
@@ -392,7 +373,30 @@ function parseStoredSessionsViewState(value: unknown): StoredSessionsViewState {
 			keys.add(key);
 		}
 	}
-	return value as unknown as StoredSessionsViewState;
+	const selections = states as StoredSessionsSelection[];
+	const drafts = [...new Map(selections.flatMap(state => state.visible.flatMap(reference => reference.kind === 'untitled' ? [[reference.session.untitledSessionId, reference.session] as const] : []))).values()];
+	if (value.version === 2) {
+		if (!Array.isArray(value.drafts) || !value.drafts.every(isUntitledSession) || new Set(value.drafts.map(draft => draft.untitledSessionId)).size !== value.drafts.length) {
+			throw new TypeError('Invalid stored Sessions drafts');
+		}
+		for (const reference of selections[0]!.visible) {
+			if (reference.kind === 'untitled' && !value.drafts.some(draft => draft.untitledSessionId === reference.session.untitledSessionId)) {
+				throw new TypeError('Stored visible draft is missing from the draft catalog');
+			}
+		}
+		drafts.splice(0, drafts.length, ...value.drafts);
+	}
+	const visible: StoredSessionsViewReference[] = [];
+	const keys = new Set<string>();
+	for (const state of selections) {
+		for (const reference of state.visible) {
+			const key = visibilityKey(storedReference(reference))!;
+			if (!keys.has(key)) { visible.push(reference); keys.add(key); }
+		}
+	}
+	const preferred = selections.find(state => state.active >= 0);
+	const activeKey = preferred && visibilityKey(storedReference(preferred.visible[preferred.active]!));
+	return { version: 2, drafts, visible, active: activeKey ? visible.findIndex(reference => visibilityKey(storedReference(reference)) === activeKey) : -1 };
 }
 
 function nonEmptyString(value: unknown): value is string {

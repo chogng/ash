@@ -1,3 +1,4 @@
+import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { h } from '../../../../base/browser/dom.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -220,7 +221,7 @@ export class TestingViewPane extends ViewPane {
 			row.append(label); this.scriptsDomNode.append(row);
 		}
 		for (const run of this.testing.runs.slice(-10).reverse()) {
-			this.scriptDisposables.add(new Button(this.scriptsDomNode, { label: `${run.profile.label} — ${run.status === 'completed' ? localize('testing.scriptCompleted', 'Completed') : testStateLabel(run.status === 'canceled' ? 'cancelled' : run.status)}`, size: 'small', onClick: () => { this.terminal.setActiveInstance(run.taskRun.terminal); this.views.focusView(TERMINAL_VIEW_ID); } }));
+			this.scriptDisposables.add(new Button(this.scriptsDomNode, { label: `${run.profile.label} — ${run.status === 'completed' ? localize('testing.scriptCompleted', 'Completed') : testStateLabel(run.status === 'canceled' ? 'cancelled' : run.status)}`, size: 'small', onClick: () => { this.terminal.setActiveInstance(run.taskRun.terminal); void this.views.focusView(TERMINAL_VIEW_ID).catch(onUnexpectedError); } }));
 		}
 	}
 

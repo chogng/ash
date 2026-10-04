@@ -61,9 +61,9 @@ registerAction2(class extends Action2 {
 		});
 	}
 
-	public override run(accessor: ServicesAccessor): void {
+	public override run(accessor: ServicesAccessor): Promise<boolean> {
 		const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
-		accessor.get(IViewsService).focusView(folders.length > 0 ? SESSIONS_FILES_VIEW_ID : SESSIONS_FILES_EMPTY_VIEW_ID);
+		return accessor.get(IViewsService).focusView(folders.length > 0 ? SESSIONS_FILES_VIEW_ID : SESSIONS_FILES_EMPTY_VIEW_ID);
 	}
 });
 

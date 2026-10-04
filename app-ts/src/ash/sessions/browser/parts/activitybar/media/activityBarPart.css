@@ -84,10 +84,10 @@
 	outline-offset: -1px;
 }
 
-.ash-sessions-page-navigation {
+.ash-sessions-navigation {
 	gap: var(--ash-spacing-size80);
 }
 
-.ash-sessions-activity-content.compact .ash-sessions-page-navigation {
+.ash-sessions-activity-content.compact .ash-sessions-navigation {
 	gap: var(--ash-spacing-size40);
 }

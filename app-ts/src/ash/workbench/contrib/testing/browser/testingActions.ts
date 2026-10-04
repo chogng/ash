@@ -17,8 +17,7 @@ registerAction2(class RunAllTestsAction extends Action2 {
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const service = accessor.get(ITestingService);
 		const notifications = accessor.get(INotificationService);
-		accessor.get(IViewsService).focusView(TESTING_VIEW_ID);
-		try { await service.refreshTests(); await service.runTests(service.tests.map(test => test.key)); }
+		try { await accessor.get(IViewsService).focusView(TESTING_VIEW_ID); await service.refreshTests(); await service.runTests(service.tests.map(test => test.key)); }
 		catch (error) { notifications.error(String(error)); }
 	}
 });

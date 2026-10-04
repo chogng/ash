@@ -30,7 +30,7 @@ test('SCM status displays provider branch and upstream commands', async () => {
 	assert.deepEqual(fixture.statusbar.getEntries(StatusbarAlignment.Left).map(item => item.compactGroup), ['ash.status.git', 'ash.status.git']);
 	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left)[1]?.entry.icon, Lxicon.sync);
 	await fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.();
-	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left)[1]?.entry.run?.(), true);
+	assert.equal(await fixture.statusbar.getEntries(StatusbarAlignment.Left)[1]?.entry.run?.(), true);
 	assert.deepEqual(commands, [{ id: GitSwitchBranchCommandId, repositoryId: 'repo-1' }]);
 	assert.deepEqual(focusedViews, ['ash.gitView']);
 
@@ -65,7 +65,7 @@ function createFixture(changes: Emitter<GitStatus>, status: () => Promise<GitSta
 	} as unknown as IGitService;
 	const services: GitSCMProviderServices = {
 		commandService: { executeCommand: async (id: string, repositoryId: string) => { commands.push({ id, repositoryId }); } } as unknown as ICommandService,
-		viewsService: { focusView: (id: string) => { focusedViews.push(id); return true; } } as unknown as IViewsService,
+		viewsService: { focusView: async (id: string) => { focusedViews.push(id); return true; } } as unknown as IViewsService,
 		dialogService: {} as IDialogService,
 		editorService: {} as IEditorService,
 		workingCopyService: {} as IWorkingCopyService,

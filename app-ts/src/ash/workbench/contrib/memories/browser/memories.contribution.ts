@@ -41,19 +41,19 @@ registerWorkbenchContribution('workbench.contrib.memories', WorkbenchPhase.Block
 	}));
 	registrations.add(registerAction2(class OpenMemories extends Action2 {
 		constructor() { super({ id: 'ash.memories.open', title: localize2({ bundle: 'ash.workbench', key: 'command.OpenMemories' }, 'Open memories'), f1: true }); }
-		public override run(services: ServicesAccessor): void { services.get(IViewsService).focusView('ash.memories.view'); }
+		public override run(services: ServicesAccessor): Promise<boolean> { return services.get(IViewsService).focusView('ash.memories.view'); }
 	}));
 	registrations.add(registerAction2(class SaveMemory extends Action2 {
 		constructor() { super({ id: 'ash.memories.save', title: localize2({ bundle: 'ash.workbench', key: 'command.SaveMemory' }, 'Save memory'), keybinding: { primary: Keybinding.single(logicalKey('s', { primaryKey: true })), when: ContextKeyExpr.has(MemoriesViewPane.FocusContext), priority: 1000 } }); }
 		public override async run(services: ServicesAccessor): Promise<void> {
-			const view = services.get(IViewsService).openView('ash.memories.view');
+			const view = await services.get(IViewsService).openView('ash.memories.view');
 			if (view instanceof MemoriesViewPane) { await view.saveDraft(); }
 		}
 	}));
 	registrations.add(registerAction2(class OpenMemoryReference extends Action2 {
 		constructor() { super({ id: 'ash.memories.openReference', title: localize2({ bundle: 'ash.workbench', key: 'command.OpenMemoryReference' }, 'Open memory reference') }); }
 		public override async run(services: ServicesAccessor, reference: string): Promise<void> {
-			const view = services.get(IViewsService).openView('ash.memories.view');
+			const view = await services.get(IViewsService).openView('ash.memories.view');
 			if (view instanceof MemoriesViewPane) { await view.openReference(reference); }
 		}
 	}));

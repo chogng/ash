@@ -55,7 +55,7 @@ registerAction2(class FocusOpenEditorsViewAction extends Action2 {
 		});
 	}
 
-	public override run(accessor: ServicesAccessor): void {
-		accessor.get(IViewsService).focusView(OpenEditorsView.ID);
+	public override run(accessor: ServicesAccessor): Promise<boolean> {
+		return accessor.get(IViewsService).focusView(OpenEditorsView.ID);
 	}
 });

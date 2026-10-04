@@ -14,12 +14,12 @@ import { ILifecycleService, LifecyclePhase } from '../../../../workbench/service
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import type { PanelPart } from '../../../browser/parts/panelPart.js';
-import { WorkbenchViewContainerId } from '../../../../workbench/common/views.js';
+import { IPaneCompositePartService } from '../../../../workbench/services/panecomposite/browser/panecomposite.js';
+import { ViewContainerLocation, WorkbenchViewContainerId } from '../../../../workbench/common/views.js';
 
 const layoutStateKey = 'sessions.singlePane.layoutState';
 
-/** Code session editor state is independent of Chat navigation and window geometry. */
+/** Editor working sets follow the selected session, independently of window geometry. */
 export abstract class BaseLayoutController extends Disposable {
 	private readonly workingSets = new Map<string, EditorWorkingSet>();
 	private readonly panelViews = new Map<string, string>();
@@ -33,7 +33,7 @@ export abstract class BaseLayoutController extends Disposable {
 	protected restoring = false;
 
 	constructor(
-		private readonly panel: PanelPart,
+		@IPaneCompositePartService protected readonly panes: IPaneCompositePartService,
 		@ISessionsService protected readonly sessions: ISessionsService,
 		@ISessionsManagementService protected readonly management: ISessionsManagementService,
 		@IEditorPart protected readonly editor: IEditorPart,
@@ -67,10 +67,11 @@ export abstract class BaseLayoutController extends Disposable {
 	}
 
 	public start(): void {
-		this._register(this.panel.onDidPaneCompositeOpen(id => {
-			const selected = this.sessions.getPageSelection('code');
+		this._register(this.panes.onDidPaneCompositeOpen(event => {
+			if (event.viewContainerLocation !== ViewContainerLocation.Panel) { return; }
+			const selected = this.sessions.getSelection();
 			if (this.layout.isPartVisible('panel') && selected.activeSelection && selected.visibleSelections.length === 1) {
-				this.panelViews.set(this.sessionKey(selected.activeSelection), id);
+				this.panelViews.set(this.sessionKey(selected.activeSelection), event.composite.id);
 			}
 		}));
 		this._register(this.storage.onWillSaveState(() => this.saveState()));
@@ -116,7 +117,7 @@ export abstract class BaseLayoutController extends Disposable {
 					this.requestedSession = to;
 				}
 			}
-			const selected = this.sessions.getPageSelection('code', reader);
+			const selected = this.sessions.getSelection(reader);
 			const selection = selected.activeSelection;
 			const key = selection ? this.sessionKey(selection) : undefined;
 			if (key !== this.requestedSession) {
@@ -126,16 +127,15 @@ export abstract class BaseLayoutController extends Disposable {
 			}
 			workspaceChanged.read(reader);
 			partVisibilityChanged.read(reader);
-			const page = this.sessions.page.read(reader);
 			if (selected.visibleSelections.length > 1) {
 				for (const visible of selected.visibleSelections) {
 					this.panelViews.delete(this.sessionKey(visible));
 				}
 			}
-			if (selection && selected.visibleSelections.length === 1 && page === 'code' && this.layout.isPartVisible('panel')) {
-				this.panel.showComposite(this.panelViews.get(this.sessionKey(selection)) ?? WorkbenchViewContainerId.Terminal);
+			if (selection && selected.visibleSelections.length === 1 && this.layout.isPartVisible('panel')) {
+				void this.panes.openPaneComposite(this.panelViews.get(this.sessionKey(selection)) ?? WorkbenchViewContainerId.Terminal, ViewContainerLocation.Panel).catch(error => this.notifications.error(String(error)));
 			}
-			if (!selection || selected.visibleSelections.length !== 1 || page !== 'code' || !this.layout.isPartVisible('sessions') || this.scheduledRevision === this.revision) {
+			if (!selection || selected.visibleSelections.length !== 1 || !this.layout.isPartVisible('sessions') || this.scheduledRevision === this.revision) {
 				return;
 			}
 			// Workspace switching precedes editor deserialization; file inputs must use the incoming directory.
@@ -178,7 +178,7 @@ export abstract class BaseLayoutController extends Disposable {
 	}
 
 	protected captureEditors(): void {
-		if (this.editorSession && !this.isEditorAutoVisibilitySuppressed()) {
+		if (this.editorSession && this.layout.isPartVisible('sessions') && !this.isEditorAutoVisibilitySuppressed()) {
 			this.workingSets.set(this.editorSession, this.getWorkingSet(this.editorSession));
 		}
 	}

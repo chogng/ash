@@ -42,8 +42,8 @@ registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): void {
-		const view = accessor.get(IViewsService).openView(CHAT_VIEW_ID);
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const view = await accessor.get(IViewsService).openView(CHAT_VIEW_ID);
 		if (view instanceof ChatViewPane) view.toggleSessionsSidebar();
 	}
 });

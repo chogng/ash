@@ -40,8 +40,7 @@ registerAction2(class RunTaskAction extends Action2 {
 		const views = accessor.get(IViewsService);
 		void tasks.refresh().then(available => {
 			if (available.length === 0) {
-				views.focusView(TASKS_VIEW_ID);
-				return;
+				return views.focusView(TASKS_VIEW_ID);
 			}
 			const picker = quickInput.createQuickPick<TaskQuickPickItem>();
 			const disposables = new DisposableStore();
@@ -71,7 +70,7 @@ registerAction2(class RerunLastTaskAction extends Action2 {
 			const task = current.find(candidate => candidate.id === last.task.id);
 			if (task) return tasks.run(task);
 		}).then(run => {
-			if (run) accessor.get(IViewsService).focusView(TERMINAL_VIEW_ID);
+			if (run) return accessor.get(IViewsService).focusView(TERMINAL_VIEW_ID);
 		}).catch(reportTaskError);
 	}
 });

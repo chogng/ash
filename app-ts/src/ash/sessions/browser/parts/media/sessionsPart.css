@@ -6,24 +6,6 @@
 
 .ash-workbench-sessions > .ash-workbench-part-content { gap: 0; }
 
-.ash-workbench-sessions > .ash-workbench-part-content.empty-page > * { visibility: hidden; }
-.ash-workbench-sessions > .ash-workbench-part-content > [hidden] { display: none; }
-
-.ash-sessions-code-page {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  background: var(--ash-editor-background);
-}
-
-.ash-sessions-contributed-page {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-}
-
 .ash-workbench-sessions > .ash-workbench-part-content > .ash-sessions-chat-view {
   min-height: 0;
   flex: 1 1 auto;

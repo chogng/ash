@@ -1,9 +1,11 @@
+import { IPaneCompositePartService } from '../../../../../workbench/services/panecomposite/browser/panecomposite.js';
+import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import assert from 'node:assert/strict';
 import { suite, suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -53,7 +55,7 @@ suite('DesktopLayoutController', () => {
 		const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as { sessionResource: string; panelViewContainerId: string }[];
 		assert.equal(saved.find(entry => entry.sessionResource === 'session:b')?.panelViewContainerId, 'tools.a');
 	});
-	test('switching Code sessions restores their own editors while Chat page changes retain live editors', async () => {
+	test('switching sessions restores their editors and layout visibility does not change selection', async () => {
 		using fixture = await createFixture();
 		fixture.editor.set(workingSet('a', 'a.ts'));
 		await fixture.open('b');
@@ -62,9 +64,10 @@ suite('DesktopLayoutController', () => {
 		await fixture.open('a');
 		assert.deepEqual(fixture.editor.current, workingSet('session:a', 'a.ts'));
 		const restores = fixture.editor.applied.length;
-		fixture.sessions.selectPage('chat');
-		fixture.sessions.openSession('b', 'b-thread');
-		fixture.sessions.selectPage('code');
+		fixture.sessionsVisible = false;
+		fixture.partsChanged.fire();
+		fixture.sessionsVisible = true;
+		fixture.partsChanged.fire();
 		await fixture.controller.whenSettled();
 		assert.equal(fixture.editor.applied.length, restores);
 	});
@@ -133,9 +136,8 @@ suite('DesktopLayoutController', () => {
 		using fixture = new LayoutFixture([{ sessionResource: 'untitled:draft-0', editorWorkingSet: workingSet('saved', 'saved.ts') }]);
 		fixture.lifecycle.phase = LifecyclePhase.Ready;
 		fixture.controller.start();
-		fixture.catalog.selectThread('a', 'a-thread');
+		fixture.sessions.openNewSession('Saved draft');
 		await fixture.sessions.initialize();
-		fixture.sessions.selectPage('code');
 		await fixture.controller.whenSettled();
 		fixture.lifecycle.phase = LifecyclePhase.Restored;
 		await fixture.storage.flush();
@@ -230,7 +232,7 @@ suite('DesktopLayoutController', () => {
 
 	test('required controller services are resolved by the production creation path', () => {
 		using services = new InstantiationService();
-		assert.throws(() => services.createInstance(DesktopLayoutController, undefined as unknown as import('../../../../browser/parts/panelPart.js').PanelPart, undefined as unknown as import('../../../../browser/parts/auxiliarybar/auxiliaryBarPart.js').AuxiliaryBarPart), /sessionsService/);
+		assert.throws(() => services.createInstance(DesktopLayoutController, undefined as unknown as import('../../../../browser/parts/sidebarPart.js').SidebarPart), /paneCompositePartService/);
 	});
 });
 
@@ -347,14 +349,22 @@ class LayoutFixture extends Disposable {
 				this.workspace.updateWorkspace({ id: selected.active.session.sessionId, folders: [] });
 			}
 		}));
-		this.controller = this._register(this.services.createInstance(WorkingSetController, {
-			onDidPaneCompositeOpen: this.panelOpened.event,
-			showComposite: (id: string) => {
-				if (id === this.panelView) return;
-				this.panelView = id;
-				this.panelOpened.fire(id);
+		this.services.registerInstance(IPaneCompositePartService, {
+			onDidPaneCompositeOpen: listener => this.panelOpened.event(id => listener({ composite: { id } as import('../../../../../workbench/browser/parts/views/paneComposite.js').PaneComposite, viewContainerLocation: ViewContainerLocation.Panel })),
+			onDidPaneCompositeClose: Event.None,
+			getActivePaneComposite: () => undefined,
+			getPartId: () => 'panel',
+			hideActivePaneComposite: () => { this.panelVisible = false; },
+			getLastActivePaneCompositeId: () => this.panelView,
+			openPaneComposite: async (id: string | undefined) => {
+				if (id !== undefined && id !== this.panelView) {
+					this.panelView = id;
+					this.panelOpened.fire(id);
+				}
+				return undefined;
 			},
-		} as unknown as import('../../../../browser/parts/panelPart.js').PanelPart));
+		});
+		this.controller = this._register(this.services.createInstance(WorkingSetController));
 	}
 	public async open(id: string): Promise<void> {
 		this.sessions.openSession(id, `${id}-thread`);
@@ -365,7 +375,6 @@ class LayoutFixture extends Disposable {
 async function createFixture(saved?: readonly unknown[]): Promise<LayoutFixture> {
 	const fixture = new LayoutFixture(saved);
 	await fixture.sessions.initialize();
-	fixture.sessions.selectPage('code');
 	fixture.sessions.openSession('a', 'a-thread');
 	fixture.lifecycle.phase = LifecyclePhase.Restored;
 	fixture.controller.start();

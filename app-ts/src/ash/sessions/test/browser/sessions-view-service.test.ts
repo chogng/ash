@@ -29,7 +29,7 @@ function createView(sessions: ISessionsManagementService, storage: IStorageServi
 	return services.createInstance(SessionsService);
 }
 
-test("Sessions view service replaces the page on open and Back/Forward navigation", async () => {
+test("Sessions view service replaces visible sessions on open and Back/Forward navigation", async () => {
 	using sessions = new FakeSessionService([session("session-1", "thread-1"), session("session-2", "thread-2")]);
 	using storage = createTestStorage();
 	using view = createView(sessions, storage);
@@ -84,7 +84,7 @@ test("Sessions view records window-local untitled sessions without creating dura
 	assert.equal(sessions.startNewSessionCalls, 0);
 });
 
-test('new Sessions replace a restored split across the entire page and leave the other page intact', async () => {
+test('new Sessions replace the restored split and share navigation history', async () => {
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using storage = createTestStorage();
 	const visible = sessions.sessions.map(session => ({ kind: 'session', sessionId: session.sessionId, threadId: session.chats[0]!.threadId }));
@@ -96,9 +96,7 @@ test('new Sessions replace a restored split across the entire page and leave the
 
 	const first = view.openNewSession('First draft');
 	const second = view.openNewSession('Second draft');
-	assert.deepEqual({ chat: view.visibleSelections.map(selectionId), code: view.getPageSelection('code').visibleSelections.map(selectionId) }, {
-		chat: [`untitled:${second.untitledSessionId}`], code: ['session:session-2:thread-2'],
-	});
+	assert.deepEqual(view.visibleSelections.map(selectionId), [`untitled:${second.untitledSessionId}`]);
 	view.navigateBack();
 	assert.deepEqual(view.visibleSelections.map(selectionId), [`untitled:${first.untitledSessionId}`]);
 	view.navigateForward();
@@ -133,8 +131,8 @@ for (const target of ['active', 'inactive', 'untitled'] as const) {
 			inactive: 'session:session-2:thread-2',
 			untitled: 'untitled:saved-draft',
 		}[target];
-		assert.deepEqual({ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection), code: view.getPageSelection('code').visibleSelections.map(selectionId) }, {
-			visible: [expected], active: expected, code: ['session:session-2:thread-2'],
+		assert.deepEqual({ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection) }, {
+			visible: [expected], active: expected,
 		});
 	});
 }
@@ -186,7 +184,7 @@ test("closing the last draft does not reopen a previously closed durable Session
 	assert.notEqual(selectionId(view.visibleSelections[0]), `untitled:${draft.untitledSessionId}`);
 });
 
-test('switching pages during catalog loading keeps independently created drafts', async () => {
+test('an explicit draft chosen during catalog loading remains active', async () => {
 	const pending = new DeferredPromise<void>();
 	using sessions = new class extends FakeSessionService {
 		override initialize(): Promise<void> { return pending.p; }
@@ -194,61 +192,44 @@ test('switching pages during catalog loading keeps independently created drafts'
 	using storage = createTestStorage();
 	using view = createView(sessions, storage);
 	const initializing = view.initialize();
-	view.selectPage('code');
-	const codeDraft = selectionId(view.activeSelection);
-	view.selectPage('chat');
-	const chatDraft = selectionId(view.activeSelection);
+	const chosen = view.openNewSession('Chosen draft');
 	await pending.complete();
 	await initializing;
-	assert.notEqual(chatDraft, codeDraft);
-	assert.deepEqual(['chat', 'code'].map(page => view.getPageSelection(page as 'chat' | 'code').visibleSelections.map(selectionId)), [[chatDraft], [codeDraft]]);
+	assert.deepEqual(view.visibleSelections.map(selectionId), [`untitled:${chosen.untitledSessionId}`]);
 });
 
-test('Chat and Code keep their own active session, visible sessions, and navigation history', async () => {
+test('the session owner keeps one active selection and one navigation history', async () => {
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using storage = createTestStorage();
 	using view = createView(sessions, storage);
 	await view.initialize();
-	const chatDraft = view.openNewSession('Chat draft');
-	view.selectPage('code');
-	const codeDraft = view.activeSelection!;
+	const draft = view.openNewSession('Draft');
 	view.openSession('session-2', 'thread-2');
 	view.navigateBack();
-	assert.deepEqual(view.getPageSelection('chat').visibleSelections.map(selectionId), [`untitled:${chatDraft.untitledSessionId}`]);
-	assert.equal(selectionId(view.activeSelection), selectionId(codeDraft));
+	assert.equal(selectionId(view.getSelection().activeSelection), `untitled:${draft.untitledSessionId}`);
 	assert.equal(view.canNavigateForward, true);
-	view.selectPage('chat');
-	assert.equal(selectionId(view.activeSelection), `untitled:${chatDraft.untitledSessionId}`);
-	assert.equal(view.canNavigateForward, false);
 	view.navigateBack();
 	assert.equal(selectionId(view.activeSelection), 'session:session-1:thread-1');
-	view.selectPage('code');
+	view.navigateForward();
 	view.navigateForward();
 	assert.equal(selectionId(view.activeSelection), 'session:session-2:thread-2');
 });
 
-test('background first send replaces only its originating page and preserves later selection', async () => {
+test('background first send materializes its history entry without replacing a later selection', async () => {
 	using sessions = new FakeSessionService([]);
 	using storage = createTestStorage();
 	using view = createView(sessions, storage);
 	await view.initialize();
-	const chatDraft = view.openNewSession('Chat draft');
-	view.selectPage('code');
-	const pending = view.activeSelection!;
-	if (pending.kind !== 'untitled') throw new Error('Expected draft');
-	const later = view.openNewSession('Later Code draft');
-	view.selectPage('chat');
-	const active = await sessions.materializeUntitledSession(pending.session.untitledSessionId);
-	sessions.promoteUntitledSession(pending.session.untitledSessionId, active);
-	assert.equal(selectionId(view.activeSelection), `untitled:${chatDraft.untitledSessionId}`);
-	assert.deepEqual(view.getPageSelection('code').visibleSelections.map(selectionId), [`untitled:${later.untitledSessionId}`]);
-	view.selectPage('code');
-	assert.equal(selectionId(view.activeSelection), `untitled:${later.untitledSessionId}`);
+	const pending = view.openNewSession('Sending draft');
+	const later = view.openNewSession('Later draft');
+	const active = await sessions.materializeUntitledSession(pending.untitledSessionId);
+	sessions.promoteUntitledSession(pending.untitledSessionId, active);
+	assert.deepEqual(view.visibleSelections.map(selectionId), [`untitled:${later.untitledSessionId}`]);
 	view.navigateBack();
 	assert.equal(selectionId(view.activeSelection), 'session:materialized-1:materialized-thread-1');
 });
 
-test('an asynchronous conversation open stays with the page that requested it', async () => {
+test('a delayed conversation open does not steal focus from a newer choice', async () => {
 	const pending = new DeferredPromise<void>();
 	using sessions = new class extends FakeSessionService {
 		override async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
@@ -259,32 +240,25 @@ test('an asynchronous conversation open stays with the page that requested it', 
 	using storage = createTestStorage();
 	using view = createView(sessions, storage);
 	await view.initialize();
-	view.selectPage('code');
 	const opening = view.openThread('session-2', 'thread-2');
-	view.selectPage('chat');
+	view.openSession('session-1', 'thread-1');
 	await pending.complete();
 	await opening;
 	assert.equal(selectionId(view.activeSelection), 'session:session-1:thread-1');
-	assert.equal(selectionId(view.getPageSelection('code').activeSelection), 'session:session-2:thread-2');
 });
 
-test('closing Code drafts and catalog selection do not change Chat selection', async () => {
+test('catalog notifications do not replace the foreground draft', async () => {
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using storage = createTestStorage();
 	using view = createView(sessions, storage);
 	await view.initialize();
-	view.selectPage('code');
 	view.closeVisibleSelection(view.activeSelection!);
-	assert.equal(view.activeSelection?.kind, 'untitled');
+	const draft = selectionId(view.activeSelection);
 	sessions.selectThread('session-2', 'thread-2');
-	assert.equal(selectionId(view.getPageSelection('chat').activeSelection), 'session:session-1:thread-1');
-	assert.equal(view.activeSelection?.kind, 'untitled');
-	view.openSession('session-1', 'thread-1');
-	view.closeVisibleSelection(view.activeSelection!);
-	assert.equal(selectionId(view.getPageSelection('chat').activeSelection), 'session:session-1:thread-1');
+	assert.equal(selectionId(view.activeSelection), draft);
 });
 
-test('Sessions restores each page order, active selection and untitled identity after restart', async () => {
+test('Sessions merges legacy selections and restores one order, active selection and draft identities after restart', async () => {
 	using storage = createTestStorage();
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	const chatDraft = { kind: 'untitled', session: { untitledSessionId: 'saved-chat', title: 'Chat draft', workspace: { type: 'current' } } };
@@ -292,24 +266,19 @@ test('Sessions restores each page order, active selection and untitled identity 
 	const secondCode = { kind: 'untitled', session: { untitledSessionId: 'saved-code-second', title: 'Second Code draft', workspace: { type: 'current' } } };
 	storage.store('sessions.viewState', JSON.stringify({ version: 1, pages: {
 		chat: { visible: [{ kind: 'session', sessionId: 'session-1', threadId: 'thread-1' }, chatDraft, { kind: 'session', sessionId: 'session-2', threadId: 'thread-2' }], active: 1 },
-		code: { visible: [firstCode, { kind: 'session', sessionId: 'session-2', threadId: 'thread-2' }, secondCode], active: 0 },
+		code: { visible: [firstCode, { kind: 'session', sessionId: 'session-2', threadId: 'thread-2' }, secondCode, chatDraft], active: 0 },
 	} }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	using view = createView(sessions, storage);
 	await view.initialize();
-	view.selectPage('code');
 	view.activateSelection(view.visibleSelections[0]!);
-	const expected = ['chat', 'code'].map(page => {
-		const state = view.getPageSelection(page as 'chat' | 'code');
-		return { visible: state.visibleSelections.map(selectionId), active: selectionId(state.activeSelection) };
-	});
+	const expected = { visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection) };
+	assert.deepEqual(expected.visible, ['session:session-1:thread-1', 'untitled:saved-chat', 'session:session-2:thread-2', 'untitled:saved-code-first', 'untitled:saved-code-second']);
 	await storage.flush();
 	using nextCatalog = new FakeSessionService([session('session-2', 'thread-2'), session('session-1', 'thread-1')]);
 	using restored = createView(nextCatalog, storage);
 	await restored.initialize();
-	assert.deepEqual(['chat', 'code'].map(page => {
-		const state = restored.getPageSelection(page as 'chat' | 'code');
-		return { visible: state.visibleSelections.map(selectionId), active: selectionId(state.activeSelection) };
-	}), expected);
+	assert.deepEqual({ visible: restored.visibleSelections.map(selectionId), active: selectionId(restored.activeSelection) }, expected);
+	assert.equal(JSON.parse(storage.get('sessions.viewState', StorageScope.WORKSPACE)!).version, 2);
 	assert.deepEqual(nextCatalog.untitledSessions.map(draft => draft.title).sort(), ['Chat draft', 'New code session', 'Second Code draft']);
 });
 
@@ -334,14 +303,13 @@ test('Sessions restoration prunes unavailable conversations and persists materia
 	});
 });
 
-test('a page choice during catalog loading supersedes saved selection without discarding the other page', async () => {
+test('a choice during catalog loading supersedes the saved foreground selection', async () => {
 	using storage = createTestStorage();
 	using sessions = new FakeSessionService([]);
 	using view = createView(sessions, storage);
 	await view.initialize();
 	view.openNewSession('Saved Chat');
-	view.selectPage('code');
-	const savedCode = view.openNewSession('Saved Code');
+	view.openNewSession('Saved Code');
 	await storage.flush();
 	const pending = new DeferredPromise<void>();
 	using nextCatalog = new class extends FakeSessionService {
@@ -355,8 +323,8 @@ test('a page choice during catalog loading supersedes saved selection without di
 	assert.equal(storage.get('sessions.viewState', StorageScope.WORKSPACE), savedRaw);
 	await pending.complete();
 	await initializing;
-	assert.deepEqual({ chat: restored.getPageSelection('chat').visibleSelections.map(selection => selection.kind === 'untitled' ? selection.session.title : selection.active.session.title), code: restored.getPageSelection('code').visibleSelections.map(selectionId), active: selectionId(restored.activeSelection) }, {
-		chat: ['Chosen during startup'], code: [`untitled:${savedCode.untitledSessionId}`], active: `untitled:${choice.untitledSessionId}`,
+	assert.deepEqual({ visible: restored.visibleSelections.map(selectionId), active: selectionId(restored.activeSelection) }, {
+		visible: [`untitled:${choice.untitledSessionId}`], active: `untitled:${choice.untitledSessionId}`,
 	});
 });
 
@@ -388,7 +356,7 @@ test('an unavailable catalog restores local drafts and preserves unresolved conv
 	assert.deepEqual(restored.visibleSelections.map(selectionId), [`untitled:${draft.untitledSessionId}`]);
 	await storage.flush();
 	const saved = JSON.parse(storage.get('sessions.viewState', StorageScope.WORKSPACE)!);
-	assert.deepEqual(saved.pages.chat.visible.map((reference: { kind: string; sessionId?: string; session?: IUntitledChatSession }) => reference.kind === 'session' ? reference.sessionId : reference.session!.untitledSessionId), ['session-1', draft.untitledSessionId]);
+	assert.deepEqual(saved.visible.map((reference: { kind: string; sessionId?: string; session?: IUntitledChatSession }) => reference.kind === 'session' ? reference.sessionId : reference.session!.untitledSessionId), ['session-1', draft.untitledSessionId]);
 	assert.doesNotThrow(() => restored.closeVisibleSelection(restored.activeSelection!));
 	assert.equal(restored.activeSelection?.kind, 'untitled');
 });

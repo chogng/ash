@@ -3,7 +3,7 @@ import { expect, test } from '../../../automation/test.js';
 const image = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 1, 8, 6, 0, 0, 0, 244, 34, 127, 138, 0, 0, 0, 14, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192, 240, 31, 4, 1, 16, 248, 3, 253, 78, 149, 193, 111, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]);
 const longName = 'library-secondary-product-photography-for-the-autumn-brand-campaign-and-design-reference.png';
 
-test('Sessions Library opens a retained page with accessible browsing controls', async ({ application, target, workbench }) => {
+test('Sessions Library opens a retained editor with accessible browsing controls', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
 	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
@@ -38,6 +38,11 @@ test('Sessions Library opens a retained page with accessible browsing controls',
 	await expect(help.getByRole('textbox')).toHaveValue(/Library stores reusable images/);
 	await page.keyboard.press('Escape');
 	await expect(library.getByRole('searchbox')).toBeFocused();
+	await page.locator('[data-part="editor"]').getByRole('button', { name: 'Close Library', exact: true }).click();
+	await expect(page.locator('[data-part="sessions"]')).toBeVisible();
+	await expect(library).toHaveCount(0);
+	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
+	await expect(library).toBeVisible();
 	if (target.kind === 'browser') { await page.setViewportSize({ width: 640, height: 780 }); }
 	else {
 		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }

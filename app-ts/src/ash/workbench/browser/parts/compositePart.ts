@@ -1,3 +1,4 @@
+import { Emitter } from "../../../base/common/event.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import { WorkbenchPart } from "../part.js";
 import { PaneComposite } from "./views/paneComposite.js";
@@ -11,6 +12,10 @@ import { PaneComposite } from "./views/paneComposite.js";
 export abstract class CompositePart extends WorkbenchPart {
 	private readonly composites = new Map<string, PaneComposite>();
 	private activeComposite: PaneComposite | undefined;
+	private readonly compositeOpened = this._register(new Emitter<PaneComposite>());
+	private readonly compositeClosed = this._register(new Emitter<PaneComposite>());
+	public readonly onDidCompositeOpen = this.compositeOpened.event;
+	public readonly onDidCompositeClose = this.compositeClosed.event;
 
 	protected constructor(container: HTMLElement, id: string) {
 		super(container, id);
@@ -35,20 +40,38 @@ export abstract class CompositePart extends WorkbenchPart {
 		if (!composite) {
 			throw new Error(`Composite is not available in Part: ${compositeId}`);
 		}
-		if (this.activeComposite === composite) return;
+		if (this.activeComposite === composite) {
+			if (!composite.isVisible() && !this.domNode.hidden) {
+				composite.setVisible(true);
+				this.compositeOpened.fire(composite);
+			}
+			return;
+		}
 		if (this.activeComposite) {
-			this.activeComposite.setVisible(false);
-			this.activeComposite.element.remove();
+			const previous = this.activeComposite;
+			const visible = previous.isVisible();
+			previous.setVisible(false);
+			previous.element.remove();
+			this.activeComposite = undefined;
+			if (visible) { this.compositeClosed.fire(previous); }
 		}
 		this.activeComposite = composite;
 		this.contentDomNode.append(composite.element);
 		composite.setVisible(!this.domNode.hidden);
+		if (!this.domNode.hidden) { this.compositeOpened.fire(composite); }
 	}
 
 	override setVisible(visible: boolean): void {
+		const changed = this.domNode.hidden === visible;
 		super.setVisible(visible);
 		this.activeComposite?.setVisible(visible);
+		if (changed && this.activeComposite) {
+			if (visible) { this.compositeOpened.fire(this.activeComposite); }
+			else { this.compositeClosed.fire(this.activeComposite); }
+		}
 	}
+
+	public getActiveComposite(): PaneComposite | undefined { return this.activeComposite; }
 
 	get activeCompositeId(): string | undefined {
 		return this.activeComposite?.id;

@@ -2,7 +2,6 @@ import '../../../editor/test/browser/testEditorDom.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { sessionsPartIds, type SessionsPartId } from '../../common/layoutConstants.js';
-import { observableValue } from '../../../base/common/observable.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -58,9 +57,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 		},
 	};
 	const sessions: ISessionsService = {
-		page: observableValue<"chat" | "code">("page", "chat"),
-		selectPage() {},
-		getPageSelection() { return { visibleSelections: [], activeSelection: undefined }; },
+		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() {},
 		onDidChange: changed.event,
 		visibleSelections: [],
@@ -100,7 +97,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 		menuButton().click();
 
 		assert.equal(closedMenus, 1);
-		assert.deepEqual([...titlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['应用程序菜单', '隐藏侧栏', 'Back', 'Forward']);
+		assert.deepEqual([...titlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['应用程序菜单', '隐藏侧栏', 'Back', 'Forward', 'Toggle Code panel']);
 		assert.equal(titlebar.domNode.querySelector('[role="toolbar"]')?.getAttribute('aria-label'), '标题栏左侧操作');
 		titlebar.dispose();
 		assert.equal(closedMenus, 2);

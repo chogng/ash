@@ -1,3 +1,5 @@
+import { URI } from '../../../../base/common/uri.js';
+import { LIBRARY_EDITOR_RESOURCE } from '../../library/browser/libraryPage.js';
 import { localize2, localize } from '../../../../nls.js';
 import { BaseLayoutController } from './baseSessionLayoutController.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -6,13 +8,16 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
-import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { IEditorService, type EditorInput } from '../../../../workbench/services/editor/common/editorService.js';
 import type { EditorWorkingSet } from '../../../../workbench/services/editor/common/editorWorkingSet.js';
+import { EditorPaneVisibility } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import type { PanelPart } from '../../../browser/parts/panelPart.js';
-import type { AuxiliaryBarPart } from '../../../browser/parts/auxiliarybar/auxiliaryBarPart.js';
+import { IPaneCompositePartService } from '../../../../workbench/services/panecomposite/browser/panecomposite.js';
+import { ViewContainerLocation } from '../../../../workbench/common/views.js';
+import type { SidebarPart } from '../../../browser/parts/sidebarPart.js';
+import { IDesignEditorService, DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from '../../design/browser/designEditorService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import { DesktopDockedTabsCoordinator } from './desktop/desktopDockedTabsCoordinator.js';
 import { DesktopDetailPanelCoordinator } from './desktop/desktopDetailPanelCoordinator.js';
@@ -50,12 +55,16 @@ export class DesktopLayoutController extends BaseLayoutController {
 	private restoredSession: string | undefined;
 	private collapsedEditors: EditorWorkingSet | undefined;
 	private existingProfile: SidePaneProfile | undefined;
-	private closedProfile: SidePaneProfile = { editor: true, details: true };
+	private closedProfile: SidePaneProfile = { editor: false, details: true };
 	private initialRestore = true;
+	private sessionEditor: EditorInput | undefined;
+	private applyingComposition = false;
+	private readonly restoredEditorResource: URI | undefined;
 
 	constructor(
-		panel: PanelPart,
-		details: AuxiliaryBarPart,
+		private readonly sidebar: SidebarPart,
+		@IPaneCompositePartService panes: IPaneCompositePartService,
+		@IDesignEditorService private readonly designEditors: IDesignEditorService,
 		@ISessionsService sessions: ISessionsService,
 		@ISessionsManagementService management: ISessionsManagementService,
 		@IEditorPart editor: IEditorPart,
@@ -68,9 +77,15 @@ export class DesktopLayoutController extends BaseLayoutController {
 		@IInstantiationService instantiation: IInstantiationService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
-		super(panel, sessions, management, editor, editors, workspace, layout, storage, notifications, lifecycle);
+		super(panes, sessions, management, editor, editors, workspace, layout, storage, notifications, lifecycle);
 		this.tabs = instantiation.createInstance(DesktopDockedTabsCoordinator);
-		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator, details);
+		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator);
+		const primaryEditor = storage.get('sessions.layout.primaryEditor', StorageScope.WORKSPACE);
+		if (primaryEditor !== undefined) {
+			const resource = URI.parse(primaryEditor);
+			if (resource.toString() !== designEditors.input.resource.toString() && resource.toString() !== LIBRARY_EDITOR_RESOURCE.toString()) { throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.')); }
+			this.restoredEditorResource = resource;
+		}
 		const profile = storage.get(profileKey, StorageScope.WORKSPACE);
 		if (profile !== undefined) {
 			this.existingProfile = parseProfile(profile);
@@ -83,6 +98,54 @@ export class DesktopLayoutController extends BaseLayoutController {
 
 	public override start(): void {
 		super.start();
+		const activityKeys = new Map(['chat', 'code', 'teams', 'library', 'design'].map(id => [id, this.contextKeys.createKey<boolean>(`sessions.activity.${id}Selected`, false)]));
+		const updateActivity = (): void => this.contextKeys.bufferChangeEvents(() => {
+			const editorVisible = this.layout.isPartVisible('editor');
+			const scheme = this.editors.activeEditor?.resource.scheme;
+			const editorOnly = !this.layout.isPartVisible('sessions');
+			const teams = !editorOnly && this.sidebar.currentView === 'teams';
+			const code = !editorOnly && !teams && (editorVisible || this.layout.isPartVisible('auxiliarybar') || this.layout.isPartVisible('panel'));
+			activityKeys.get('chat')!.set(!editorOnly && !teams && !code);
+			activityKeys.get('code')!.set(code);
+			activityKeys.get('teams')!.set(teams);
+			activityKeys.get('library')!.set(editorOnly && editorVisible && scheme === 'ash-library');
+			activityKeys.get('design')!.set(editorOnly && editorVisible && scheme === 'ash-design');
+		});
+		this._register(toDisposable(() => { for (const key of activityKeys.values()) { key.reset(); } }));
+		this._register(this.layout.onDidLayoutMainContainer(updateActivity));
+		this._register(this.sidebar.onDidChangeView(updateActivity));
+		this._register(this.editors.onDidActiveEditorChange(() => {
+			const input = this.editors.activeEditor;
+			if (input && input.resource.scheme !== 'ash-design' && input.resource.scheme !== 'ash-library') { this.sessionEditor = input; }
+			if (!this.applyingComposition && !this.restoring && input) {
+				if (input.resource.scheme === 'ash-design' || input.resource.scheme === 'ash-library') {
+					void this.showEditorComposition(input.resource.scheme === 'ash-design').catch(error => this.notifications.error(String(error)));
+				} else {
+					this.layout.updateParts(() => {
+						this.layout.setPartAvailable('sessions', true);
+						this.layout.setPartAvailable('editor', true);
+						this.layout.setPartAvailable('sidebar', true);
+						this.layout.setPartAvailable('panel', true);
+						this.layout.setPartAvailable('auxiliarybar', true);
+					});
+					this.savePrimaryEditor();
+				}
+			}
+			if (!input && !this.applyingComposition && !this.restoring && !this.layout.isPartVisible('sessions')) {
+				void this.showSessionComposition('chat').catch(error => this.notifications.error(String(error)));
+			}
+			updateActivity();
+		}));
+		this._register(this.layout.onDidChangePartVisibility(event => {
+			if (event.partId !== 'editor') { return; }
+			for (const group of this.editor.groups) {
+				group.activePane?.setVisible(event.visible ? EditorPaneVisibility.Visible : EditorPaneVisibility.Hidden);
+			}
+		}));
+		for (const id of ['chat', 'code', 'teams'] as const) {
+			this._register(CommandsRegistry.register(`sessions.open.${id}`, () => this.showSessionComposition(id)));
+		}
+		updateActivity();
 		const editorVisible = editorVisibleContext.bindTo(this.contextKeys);
 		const detailsVisible = detailsVisibleContext.bindTo(this.contextKeys);
 		const code = codeContext.bindTo(this.contextKeys);
@@ -108,7 +171,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 			if (this.layout.isPartVisible('editor') && this.collapsedEditors) {
 				void this.enqueueDetails(() => this.restoreCollapsedEditors());
 			}
-			if (this.sessions.getPageSelection('code').activeSelection?.kind === 'session') {
+			if (this.sessions.getSelection().activeSelection?.kind === 'session') {
 				this.existingProfile = this.profile;
 				this.saveProfile();
 			}
@@ -149,7 +212,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 				if (input && !this.tabs.isManaged(input) && ['file', 'ash-remote', 'untitled'].includes(input.resource.scheme)) {
 					await this.tabs.removeFilesLandingTab();
 				}
-				this.detailPanel.update(true);
+				await this.detailPanel.update(true);
 			});
 		}));
 		this._register(this.storage.onWillSaveState(() => this.saveProfile()));
@@ -161,14 +224,14 @@ export class DesktopLayoutController extends BaseLayoutController {
 			['ash.sessions.openFilesTab', async () => {
 				await this.showEditor();
 				await this.tabs.openFiles();
-				this.detailPanel.update(true);
+				await this.detailPanel.update(true);
 			}],
 			['ash.sessions.openChangesTab', async () => {
 				await this.showEditor();
-				const selection = this.sessions.getPageSelection('code').activeSelection;
+				const selection = this.sessions.getSelection().activeSelection;
 				if (selection) {
 					await this.tabs.openChanges(selection);
-					this.detailPanel.update(true);
+					await this.detailPanel.update(true);
 				}
 			}],
 		] as const) {
@@ -213,7 +276,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		updateContext();
 	}
 
-	protected override isEditorAutoVisibilitySuppressed(): boolean { return this.restoring || this.updating; }
+	protected override isEditorAutoVisibilitySuppressed(): boolean { return this.restoring || this.updating || this.applyingComposition; }
 	protected override shouldShowEditor(): boolean {
 		const input = this.editors.activeEditor;
 		return super.shouldShowEditor() && (this.layout.isPartVisible('editor') || !input || !this.tabs.isManaged(input));
@@ -268,13 +331,90 @@ export class DesktopLayoutController extends BaseLayoutController {
 		} else if (!this.layout.isPartVisible('editor') && this.layout.isPartVisible('auxiliarybar')) {
 			await this.hideEditor();
 		}
-		this.detailPanel.update(false);
+		await this.detailPanel.update(false);
+	}
+
+	private async showEditorComposition(design: boolean): Promise<void> {
+		this.applyingComposition = true;
+		try {
+			this.layout.updateParts(() => {
+				this.layout.setPartAvailable('editor', true);
+				this.layout.showPart('editor');
+				this.layout.setPartAvailable('sessions', false);
+				this.layout.setPartAvailable('sidebar', design);
+				this.layout.setPartAvailable('auxiliarybar', design);
+				this.layout.setPartAvailable('panel', false);
+			});
+			if (design) {
+				await this.panes.openPaneComposite(DESIGN_LAYERS_CONTAINER_ID, ViewContainerLocation.Sidebar);
+				await this.panes.openPaneComposite(DESIGN_PROPERTIES_CONTAINER_ID, ViewContainerLocation.AuxiliaryBar);
+			}
+		} finally { this.applyingComposition = false; }
+		this.savePrimaryEditor();
+	}
+
+	private async showSessionComposition(action: 'chat' | 'code' | 'teams'): Promise<void> {
+		this.applyingComposition = true;
+		try {
+			const keepComposition = this.layout.isPartVisible('sessions') && this.sidebar.currentView === 'chats'
+				&& (this.layout.isPartVisible('editor') || this.layout.isPartVisible('auxiliarybar') || this.layout.isPartVisible('panel'));
+			const specialEditor = ['ash-design', 'ash-library'].includes(this.editors.activeEditor?.resource.scheme ?? '');
+			if (specialEditor) {
+				const retained = this.sessionEditor && this.editor.groups.some(group => group.inputs.includes(this.sessionEditor!));
+				if (retained) { this.editor.activateEditor(this.sessionEditor!); }
+				else { await this.tabs.openFiles(); }
+			}
+			if (action !== 'code' && this.layout.isPartVisible('sessions') && (this.layout.isPartVisible('editor') || this.layout.isPartVisible('auxiliarybar'))) {
+				this.closedProfile = this.profile;
+			}
+			this.layout.updateParts(() => {
+				this.layout.setPartAvailable('sidebar', true);
+				this.sidebar.selectView(action === 'teams' ? 'teams' : 'chats');
+				this.layout.setPartAvailable('editor', true);
+				this.layout.setPartAvailable('auxiliarybar', true);
+				this.layout.setPartAvailable('panel', true);
+				this.layout.setPartAvailable('sessions', true);
+				if (action !== 'code') { this.layout.showPart('sidebar'); }
+				if (action === 'code') {
+					if (!keepComposition) { this.applyProfile(this.closedProfile); }
+				} else {
+					this.layout.hidePart('editor');
+					this.layout.hidePart('auxiliarybar');
+					this.layout.hidePart('panel');
+				}
+			});
+			if (action === 'code') {
+				const selection = this.sessions.activeSelection;
+				if (selection) {
+					await this.tabs.reconcile(selection, !this.layout.isPartVisible('editor'));
+					if (!this.layout.isPartVisible('editor')) { await this.hideEditor(); }
+				}
+				await this.detailPanel.update(false);
+				this.editors.focusActiveEditor();
+			} else { this.sidebar.focus(); }
+		} finally { this.applyingComposition = false; }
+		this.savePrimaryEditor();
+	}
+
+	public async restorePrimaryEditor(): Promise<void> {
+		if (!this.restoredEditorResource) { return; }
+		const input = this.restoredEditorResource.scheme === 'ash-design'
+			? this.designEditors.input
+			: { resource: LIBRARY_EDITOR_RESOURCE, label: localize('library.title', 'Library'), readOnly: true, showBreadcrumbs: false };
+		await this.editors.openEditor(input, { pinned: true, preserveFocus: true });
+	}
+
+	private savePrimaryEditor(): void {
+		const input = this.editors.activeEditor;
+		if (input && !this.layout.isPartVisible('sessions')) {
+			this.storage.store('sessions.layout.primaryEditor', input.resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		} else { this.storage.remove('sessions.layout.primaryEditor', StorageScope.WORKSPACE); }
 	}
 
 	private get profile(): SidePaneProfile { return { editor: this.layout.isPartVisible('editor'), details: this.layout.isPartVisible('auxiliarybar') }; }
-	private isCodeActive(): boolean { return this.sessions.page.get() === 'code' && this.layout.isPartAvailable('panel'); }
+	private isCodeActive(): boolean { return this.layout.isPartVisible('sessions') && this.layout.isPartAvailable('panel'); }
 	private isCurrentSession(selection: SessionsViewSelection): boolean {
-		const current = this.sessions.getPageSelection('code').activeSelection;
+		const current = this.sessions.getSelection().activeSelection;
 		return this.isCodeActive() && current !== undefined && this.sessionKey(current) === this.sessionKey(selection);
 	}
 	private saveProfile(): void {
@@ -300,7 +440,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 			if (this.isDisposed || !this.isCodeActive()) {
 				return;
 			}
-			const selected = this.sessions.getPageSelection('code').activeSelection;
+			const selected = this.sessions.getSelection().activeSelection;
 			this.captureEditors();
 			this.updating = true;
 			try {
@@ -315,13 +455,20 @@ export class DesktopLayoutController extends BaseLayoutController {
 		});
 	}
 	private async hideEditor(): Promise<void> {
-		const selection = this.sessions.getPageSelection('code').activeSelection;
-		if (!selection || !await this.editor.confirmCloseAllEditors() || !this.isCurrentSession(selection)) {
+		const selection = this.sessions.getSelection().activeSelection;
+		if (!selection) {
 			return;
 		}
+		// Product editors own window documents; collapsing session files must retain those panes.
+		const closing = this.editor.groups.map(group => ({ group, inputs: group.inputs.filter(input => !this.tabs.isManaged(input) && !['ash-design', 'ash-library'].includes(input.resource.scheme)) }));
+		for (const { group, inputs } of closing) {
+			for (const input of inputs) {
+				if (!await group.confirmCloseEditor(input) || !this.isCurrentSession(selection)) { return; }
+			}
+		}
 		this.collapsedEditors ??= this.editor.saveWorkingSet('collapsed');
-		for (const group of this.editor.groups) {
-			for (const input of [...group.inputs].filter(input => !this.tabs.isManaged(input))) {
+		for (const { group, inputs } of closing) {
+			for (const input of inputs) {
 				await group.closeEditor(input, { skipConfirmation: true, reason: 'reset' });
 				if (!this.isCurrentSession(selection)) {
 					return;
@@ -331,7 +478,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		this.layout.showPart('auxiliarybar');
 		this.layout.hidePart('editor');
 		await this.tabs.reconcile(selection, true);
-		this.detailPanel.update(true);
+		await this.detailPanel.update(true);
 	}
 	private async restoreCollapsedEditors(): Promise<void> {
 		const saved = this.collapsedEditors ? this.getWorkingSet('collapsed') : undefined;
@@ -339,7 +486,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		if (saved) {
 			await this.editor.applyWorkingSet(saved, { preserveFocus: true });
 		}
-		const selection = this.sessions.getPageSelection('code').activeSelection;
+		const selection = this.sessions.getSelection().activeSelection;
 		if (selection) {
 			await this.tabs.reconcile(selection, false);
 		}
@@ -347,7 +494,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	private async showEditor(): Promise<void> {
 		await this.restoreCollapsedEditors();
 		this.layout.showPart('editor');
-		this.detailPanel.update(false);
+		await this.detailPanel.update(false);
 		this.editor.focus();
 	}
 	private async toggleDetails(): Promise<void> {
@@ -357,7 +504,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 			}
 			this.layout.hidePart('auxiliarybar');
 		} else {
-			this.detailPanel.update(true);
+			await this.detailPanel.update(true);
 		}
 	}
 	private async toggleSidePane(): Promise<void> {
@@ -370,13 +517,13 @@ export class DesktopLayoutController extends BaseLayoutController {
 			if (this.closedProfile.editor) {
 				await this.restoreCollapsedEditors();
 			}
-			const selection = this.sessions.getPageSelection('code').activeSelection;
+			const selection = this.sessions.getSelection().activeSelection;
 			if (selection) {
 				await this.tabs.reconcile(selection, !this.closedProfile.editor);
 			}
-			this.detailPanel.update(false);
+			await this.detailPanel.update(false);
 		}
-		if (this.sessions.getPageSelection('code').activeSelection?.kind === 'session') {
+		if (this.sessions.getSelection().activeSelection?.kind === 'session') {
 			this.existingProfile = this.profile;
 		}
 		this.saveProfile();

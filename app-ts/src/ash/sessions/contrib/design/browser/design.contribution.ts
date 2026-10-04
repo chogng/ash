@@ -20,18 +20,23 @@ import { DesignEditorWidget } from './widget/designEditorWidget.js';
 import { DESIGN_EDITOR_RESOURCE } from './designDocumentController.js';
 import { IDesignEditorService, DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from './designEditorService.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { SessionsPageRegistry } from '../../../browser/pages.js';
+import { Menus } from '../../../browser/menus.js';
+import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { DesignLayersView, DesignPropertiesView } from './designViews.js';
 import { designToolActions, designModeActions } from './widget/designToolsWidget.js';
 import { ColorPicker } from '../../../../base/browser/ui/colorPicker/colorPicker.js';
 
-SessionsPageRegistry.registerPage({
-	id: 'design', title: 'Design', titleKey: 'sessions.activity.design', icon: Lxicon.symbolColor, activeIcon: Lxicon.symbolColorFilled, order: 50,
-	layout: {
-		sidebar: { containerId: DESIGN_LAYERS_CONTAINER_ID }, primary: 'editor', editor: { resource: DESIGN_EDITOR_RESOURCE },
-		auxiliaryBar: { containerId: DESIGN_PROPERTIES_CONTAINER_ID }, panel: false,
-	},
-	getEditorInput: accessor => accessor.get(IDesignEditorService).input,
+registerAction2(class OpenDesign extends Action2 {
+	constructor() {
+		super({
+			id: 'sessions.open.design', title: localize2({ bundle: 'ash', key: 'sessions.activity.design' }, 'Design'), icon: Lxicon.symbolColor,
+			toggled: { condition: ContextKeyExpr.has('sessions.activity.designSelected'), icon: Lxicon.symbolColorFilled },
+			menu: { id: Menus.ActivityBar, group: 'navigation', order: 50 },
+		});
+	}
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(IEditorService).openEditor(accessor.get(IDesignEditorService).input, { pinned: true });
+	}
 });
 
 EditorPanes.registerStatic({

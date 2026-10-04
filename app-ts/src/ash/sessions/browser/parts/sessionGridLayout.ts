@@ -3,7 +3,6 @@ import { scheduleAtNextAnimationFrame } from '../../../base/browser/dom.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
-import type { SessionsPage } from '../../services/sessions/browser/sessionsService.js';
 
 export interface ISessionGridEntry {
 	readonly id: string;
@@ -19,24 +18,38 @@ export class SessionGridLayout extends Disposable {
 	public get element(): HTMLDivElement { return this.grid.element; }
 	private views: readonly IView[];
 	private entries: readonly ISessionGridEntry[] = [];
-	private pendingWidths: ReadonlyMap<string, number> | undefined;
+	private widths: ReadonlyMap<string, number> | undefined;
+	private restorePending = false;
 	private readonly storageKey: string;
 	private dimension: { width: number; height: number } | undefined;
 	private visible = true;
 
-	constructor(private readonly container: HTMLElement, initialView: IView, page: SessionsPage, @IStorageService private readonly storage: IStorageService) {
+	constructor(private readonly container: HTMLElement, initialView: IView, @IStorageService private readonly storage: IStorageService) {
 		super();
-		this.storageKey = `sessions.gridState.${page}`;
+		this.storageKey = 'sessions.gridState';
 		const raw = storage.get(this.storageKey, StorageScope.WORKSPACE);
-		this.pendingWidths = raw === undefined ? undefined : parseStoredWidths(JSON.parse(raw));
+		if (raw !== undefined) {
+			this.widths = parseStoredWidths(JSON.parse(raw));
+		} else {
+			const widths = new Map<string, number>();
+			for (const key of ['sessions.gridState.code', 'sessions.gridState.chat']) {
+				const legacy = storage.get(key, StorageScope.WORKSPACE);
+				if (legacy !== undefined) {
+					for (const [id, width] of parseStoredWidths(JSON.parse(legacy))) { widths.set(id, width); }
+				}
+			}
+			if (widths.size > 0) { this.widths = widths; }
+		}
+		this.restorePending = this.widths !== undefined;
 		this.gridResource.value = new Grid<IView>(container, { type: 'leaf', view: initialView, size: 800 }, { sashPresentation: { type: 'inset', gap: 8 } });
 		this.element.classList.add('ash-sessions-chat-grid');
 		this.views = [initialView];
-		this.gridChanges.value = this.grid.onDidChange(() => this.saveState());
+		this.gridChanges.value = this.grid.onDidChange(() => this.captureWidths());
 		this._register(storage.onWillSaveState(() => this.saveState()));
 	}
 
 	public reconcile(entries: readonly ISessionGridEntry[], active: string): void {
+		const changed = entries.length !== this.entries.length || entries.some((entry, index) => entry.id !== this.entries[index]?.id || entry.view !== this.entries[index]?.view);
 		const activeView = entries.find(entry => entry.id === active)?.view;
 		const focused = this.element.ownerDocument.activeElement;
 		const restoreFocus = focused instanceof this.element.ownerDocument.defaultView!.HTMLElement && activeView?.element.contains(focused);
@@ -70,6 +83,7 @@ export class SessionGridLayout extends Disposable {
 		}
 		this.views = nextViews;
 		this.entries = entries.filter(entry => entry.id !== 'empty');
+		if (changed && !this.restorePending) { this.captureWidths(); }
 		if (this.dimension) {
 			this.scheduleRestoreWidths();
 		}
@@ -80,6 +94,8 @@ export class SessionGridLayout extends Disposable {
 	}
 
 	public layout(width: number, height: number): void {
+		// Keep the user's proportions when surrounding Parts temporarily squeeze leaves to their minimum widths.
+		if (this.widths && this.dimension?.width !== width) { this.restorePending = true; }
 		this.dimension = { width, height };
 		this.scheduleRestoreWidths();
 		this.grid.layout(width, height);
@@ -91,19 +107,28 @@ export class SessionGridLayout extends Disposable {
 		if (!visible) { this.restoreFrame.clear(); }
 	}
 
+	private captureWidths(): void {
+		if (!this.dimension || this.dimension.width <= 0 || this.entries.length === 0 || this.restorePending) { return; }
+		this.widths = new Map(this.entries.map(entry => [entry.id, this.grid.getViewSize(entry.view).width]));
+		this.saveState();
+	}
+
 	private saveState(): void {
-		if (this.pendingWidths || !this.dimension || this.dimension.width <= 0 || this.entries.length === 0) {
+		if (this.restorePending || !this.dimension || this.dimension.width <= 0 || this.entries.length === 0) {
 			return;
 		}
-		const widths = this.entries.map(entry => ({ id: entry.id, width: this.grid.getViewSize(entry.view).width }));
+		this.widths ??= new Map(this.entries.map(entry => [entry.id, this.grid.getViewSize(entry.view).width]));
+		const widths = this.entries.map(entry => ({ id: entry.id, width: this.widths!.get(entry.id)! }));
 		this.storage.store(this.storageKey, JSON.stringify({ version: 1, widths }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		this.storage.remove('sessions.gridState.chat', StorageScope.WORKSPACE);
+		this.storage.remove('sessions.gridState.code', StorageScope.WORKSPACE);
 	}
 
 	private scheduleRestoreWidths(): void {
-		if (!this.visible || !this.pendingWidths || !this.dimension || this.dimension.width <= 0 || this.dimension.height <= 0 || this.entries.length === 0 || this.restoreFrame.value) {
+		if (!this.visible || !this.restorePending || !this.widths || !this.dimension || this.dimension.width <= 0 || this.dimension.height <= 0 || this.entries.length === 0 || this.restoreFrame.value) {
 			return;
 		}
-		// Page restoration changes which surrounding Parts are present. Apply widths after that layout settles.
+		// Restoring surrounding Parts changes the available width. Apply widths after that layout settles.
 		this.restoreFrame.value = scheduleAtNextAnimationFrame(this.element.ownerDocument.defaultView!, () => {
 			this.restoreFrame.clear();
 			const { width, height } = this.dimension!;
@@ -114,20 +139,22 @@ export class SessionGridLayout extends Disposable {
 	}
 
 	private restoreWidths(width: number, height: number): void {
-		if (!this.pendingWidths || this.entries.length === 0 || width <= 0 || height <= 0) {
+		if (!this.widths || this.entries.length === 0 || width <= 0 || height <= 0) {
 			return;
 		}
 		// An entirely new arrangement has no saved geometry to restore.
-		if (!this.entries.some(entry => this.pendingWidths!.has(entry.id))) {
-			this.pendingWidths = undefined;
+		if (!this.entries.some(entry => this.widths!.has(entry.id))) {
+			this.widths = undefined;
+			this.restorePending = false;
 			return;
 		}
-		const sizes = this.entries.map(entry => this.pendingWidths!.get(entry.id) ?? this.grid.getViewSize(entry.view).width);
+		const sizes = this.entries.map(entry => this.widths!.get(entry.id) ?? this.grid.getViewSize(entry.view).width);
 		const total = sizes.reduce((sum, size) => sum + size, 0);
 		const focused = this.element.ownerDocument.activeElement;
 		const restoreFocus = focused instanceof this.element.ownerDocument.defaultView!.HTMLElement && this.entries.some(entry => entry.view.element.contains(focused));
-		this.pendingWidths = undefined;
-		// Replace only the initial geometry, keeping the page's already-restored widgets alive.
+		this.widths = new Map(this.entries.map((entry, index) => [entry.id, sizes[index]! / total * width]));
+		this.restorePending = false;
+		// Replace the geometry, keeping the restored widgets alive.
 		this.gridResource.clear();
 		this.gridResource.value = new Grid<IView>(this.container, {
 			type: 'branch',
@@ -137,7 +164,7 @@ export class SessionGridLayout extends Disposable {
 		}, { sashPresentation: { type: 'inset', gap: 8 } });
 		this.element.classList.add('ash-sessions-chat-grid');
 		this.grid.layout(width, height);
-		this.gridChanges.value = this.grid.onDidChange(() => this.saveState());
+		this.gridChanges.value = this.grid.onDidChange(() => this.captureWidths());
 		if (restoreFocus && focused.isConnected) {
 			focused.focus({ preventScroll: true });
 		}

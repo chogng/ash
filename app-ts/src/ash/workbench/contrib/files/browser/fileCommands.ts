@@ -60,7 +60,7 @@ export function resolveFileResource(accessor: ServicesAccessor, resourceArgument
 export async function revealInExplorer(accessor: ServicesAccessor, resourceArgument?: unknown): Promise<void> {
 	const resource = resolveFileResource(accessor, resourceArgument);
 	if (!accessor.get(IWorkspaceContextService).getWorkspaceFolder(resource)) return;
-	const view = accessor.get(IViewsService).openView(VIEW_ID);
+	const view = await accessor.get(IViewsService).openView(VIEW_ID);
 	if (!view) return;
 	await accessor.get(IExplorerService).select(resource, 'force');
 	view.focus();

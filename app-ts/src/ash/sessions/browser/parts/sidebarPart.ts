@@ -6,10 +6,7 @@ import { ActivityBarPosition } from '../../../workbench/common/configuration.js'
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
 import { SidebarPart as WorkbenchSidebarPart } from '../../../workbench/browser/parts/sidebar/sidebarPart.js';
-import { PaneComposite } from '../../../workbench/browser/parts/views/paneComposite.js';
-import { ViewContainerLocation } from '../../../workbench/common/views.js';
 import { IViewDescriptorService } from '../../../workbench/services/views/common/viewDescriptorService.js';
-import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { SessionsList } from "./sessionsList.js";
@@ -32,9 +29,8 @@ export class SidebarPart extends WorkbenchSidebarPart {
 	override get maximumWidth(): number { return 520; }
 
 	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, teamsService: ITeamsManagementService, quickInput: IQuickInputService, listRoles: () => Promise<readonly TeamRoleOption[]>,
-		@IViewDescriptorService private readonly descriptors: IViewDescriptorService,
-		@IInstantiationService private readonly instantiation: IInstantiationService,
-		@IContextKeyService private readonly contextKeys: IContextKeyService,
+		@IViewDescriptorService descriptors: IViewDescriptorService,
+		@IContextKeyService contextKeys: IContextKeyService,
 		@IStorageService storage: IStorageService,
 	) {
 		super(container, { viewDescriptorService: descriptors, contextKeyService: contextKeys, storageService: storage, compositeBarVisible: false });
@@ -51,21 +47,13 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		this.contentDomNode.append(this.bottomActivityBarHost);
 	}
 
+	public override getPaneCompositeOptions(): ReturnType<WorkbenchSidebarPart['getPaneCompositeOptions']> {
+		return { paneLayout: 'fill', mergeViewWithContainerWhenSingleView: true };
+	}
 	focus(): void {
 		if (this.activeView === 'views') this.getComposite(this.activeCompositeId!)?.focus();
 		else if (this.activeView === 'chats') this.list.focus();
 		else this.teams.focus();
-	}
-
-	public initialize(): void {
-		for (const viewContainer of this.descriptors.getViewContainers(ViewContainerLocation.Sidebar)) {
-			this.addComposite(this.instantiation.createInstance(PaneComposite, this.domNode, {
-				viewContainer, model: this.descriptors.getViewContainerModel(viewContainer.id),
-				instantiationService: this.instantiation, contextKeyService: this.contextKeys,
-				paneLayout: 'fill', mergeViewWithContainerWhenSingleView: true,
-				onDidFailCreateView: (error: unknown) => { throw error; },
-			}));
-		}
 	}
 
 	public override showComposite(id: string): void {
@@ -96,10 +84,6 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		if (view === 'teams') void this.teams.show().then(() => {
 			if (this.activeView === 'teams') this.teams.focus();
 		});
-	}
-
-	setEmptyPage(empty: boolean): void {
-		this.contentDomNode.classList.toggle('empty-page', empty);
 	}
 
 	override setActivityBarLocation(location: ActivityBarPosition): HTMLElement | undefined {

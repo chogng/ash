@@ -20,8 +20,8 @@ registerAction2(class FocusTerminalAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): void {
-		accessor.get(IViewsService).focusView(TERMINAL_VIEW_ID);
+	override run(accessor: ServicesAccessor): Promise<boolean> {
+		return accessor.get(IViewsService).focusView(TERMINAL_VIEW_ID);
 	}
 });
 

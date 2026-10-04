@@ -84,7 +84,7 @@ test("Tasks projects its refresh action into the Panel title", async () => {
 		dispose() {},
 		[Symbol.dispose]() {},
 	} as ITaskService;
-	const views: IViewsService = { openView: () => undefined, focusView: () => false, getViewWithId: () => undefined };
+	const views: IViewsService = { openView: async () => undefined, focusView: async () => false, getViewWithId: () => undefined };
 	const terminals = { instances: [] } as unknown as ITerminalService;
 	try {
 		const { TasksViewPane } = await import("../../../../../workbench/contrib/tasks/browser/tasksViewPane.js");

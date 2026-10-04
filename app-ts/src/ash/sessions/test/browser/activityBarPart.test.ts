@@ -22,13 +22,21 @@ const { IConfigurationService } = await import('../../../platform/configuration/
 const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
 const { HoverService, IHoverService } = await import('../../../platform/hover/browser/hoverService.js');
 const { Event } = await import('../../../base/common/event.js');
+const { setARIAContainer } = await import('../../../base/browser/ui/aria/aria.js');
 const { ActivityBarPart } = await import('../../browser/parts/activitybar/activityBarPart.js');
-const { SessionsPageRegistry } = await import('../../browser/pages.js');
-const { SessionsPageService } = await import('../../services/pages/browser/sessionsPageService.js');
-const { ISessionsPageService } = await import('../../common/pages.js');
+const { MenusRegistry, IMenuService } = await import('../../../platform/actions/common/actions.js');
+const { MenuService } = await import('../../../platform/actions/common/menuService.js');
+const { ContextKeyService, IContextKeyService } = await import('../../../platform/contextkey/browser/contextKeyService.js');
+const { CommandsRegistry, ICommandService } = await import('../../../platform/commands/common/commands.js');
+const { CommandService } = await import('../../../workbench/services/commands/common/commandService.js');
+const { IEditorService } = await import('../../../workbench/services/editor/common/editorService.js');
+const { IDesignEditorService } = await import('../../contrib/design/browser/designEditorService.js');
+const { URI } = await import('../../../base/common/uri.js');
+const { DisposableStore } = await import('../../../base/common/lifecycle.js');
+const { Menus } = await import('../../browser/menus.js');
+const { Lxicon } = await import('../../../base/common/lxicons.js');
 const { IStorageService } = await import('../../../platform/storage/common/storage.js');
 const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
-const { autorun } = await import('../../../base/common/observable.js');
 await import('../../sessions.common.main.js');
 suiteTeardown(() => browser.window.close());
 let storageSequence = 0;
@@ -36,12 +44,11 @@ const { SessionsConfiguration } = await import('../../common/configuration.js');
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/browser/configurationService.js');
 
-test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Design pages', async () => {
+test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Design actions', async () => {
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();
-	let listFocuses = 0;
 	let accountAnchor: HTMLElement | undefined;
-	const selectedPages: string[] = [];
+	const selectedActions: string[] = [];
 	const contextMenu: IContextMenuService = {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
@@ -57,11 +64,10 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Desi
 	services.registerInstance(IHoverService, hovers);
 	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: `activity-test-${++storageSequence}`, workspaceId: 'sessions', flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
-	using pages = services.createInstance(SessionsPageService);
-	services.registerInstance(ISessionsPageService, pages);
-	using selection = autorun(reader => selectedPages.push(pages.activePage.read(reader)));
+	using menuServices = registerMenus(services);
+	using executed = services.get(ICommandService).onWillExecuteCommand(event => selectedActions.push(event.commandId.slice('sessions.open.'.length)));
+	selectedActions.push('chat');
 	const bar = services.createInstance(ActivityBarPart, ownerDocument.body, {
-		focusList: () => { listFocuses++; },
 		showAccountMenu: async (anchor: HTMLElement) => { accountAnchor = anchor; },
 	});
 	try {
@@ -99,10 +105,9 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Desi
 			['code', null], ['symbol-color-filled', 'page'],
 		]);
 		buttons[0]?.click();
-		assert.deepEqual(selectedPages, ['chat', 'colab', 'library', 'code', 'design', 'chat']);
+		assert.deepEqual(selectedActions, ['chat', 'teams', 'library', 'code', 'design', 'chat']);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		assert.equal(buttons[4]?.getAttribute('aria-current'), null);
-		assert.equal(listFocuses, 1);
 		buttons[5]?.click();
 		await Promise.resolve();
 		assert.equal(accountAnchor, buttons[5]);
@@ -131,9 +136,8 @@ test('Sessions Activity Bar context menu changes its own position and size setti
 	services.registerInstance(IHoverService, hovers);
 	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: `activity-test-${++storageSequence}`, workspaceId: 'sessions', flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
-	using pages = services.createInstance(SessionsPageService);
-	services.registerInstance(ISessionsPageService, pages);
-	const bar = services.createInstance(ActivityBarPart, ownerDocument.body, { focusList() {}, async showAccountMenu() {} });
+	using menuServices = registerMenus(services);
+	const bar = services.createInstance(ActivityBarPart, ownerDocument.body, { async showAccountMenu() {} });
 	try {
 		bar.domNode.querySelector('.ash-sessions-activity-content')?.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, button: 2 }));
 		assert.deepEqual(shownActions.map(action => action.label), ['Activity Bar Position', 'Activity Bar Size']);
@@ -169,33 +173,38 @@ test('Sessions Activity Bar requires its window Hover service during creation', 
 		hideContextMenu() {},
 	});
 	assert.throws(() => services.createInstance(ActivityBarPart, browser.window.document.body, {
-		focusList() {}, showAccountMenu() {},
+		showAccountMenu() {},
 	}), /hoverService/);
 });
 
-test('Sessions page order survives a new window and includes newly registered pages without changing selection', async () => {
+test('navigation order survives a new window and includes new menu contributions', async () => {
+	using configuration = new WorkbenchConfigurationService();
+	using contextViews = new BrowserContextViewService(document.body);
+	let shownActions: readonly IAction[] = [];
+	const contextMenu: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu(delegate) { shownActions = delegate.getActions!(); }, hideContextMenu() {} };
+	using hovers = new HoverService(configuration, contextViews, contextMenu);
 	using services = new InstantiationService();
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IContextMenuService, contextMenu);
+	services.registerInstance(IHoverService, hovers);
 	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: `activity-test-${++storageSequence}`, workspaceId: 'sessions', flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
-	using pages = services.createInstance(SessionsPageService);
-	pages.openPage('library');
-	pages.movePage('design', 'chat', 'before');
+	using menuServices = registerMenus(services);
+	using bar = services.createInstance(ActivityBarPart, document.body, { showAccountMenu() {} });
+	setARIAContainer(document.body);
+	const buttons = [...bar.domNode.querySelectorAll<HTMLButtonElement>('button')];
+	buttons[4]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+	await shownActions[0]!.run();
+	assert.equal(bar.domNode.querySelectorAll('button')[3], buttons[4]);
 	await storage.flush();
-	using restoredStorage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: `activity-test-${storageSequence}`, workspaceId: 'sessions', flushInterval: 0 });
-	using restoredServices = new InstantiationService();
-	restoredServices.registerInstance(IStorageService, restoredStorage);
-	using restored = restoredServices.createInstance(SessionsPageService);
-	assert.deepEqual({ page: restored.activePage.get(), order: restored.pages.get().map(page => page.id) }, {
-		page: 'library', order: ['design', 'chat', 'colab', 'library', 'code'],
-	});
-	using contribution = SessionsPageRegistry.registerPage({
-		id: 'test.page', title: 'Test page', titleKey: 'test.page', icon: restored.getPage('chat').icon, order: 60,
-		layout: { sidebar: 'hidden', primary: 'sessions', editor: 'hidden', auxiliaryBar: 'hidden', panel: false },
-	});
-	assert.deepEqual(restored.pages.get().map(page => page.id), ['design', 'chat', 'colab', 'library', 'code', 'test.page']);
+	using restored = services.createInstance(ActivityBarPart, document.body, { showAccountMenu() {} });
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 5).map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Design', 'Code']);
+	using contribution = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: 'test.activity', title: 'Test action', icon: Lxicon.chat2 }, order: 60 });
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Design', 'Code', 'Test action', 'Accounts']);
+	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), 'page');
 });
 
-test('Sessions registered page labels and ordering menu use the Chinese language catalog', async () => {
+test('navigation and ordering labels use the Chinese language catalog', async () => {
 	const { setNlsResolver, resetNlsResolver, formatNlsMessage } = await import('../../../nls.js');
 	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
@@ -214,15 +223,29 @@ test('Sessions registered page labels and ordering menu use the Chinese language
 		services.registerInstance(IHoverService, hovers);
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: `activity-test-${++storageSequence}`, workspaceId: 'sessions', flushInterval: 0 });
 		services.registerInstance(IStorageService, storage);
-		using pages = services.createInstance(SessionsPageService);
-		services.registerInstance(ISessionsPageService, pages);
-		using bar = services.createInstance(ActivityBarPart, ownerDocument.body, { focusList() {}, showAccountMenu() {} });
+		using menuServices = registerMenus(services);
+		using bar = services.createInstance(ActivityBarPart, ownerDocument.body, { showAccountMenu() {} });
 		const buttons = [...bar.domNode.querySelectorAll('button')];
 		buttons[1]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
-		assert.deepEqual({ titles: buttons.slice(0, 5).map(button => button.getAttribute('aria-label')), moves: actions.slice(0, 2).map(action => action.label) }, {
-			titles: ['聊天', '协作', '资料库', '代码', '设计'], moves: ['向前移动', '向后移动'],
+		assert.deepEqual({ navigation: bar.domNode.querySelector('.ash-sessions-navigation')!.getAttribute('aria-label'), moves: actions.slice(0, 2).map(action => action.label) }, {
+			navigation: '导航', moves: ['向前移动', '向后移动'],
 		});
 	} finally {
 		resetNlsResolver();
 	}
 });
+
+function registerMenus(services: InstanceType<typeof InstantiationService>): InstanceType<typeof DisposableStore> {
+	const resources = new DisposableStore();
+	const contexts = resources.add(new ContextKeyService());
+	services.registerInstance(IContextKeyService, contexts);
+	const commands = resources.add(new CommandService(services));
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(IMenuService, services.createInstance(MenuService));
+	const keys = new Map(['chat', 'teams', 'library', 'code', 'design'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
+	const select = (id: string): void => contexts.bufferChangeEvents(() => { for (const [candidate, key] of keys) { key.set(candidate === id); } });
+	for (const id of ['chat', 'teams', 'code']) { resources.add(CommandsRegistry.register(`sessions.open.${id}`, () => select(id))); }
+	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string } }) => select(input.resource.scheme === 'ash-library' ? 'library' : 'design') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
+	services.registerInstance(IDesignEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/design/browser/designEditorService.js').IDesignEditorService);
+	return resources;
+}

@@ -1,3 +1,4 @@
+import { onUnexpectedError } from '../../../base/common/errors.js';
 import { localize2 } from '../../../nls.js';
 import { Lxicon } from "../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
@@ -19,8 +20,8 @@ registerAction2(class OpenChatAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): void {
-		accessor.get(IViewsService).focusView(CHAT_VIEW_ID);
+	override run(accessor: ServicesAccessor): Promise<boolean> {
+		return accessor.get(IViewsService).focusView(CHAT_VIEW_ID);
 	}
 });
 
@@ -39,11 +40,11 @@ registerAction2(class NewChatAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): void {
+	override run(accessor: ServicesAccessor): Promise<boolean> {
 		const sessionService = accessor.get(ISessionsManagementService);
 		const viewsService = accessor.get(IViewsService);
 		sessionService.createUntitledSession();
-		viewsService.focusView(CHAT_VIEW_ID);
+		return viewsService.focusView(CHAT_VIEW_ID);
 	}
 });
 
@@ -88,7 +89,7 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
 		disposables.add(quickPick.onDidAccept((item) => {
 			sessions.selectThread(item.sessionId, item.threadId);
 			quickPick.hide();
-			views.focusView(CHAT_VIEW_ID);
+			void views.focusView(CHAT_VIEW_ID).catch(onUnexpectedError);
 		}));
 		disposables.add(quickPick.onDidHide(() => disposables.dispose()));
 		quickPick.show();

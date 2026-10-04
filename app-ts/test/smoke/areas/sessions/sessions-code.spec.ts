@@ -63,7 +63,7 @@ test('Code sessions restore editor tabs through Back, Forward and reopening with
 	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toBeVisible();
 });
 
-test('Code panel stays below the main region and retains its state only on Code', async ({ application, target, workbench }) => {
+test('Code panel stays below the main region and retains its views across session layouts', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	let navigation = page.locator('.ash-sessions-activity-content');
@@ -82,8 +82,10 @@ test('Code panel stays below the main region and retains its state only on Code'
 	expect(await sidebar.boundingBox()).toEqual(sidebarBefore);
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(panel).toBeHidden();
-	await expect(toggle).toHaveCount(0);
+	await expect(toggle).toBeVisible();
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(panel).toBeHidden();
+	await toggle.click();
 	await expect(panel).toBeVisible();
 	expect((await panel.boundingBox())?.height).toBe(panelBefore?.height);
 	page = await workbench.reopenAgentsWindow(application, page);
@@ -93,6 +95,8 @@ test('Code panel stays below the main region and retains its state only on Code'
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(panel).toBeHidden();
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(panel).toBeHidden();
+	await toggle.click();
 	await expect(panel).toBeVisible();
 	await toggle.click();
 	await expect(panel).toBeHidden();
@@ -176,11 +180,11 @@ test('Code connects layout commands to View, Add tab and the panel shortcut', as
 	const codeActions = ['Toggle Code panel', 'Toggle Code side panel', 'Toggle details', 'Hide editor', 'Show editor', 'Open Files tab', 'Open Changes tab'];
 	if (usesSystemMenu) {
 		const items = await captureElectronMenu(application, () => menuButton.click());
-		expect(items.find(item => item.label === 'View')!.submenu!.filter(item => codeActions.includes(item.label))).toEqual([]);
+		expect(items.find(item => item.label === 'View')!.submenu!.filter(item => codeActions.includes(item.label)).map(item => item.label)).toEqual(expect.arrayContaining(['Toggle Code panel', 'Open Files tab', 'Open Changes tab']));
 		await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
 	} else {
 		await openViewMenu();
-		for (const name of codeActions) await expect(page.getByRole('menu').getByText(name, { exact: true })).toHaveCount(0);
+		for (const name of ['Toggle Code panel', 'Open Files tab', 'Open Changes tab']) await expect(page.getByRole('menu').getByText(name, { exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
 	}
 });
@@ -258,14 +262,6 @@ test('Code shares its tabs across all four editor and Details states', async ({ 
 	await title.getByRole('button', { name: 'Toggle details', exact: true }).click();
 	await expect(details).toBeHidden();
 	await commands.runCommand('ash.sessions.toggleSidePane');
-	await expect(editor).toBeHidden();
-	page = await workbench.reopenAgentsWindow(application, page);
-	editor = page.locator('[data-part="editor"]');
-	title = editor.locator('.ash-editor-title-control');
-	details = page.locator('[data-part="auxiliarybar"]');
-	commands = new QuickAccess(page);
-	await expect(editor).toBeHidden();
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(editor).toBeHidden();
 	await commands.runCommand('ash.sessions.toggleSidePane');
 	await expect(editor).toBeVisible();

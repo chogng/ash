@@ -2035,3 +2035,55 @@ test('Activity Bar restores user container order in a new window and keeps the a
 	disposables.dispose();
 	dom.window.close();
 });
+
+
+test('Pane composite service reveals retained Parts and publishes visibility changes once', async () => {
+	const { PaneCompositePartService } = await import('../../../workbench/browser/parts/paneCompositePartService.js');
+	const { IPaneCompositePartService } = await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
+	const { IViewDescriptorService } = await import('../../../workbench/services/views/common/viewDescriptorService.js');
+	const { IContextKeyService } = await import('../../../platform/contextkey/browser/contextKeyService.js');
+	const { ILocalizationService } = await import('../../../workbench/services/localization/common/localizationService.js');
+	const { IViewsService, ViewsService } = await import('../../../workbench/services/views/browser/viewsService.js');
+	using resources = new DisposableStore();
+	const registry = new WorkbenchViewRegistry();
+	registry.registerStaticViewContainer({ id: 'test.panel.first', title: 'First', location: ViewContainerLocation.Panel });
+	registry.registerStaticViewContainer({ id: 'test.panel.second', title: 'Second', location: ViewContainerLocation.Panel });
+	registry.registerStaticViews('test.panel.first', [{ id: 'test.panel.view', title: 'View', canToggleVisibility: true, ctorDescriptor: new SyncDescriptor(TestPanelView) }]);
+	const context = resources.add(new ContextKeyService());
+	const descriptors = resources.add(new ViewDescriptorService({ contextKeyService: context, registry }));
+	const panel = resources.add(new PanelPart(browserEnvironment.window.document.body, { viewDescriptorService: descriptors }));
+	panel.setVisible(false);
+	const services = resources.add(new InstantiationService());
+	services.registerInstance(IContextKeyService, context);
+	services.registerInstance(IViewDescriptorService, descriptors);
+	services.registerInstance(IStorageService, paneStorage);
+	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
+	services.registerInstance(IWorkbenchLayoutService, {
+		showPart: () => panel.setVisible(true),
+		hidePart: () => panel.setVisible(false),
+	} as unknown as import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
+	const parts = new Map([[ViewContainerLocation.Panel, panel]]);
+	const panes = resources.add(services.createInstance(PaneCompositePartService, parts));
+	services.registerInstance(IPaneCompositePartService, panes);
+	services.registerInstance(IViewsService, services.createInstance(ViewsService));
+	const events: string[] = [];
+	resources.add(panes.onDidPaneCompositeOpen(event => events.push(`open:${event.composite.id}`)));
+	resources.add(panes.onDidPaneCompositeClose(event => events.push(`close:${event.composite.id}`)));
+	const first = await panes.openPaneComposite('test.panel.first', ViewContainerLocation.Panel);
+	await panes.openPaneComposite('test.panel.first', ViewContainerLocation.Panel);
+	await panes.openPaneComposite('test.panel.second', ViewContainerLocation.Panel);
+	panes.hideActivePaneComposite(ViewContainerLocation.Panel);
+	assert.deepEqual({ active: panes.getActivePaneComposite(ViewContainerLocation.Panel), last: panes.getLastActivePaneCompositeId(ViewContainerLocation.Panel) }, { active: undefined, last: 'test.panel.second' });
+	assert.equal(await panes.openPaneComposite('test.panel.first', ViewContainerLocation.Panel), first);
+	assert.deepEqual({ events, active: panes.getActivePaneComposite(ViewContainerLocation.Panel)?.id, visible: !panel.domNode.hidden }, {
+		events: ['open:test.panel.first', 'close:test.panel.first', 'open:test.panel.second', 'close:test.panel.second', 'open:test.panel.first'],
+		active: 'test.panel.first', visible: true,
+	});
+	const views = services.get(IViewsService);
+	assert.equal(await views.openView('test.panel.view'), first!.getView('test.panel.view'));
+	assert.equal(await views.focusView('test.panel.view'), true);
+	assert.equal(await views.openView('missing'), undefined);
+	assert.equal(await panes.openPaneComposite('missing', ViewContainerLocation.Panel), undefined);
+	using incomplete = new InstantiationService();
+	assert.throws(() => incomplete.createInstance(PaneCompositePartService, parts), /service/i);
+});

@@ -2,7 +2,6 @@ import '../../../editor/test/browser/testEditorDom.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { sessionsPartIds, type SessionsPartId } from '../../common/layoutConstants.js';
-import { observableValue } from '../../../base/common/observable.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -42,9 +41,7 @@ test('Sessions layout commands update menu state from their owners and release w
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	let historyIndex = 1;
 	const sessions: ISessionsService = {
-		page: observableValue<"chat" | "code">("page", "chat"),
-		selectPage() {},
-		getPageSelection() { return { visibleSelections: [], activeSelection: undefined }; },
+		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() {},
 		onDidChange: changed.event,
 		visibleSelections: [],
@@ -62,8 +59,9 @@ test('Sessions layout commands update menu state from their owners and release w
 	};
 	using actions = registerLayoutActions(layout, sessions, contextKeys);
 	using menu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarLeftLayout);
-	const state = (): unknown => menu.getActions().flatMap(([, actions]) => actions).map(action => [action.label, action.tooltip, action.enabled, action.checked]);
+	const state = (): unknown => menu.getActions().flatMap(([, actions]) => actions).filter(action => action.id !== 'ash.sessions.togglePanel').map(action => [action.label, action.tooltip, action.enabled, action.checked]);
 	try {
+		assert.equal(menu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
 		await commands.executeCommand('ash.sessions.toggleSidebar');
 		assert.equal(layout.isPartVisible('sidebar'), false);

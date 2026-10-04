@@ -42,7 +42,7 @@ test('Sessions split insertion preserves an unrelated pane and retained input fo
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'grid-test', workspaceId: 'test', flushInterval: 0 });
 		using services = new InstantiationService();
 		services.registerInstance(IStorageService, storage);
-		using layout = services.createInstance(SessionGridLayout, document.body, first, 'chat');
+		using layout = services.createInstance(SessionGridLayout, document.body, first);
 		layout.reconcile([{ id: 'first', view: first }, { id: 'second', view: second }], 'first');
 		layout.layout(1_200, 800);
 		const firstBounds = first.bounds;
@@ -69,7 +69,7 @@ test('Sessions rearrangement keeps live inputs and does not steal focus from ano
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'grid-test', workspaceId: 'test', flushInterval: 0 });
 		using services = new InstantiationService();
 		services.registerInstance(IStorageService, storage);
-		using layout = services.createInstance(SessionGridLayout, document.body, first, 'chat');
+		using layout = services.createInstance(SessionGridLayout, document.body, first);
 		layout.reconcile([{ id: 'first', view: first }, { id: 'second', view: second }], 'first');
 		layout.layout(1_200, 800);
 		first.element.querySelector('input')!.value = 'Unsent text';
@@ -86,7 +86,7 @@ test('Sessions rearrangement keeps live inputs and does not steal focus from ano
 	}
 });
 
-test('Sessions restores and immediately saves widths without reviving missing panes or changing another page', async () => {
+test('Sessions restores and immediately saves widths from both legacy layouts without reviving missing panes', async () => {
 	const browser = new JSDOM('<!doctype html><body><button>Sidebar</button></body>', { url: 'https://ash.test', pretendToBeVisual: true });
 	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent']);
 	try {
@@ -97,7 +97,7 @@ test('Sessions restores and immediately saves widths without reviving missing pa
 		services.registerInstance(IStorageService, storage);
 		const first = new TestView(browser.window.document);
 		const second = new TestView(browser.window.document);
-		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, first, 'chat');
+		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, first);
 		layout.layout(0, 0);
 		layout.reconcile([{ id: 'first', view: first }, { id: 'second', view: second }], 'second');
 		const input = second.element.querySelector('input')!;
@@ -107,13 +107,18 @@ test('Sessions restores and immediately saves widths without reviving missing pa
 		layout.setVisible(false);
 		layout.layout(1_200, 800);
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
-		assert.equal(JSON.parse(storage.get('sessions.gridState.chat', StorageScope.WORKSPACE)!).widths[0].width, 300, 'Hidden pages retain their pending saved widths');
+		assert.equal(JSON.parse(storage.get('sessions.gridState.chat', StorageScope.WORKSPACE)!).widths[0].width, 300, 'Hidden layouts retain their pending saved widths');
 		layout.setVisible(true);
 		layout.layout(1_200, 800);
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
-		assert.deepEqual({ widths: [first.bounds!.width, second.bounds!.width], draft: input.value, focus: browser.window.document.activeElement?.tagName, stored: JSON.parse(storage.get('sessions.gridState.chat', StorageScope.WORKSPACE)!), code: JSON.parse(storage.get('sessions.gridState.code', StorageScope.WORKSPACE)!) }, {
-			widths: [400, 800], draft: 'Unsent text', focus: 'BUTTON', stored: { version: 1, widths: [{ id: 'first', width: 400 }, { id: 'second', width: 800 }] }, code: { version: 1, widths: [{ id: 'code', width: 900 }] },
+		assert.deepEqual({ widths: [first.bounds!.width, second.bounds!.width], draft: input.value, focus: browser.window.document.activeElement?.tagName, stored: JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!), code: storage.get('sessions.gridState.code', StorageScope.WORKSPACE), chat: storage.get('sessions.gridState.chat', StorageScope.WORKSPACE) }, {
+			widths: [400, 800], draft: 'Unsent text', focus: 'BUTTON', stored: { version: 1, widths: [{ id: 'first', width: 400 }, { id: 'second', width: 800 }] }, code: undefined, chat: undefined,
 		});
+		layout.layout(150, 800);
+		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
+		layout.layout(1_200, 800);
+		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
+		assert.deepEqual({ widths: [first.bounds!.width, second.bounds!.width], input: second.element.querySelector('input') }, { widths: [400, 800], input });
 	} finally {
 		getWindowById(1)?.disposables.dispose();
 		browser.window.close();
@@ -129,12 +134,12 @@ test('Sessions ignores saved widths when every pane has been replaced before its
 		using services = new InstantiationService();
 		services.registerInstance(IStorageService, storage);
 		const view = new TestView(browser.window.document);
-		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, view, 'code');
+		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, view);
 		layout.reconcile([{ id: 'new', view }], 'new');
 		layout.layout(1_200, 800);
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
 		assert.equal(view.bounds!.width, 1_200);
-		assert.deepEqual(JSON.parse(storage.get('sessions.gridState.code', StorageScope.WORKSPACE)!), { version: 1, widths: [{ id: 'new', width: 1_200 }] });
+		assert.deepEqual(JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!), { version: 1, widths: [{ id: 'new', width: 1_200 }] });
 	} finally {
 		getWindowById(1)?.disposables.dispose();
 		browser.window.close();

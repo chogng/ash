@@ -2,7 +2,7 @@
 
 Design 是 Sessions 专属的二维设计编辑器。本目录拥有设计文档、编辑操作、画布和文件生命周期，画布通过共享编辑器注册进入 `EditorPart`，图层和属性通过 Sessions 视图注册分别进入 `SidebarPart` 和 `AuxiliaryBarPart`。配置、主题、快捷键、文件访问、对话框和窗口生命周期复用已有服务。
 
-这份文档说明目录归属、状态与生命周期约定。Sessions 的页面装配见 [Sessions README](../../README.md)，窗口分层见 [LAYERS.md](../../LAYERS.md)。
+这份文档说明目录归属、状态与生命周期约定。Sessions 的窗口装配见 [Sessions README](../../README.md)，窗口分层见 [LAYERS.md](../../LAYERS.md)。
 
 ## 目录与命名
 

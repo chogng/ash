@@ -16,7 +16,7 @@ function registerAutomationView(): IDisposable {
 	registrations.add(ViewsRegistry.registerViews('ash.automation', [{ id: 'ash.automation.view', title: 'Automations', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(AutomationViewPane) }]));
 	registrations.add(registerAction2(class OpenAutomations extends Action2 {
 		constructor() { super({ id: 'ash.automation.open', title: localize2({ bundle: 'ash.workbench', key: 'command.OpenAutomations' }, 'Open Automations'), f1: true }); }
-		public override run(accessor: ServicesAccessor): void { accessor.get(IViewsService).focusView('ash.automation.view'); }
+		public override run(accessor: ServicesAccessor): Promise<boolean> { return accessor.get(IViewsService).focusView('ash.automation.view'); }
 	}));
 	return registrations;
 }

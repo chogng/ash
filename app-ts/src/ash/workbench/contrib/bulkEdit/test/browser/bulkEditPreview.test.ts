@@ -139,7 +139,7 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 			using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
 			browser.window.document.body.append(pane.element);
 			pane.setVisible(true);
-			services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } });
+			services.registerInstance(IViewsService, { openView: async () => pane, getViewWithId: () => pane, focusView: async () => { pane.focus(); return true; } });
 			using bulkEdits = services.createInstance(BulkEditService);
 			services.registerInstance(IBulkEditService, bulkEdits);
 			using contribution = services.createInstance(BulkEditPreviewContribution);

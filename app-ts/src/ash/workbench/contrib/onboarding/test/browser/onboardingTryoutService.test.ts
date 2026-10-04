@@ -26,7 +26,7 @@ suite('OnboardingTryoutService', () => {
 			async showSteps() { shown += 1; return 'completed' as const; },
 			resetAll() {},
 		});
-		services.registerInstance(IViewsService, { openView: () => undefined, focusView: () => false, getViewWithId: () => undefined });
+		services.registerInstance(IViewsService, { openView: async () => undefined, focusView: async () => false, getViewWithId: () => undefined });
 		services.registerInstance(IDialogService, {
 			onWillShowDialog: Event.None,
 			onDidShowDialog: Event.None,

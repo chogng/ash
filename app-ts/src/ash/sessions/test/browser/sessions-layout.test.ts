@@ -84,6 +84,7 @@ test('Code docks Details below one tab strip and preserves the side pane boundar
 	assert.equal(editor.domNode.querySelector<HTMLElement>('.ash-sessions-docked-details')!.style.top, '35px');
 	layout.showPart('editor');
 	layout.resizePart('editor', new Dimension(500, 800));
+	layout.showPart('auxiliarybar');
 	layout.resizePart('auxiliarybar', new Dimension(280, 800));
 	const width = layout.getPartSize('editor').width;
 	assert.equal(editor.contentInset, 280);
@@ -144,12 +145,12 @@ test('Sessions layout style changes without changing the IDE preference or visib
 	});
 	try {
 		layout.layout(new Dimension(1_200, 800));
-		assert.deepEqual(surface(), { style: 'modern', leftInset: '0px', rightInset: '0px', bottomInset: '4px' });
+		assert.deepEqual(surface(), { style: 'modern', leftInset: '0px', rightInset: '4px', bottomInset: '4px' });
 		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'flat');
 		assert.deepEqual(surface(), { style: 'flat', leftInset: '0px', rightInset: '0px', bottomInset: '0px' });
 		assert.equal(container.classList.contains('modern-ui'), false);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.layoutStyle), 'modern');
-		assert.equal(layout.isPartVisible('auxiliarybar'), true);
+		assert.equal(layout.isPartVisible('auxiliarybar'), false);
 		await configuration.updateValue(WorkbenchConfiguration.layoutStyle, 'flat');
 		assert.equal(container.dataset.layoutStyle, 'flat');
 		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'modern');
@@ -184,6 +185,7 @@ test("Sessions layout toggles the sidebar and auxiliary Part while keeping the p
 	layout.showPart('sidebar');
 	assert.equal(layout.isPartVisible('sidebar'), true);
 	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
+	layout.showPart("auxiliarybar");
 	layout.hidePart("auxiliarybar");
 
 	assert.equal(layout.isPartVisible("auxiliarybar"), false);
@@ -199,7 +201,7 @@ test("Sessions layout toggles the sidebar and auxiliary Part while keeping the p
 	dom.window.close();
 });
 
-test('Sessions compound page changes lay out Parts once at the completed width', () => {
+test('Sessions compound composition changes lay out Parts once at the completed width', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const parts = createParts(dom.window.document);
 	using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
@@ -210,7 +212,7 @@ test('Sessions compound page changes lay out Parts once at the completed width',
 	using subscription = layout.onDidLayoutMainContainer(dimension => completed.push(dimension));
 	layout.updateParts(() => {
 		layout.setPartAvailable('sidebar', false);
-		// Composite selection can synchronously select another page inside the outer update.
+		// Composite selection can synchronously change composition inside the outer update.
 		layout.updateParts(() => layout.setPartAvailable('auxiliarybar', false));
 		assert.deepEqual(sessions.layouts, []);
 		assert.deepEqual(completed, []);
@@ -326,12 +328,13 @@ test('Sessions layout completion exposes settled Parts through the window contai
 	dom.window.close();
 });
 
-test('Sessions page availability preserves user visibility and cached widths during persistence', async () => {
+test('Sessions Part availability preserves user visibility and cached widths during persistence', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'code', workspaceId: 'sessions', flushInterval: 0 });
 	const parts = createParts(dom.window.document);
 	using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_200, 800), storageService: storage });
 	layout.layout(new Dimension(1_200, 800));
+	layout.showPart('auxiliarybar');
 	layout.resizePart('auxiliarybar', new Dimension(280, 800));
 	layout.setPartAvailable('auxiliarybar', false);
 	await storage.flush(WillSaveStateReason.SHUTDOWN);

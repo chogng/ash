@@ -156,8 +156,8 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 			openEditor: async (input: EditorInput) => { opened.push(input.resource.toString()); },
 		} as unknown as IEditorService,
 		viewsService: {
-			openView: () => undefined,
-			focusView: (viewId: string) => { focusedViews.push(viewId); return true; },
+			openView: async () => undefined,
+			focusView: async (viewId: string) => { focusedViews.push(viewId); return true; },
 			getViewWithId: () => undefined,
 		},
 		fileActions: {

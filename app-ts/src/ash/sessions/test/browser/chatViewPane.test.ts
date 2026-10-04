@@ -317,8 +317,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	let chatView: InstanceType<typeof ChatViewPane> | undefined;
 	services.registerInstance(IWorkbenchLayoutService, layout);
 	services.registerInstance(IViewsService, {
-		openView: () => chatView,
-		focusView: () => true,
+		openView: async () => chatView,
+		focusView: async () => true,
 		getViewWithId: () => chatView,
 	});
 	let shownContextMenuActions: readonly IAction[] = [];
@@ -730,7 +730,7 @@ test("Turn error cards invoke their typed action without interpreting message te
 	dom.window.close();
 });
 
-test('Code sending preserves the Chat draft when pages switch during first-session creation', async () => {
+test('sending from one session preserves a later draft during first-session creation', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using domLifetime = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -757,7 +757,7 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	editorServices.registerInstance(ISessionsManagementService, sessions);
 	using view = editorServices.createInstance(SessionsService);
 	await view.initialize();
-	view.selectPage('code');
+	view.openNewSession();
 	const draft = view.activeSelection;
 	if (draft?.kind !== 'untitled') throw new Error('Expected Code draft');
 	using commands = new CommandService(new InstantiationService());
@@ -779,14 +779,14 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 		undefined,
 		undefined,
 		undefined,
-		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel, undefined, 'code'),
+		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel),
 		editorServices,
 	);
 	widget.setVisible(true);
 	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
 	const heading = widget.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading');
 	assert.equal(heading?.hidden, false);
-	assert.equal(input?.classList.contains('code-composer'), true);
+	assert.equal(input?.classList.contains('chat-composer'), true);
 	const welcomeTip = input?.querySelector('.ash-chat-input-tip');
 	assert.ok(welcomeTip);
 	assert.deepEqual([input?.getAttribute('aria-busy'), input?.querySelector('.ash-chat-status')?.textContent], ['true', '']);
@@ -796,13 +796,13 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	const attachment = new DeferredPromise<{ name: string; content: string }>();
 	widget.addContext({ id: 'code-file', kind: 'file', name: 'code.ts', resolve: () => attachment.p });
 	const sending = widget.acceptInput('Start this work');
-	view.selectPage('chat');
+	view.openNewSession();
 	const chatSelection = view.activeSelection;
 	if (chatSelection?.kind !== 'untitled') throw new Error('Expected Chat draft');
 	const chatModel = createWidgetModel(chat, { kind: 'untitled', session: chatSelection.session }, sessions);
 	using chatWidget = new ChatWidget(dom.window.document.body, 'separate-chat', chatModel, () => view.openNewSession(),
 		{ showContextMenu: () => undefined } as unknown as IContextMenuService, contextViewService, commands,
-		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel, undefined, 'chat'), editorServices);
+		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel), editorServices);
 	chatWidget.setVisible(true);
 	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context' }] };
 	chatWidget.restoreDraft(chatDraft);
@@ -813,14 +813,14 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	assert.equal(widget.element.querySelector('.ash-chat-input-part'), input);
 	assert.equal(widget.sessionId, 'session-1');
 	assert.deepEqual((await chatWidget.captureDraft())?.draft, chatDraft);
-	assert.deepEqual(readNewChatDraftState(composerStorage, 'chat', `untitled:${chatSelection.session.untitledSessionId}`), chatDraft);
-	assert.equal(readNewChatDraftState(composerStorage, 'chat', 'thread-1'), undefined);
+	assert.deepEqual(readNewChatDraftState(composerStorage, `untitled:${chatSelection.session.untitledSessionId}`), chatDraft);
+	assert.equal(readNewChatDraftState(composerStorage, 'thread-1'), undefined);
 	assert.equal(view.activeSelection?.kind, 'untitled');
 	assert.equal(chatWidget.sessionId, undefined);
-	view.selectPage('code');
+	view.openSession('session-1', 'thread-1');
 	assert.equal(view.activeSelection?.kind, 'session');
 	assert.equal(await widget.captureDraft(), undefined);
-	assert.equal(readNewChatDraftState(composerStorage, 'code', 'thread-1'), undefined);
+	assert.equal(readNewChatDraftState(composerStorage, 'thread-1'), undefined);
 });
 
 test("an empty Session list opens an untitled session and persists it on its first send", async () => {
@@ -850,8 +850,8 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	});
 	services.registerInstance(ISessionsManagementService, sessions);
 	services.registerInstance(IViewsService, {
-		openView: () => undefined,
-		focusView: () => true,
+		openView: async () => undefined,
+		focusView: async () => true,
 		getViewWithId: () => undefined,
 	});
 	using commands = new CommandService(services);
@@ -973,8 +973,8 @@ test("the New Chat slash command opens an untitled session", async () => {
 	services.registerInstance(ISessionsManagementService, sessions);
 	let focusedView: string | undefined;
 	services.registerInstance(IViewsService, {
-		openView: () => undefined,
-		focusView: (viewId) => {
+		openView: async () => undefined,
+		focusView: async (viewId) => {
 			focusedView = viewId;
 			return true;
 		},
@@ -1055,8 +1055,8 @@ test("failed first send keeps the untitled session and its input draft", async (
 	});
 	services.registerInstance(ISessionsManagementService, sessions);
 	services.registerInstance(IViewsService, {
-		openView: () => undefined,
-		focusView: () => true,
+		openView: async () => undefined,
+		focusView: async () => true,
 		getViewWithId: () => undefined,
 	});
 	using commands = new CommandService(services);
@@ -1215,8 +1215,8 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 	services.registerInstance(ISessionsManagementService, sessions);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IViewsService, {
-		openView: () => undefined,
-		focusView: (viewId) => {
+		openView: async () => undefined,
+		focusView: async (viewId) => {
 			focusedView = viewId;
 			return true;
 		},
@@ -1257,7 +1257,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 	dom.window.close();
 });
 
-test("ViewsService resolves, opens, and focuses contributed views", () => {
+test("ViewsService resolves, opens, and focuses contributed views", async () => {
 	const registry = new WorkbenchViewRegistry();
 	registerChatViews(registry);
 	using contextKeys = new ContextKeyService();
@@ -1275,30 +1275,34 @@ test("ViewsService resolves, opens, and focuses contributed views", () => {
 	};
 	const paneContainer = {
 		getView: (viewId: string) => viewId === CHAT_VIEW_ID ? view : undefined,
-		openView: (viewId: string) => {
+		openView: async (viewId: string) => {
 			assert.equal(viewId, CHAT_VIEW_ID);
 			opened++;
 			return view;
 		},
 	} as unknown as ViewPaneContainer;
-	const service = new ViewsService({
-		viewDescriptorService: descriptors,
-		getViewContainer: (container) => {
-			assert.equal(container.id, CHAT_VIEW_CONTAINER_ID);
-			return paneContainer;
-		},
-		openViewContainer: (container) => {
-			assert.equal(container.id, CHAT_VIEW_CONTAINER_ID);
-			return paneContainer;
-		},
-	});
+	const { IPaneCompositePartService } = await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
+	const { IViewDescriptorService } = await import('../../../workbench/services/views/common/viewDescriptorService.js');
+	using services = new InstantiationService();
+	services.registerInstance(IViewDescriptorService, descriptors);
+	const composite = Object.assign(paneContainer, { id: CHAT_VIEW_CONTAINER_ID }) as import("../../../workbench/browser/parts/views/paneComposite.js").PaneComposite;
+	services.registerInstance(IPaneCompositePartService, {
+		onDidPaneCompositeOpen: Event.None,
+		onDidPaneCompositeClose: Event.None,
+		openPaneComposite: async id => { assert.equal(id, CHAT_VIEW_CONTAINER_ID); return composite; },
+		getActivePaneComposite: () => composite,
+		getPartId: () => 'auxiliarybar',
+		hideActivePaneComposite() {},
+		getLastActivePaneCompositeId: () => CHAT_VIEW_CONTAINER_ID,
+	} as import('../../../workbench/services/panecomposite/browser/panecomposite.js').IPaneCompositePartService);
+	const service = services.createInstance(ViewsService);
 
 	assert.equal(service.getViewWithId(CHAT_VIEW_ID), view);
 	assert.equal(opened, 0);
-	assert.equal(service.focusView(CHAT_VIEW_ID), true);
+	assert.equal(await service.focusView(CHAT_VIEW_ID), true);
 	assert.equal(opened, 1);
 	assert.equal(focused, 1);
-	assert.equal(service.openView("missing"), undefined);
+	assert.equal(await service.openView("missing"), undefined);
 });
 
 test("SessionsManagementService restores and creates active Threads", async () => {

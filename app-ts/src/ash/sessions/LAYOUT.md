@@ -24,23 +24,33 @@ Content
     └── Panel
 ```
 
-The workbench omits the standard Activity Bar, Status Bar, and Banner. Its Sessions Activity Bar selects registered product pages. Part positions are fixed by the Agents Window rather than user settings.
+The workbench omits the standard Activity Bar, Status Bar, and Banner. Its Sessions Activity Bar runs registered product commands. Part positions are fixed by the Agents Window rather than user settings.
 
-Pages register their identity, localized title metadata, icons, and composition of existing Parts through `SessionsPageRegistry`. `ISessionsPageService` owns the active product page and profile-scoped navigation order; the active page is restored per workspace. The Activity Bar renders this state and changes order by page ID, independently of activation. Account actions remain outside the sortable page group. Activity Bar placement changes retain the same navigation items and order.
+Contributions register localized titles, icons and commands in `Menus.ActivityBar`.
+`ActivityBarPart` owns profile-scoped command order and presentation. Selected
+items are derived from the visible Parts, active editor and Sidebar selection.
+Account actions remain outside the sortable group, and placement changes retain
+the same buttons and order.
 
-`SessionsPageLayoutController` applies the registered composition to Sidebar, Sessions, Editor, Auxiliary Bar, and Panel. A page may select a sidebar or auxiliary container, retain session tools, or use an editor as the primary surface. The controller owns coordination and editor-driven page activation; individual Parts retain their models and views. `ISessionsService` continues to own Chat and Code conversation selections and drafts, independently of the active product page. User navigation, commands, and container opening all use the page service.
+Both workbenches open, hide and focus view containers through
+`IPaneCompositePartService`. Sidebar, Panel and Auxiliary Bar retain their
+`PaneComposite` instances. `DesktopLayoutController` coordinates the surrounding
+Parts for conversation, collaboration, Library and Design commands. Library and
+Design use `IEditorService` and the shared Editor Part. `ISessionsService` owns a
+single conversation selection, visible arrangement and navigation history;
+changing the surrounding layout never creates a second conversation or composer.
 
 | Part | Ownership |
 |------|-----------|
 | Title bar | Window navigation and window-scoped actions |
 | Sidebar | Sessions list and Sessions-owned sidebar views |
 | Sessions Part | One or more visible session surfaces |
-| Editor | File, browser, diff, Design canvas, and other editor inputs |
+| Editor | File, browser, diff, Library, Design canvas, and other editor inputs |
 | Auxiliary Bar | Code files and changes, or the active Design editor's properties |
 | Panel | Terminal and other panel views |
 | Custom View Grid | Full-surface contributed views that replace session content |
 
-Design uses the fixed `SidebarPart | EditorPart | AuxiliaryBarPart` chain. Its registered Layers view belongs to SidebarPart, the registered canvas pane belongs to EditorPart, and Shape properties belongs to AuxiliaryBarPart. SessionsPart remains the conversation owner and is hidden in Design. The two panel views consume the active design editor's state rather than creating a document or selection of their own. Activity-page switches retain editor panes; closing a Design tab uses the shared working-copy save/discard/cancel lifecycle.
+Design uses the fixed `SidebarPart | EditorPart | AuxiliaryBarPart` chain. Its registered Layers view belongs to SidebarPart, the registered canvas pane belongs to EditorPart, and Shape properties belongs to AuxiliaryBarPart. SessionsPart remains the conversation owner and is hidden in Design. The two panel views consume the active design editor's state rather than creating a document or selection of their own. Activity Bar commands retain editor panes; closing a Design tab uses the shared working-copy save/discard/cancel lifecycle.
 
 The Sessions Part contains its own nested two-dimensional split grid. Its leaves are not workbench editor groups, nor the chat groups inside an individual session.
 
@@ -48,7 +58,9 @@ The Sessions Part contains its own nested two-dimensional split grid. Its leaves
 
 The main workbench grid is non-proportional. The Sessions Part is the flexible surface that absorbs container resize and part-visibility deltas. The Sidebar, Editor, Auxiliary Bar, and Panel preserve user-established sizes within their constraints.
 
-The primary surface absorbs general window resize: SessionsPart for conversation pages, or EditorPart while Design replaces the conversation region. Design preserves both side-panel widths as the editor expands and shrinks. This prevents fixed side parts from absorbing general window resize.
+The Sessions grid retains user-established proportions even when a narrower composition temporarily clamps leaves to their minimum widths. The preferred widths are restored when the available area grows again.
+
+The primary surface absorbs general window resize: SessionsPart for conversations, or EditorPart while Library or Design replaces the conversation region. Design preserves both side-panel widths as the editor expands and shrinks. This prevents fixed side parts from absorbing general window resize.
 
 The desktop presentation may place the Auxiliary Bar inside the Editor's grid node. Consumers must distinguish the actual Editor content area from the shared grid node when interpreting visibility or size.
 
@@ -71,7 +83,12 @@ The Sessions Part renders that model. It does not create a second active-session
 
 Opening, closing, and directional insertion or movement operate through `ISessionsService`. The part owns the canonical split geometry and user sash sizes, using the shared grid primitive. Maximization and phone presentation project a single live view without changing that geometry. Ordinary structural edits preserve unaffected branches and sizes. Balanced tiling is an explicit arrangement operation over this grid, not a persistent mode or a comparison-specific layout.
 
-`ISessionsService` persists a versioned geometry snapshot separately from per-session chat state. Saved leaf bindings restore created sessions, the empty composer, active selection, pins, and maximization; untitled provider drafts are not recreated. Legacy ordered-session state remains readable. Restoration projects the saved topology onto available sessions and retains existing views when delayed providers arrive. Explicit navigation or grid interaction supersedes pending restoration.
+Ash persists Session bindings, all untitled identities and the active selection in
+`sessions.viewState` version 2. `SessionGridLayout` separately owns widths in
+`sessions.gridState`. Old Chat/Code arrangements are merged without duplicating
+identities. Explicit navigation supersedes pending selection restoration. Pins,
+maximization and two-dimensional placement remain intended extensions described
+by this specification; current implementation limits are listed in the README.
 
 Session geometry does not determine Editor, Details, or other side-pane visibility policy. That policy remains with the layout controllers.
 

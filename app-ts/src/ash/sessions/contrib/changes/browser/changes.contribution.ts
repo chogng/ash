@@ -65,7 +65,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 		priority: 100,
 		when: ContextKeyExpr.has('sessionsChangesFocused'),
 		getProvider: accessor => {
-			const view = accessor.get(IViewsService).openView(CHANGES_VIEW_ID);
+			const view = accessor.get(IViewsService).getViewWithId(CHANGES_VIEW_ID);
 			if (!(view instanceof ChangesViewPane)) { return undefined; }
 			return new AccessibleContentProvider(
 				AccessibleViewProviderId.SessionsChanges,

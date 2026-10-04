@@ -660,11 +660,11 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 	services.registerInstance(IEditorGroupsService, { getGroup: (id: string) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
 	services.registerInstance(INativeHostService, { revealFile: async path => { effects.push(['finder', path]); } } as INativeHostApi);
 	services.registerInstance(IViewsService, {
-		openView: id => {
+		openView: async id => {
 			effects.push(['open', id]);
 			return { id, focus: () => { effects.push(['focus']); }, isVisible: () => true, setVisible() {} };
 		},
-		focusView: () => false,
+		focusView: async () => false,
 		getViewWithId: () => undefined,
 	});
 	using commands = new CommandService(services);

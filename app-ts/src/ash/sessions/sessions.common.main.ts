@@ -15,19 +15,20 @@ import '../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.contributio
 import { registerTerminalView } from '../workbench/contrib/terminal/browser/terminal.contribution.js';
 import { SessionsViewRegistry } from './common/views.js';
 import { Lxicon } from '../base/common/lxicons.js';
-import { SessionsPageRegistry } from './browser/pages.js';
+import { MenusRegistry } from '../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../platform/contextkey/common/contextkey.js';
+import { localize2 } from '../nls.js';
+import { Menus } from './browser/menus.js';
 
-SessionsPageRegistry.registerPage({
-	id: 'chat', title: 'Chat', titleKey: 'sessions.activity.chat', icon: Lxicon.chat2, activeIcon: Lxicon.chat2Filled, order: 10,
-	layout: { conversation: 'chat', sidebar: 'sessions', primary: 'sessions', editor: 'hidden', auxiliaryBar: 'hidden', panel: false },
-});
-SessionsPageRegistry.registerPage({
-	id: 'colab', title: 'Collaboration', titleKey: 'sessions.activity.colab', icon: Lxicon.colab, activeIcon: Lxicon.colabFilled, order: 20,
-	layout: { sidebar: 'hidden', primary: 'sessions', editor: 'hidden', auxiliaryBar: 'hidden', panel: false },
-});
-SessionsPageRegistry.registerPage({
-	id: 'code', title: 'Code', titleKey: 'sessions.mode.code', icon: Lxicon.code, order: 40,
-	layout: { conversation: 'code', sidebar: 'sessions', primary: 'sessions', editor: 'session', auxiliaryBar: 'session', panel: true },
-});
+for (const [id, title, icon, activeIcon, order] of [
+	['chat', localize2({ bundle: 'ash', key: 'sessions.activity.chat' }, 'Chat'), Lxicon.chat2, Lxicon.chat2Filled, 10],
+	['teams', localize2({ bundle: 'ash', key: 'sessions.activity.colab' }, 'Collaboration'), Lxicon.colab, Lxicon.colabFilled, 20],
+	['code', localize2({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), Lxicon.code, Lxicon.code, 40],
+] as const) {
+	MenusRegistry.appendMenuItem(Menus.ActivityBar, {
+		command: { id: `sessions.open.${id}`, title, icon, toggled: { condition: ContextKeyExpr.has(`sessions.activity.${id}Selected`), icon: activeIcon } },
+		group: 'navigation', order,
+	});
+}
 
 registerTerminalView(SessionsViewRegistry);

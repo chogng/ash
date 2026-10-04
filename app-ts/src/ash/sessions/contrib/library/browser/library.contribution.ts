@@ -1,20 +1,41 @@
 import { getActiveElement } from '../../../../base/browser/dom.js';
-import { localize } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { EditorPanes } from '../../../../workbench/browser/editor.js';
+import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { SessionsPageRegistry } from '../../../browser/pages.js';
-import { LibraryPage } from './libraryPage.js';
+import { Menus } from '../../../browser/menus.js';
+import { LibraryPage, LibraryEditorPane, LIBRARY_EDITOR_RESOURCE } from './libraryPage.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 
-SessionsPageRegistry.registerPage({
-	id: 'library', title: 'Library', titleKey: 'sessions.activity.library', icon: Lxicon.library, activeIcon: Lxicon.libraryFilled, order: 30,
-	viewDescriptor: new SyncDescriptor(LibraryPage),
-	layout: { sidebar: 'hidden', primary: 'sessions', editor: 'hidden', auxiliaryBar: 'hidden', panel: false },
+EditorPanes.registerStatic({
+	id: LibraryEditorPane.ID,
+	name: 'Library',
+	canOpen: input => input.resource.toString() === LIBRARY_EDITOR_RESOURCE.toString() ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	create: options => {
+		if (!options.instantiationService) { throw new Error('Library editor requires an instantiation service'); }
+		return options.instantiationService.createInstance(LibraryEditorPane);
+	},
+});
+
+registerAction2(class OpenLibrary extends Action2 {
+	constructor() {
+		super({
+			id: 'sessions.open.library', title: localize2({ bundle: 'ash', key: 'sessions.activity.library' }, 'Library'), icon: Lxicon.library,
+			toggled: { condition: ContextKeyExpr.has('sessions.activity.librarySelected'), icon: Lxicon.libraryFilled },
+			menu: { id: Menus.ActivityBar, group: 'navigation', order: 30 },
+		});
+	}
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(IEditorService).openEditor({ resource: LIBRARY_EDITOR_RESOURCE, label: localize('library.title', 'Library'), readOnly: true, showBreadcrumbs: false }, { pinned: true });
+	}
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({

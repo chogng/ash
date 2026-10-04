@@ -43,7 +43,7 @@ registerWorkbenchContribution('workbench.contrib.call', WorkbenchPhase.BlockStar
 	}));
 	registrations.add(registerAction2(class OpenCalls extends Action2 {
 		constructor() { super({ id: 'ash.call.open', title: localize2({ bundle: 'ash.workbench', key: 'command.OpenCalls' }, 'Open Calls'), f1: true }); }
-		public override run(accessor: ServicesAccessor): void { accessor.get(IViewsService).focusView('ash.call.view'); }
+		public override run(accessor: ServicesAccessor): Promise<boolean> { return accessor.get(IViewsService).focusView('ash.call.view'); }
 	}));
 	return registrations;
 });

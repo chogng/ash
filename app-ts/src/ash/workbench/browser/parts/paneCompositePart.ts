@@ -1,3 +1,4 @@
+import type { PaneCompositeOptions } from './views/paneComposite.js';
 import { HoverPosition } from "../../../base/browser/ui/hover/hoverWidget.js";
 import type { IActivityHoverOptions } from "./compositeBarActions.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
@@ -70,6 +71,11 @@ export class PaneCompositePart extends CompositePart {
 	private compositeBarVisible = true;
 	private hasCustomTitleContent = false;
 
+	/** The host chooses presentation; the shared service only creates and activates containers. */
+	public getPaneCompositeOptions(): Pick<PaneCompositeOptions, 'paneHeaders' | 'paneLayout' | 'mergeViewWithContainerWhenSingleView'> {
+		const fill = this.location === ViewContainerLocation.Panel || this.location === ViewContainerLocation.AuxiliaryBar;
+		return { paneHeaders: fill ? 'hidden' : 'visible', paneLayout: fill ? 'fill' : 'stack' };
+	}
 	constructor(container: HTMLElement, options: PaneCompositePartOptions) {
 		super(container, options.id);
 		this.viewDescriptorService = options.viewDescriptorService;

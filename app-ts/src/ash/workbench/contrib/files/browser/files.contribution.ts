@@ -117,7 +117,7 @@ AccessibleViewRegistry.register({
 	name: 'openEditorsHelp',
 	when: OpenEditorsFocusedContext.isEqualTo(true),
 	getProvider: accessor => {
-		const view = accessor.get(IViewsService).openView(OpenEditorsView.ID);
+		const view = accessor.get(IViewsService).getViewWithId(OpenEditorsView.ID);
 		if (!(view instanceof OpenEditorsView)) return undefined;
 		const focused = view.element.ownerDocument.activeElement;
 		return new AccessibleContentProvider(
@@ -136,7 +136,7 @@ AccessibleViewRegistry.register({
 	name: 'openEditorsView',
 	when: OpenEditorsFocusedContext.isEqualTo(true),
 	getProvider: accessor => {
-		const view = accessor.get(IViewsService).openView(OpenEditorsView.ID);
+		const view = accessor.get(IViewsService).getViewWithId(OpenEditorsView.ID);
 		if (!(view instanceof OpenEditorsView)) return undefined;
 		const focused = view.element.ownerDocument.activeElement;
 		const content = view.getAccessibleContent();

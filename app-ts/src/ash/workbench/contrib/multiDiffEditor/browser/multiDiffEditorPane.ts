@@ -111,7 +111,7 @@ export class MultiDiffEditorPane extends Disposable implements IEditorPaneWithVi
 		}
 		this.session.value = this.pendingSession.clearAndLeak();
 		this.session.value?.show();
-		this.options.viewsService?.focusView(GIT_VIEW_ID);
+		await this.options.viewsService?.focusView(GIT_VIEW_ID);
 	}
 
 	public clearInput(): void {

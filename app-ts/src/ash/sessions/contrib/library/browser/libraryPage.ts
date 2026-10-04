@@ -16,7 +16,9 @@ import { IHoverService } from '../../../../platform/hover/browser/hoverService.j
 import { ImageResource } from '../../../../platform/media/browser/image.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import type { ISessionsPageView } from '../../../browser/pages.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { EditorPaneVisibility, type IEditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
+import type { EditorInput } from '../../../../workbench/services/editor/common/editorService.js';
 
 interface LibraryItem {
 	readonly store: DisposableStore;
@@ -29,8 +31,8 @@ interface LibraryItem {
 	inViewport: boolean;
 }
 
-/** Catalog state belongs to assets; this retained page owns only browsing and preview lifetimes. */
-export class LibraryPage extends Disposable implements ISessionsPageView {
+/** Catalog state belongs to assets; this widget owns only browsing and preview lifetimes. */
+export class LibraryPage extends Disposable {
 	public readonly domNode: HTMLElement;
 	private static readonly pages = new WeakMap<HTMLElement, LibraryPage>();
 	private readonly ui = this._register(new DisposableStore());
@@ -395,4 +397,30 @@ export class LibraryPage extends Disposable implements ISessionsPageView {
 		else { next += event.key === 'ArrowDown' ? columns : event.key === 'ArrowUp' ? -columns : event.key === 'ArrowRight' ? 1 : -1; }
 		event.preventDefault(); buttons[Math.max(0, Math.min(buttons.length - 1, next))].focus();
 	}
+}
+
+export const LIBRARY_EDITOR_RESOURCE = URI.from({ scheme: 'ash-library', path: '/library' });
+
+/** The Editor Part owns mounting and visibility; browsing state stays in the widget. */
+export class LibraryEditorPane extends Disposable implements IEditorPane {
+	public static readonly ID = 'sessions.library.editor';
+	public readonly id = LibraryEditorPane.ID;
+	private library!: LibraryPage;
+
+	constructor(@IInstantiationService private readonly instantiation: IInstantiationService) { super(); }
+
+	public create(parent: HTMLElement): void {
+		this.library = this._register(this.instantiation.createInstance(LibraryPage, parent.ownerDocument));
+		parent.append(this.library.domNode);
+		this._register(toDisposable(() => this.library.domNode.remove()));
+	}
+
+	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+		if (input.resource.toString() !== LIBRARY_EDITOR_RESOURCE.toString()) { throw new TypeError('Invalid Library editor input'); }
+		signal.throwIfAborted();
+	}
+	public clearInput(): void { this.library.setVisible(false); }
+	public setVisible(visibility: EditorPaneVisibility): void { this.library.setVisible(visibility === EditorPaneVisibility.Visible); }
+	public layout(dimension: IDimension): void { this.library.layout(dimension); }
+	public focus(): void { this.library.focus(); }
 }

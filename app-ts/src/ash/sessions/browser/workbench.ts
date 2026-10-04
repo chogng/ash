@@ -190,9 +190,9 @@ import { TerminalService } from '../../workbench/services/terminal/browser/termi
 import { AuxiliaryBarPart } from "./parts/auxiliarybar/auxiliaryBarPart.js";
 import { disposableWindowTimeout } from '../../base/browser/scheduler.js';
 import { ActivityBarPart } from './parts/activitybar/activityBarPart.js';
-import { ISessionsPageService } from '../common/pages.js';
-import { SessionsPageService } from '../services/pages/browser/sessionsPageService.js';
-import { SessionsPageLayoutController } from './pageLayoutController.js';
+import type { PaneCompositePart } from '../../workbench/browser/parts/paneCompositePart.js';
+import { PaneCompositePartService } from '../../workbench/browser/parts/paneCompositePartService.js';
+import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
 import { SessionsPart, type SessionsPartOptions } from "./parts/sessionsPart.js";
 import { SidebarPart } from "./parts/sidebarPart.js";
 import { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
@@ -229,9 +229,9 @@ export class Workbench extends Disposable {
 	private readonly lifecycleService: ILifecycleService;
 	private readonly sessionsView: SessionsService;
 	private readonly sessionsPart: SessionsPart;
-	private readonly showChat: () => void;
+	private readonly showChat: () => Promise<void>;
 	private readonly workspaceSelection: () => SessionWorkspaceSelection;
-	/** Saved page and session layout are restored before the host completes startup. */
+	/** Saved session layouts are restored before the host completes startup. */
 	public readonly whenRestored: Promise<void>;
 	private readonly logService: ILogService;
 
@@ -470,7 +470,7 @@ export class Workbench extends Disposable {
 		void keybindingsResourceService.reload().catch((error: unknown) => console.error("Failed to initialize keybindings resource", error));
 		const accessibleViewService = this._register(services.createInstance(AccessibleViewService));
 		services.registerInstance(IAccessibleViewService, accessibleViewService);
-		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, () => { selectActivityPage('code'); editors.focusActiveEditor(); }));
+		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, () => { void commandService.executeCommand('sessions.open.code').catch(error => notificationService.error(String(error))); }));
 		this._register(CommandsRegistry.register(OPEN_PLUGINS_COMMAND_ID, () => preferences.open('plugins', { mode: 'installed' })));
 		this._register(CommandsRegistry.register(OPEN_MARKETPLACE_COMMAND_ID, (_accessor, value: unknown) => {
 			const options = value as MarketplaceOpenOptions | string | undefined;
@@ -491,15 +491,11 @@ export class Workbench extends Disposable {
 				role: { type: 'exact' as const, name: agent.name, source: agent.source },
 			}));
 		}));
-		const pages = this._register(services.createInstance(SessionsPageService));
-		services.registerInstance(ISessionsPageService, pages);
-		let pageLayoutController: SessionsPageLayoutController;
-		const selectActivityPage = (page: string): void => pages.openPage(page);
+		const recoveredDrafts = migrateNewChatDraftState(storage);
 		this._register(CommandsRegistry.register('sessions.library.useInDesign', async (_accessor, value) => {
 			const version = value as AssetVersion;
 			const design = services.get(IDesignEditorService);
 			await editors.openEditor(design.input, { pinned: true, preserveFocus: true });
-			selectActivityPage('design');
 			await design.activeEditor.get()!.adoptAssetVersion(version);
 		}));
 		this._register(CommandsRegistry.register('sessions.library.addToChat', async (_accessor, value) => {
@@ -508,13 +504,12 @@ export class Workbench extends Disposable {
 			let binary = '';
 			for (let offset = 0; offset < bytes.length; offset += 8192) { binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192)); }
 			const content = `data:${version.mediaType};base64,${btoa(binary)}`;
-			selectActivityPage('chat');
-			sessionsPart!.addContext({ id: version.versionId, name: version.name, kind: 'image', resolve: async () => ({ name: version.name, content, kind: 'image' }) }, 'chat');
+			await this.showChat();
+			sessionsPart!.addContext({ id: version.versionId, name: version.name, kind: 'image', resolve: async () => ({ name: version.name, content, kind: 'image' }) });
 			sessionsPart!.focus();
 		}));
-		this.showChat = () => selectActivityPage('chat');
+		this.showChat = () => commandService.executeCommand<void>('sessions.open.chat');
 		const activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
-			focusList: () => sidebar.focusChats(),
 			showAccountMenu: (anchor: HTMLElement) => accountMenu.show(anchor),
 		}));
 		const activityBarLocation = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
@@ -532,7 +527,7 @@ export class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter page navigation and Accounts. Use arrow keys, Home and End to move between pages. Press Enter or Space to open the focused page. Drag page icons to reorder them, or use Move earlier and Move later in the Context Menu key or Shift+F10 menu. Page order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Chat and Code keep separate selected sessions, navigation history, unsent text, and attachments when you switch pages. Code sessions restore their own editor tabs when you navigate between them. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the Code side panel. Toggle Code side panel closes and reopens the whole composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens an empty page. Library browses imported images, favorites and collections. Design opens an infinite canvas. Accounts opens the account menu, which includes Return to Workbench.'),
+					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Chat and Code share the selected session, navigation history, unsent text and attachments; switching changes the layout. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens Teams in the sidebar. Library browses imported images, favorites and collections in an editor. Design opens a canvas editor with Layers and Shape properties. Accounts opens the account menu, which includes Return to Workbench.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -551,26 +546,19 @@ export class Workbench extends Disposable {
 			accessibleViewService,
 			notifications: notificationService,
 			commandService,
-			createInputPart: (container, delegate, model, page) => {
-				if (model.untitledSessionId) {
-					migrateNewChatDraftState(storage, page, model.untitledSessionId);
-				}
-				return services.createInstance(NewChatInputWidget, container, delegate, model, undefined, page);
-			},
-			activateSelection: (selection, page) => view.activateSelection(selection, page),
-			closeSelection: (selection, page) => {
-				view.closeVisibleSelection(selection, page);
+			createInputPart: (container, delegate, model) => services.createInstance(NewChatInputWidget, container, delegate, model),
+			activateSelection: selection => view.activateSelection(selection),
+			closeSelection: selection => {
+				view.closeVisibleSelection(selection);
 				if (selection.kind === 'untitled') {
-					writeNewChatDraftState(storage, page, undefined, `untitled:${selection.session.untitledSessionId}`);
+					writeNewChatDraftState(storage, undefined, `untitled:${selection.session.untitledSessionId}`);
 				}
 			},
-			createNewSession: page => { view.openNewSession(page === 'code' ? 'New code session' : 'New chat', page); },
+			createNewSession: () => { view.openNewSession(); },
 		} satisfies SessionsPartOptions));
 		const updateSessionsPart = (): void => {
-			for (const page of ['chat', 'code'] as const) {
-				const selection = view.getPageSelection(page);
-				sessionsPart?.updateVisibleSelections(selection.visibleSelections, selection.activeSelection, page);
-			}
+			const selection = view.getSelection();
+			sessionsPart?.updateVisibleSelections(selection.visibleSelections, selection.activeSelection);
 		};
 		this._register(view.onDidChange(updateSessionsPart));
 		updateSessionsPart();
@@ -581,12 +569,13 @@ export class Workbench extends Disposable {
 			},
 			getConversations: () => sessions.sessions.filter(session => session.status === 'active').flatMap(session => session.chats.filter(chat => chat.status === 'active').map(chat => ({ sessionId: session.sessionId, threadId: chat.threadId, title: chat.title ?? session.title }))),
 			appendToActiveDraft: text => {
-				selectActivityPage(view.page.get());
-				sessionsPart!.appendToDraft(text, view.page.get());
-				sessionsPart!.focus();
+				void this.showChat().then(() => {
+					sessionsPart!.appendToDraft(text);
+					sessionsPart!.focus();
+				}).catch(error => notificationService.error(String(error)));
 			},
-			captureActiveDraft: () => sessionsPart!.captureActiveDraft(view.page.get()),
-			openConversation: async (sessionId, threadId) => { selectActivityPage(view.page.get()); await view.openThread(sessionId, threadId); },
+			captureActiveDraft: () => sessionsPart!.captureActiveDraft(),
+			openConversation: async (sessionId, threadId) => { await this.showChat(); await view.openThread(sessionId, threadId); },
 		});
 
 		const editor = this._register(services.createInstance(EditorPart, this.domNode, {
@@ -621,35 +610,13 @@ export class Workbench extends Disposable {
 		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode));
 		services.registerInstance(ITerminalService, this._register(new TerminalService(options.api.terminal, workspace)));
 		const panel = this._register(services.createInstance(PanelPart, this.domNode));
-		services.registerInstance(IViewsService, new ViewsService({
-			viewDescriptorService: viewDescriptors,
-			getViewContainer: container => {
-				switch (container.location) {
-					case ViewContainerLocation.Sidebar: return sidebar.getComposite(container.id);
-					case ViewContainerLocation.Panel: return panel.getComposite(container.id);
-					case ViewContainerLocation.AuxiliaryBar: return auxiliarybar!.getComposite(container.id);
-				}
-			},
-			openViewContainer: container => {
-				pageLayoutController.openContainerPage(container.id, container.location);
-				switch (container.location) {
-					case ViewContainerLocation.Sidebar:
-						layout.showPart('sidebar');
-						sidebar.showComposite(container.id);
-						return sidebar.getComposite(container.id);
-					case ViewContainerLocation.Panel:
-						layout.showPart('panel');
-						panel.showComposite(container.id);
-						return panel.getComposite(container.id);
-					case ViewContainerLocation.AuxiliaryBar:
-						layout.showPart('auxiliarybar');
-						auxiliarybar!.showComposite(container.id);
-						return auxiliarybar!.getComposite(container.id);
-				}
-			},
-		}));
-		sidebar.initialize();
-		auxiliarybar.initialize();
+		const panes = this._register(services.createInstance(PaneCompositePartService, new Map<ViewContainerLocation, PaneCompositePart>([
+			[ViewContainerLocation.Sidebar, sidebar],
+			[ViewContainerLocation.Panel, panel],
+			[ViewContainerLocation.AuxiliaryBar, auxiliarybar],
+		])));
+		services.registerInstance(IPaneCompositePartService, panes);
+		services.registerInstance(IViewsService, services.createInstance(ViewsService));
 		const parts = new Map<SessionsPartId, WorkbenchPart>([
 			["titlebar", titlebar],
 			['activitybar', activitybar],
@@ -660,8 +627,12 @@ export class Workbench extends Disposable {
 			['panel', panel],
 		]);
 		layout.createWorkbenchLayout(parts);
-		pageLayoutController = this._register(services.createInstance(SessionsPageLayoutController, sidebar, sessionsPart, auxiliarybar));
-		const layoutController = this._register(services.createInstance(DesktopLayoutController, panel, auxiliarybar));
+		for (const [location, part] of [[ViewContainerLocation.Sidebar, sidebar], [ViewContainerLocation.Panel, panel], [ViewContainerLocation.AuxiliaryBar, auxiliarybar]] as const) {
+			this._register(part.onDidSelectComposite(event => {
+				void panes.openPaneComposite(event.compositeId, location, true).catch(error => notificationService.error(String(error)));
+			}));
+		}
+		const layoutController = this._register(services.createInstance(DesktopLayoutController, sidebar));
 		layoutController.start();
 		this._register(this.lifecycleService.onBeforeShutdown(event => {
 			event.veto(editor.confirmCloseAllEditors().then(confirmed => !confirmed), 'Sessions unsaved files');
@@ -683,12 +654,12 @@ export class Workbench extends Disposable {
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		this.lifecycleService.phase = LifecyclePhase.Ready;
-		this.whenRestored = this.initialize(view, configurationService, ownerWindow, layoutController, contributions, pageLayoutController);
+		this.whenRestored = this.initialize(view, configurationService, ownerWindow, layoutController, contributions, storage, commandService, recoveredDrafts);
 	}
 
 	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
 		await this.whenRestored;
-		this.showChat();
+		await this.showChat();
 		if (options.conversation) {
 			await this.sessionsView.openThread(options.conversation.sessionId, options.conversation.threadId);
 		}
@@ -698,22 +669,34 @@ export class Workbench extends Disposable {
 				this.sessionsView.openNewSession('New code session');
 			}
 		}
-		this.showChat();
-		if (options.draft) this.sessionsPart.restoreDraft(options.draft, 'chat');
+		await this.showChat();
+		if (options.draft) this.sessionsPart.restoreDraft(options.draft);
 	}
 
 	shutdown(reason: ShutdownReason): Promise<void> {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async initialize(view: SessionsService, configurationService: WorkbenchConfigurationService, ownerWindow: Window, layoutController: DesktopLayoutController, contributions: WorkbenchContributionHost, pages: SessionsPageLayoutController): Promise<void> {
+	private async initialize(view: SessionsService, configurationService: WorkbenchConfigurationService, ownerWindow: Window, layoutController: DesktopLayoutController, contributions: WorkbenchContributionHost, storage: IStorageService, commands: ICommandService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>): Promise<void> {
 		await configurationService.reloadConfiguration();
 		await view.initialize();
 		if (this.isDisposed) return;
-		// Page activation may create a draft; restored selections must exist before the saved page opens.
-		pages.start();
-		if (!view.activeSelection) view.openNewSession("New code session");
+		if (!view.activeSelection) view.openNewSession();
+		const selected = view.activeSelection!;
+		for (const recovered of recoveredDrafts) {
+			const session = view.openNewSession(undefined, { sideBySide: true });
+			writeNewChatDraftState(storage, recovered.draft, `untitled:${session.untitledSessionId}`);
+			this.sessionsPart.restoreDraft(recovered.draft);
+			storage.remove(recovered.key, StorageScope.WORKSPACE);
+		}
+		view.activateSelection(selected);
+		const previousActivity = storage.get('sessions.activityBar.activePage', StorageScope.WORKSPACE);
+		if (previousActivity === 'library' || previousActivity === 'design' || previousActivity === 'colab') {
+			await commands.executeCommand(`sessions.open.${previousActivity === 'colab' ? 'teams' : previousActivity}`);
+		}
+		storage.remove('sessions.activityBar.activePage', StorageScope.WORKSPACE);
 		await layoutController.whenSettled();
+		await layoutController.restorePrimaryEditor();
 		if (this.isDisposed) return;
 		this.lifecycleService.phase = LifecyclePhase.Restored;
 		contributions.advance(WorkbenchPhase.AfterRestored);
@@ -740,6 +723,8 @@ export interface IAgentWorkbenchLayoutService extends ILayoutService {
 	setLayoutStyle(style: SessionsLayoutStyle): void;
 	isPartVisible(partId: SessionsPartId): boolean;
 	isPartAvailable(partId: SessionsPartId): boolean;
+	setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void;
+	updateParts(update: () => void): void;
 	showPart(partId: SessionsPartId): void;
 	hidePart(partId: SessionsPartId): void;
 }
@@ -777,7 +762,7 @@ function createDefaultSessionsWorkbenchLayoutState(): SessionsWorkbenchLayoutSta
 	return {
 		version: 1,
 		sidebar: { width: SESSION_SIDEBAR_DEFAULT_WIDTH, visible: true },
-		auxiliarybar: { width: SESSION_AUXILIARYBAR_DEFAULT_WIDTH, visible: true },
+		auxiliarybar: { width: SESSION_AUXILIARYBAR_DEFAULT_WIDTH, visible: false },
 		editor: { width: 480, visible: false },
 		panel: { height: 240, visible: false },
 	};
@@ -1137,7 +1122,7 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		this.saveState();
 	}
 
-	/** Composite and editor events can reenter page selection; only the outer selection commits Part geometry. */
+	/** Editor and panel changes share one geometry commit when several Parts change together. */
 	public updateParts(update: () => void): void {
 		this.partUpdateDepth++;
 		try {

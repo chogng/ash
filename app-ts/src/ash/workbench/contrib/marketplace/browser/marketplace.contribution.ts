@@ -16,16 +16,16 @@ registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.Bl
 	registrations.add(ViewsRegistry.registerViews('ash.marketplace', [{ id: 'ash.marketplace.view', title: 'Marketplace', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(MarketplaceViewPane) }]));
 	registrations.add(registerAction2(class OpenMarketplace extends Action2 {
 		constructor() { super({ id: OPEN_MARKETPLACE_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.OpenMarketplace' }, 'Open Marketplace'), f1: true }); }
-		public override run(accessor: ServicesAccessor, options?: MarketplaceOpenOptions | string): void {
-			const view = accessor.get(IViewsService).openView('ash.marketplace.view');
+		public override async run(accessor: ServicesAccessor, options?: MarketplaceOpenOptions | string): Promise<void> {
+			const view = await accessor.get(IViewsService).openView('ash.marketplace.view');
 			// Catalog loading and its errors belong to the view; navigation must release the Chat composer immediately.
 			if (view instanceof MarketplaceViewPane) { void view.open(typeof options === 'string' ? { query: options.trim() } : options); }
 		}
 	}));
 	registrations.add(registerAction2(class OpenPlugins extends Action2 {
 		constructor() { super({ id: OPEN_PLUGINS_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.OpenPlugins' }, 'Manage installed packages'), f1: true }); }
-		public override run(accessor: ServicesAccessor): void {
-			const view = accessor.get(IViewsService).openView('ash.marketplace.view');
+		public override async run(accessor: ServicesAccessor): Promise<void> {
+			const view = await accessor.get(IViewsService).openView('ash.marketplace.view');
 			if (view instanceof MarketplaceViewPane) { void view.open({ mode: 'installed' }); }
 		}
 	}));

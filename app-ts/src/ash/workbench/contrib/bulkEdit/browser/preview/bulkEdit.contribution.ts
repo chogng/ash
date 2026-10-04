@@ -76,7 +76,7 @@ export class BulkEditPreviewContribution extends Disposable {
 	}
 
 	private async preview(edits: ResourceEdit[], signal: AbortSignal): Promise<ResourceEdit[]> {
-		const view = this.views.openView(BulkEditPane.ID);
+		const view = await this.views.openView(BulkEditPane.ID);
 		if (!(view instanceof BulkEditPane)) throw new Error("Bulk edit preview view is not available");
 		if (this.activeSession) {
 			const previous = this.activeSession;

@@ -28,7 +28,6 @@ import { ILifecycleService } from '../../../../workbench/services/lifecycle/comm
 import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import type { SessionsPage } from '../../../services/sessions/browser/sessionsService.js';
 
 /** Sessions owns its composer layout and editor policy while sharing input operations. */
 export class NewChatInputWidget extends ChatInputPart {
@@ -49,8 +48,6 @@ export class NewChatInputWidget extends ChatInputPart {
 		container: HTMLElement,
 		delegate: ChatInputDelegate,
 		private readonly model: IChatWidgetModel,
-		initialDraft: IOpenAgentsWindowOptions['draft'],
-		private readonly page: SessionsPage,
 		@IChatSpeechToTextService speechToText: IChatSpeechToTextService,
 		@IDictationOnboardingService onboarding: IDictationOnboardingService,
 		@IContextMenuService contextMenus: IContextMenuService,
@@ -91,7 +88,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		}], instantiationService, speechToText, onboarding);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-chat-input', 'floating-card');
-		this.element.classList.add(`${page}-composer`);
+		this.element.classList.add('chat-composer');
 		this.contextAttachments = this._register(instantiationService.createInstance(NewChatContextAttachments, this.inputContainer, this.attachmentModel));
 		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
 		const dragAndDrop = this._register(new ChatDragAndDrop(files => this.contextAttachments.attachFiles(files)));
@@ -127,7 +124,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.element.prepend(this.heading);
 		this.displayedThreadId = model.threadId;
 		this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
-		const storedDraft = readNewChatDraftState(storage, this.page, this.displayedDraftId) ?? initialDraft;
+		const storedDraft = readNewChatDraftState(storage, this.displayedDraftId);
 		if (storedDraft) this.restoreDraft(storedDraft);
 		this._register(this.onDidChangeInput(() => {
 			if (!this.restoringDraft) {
@@ -152,13 +149,13 @@ export class NewChatInputWidget extends ChatInputPart {
 					this.restoringDraft = true;
 					this.input.value = '';
 					this.attachmentModel.clear();
-					const draft = readNewChatDraftState(storage, this.page, model.threadId ?? `untitled:${model.untitledSessionId!}`);
+					const draft = readNewChatDraftState(storage, model.threadId ?? `untitled:${model.untitledSessionId!}`);
 					if (draft) this.restoreDraft(draft);
 					this.restoringDraft = false;
 				} else {
 					// A successful materialization consumes the new-session identity and its persisted draft.
 					this.draftWriteRevisions.set(this.displayedDraftId, (this.draftWriteRevisions.get(this.displayedDraftId) ?? 0) + 1);
-					writeNewChatDraftState(storage, this.page, undefined, this.displayedDraftId);
+					writeNewChatDraftState(storage, undefined, this.displayedDraftId);
 				}
 				this.displayedThreadId = model.threadId;
 				this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
@@ -202,7 +199,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		const mode = this.model.inputState.mode;
 		const attachments = this.attachmentModel.attachments;
 		if (attachments.length === 0) {
-			writeNewChatDraftState(this.storage, this.page, { mode, text, contexts: [] }, draftId);
+			writeNewChatDraftState(this.storage, { mode, text, contexts: [] }, draftId);
 			return;
 		}
 		const contexts = await Promise.all(attachments.map(async attachment => ({
@@ -210,7 +207,7 @@ export class NewChatInputWidget extends ChatInputPart {
 			content: (await attachment.resolve()).content,
 		})));
 		if (revision !== this.draftWriteRevisions.get(draftId)) return;
-		writeNewChatDraftState(this.storage, this.page, { mode, text, contexts }, draftId);
+		writeNewChatDraftState(this.storage, { mode, text, contexts }, draftId);
 	}
 
 	private updateConversation(): void {

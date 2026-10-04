@@ -69,7 +69,10 @@ export class TasksViewPane extends ViewPane {
 		if (terminalId) {
 			const terminal = this.terminalService.instances.find(candidate => candidate.id === terminalId);
 			if (terminal) this.terminalService.setActiveInstance(terminal);
-			this.viewsService.focusView(TERMINAL_VIEW_ID);
+			void this.viewsService.focusView(TERMINAL_VIEW_ID).catch(error => {
+				this.error = error instanceof Error ? error.message : String(error);
+				this.render();
+			});
 		}
 	}
 

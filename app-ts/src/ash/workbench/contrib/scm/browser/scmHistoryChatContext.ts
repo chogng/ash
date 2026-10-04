@@ -82,7 +82,7 @@ async function historyPicks(scmService: ISCMServiceType, rawQuery: string): Prom
 }
 
 async function revealChat(accessor: ServicesAccessor): Promise<IChatContextTarget | undefined> {
-	return accessor.get(IViewsService).openView(CHAT_VIEW_ID) as IChatContextTarget | undefined;
+	return await accessor.get(IViewsService).openView(CHAT_VIEW_ID) as IChatContextTarget | undefined;
 }
 
 registerAction2(class extends Action2 {

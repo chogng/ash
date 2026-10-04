@@ -26,8 +26,9 @@ registerAction2(class StartDebugAction extends Action2 {
 	constructor() { super({ id: START_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'debug.start' }, "Start Debugging"), f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5")) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 1 } }); }
 	override run(accessor: ServicesAccessor): void {
 		const debug = accessor.get(IDebugService);
-		accessor.get(IViewsService).focusView(DEBUG_VIEW_ID);
+		const views = accessor.get(IViewsService);
 		void (async () => {
+			await views.focusView(DEBUG_VIEW_ID);
 			if (debug.session?.state === "stopped") { await debug.session.continue(); return; }
 			const configurations = await debug.refresh();
 			if (configurations[0]) await debug.start(configurations[0]);
@@ -53,7 +54,7 @@ registerAction2(class StopAllDebugAction extends Action2 {
 
 registerAction2(class FocusDebugConsoleAction extends Action2 {
 	constructor() { super({ id: FOCUS_DEBUG_CONSOLE_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.FocusDebugConsoleAction' }, "Focus on Debug Console View"), f1: true }); }
-	override run(accessor: ServicesAccessor): void { accessor.get(IViewsService).focusView(DEBUG_CONSOLE_VIEW_ID); }
+	override run(accessor: ServicesAccessor): Promise<boolean> { return accessor.get(IViewsService).focusView(DEBUG_CONSOLE_VIEW_ID); }
 });
 
 registerAction2(class ClearDebugConsoleAction extends Action2 {

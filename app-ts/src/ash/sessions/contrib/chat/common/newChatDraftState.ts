@@ -4,13 +4,9 @@ import { StorageScope, StorageTarget, type IStorageService } from '../../../../p
 
 type ChatDraft = NonNullable<IOpenAgentsWindowOptions['draft']>;
 
-function draftPrefix(page: 'chat' | 'code'): string {
-	return page === 'chat' ? 'sessions.draftState' : 'sessions.codeDraftState';
-}
-
-/** Draft identities are page-local: a Thread id or an `untitled:` slot id. */
-export function readNewChatDraftState(storage: IStorageService, page: 'chat' | 'code', draftId: string): ChatDraft | undefined {
-	const raw = storage.get(`${draftPrefix(page)}:${draftId}`, StorageScope.WORKSPACE);
+/** A draft belongs to a Thread or an `untitled:` session identity, regardless of layout. */
+export function readNewChatDraftState(storage: IStorageService, draftId: string): ChatDraft | undefined {
+	const raw = storage.get(`sessions.inputDraft:${draftId}`, StorageScope.WORKSPACE);
 	return raw === undefined ? undefined : parseChatDraft(raw);
 }
 
@@ -25,8 +21,8 @@ function parseChatDraft(raw: string): ChatDraft {
 	return draft as unknown as ChatDraft;
 }
 
-export function writeNewChatDraftState(storage: IStorageService, page: 'chat' | 'code', draft: ChatDraft | undefined, draftId: string): void {
-	const key = `${draftPrefix(page)}:${draftId}`;
+export function writeNewChatDraftState(storage: IStorageService, draft: ChatDraft | undefined, draftId: string): void {
+	const key = `sessions.inputDraft:${draftId}`;
 	if (!draft || (!draft.text && draft.contexts.length === 0)) {
 		storage.remove(key, StorageScope.WORKSPACE);
 	} else {
@@ -34,20 +30,23 @@ export function writeNewChatDraftState(storage: IStorageService, page: 'chat' | 
 	}
 }
 
-/** The first untitled slot claims the old page-wide draft once; all subsequent writes use its identity. */
-export function migrateNewChatDraftState(storage: IStorageService, page: 'chat' | 'code', untitledSessionId: string): void {
-	const key = draftPrefix(page);
-	const raw = storage.get(key, StorageScope.WORKSPACE);
-	if (raw === undefined) {
-		return;
+/** Conflicting legacy drafts get their own session before their old entry is removed. */
+export function migrateNewChatDraftState(storage: IStorageService): readonly { readonly draft: ChatDraft; readonly key: string }[] {
+	const prefixes = storage.get('sessions.activityBar.activePage', StorageScope.WORKSPACE) === 'code'
+		? ['sessions.codeDraftState', 'sessions.draftState'] : ['sessions.draftState', 'sessions.codeDraftState'];
+	const recovered: { draft: ChatDraft; key: string }[] = [];
+	for (const prefix of prefixes) {
+		for (const key of storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE).filter(key => key === prefix || key.startsWith(`${prefix}:`))) {
+			const draft = parseChatDraft(storage.get(key, StorageScope.WORKSPACE)!);
+			const identity = key.slice(prefix.length + 1);
+			const existing = identity ? readNewChatDraftState(storage, identity) : undefined;
+			if (!identity || existing && JSON.stringify(existing) !== JSON.stringify(draft)) {
+				recovered.push({ draft, key });
+				continue;
+			}
+			writeNewChatDraftState(storage, draft, identity);
+			storage.remove(key, StorageScope.WORKSPACE);
+		}
 	}
-	const legacy = parseChatDraft(raw);
-	const identity = `untitled:${untitledSessionId}`;
-	const current = readNewChatDraftState(storage, page, identity);
-	if (current && JSON.stringify(current) !== JSON.stringify(legacy)) {
-		throw new Error('Conflicting stored Sessions drafts');
-	}
-	writeNewChatDraftState(storage, page, legacy, identity);
-	// Both entries belong to one workspace state document, committed by the same flush.
-	storage.remove(key, StorageScope.WORKSPACE);
+	return recovered;
 }

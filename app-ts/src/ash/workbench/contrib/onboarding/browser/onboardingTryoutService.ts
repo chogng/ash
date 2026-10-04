@@ -47,7 +47,7 @@ export class OnboardingTryoutService implements IOnboardingTryoutService {
 			case 'openView':
 				if (!await this.isAvailable(id, token)) return token.isCancellationRequested ? 'cancelled' : 'unavailable';
 				if (token.isCancellationRequested) return 'cancelled';
-				return this.views.focusView(presentation.viewId) ? 'completed' : 'unavailable';
+				return await this.views.focusView(presentation.viewId) ? 'completed' : 'unavailable';
 			case 'guided': {
 				const scope = await presentation.prepare?.(token);
 				if (token.isCancellationRequested) return 'cancelled';

@@ -24,8 +24,8 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 		return view.captureActiveDraft();
 	}
 
-	appendToActiveDraft(text: string): void {
-		const view = this.views.openView(CHAT_VIEW_ID);
+	async appendToActiveDraft(text: string): Promise<void> {
+		const view = await this.views.openView(CHAT_VIEW_ID);
 		if (!(view instanceof ChatViewPane)) throw new Error('Chat view is unavailable for a configuration draft');
 		view.appendToDraft(text);
 		view.focus();

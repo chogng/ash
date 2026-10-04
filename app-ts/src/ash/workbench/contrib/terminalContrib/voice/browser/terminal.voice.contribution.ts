@@ -17,8 +17,8 @@ registerAction2(class TerminalStartVoiceAction extends Action2 {
 			menu: { id: MenuId.TerminalTitle, group: 'navigation', order: 15, when: ContextKeyExpr.equals('terminalActiveInstanceState', 'running') },
 		});
 	}
-	public override run(accessor: ServicesAccessor): Promise<void> | undefined {
-		const view = accessor.get(IViewsService).openView(TERMINAL_VIEW_ID);
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const view = await accessor.get(IViewsService).openView(TERMINAL_VIEW_ID);
 		return view instanceof TerminalViewPane ? view.startVoice() : undefined;
 	}
 });

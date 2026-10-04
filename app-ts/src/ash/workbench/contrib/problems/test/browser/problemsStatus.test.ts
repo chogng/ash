@@ -6,7 +6,7 @@ import { ProblemsStatusContribution } from "../../../../../workbench/contrib/pro
 import { StatusbarAlignment, StatusbarService } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
 import type { IViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
 
-test("Problems status projects and updates workspace error and warning counts", () => {
+test("Problems status projects and updates workspace error and warning counts", async () => {
 	using markerService = new MarkerService();
 	const resource = URI.file("C:\\project\\src\\main.rs");
 	markerService.set("fixture", [
@@ -17,14 +17,14 @@ test("Problems status projects and updates workspace error and warning counts", 
 	]);
 	const focusedViews: string[] = [];
 	const viewsService = {
-		focusView: (viewId: string) => { focusedViews.push(viewId); return true; },
+		focusView: async (viewId: string) => { focusedViews.push(viewId); return true; },
 	} as unknown as IViewsService;
 	using statusbar = new StatusbarService();
 	using contribution = new ProblemsStatusContribution({ statusbarService: statusbar, markerService, viewsService });
 
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left).map(item => item.id), ["ash.status.problems"]);
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.segments?.map(segment => segment.text), ["2", "1"]);
-	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.(), true);
+	assert.equal(await statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.(), true);
 	assert.deepEqual(focusedViews, ["ash.problems"]);
 
 	markerService.set("fixture", [

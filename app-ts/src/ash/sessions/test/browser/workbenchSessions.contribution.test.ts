@@ -54,7 +54,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	services.registerInstance(IQuickInputService, {} as IQuickInputService);
 	services.registerInstance(IChatService, {} as IChatService);
 	services.registerInstance(IEditorService, {} as IEditorService);
-	services.registerInstance(IViewsService, { openView: () => { throw new Error('Draft capture must not reveal Chat'); }, focusView: () => false, getViewWithId: () => undefined });
+	services.registerInstance(IViewsService, { openView: async () => { throw new Error('Draft capture must not reveal Chat'); }, focusView: async () => false, getViewWithId: () => undefined });
 	services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
 	for (const [id, descriptor] of getSingletonServiceDescriptors()) {
 		if (id === ISessionsManagementService || id === IChatSessionNavigationService) {
@@ -80,7 +80,7 @@ test('Open in Agents uses the visible untitled chat instead of an older active s
 	};
 	using services = new InstantiationService();
 	services.registerInstance(ISessionsManagementService, selection as unknown as ISessionsManagementService);
-	services.registerInstance(IViewsService, { openView: () => undefined, focusView: () => false, getViewWithId: () => undefined });
+	services.registerInstance(IViewsService, { openView: async () => undefined, focusView: async () => false, getViewWithId: () => undefined });
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)?.[1];
 	assert.ok(descriptor);
 	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(descriptor));

@@ -1,4 +1,5 @@
-import type { AuxiliaryBarPart } from '../../../../browser/parts/auxiliarybar/auxiliaryBarPart.js';
+import { IPaneCompositePartService } from '../../../../../workbench/services/panecomposite/browser/panecomposite.js';
+import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { isDiffEditorInput } from '../../../../../workbench/common/editor/diffEditorInput.js';
 import { isMultiDiffEditorInput } from '../../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
@@ -10,7 +11,7 @@ import { CHANGES_VIEW_CONTAINER_ID } from '../../../changes/browser/changes.cont
 /** Active tabs choose detail content; an explicit hide remains authoritative until another tab is selected. */
 export class DesktopDetailPanelCoordinator {
 	constructor(
-		private readonly details: AuxiliaryBarPart,
+		@IPaneCompositePartService private readonly panes: IPaneCompositePartService,
 		@IEditorService private readonly editors: IEditorService,
 		@ILayoutService private readonly layout: IAgentWorkbenchLayoutService,
 	) {}
@@ -20,7 +21,7 @@ export class DesktopDetailPanelCoordinator {
 		return input !== undefined && (['ash-session-changes', 'file', 'ash-remote', 'untitled', 'ash-sessions-files'].includes(input.resource.scheme) || isDiffEditorInput(input) || isMultiDiffEditorInput(input));
 	}
 
-	public update(reveal: boolean): void {
+	public async update(reveal: boolean): Promise<void> {
 		const input = this.editors.activeEditor;
 		const changes = input && (input.resource.scheme === 'ash-session-changes' || isDiffEditorInput(input) || isMultiDiffEditorInput(input));
 		const files = input && ['file', 'ash-remote', 'untitled', 'ash-sessions-files'].includes(input.resource.scheme);
@@ -28,9 +29,8 @@ export class DesktopDetailPanelCoordinator {
 			this.layout.hidePart('auxiliarybar');
 			return;
 		}
-		this.details.showComposite(changes ? CHANGES_VIEW_CONTAINER_ID : SESSIONS_FILES_CONTAINER_ID);
-		if (reveal) {
-			this.layout.showPart('auxiliarybar');
-		}
+		// Hidden detail content is selected when explicitly opened; background updates must not resize the session grid.
+		if (!reveal && !this.layout.isPartVisible('auxiliarybar')) { return; }
+		await this.panes.openPaneComposite(changes ? CHANGES_VIEW_CONTAINER_ID : SESSIONS_FILES_CONTAINER_ID, ViewContainerLocation.AuxiliaryBar);
 	}
 }

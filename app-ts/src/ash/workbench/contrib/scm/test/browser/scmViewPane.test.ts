@@ -1373,7 +1373,7 @@ function testGitProviderServices(overrides: Partial<GitSCMProviderServices> = {}
 		commandService: inactiveCommandService(),
 		dialogService: testDialogs,
 		editorService: testEditorService(),
-		viewsService: { focusView: () => true } as unknown as IViewsService,
+		viewsService: { focusView: async () => true } as unknown as IViewsService,
 		workingCopyService: { get: () => [] } as unknown as IWorkingCopyService,
 		...overrides,
 	};

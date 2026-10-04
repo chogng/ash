@@ -1,3 +1,4 @@
+import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -25,7 +26,7 @@ interface OutputChannelQuickPickItem extends IQuickPickItem {
 
 registerAction2(class ShowOutputAction extends Action2 {
 	constructor() { super({ id: SHOW_OUTPUT_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ShowOutputAction' }, "View: Show Output"), f1: true }); }
-	override run(accessor: ServicesAccessor): void { accessor.get(IViewsService).focusView(OUTPUT_VIEW_ID); }
+	override run(accessor: ServicesAccessor): Promise<boolean> { return accessor.get(IViewsService).focusView(OUTPUT_VIEW_ID); }
 });
 
 registerAction2(class ShowOutputChannelsAction extends Action2 {
@@ -79,9 +80,9 @@ class OutputContribution extends Disposable {
 		super();
 		this._register(output.onDidRequestShowChannel(request => {
 			if (request.focus === 'take') {
-				views.focusView(OUTPUT_VIEW_ID);
+				void views.focusView(OUTPUT_VIEW_ID).catch(onUnexpectedError);
 			} else {
-				views.openView(OUTPUT_VIEW_ID);
+				void views.openView(OUTPUT_VIEW_ID).catch(onUnexpectedError);
 			}
 		}));
 	}

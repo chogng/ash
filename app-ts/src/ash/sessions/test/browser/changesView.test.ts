@@ -4,7 +4,6 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Event, Emitter } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
-import { observableValue } from '../../../base/common/observable.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
@@ -35,10 +34,9 @@ test('Changes ignores an old conversation response and opens a shared read-only 
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'changes', workspaceId: 'sessions', flushInterval: 0 });
 		let selection = selected('old');
 		const sessions: ISessionsService = {
-			onDidChange: changed.event, page: observableValue('page', 'code' as const),
-			get activeSelection() { return selection; }, get visibleSelections() { return [selection]; },
+			onDidChange: changed.event, get activeSelection() { return selection; }, get visibleSelections() { return [selection]; },
 			canNavigateBack: false, canNavigateForward: false,
-			selectPage() {}, getPageSelection() { return { activeSelection: selection, visibleSelections: [selection] }; },
+			getSelection() { return { activeSelection: selection, visibleSelections: [selection] }; },
 			async initialize() {}, async openThread() {}, openSession() {}, openUntitledSession() {},
 			openNewSession(): never { throw new Error('This test selects durable conversations'); },
 			activateSelection() {}, closeVisibleSelection() {}, navigateBack() {}, navigateForward() {},

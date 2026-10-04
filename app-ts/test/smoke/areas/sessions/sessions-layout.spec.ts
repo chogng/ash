@@ -75,13 +75,13 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	await expect(page.locator('[data-part="editor"]')).toHaveCSS('border-bottom-right-radius', '12px');
 	await expectCardGeometry();
 	await navigation.getByRole('button', { name: 'Collaboration', exact: true }).click();
-	await expect(sidebar).toBeHidden();
-	await expect(sessions).toHaveCSS('border-top-left-radius', '12px');
+	await expect(sidebar).toBeVisible();
+	await expect(sidebar).toHaveCSS('border-top-left-radius', '12px');
 	await expect(sessions).toHaveCSS('border-bottom-right-radius', '12px');
 	await expectCardGeometry();
 });
 
-test('Sessions shared layout preserves user geometry across pages, resize and reload', async ({ application, target, workbench }) => {
+test('Sessions shared layout preserves user geometry across views, resize and reload', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	const failures: string[] = [];
@@ -120,7 +120,7 @@ test('Sessions shared layout preserves user geometry across pages, resize and re
 	await page.keyboard.insertText('Retained Code draft');
 	const input = await editor.input.elementHandle();
 	await navigation.getByRole('button', { name: 'Collaboration', exact: true }).click();
-	await expect(sidebar).toBeHidden();
+	await expect(sidebar).toBeVisible();
 	await expect(auxiliarybar).toBeHidden();
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(sidebar).toBeVisible();
@@ -137,7 +137,7 @@ test('Sessions shared layout preserves user geometry across pages, resize and re
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await expect(sidebar).toBeHidden();
 	await expect(auxiliarybar).toBeHidden();
-	// The Library page has no sidebar; reopen Code to check the retained visibility preference.
+	// The Library editor has no sidebar; reopen Code to check the retained visibility preference.
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(sidebar).toBeHidden();
 	await titlebar.getByRole('button', { name: 'Show sidebar', exact: true }).click();
@@ -150,7 +150,7 @@ test('Sessions shared layout preserves user geometry across pages, resize and re
 	expect(failures).toEqual([]);
 });
 
-test('Sessions restores independent pane arrangements, active selections and drafts after reload', async ({ application, target, workbench }) => {
+test('Sessions merges legacy pane arrangements and retains shared selections and drafts after reload', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	const failures: string[] = [];
@@ -195,6 +195,7 @@ test('Sessions restores independent pane arrangements, active selections and dra
 	await typeDraft('Chat third draft');
 	chatReferences.push(await draftReference());
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await add.click();
 	await typeDraft('Code first draft');
 	const codeReferences = [await draftReference()];
 	await add.click();
@@ -207,62 +208,59 @@ test('Sessions restores independent pane arrangements, active selections and dra
 	await expect.poll(async () => Boolean((await readStorageEntries(application, page, identity))['sessions.viewState'])).toBe(true);
 	await seedStorageOnNextLoad(application, page, identity, {
 		'sessions.viewState': { value: JSON.stringify({ version: 1, pages: { chat: { visible: chatReferences, active: 0 }, code: { visible: codeReferences, active: 1 } } }), target: StorageTarget.MACHINE },
+		'sessions.gridState': null,
 		'sessions.gridState.chat': null,
 		'sessions.gridState.code': null,
 	});
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
-	await expect(panes).toHaveCount(3);
+	await expect(panes).toHaveCount(5);
 	await panes.first().locator('.ash-sessions-chat-slot-title').click();
 	const beforeDrag = (await panes.first().boundingBox())!.width;
 	await drag(-80);
 	await expect.poll(async () => Math.round((await panes.first().boundingBox())!.width)).toBe(Math.round(Math.max(300, beforeDrag - 80)));
-	const chat = await snapshot();
+	const shared = await snapshot();
+	expect(shared.map(slot => slot.text)).toEqual(['Chat first draft', 'Chat second draft', 'Chat third draft', 'Code first draft', 'Code second draft']);
+	const identities = shared.map(({ width, ...state }) => state);
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(panes).toHaveCount(2);
-	await drag(-60);
-	const code = await snapshot();
+	await expect(panes).toHaveCount(5);
+	await expect.poll(async () => (await snapshot()).map(({ width, ...state }) => state)).toEqual(identities);
+	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
+	for (let index = 0; index < shared.length; index++) {
+		await expect.poll(async () => Math.abs((await panes.nth(index).boundingBox())!.width - shared[index]!.width)).toBeLessThanOrEqual(1);
+	}
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
 	await page.reload({ waitUntil: 'domcontentloaded' });
-	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
-	await expect(panes).toHaveCount(3);
-	await expect.poll(async () => (await snapshot()).map(({ width, ...state }) => state)).toEqual(chat.map(({ width, ...state }) => state));
-	for (let index = 0; index < chat.length; index++) {
-		await expect.poll(async () => Math.abs((await panes.nth(index).boundingBox())!.width - chat[index]!.width)).toBeLessThanOrEqual(1);
-	}
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(panes).toHaveCount(2);
-	await expect.poll(async () => (await snapshot()).map(({ width, ...state }) => state)).toEqual(code.map(({ width, ...state }) => state));
-	for (let index = 0; index < code.length; index++) {
-		await expect.poll(async () => Math.abs((await panes.nth(index).boundingBox())!.width - code[index]!.width)).toBeLessThanOrEqual(1);
+	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
+	await expect(panes).toHaveCount(5);
+	await expect.poll(async () => (await snapshot()).map(({ width, ...state }) => state)).toEqual(identities);
+	for (let index = 0; index < shared.length; index++) {
+		await expect.poll(async () => Math.abs((await panes.nth(index).boundingBox())!.width - shared[index]!.width)).toBeLessThanOrEqual(1);
 	}
 	await panes.first().locator('.ash-sessions-chat-slot-close').click();
-	await expect(panes).toHaveCount(1);
+	await expect(panes).toHaveCount(4);
 	await page.reload({ waitUntil: 'domcontentloaded' });
-	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
-	await expect(panes).toHaveCount(3);
+	await expect(panes).toHaveCount(4);
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(panes).toHaveCount(1);
-	await new Editor(panes.first()).waitForEditorContents(text => text === 'Code second draft');
+	await expect(panes).toHaveCount(4);
 	await expect.poll(async () => {
 		const entries = await readStorageEntries(application, page, identity);
 		return {
-			removed: Boolean(entries[`sessions.codeDraftState:untitled:${code[0]!.identity}`]),
-			retained: Boolean(entries[`sessions.codeDraftState:untitled:${code[1]!.identity}`]),
+			removed: Boolean(entries[`sessions.inputDraft:untitled:${shared[0]!.identity}`]),
+			retained: Boolean(entries[`sessions.inputDraft:untitled:${shared[4]!.identity}`]),
 		};
 	}).toEqual({ removed: false, retained: true });
-	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
-	await expect(panes).toHaveCount(3);
-	// A normal list selection exits the restored split, including a click on its already-active Session.
+	// Normal list navigation exits the split and selects one retained draft in every layout.
+	const selected = (await snapshot()).find(slot => slot.active)!;
 	await page.locator('.ash-sessions-list-item[aria-current="page"]').click();
 	await expect(panes).toHaveCount(1);
-	await expect(panes.locator('.ash-chat')).toHaveAttribute('data-untitled-session-id', chat[0]!.identity!);
-	await new Editor(panes.first()).waitForEditorContents(text => text === 'Chat first draft');
+	await expect(panes.locator('.ash-chat')).toHaveAttribute('data-untitled-session-id', selected.identity!);
+	await new Editor(panes.first()).waitForEditorContents(text => text === selected.text);
+	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
+	await expect(panes).toHaveCount(1);
+	await new Editor(panes.first()).waitForEditorContents(text => text === selected.text);
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await expect(panes).toHaveCount(1);
-	await expect(panes.locator('.ash-chat')).toHaveAttribute('data-untitled-session-id', chat[0]!.identity!);
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(panes).toHaveCount(1);
-	await new Editor(panes.first()).waitForEditorContents(text => text === 'Code second draft');
+	await expect(panes.locator('.ash-chat')).toHaveAttribute('data-untitled-session-id', selected.identity!);
 	expect(failures).toEqual([]);
 });
