@@ -7,6 +7,8 @@ pub(crate) use scroll::TranscriptScrollTarget;
 
 use super::CellView;
 use super::ChatHistoryRenderCache;
+use super::history_cell::DETAIL_ACTION_LABEL;
+use super::history_cell::DETAIL_CONTINUATION;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -181,9 +183,10 @@ impl ChatHistoryView<'_> {
                 && details_row.is_some_and(|row| logical_row == cell_start.saturating_add(row))
                 && position.x >= content_area.x
                 && position.x
-                    < content_area
-                        .x
-                        .saturating_add(("   view full".len() as u16).min(content_area.width))
+                    < content_area.x.saturating_add(
+                        ((DETAIL_CONTINUATION.len() + DETAIL_ACTION_LABEL.len()) as u16)
+                            .min(content_area.width),
+                    )
             {
                 return Some(ChatHistoryPointerTarget::Details(cell_id.clone()));
             }
@@ -557,7 +560,7 @@ fn render_pointer_feedback(
             area,
             cell_start.saturating_add(details_row),
             viewport_start,
-            "   view full".len() as u16,
+            (DETAIL_CONTINUATION.len() + DETAIL_ACTION_LABEL.len()) as u16,
             details_hovered,
             details_pressed,
             context,

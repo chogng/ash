@@ -39,6 +39,46 @@ fn render(app: &App) -> String {
 }
 
 #[test]
+fn command_result_preserves_the_marker_column_in_both_modes() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        switch(&mut app, mode);
+        app.update(ThreadEvent::CommandCompleted {
+            command: "/command".into(),
+            result: "first result\nsecond result".into(),
+        });
+        let area = Rect::new(0, 0, 50, 16);
+        app.handle_key_in_area(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL), area);
+        assert!(app.transcript_scroll().anchor().is_some());
+        let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+        terminal
+            .draw(|frame| super::frame::draw(frame, &app))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let command_row = (0..area.height)
+            .find(|&y| {
+                (0..area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+                    .contains("> /command")
+            })
+            .expect("the command is visible");
+        let marker_column = (0..area.width)
+            .find(|&x| buffer[(x, command_row)].symbol() == ">")
+            .unwrap();
+        assert_eq!(buffer[(marker_column, command_row + 1)].symbol(), " ");
+        assert_eq!(buffer[(marker_column + 1, command_row + 1)].symbol(), "└");
+        assert_eq!(buffer[(marker_column + 4, command_row + 1)].symbol(), "f");
+        assert_eq!(buffer[(marker_column + 4, command_row + 2)].symbol(), "s");
+        assert_eq!(
+            buffer[(marker_column + 1, command_row + 1)].fg,
+            app.render_context().muted()
+        );
+        crate::tui_assert_snapshot!(app = &app; "command_result_detail_indent", render(&app));
+    }
+}
+
+#[test]
 fn modes_restore_their_own_scroll_while_sharing_the_draft_and_queue() {
     let mut app = App::new();
     for index in 0..16 {

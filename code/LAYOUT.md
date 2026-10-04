@@ -337,6 +337,29 @@ fullscreen 的 [pointer.rs](tui/src/app/fullscreen/pointer.rs) 聚合各组件�
 
 行首的消息身份、列表焦点 `>` 和 inline 输入提示使用“状态标识列”；其分隔留白之外才是内容区。无标识时仍保留这一列，组件不能重复预留。fullscreen 的 `> ` 属于输入区本身；两种输入提示均占两列，计入换行与光标宽度。具体约束见 [TUI 布局规范](../.github/instructions/tui.instructions.md#learnings)。
 
+### 正文详情的层级连接符
+
+命令回执、工具输出和展开的消息详情用 `└─` 表示它们属于上一条记录。以本条记录的起始位置为第 0 列，连接符左侧留一列空白，详情文字从第 4 列开始；后续原始输出行和 `view full` 入口也从这一列开始。状态标识留在第 0 列，详情不会另占一套状态标识列。fullscreen、inline 活动正文和写入终端历史的正文共用这一规则。
+
+```text
+> /command
+ └─ command result
+    next output line
+
+● tool summary
+ └─ tool output
+    next output line
+```
+
+| 职责 | 所属位置 |
+| --- | --- |
+| 工具状态、结果、分组、预览和失败原因 | `ExecCell`；本地命令回执由 `LocalCommandCell` 保存 |
+| 详情连接符、续行留白和文字样式 | [history_cell/text.rs](tui/src/thread/transcript/history_cell/text.rs)，各类 `HistoryCell` 共用 |
+| 展开选择、正文滚动、详情入口命中和缓存 | 正文视图及各屏幕模式的浏览状态，按同一组绘制行计算布局 |
+| 普通文字前缀操作 | `render::prefix_lines`，不解释工具或命令含义 |
+
+这里复用现有正文绘制边界：详情没有独立焦点、输入或生命周期，无需另建有状态 widget。工具和本地命令只提供内容；失败提示也使用共用前缀，不在各功能中重复定义缩进。连接符表示内容归属；可否展开由记录能力决定，不能根据 `└─` 判断。输入区的 progress 技巧属于独立区域，不套用正文详情布局。
+
 ## 页面与状态归属
 
 | 内容 | 保存与维护位置 |

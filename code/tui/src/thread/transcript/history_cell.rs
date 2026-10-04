@@ -7,6 +7,9 @@ pub(crate) use cache::ChatHistoryRenderCache;
 pub(super) use content::ContentCell;
 pub(super) use local_command::LocalCommandCell;
 pub(crate) use local_command::LocalCommandCompletion;
+pub(super) use text::DETAIL_ACTION_LABEL;
+pub(super) use text::DETAIL_CONTINUATION;
+pub(super) use text::DETAIL_PREFIX;
 pub(super) use text::prefixed_body;
 pub(super) use text::push_detail_lines;
 
@@ -194,7 +197,7 @@ pub(super) fn finish_lines(
     let details_line = (view.expanded && view.has_details).then_some(lines.len());
     if view.expanded && view.has_details {
         lines.push(Line::from(Span::styled(
-            "   view full",
+            format!("{DETAIL_CONTINUATION}{DETAIL_ACTION_LABEL}"),
             action_style(context),
         )));
     }

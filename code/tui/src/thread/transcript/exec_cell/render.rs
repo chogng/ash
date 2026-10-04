@@ -6,6 +6,7 @@ use crate::thread::transcript::history_cell::CellLines;
 use crate::thread::transcript::history_cell::CellMode;
 use crate::thread::transcript::history_cell::CellView;
 use crate::thread::transcript::history_cell::ChatHistoryRenderCache;
+use crate::thread::transcript::history_cell::DETAIL_PREFIX;
 use crate::thread::transcript::history_cell::DetailFormat;
 use crate::thread::transcript::history_cell::HistoryCell;
 use crate::thread::transcript::history_cell::MessageRole;
@@ -75,7 +76,7 @@ impl HistoryCell for ExecCell {
                     })
                     .map(|line| truncate_utf8(&line, 160));
                 let mut spans = vec![
-                    Span::styled("└─ ", Style::default().fg(context.muted())),
+                    Span::styled(DETAIL_PREFIX, Style::default().fg(context.muted())),
                     Span::styled(label, Style::default().fg(context.danger())),
                 ];
                 if let Some(reason) = reason {

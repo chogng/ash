@@ -13,6 +13,12 @@ use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 
+// Details sit beneath their parent without reusing its status marker column.
+// Keep the branch, continuation rows and full-detail action on the same text column.
+pub(in crate::thread::transcript) const DETAIL_PREFIX: &str = " └─ ";
+pub(in crate::thread::transcript) const DETAIL_CONTINUATION: &str = "    ";
+pub(in crate::thread::transcript) const DETAIL_ACTION_LABEL: &str = "view full";
+
 pub(in crate::thread::transcript) fn prefixed_body(
     text: &str,
     marker: &str,
@@ -58,8 +64,8 @@ pub(in crate::thread::transcript) fn push_detail_lines(
     if matches!(format, DetailFormat::Plain) {
         let detail_lines = prefix_lines(
             styled_text_lines(detail, Style::default().fg(context.muted())),
-            Span::styled("└─ ", Style::default().fg(context.muted())),
-            Span::raw("   "),
+            Span::styled(DETAIL_PREFIX, Style::default().fg(context.muted())),
+            Span::raw(DETAIL_CONTINUATION),
         );
         push_owned_lines(&detail_lines, lines);
         return;
@@ -78,7 +84,7 @@ pub(in crate::thread::transcript) fn push_detail_lines(
     }
     lines.extend(prefix_lines(
         output,
-        Span::styled("└─ ", Style::default().fg(context.muted())),
-        Span::raw("   "),
+        Span::styled(DETAIL_PREFIX, Style::default().fg(context.muted())),
+        Span::raw(DETAIL_CONTINUATION),
     ));
 }

@@ -3,6 +3,6 @@ source: code/tui/src/thread/transcript/model_tests.rs
 expression: visible
 ---
 ● 已探查 2 项操作 · 1 项失败
-└─ 读取历史记录失败 — record missing
+ └─ 读取历史记录失败 — record missing
 
 ● 命令执行完成

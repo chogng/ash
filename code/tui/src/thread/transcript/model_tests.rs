@@ -73,6 +73,50 @@ fn tool_call_output_and_result_form_one_exec_cell() {
     let views = model.views(&BTreeSet::new(), None);
     assert_eq!(views[0].command_status(), Some(CommandStatus::Succeeded));
     assert_eq!(views[0].text(), "Command finished");
+
+    let expanded = BTreeSet::from([model.cells()[0].cell_id().clone()]);
+    let views = model.views(&expanded, None);
+    let scroll = ChatHistoryScroll::default();
+    let cache = ChatHistoryRenderCache::default();
+    let view = ChatHistoryView {
+        jump_label: "Jump to bottom",
+        header: None,
+        messages: &views,
+        scroll: &scroll,
+        render_cache: &cache,
+        pointer: Default::default(),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(40, 9)).unwrap();
+    terminal
+        .draw(|frame| view.render(frame, frame.area(), crate::render::test_context()))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(0, 1)].symbol(), " ");
+    assert_eq!(buffer[(1, 1)].symbol(), "└");
+    assert_eq!(buffer[(4, 1)].symbol(), "e");
+    assert_eq!(buffer[(4, 5)].symbol(), "r");
+    assert_eq!(buffer[(4, 6)].symbol(), "p");
+    assert_eq!(buffer[(4, 7)].symbol(), "v");
+    let visible = (0..9)
+        .map(|y| {
+            (0..40)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    insta::assert_snapshot!(visible, @r#"
+    ● Command finished
+     └─ exec [call]
+        {
+          "cmd": "test"
+        }
+        running
+        passed
+        view full
+    "#);
 }
 
 #[test]
@@ -176,7 +220,9 @@ fn grouped_history_failure_names_the_failed_call_and_command_completion_stays_ne
         .join("\n");
     crate::tui_assert_snapshot!("grouped_history_failure_chinese", visible);
     assert_eq!(buffer[(0, 0)].fg, context.muted());
-    assert_eq!(buffer[(3, 1)].fg, context.danger());
+    assert_eq!(buffer[(0, 1)].symbol(), " ");
+    assert_eq!(buffer[(1, 1)].symbol(), "└");
+    assert_eq!(buffer[(4, 1)].fg, context.danger());
     assert_eq!(buffer[(0, 3)].fg, context.muted());
 }
 

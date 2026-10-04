@@ -35,7 +35,7 @@ fn tool_output_renders_ansi_as_styled_spans() {
         .map(|span| span.content.as_ref() as &str)
         .collect::<String>();
 
-    assert_eq!(visible, "└─ plain red");
+    assert_eq!(visible, " └─ plain red");
     assert!(
         output
             .spans
@@ -159,7 +159,7 @@ fn expanded_output_uses_its_detail_branch_instead_of_a_disclosure_marker() {
     let lines = message_lines(&messages, test_context());
 
     assert_eq!(lines[0].to_string(), "> write_file");
-    assert_eq!(lines[1].to_string(), "└─ write_file [call]");
+    assert_eq!(lines[1].to_string(), " └─ write_file [call]");
 }
 
 #[test]
@@ -223,7 +223,9 @@ fn local_command_fills_only_its_input_rows() {
     assert_eq!(buffer[(0, 0)].symbol(), ">");
     assert_eq!(buffer[(0, 0)].bg, test_context().user_message_background());
     assert_eq!(buffer[(11, 0)].bg, test_context().user_message_background());
-    assert_eq!(buffer[(0, 1)].symbol(), "└");
+    assert_eq!(buffer[(0, 1)].symbol(), " ");
+    assert_eq!(buffer[(1, 1)].symbol(), "└");
+    assert_eq!(buffer[(4, 1)].symbol(), "d");
     assert_eq!(buffer[(0, 1)].bg, test_context().background());
     assert_eq!(buffer[(11, 1)].bg, test_context().background());
     assert_eq!(buffer[(0, 2)].bg, test_context().background());
@@ -309,8 +311,101 @@ fn multiline_command_output_keeps_detail_prefix_alignment() {
 
     let lines = message_lines(&messages, test_context());
 
-    assert_eq!(lines[1].to_string(), "└─ one");
-    assert_eq!(lines[2].to_string(), "   two");
+    assert_eq!(lines[1].to_string(), " └─ one");
+    assert_eq!(lines[2].to_string(), "    two");
+}
+
+#[test]
+fn expanded_plain_details_use_the_same_indent_as_command_results() {
+    let messages = vec![
+        CellView::plain(MessageRole::Reasoning, "one\ntwo".into()).with_presentation(true, false),
+    ];
+    let scroll = ChatHistoryScroll::default();
+    let cache = ChatHistoryRenderCache::default();
+    let view = ChatHistoryView {
+        jump_label: "Jump to bottom",
+        header: None,
+        messages: &messages,
+        scroll: &scroll,
+        render_cache: &cache,
+        pointer: Default::default(),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(20, 4)).unwrap();
+    terminal
+        .draw(|frame| view.render(frame, frame.area(), test_context()))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(0, 1)].symbol(), " ");
+    assert_eq!(buffer[(1, 1)].symbol(), "└");
+    assert_eq!(buffer[(4, 1)].symbol(), "o");
+    assert_eq!(buffer[(4, 2)].symbol(), "t");
+    assert_eq!(buffer[(1, 1)].fg, test_context().muted());
+    let visible = (0..4)
+        .map(|y| {
+            (0..20)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    insta::assert_snapshot!(visible, @"
+    ● Thought
+     └─ one
+        two
+    ");
+}
+
+#[test]
+fn detail_action_last_column_uses_the_same_hit_and_hover_bounds_as_drawing() {
+    let messages = vec![
+        CellView::plain(MessageRole::Reasoning, "line\n".repeat(14))
+            .with_cell_id("reasoning")
+            .with_render_revision(1)
+            .with_presentation(true, false),
+    ];
+    let area = Rect::new(0, 0, 20, 20);
+    let scroll = ChatHistoryScroll::default();
+    let cache = ChatHistoryRenderCache::default();
+    let view = ChatHistoryView {
+        jump_label: "Jump to bottom",
+        header: None,
+        messages: &messages,
+        scroll: &scroll,
+        render_cache: &cache,
+        pointer: ChatHistoryPointerState {
+            hovered_details: Some("reasoning"),
+            ..Default::default()
+        },
+    };
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| view.render(frame, area, test_context()))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let row = (0..area.height)
+        .find(|&y| buffer[(4, y)].symbol() == "v")
+        .expect("the full-detail action is visible");
+    assert_eq!(buffer[(12, row)].symbol(), "l");
+    assert_eq!(buffer[(12, row)].bg, test_context().hover_background());
+    assert_eq!(buffer[(13, row)].bg, test_context().background());
+    assert_eq!(
+        view.pointer_target_at(
+            area,
+            ratatui::layout::Position::new(12, row),
+            test_context()
+        ),
+        Some(ChatHistoryPointerTarget::Details("reasoning".into()))
+    );
+    assert_eq!(
+        view.pointer_target_at(
+            area,
+            ratatui::layout::Position::new(13, row),
+            test_context()
+        ),
+        None
+    );
 }
 
 #[test]
@@ -341,7 +436,7 @@ fn wrapped_details_link_remains_visible_in_a_narrow_terminal() {
             (0..area.width)
                 .map(|column| terminal.backend().buffer()[(column, row)].symbol())
                 .collect::<String>()
-                .starts_with("   view")
+                .starts_with("    view")
         })
         .expect("the details link is visible");
     assert_eq!(
