@@ -62,8 +62,9 @@ flowchart TD
 Plugin activation snapshot 中的 `declarativeExtensions[]` 与 Manager 的 Theme/Language capabilities
 解析为 exact immutable package directories。`ash-extensions` 按 built-in → dynamic authority sources
 → profile user 顺序扫描，每个扩展 ID 的第一个有效包获胜。每次 `Refresh` 或任一动态 source
-generation 改变都产生单调递增的目录代次，并把包内 regular-file bytes 冻结为当前
-内存快照。资源读取必须携带该代次，只能读取当前快照；刷新后请求旧代次会得到 generation
+generation 改变都会重新扫描；只有 descriptor、完整 package digest 或 diagnostics 改变才推进目录
+代次，并把包内 regular-file bytes 冻结为当前内存快照。内容相同的刷新保留代次，避免启动时多个
+加载器互相打断资源读取。资源读取必须携带该代次，只能读取当前快照；目录内容改变后请求旧代次会得到 generation
 conflict，而不是从已变化的磁盘路径读取内容。
 
 Renderer 不接收主机路径。它先取得目录描述，再以“目录代次 + 扩展 ID + 包内相对路径”请求资源。

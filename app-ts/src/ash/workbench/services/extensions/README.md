@@ -96,7 +96,9 @@ the same manifest parser, `include` resolver, and registry. The metadata catalog
 register color themes a second time. Active-theme changes reach TextMate through `IThemeService`.
 
 Candidate resources are always read with the candidate catalog generation. A Rust refresh therefore
-cannot make one parsed manifest load resource bytes from another generation. Generation conflict is
+cannot make one parsed manifest load resource bytes from another generation. Refreshes with identical
+descriptors, package digests, and diagnostics retain that generation, so startup loaders and other
+windows can rescan without invalidating each other's resource reads. When catalog contents change, generation conflict is
 reported as a failed candidate refresh; the service does not silently retry individual files against
 a newer catalog.
 

@@ -30,7 +30,7 @@ const MAX_MANIFEST_FIELD_LENGTH: usize = 256;
 pub enum ExtensionCatalogReload {
     /// Return the previous snapshot, scanning only when no snapshot exists yet.
     Cached,
-    /// Rescan all configured roots and publish a new generation.
+    /// Rescan all configured roots, publishing a new generation only when contents change.
     Refresh,
 }
 
@@ -103,7 +103,7 @@ pub struct ExtensionDiagnostic {
 /// Immutable result of one extension catalog generation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExtensionCatalogSnapshot {
-    /// Monotonically increasing scan generation.
+    /// Monotonically increasing generation of the catalog contents.
     pub generation: u64,
     /// Successfully discovered extensions in deterministic order.
     pub extensions: Vec<ExtensionDescriptor>,
@@ -205,6 +205,15 @@ impl ExtensionCatalog {
         let (extensions, diagnostics, discovered) =
             self.scan(dynamic_snapshot, dynamic_error.map(String::as_str));
         self.dynamic_generation = dynamic_snapshot.map(|snapshot| snapshot.generation);
+        // Independent renderers and contribution loaders refresh the same catalog.
+        // A scan alone must not invalidate their in-flight frozen-resource reads.
+        // Descriptors include package digests, so resource-only changes still advance it.
+        if let Some(snapshot) = &self.snapshot
+            && snapshot.extensions == extensions
+            && snapshot.diagnostics == diagnostics
+        {
+            return snapshot.clone();
+        }
         self.generation = self
             .generation
             .checked_add(1)
