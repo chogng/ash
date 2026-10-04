@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { Emitter } from '../../../base/common/event.js';
+import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
@@ -66,6 +66,7 @@ test('Session files preserve their original directory through selection, directo
 });
 
 class MemoryProvider extends Disposable implements ISessionsProvider {
+	readonly onDidChangeCatalog = Event.None;
 	private readonly changed = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean }>());
 	readonly onDidChangeSession = this.changed.event;
 	items = [session('first', 'C:/sessions/first'), session('second', 'C:/sessions/second')];

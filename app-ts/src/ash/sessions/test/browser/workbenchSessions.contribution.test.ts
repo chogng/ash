@@ -4,6 +4,8 @@ import { JSDOM } from 'jsdom';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IRendererHostService, type IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
+import { IAppServerApi } from '../../../platform/app-server/common/appServerApi.js';
+import { Event } from '../../../base/common/event.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
@@ -46,6 +48,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	} as unknown as IRendererHost;
 	using services = new InstantiationService();
 	services.registerInstance(IRendererHostService, api);
+	services.registerInstance(IAppServerApi, { getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: Event.None });
 	using workspace = new WorkspaceContextService({ id: 'empty-window' });
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IQuickInputService, {} as IQuickInputService);

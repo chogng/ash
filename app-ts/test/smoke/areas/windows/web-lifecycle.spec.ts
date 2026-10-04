@@ -7,6 +7,7 @@ import { chromium, type Page } from '@playwright/test';
 import { developmentAshPackagePath } from '../../../../../build/app_ts/runtimeStore.ts';
 import { expect, test } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
+import { Editor } from '../../../automation/editor.js';
 
 const repository = resolve(import.meta.dirname, '../../../../..');
 
@@ -18,7 +19,8 @@ for (const mode of ['production', 'development'] as const) {
 		const port = await freePort();
 		const env = { ...process.env, ASH_WEB_APP_SERVER: '1', ASH_WEB_APP_SERVER_PROFILE: profile, ASH_HOME: profile, ASH_WORKSPACE_ROOT: testWorkspace.directory };
 		const browser = await chromium.launch();
-		const page = await browser.newPage();
+		const context = await browser.newContext();
+		const page = await context.newPage();
 		const diagnostics: string[] = [];
 		page.on('console', message => { if (message.type() === 'error') { diagnostics.push(message.text()); } });
 		page.on('pageerror', error => diagnostics.push(error.message));
@@ -44,6 +46,16 @@ for (const mode of ['production', 'development'] as const) {
 				await page.reload();
 				await expectWorkspace(page);
 			}
+			await createConversation(page, 'Selected before reconnect');
+			await page.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button').click();
+			const sidebar = page.locator('.ash-chat-sessions-sidebar');
+			const selected = sidebar.locator('.ash-agent-session-row').filter({ hasText: 'Selected before reconnect' });
+			await expect(selected).toBeVisible();
+			await selected.click();
+			const editor = new Editor(page.locator('.ash-chat-view-pane'));
+			await editor.waitForEditorFocus();
+			await page.keyboard.insertText('Keep my unsent message after reconnect');
+			await editor.waitForEditorContents(text => text === 'Keep my unsent message after reconnect');
 			await page.evaluate(() => {
 				(globalThis as typeof globalThis & { acceptanceHost: unknown }).acceptanceHost = globalThis.ashWebWorkbenchHost;
 			});
@@ -62,6 +74,30 @@ for (const mode of ['production', 'development'] as const) {
 				});
 			}, { timeout: 30_000 }).toBe('const value = 1;\n');
 			expect(await page.evaluate(() => (globalThis as typeof globalThis & { acceptanceHost: unknown }).acceptanceHost === globalThis.ashWebWorkbenchHost)).toBe(true);
+			await expect(selected).toHaveAttribute('aria-current', 'page');
+			await editor.waitForEditorContents(text => text === 'Keep my unsent message after reconnect');
+			// A second client writes through the real API; only a restored catalog subscription
+			// can notify the retained Workbench about this previously unknown Session.
+			const peer = await context.newPage();
+			try {
+				await peer.addInitScript(({ endpoint, token }) => {
+					sessionStorage.setItem('ash.appServer.endpoint', endpoint);
+					sessionStorage.setItem(`ash.appServer.session:${new URL(endpoint).origin}`, token);
+				}, session);
+				await peer.goto(page.url());
+				await expectWorkspace(peer);
+				const peerSessionId = await createConversation(peer, 'Created by another client');
+				const added = sidebar.locator('.ash-agent-session-row').filter({ hasText: 'Created by another client' });
+				await expect(added).toBeVisible();
+				await peer.evaluate(async sessionId => {
+					await globalThis.ashWebWorkbenchHost!.api.session.archive({ commandId: crypto.randomUUID(), sessionId });
+				}, peerSessionId);
+				await expect(added).toHaveCount(0);
+				await expect(selected).toHaveAttribute('aria-current', 'page');
+				await editor.waitForEditorContents(text => text === 'Keep my unsent message after reconnect');
+			} finally {
+				await peer.close();
+			}
 			const resumed = await fetch(new URL('/ash/session', session.endpoint), { method: 'POST', headers: { Origin: mode === 'development' ? new URL(page.url()).origin : new URL(session.endpoint).origin, Authorization: `Bearer ${session.token}` } });
 			expect(resumed.status).toBe(200);
 
@@ -85,6 +121,15 @@ for (const mode of ['production', 'development'] as const) {
 			await rm(profile, { recursive: true, force: true });
 		}
 	});
+}
+
+async function createConversation(page: Page, title: string): Promise<string> {
+	return page.evaluate(async title => {
+		const api = globalThis.ashWebWorkbenchHost!.api.session;
+		const created = await api.create({ commandId: crypto.randomUUID(), title, executionTarget: null, agent: { type: 'default' } });
+		await api.createThread({ commandId: crypto.randomUUID(), sessionId: created.session.sessionId, title: 'Main' });
+		return created.session.sessionId;
+	}, title);
 }
 
 async function expectWorkspace(page: Page): Promise<void> {

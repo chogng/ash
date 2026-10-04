@@ -50,13 +50,17 @@
 	box-sizing: border-box;
 	width: 100%;
 	height: 100%;
-	padding-inline: var(--ash-spacing-size80);
 	overflow: hidden;
 	white-space: pre;
 	font: inherit;
 	color: var(--ash-editor-foreground);
 	background: var(--ash-diff-editor-removed-line-background);
-	border-left: var(--ash-stroke-thickness) solid var(--ash-diff-editor-removed-line-marker);
+}
+
+.ash-diff-inline-original-margin > .stanza-diff-remove-sign {
+	position: absolute;
+	right: 0;
+	height: 100%;
 }
 
 .stanza-diff-line-removed {

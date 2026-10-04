@@ -159,6 +159,14 @@ Quick Fix 有多个类别时使用 `TabbedActionListWidget` 显示“全部操�
 
 新增同路径 `contrib/diffEditorBreadcrumbs/browser/contribution.ts`，由修改侧文档符号模型提供折叠区中的符号按钮；模型内容、语言或提供者变化时会取消旧请求并更新按钮。`DiffEditorWidget` 的 `HideUnchangedRegionsFeature` 根据差异结果成对隐藏两侧未修改行，提供分段展开、全部展开和符号跳转。`DiffEditorPane` 读取并监听四项 `diffEditor.hideUnchangedRegions.*` 设置；标准 Diff 视图与直接创建的 Diff Editor 均可启用。首行保持可见，以满足 Ash 编辑器的视图模型约束。折叠区按钮可通过键盘操作，展开后将焦点送回编辑器并播报结果。下方旧审查表只记录删除前状态。
 
+## Diff 单栏删除标记（2026-10-03）
+
+单栏删除行的内容和边栏现在由同一 View Zone 持有：内容不再用左边框表示删除，边栏使用已注册的 `diff-remove` 图标，位置跟随修改侧编辑器的边栏宽度与滚动。空白删除行同样显示减号；切换双栏、更新比较或释放 Widget 时，内容和边栏一起退出。
+
+`diffEditor.renderIndicators` 已从 JSON schema 接到运行时配置注册、布尔校验和两种视图的渲染路径，默认启用。创建选项及 `updateOptions` 可以覆盖配置；关闭标记保留差异背景。设置标题与说明进入英文和简体中文词条。这一修复完成删除标记与开关行为，不将完整 Diff Editor API 记为已对齐。
+
+验证：Diff Widget 定向单测 18 项、Diff Chromium 场景 48 项通过，包含中英文设置文案、空白删除行、边栏几何、滚动、四种主题、配置覆盖和释放。连接 App Server 的 Web 与 Electron Git 比较场景各 1 项、Electron UI 输入场景 1 项通过；Renderer、Host、Stanza 构建与本地化目录检查通过。完整 Editor 浏览器检查为 779/780 项通过，剩余失败是 Code bundle 的文档格式化贡献排除断言，本批未修改该贡献或注册入口；未计为全量通过。结构与 CSS 所有权检查通过，无新增源码 JavaScript 输出。
+
 ## Document Symbols 归属修正（2026-09-24）
 
 用户确认删除仅 Ash 的 `contrib/documentSymbols/common/languageDocumentSymbols.ts`，把调用迁到上游对应的 `contrib/documentSymbols/browser/outlineModel.ts`。新模型按提供者分组请求文档符号，建立父子树和稳定的提供者身份；快速符号选择、符号图标及 Sticky Scroll 共用这一实现，原文件和全部引用退出。请求绑定当前模型版本、语言及提供者集合，过期结果不发布；单个提供者报错不丢弃其他提供者的结果。以下历史段落中“保留 DocumentSymbolService”的判断已被本次修正覆盖。

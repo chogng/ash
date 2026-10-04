@@ -4,7 +4,7 @@ import { LineDiffKind, type LineDiffRow } from '../../../../common/diff/lineDiff
 import { type IEditorDecorationsCollection } from '../../../../common/editorCommon.js';
 import { type IModelDeltaDecoration, type IModelDecorationOptions } from '../../../../common/model.js';
 import { CodeEditorWidget } from '../../codeEditor/codeEditorWidget.js';
-import { diffAddDecoration, diffAddDecorationEmpty, diffDeleteDecoration, diffDeleteDecorationEmpty, diffLineAddDecorationBackground, diffLineDeleteDecorationBackground } from '../registrations.contribution.js';
+import { diffAddDecoration, diffAddDecorationEmpty, diffDeleteDecoration, diffDeleteDecorationEmpty, diffLineAddDecorationBackground, diffLineAddDecorationBackgroundWithIndicator, diffLineDeleteDecorationBackground, diffLineDeleteDecorationBackgroundWithIndicator } from '../registrations.contribution.js';
 
 export class DiffEditorDecorations extends Disposable {
 	private readonly original: IEditorDecorationsCollection;
@@ -20,7 +20,7 @@ export class DiffEditorDecorations extends Disposable {
 		}));
 	}
 
-	public update(rows: readonly LineDiffRow[], activeRow: number, showInlineChanges: boolean): void {
+	public update(rows: readonly LineDiffRow[], activeRow: number, showInlineChanges: boolean, renderIndicators: boolean): void {
 		const original: IModelDeltaDecoration[] = [];
 		const modified: IModelDeltaDecoration[] = [];
 		for (const [rowIndex, row] of rows.entries()) {
@@ -30,7 +30,7 @@ export class DiffEditorDecorations extends Disposable {
 			if (row.originalLineIndex !== undefined) {
 				original.push({
 					range: new Range(row.originalLineIndex + 1, 1, row.originalLineIndex + 1, 1),
-					options: lineOptions(diffLineDeleteDecorationBackground, rowIndex === activeRow),
+					options: lineOptions(renderIndicators ? diffLineDeleteDecorationBackgroundWithIndicator : diffLineDeleteDecorationBackground, rowIndex === activeRow),
 				});
 				if (showInlineChanges) {
 					addInlineDecorations(original, row.originalLineIndex + 1, row.originalChanges, diffDeleteDecoration, diffDeleteDecorationEmpty);
@@ -39,7 +39,7 @@ export class DiffEditorDecorations extends Disposable {
 			if (row.modifiedLineIndex !== undefined) {
 				modified.push({
 					range: new Range(row.modifiedLineIndex + 1, 1, row.modifiedLineIndex + 1, 1),
-					options: lineOptions(diffLineAddDecorationBackground, rowIndex === activeRow),
+					options: lineOptions(renderIndicators ? diffLineAddDecorationBackgroundWithIndicator : diffLineAddDecorationBackground, rowIndex === activeRow),
 				});
 				if (showInlineChanges) {
 					addInlineDecorations(modified, row.modifiedLineIndex + 1, row.modifiedChanges, diffAddDecoration, diffAddDecorationEmpty);

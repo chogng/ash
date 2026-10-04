@@ -271,6 +271,10 @@ test.describe('SCM editor groups', () => {
 		await expect.poll(async () => (await modifiedString.allTextContents()).join('')).toBe('after');
 		const removed = editor.locator('.stanza-diff-inline-original-line');
 		await expect(removed).toHaveAttribute('aria-label', 'Removed line 2: export const value: Thing = "before";');
+		const removedMarker = editor.locator('.ash-diff-inline-original-margin .ash-icon');
+		await expect(removedMarker).toBeVisible();
+		await expect(removedMarker).toHaveAttribute('data-ash-icon-id', 'diff-remove');
+		await expect(removedMarker).toHaveAttribute('aria-hidden', 'true');
 		const originalString = removed.locator('.token-string');
 		await expect.poll(async () => (await originalString.allTextContents()).join('')).toBe('before');
 		await expect.poll(async () => (await removed.locator('.stanza-diff-inline-removed').allTextContents()).join('')).toBe('bfoe');

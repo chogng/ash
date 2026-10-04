@@ -1,6 +1,7 @@
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { CancellationToken, CancellationTokenSource } from '../../../src/ash/base/common/cancellation.js';
-import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, toDisposable, type IDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { DiffEditorWidget } from '../../../src/ash/editor/browser/widget/diffEditor/diffEditorWidget.js';
@@ -20,6 +21,8 @@ import { CodeEditorConfiguration } from '../../../src/ash/workbench/contrib/code
 import { resetNlsResolver, setNlsMessages } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { Registry } from '../../../src/ash/platform/registry/common/platform.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { MenusRegistry, MenuId } from '../../../src/ash/platform/actions/common/actions.js';
 import type { DiffEditorSelectionHunkToolbarContext } from '../../../src/ash/editor/browser/widget/diffEditor/features/gutterFeature.js';
@@ -84,8 +87,26 @@ let completeDeferredComparison: (() => void) | undefined;
 let compressedEditor: MultiDiffEditorWidget | undefined;
 let compressedViewState: unknown;
 let lastHunkAction: { text: string; originalStart: number; modifiedStart: number } | undefined;
+let themeBinding: IDisposable | undefined;
 
 const harness = {
+	readIndicatorSetting(): { title: string; description: string } {
+		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration('diffEditor.renderIndicators')!.setting!;
+		return { title: setting.title, description: setting.description };
+	},
+	setTheme(themeId: string): { marker: string; background: string } {
+		themeBinding ??= resources.add(bindColorTheme(editorServices.themeService, document.getElementById('single')!));
+		editorServices.themeService.setTheme(themeId);
+		const theme = editorServices.themeService.getColorTheme();
+		const cssColor = (id: string) => {
+			const { r, g, b } = theme.getColor(id)!.rgba;
+			return `rgb(${r}, ${g}, ${b})`;
+		};
+		return { marker: cssColor('diffEditor.removedLineMarker'), background: cssColor('diffEditorGutter.removedLineBackground') };
+	},
+	async setDiffIndicators(enabled: boolean): Promise<void> {
+		await editorServices.get(IConfigurationService).updateValue('diffEditor.renderIndicators', enabled);
+	},
 	setEditorFeatures(options: IDiffEditorOptions): void {
 		single.updateOptions(options);
 	},

@@ -74,6 +74,8 @@ Diff 的版本化结果由 `common/diff/diffModel.ts` 持有。`browser/widget/d
 
 `components/accessibleDiffViewer.ts` 从当前版本化结果读取差异文本，F7/Shift+F7 沿 Widget 现有导航状态逐行阅读，Escape 恢复原焦点。`diffEditor.contribution.ts` 注册 Alt+F1 帮助和 Alt+F2 全部差异纯文本视图；`commands.ts` 注册命令面板入口。Workbench 的 `accessibility.verbosity.diffEditor` 设置控制编辑器焦点上的帮助提示。
 
+`diffEditor.renderIndicators` 默认显示新增行的加号和删除行的减号，可在创建或更新 Diff Widget 时覆盖。设置变化同时更新单栏和双栏标记，关闭标记仍保留差异背景。单栏删除行不属于修改侧文本模型，其减号与边栏背景由同一 View Zone 的 `marginDomNode` 持有，沿用修改侧编辑器的边栏宽度、滚动和释放流程。
+
 ### 富文档 engine
 
 Academic 使用与 Code 相同的 `TextModel`、`TextBuffer`、`LineSequence` 和版本号，并用 schema 定义允许的 mark、atom、facet、region、relation、selection、transaction history、plugin state 与 serialization。`TextModel.lineDocument` 给出当前不可变语义快照；字符和逻辑行始终由 TextModel 唯一保存。Workbench-owned `DocumentEditorTextModelService` 负责 reference、working copy 和保存边界。

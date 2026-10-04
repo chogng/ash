@@ -18,6 +18,8 @@
 		"diffEditor.gutterMenu.description": "Show contributed actions beside changed blocks and selected changes.",
 		"diffEditor.gutterMenu.title": "Change actions",
 		"diffEditor.revertIcon.description": "Show buttons to revert changes in the modified editor margin.",
+		"diffEditor.indicators.title": "Diff indicators",
+		"diffEditor.indicators.description": "Show plus and minus signs beside added and removed lines.",
 		"diffEditor.revertIcon.title": "Revert change buttons"
 	}
 }

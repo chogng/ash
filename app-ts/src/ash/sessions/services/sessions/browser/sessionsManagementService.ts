@@ -18,6 +18,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private _state: SessionsManagementState = "loading";
 	private _error: string | undefined;
 	private initializePromise: Promise<void> | undefined;
+	private catalogGeneration = 0;
 	private readonly pendingRefreshes = new Set<SessionId>();
 	private readonly pendingDetailRefreshes = new Set<SessionId>();
 	private readonly refreshes = new Map<SessionId, Promise<void>>();
@@ -29,6 +30,9 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	constructor(private readonly provider: ISessionsProvider) {
 		super();
 		this._register(provider);
+		this._register(provider.onDidChangeCatalog(() => {
+			if (this.initializePromise) this.initializePromise = this.loadSessions();
+		}));
 		this._register(provider.onDidChangeSession(({ sessionId, detailChanged }) => {
 			this.pendingRefreshes.add(sessionId);
 			if (detailChanged) this.pendingDetailRefreshes.add(sessionId);
@@ -212,31 +216,46 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 	private async loadSessions(): Promise<void> {
+		const generation = ++this.catalogGeneration;
+		// Superseded jobs can finish later, but must not own the new catalog's refresh slots.
+		this.hydrating.clear();
+		this.refreshes.clear();
 		this.setState("loading");
 		try {
-			this._sessions = await this.provider.list();
-			this._active = this.firstActiveThread();
+			const sessions = await this.provider.list();
+			if (this.isDisposed || generation !== this.catalogGeneration) return;
+			const hydrated = this._sessions.filter(session => session.agentTree !== undefined).map(session => session.sessionId);
+			const active = this._active;
+			this._sessions = sessions;
+			const selected = sessions.find(session => session.sessionId === active?.session.sessionId && session.status === 'active');
+			this._active = selected && active ? activeThread(selected, active.threadId) ?? this.firstActiveThread() : this.firstActiveThread();
 			this.restoreSelection();
 			this.setState("ready");
 			for (const sessionId of this.pendingRefreshes) this.scheduleRefresh(sessionId);
+			for (const sessionId of hydrated) void this.hydrateSession(sessionId).catch(error => this.setError(error));
 			if (this._active) void this.hydrateSession(this._active.session.sessionId).catch(error => this.setError(error));
 		} catch (error) {
-			this.setError(error);
+			if (generation === this.catalogGeneration) this.setError(error);
 		}
 	}
 
 	private scheduleRefresh(sessionId: SessionId): void {
 		if (this.refreshes.has(sessionId)) return;
-		const refresh = this.refreshSession(sessionId).finally(() => this.refreshes.delete(sessionId));
+		const refresh = this.refreshSession(sessionId).finally(() => {
+			if (this.refreshes.get(sessionId) === refresh) this.refreshes.delete(sessionId);
+		});
 		this.refreshes.set(sessionId, refresh);
 	}
 
 	private async refreshSession(sessionId: SessionId): Promise<void> {
+		const generation = this.catalogGeneration;
 		try {
 			while (this.pendingRefreshes.delete(sessionId)) {
 				await this.hydrating.get(sessionId);
+				if (this.isDisposed || generation !== this.catalogGeneration) return;
 				const current = this._sessions.find(candidate => candidate.sessionId === sessionId);
 				const listed = await this.provider.readCatalog(sessionId, current);
+				if (this.isDisposed || generation !== this.catalogGeneration) return;
 				const detailChanged = this.pendingDetailRefreshes.delete(sessionId);
 				if (current?.agentTree && listed?.status !== "active") await this.provider.unsubscribe(sessionId);
 				const membershipChanged = listed && current && (listed.chats.length !== current.chats.length
@@ -244,6 +263,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				const refreshed = listed && (detailChanged || membershipChanged) && current?.agentTree && listed.status === "active"
 					? await this.provider.subscribe(listed)
 					: listed;
+				if (this.isDisposed || generation !== this.catalogGeneration) return;
 				if (sameSession(current, refreshed)) continue;
 				if (refreshed) this.replaceSession(refreshed);
 				else this._sessions = this._sessions.filter(candidate => candidate.sessionId !== sessionId);
@@ -256,17 +276,19 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				if (this._active && !this._active.session.agentTree) void this.hydrateSession(this._active.session.sessionId).catch(error => this.setError(error));
 			}
 		} catch (error) {
-			this.setError(error);
+			if (generation === this.catalogGeneration) this.setError(error);
 		}
 	}
 
 	private hydrateSession(sessionId: SessionId): Promise<void> {
 		const pending = this.hydrating.get(sessionId);
 		if (pending) return pending;
+		const generation = this.catalogGeneration;
 		const hydrate = (async () => {
 			const current = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
 			if (!current || current.agentTree) return;
 			const session = await this.provider.subscribe(current);
+			if (this.isDisposed || generation !== this.catalogGeneration) return;
 			if (!this._sessions.some(candidate => candidate.sessionId === sessionId && candidate.status === "active")) {
 				await this.provider.unsubscribe(sessionId);
 				return;
@@ -276,9 +298,12 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				this._active = activeThread(session, this._active.threadId) ?? this.firstActiveThread();
 			}
 			this._onDidChange.fire();
-		})();
+		})().catch(error => {
+			if (!this.isDisposed && generation === this.catalogGeneration) throw error;
+		});
 		this.hydrating.set(sessionId, hydrate);
-		void hydrate.then(() => this.hydrating.delete(sessionId), () => this.hydrating.delete(sessionId));
+		const finish = (): void => { if (this.hydrating.get(sessionId) === hydrate) this.hydrating.delete(sessionId); };
+		void hydrate.then(finish, finish);
 		return hydrate;
 	}
 
@@ -302,6 +327,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 	private setError(error: unknown): void {
+		if (this.isDisposed || isCancellationError(error)) return;
 		this.restoreSelection();
 		this._state = "error";
 		this._error = error instanceof Error ? error.message : "Unable to load sessions.";

@@ -1,4 +1,5 @@
 import { h } from '../../../../../../base/browser/dom.js';
+import { appendIcon } from '../../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -13,6 +14,7 @@ import type { LineRangeMapping } from '../../../../../common/diff/rangeMapping.j
 import { type IViewZoneChangeAccessor } from '../../../../editorBrowser.js';
 import { projectStanzaSemanticTokenLine } from '../../../../viewParts/viewLines/viewLine.js';
 import { CodeEditorWidget } from '../../../codeEditor/codeEditorWidget.js';
+import { diffRemoveIcon } from '../../registrations.contribution.js';
 
 interface DiffViewZone {
 	readonly afterLineNumber: number;
@@ -46,9 +48,10 @@ export class DiffEditorViewZones extends Disposable {
 		this._register(toDisposable(() => this.clear()));
 	}
 
-	public update(inlineView: boolean, wordWrap: boolean, rows: readonly LineDiffRow[], comparison?: LineRangeMapping): void {
+	public update(inlineView: boolean, wordWrap: boolean, rows: readonly LineDiffRow[], renderIndicators: boolean, comparison?: LineRangeMapping): void {
 		this.inlineOriginalLines = undefined;
 		if (inlineView) {
+			const layout = this.modifiedEditor.getLayoutInfo();
 			const lines: { readonly element: HTMLElement; readonly lineNumber: number }[] = [];
 			this.inlineOriginalLines = { version: this.model.original.version, lines };
 			this.originalEditor.changeViewZones(accessor => {
@@ -66,11 +69,23 @@ export class DiffEditorViewZones extends Disposable {
 						line.textContent = this.model.original.getLineContent(row.originalLineIndex + 1);
 						line.setAttribute('aria-label', localize('diffEditor.removedLine', 'Removed line {0}: {1}', row.originalLineIndex + 1, line.textContent));
 						lines.push({ element: line, lineNumber: row.originalLineIndex + 1 });
+						// Deleted text has no modified-model line; its marker must share the zone's scroll and disposal lifecycle.
+						const marginDomNode = h(line.ownerDocument, 'div');
+						marginDomNode.className = 'ash-diff-inline-original-margin stanza-diff-gutter-removed';
+						marginDomNode.setAttribute('aria-hidden', 'true');
+						if (renderIndicators) {
+							const marker = h(line.ownerDocument, 'div');
+							marker.className = 'stanza-diff-remove-sign';
+							marker.style.width = `${layout.decorationsWidth}px`;
+							appendIcon(diffRemoveIcon, marker);
+							marginDomNode.append(marker);
+						}
 						this.modifiedZones.push(accessor.addZone({
 							afterLineNumber: row.modifiedLineIndex ?? precedingModifiedLine,
 							heightInPx: this.lineHeight,
 							ordinal,
 							domNode: line,
+							marginDomNode,
 							isAccessible: true,
 						}));
 					}

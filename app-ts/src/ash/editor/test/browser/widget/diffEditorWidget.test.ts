@@ -316,6 +316,31 @@ test('DiffEditorWidget uses registered presentation defaults and preserves expli
 	await assert.rejects(configuration.updateValue('diffEditor.experimental.showMoves', 'yes'), /boolean/);
 });
 
+test('DiffEditorWidget honors creation indicators and keeps their override across configuration changes', async () => {
+	using services = createServices();
+	using original = new TextModel('before');
+	using modified = new TextModel('after');
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+	await waitForReady(model);
+	using editor = services.createInstance(DiffEditorWidget, {
+		container: browserEnvironment.window.document.createElement('main'),
+		model,
+		renderSideBySide: false,
+		renderIndicators: false,
+	});
+	editor.layout({ width: 400, height: 80 });
+	const configuration = services.get(IConfigurationService);
+	assert.equal(configuration.getValue('diffEditor.renderIndicators'), true);
+	assert.equal(editor.element.querySelector('.ash-diff-inline-original-margin .ash-icon'), null);
+	await configuration.updateValue('diffEditor.renderIndicators', false);
+	await configuration.updateValue('diffEditor.renderIndicators', true);
+	assert.equal(editor.element.querySelector('.ash-diff-inline-original-margin .ash-icon'), null);
+	editor.updateOptions({ renderIndicators: true });
+	assert.equal(editor.element.querySelectorAll('.ash-diff-inline-original-margin .ash-icon').length, 1);
+	await assert.rejects(configuration.updateValue('diffEditor.renderIndicators', 'yes'), /boolean/);
+});
+
 function createServices(): InstantiationService {
 	const services = new InstantiationService();
 	services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());

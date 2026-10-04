@@ -26,6 +26,7 @@ export interface DiffEditorWidgetOptions {
 	readonly renderSideBySideInlineBreakpoint?: number;
 	readonly enableSplitViewResizing?: boolean;
 	readonly splitViewDefaultRatio?: number;
+	readonly renderIndicators?: boolean;
 	readonly renderMarginRevertIcon?: boolean;
 	readonly renderGutterMenu?: boolean;
 	readonly renderOverviewRuler?: boolean;
@@ -52,11 +53,16 @@ export class DiffEditorOptions {
 		this.splitViewResizingEnabled = options.enableSplitViewResizing ?? diffEditorDefaultOptions.enableSplitViewResizing;
 		this.defaultSplitViewRatio = options.splitViewDefaultRatio ?? diffEditorDefaultOptions.splitViewDefaultRatio;
 		this.featureOptions = {
+			renderIndicators: options.renderIndicators,
 			renderMarginRevertIcon: options.renderMarginRevertIcon,
 			renderGutterMenu: options.renderGutterMenu,
 			renderOverviewRuler: options.renderOverviewRuler,
 			experimental: options.experimental,
 		};
+	}
+
+	public get renderIndicators(): boolean {
+		return this.featureOptions.renderIndicators ?? this.configuration.getValue<boolean>('diffEditor.renderIndicators');
 	}
 
 	public get renderMarginRevertIcon(): boolean {
@@ -145,6 +151,7 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
 		['renderSideBySide', options.renderSideBySide],
 		['useInlineViewWhenSpaceIsLimited', options.useInlineViewWhenSpaceIsLimited],
 		['enableSplitViewResizing', options.enableSplitViewResizing],
+		['renderIndicators', options.renderIndicators],
 		['renderMarginRevertIcon', options.renderMarginRevertIcon],
 		['renderGutterMenu', options.renderGutterMenu],
 		['renderOverviewRuler', options.renderOverviewRuler],

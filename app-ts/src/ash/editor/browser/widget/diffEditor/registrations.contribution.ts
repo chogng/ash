@@ -6,7 +6,7 @@ const diffInsertIcon = registerIcon('diff-insert', () =>
 	'Inserted diff line',
 );
 
-const diffRemoveIcon = registerIcon('diff-remove', () =>
+export const diffRemoveIcon = registerIcon('diff-remove', () =>
 	'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 8h8"/></svg>',
 	'Removed diff line',
 );
@@ -16,6 +16,10 @@ export const diffLineAddDecorationBackground: IModelDecorationOptions = Object.f
 	isWholeLine: true,
 	className: 'stanza-diff-line-added',
 	marginClassName: 'stanza-diff-gutter-added',
+});
+
+export const diffLineAddDecorationBackgroundWithIndicator: IModelDecorationOptions = Object.freeze({
+	...diffLineAddDecorationBackground,
 	firstLineDecorationClassName: 'stanza-diff-insert-sign',
 	firstLineDecorationIcon: diffInsertIcon,
 });
@@ -25,6 +29,10 @@ export const diffLineDeleteDecorationBackground: IModelDecorationOptions = Objec
 	isWholeLine: true,
 	className: 'stanza-diff-line-removed',
 	marginClassName: 'stanza-diff-gutter-removed',
+});
+
+export const diffLineDeleteDecorationBackgroundWithIndicator: IModelDecorationOptions = Object.freeze({
+	...diffLineDeleteDecorationBackground,
 	firstLineDecorationClassName: 'stanza-diff-remove-sign',
 	firstLineDecorationIcon: diffRemoveIcon,
 });

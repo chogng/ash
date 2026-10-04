@@ -255,6 +255,8 @@
 		"diffEditor.gutterMenu.description": "在更改的代码块和选中的更改旁显示已注册的操作。",
 		"diffEditor.gutterMenu.title": "更改操作",
 		"diffEditor.revertIcon.description": "在修改后的编辑器边栏显示还原更改按钮。",
+		"diffEditor.indicators.title": "差异标记",
+		"diffEditor.indicators.description": "在新增行和删除行旁显示加号和减号。",
 		"diffEditor.revertIcon.title": "还原更改按钮",
 		"diffEditor.movedLines": "原始第 {0}–{1} 行已移动到修改后的第 {2}–{3} 行",
 		"diffEditor.comparingMovedCode": "正在比较原始第 {0}–{1} 行与修改后第 {2}–{3} 行",

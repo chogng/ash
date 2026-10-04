@@ -3,7 +3,7 @@ import { Emitter } from "../../../../../base/common/event.js";
 import { canceled } from "../../../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../../base/common/uuid.js";
-import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import { IAppServerApi, type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { IModelApi, ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
 import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from "../../../../services/sessions/common/session.js";
 import type { ISessionsProvider } from "../../../../services/sessions/common/sessionsProvider.js";
@@ -22,12 +22,23 @@ export interface AppServerSessionsProviderHost {
 export class AppServerSessionsProvider extends Disposable implements ISessionsProvider {
 	private readonly subscribed = new Set<SessionId>();
 	private catalogSubscribed = false;
+	private connectionGeneration = 0;
 	private model: ModelRef | null = null;
+	private readonly _onDidChangeCatalog = this._register(new Emitter<void>());
+	readonly onDidChangeCatalog = this._onDidChangeCatalog.event;
 	private readonly _onDidChangeSession = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean }>());
 	readonly onDidChangeSession = this._onDidChangeSession.event;
 
-	constructor(private readonly host: AppServerSessionsProviderHost) {
+	constructor(private readonly host: AppServerSessionsProviderHost, @IAppServerApi appServer: IAppServerApi) {
 		super();
+		const connection = appServer.onConnectionState(state => {
+			// The server starts each connection with an empty subscription set.
+			++this.connectionGeneration;
+			this.catalogSubscribed = false;
+			this.subscribed.clear();
+			if (state === 'ready') this._onDidChangeCatalog.fire();
+		});
+		this._register(toDisposable(() => connection.dispose()));
 		if (host.events) {
 			const subscription = host.events.subscribe(event => {
 				if (event.method === "session/changed") this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: event.params.agentTreeChanged });
@@ -45,10 +56,12 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	async list(): Promise<readonly ISession[]> {
+		const generation = this.connectionGeneration;
 		const [result, model] = await Promise.all([
 			this.catalogSubscribed ? this.host.session.list() : this.host.session.subscribeCatalog(),
 			this.host.model?.readModel() ?? Promise.resolve(null),
 		]);
+		this.assertCurrentConnection(generation);
 		this.catalogSubscribed = true;
 		this.model = model;
 		return result.sessions.map(session => ({ ...toSession(session), model }));
@@ -62,13 +75,17 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	async readCatalog(sessionId: SessionId, previous?: ISession): Promise<ISession | undefined> {
+		const generation = this.connectionGeneration;
 		const result = await this.host.session.readCatalog({ sessionId });
+		this.assertCurrentConnection(generation);
 		return result.session ? { ...toSession(result.session, [], previous), model: previous?.model ?? this.model } : undefined;
 	}
 
 	async subscribe(session: ISession): Promise<ISession> {
 		if (session.status !== "active") return session;
+		const generation = this.connectionGeneration;
 		const result = await this.host.session.subscribe({ sessionId: session.sessionId });
+		this.assertCurrentConnection(generation);
 		this.subscribed.add(session.sessionId);
 		const next = toSession(result.session, result.threadProjections, session, result.agentTree.roots);
 		if (next.sessionId !== session.sessionId) {
@@ -131,6 +148,10 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 			turnId: node.currentTurnId,
 			expectedSequence: node.threadSequence,
 		});
+	}
+
+	private assertCurrentConnection(generation: number): void {
+		if (this.isDisposed || generation !== this.connectionGeneration) throw canceled();
 	}
 }
 

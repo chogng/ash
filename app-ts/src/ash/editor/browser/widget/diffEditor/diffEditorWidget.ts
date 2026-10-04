@@ -187,6 +187,10 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		}));
 		this._register(this.model.onDidChange(() => this.refresh()));
 		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('diffEditor.renderIndicators')) {
+				this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.activeChangeRow, this.showInlineChanges, this.diffOptions.renderIndicators);
+				this.layout({ width: this.viewportWidth, height: this.viewportHeight });
+			}
 			if (event.affectsConfiguration('diffEditor.renderMarginRevertIcon')
 				|| event.affectsConfiguration('diffEditor.renderGutterMenu')
 				|| event.affectsConfiguration('diffEditor.renderOverviewRuler')
@@ -367,6 +371,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 
 	public updateOptions(options: IDiffEditorOptions): void {
 		this.diffOptions.updateOptions(options);
+		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.activeChangeRow, this.showInlineChanges, this.diffOptions.renderIndicators);
 		if (options.readOnly !== undefined) this.modifiedEditor.updateOptions({ readOnly: options.readOnly });
 		this.updateFeatures();
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
@@ -404,7 +409,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 			if (inlineView && this.originalContainer.contains(this.element.ownerDocument.activeElement)) this.modifiedEditor.focus();
 			if (inlineView && this.movedTextToCompare) {
 				this.clearComparedMove();
-				this.diffDecorations.update(this.model.diff?.rows ?? [], -1, this.showInlineChanges);
+				this.diffDecorations.update(this.model.diff?.rows ?? [], -1, this.showInlineChanges, this.diffOptions.renderIndicators);
 				this.overviewRuler.setRows(this.model.diff?.rows ?? []);
 			}
 			this.updateFeatures();
@@ -422,7 +427,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.element.style.setProperty('--ash-diff-header-height', `${headerHeight}px`);
 		this.originalEditor.layout({ width: inlineView ? contentWidth : originalWidth, height: editorHeight });
 		this.modifiedEditor.layout({ width: inlineView ? contentWidth : contentWidth - originalWidth, height: editorHeight });
-		this.diffViewZones.update(this.inlineView, this.wordWrap, this.displayedDiff?.rows ?? [], this.comparedRange);
+		this.diffViewZones.update(this.inlineView, this.wordWrap, this.displayedDiff?.rows ?? [], this.diffOptions.renderIndicators, this.comparedRange);
 		this.gutter.layout(inlineView ? 0 : originalWidth, editorHeight);
 		this.movedBlocks.layout(originalWidth + this.gutter.width, editorHeight);
 		this.overviewRuler.layout({ width: size.width, height: editorHeight });
@@ -459,7 +464,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 
 	private revealDiffRow(rows: readonly LineDiffRow[], rowIndex: number, announce: boolean): void {
 		this.activeChangeRow = rowIndex;
-		this.diffDecorations.update(rows, this.activeChangeRow, this.showInlineChanges);
+		this.diffDecorations.update(rows, this.activeChangeRow, this.showInlineChanges, this.diffOptions.renderIndicators);
 		const row = rows[rowIndex];
 		if (row.modifiedLineIndex !== undefined) {
 			const lineNumber = row.modifiedLineIndex + 1;
@@ -485,7 +490,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	public clearActiveChange(): void {
 		if (this.activeChangeRow < 0) return;
 		this.activeChangeRow = -1;
-		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.activeChangeRow, this.showInlineChanges);
+		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.activeChangeRow, this.showInlineChanges, this.diffOptions.renderIndicators);
 	}
 
 	private updateWordWrap(): void {
@@ -516,7 +521,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 				: '';
 		this.updateIncompleteStatus();
 		this.updateFeatures();
-		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.activeChangeRow, this.showInlineChanges);
+		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.activeChangeRow, this.showInlineChanges, this.diffOptions.renderIndicators);
 		this.overviewRuler.setRows(this.displayedDiff?.rows ?? []);
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
 	}
@@ -524,7 +529,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	private updateFeatures(): void {
 		if (!this.diffOptions.showMoves && this.movedTextToCompare) {
 			this.clearComparedMove();
-			this.diffDecorations.update(this.model.diff?.rows ?? [], -1, this.showInlineChanges);
+			this.diffDecorations.update(this.model.diff?.rows ?? [], -1, this.showInlineChanges, this.diffOptions.renderIndicators);
 			this.overviewRuler.setRows(this.model.diff?.rows ?? []);
 		}
 		this.gutter.update(this.diffOptions.renderGutterMenu && !this.movedTextToCompare);

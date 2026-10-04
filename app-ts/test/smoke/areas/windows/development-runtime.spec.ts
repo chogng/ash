@@ -10,6 +10,7 @@ import { developmentAppServerGenerationPath } from '../../../../src/ash/platform
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createAppServerDaemonLauncher } from '../../../../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
+import { Editor } from '../../../automation/editor.js';
 
 const desktopDirectory = resolve(import.meta.dirname, '../../../..');
 const execFileAsync = promisify(execFile);
@@ -27,6 +28,20 @@ async function connection(page: Page): Promise<{ generation: number }> {
 		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number }> } } }).ash.ipcRenderer;
 		return ipc.invoke('ash:remote:connection');
 	});
+}
+
+type CatalogProbeGlobal = typeof globalThis & { catalogSubscriptions: number };
+
+function countCatalogSubscriptions(): void {
+	(globalThis as CatalogProbeGlobal).catalogSubscriptions = 0;
+	const post = MessagePort.prototype.postMessage;
+	// Observe outgoing product requests without replacing the connection or backend replies.
+	MessagePort.prototype.postMessage = function (message: { frame?: string }, options?: Transferable[] | StructuredSerializeOptions): void {
+		if (message.frame && JSON.parse(message.frame).method === 'session/catalog/subscribe') {
+			(globalThis as CatalogProbeGlobal).catalogSubscriptions++;
+		}
+		post.call(this, message, Array.isArray(options) ? { transfer: options } : options);
+	};
 }
 
 test('Rust publication reconnects Workbench and Agents once while keeping both windows open', async ({ target, testWorkspace }) => {
@@ -48,10 +63,17 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		desktop.application.process().stdout?.on('data', output);
 		const workbench = desktop.driver.workbench.page;
+		await workbench.evaluate(countCatalogSubscriptions);
+		await desktop.application.context().addInitScript(countCatalogSubscriptions);
 		const opened = desktop.application.waitForEvent('window');
 		await workbench.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		const agents = await opened;
 		await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+		await expect.poll(() => agents.evaluate(() => (globalThis as CatalogProbeGlobal).catalogSubscriptions)).toBe(1);
+		const editor = new Editor(agents.locator('.ash-sessions-chat-slot.active:visible'));
+		await editor.waitForEditorFocus();
+		await agents.keyboard.insertText('Keep the Agents draft across backend replacement');
+		await editor.waitForEditorContents(text => text === 'Keep the Agents draft across backend replacement');
 		const beforeWorkbench = await connection(workbench);
 		const beforeAgents = await connection(agents);
 		const daemon = join(source, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`);
@@ -62,6 +84,9 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		await expect.poll(async () => (await connection(workbench)).generation).toBe(beforeWorkbench.generation + 1);
 		await expect.poll(async () => (await connection(agents)).generation).toBe(beforeAgents.generation + 1);
 		await expect.poll(() => processOutput.includes(`Restarted development runtime ${second}`)).toBe(true);
+		await expect.poll(() => workbench.evaluate(() => (globalThis as CatalogProbeGlobal).catalogSubscriptions)).toBe(1);
+		await expect.poll(() => agents.evaluate(() => (globalThis as CatalogProbeGlobal).catalogSubscriptions)).toBe(2);
+		await editor.waitForEditorContents(text => text === 'Keep the Agents draft across backend replacement');
 		const afterPid = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout).pid;
 		expect(afterPid).not.toBe(beforePid);
 		expect(desktop.application.windows()).toHaveLength(2);
@@ -81,6 +106,7 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		expect(await publish(source, directory, 'first')).toBe(first);
 		await expect.poll(async () => (await connection(workbench)).generation).toBe(beforeWorkbench.generation + 2);
 		await expect.poll(() => processOutput.includes(`Restarted development runtime ${first}`)).toBe(true);
+		await expect.poll(() => workbench.evaluate(() => (globalThis as CatalogProbeGlobal).catalogSubscriptions)).toBe(2);
 	} finally {
 		try {
 			desktop?.application.process().stdout?.off('data', output);

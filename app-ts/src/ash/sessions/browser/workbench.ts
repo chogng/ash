@@ -169,7 +169,7 @@ import type { BrowserStorageServiceOptions } from "../../workbench/services/stor
 import { IWorkbenchHostService } from "../../workbench/services/host/common/workbenchHostService.js";
 import { WorkbenchThemeService } from "../../workbench/services/themes/browser/workbenchThemeService.js";
 import { IHostColorSchemeService } from '../../workbench/services/themes/common/hostColorSchemeService.js';
-import { AppServerSessionsProvider } from "../contrib/providers/appServer/browser/appServerSessionsProvider.js";
+import { AppServerSessionsProvider, type AppServerSessionsProviderHost } from "../contrib/providers/appServer/browser/appServerSessionsProvider.js";
 import { AppServerTeamsProvider } from '../contrib/providers/appServer/browser/appServerTeamsProvider.js';
 import { TeamsManagementService } from '../services/teams/browser/teamsManagementService.js';
 import { ITeamsManagementService } from '../services/teams/common/teamsManagement.js';
@@ -301,14 +301,15 @@ export class Workbench extends Disposable {
 			workbenchState: WorkbenchState.EMPTY,
 		}));
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
-		const sessions = this._register(new SessionsManagementService(new AppServerSessionsProvider({
+		services.registerInstance(AppServerApiId, options.api.appServer);
+		const sessions = this._register(new SessionsManagementService(services.createInstance(AppServerSessionsProvider, {
 			session: options.api.session,
 			workspace: options.workspaceSelection,
 			selectWorkspace: folders => pickWorkspaceFolder(services.get(IQuickInputService), folders),
 			model: options.api.model,
 			turn: options.api.turn,
 			events: options.api.events,
-		})));
+		} satisfies AppServerSessionsProviderHost)));
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
 		const storage = this._register(storageService);
@@ -359,7 +360,6 @@ export class Workbench extends Disposable {
 		if (options.createTextDocumentHost) { this._register(options.createTextDocumentHost(services)); }
 		services.registerInstance(IChatService, chat);
 		services.registerInstance(ModelApiId, options.api.model);
-		services.registerInstance(AppServerApiId, options.api.appServer);
 		services.registerInstance(ServerEventApiId, options.api.events);
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService)));
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));

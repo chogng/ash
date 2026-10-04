@@ -449,6 +449,7 @@ function schemaForDefault(value: unknown): JsonSchema {
 }
 
 for (const [key, defaultValue, titleKey, title, descriptionKey, description] of [
+	['diffEditor.renderIndicators', diffEditorDefaultOptions.renderIndicators, 'diffEditor.indicators.title', 'Diff indicators', 'diffEditor.indicators.description', 'Show plus and minus signs beside added and removed lines.'],
 	['diffEditor.renderMarginRevertIcon', diffEditorDefaultOptions.renderMarginRevertIcon, 'diffEditor.revertIcon.title', 'Revert change buttons', 'diffEditor.revertIcon.description', 'Show buttons to revert changes in the modified editor margin.'],
 	['diffEditor.renderGutterMenu', diffEditorDefaultOptions.renderGutterMenu, 'diffEditor.gutterMenu.title', 'Change actions', 'diffEditor.gutterMenu.description', 'Show contributed actions beside changed blocks and selected changes.'],
 	['diffEditor.renderOverviewRuler', diffEditorDefaultOptions.renderOverviewRuler, 'diffEditor.overviewRuler.title', 'Diff overview ruler', 'diffEditor.overviewRuler.description', 'Show differences and the current viewport in the diff overview ruler.'],
