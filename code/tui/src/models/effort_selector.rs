@@ -9,6 +9,7 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use ratatui::Frame;
+use ratatui::layout::Alignment;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -295,6 +296,15 @@ impl EffortSelector {
             Paragraph::new("─".repeat(layout.axis.width as usize)).style(muted),
             layout.axis.intersection(area),
         );
+        // Theme colors retain terminal color-depth conversion and user palette choices.
+        let rainbow = [
+            context.danger(),
+            context.warning(),
+            context.success(),
+            context.accent(),
+            context.function(),
+            context.mode_color(CollaborationMode::Multitask),
+        ];
         for LevelLayout {
             index,
             hit_area,
@@ -305,29 +315,32 @@ impl EffortSelector {
             let target = Target::Level(index);
             let selected = self.selected == index;
             let level = self.levels[index];
+            // Colors belong to effort identities, so a model's subset or order
+            // cannot change the meaning of a selected label and its arrow.
+            let selected_color = match level {
+                ReasoningEffort::None => context.foreground(),
+                ReasoningEffort::Minimal => context.success(),
+                ReasoningEffort::Low => context.warning(),
+                ReasoningEffort::Medium => context.accent(),
+                ReasoningEffort::High => context.focus(),
+                ReasoningEffort::ExtraHigh => context.function(),
+                ReasoningEffort::Max => rainbow[self.phase / 2 % rainbow.len()],
+            };
+            // The scale marks selection with its arrow and label; only pointer
+            // interaction fills the wider hit area between ticks.
             let interaction = InteractionState {
-                selected,
                 hovered: hovered == Some(target),
                 pressed: pressed == Some(target),
                 ..Default::default()
             };
             let style = Style::default()
                 .fg(if selected {
-                    context.focus()
+                    selected_color
                 } else {
                     context.muted()
                 })
                 .patch(crate::render::interaction_style(context, interaction));
             let spans = if selected && level == ReasoningEffort::Max {
-                // Theme colors retain terminal color-depth conversion and user palette choices.
-                let colors = [
-                    context.danger(),
-                    context.warning(),
-                    context.success(),
-                    context.accent(),
-                    context.function(),
-                    context.mode_color(CollaborationMode::Multitask),
-                ];
                 level
                     .as_str()
                     .chars()
@@ -336,7 +349,7 @@ impl EffortSelector {
                         Span::styled(
                             ch.to_string(),
                             style
-                                .fg(colors[(self.phase / 2 + index) % colors.len()])
+                                .fg(rainbow[(self.phase / 2 + index) % rainbow.len()])
                                 .add_modifier(Modifier::BOLD),
                         )
                     })
@@ -358,7 +371,7 @@ impl EffortSelector {
             frame.render_widget(Paragraph::new(Line::from(spans)), label.intersection(area));
             if selected {
                 frame.render_widget(
-                    Paragraph::new("▲").style(Style::default().fg(context.focus())),
+                    Paragraph::new("▲").style(Style::default().fg(selected_color)),
                     Rect::new(marker.x, marker.y, 1, 1).intersection(area),
                 );
             }
@@ -415,7 +428,9 @@ impl EffortSelector {
             layout.description.width as usize,
         );
         frame.render_widget(
-            Paragraph::new(lines).style(muted),
+            Paragraph::new(lines)
+                .style(muted)
+                .alignment(Alignment::Center),
             layout.description.intersection(area),
         );
     }

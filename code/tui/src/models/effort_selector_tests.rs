@@ -97,6 +97,126 @@ fn effort_selector_held_arrows_adjust_but_held_controls_do_not_apply_or_toggle()
 }
 
 #[test]
+fn effort_selector_keyboard_selection_colors_every_level_without_filling_the_background() {
+    let levels = [
+        ReasoningEffort::None,
+        ReasoningEffort::Minimal,
+        ReasoningEffort::Low,
+        ReasoningEffort::Medium,
+        ReasoningEffort::High,
+        ReasoningEffort::ExtraHigh,
+        ReasoningEffort::Max,
+    ];
+    for palette in [ThemePalette::dark(), ThemePalette::light()] {
+        for capability in [ColorLevel::TrueColor, ColorLevel::Ansi256] {
+            let theme = RenderTheme::from_palette(palette, capability);
+            let context = RenderContext::new(&theme, 0);
+            let colors = [
+                context.foreground(),
+                context.success(),
+                context.warning(),
+                context.accent(),
+                context.focus(),
+                context.function(),
+                context.danger(),
+            ];
+            for width in [24, 120] {
+                let mut selector = EffortSelector::new(
+                    &levels,
+                    Some(ReasoningEffort::None),
+                    CollaborationMode::Agent,
+                );
+                for (selected, effort) in levels.iter().enumerate() {
+                    let buffer = render(&selector, width, context);
+                    let layout = selector.layout(buffer.area, context);
+                    let background = buffer[(0, layout.axis.y)].bg;
+                    for tick in &layout.levels {
+                        for x in tick.hit_area.x..tick.hit_area.right() {
+                            assert_eq!(buffer[(x, tick.hit_area.y)].bg, background);
+                        }
+                        let label = &buffer[tick.label.as_position()];
+                        assert_eq!(
+                            label.modifier.contains(Modifier::BOLD),
+                            tick.index == selected
+                        );
+                        if tick.index == selected {
+                            assert_eq!(buffer[tick.marker].symbol(), "▲");
+                            assert_eq!(buffer[tick.marker].fg, colors[selected]);
+                            assert_eq!(label.fg, colors[selected]);
+                        } else {
+                            assert_eq!(label.fg, context.muted());
+                        }
+                    }
+                    if *effort != ReasoningEffort::Max {
+                        assert!(!selector.tick(selector.opened + Duration::from_millis(160)));
+                        assert_eq!(buffer, render(&selector, width, context));
+                    }
+                    assert!(matches!(
+                        key(&mut selector, KeyCode::Enter),
+                        Outcome::Apply { effort: applied, .. } if applied == *effort
+                    ));
+                    key(&mut selector, KeyCode::Right);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn effort_selector_centers_each_description_line_in_both_languages() {
+    let levels = [
+        ReasoningEffort::None,
+        ReasoningEffort::Minimal,
+        ReasoningEffort::Low,
+        ReasoningEffort::Medium,
+        ReasoningEffort::High,
+        ReasoningEffort::ExtraHigh,
+        ReasoningEffort::Max,
+    ];
+    let theme = RenderTheme::from_palette(ThemePalette::dark(), ColorLevel::TrueColor);
+    for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
+        let context = RenderContext::new(&theme, 0).with_language(language);
+        for width in [24, 60, 120] {
+            let mut selector = EffortSelector::new(
+                &levels,
+                Some(ReasoningEffort::None),
+                CollaborationMode::Agent,
+            );
+            for effort in levels {
+                let buffer = render(&selector, width, context);
+                let description = selector.layout(buffer.area, context).description;
+                for y in description.y..description.bottom() {
+                    let row = crate::terminal::text::text_in_range(
+                        &buffer,
+                        crate::terminal::text::ScreenSelectionRange::new(
+                            Position::new(description.x, y),
+                            Position::new(description.right() - 1, y),
+                        ),
+                    )
+                    .unwrap();
+                    let row_width = crate::render::display_width(row.trim()) as u16;
+                    let first = (description.x..description.right())
+                        .find(|x| !buffer[(*x, y)].symbol().trim().is_empty())
+                        .unwrap();
+                    let left = first - description.x;
+                    let right = description.right() - first - row_width;
+                    assert!(
+                        left.abs_diff(right) <= 1,
+                        "{language:?} {effort:?}, width {width}, row {row:?}"
+                    );
+                    assert_eq!(buffer[(first, y)].fg, context.muted());
+                }
+                assert!(matches!(
+                    key(&mut selector, KeyCode::Enter),
+                    Outcome::Apply { effort: applied, .. } if applied == effort
+                ));
+                key(&mut selector, KeyCode::Right);
+            }
+        }
+    }
+}
+
+#[test]
 fn effort_selector_max_colors_advance_on_fixed_ticks_and_stop_after_selection_changes() {
     for palette in [ThemePalette::dark(), ThemePalette::light()] {
         let theme = RenderTheme::from_palette(palette, ColorLevel::TrueColor);
@@ -114,10 +234,12 @@ fn effort_selector_max_colors_advance_on_fixed_ticks_and_stop_after_selection_ch
         assert_eq!(first[(max.x + 1, max.y)].fg, context.warning());
         assert_eq!(first[(max.x + 2, max.y)].fg, context.success());
         assert_eq!(first[(max.x + 1, max.y - 1)].symbol(), "▲");
+        assert_eq!(first[(max.x + 1, max.y - 1)].fg, context.danger());
         assert!(selector.tick(selector.opened + Duration::from_millis(160)));
         let second = render(&selector, 80, context);
         assert_eq!(text(&first), text(&second));
         assert_eq!(second[(max.x, max.y)].fg, context.warning());
+        assert_eq!(second[(max.x + 1, max.y - 1)].fg, context.warning());
         assert_ne!(first[(max.x, max.y)].fg, second[(max.x, max.y)].fg);
         assert!(!selector.tick(selector.opened + Duration::from_millis(160)));
         assert_eq!(second, render(&selector, 80, context));
@@ -250,7 +372,10 @@ fn effort_selector_generates_uniform_ticks_from_catalog_level_counts() {
         }
         let selected = &layout.levels[count - 1];
         assert_eq!(buffer[selected.marker].symbol(), "▲");
-        assert_eq!(buffer[selected.marker].fg, context.focus());
+        assert_eq!(
+            buffer[selected.marker].fg,
+            buffer[selected.label.as_position()].fg
+        );
         if count == 1 {
             assert_eq!(
                 selected.marker.x - layout.axis.x,
@@ -509,7 +634,7 @@ fn effort_selector_localizes_live_content_and_wrapped_descriptions() {
 #[test]
 fn effort_selector_hover_and_press_do_not_change_the_keyboard_selection() {
     let context = crate::render::test_context();
-    let selector = EffortSelector::new(
+    let mut selector = EffortSelector::new(
         &[
             ReasoningEffort::Low,
             ReasoningEffort::High,
@@ -521,26 +646,27 @@ fn effort_selector_hover_and_press_do_not_change_the_keyboard_selection() {
     let mut terminal =
         Terminal::new(TestBackend::new(80, selector.body_rows(80, context))).unwrap();
     let layout = selector.layout(terminal.backend().buffer().area, context);
-    let high = layout.levels[1].label;
+    let high = layout.levels[1].hit_area;
     let target = Target::Level(1);
-    for pressed in [None, Some(target)] {
-        terminal
-            .draw(|frame| selector.draw(frame, frame.area(), Some(target), pressed, context))
-            .unwrap();
-        let cell = &terminal.backend().buffer()[(high.x, high.y)];
-        assert_eq!(
-            cell.bg,
-            if pressed.is_some() {
-                context.pressed_background()
-            } else {
-                context.hover_background()
+    for selected in [0, 1] {
+        selector.activate(Target::Level(selected));
+        for pressed in [None, Some(target)] {
+            terminal
+                .draw(|frame| selector.draw(frame, frame.area(), Some(target), pressed, context))
+                .unwrap();
+            let buffer = terminal.backend().buffer();
+            for x in high.x..high.right() {
+                assert_eq!(
+                    buffer[(x, high.y)].bg,
+                    if pressed.is_some() {
+                        context.pressed_background()
+                    } else {
+                        context.hover_background()
+                    }
+                );
             }
-        );
-        assert_eq!(selector.selected, 0);
-        let low = layout.levels[0].label;
-        assert_eq!(
-            terminal.backend().buffer()[(low.x + 1, low.y - 1)].symbol(),
-            "▲"
-        );
+            assert_eq!(selector.selected, selected);
+            assert_eq!(buffer[layout.levels[selected].marker].symbol(), "▲");
+        }
     }
 }

@@ -23,6 +23,6 @@ expression: render_effort(&app)
                ───────────────▲───────────────    Multitask  off
                  low        high         max
 
-  More reasoning for complex tasks and careful verification.
+           More reasoning for complex tasks and careful verification.
 
   ←/→ choose  ·  Tab toggle multitask  ·  Enter apply  ·  Esc cancel

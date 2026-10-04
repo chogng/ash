@@ -6,4 +6,4 @@ expression: "text(&render(&selector, 120, context))"
                                    ───────────────▲───────────────    Multitask  off
                                      low        high         max
 
-                  More reasoning for complex tasks and careful verification.
+                               More reasoning for complex tasks and careful verification.

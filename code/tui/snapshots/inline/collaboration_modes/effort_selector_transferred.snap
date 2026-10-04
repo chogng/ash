@@ -23,6 +23,6 @@ expression: render_effort(&app)
                  low        high         max
 
   Maximum reasoning. May use more tokens and take longer; use for the hardest
-  tasks.
+                                     tasks.
 
   ←/→ choose  ·  Tab toggle multitask  ·  Enter apply  ·  Esc cancel
