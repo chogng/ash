@@ -84,3 +84,90 @@ test('multiple view panes resize independently and restore their layout after re
 	await header(graph).press('ArrowRight');
 	await expect.poll(() => height(graph)).toBeCloseTo(resizedHeight, 0);
 });
+
+test.describe('Pane motion', () => {
+	test.use({ openWorkspace: true, gitRepository: true });
+
+	test('pane motion preserves content, resize handles and the final state when interrupted', async ({ target, workbench }) => {
+		const page = workbench.page;
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		const graph = page.locator('[data-view-id="ash.gitGraph"]');
+		const header = graph.locator('.ash-pane-view-header-button');
+		const body = graph.locator('.ash-pane-view-content');
+		await expect(header).toHaveAttribute('aria-expanded', 'false');
+		const opening = await graph.evaluate(element => {
+			const wrapper = element.parentElement!;
+			const split = wrapper.parentElement!;
+			const before = wrapper.getBoundingClientRect().height;
+			const sashes = [...split.querySelectorAll('.ash-sash')];
+			(element.querySelector('.ash-pane-view-header-button') as HTMLButtonElement).click();
+			const target = Number.parseFloat(wrapper.style.height);
+			const animations = split.getAnimations({ subtree: true }).filter(animation =>
+				animation.effect instanceof KeyframeEffect && animation.effect.getKeyframes().some(frame => frame.height !== undefined || frame.top !== undefined),
+			);
+			for (const animation of animations) {
+				animation.pause();
+				animation.currentTime = Number(animation.effect!.getComputedTiming().duration) / 2;
+			}
+			const midway = wrapper.getBoundingClientRect().height;
+			const contentHeight = element.querySelector('.ash-pane-view-content')!.getBoundingClientRect().height;
+			const sash = split.querySelector<HTMLElement>('.ash-sash:last-child')!;
+			const boundaryError = Math.abs(sash.getBoundingClientRect().top + sash.getBoundingClientRect().height / 2 - wrapper.getBoundingClientRect().top);
+			for (const animation of animations) animation.finish();
+			return { before, target, midway, contentHeight, boundaryError, animationCount: animations.length, stableSashes: sashes.every(sash => sash.isConnected) };
+		});
+		expect(opening.animationCount).toBeGreaterThan(0);
+		expect(opening.midway).toBeGreaterThan(opening.before);
+		expect(opening.midway).toBeLessThan(opening.target);
+		expect(opening.contentHeight).toBeCloseTo(opening.target - 28, 0);
+		expect(opening.boundaryError).toBeLessThan(1);
+		expect(opening.stableSashes).toBe(true);
+		await expect.poll(() => graph.evaluate(element => element.getBoundingClientRect().height)).toBeCloseTo(opening.target, 0);
+		if (target.appServerMode === 'required') {
+			await expect(graph.getByRole('treeitem').first()).toBeVisible();
+		}
+		if (target.appServerMode === 'required') {
+			await graph.getByRole('treeitem').first().focus();
+		} else {
+			await header.focus();
+		}
+		await header.evaluate(element => (element as HTMLButtonElement).click());
+		await expect(header).toBeFocused();
+		await expect(body).toHaveAttribute('inert', '');
+		await expect(body).toHaveAttribute('aria-hidden', 'true');
+		await header.press('ArrowRight');
+		await header.press('ArrowLeft');
+		await header.press('ArrowRight');
+		await expect(header).toHaveAttribute('aria-expanded', 'true');
+		await expect(body).toHaveAttribute('aria-hidden', 'false');
+		await expect.poll(() => body.evaluate(element => (element as HTMLElement).inert)).toBe(false);
+		await expect(graph).not.toHaveClass(/closing/u);
+		await expect.poll(() => graph.evaluate(element => element.getBoundingClientRect().height)).toBeCloseTo(opening.target, 0);
+		const sash = graph.locator('..').locator('..').locator('.ash-sash').last();
+		await sash.focus();
+		await sash.press('ArrowUp');
+		await expect(sash).toBeFocused();
+		await expect.poll(() => graph.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(opening.target);
+	});
+
+	test('reduced motion switches pane geometry and content visibility immediately', async ({ workbench }) => {
+		const page = workbench.page;
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await expect(page.locator('.ash-workbench')).toHaveClass(/ash-reduce-motion/u);
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		const graph = page.locator('[data-view-id="ash.gitGraph"]');
+		const state = await graph.evaluate(element => {
+			const wrapper = element.parentElement!;
+			const header = element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')!;
+			const body = element.querySelector<HTMLElement>('.ash-pane-view-content')!;
+			wrapper.getBoundingClientRect();
+			header.click();
+			const expanded = wrapper.getBoundingClientRect().height;
+			const target = Number.parseFloat(wrapper.style.height);
+			header.click();
+			return { expanded, target, collapsed: wrapper.getBoundingClientRect().height, hidden: body.hidden, inert: body.inert, animations: wrapper.getAnimations().length };
+		});
+		expect(state).toEqual({ expanded: state.target, target: state.target, collapsed: 28, hidden: true, inert: true, animations: 0 });
+	});
+});

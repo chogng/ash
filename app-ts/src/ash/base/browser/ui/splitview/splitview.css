@@ -3,6 +3,21 @@
 .ash-split-view-pane-overflow-visible { overflow: visible; }
 .ash-split-view-pane[hidden] { display: none; }
 .ash-split-view-pane > * { flex: 1 1 auto; min-width: 0; min-height: 0; }
+/* Global motion settings shorten transitions; geometry must opt out unless a pane requests motion. */
+.ash-split-view-pane,
+.ash-split-view > .ash-sash {
+  transition-property: none;
+}
+.ash-split-view-vertical.animated > .ash-split-view-pane,
+.ash-split-view-vertical.animated > .ash-sash {
+  transition-property: top, height;
+  transition-duration: var(--ash-animation-duration-fast);
+  transition-timing-function: ease-out;
+}
+.ash-reduce-motion .ash-split-view-vertical > .ash-split-view-pane,
+.ash-reduce-motion .ash-split-view-vertical > .ash-sash {
+  transition: none;
+}
 /* Pane edges stay visible independently of resize-handle hover and drag state. */
 .ash-split-view-separator-border > .ash-split-view-pane:not(:first-child)::before {
   position: absolute;

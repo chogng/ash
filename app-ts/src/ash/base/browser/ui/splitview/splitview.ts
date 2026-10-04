@@ -239,7 +239,7 @@ export class SplitView extends Disposable {
 		if (view.onDidChange) {
 			item.changeListener = view.onDidChange((preferredSize) => {
 				validateViewConstraints(view);
-				this.rebuildSashes();
+				this.ensureSashes();
 				if (!this.didLayout && preferredSize === undefined) return;
 				if (preferredSize === undefined) {
 					this.fitToSize();
@@ -454,12 +454,17 @@ export class SplitView extends Disposable {
 	private rebuildSashes(): void {
 		this.sashes.clear();
 		this.sashItems.length = 0;
+		this.ensureSashes();
+		this.positionSashes();
+	}
+
+	private ensureSashes(): void {
+		// Constraint changes disable existing boundaries; only topology changes replace their resources.
 		for (let boundaryIndex = 0; boundaryIndex < this.items.length - 1; boundaryIndex += 1) {
-			if (this.canResizeAtBoundary(boundaryIndex)) {
+			if (!this.getSash(boundaryIndex) && this.canHaveSashAtBoundary(boundaryIndex)) {
 				this.addSash(boundaryIndex);
 			}
 		}
-		this.positionSashes();
 	}
 
 	private addSash(boundaryIndex: number): void {
@@ -473,6 +478,7 @@ export class SplitView extends Disposable {
 		this.sashItems.push({ sash, boundaryIndex });
 		let dragState: SashDragState | undefined;
 		this.sashes.add(sash.onDidStart(() => {
+			this.element.classList.remove("animated");
 			dragState = { snapshot: this.getResizeItems(), baseline: 0, altKey: undefined };
 		}));
 		this.sashes.add(sash.onDidChange((event) => {
@@ -491,7 +497,9 @@ export class SplitView extends Disposable {
 			dragState = undefined;
 		}));
 		this.sashes.add(sash.onDidReset(() => this.handleSashReset(boundaryIndex)));
-		this.element.append(sash.element);
+		this.sashItems.sort((left, right) => left.boundaryIndex - right.boundaryIndex);
+		const index = this.sashItems.findIndex(item => item.sash === sash);
+		this.element.insertBefore(sash.element, this.sashItems[index + 1]?.sash.element ?? null);
 	}
 
 	private resizeAtBoundary(boundaryIndex: number, snapshot: readonly SplitViewResizeItem[], event: SashDragEvent): void {
@@ -569,8 +577,8 @@ export class SplitView extends Disposable {
 		}));
 	}
 
-	private canResizeAtBoundary(boundaryIndex: number): boolean {
-		const canResize = (item: ViewItem) => isResizable(item) || item.view.snap === true;
+	private canHaveSashAtBoundary(boundaryIndex: number): boolean {
+		const canResize = (item: ViewItem) => isResizable(item) || item.view.snap === true || item.view.onDidChange !== undefined;
 		return this.items.slice(0, boundaryIndex + 1).some(canResize) && this.items.slice(boundaryIndex + 1).some(canResize);
 	}
 

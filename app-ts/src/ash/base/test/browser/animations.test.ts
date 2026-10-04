@@ -48,3 +48,16 @@ test("UI animations use shared timing and honor reduced motion", () => {
 	assert.equal(animateElement(element, [{ opacity: 0 }, { opacity: 1 }]), undefined);
 	dom.window.close();
 });
+
+test("UI animations respect an explicit motion preference over the system", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const element = h(dom.window.document, "button");
+	dom.window.document.body.append(element);
+	Object.defineProperty(dom.window, "matchMedia", { value: () => ({ matches: true }) });
+	assert.equal(isReducedMotion(element), true);
+	dom.window.document.body.classList.add("ash-enable-motion");
+	assert.equal(isReducedMotion(element), false);
+	dom.window.document.body.classList.replace("ash-enable-motion", "ash-reduce-motion");
+	assert.equal(isReducedMotion(element), true);
+	dom.window.close();
+});

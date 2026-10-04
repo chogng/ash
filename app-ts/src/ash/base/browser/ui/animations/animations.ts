@@ -28,6 +28,7 @@ export interface BounceElementOptions {
 /** Returns whether a UI animation should be suppressed for the element. */
 export function isReducedMotion(element: Element): boolean {
 	if (element.closest(".ash-reduce-motion")) return true;
+	if (element.closest(".ash-enable-motion")) return false;
 	return element.ownerDocument.defaultView?.matchMedia?.(
 		"(prefers-reduced-motion: reduce)",
 	)?.matches ?? false;

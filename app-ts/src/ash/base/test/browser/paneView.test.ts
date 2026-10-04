@@ -134,3 +134,43 @@ test("PaneView double-click resets expanded panes across a collapsed pane", () =
 	view.element.querySelectorAll(".ash-sash")[1]!.dispatchEvent(new browserEnvironment.window.MouseEvent("dblclick", { bubbles: true }));
 	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(middle), view.getPaneSize(last)], [236, 28, 236]);
 });
+
+test("PaneView lays out once per toggle and retains its resize boundary", () => {
+	class CountingPane extends Pane {
+		public layouts = 0;
+		protected override layoutBody(): void {
+			this.layouts += 1;
+		}
+	}
+	const document = browserEnvironment.window.document;
+	using view = new PaneView(document.body);
+	using first = new CountingPane(document.body, { id: "count-first", title: "First" });
+	using second = new Pane(document.body, { id: "count-second", title: "Second" });
+	view.addPane(first, 200);
+	view.addPane(second, 200);
+	view.layout(400, 280);
+	const sash = view.element.querySelector<HTMLElement>(".ash-sash")!;
+	const layouts = first.layouts;
+	for (let index = 0; index < 10; index += 1) {
+		second.setCollapsed(true);
+		assert.equal(sash.getAttribute("aria-disabled"), "true");
+		second.setCollapsed(false);
+	}
+	assert.deepEqual({
+		layouts: first.layouts - layouts,
+		sash: view.element.querySelector(".ash-sash"),
+		sashCount: view.element.querySelectorAll(".ash-sash").length,
+		resizable: sash.getAttribute("aria-disabled"),
+		sizes: [view.getPaneSize(first), view.getPaneSize(second)],
+	}, {
+		layouts: 20,
+		sash,
+		sashCount: 1,
+		resizable: "false",
+		sizes: [200, 200],
+	});
+	sash.focus();
+	sash.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [190, 210]);
+	assert.equal(document.activeElement, sash);
+});

@@ -2,7 +2,9 @@ import { addDisposableListener, h } from "../../dom.js";
 import { trackFocus } from "../../focus.js";
 import { appendIcon } from "../lxicons/lxicon.js";
 import { Emitter, type Event } from "../../../common/event.js";
-import { Disposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../common/lifecycle.js";
+import { RunOnceScheduler } from "../../../common/async.js";
+import { isReducedMotion, UI_ANIMATION_DURATION } from "../animations/animations.js";
 import { Lxicon } from "../../../common/lxicons.js";
 import { SplitView, type ISplitViewView } from "./splitview.js";
 import "./paneview.css";
@@ -41,6 +43,12 @@ export class Pane extends Disposable implements ISplitViewView {
 	private readonly focusTracker;
 	private readonly headerActionsVisibility: PaneViewHeaderActionsVisibility;
 	private collapsed: boolean;
+	private isClosing = false;
+	private didLayout = false;
+	private readonly closeAnimation = this._register(new RunOnceScheduler(() => {
+		this.isClosing = false;
+		this.renderCollapsedState();
+	}, UI_ANIMATION_DURATION.normal));
 	private readonly minimumBodySize: number;
 	private readonly maximumBodySize: number;
 	private readonly change = this._register(new Emitter<number | undefined>());
@@ -148,7 +156,13 @@ export class Pane extends Disposable implements ISplitViewView {
 	}
 
 	layout(size: number, _offset: number, orthogonalSize: number): void {
-		if (!this.collapsed) this.layoutBody(Math.max(0, size - this.headerSize), orthogonalSize);
+		this.didLayout = true;
+		if (!this.collapsed) {
+			const bodyHeight = Math.max(0, size - this.headerSize);
+			// Keep the body at its allocated size while the outer pane clips the transition.
+			this.contentElement.style.height = `${bodyHeight}px`;
+			this.layoutBody(bodyHeight, orthogonalSize);
+		}
 	}
 
 	/** Subclasses lay out content here; the container owns the outer geometry. */
@@ -172,6 +186,9 @@ export class Pane extends Disposable implements ISplitViewView {
 			else this.focus();
 		}
 		this.collapsed = collapsed;
+		this.closeAnimation.cancel();
+		this.isClosing = collapsed && this.didLayout && !isReducedMotion(this.element);
+		if (this.isClosing) this.closeAnimation.schedule();
 		this.renderCollapsedState();
 		this.change.fire(collapsed ? this.headerSize : undefined);
 		this.expansionChange.fire(!collapsed);
@@ -184,10 +201,14 @@ export class Pane extends Disposable implements ISplitViewView {
 	private renderCollapsedState(): void {
 		const expanded = !this.collapsed;
 		this.element.classList.toggle("collapsed", this.collapsed);
+		this.element.classList.toggle("closing", this.isClosing);
 		this.headerButton.classList.toggle("expanded", expanded);
 		this.headerButton.setAttribute("aria-expanded", String(expanded));
-		this.contentElement.classList.toggle("collapsed", this.collapsed);
-		this.contentElement.hidden = this.collapsed;
+		this.contentElement.classList.toggle("collapsed", this.collapsed && !this.isClosing);
+		// Closing content remains painted, but must leave focus and the accessibility tree immediately.
+		this.contentElement.inert = this.collapsed;
+		this.contentElement.setAttribute("aria-hidden", String(this.collapsed));
+		this.contentElement.hidden = this.collapsed && !this.isClosing;
 		this.headerActionsElement.hidden = this.collapsed && this.headerActionsVisibility === "whenExpanded";
 	}
 }
@@ -197,9 +218,10 @@ export class PaneView extends Disposable {
 	readonly element: HTMLElement;
 	private readonly splitView: SplitView;
 	private readonly panes: Pane[] = [];
-	private readonly paneListeners = new Map<Pane, IDisposable>();
+	private readonly animationReset = this._register(new RunOnceScheduler(() => {
+		this.splitView.element.classList.remove("animated");
+	}, UI_ANIMATION_DURATION.normal));
 	private height = 0;
-	private width = 0;
 	private didLayout = false;
 	readonly onDidSashChange: Event<void>;
 	readonly onDidSashReset: Event<number>;
@@ -224,8 +246,6 @@ export class PaneView extends Disposable {
 			headers[target]?.element.querySelector<HTMLButtonElement>(".ash-pane-view-header-button")?.focus();
 		}));
 		this._register(toDisposable(() => {
-			for (const listener of this.paneListeners.values()) listener.dispose();
-			this.paneListeners.clear();
 			this.panes.length = 0;
 		}));
 	}
@@ -242,8 +262,14 @@ export class PaneView extends Disposable {
 			onDidChange: listener => pane.onDidChange(preferredSize => {
 				const collapsed = pane.isCollapsed();
 				const requestedSize = wasCollapsed && !collapsed ? expandedSize : preferredSize;
+				if (wasCollapsed !== collapsed && this.didLayout && !isReducedMotion(this.element)) {
+					this.splitView.element.classList.add("animated");
+					this.animationReset.schedule();
+				}
 				wasCollapsed = collapsed;
+				if (this.didLayout) this.updateContentHeight();
 				listener(requestedSize);
+				this.updateSashLabels();
 			}),
 			layout: (height, offset, width) => {
 				if (!pane.isCollapsed()) expandedSize = height;
@@ -251,11 +277,8 @@ export class PaneView extends Disposable {
 			},
 		}, size, index);
 		this.panes.splice(index, 0, pane);
-		this.paneListeners.set(pane, pane.onDidChange(() => {
-			if (this.didLayout) this.layout(this.height, this.width);
-		}));
-		if (this.didLayout) this.layout(this.height, this.width);
-		else this.updateSashLabels();
+		if (this.didLayout) this.updateContentHeight();
+		this.updateSashLabels();
 	}
 
 	/** Removing a pane detaches it; its contribution remains responsible for disposal. */
@@ -263,12 +286,10 @@ export class PaneView extends Disposable {
 		const index = this.panes.indexOf(pane);
 		if (index < 0) return;
 		this.panes.splice(index, 1);
-		this.paneListeners.get(pane)?.dispose();
-		this.paneListeners.delete(pane);
 		this.splitView.removeView(index);
 		pane.element.remove();
-		if (this.didLayout) this.layout(this.height, this.width);
-		else this.updateSashLabels();
+		if (this.didLayout) this.updateContentHeight();
+		this.updateSashLabels();
 	}
 
 	movePane(from: Pane, to: Pane): void {
@@ -282,6 +303,8 @@ export class PaneView extends Disposable {
 	}
 
 	resizePane(pane: Pane, size: number): void {
+		this.animationReset.cancel();
+		this.splitView.element.classList.remove("animated");
 		const index = this.panes.indexOf(pane);
 		if (index >= 0) this.splitView.resizeView(index, size);
 	}
@@ -293,12 +316,17 @@ export class PaneView extends Disposable {
 
 	layout(height: number, width: number): void {
 		this.height = height;
-		this.width = width;
 		this.didLayout = true;
-		const contentHeight = Math.max(height, this.splitView.minimumSize);
-		this.splitView.element.style.height = `${contentHeight}px`;
-		this.splitView.layout(contentHeight, width);
+		this.animationReset.cancel();
+		this.splitView.element.classList.remove("animated");
+		this.updateContentHeight();
+		// SplitView fits the viewport; its constraints already retain overflowing minimum sizes.
+		this.splitView.layout(height, width);
 		this.updateSashLabels();
+	}
+
+	private updateContentHeight(): void {
+		this.splitView.element.style.height = `${Math.max(this.height, this.splitView.minimumSize)}px`;
 	}
 
 	private updateSashLabels(): void {
