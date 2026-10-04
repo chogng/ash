@@ -407,6 +407,110 @@ fn collaboration_policy_and_effort_commands_are_independent() {
 }
 
 #[test]
+fn cooperation_aliases_use_ash_multitask_without_changing_effort() {
+    use ash_protocol::ReasoningEffort;
+    for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
+            let mut app = App::new();
+            let mut settings = TerminalSettings::default();
+            settings.set_screen_mode(screen);
+            settings.set_language(language);
+            app.update(ConfigEvent::SettingsReceived(settings));
+            app.update(crate::models::Event::SummaryReceived(
+                crate::models::ModelSummary::from_catalog(
+                    Some(ash_app_server_protocol::protocol::config::ModelRefDto {
+                        provider: "openai".into(),
+                        model: "test-model".into(),
+                    }),
+                    Some(ReasoningEffort::High),
+                    None,
+                ),
+            ));
+            for alias in ["multitask", "ULTRA", "ultracode"] {
+                command(&mut app, "/mode plan");
+                assert_eq!(command(&mut app, &format!("/effort {alias}")), None);
+                assert_eq!(app.collaboration_mode(), CollaborationMode::Multitask);
+                assert_eq!(app.status_line().model_label(), "test-model (high)");
+                assert_eq!(app.approval_mode(), ApprovalMode::Manual);
+                assert!(app.chat_input_focused());
+                assert!(app.input().is_empty());
+                assert!(app.command_panel().is_none());
+                assert_eq!(command(&mut app, &format!("/effort {alias} off")), None);
+                assert_eq!(app.collaboration_mode(), CollaborationMode::Agent);
+                command(&mut app, "/mode plan");
+                command(&mut app, &format!("/effort {alias} off"));
+                assert_eq!(app.collaboration_mode(), CollaborationMode::Plan);
+            }
+            command(&mut app, "/effort ultracode on");
+            assert_eq!(
+                command(&mut app, "/effort high"),
+                Some(AppCommand::Models(crate::models::Command::SetEffort {
+                    effort: ReasoningEffort::High
+                }))
+            );
+            assert_eq!(app.collaboration_mode(), CollaborationMode::Multitask);
+            // Keep the snapshot focused on the final acknowledgement, rather than the matrix.
+            app.update(ThreadEvent::TranscriptCleared);
+            command(&mut app, "/effort ultra on");
+            match (screen, language) {
+                (ScreenMode::Fullscreen, crate::nls::Language::English) => {
+                    crate::tui_assert_snapshot!(app = &app; "cooperation_alias_fullscreen", render_effort(&app));
+                }
+                (ScreenMode::Inline, crate::nls::Language::Chinese) => {
+                    // Inline commits notices above the live viewport, through the history renderer.
+                    assert_eq!(app.history_prefix().len(), 1);
+                    let view = app.history_prefix()[0].history_view();
+                    let context = app.render_context();
+                    let cache = app.transcript_render_cache();
+                    let mut buffer = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(
+                        0,
+                        0,
+                        80,
+                        view.height(80, context, cache) as u16,
+                    ));
+                    view.render_rows(&mut buffer, 0, context, cache);
+                    let history = buffer
+                        .content
+                        .chunks(80)
+                        .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    crate::tui_assert_snapshot!(app = &app; "cooperation_alias_inline_chinese", format!("{history}\n{}", render_effort(&app)));
+                }
+                _ => {}
+            }
+            command(&mut app, "/mode plan");
+            for value in ["ultra unknown", "ultracode on extra", "max on"] {
+                assert_eq!(command(&mut app, &format!("/effort {value}")), None);
+                assert_eq!(app.collaboration_mode(), CollaborationMode::Plan);
+                assert_eq!(app.status_line().model_label(), "test-model (high)");
+            }
+        }
+    }
+}
+
+#[test]
+fn cooperation_alias_during_a_turn_only_changes_the_next_submission() {
+    let mut app = App::new();
+    let turn = running_turn(CollaborationMode::Debug);
+    app.sync_active_turn(&[turn.clone()]);
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
+    assert_eq!(command(&mut app, "/effort ultra"), None);
+    assert_eq!(app.status(), &super::Status::Working);
+    app.sync_active_turn(&[turn]);
+    assert_eq!(app.collaboration_mode(), CollaborationMode::Multitask);
+    app.insert_text("execute the next task");
+    let Some(AppCommand::Thread(ThreadCommand::Enqueue { submission, .. })) =
+        key(&mut app, KeyCode::Enter, KeyModifiers::CONTROL)
+    else {
+        panic!("the new cooperation mode must submit a separate queued task")
+    };
+    assert_eq!(submission.mode, CollaborationMode::Multitask);
+    assert_eq!(serde_json::to_value(submission.mode).unwrap(), "multitask");
+    assert_eq!(app.queue_view().items[0].text, "execute the next task");
+}
+
+#[test]
 fn permission_menu_uses_shared_copy_and_the_same_ids_in_both_screens() {
     for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
         let mut app = App::new();

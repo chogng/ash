@@ -52,6 +52,44 @@ pub(crate) fn parse_mode(value: &str) -> Result<CollaborationMode, String> {
         .map_err(|_| "Use /mode agent|plan|debug|multitask|ask".into())
 }
 
+pub(crate) enum EffortSelection {
+    Effort(ReasoningEffort),
+    Mode(CollaborationMode),
+}
+
+pub(crate) fn parse_effort(
+    value: &str,
+    current_mode: CollaborationMode,
+) -> Result<EffortSelection, String> {
+    let mut arguments = value.split_whitespace();
+    let selection = arguments.next().unwrap_or_default().to_ascii_lowercase();
+    // These are product cooperation intents, never model effort values. Canonical
+    // submissions keep Ash's mode ID and the independently selected effort.
+    if matches!(selection.as_str(), "multitask" | "ultra" | "ultracode") {
+        let mode = match arguments.next().map(str::to_ascii_lowercase).as_deref() {
+            None | Some("on") => CollaborationMode::Multitask,
+            Some("off") if current_mode == CollaborationMode::Multitask => CollaborationMode::Agent,
+            Some("off") => current_mode,
+            Some(_) => return Err(effort_usage().into()),
+        };
+        if arguments.next().is_some() {
+            return Err(effort_usage().into());
+        }
+        return Ok(EffortSelection::Mode(mode));
+    }
+    if arguments.next().is_some() {
+        return Err(effort_usage().into());
+    }
+    selection
+        .parse()
+        .map(EffortSelection::Effort)
+        .map_err(|_| effort_usage().into())
+}
+
+fn effort_usage() -> &'static str {
+    "Use /effort <level> or /effort multitask|ultra|ultracode [on|off]"
+}
+
 pub(crate) fn mode_choices(current: CollaborationMode) -> ComposerOptions {
     choices(
         "Mode",
@@ -60,7 +98,7 @@ pub(crate) fn mode_choices(current: CollaborationMode) -> ComposerOptions {
                 CollaborationMode::Agent => "Complete the task",
                 CollaborationMode::Plan => "Analyze and plan without editing",
                 CollaborationMode::Debug => "Investigate and fix a problem",
-                CollaborationMode::Multitask => "Delegate work and combine results",
+                CollaborationMode::Multitask => "Ash delegates and combines results",
                 CollaborationMode::Ask => "Answer questions without editing",
             };
             (

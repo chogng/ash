@@ -255,6 +255,8 @@ fn normalize_models(
                     "ChatGPT returned an invalid model ID",
                 )
             })?;
+            // Ash keeps Codex Ultra as a cooperation intent, separate from model effort.
+            // Catalog import must not choose Ash's cooperation mode or effort on its behalf.
             let efforts = entry
                 .supported_reasoning_levels
                 .into_iter()

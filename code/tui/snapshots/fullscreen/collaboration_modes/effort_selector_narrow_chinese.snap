@@ -19,7 +19,7 @@ expression: content
   low           high          max
   当前：high
   多任务  关闭
-  委托独立任务并整合结果。
+  由 Ash 协调
 
   最高推理强度，可能消耗更多 token
   并耗时更长，适合最困难的任务。

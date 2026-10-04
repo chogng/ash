@@ -3586,13 +3586,25 @@ impl App {
                 if invocation.arguments.is_empty() {
                     return Some(ModelCommand::OpenEffortPicker.into());
                 }
-                let effort = invocation.text_arguments().and_then(|value| {
-                    value
-                        .parse::<ash_protocol::ReasoningEffort>()
-                        .map_err(|_| "Use /effort to choose a supported thinking effort".to_owned())
-                });
-                return match effort {
-                    Ok(effort) => Some(ModelCommand::SetEffort { effort }.into()),
+                let option = invocation
+                    .text_arguments()
+                    .and_then(|value| options::parse_effort(&value, self.collaboration_mode()));
+                return match option {
+                    Ok(options::EffortSelection::Effort(effort)) => {
+                        Some(ModelCommand::SetEffort { effort }.into())
+                    }
+                    Ok(options::EffortSelection::Mode(mode)) => {
+                        self.set_collaboration_mode(mode);
+                        let notice = if mode == ash_protocol::CollaborationMode::Multitask {
+                            "Multitask enabled. Ash coordinates agents; thinking effort is unchanged."
+                        } else {
+                            "Multitask disabled. Thinking effort is unchanged."
+                        };
+                        self.thread.update(ThreadPresentationEvent::NoticeReceived(
+                            crate::nls::localize_owned(self.language(), notice),
+                        ));
+                        None
+                    }
                     Err(error) => {
                         self.report_composer_option_error(error);
                         None

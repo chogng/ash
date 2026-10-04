@@ -9,7 +9,7 @@ expression: render(&app)
         │  Agent        Complete the task                              │        
         │  Plan         Analyze and plan without editing               │        
         │> Debug        Investigate and fix a problem          Current │        
-        │  Multitask    Delegate work and combine results              │        
+        │  Multitask    Ash delegates and combines results             │        
         │  Ask          Answer questions without editing               │        
         │                                                              │        
         │                                                              │        

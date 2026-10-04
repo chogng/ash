@@ -173,6 +173,9 @@ WebSocket eligibility 由独立的 `WebSocketApiProfile` 声明，不能从
 模型目录读取按供应商放在 `src/catalog/`：`openai.rs` 管 OpenAI API 目录，其下的 `chatgpt.rs` 管 ChatGPT 订阅目录，并优先读取 Codex 当前账户校验后的本地目录；`xai.rs` 读取已登录账户的模型目录，`kimi.rs` 提供已支持的 Kimi Code 型号，`ollama.rs` 读取本地 Ollama。各来源只返回标准化观察结果，缓存由 `ash-models-manager` 按供应商写入 Ash profile。更多 stream profile 与动态 catalog 的长期设计仍在系统文档中演进。
 
 ChatGPT subscription 通过 `ash-chatgpt` 提供的 fresh authenticated target 进入 OpenAI Responses adapter；Agent loop 仍由 Ash Core `TurnExecutor` 持有。该订阅接口拒绝公开 API 的 `prompt_cache_breakpoint` 字段；runtime 选择明确的 `ApiEndpoint::ChatGptResponses`，不改写缓存字段或组装路由头。`ash-api` 统一处理这些协议规则，完整结果、流式调用和认证重试共用同一 API 入口。
+
+Codex 的 `Ultra` 和 Claude Code 的 `Ultracode` 表达产品协作设置，不作为 Ash 模型推理档位。ChatGPT 目录标准化仅保留已识别的 `ReasoningEffort`；目录中 `ultra` 的候选和默认值不会进入推理配置，也不会触发模式切换。TUI 的同名命令别名统一选择 Ash Multitask，保留独立 effort，委托仍由 Core 执行；当前没有启用 OpenAI 托管多 Agent 的请求参数，也没有 Claude Code 执行通道。完整边界见 [Multitask、Ultra 与 Ultracode](../collaboration-mode-templates/collaboration-modes.md#multitaskultra-与-ultracode)。
+
 新增能力应保持 invoker immutable、profile explicit、
 provider adapter private，以及 config/catalog/codec/operation/network 分层。
 

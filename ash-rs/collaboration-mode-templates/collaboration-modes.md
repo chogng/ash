@@ -122,6 +122,22 @@ Multitask 模式与持久 Team、临时工作流分别选择。模式本身不�
 
 当前 `/team <任务>`、`/team status|resume|cancel` 管理一次临时协作工作。将这个临时工作流入口更名为 `multitask` 是 Team 设计中的命名候选，尚未实现；它与已经可选的 Multitask 模式是不同的产品入口。历史 `/team` 记录继续使用原 Session 与委托事实，不推断或补造持久 Team 成员身份。
 
+## Multitask、Ultra 与 Ultracode
+
+Ash 中统一选择 Multitask，由 Ash Core 管理委托、消息、取消和结果整合；推理档位独立选择。GPT 与 Claude 都使用这套执行系统。同一次任务只有 Ash 负责协调，不同时启动另一套产品的协作工作流。
+
+| 名称 | 原产品的含义 | Ash 当前的处理 |
+| --- | --- | --- |
+| Ash Multitask | 强调拆分、委托与整合的任务模式 | 以 `multitask` 模式提交 Turn，使用 Ash 多 Agent 工具 |
+| GPT Ultra | Codex / ChatGPT Work 的多 Agent 预设，结合较高推理投入与主动委派 | `/effort ultra [on\|off]` 作为 Ash Multitask 的入口；保留用户已选推理档位 |
+| Claude Ultracode | Claude Code 的协作设置，可在所选 effort 下动态组织工作流 | `/effort ultracode [on\|off]` 作为 Ash Multitask 的入口；保留用户已选推理档位 |
+
+`/effort multitask [on|off]` 是 Ash 的明确入口，`ultra` / `ultracode` 仅为命令别名，提交和恢复仍使用同一个 `multitask` 模式 ID。开启不强制改为 `max` 或 `xhigh`；关闭将 Multitask 改回 Agent，其他模式不变。选择只影响下一次提交，已接受 Turn 的执行模式保持原样。终端交互见 [命令与补全](../../code/README.md#命令与补全)。
+
+模型目录只发布型号支持的推理档位。导入 Codex 目录中的 `ultra` 时，不将其列为 effort；如果目录默认值为 `ultra`，也不据此设置推理默认值或开启 Multitask。Ash 当前尚未接入 OpenAI 托管多 Agent，也不通过 Claude Code 执行 Ultracode；这些命令别名不表示两种外部工作流已经接通。
+
+依据：[OpenAI Max 与 Ultra](https://learn.chatgpt.com/docs/models#know-when-to-use-max-or-ultra)、[Claude Code effort 与 Ultracode](https://code.claude.com/docs/en/model-config#adjust-effort-level)、[Claude Code Ultracode 工作流](https://code.claude.com/docs/en/workflows#let-claude-decide-with-ultracode)。产品行为核对于 2026-10-03；上述名称描述相近的协作意图，执行系统和默认推理策略各自不同。
+
 ## Cursor 参考与采用范围
 
 复核日期：2026-09-30。本机 Cursor 为 3.22.12，提交 `3a92974361033b2051526321308c2740fe5912c0`。公开资料与可读客户端代码可以确认界面和调用边界，不能据此声称取得了服务端完整提示词。

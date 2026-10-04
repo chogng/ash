@@ -10,7 +10,7 @@
 
 | 供应商 | 推理档位数与名称 | 型号差异和控制方式 |
 | --- | --- | --- |
-| OpenAI | API 最多 7 档：`none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`；ChatGPT Work/Codex 另有 `Ultra` | API 值由具体型号决定；例如 GPT-6 Astra 不支持 `none`。`Ultra` 是 Codex 产品档位：它会按型号选用多 Agent 专用推理力度，并启用主动委派；例如 GPT-6 Astra 实际请求使用 `xhigh`。它不是 API 的 `reasoning.effort` 值。`pro` 也是独立模式。[API 档位](https://developers.openai.com/api/docs/guides/reasoning) · [Work/Codex Ultra](https://help.openai.com/en/articles/11481834-chatgpt-rate-card-business-enterpriseedu-credit-based-pricing) |
+| OpenAI | API 最多 7 档：`none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`；ChatGPT Work/Codex 另有 `Ultra` | API 值由具体型号决定；例如 GPT-6 Astra 不支持 `none`。`Ultra` 是产品预设，面向支持的模型结合最高推理投入与主动委派；不能直接作为 Ash API 请求的 `reasoning.effort` 值。`pro` 也是独立模式。[API 档位](https://developers.openai.com/api/docs/guides/reasoning) · [Work/Codex Ultra](https://learn.chatgpt.com/docs/models#know-when-to-use-max-or-ultra) |
 | Anthropic | 最多 5 档：`low`、`medium`、`high`、`xhigh`、`max` | 支持范围因型号而异；较早的型号可能使用 thinking token budget，而非 effort 档位。[官方文档](https://platform.claude.com/docs/en/build-with-claude/effort) |
 | Google | 最多 4 档：`minimal`、`low`、`medium`、`high` | Gemini 3 各型号支持集合不同；Gemini 2.5 使用数值 `thinkingBudget`，不与这些档位等同。[官方文档](https://ai.google.dev/gemini-api/docs/thinking) |
 | xAI | 3 或 4 档：`low`、`medium`、`high`、`xhigh` | Grok 4.5 支持前三档；Grok 4.6 及更新型号支持四档。不能关闭推理。[官方文档](https://docs.x.ai/developers/model-capabilities/text/reasoning) |
@@ -22,6 +22,8 @@
 | MiMo | 0 个深度档位；2 种有效模式：关闭、开启 | Responses API 的 `reasoning.effort` 接受 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`、`ultra`，但不支持自定义深度；除 `none` 外都只表示开启。Chat Completions 使用 `thinking.type`。[Responses 文档](https://mimo.mi.com/docs/en-US/api/chat/responses) · [Chat Completions 文档](https://mimo.mi.com/docs/en-US/api/chat) |
 
 这些标签不能跨供应商直接比较，也不能用供应商级的固定枚举替代型号级支持列表。请求构造应依据所选型号和接入协议。
+
+Ash 的模型选择器只显示所接入型号支持的推理档位，`Ultra` / `Ultracode` 不进入此列表。TUI 的 `/effort ultra`、`/effort ultracode` 与 `/effort multitask` 都开启由 Ash 协调的 Multitask，并保留当前 effort；它们不调用外部产品的同名工作流，也不自动改为 `max` / `xhigh`。目录刷新本身不会切换任务模式。使用方式与产品差异见 [Multitask、Ultra 与 Ultracode](../../ash-rs/collaboration-mode-templates/collaboration-modes.md#multitaskultra-与-ultracode)。
 
 ### 思考开关与 Ash 接入端点
 

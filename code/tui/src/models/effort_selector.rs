@@ -334,12 +334,15 @@ impl EffortSelector {
             Paragraph::new(toggle).style(style),
             layout.toggle.intersection(area),
         );
-        if area.width < 70 {
-            frame.render_widget(
-                Paragraph::new(context.localize("Delegate and combine results.")).style(muted),
-                row(5, 1).intersection(area),
-            );
-        }
+        let coordinator = if area.width >= 70 {
+            Rect::new(layout.toggle.x, area.y + 2, 22, 1)
+        } else {
+            row(5, 1)
+        };
+        frame.render_widget(
+            Paragraph::new(context.localize("Ash coordinates")).style(muted),
+            coordinator.intersection(area),
+        );
         let lines = crate::render::wrap_lines(
             vec![Line::raw(context.localize(self.description()).into_owned())],
             area.width as usize,

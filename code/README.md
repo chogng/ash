@@ -102,6 +102,8 @@ Queue 保存完整草稿，包括图片、长粘贴和绑定的 Skill。恢复�
 
 推理档位按当前 `provider + model` 对应的目录项读取可选值、顺序和默认值。选择、升降与边界判断及配置更新由 [reasoning_effort.rs](tui/src/models/reasoning_effort.rs) 统一处理，快捷键与 `/effort` 共用这条路径。按键重绑由 `keymap` 管理，输入优先级由 App 管理。
 
+`/effort multitask` 开启 Ash Multitask；`/effort ultra` 和 `/effort ultracode` 是同一操作的别名，可用于 GPT、Claude 和其他模型。三者都接受 `on` / `off`，省略时按 `on` 处理。开启只改变下一次提交的任务模式，保留当前模型、推理档位和权限；关闭将 Multitask 改回 Agent，其他模式保持原样。运行中的 Turn 不受影响。也可直接使用 `/mode multitask`。横向选择器的开关旁显示“由 Ash 协调”，命令结果也说明推理档位未变；这些入口不会启用 OpenAI 托管多 Agent 或 Claude Code 的 Ultracode。产品名称与执行范围见 [Multitask、Ultra 与 Ultracode](../ash-rs/collaboration-mode-templates/collaboration-modes.md#multitaskultra-与-ultracode)。
+
 文件补全只识别空白分隔的 `@token`，不处理邮箱中的 `@`，最多展示 50 项。请求校验查询文本和版本，关闭补全释放句柄；扫描、忽略与排序规则见 [file-search](../ash-rs/file-search/README.md)。
 
 TUI 不扫描 Skill 正文；完整 `SKILL.md` 由后端在接受任务后按需加载。`skills/changed` 刷新目录与候选；Plugin 安装或变更也刷新相关 Skill 与打开的 Connector 面板。

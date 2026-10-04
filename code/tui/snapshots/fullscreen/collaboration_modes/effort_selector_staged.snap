@@ -19,7 +19,7 @@ expression: render_effort(&app)
   Thinking effort
   Less reasoning → More reasoning
   ───────────────────────────────────────────▲──────    Multitask  on
-  low                  high                 max
+  low                  high                 max         Ash coordinates
   Current: high
 
   Maximum reasoning. May use more tokens and take longer; use for the hardest

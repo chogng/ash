@@ -255,7 +255,7 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
 
 ### 居中弹窗
 
-`/effort` 的 fullscreen 编辑器位于底部，不使用居中外框；[fullscreen/modal.rs](tui/src/app/fullscreen/modal.rs) 分配标题、内容和提示区域，[effort_selector.rs](tui/src/models/effort_selector.rs) 负责档位、Multitask 暂选、说明和 `max` 彩虹动画。背景草稿保留但不接收输入；确认或取消后恢复原页面焦点。正文区域止于选择器上沿，不被选择器遮挡。具体按键和提交约定见 [命令与补全](README.md#命令与补全)。
+`/effort` 的 fullscreen 编辑器位于底部，不使用居中外框；[fullscreen/modal.rs](tui/src/app/fullscreen/modal.rs) 分配标题、内容和提示区域，[effort_selector.rs](tui/src/models/effort_selector.rs) 负责档位、Multitask 暂选、说明和 `max` 彩虹动画。宽屏在横向档位右侧显示 Multitask 开关，窄屏将开关移到档位下方；两者都显示“由 Ash 协调”，与推理档位分开说明。背景草稿保留但不接收输入；确认或取消后恢复原页面焦点。正文区域止于选择器上沿，不被选择器遮挡。具体按键和提交约定见 [命令与补全](README.md#命令与补全)。
 
 模型、设置和帮助等命令面板覆盖当前页面。外框由 [widgets/modal.rs](tui/src/widgets/modal.rs) 的 `ModalLayout` 计算，内容由 [fullscreen/modal.rs](tui/src/app/fullscreen/modal.rs) 组合：
 

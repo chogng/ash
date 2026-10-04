@@ -1,7 +1,7 @@
 use super::super::normalize_models;
 use super::*;
 use ash_models_manager::CatalogSourceErrorKind;
-use ash_protocol::ModelAccess;
+use ash_protocol::{ModelAccess, ReasoningEffort};
 
 #[test]
 fn codex_model_list_becomes_subscription_metadata_without_hidden_entries() {
@@ -44,6 +44,40 @@ fn codex_model_list_becomes_subscription_metadata_without_hidden_entries() {
 fn empty_chatgpt_catalog_is_rejected() {
     let error = normalize_models(Vec::new()).unwrap_err();
     assert_eq!(error.kind(), CatalogSourceErrorKind::InvalidPayload);
+}
+
+#[test]
+fn codex_ultra_is_not_imported_as_model_reasoning_or_a_default() {
+    let models: Vec<CodexModel> = serde_json::from_value(serde_json::json!([
+        {
+            "id": "gpt-cooperation", "displayName": "GPT Cooperation", "hidden": false,
+            "defaultReasoningEffort": "ultra",
+            "supportedReasoningEfforts": [
+                {"reasoningEffort": "low"}, {"reasoningEffort": "high"},
+                {"reasoningEffort": "max"}, {"reasoningEffort": "ultra"}
+            ]
+        }
+    ]))
+    .unwrap();
+    let imported = normalize_models(
+        models
+            .into_iter()
+            .map(CodexModel::into_catalog_entry)
+            .collect(),
+    )
+    .unwrap();
+    assert_eq!(
+        imported[0].metadata.supported_reasoning_efforts.as_deref(),
+        Some(
+            [
+                ReasoningEffort::Low,
+                ReasoningEffort::High,
+                ReasoningEffort::Max
+            ]
+            .as_slice()
+        )
+    );
+    assert_eq!(imported[0].metadata.model_reasoning_effort, None);
 }
 
 #[test]

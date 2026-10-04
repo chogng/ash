@@ -928,10 +928,22 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "basculer le mode multitâche",
     ),
     translation(
-        "Delegate and combine results.",
-        "独立した作業を委任し、結果を統合します。",
-        "委托独立任务并整合结果。",
-        "Déléguer les tâches indépendantes et réunir les résultats.",
+        "Ash coordinates",
+        "Ash が協調実行",
+        "由 Ash 协调",
+        "Coordonné par Ash",
+    ),
+    translation(
+        "Multitask enabled. Ash coordinates agents; thinking effort is unchanged.",
+        "マルチタスクを有効にしました。Ash がエージェントを調整し、推論レベルは変わりません。",
+        "已开启多任务协作，由 Ash 协调 Agent；推理强度保持不变。",
+        "Mode multitâche activé. Ash coordonne les agents ; le niveau de raisonnement reste inchangé.",
+    ),
+    translation(
+        "Multitask disabled. Thinking effort is unchanged.",
+        "マルチタスクを無効にしました。推論レベルは変わりません。",
+        "已关闭多任务协作；推理强度保持不变。",
+        "Mode multitâche désactivé. Le niveau de raisonnement reste inchangé.",
     ),
     translation(
         "No reasoning. Best for straightforward tasks.",
@@ -1012,10 +1024,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "choisir comment traiter la prochaine tâche",
     ),
     translation(
-        "choose the thinking effort for the current model",
-        "現在のモデルの推論レベルを選択",
-        "选择当前模型的推理强度",
-        "choisir le niveau de raisonnement du modèle actuel",
+        "set thinking effort or Ash multitask",
+        "推論レベルまたは Ash のマルチタスクを選択",
+        "选择推理强度或 Ash 多任务协作",
+        "choisir le raisonnement ou le mode multitâche Ash",
     ),
     translation(
         "prepare and review project background for Guardian",
@@ -1165,10 +1177,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Examiner et corriger un problème",
     ),
     translation(
-        "Delegate work and combine results",
-        "独立した作業を委任し結果を統合",
-        "委托独立工作并整合结果",
-        "Déléguer et réunir les résultats",
+        "Ash delegates and combines results",
+        "Ash が作業を委任し結果を統合",
+        "由 Ash 委托工作并整合结果",
+        "Ash délègue et réunit les résultats",
     ),
     translation(
         "Answer questions without editing",
@@ -1213,7 +1225,18 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "<agent|plan|debug|multitask|ask>",
         "<agent|plan|debug|multitask|ask>",
     ),
-    translation("<effort>", "<推論レベル>", "<推理强度>", "<niveau>"),
+    translation(
+        "Use /effort <level> or /effort multitask|ultra|ultracode [on|off]",
+        "/effort <推論レベル> または /effort multitask|ultra|ultracode [on|off] を使用",
+        "使用 /effort <档位> 或 /effort multitask|ultra|ultracode [on|off]",
+        "Utiliser /effort <niveau> ou /effort multitask|ultra|ultracode [on|off]",
+    ),
+    translation(
+        "<effort> | multitask [on|off]",
+        "<推論レベル> | multitask [on|off]",
+        "<推理强度> | multitask [on|off]",
+        "<niveau> | multitask [on|off]",
+    ),
     translation(
         "<manual|auto|bypassPermissions>",
         "<manual|auto|bypassPermissions>",
