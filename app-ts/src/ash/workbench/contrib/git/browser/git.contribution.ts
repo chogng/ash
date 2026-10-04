@@ -483,7 +483,6 @@ const graphActions: readonly { kind: GraphActionKind; title: ReturnType<typeof l
 	{ kind: 'copyHash', title: localize2('git.graph.copyHash', 'Copy Commit Hash'), menu: MenuId.SCMHistoryItemContext, group: 'scm_5_copy', order: 1 },
 	{ kind: 'copyMessage', title: localize2('git.graph.copyMessage', 'Copy Commit Message'), menu: MenuId.SCMHistoryItemContext, group: 'scm_5_copy', order: 2 },
 	{ kind: 'copyHash', title: localize2('git.graph.copyHash', 'Copy Commit Hash'), menu: MenuId.for('SCMHistoryItemHover'), group: 'inline', order: 1 },
-	{ kind: 'openRemote', title: localize2('git.graph.openRemote', 'Open Commit in Browser'), menu: MenuId.for('SCMHistoryItemHover'), group: 'inline', order: 2, when: ContextKeyExpr.has('scmHistoryItemHasRemote') },
 	{ kind: 'checkoutBranch', title: localize2('git.graph.checkoutBranch', 'Switch to Branch…'), menu: graphRefMenu, group: '1_branch', order: 1, when: ContextKeyExpr.has('scmHistoryItemHasBranch') },
 	{ kind: 'deleteBranch', title: localize2('git.graph.deleteBranch', 'Delete Branch…'), menu: graphRefMenu, group: '2_delete', order: 1, when: ContextKeyExpr.has('scmHistoryRefCanDelete') },
 	{ kind: 'compareRemote', title: localize2('git.graph.compareRemote', 'Compare with Remote…'), menu: graphRefMenu, group: '3_compare', order: 1, when: ContextKeyExpr.has('scmHistoryItemHasUpstream') },
@@ -495,7 +494,7 @@ for (const kind of new Set(graphActions.map(action => action.kind))) {
 	const entries = graphActions.filter(action => action.kind === kind);
 	registerAction2(class extends Action2 {
 		constructor() {
-			super({ id: `git.graph.${kind}`, title: entries[0].title, menu: entries.map(entry => ({ id: entry.menu, group: entry.group, order: entry.order, when: ContextKeyExpr.and(gitGraphWhen, entry.when) })) });
+			super({ id: `git.graph.${kind}`, title: entries[0].title, icon: kind === 'copyHash' ? Lxicon.copy : undefined, shortTitle: kind === 'copyHash' ? { value: '', original: '' } : undefined, tooltip: entries[0].title, menu: entries.map(entry => ({ id: entry.menu, group: entry.group, order: entry.order, when: ContextKeyExpr.and(gitGraphWhen, entry.when) })) });
 		}
 
 		public override async run(accessor: ServicesAccessor, element: SCMHistoryItemViewModelTreeElement): Promise<void> {
@@ -506,6 +505,19 @@ for (const kind of new Set(graphActions.map(action => action.kind))) {
 				accessor.get(INotificationService).error(localize('git.commandFailed', 'Git operation failed: {0}', gitErrorMessage(error)));
 			}
 		}
+	});
+}
+
+const githubHistoryRemote = ContextKeyExpr.equals('scmHistoryItemRemoteAuthority', 'github.com');
+for (const github of [true, false]) {
+	MenusRegistry.appendMenuItem(MenuId.for('SCMHistoryItemHover'), {
+		command: {
+			id: 'git.graph.openRemote',
+			title: github ? localize2('git.graph.openOnGitHub', 'Open on GitHub') : localize2('git.graph.openRemote', 'Open Commit in Browser'),
+			icon: github ? Lxicon.github : Lxicon.linkExternal,
+		},
+		group: 'inline', order: 2,
+		when: ContextKeyExpr.and(gitGraphWhen, ContextKeyExpr.has('scmHistoryItemHasRemote'), github ? githubHistoryRemote : ContextKeyExpr.notEquals('scmHistoryItemRemoteAuthority', 'github.com')),
 	});
 }
 

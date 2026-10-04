@@ -3,6 +3,7 @@ import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { observeElementSize } from "../../../../base/browser/observer.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
 import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
+import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
 
 import { URI } from '../../../../base/common/uri.js';
@@ -378,6 +379,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		const scope = this.hovers.add(this.contextKeyService.createScoped(item));
 		scope.setContext('scmHistoryProviderId', repository?.provider.providerId ?? '');
 		scope.setContext('scmHistoryItemHasRemote', (historyItem.remoteLinks?.length ?? 0) > 0);
+		scope.setContext('scmHistoryItemRemoteAuthority', historyItem.remoteLinks?.length === 1 ? historyItem.remoteLinks[0].uri.authority : '');
 		scope.setContext('scmHistoryItemHasBranch', historyItem.references?.some(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch') ?? false);
 		scope.setContext('scmHistoryItemHasUpstream', historyItem.references?.some(reference => reference.upstream !== undefined) ?? false);
 		const hoverContent = this.hovers.add(new MutableDisposable<DisposableStore>());
@@ -683,7 +685,8 @@ export class SCMHistoryViewPane extends ViewPane {
 		const toolbar = resources.add(new MenuWorkbenchToolBar(actions, this.menuService, this.contextMenuService, MenuId.for('SCMHistoryItemHover'), {
 			ariaLabel: localize('scm.history.commitActions', 'Commit actions'),
 			contextKeyService: scope,
-			menuOptions: { arg: target },
+			menuOptions: { arg: target, renderShortTitle: true },
+			actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: action.tooltip }),
 			toolbarOptions: { primaryGroup: 'inline' },
 		}));
 		if (hint) toolbar.element.setAttribute('aria-description', hint);

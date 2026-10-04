@@ -207,6 +207,7 @@
 		"git.graph.checkout": "检出",
 		"git.graph.more": "更多…",
 		"git.graph.openRemote": "在浏览器中打开提交",
+		"git.graph.openOnGitHub": "在 GitHub 上打开",
 		"git.graph.compare": "与其他版本比较…",
 		"git.graph.compareRemote": "与远端比较…",
 		"git.graph.compareMergeBase": "与共同祖先比较…",

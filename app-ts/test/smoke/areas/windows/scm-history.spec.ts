@@ -127,7 +127,7 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Review all files' })).toHaveCount(1);
 });
 
-test('SCM history reserves title width and reveals commit details on pointer and keyboard focus', async ({ application, target, testWorkspace, workbench }) => {
+test('SCM history reserves title width and reveals commit details on pointer and keyboard focus', async ({ application, target, testWorkspace, workbench, restartWorkbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 	const cwd = testWorkspace.directory;
 	const subject = 'History metadata: a long title that uses the space previously occupied by the commit hash and date';
@@ -179,7 +179,10 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	expect(await hover.locator('.ash-scm-graph-hover-message').textContent()).toBe(body);
 	await expect(hover.locator('.ash-scm-graph-hover-statistics > span')).toHaveText(['2 files changed', '2 insertions(+)', '0 deletions(-)']);
 	await expect(hover.locator('.ash-scm-graph-hover-hash')).toHaveAttribute('title', hash);
-	await expect(hover.getByRole('button', { name: 'Open Commit in Browser', exact: true })).toBeVisible();
+	const openOnGitHub = hover.getByRole('button', { name: 'Open on GitHub', exact: true });
+	await expect(openOnGitHub).toBeVisible();
+	await expect(openOnGitHub).toHaveText('Open on GitHub');
+	await expect(openOnGitHub.locator('.ash-icon')).toHaveAttribute('aria-hidden', 'true');
 	await hover.locator('.ash-scm-graph-hover-message').hover();
 	await expect(hover).toBeVisible();
 	await page.keyboard.press('Escape');
@@ -192,11 +195,15 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	await commit.press('Alt+ArrowDown');
 	const copy = hover.getByRole('button', { name: 'Copy Commit Hash', exact: true });
 	await expect(copy).toBeFocused();
+	await expect(copy).toHaveText('');
+	await expect(copy.locator('.ash-icon')).toHaveAttribute('aria-hidden', 'true');
 	await copy.press('Enter');
 	const copied = () => target.kind === 'electron'
 		? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())
 		: page.evaluate(() => navigator.clipboard.readText());
 	await expect.poll(copied).toBe(hash);
+	await copy.press('ArrowRight');
+	await expect(openOnGitHub).toBeFocused();
 	await page.keyboard.press('Escape');
 	await expect(hover).toHaveCount(0);
 	await expect(commit).toBeFocused();
@@ -218,6 +225,19 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	await commit.press('Enter');
 	await expect(commit).toHaveAttribute('aria-expanded', 'true');
 	await expect(commit.getByRole('button', { name: /details\.txt/ })).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const language = page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+	await language.fill('简体中文');
+	await language.press('Enter');
+	({ workbench } = await restartWorkbench());
+	const localizedHistory = workbench.page.locator('[data-view-id="ash.gitGraph"]');
+	await expect(localizedHistory).toBeVisible();
+	const localizedCommit = localizedHistory.getByRole('treeitem', { name: /History metadata:/u });
+	await localizedCommit.focus();
+	await localizedCommit.press('Alt+ArrowDown');
+	const localizedHover = workbench.page.getByRole('tooltip').filter({ has: workbench.page.locator('.ash-scm-graph-hover') });
+	await expect(localizedHover.getByRole('button', { name: '复制提交哈希', exact: true })).toHaveText('');
+	await expect(localizedHover.getByRole('button', { name: '在 GitHub 上打开', exact: true })).toHaveText('在 GitHub 上打开');
 });
 
 test('SCM history references and actions overlay long titles without changing row widths', async ({ target, testWorkspace, workbench }) => {

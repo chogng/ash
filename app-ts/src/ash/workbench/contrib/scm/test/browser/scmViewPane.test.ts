@@ -335,8 +335,13 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		assert.equal(content.querySelector('time')?.getAttribute('datetime'), new Date(1_753_000_000_000).toISOString());
 		assert.equal(content.querySelector('.ash-scm-graph-hover-hash')?.getAttribute('aria-label'), 'Commit 1234567890abcdef');
 		assert.deepEqual([...content.querySelectorAll('.ash-scm-graph-hover-statistics > span')].map(element => element.textContent), ['3 files changed', '12 insertions(+)', '4 deletions(-)']);
-		assert.ok(content.querySelector('[data-action-id="git.graph.copyHash"] button'));
-		assert.ok(content.querySelector('[data-action-id="git.graph.openRemote"] button'));
+		const copyHash = content.querySelector<HTMLButtonElement>('[data-action-id="git.graph.copyHash"] button')!;
+		assert.equal(copyHash.getAttribute('aria-label'), 'Copy Commit Hash');
+		assert.equal(copyHash.textContent, '');
+		assert.equal(copyHash.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'copy');
+		const openRemote = content.querySelector<HTMLButtonElement>('[data-action-id="git.graph.openRemote"] button')!;
+		assert.equal(openRemote.textContent, 'Open on GitHub');
+		assert.equal(openRemote.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'github');
 		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		try {

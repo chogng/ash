@@ -24,6 +24,7 @@
 		"git.graph.checkout": "Checkout",
 		"git.graph.more": "More…",
 		"git.graph.openRemote": "Open Commit in Browser",
+		"git.graph.openOnGitHub": "Open on GitHub",
 		"git.graph.compare": "Compare with…",
 		"git.graph.compareRemote": "Compare with Remote…",
 		"git.graph.compareMergeBase": "Compare with Merge Base…",
