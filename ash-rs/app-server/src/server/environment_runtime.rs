@@ -534,7 +534,9 @@ impl EnvRuntimeControl {
             .clone()
             .with_context_source("codebase", context_source);
         drop(runtime);
-        // Watcher shutdown joins its worker, which must not run under the runtime write lock.
+        // The replacement is committed. Retired watchers can still be indexing a large
+        // directory; joining them must not hold the gate needed by other windows to bind it.
+        drop(_authority);
         drop(previous_watcher);
         drop(previous_job);
         Ok(())

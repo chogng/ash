@@ -1933,3 +1933,76 @@ fn failed_semantic_rebuild_preserves_tools_watcher_and_indexing_job() {
         &server.codebase_semantic_service().unwrap()
     ));
 }
+
+#[test]
+fn semantic_rebuild_releases_directory_gate_before_joining_retired_watcher() {
+    struct BlockedChanges {
+        entered: std::sync::mpsc::Sender<()>,
+        release: Mutex<std::sync::mpsc::Receiver<()>>,
+    }
+    impl super::super::fs_watcher::SessionDirFileChangeSink for BlockedChanges {
+        fn session_files_changed(
+            &self,
+            _: &SessionId,
+            _: &Path,
+            _: &ash_app_server_protocol::protocol::fs::FsChanged,
+        ) {
+            self.entered.send(()).unwrap();
+            self.release.lock().unwrap().recv().unwrap();
+        }
+    }
+
+    let dir = TestDir::new("retired-watcher", "source.rs");
+    let server = Arc::new(server().with_local_env_host(None, host_policy()).unwrap());
+    server
+        .activate_local_dirs(vec![("folder".into(), dir.authorization())])
+        .unwrap();
+    let (entered, entered_rx) = std::sync::mpsc::channel();
+    let (release, release_rx) = std::sync::mpsc::channel();
+    let watcher = FileSystemWatcher::start_for_session_directory(
+        dir.authorization().dir().clone(),
+        Arc::clone(&server.updates),
+        SessionId::new("blocked-watcher").unwrap(),
+        Arc::new(BlockedChanges {
+            entered,
+            release: Mutex::new(release_rx),
+        }),
+    )
+    .unwrap();
+    entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    let previous = server
+        .env_runtime
+        .write()
+        .unwrap()
+        .workspace
+        ._file_system_watcher
+        .replace(watcher);
+    drop(previous);
+    let tools = Arc::clone(&server.local_env_host.as_ref().unwrap().tools);
+    let generation = tools.state.lock().unwrap().registry_generation;
+    let control = server.env_runtime_control().unwrap();
+    let rebuilding = std::thread::spawn(move || control.reconcile_codebase_runtime());
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while tools.state.lock().unwrap().registry_generation == generation && Instant::now() < deadline
+    {
+        std::thread::yield_now();
+    }
+    let (bound, bound_rx) = std::sync::mpsc::channel();
+    let binding_server = Arc::clone(&server);
+    let authorization = dir.authorization();
+    let binding = std::thread::spawn(move || {
+        bound
+            .send(binding_server.activate_local_dirs(vec![("folder".into(), authorization)]))
+            .unwrap();
+    });
+    let result = bound_rx.recv_timeout(Duration::from_secs(5));
+    // Release the owned worker before asserting so the failing version also exits cleanly.
+    release.send(()).unwrap();
+    rebuilding.join().unwrap().unwrap();
+    binding.join().unwrap();
+    assert!(
+        result.is_ok(),
+        "another window must bind while the retired watcher is busy"
+    );
+    result.unwrap().unwrap();
+}

@@ -2,8 +2,64 @@ import { expect, test } from '../../../automation/test.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
+import { URI } from '../../../../src/ash/base/common/uri.js';
 
 test.use({ openWorkspace: false });
+
+for (const entry of ['welcome', 'explorer'] as const) {
+	test(`desktop ${entry} folder entry opens the Windows folder chooser`, async ({ application, target, workbench }) => {
+		test.skip(process.platform !== 'win32' || target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Windows Code desktop');
+		if (!('windows' in application)) throw new Error('Expected Electron');
+		const page = workbench.page;
+		if (entry === 'explorer') {
+			const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+			if (await showSidebar.isVisible()) await showSidebar.click();
+		}
+		await page.getByRole('button', { name: entry === 'welcome' ? 'Open folder' : 'Open Folder', exact: true }).click();
+		// Windows disables the owning window while its system chooser is open.
+		// Keep the real dialog implementation; fixture cleanup destroys its owner.
+		await expect.poll(() => application.evaluate(({ BrowserWindow }) => {
+			return BrowserWindow.getAllWindows().some(window => !window.isEnabled());
+		})).toBe(true);
+	});
+}
+
+for (const entry of ['welcome', 'explorer', 'recent'] as const) {
+	test(`desktop ${entry} folder entry loads the workspace and file contents`, async ({ application, target, testWorkspace, workbench }) => {
+		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code desktop and App Server');
+		if (!('windows' in application)) throw new Error('Expected Electron');
+		const originalDialog = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
+		await application.evaluate(({ dialog }, folder) => {
+			dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [folder] })) as typeof dialog.showOpenDialog;
+		}, testWorkspace.directory);
+		try {
+			const page = workbench.page;
+			if (entry === 'recent') {
+				await page.evaluate(async folder => {
+					const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, argument: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+					await ipc.invoke('ash:workspaces:recent:add', { workspaces: [{ folderUri: folder }] });
+				}, URI.file(testWorkspace.directory).toString());
+				await page.locator('.ash-getting-started-recent-item').click();
+			} else if (entry === 'explorer') {
+				const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+				if (await showSidebar.isVisible()) await showSidebar.click();
+				await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+			} else {
+				await page.getByRole('button', { name: 'Open folder', exact: true }).click();
+			}
+			await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+			const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+			if (await showSidebar.isVisible()) await showSidebar.click();
+			const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+			await expect(file).toHaveCount(1);
+			await file.dblclick();
+			await expect(page.locator('.stanza-editor-line-text').first()).toContainText('const value = 1;');
+		} finally {
+			await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, originalDialog);
+			await originalDialog.dispose();
+		}
+	});
+}
 
 test('desktop window commands update zoom and open the window switcher', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop');
