@@ -9,6 +9,7 @@ fn session_layout_bounds_queue_and_preserves_transcript() {
         1,
         12,
         0,
+        0,
         3,
         2,
         4,
@@ -34,6 +35,7 @@ fn session_layout_uses_zero_height_for_absent_rows() {
         0,
         0,
         0,
+        0,
         3,
         1,
         0,
@@ -52,6 +54,7 @@ fn session_layout_places_goal_plan_and_queue_above_input() {
         1,
         1,
         2,
+        0,
         0,
         3,
         1,
@@ -79,6 +82,7 @@ fn session_layout_does_not_reserve_an_agent_thread_gap_without_both_surfaces() {
         0,
         0,
         0,
+        0,
         3,
         1,
         0,
@@ -86,6 +90,7 @@ fn session_layout_does_not_reserve_an_agent_thread_gap_without_both_surfaces() {
     );
     let without_bottom = session_areas(
         Rect::new(0, 0, 80, 20),
+        0,
         0,
         0,
         0,
@@ -114,6 +119,7 @@ fn session_layout_places_query_above_the_fixed_top_tip_row() {
         0,
         0,
         1,
+        0,
         3,
         1,
         0,
@@ -128,7 +134,7 @@ fn session_layout_places_query_above_the_fixed_top_tip_row() {
 
 #[test]
 fn short_session_keeps_the_entire_question_visible_before_transcript_space() {
-    let areas = session_areas(Rect::new(0, 0, 42, 15), 0, 0, 0, 6, 3, 1, 2, 4);
+    let areas = session_areas(Rect::new(0, 0, 42, 15), 0, 0, 0, 6, 0, 3, 1, 2, 4);
 
     assert_eq!(areas.request.height, 6);
     assert_eq!(areas.transcript.height, 1);
@@ -138,7 +144,7 @@ fn short_session_keeps_the_entire_question_visible_before_transcript_space() {
 fn fixed_footer_and_tip_stay_bounded_on_short_terminals() {
     for height in 0..40 {
         let area = Rect::new(3, 5, 40, height);
-        let areas = session_areas(area, 0, 0, 0, 0, 3, 2, 0, super::MIN_TRANSCRIPT_ROWS);
+        let areas = session_areas(area, 0, 0, 0, 0, 0, 3, 2, 0, super::MIN_TRANSCRIPT_ROWS);
         assert!(areas.hintline.bottom() <= area.bottom());
         assert!(areas.tipline.y >= area.y);
         assert_eq!(areas.tipline.bottom(), areas.composer.y);
@@ -455,5 +461,106 @@ fn permission_survives_tips_dictation_and_narrow_widths_in_both_modes() {
         );
         assert!(!text(&render(&app, area)).contains("ctrl+c to stop dictation"));
         assert!(row(&render(&app, area), regions.statusline.bottom() - 1).contains("Manual"));
+    }
+}
+
+#[test]
+fn chat_progress_stays_fixed_while_history_scrolls_in_both_modes() {
+    use crate::thread::Event;
+    use crate::thread::TurnActivity;
+    use ash_protocol::TurnId;
+
+    let area = Rect::new(0, 0, 80, 20);
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = configured_app(mode);
+        for index in 0..16 {
+            app.update(Event::ProductNotice(format!("History entry {index}")));
+        }
+        app.set_active_turn(TurnId::new("fixed-progress").unwrap());
+        app.update(Event::TurnActivityChanged(TurnActivity::Working));
+        let regions = areas(&app, area);
+        let before = render(&app, area);
+        assert_eq!(regions.progress.height, 1);
+        assert_eq!(regions.progress.bottom(), regions.tipline.y);
+        assert_eq!(regions.tipline.bottom(), regions.composer.y);
+        assert!(row(&before, regions.progress.y).starts_with("⠋ Working... · 0s"));
+        assert_eq!(
+            before[(0, regions.progress.y)].fg,
+            app.render_context().accent()
+        );
+        assert_eq!(
+            before[(2, regions.progress.y)].fg,
+            app.render_context().muted()
+        );
+        assert!(row(&before, regions.progress.y).contains("ctrl+c to interrupt"));
+        assert!(!app.transcript_markdown().contains("Working..."));
+        assert_eq!(
+            app.handle_key_in_area(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL), area),
+            Some(AppCommand::Thread(crate::thread::Command::LoadOlderHistory))
+        );
+        assert!(app.transcript_scroll().anchor().is_some());
+        let scrolled = render(&app, area);
+        assert!(text(&scrolled).contains("History entry 0"));
+        assert_eq!(
+            row(&before, regions.progress.y),
+            row(&scrolled, regions.progress.y)
+        );
+        match mode {
+            ScreenMode::Fullscreen => {
+                crate::tui_assert_snapshot!(app = &app; "fixed_progress_scrolled_fullscreen", text(&scrolled))
+            }
+            ScreenMode::Inline => {
+                crate::tui_assert_snapshot!(app = &app; "fixed_progress_scrolled_inline", text(&scrolled))
+            }
+        }
+        app.handle_key_in_area(KeyEvent::new(KeyCode::End, KeyModifiers::CONTROL), area);
+        assert!(app.transcript_scroll().anchor().is_none());
+        let latest = render(&app, area);
+        if mode == ScreenMode::Fullscreen {
+            assert!(text(&latest).contains("History entry 15"));
+        }
+        assert!(row(&latest, areas(&app, area).progress.y).contains("Working..."));
+        app.update(Event::TurnActivityChanged(
+            TurnActivity::WaitingForUserInput,
+        ));
+        let waiting = render(&app, area);
+        assert!(row(&waiting, areas(&app, area).progress.y).starts_with("○ Waiting for input"));
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+            Some(AppCommand::Thread(crate::thread::Command::Interrupt))
+        );
+        assert!(text(&render(&app, area)).contains("Cancelling..."));
+        app.update(Event::TurnCompleted);
+        assert_eq!(areas(&app, area).progress.height, 0);
+        assert!(!text(&render(&app, area)).contains("Cancelling..."));
+    }
+}
+
+#[test]
+fn chat_progress_yields_to_question_and_input_on_short_terminals() {
+    for height in 0..24 {
+        let area = Rect::new(3, 5, 42, height);
+        let regions = session_areas(area, 1, 1, 8, 6, 2, 3, 2, 0, 4);
+        for region in [
+            regions.transcript,
+            regions.goal,
+            regions.plan,
+            regions.queue,
+            regions.request,
+            regions.progress,
+            regions.tipline,
+            regions.composer,
+            regions.statusline,
+            regions.hintline,
+        ] {
+            assert!(region.y >= area.y && region.bottom() <= area.bottom());
+        }
+        assert_eq!(regions.request.bottom(), regions.progress.y);
+        assert_eq!(regions.progress.bottom(), regions.tipline.y);
+        assert_eq!(regions.tipline.bottom(), regions.composer.y);
+        if height >= 11 {
+            assert_eq!(regions.request.height, 6);
+            assert_eq!(regions.composer.height, 3);
+        }
     }
 }

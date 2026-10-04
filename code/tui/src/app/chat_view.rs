@@ -76,6 +76,8 @@ pub(super) fn layout(app: &App, area: Rect, presentation: Presentation) -> Layou
         plan_rows,
         queue_rows,
         query_rows,
+        app.turn_progress()
+            .map_or(0, |progress| progress.desired_height()),
         composer_rows,
         presentation.footer_rows,
         match presentation.content {
@@ -124,6 +126,9 @@ pub(super) fn draw(
     pointer: Pointer<'_>,
     context: RenderContext<'_>,
 ) {
+    if let Some(progress) = app.turn_progress() {
+        progress.draw(frame, session.progress, context);
+    }
     if let Some(approval) = app.approval_view() {
         approval::draw(
             frame,
@@ -216,6 +221,7 @@ pub(in crate::app) struct SessionAreas {
     pub(in crate::app) plan: Rect,
     pub(in crate::app) queue: Rect,
     pub(in crate::app) request: Rect,
+    pub(in crate::app) progress: Rect,
     pub(in crate::app) tipline: Rect,
     pub(in crate::app) composer: Rect,
     pub(in crate::app) statusline: Rect,
@@ -229,6 +235,7 @@ pub(in crate::app) fn session_areas(
     plan_desired_rows: u16,
     queue_desired_rows: u16,
     request_desired_rows: u16,
+    progress_desired_rows: u16,
     composer_desired_rows: u16,
     bottom_desired_rows: u16,
     switcher_desired_rows: u16,
@@ -246,6 +253,7 @@ pub(in crate::app) fn session_areas(
         min_transcript_rows.min(
             available_above_gap.saturating_sub(
                 TIPLINE_ROWS
+                    .saturating_add(progress_desired_rows)
                     .saturating_add(composer_desired_rows)
                     .saturating_add(request_desired_rows),
             ),
@@ -254,17 +262,26 @@ pub(in crate::app) fn session_areas(
         min_transcript_rows.min(available_above_gap)
     };
     let available_chrome = available_above_gap.saturating_sub(transcript_rows);
-    // A pending question and its input take priority over the optional tipline.
-    let tipline_rows = if request_desired_rows > 0 {
+    // Status stays outside history so scrolling cannot hide the running turn or its stop key.
+    // Questions and input take priority on short terminals; the status precedes optional tips.
+    let progress_rows = progress_desired_rows.min(
+        available_chrome
+            .saturating_sub(composer_desired_rows)
+            .saturating_sub(request_desired_rows),
+    );
+    let tipline_rows = if request_desired_rows > 0 || progress_rows > 0 {
         TIPLINE_ROWS.min(
             available_chrome
+                .saturating_sub(progress_rows)
                 .saturating_sub(composer_desired_rows)
                 .saturating_sub(request_desired_rows),
         )
     } else {
         TIPLINE_ROWS.min(available_chrome)
     };
-    let available_input = available_chrome.saturating_sub(tipline_rows);
+    let available_input = available_chrome
+        .saturating_sub(tipline_rows)
+        .saturating_sub(progress_rows);
     let composer_rows = composer_desired_rows.min(available_input);
     let request_rows = request_desired_rows.min(available_input.saturating_sub(composer_rows));
     let available_inline = available_input
@@ -284,7 +301,8 @@ pub(in crate::app) fn session_areas(
         .saturating_sub(bottom_rows);
     let composer_y = bottom_y.saturating_sub(composer_rows);
     let tipline_y = composer_y.saturating_sub(tipline_rows);
-    let request_y = tipline_y.saturating_sub(request_rows);
+    let progress_y = tipline_y.saturating_sub(progress_rows);
+    let request_y = progress_y.saturating_sub(request_rows);
     let queue_y = request_y.saturating_sub(queue_rows);
     let plan_y = queue_y.saturating_sub(plan_rows);
     let goal_y = plan_y.saturating_sub(goal_rows);
@@ -312,6 +330,11 @@ pub(in crate::app) fn session_areas(
         request: Rect {
             y: request_y,
             height: request_rows,
+            ..area
+        },
+        progress: Rect {
+            y: progress_y,
+            height: progress_rows,
             ..area
         },
         tipline: Rect {

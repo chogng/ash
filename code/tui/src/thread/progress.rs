@@ -20,7 +20,7 @@ const TIPS: [Message; 4] = [
     Message::TipShortcuts,
 ];
 
-/// Transient feedback following the current chat turn; never written to terminal history.
+/// Live turn feedback in the fixed chat controls; never written to terminal history.
 pub(crate) struct TurnProgress<'a> {
     pub(crate) activity: TurnActivity,
     pub(crate) timer: &'a StatusTimer,
@@ -31,7 +31,7 @@ pub(crate) struct TurnProgress<'a> {
 impl TurnProgress<'_> {
     fn label(&self) -> (&'static str, bool) {
         match self.activity {
-            TurnActivity::Starting => ("Starting", true),
+            TurnActivity::Starting => ("Starting...", true),
             TurnActivity::Working => {
                 let index = (self.timer.runs_started().saturating_sub(1) as usize)
                     % nls::spinner_verb_count();
@@ -40,7 +40,7 @@ impl TurnProgress<'_> {
             TurnActivity::WaitingForApproval => ("Waiting for approval", false),
             TurnActivity::WaitingForUserInput => ("Waiting for input", false),
             TurnActivity::WaitingForCapability => ("Waiting for capability", false),
-            TurnActivity::Cancelling => ("Cancelling", true),
+            TurnActivity::Cancelling => ("Cancelling...", true),
         }
     }
 
@@ -65,16 +65,6 @@ impl TurnProgress<'_> {
     }
 
     pub(crate) fn draw(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
-        self.draw_rows(frame, area, 0, context);
-    }
-
-    pub(crate) fn draw_rows(
-        &self,
-        frame: &mut Frame<'_>,
-        area: Rect,
-        offset: u16,
-        context: RenderContext<'_>,
-    ) {
-        view::draw(frame, area, self, offset, context);
+        view::draw(frame, area, self, context);
     }
 }

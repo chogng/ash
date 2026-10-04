@@ -1,8 +1,7 @@
 ---
 source: code/tui/src/thread/progress/view_tests.rs
-assertion_line: 51
 expression: text
 ---
-⠙ Working · 1m 05s total · ctrl+c to interrupt
-○ Waiting for approval · 1m 05s total · ctrl+c to interrupt
-⠙ Cancelling · 1m 05s total
+⠙ Working... · 1m 05s · ctrl+c to interrupt
+○ Waiting for approval · 1m 05s · ctrl+c to interrupt
+⠙ Cancelling... · 1m 05s

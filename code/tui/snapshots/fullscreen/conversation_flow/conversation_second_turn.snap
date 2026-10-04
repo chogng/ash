@@ -2,7 +2,7 @@
 source: code/tui/src/app/conversation_flow_tests.rs
 expression: render(&app)
 ---
-  .                                                                            [— / —] [Dashboard]
+  .                                                                                    [Dashboard]
 
 > 请 正 常 回 复 ， 并 展 示 多 行 输 出 。
 
@@ -28,9 +28,9 @@ expression: render(&app)
 
 
 
-  ⏸ ask permissions on                                                   shift+tab to cycle policy
+                                                                 /permission to change permissions
   ────────────────────────────────────────────────────────────────────────────────────────────────
   >
   ─────────────────────────────────────────────────────────────────────────────── Automatic model
-
-  Enter send  ·  shift+tab permissions
+  ⏸ Manual
+  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

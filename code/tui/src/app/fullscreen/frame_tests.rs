@@ -869,7 +869,7 @@ fn turn_activity_does_not_enter_status_line() {
         .unwrap() as u16;
     assert!(
         areas
-            .transcript
+            .progress
             .contains(ratatui::layout::Position::new(0, progress_row))
     );
     assert!(rows[usize::from(areas.statusline.y)].contains("Manual"));
@@ -3395,7 +3395,7 @@ fn model_pointer_single_click_previews_and_double_click_confirms() {
 }
 
 #[test]
-fn chat_progress_follows_messages_without_hiding_top_tip() {
+fn chat_progress_stays_above_input_without_hiding_top_tip() {
     let mut app = App::new();
     app.set_active_turn(ash_protocol::TurnId::new("status-test").unwrap());
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
@@ -3410,11 +3410,11 @@ fn chat_progress_follows_messages_without_hiding_top_tip() {
     let progress_row = rows.iter().position(|row| row.contains("Working")).unwrap() as u16;
     assert!(
         areas
-            .transcript
+            .progress
             .contains(ratatui::layout::Position::new(0, progress_row))
     );
     assert!(rows[usize::from(areas.statusline.y)].contains("Manual"));
-    assert!(working.contains("Working"));
+    assert!(working.contains("Working..."));
     assert!(working.contains("ctrl+c to interrupt"));
     assert!(working.contains("Copied 42 chars"));
     crate::tui_assert_snapshot!(app = &app; "chat_progress_with_notice", working);

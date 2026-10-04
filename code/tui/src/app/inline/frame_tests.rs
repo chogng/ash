@@ -412,7 +412,9 @@ fn running_tip_follows_inline_chat_progress() {
     )
     .session;
     assert_eq!(tip_row, progress_row + 1);
-    assert!(progress_row < usize::from(areas.tipline.y));
+    assert_eq!(progress_row, usize::from(areas.progress.y));
+    assert_eq!(areas.progress.height, 2);
+    assert_eq!(areas.progress.bottom(), areas.tipline.y);
     assert!(!rows[usize::from(areas.tipline.y)].contains("Working"));
     assert!(rendered.contains("Tip: Ask Ash to list steps for complex tasks"));
 

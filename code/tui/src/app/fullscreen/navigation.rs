@@ -620,7 +620,6 @@ pub(in crate::app) fn scroll_transcript(
     let transcript_area = super::layout(app, terminal_area).session.transcript;
     let messages = app.visible_transcript_views();
     let target = crate::thread::transcript::ChatHistoryView {
-        progress: app.turn_progress(),
         jump_label: super::JUMP_LABEL,
         header: None,
         messages: &messages,

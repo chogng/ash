@@ -102,7 +102,9 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
 
     let first = submit_from_input(&mut app, FIRST_PROMPT);
     let first_command_id = first.command_id.clone();
-    crate::tui_assert_snapshot!(app = &app; "conversation_submitted", render(&app));
+    let submitted_frame = render(&app);
+    assert!(submitted_frame.contains("Starting... · 0s"));
+    crate::tui_assert_snapshot!(app = &app; "conversation_submitted", submitted_frame);
     let started = submit_prompt(
         &mut client,
         request_scope(&conversation),
@@ -136,7 +138,19 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
             .any(|message| message.text().contains(FIRST_PARTIAL))
     );
     assert_eq!(app.status(), &Status::Working);
-    crate::tui_assert_snapshot!(app = &app; "conversation_streaming", render(&app));
+    let streaming_frame = render(&app);
+    assert!(streaming_frame.contains("Working... · 0s · ctrl+c to interrupt"));
+    let regions =
+        super::fullscreen::layout(&app, ratatui::layout::Rect::new(0, 0, 100, 32)).session;
+    assert_eq!(regions.progress.bottom(), regions.tipline.y);
+    assert!(
+        streaming_frame
+            .lines()
+            .nth(usize::from(regions.progress.y))
+            .unwrap()
+            .starts_with("⠋ Working...")
+    );
+    crate::tui_assert_snapshot!(app = &app; "conversation_streaming", streaming_frame);
 
     model.release_first_response();
     let completed = wait_for_completed_thread(&mut client, &conversation, 1);
@@ -149,7 +163,9 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     assert!(completed_frame.contains("fn main()"));
     assert_eq!(app.latest_agent_response(), Some(FIRST_RESPONSE));
     assert_eq!(app.status(), &Status::Ready);
-    crate::tui_assert_snapshot!(app = &app; "conversation_completed", render(&app));
+    assert!(app.turn_progress().is_none());
+    assert!(!completed_frame.contains("Working..."));
+    crate::tui_assert_snapshot!(app = &app; "conversation_completed", completed_frame);
 
     let second = submit_from_input(&mut app, SECOND_PROMPT);
     let started = submit_prompt(

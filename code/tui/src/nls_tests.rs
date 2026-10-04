@@ -47,6 +47,7 @@ fn spinner_verbs_are_distinct_in_every_language() {
         let mut words = std::collections::BTreeSet::new();
         for entry in super::SPINNER_VERBS {
             let word = localize(language, entry.english);
+            assert!(word.ends_with("..."), "{language:?}: {word}");
             assert!(
                 words.insert(word.into_owned()),
                 "duplicate {language:?} word"

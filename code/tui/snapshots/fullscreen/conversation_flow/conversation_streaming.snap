@@ -1,8 +1,8 @@
 ---
 source: code/tui/src/app/conversation_flow_tests.rs
-expression: render(&app)
+expression: streaming_frame
 ---
-  .                                                                            [— / —] [Dashboard]
+  .                                                                                    [Dashboard]
 
 > 请 正 常 回 复 ， 并 展 示 多 行 输 出 。
 
@@ -27,10 +27,10 @@ expression: render(&app)
 
 
 
-⠋ Working · 0m 00s total · ctrl+c to interrupt
-  ⏸ ask permissions on                                                   shift+tab to cycle policy
+⠋ Working... · 0s · ctrl+c to interrupt
+                                                                 /permission to change permissions
   ────────────────────────────────────────────────────────────────────────────────────────────────
   >
   ─────────────────────────────────────────────────────────────────────────────── Automatic model
-
-  Enter queue  ·  shift+tab permissions
+  ⏸ Manual
+  Enter queue  ·  shift+tab mode  ·  shift+↓/↑ effort

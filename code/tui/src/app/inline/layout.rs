@@ -45,7 +45,7 @@ fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16)
         };
     }
     if app.session_preview().is_some() {
-        let session = session_areas(terminal_area, 0, 0, 0, 0, 1, 1, 0, min_transcript_rows);
+        let session = session_areas(terminal_area, 0, 0, 0, 0, 0, 1, 1, 0, min_transcript_rows);
         return Layout {
             input: Rect::default(),
             session,

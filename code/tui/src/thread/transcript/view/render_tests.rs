@@ -54,7 +54,6 @@ fn renderable_measurement_uses_the_same_wrapped_message_rows_as_drawing() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
-        progress: None,
         jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
@@ -173,7 +172,6 @@ fn user_message_starts_in_the_symbol_column_and_fills_the_content_row() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
-        progress: None,
         jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
@@ -208,7 +206,6 @@ fn local_command_fills_only_its_input_rows() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
-        progress: None,
         jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
@@ -260,7 +257,6 @@ fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
     let mut terminal = Terminal::new(TestBackend::new(30, 4)).unwrap();
 
     let hovered = ChatHistoryView {
-        progress: None,
         jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
@@ -288,7 +284,6 @@ fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
     );
 
     let pressed = ChatHistoryView {
-        progress: None,
         jump_label: "Ctrl+End to jump to bottom ↓",
         pointer: ChatHistoryPointerState {
             pressed_toggle: Some("reasoning"),
@@ -330,7 +325,6 @@ fn wrapped_details_link_remains_visible_in_a_narrow_terminal() {
     let scroll = ChatHistoryScroll::default();
     let cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
-        progress: None,
         jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
@@ -372,7 +366,6 @@ fn long_transcripts_buffer_only_visible_cells() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
-        progress: None,
         jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
@@ -401,7 +394,6 @@ fn follow_latest_reaches_content_beyond_the_u16_row_range() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
-        progress: None,
         jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
@@ -449,7 +441,6 @@ fn scrolled_transcript_draws_a_themed_jump_control_inside_its_bottom_row() {
     .unwrap();
     assert!(scroll.apply(target));
     let view = ChatHistoryView {
-        progress: None,
         jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
@@ -498,7 +489,6 @@ fn scrolling_to_the_start_reveals_the_history_header_before_messages() {
     );
     scroll.apply(first_scroll_target(true, &messages).unwrap());
     let view = ChatHistoryView {
-        progress: None,
         jump_label: "Ctrl+End to jump to bottom ↓",
         header: Some(&header),
         messages: &messages,
@@ -626,7 +616,6 @@ fn jump_control_is_hidden_while_following_the_latest_content() {
     terminal
         .draw(|frame| {
             ChatHistoryView {
-                progress: None,
                 jump_label: "Ctrl+End to jump to bottom ↓",
                 header: None,
                 messages: &messages,
@@ -650,7 +639,6 @@ fn render_first_row(
     terminal
         .draw(|frame| {
             ChatHistoryView {
-                progress: None,
                 jump_label: "Ctrl+End to jump to bottom ↓",
                 header: None,
                 messages,
@@ -664,149 +652,4 @@ fn render_first_row(
     (0..area.width)
         .map(|column| terminal.backend().buffer()[(column, 0)].symbol())
         .collect()
-}
-
-#[test]
-fn chat_progress_follows_the_reply_and_scrolls_with_it() {
-    let messages =
-        vec![CellView::plain(MessageRole::Agent, "current reply".into()).with_cell_id("reply")];
-    let scroll = ChatHistoryScroll::default();
-    let cache = ChatHistoryRenderCache::default();
-    let timer = crate::thread::progress::StatusTimer::default();
-    let view = ChatHistoryView {
-        progress: Some(crate::thread::progress::TurnProgress {
-            activity: crate::thread::TurnActivity::Working,
-            timer: &timer,
-            interrupt_hint: Some("ctrl+c".into()),
-            show_tips: false,
-        }),
-        jump_label: "Jump to bottom",
-        header: None,
-        messages: &messages,
-        scroll: &scroll,
-        render_cache: &cache,
-        pointer: Default::default(),
-    };
-    let message_rows = messages[0].height(80, test_context(), &cache) as u16;
-    assert_eq!(view.desired_height(80, test_context()), message_rows + 1);
-    let mut terminal = Terminal::new(TestBackend::new(80, 8)).unwrap();
-    terminal
-        .draw(|frame| view.render(frame, frame.area(), test_context()))
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(0, message_rows)].symbol(), "⠋");
-    assert_eq!(buffer[(0, message_rows)].fg, test_context().accent());
-    assert_eq!(buffer[(2, message_rows)].symbol(), "W");
-    assert!(
-        buffer
-            .content()
-            .iter()
-            .skip(usize::from((message_rows + 1) * 80))
-            .all(|cell| cell.symbol() == " ")
-    );
-    crate::tui_assert_snapshot!(
-        "chat_progress_follows_reply",
-        (0..8)
-            .map(|y| {
-                (0..80)
-                    .map(|x| buffer[(x, y)].symbol())
-                    .collect::<String>()
-                    .trim_end()
-                    .to_owned()
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
-
-    // The live row is part of the scroll height even when only one row fits.
-    let mut terminal = Terminal::new(TestBackend::new(80, 1)).unwrap();
-    terminal
-        .draw(|frame| view.render(frame, frame.area(), test_context()))
-        .unwrap();
-    assert_eq!(terminal.backend().buffer()[(2, 0)].symbol(), "W");
-    assert_eq!(
-        view.pointer_target_at(
-            Rect::new(0, 0, 80, 1),
-            ratatui::layout::Position::new(0, 0),
-            test_context()
-        ),
-        None
-    );
-}
-
-#[test]
-fn chat_progress_preserves_history_anchors_and_jump_to_latest() {
-    let messages = (0..8)
-        .map(|index| {
-            CellView::plain(MessageRole::Agent, format!("reply {index}"))
-                .with_cell_id(format!("reply-{index}"))
-        })
-        .collect::<Vec<_>>();
-    let mut scroll = ChatHistoryScroll::default();
-    let cache = ChatHistoryRenderCache::default();
-    let timer = crate::thread::progress::StatusTimer::default();
-    let area = Rect::new(0, 0, 80, 5);
-    let target = chat_progress_view(&messages, &scroll, &cache, &timer)
-        .scroll_target(area, test_context(), TranscriptScrollDirection::Up, 8)
-        .unwrap();
-    assert!(scroll.apply(target));
-    let mut terminal = Terminal::new(TestBackend::new(80, 5)).unwrap();
-    terminal
-        .draw(|frame| {
-            chat_progress_view(&messages, &scroll, &cache, &timer).render(
-                frame,
-                area,
-                test_context(),
-            )
-        })
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    assert!(!buffer.content().iter().any(|cell| cell.symbol() == "⠋"));
-    let view = chat_progress_view(&messages, &scroll, &cache, &timer);
-    let jump = view.jump_area(area, test_context()).unwrap();
-    assert_eq!(
-        view.pointer_target_at(
-            area,
-            ratatui::layout::Position::new(jump.x, jump.y),
-            test_context()
-        ),
-        Some(ChatHistoryPointerTarget::JumpToBottom)
-    );
-    let target = view
-        .scroll_target(area, test_context(), TranscriptScrollDirection::Down, 100)
-        .unwrap();
-    assert_eq!(target, TranscriptScrollTarget::FollowLatest);
-    assert!(scroll.apply(target));
-    terminal
-        .draw(|frame| {
-            chat_progress_view(&messages, &scroll, &cache, &timer).render(
-                frame,
-                area,
-                test_context(),
-            )
-        })
-        .unwrap();
-    assert_eq!(terminal.backend().buffer()[(0, 4)].symbol(), "⠋");
-}
-
-fn chat_progress_view<'a>(
-    messages: &'a [CellView<'a>],
-    scroll: &'a ChatHistoryScroll,
-    cache: &'a ChatHistoryRenderCache,
-    timer: &'a crate::thread::progress::StatusTimer,
-) -> ChatHistoryView<'a> {
-    ChatHistoryView {
-        progress: Some(crate::thread::progress::TurnProgress {
-            activity: crate::thread::TurnActivity::Working,
-            timer,
-            interrupt_hint: None,
-            show_tips: false,
-        }),
-        jump_label: "Jump to bottom",
-        header: None,
-        messages,
-        scroll,
-        render_cache: cache,
-        pointer: Default::default(),
-    }
 }

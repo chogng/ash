@@ -4,7 +4,7 @@ use ratatui::layout::Rect;
 
 #[test]
 fn short_query_uses_history_space_before_clipping_its_choices() {
-    let areas = session_areas(Rect::new(3, 5, 42, 12), 0, 0, 0, 6, 3, 2, 0, 4);
+    let areas = session_areas(Rect::new(3, 5, 42, 12), 0, 0, 0, 6, 0, 3, 2, 0, 4);
     assert_eq!(areas.request, Rect::new(3, 5, 42, 6));
     assert_eq!(areas.transcript.height, 0);
     assert_eq!(areas.composer.height, 3);
@@ -13,7 +13,7 @@ fn short_query_uses_history_space_before_clipping_its_choices() {
     assert_eq!(areas.hintline.height, 1);
     assert_eq!(areas.hintline.bottom(), 17);
 
-    let short = session_areas(Rect::new(3, 5, 42, 11), 0, 0, 0, 6, 3, 2, 0, 4);
+    let short = session_areas(Rect::new(3, 5, 42, 11), 0, 0, 0, 6, 0, 3, 2, 0, 4);
     assert_eq!(short.request.height, 6);
     assert_eq!(short.composer.height, 3);
     assert_eq!(short.tipline.height, 0);

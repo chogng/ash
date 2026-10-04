@@ -23,7 +23,6 @@ use unicode_width::UnicodeWidthStr;
 
 pub(crate) struct ChatHistoryView<'a> {
     pub(crate) jump_label: &'a str,
-    pub(crate) progress: Option<crate::thread::progress::TurnProgress<'a>>,
     pub(crate) header: Option<&'a Buffer>,
     pub(crate) messages: &'a [CellView<'a>],
     pub(crate) scroll: &'a ChatHistoryScroll,
@@ -89,25 +88,6 @@ impl Renderable for ChatHistoryView<'_> {
             self.pointer,
             context,
         );
-        if let Some(progress) = &self.progress {
-            let progress_start =
-                header_rows + heights.iter().take(self.messages.len()).sum::<usize>();
-            let skipped = viewport_start.saturating_sub(progress_start);
-            let row = progress_start.saturating_sub(viewport_start);
-            if row < usize::from(content_area.height) {
-                let progress_area = Rect::new(
-                    content_area.x,
-                    content_area.y + row as u16,
-                    content_area.width,
-                    content_area.height - row as u16,
-                );
-                if skipped == 0 {
-                    progress.draw(frame, progress_area, context);
-                } else {
-                    progress.draw_rows(frame, progress_area, skipped as u16, context);
-                }
-            }
-        }
         render_jump_to_bottom(
             frame,
             self.jump_area(area, context),
@@ -119,13 +99,8 @@ impl Renderable for ChatHistoryView<'_> {
 }
 
 impl ChatHistoryView<'_> {
-    // Progress participates in scrolling, but has no cell identity or cached history entry.
     fn measured_heights(&self, width: u16, context: RenderContext<'_>) -> Vec<usize> {
-        let mut heights = measured_heights(self.messages, self.render_cache, width, context);
-        if let Some(progress) = &self.progress {
-            heights.push(usize::from(progress.desired_height()));
-        }
-        heights
+        measured_heights(self.messages, self.render_cache, width, context)
     }
 
     pub(crate) fn scroll_target(

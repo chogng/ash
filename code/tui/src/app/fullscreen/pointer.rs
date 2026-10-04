@@ -268,7 +268,6 @@ pub(crate) fn target_at(
         (app.transcript_scroll(), app.transcript_render_cache())
     };
     let target = ChatHistoryView {
-        progress: app.turn_progress(),
         jump_label: super::JUMP_LABEL,
         header: None,
         messages: &messages,

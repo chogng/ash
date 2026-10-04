@@ -497,7 +497,6 @@ pub(in crate::app) fn scroll_transcript(
         app.render_context(),
     );
     let target = crate::thread::transcript::ChatHistoryView {
-        progress: app.turn_progress(),
         jump_label: super::JUMP_LABEL,
         header: Some(&header),
         messages: &messages,

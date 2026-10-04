@@ -192,7 +192,7 @@ fn progress_narrow_row_preserves_interrupt_hint() {
         .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
         .collect::<String>();
     assert!(text.contains("ctrl+c to interrupt"));
-    assert!(!text.contains("total"));
+    assert!(!text.contains(" · 0s"));
 }
 
 #[test]
@@ -200,7 +200,7 @@ fn long_spinner_verb_keeps_interrupt_hint_visible() {
     let now = Instant::now();
     let mut timer = StatusTimer::default();
     let index = (0..crate::nls::spinner_verb_count())
-        .find(|&index| crate::nls::spinner_verb(index) == "Brainstorming")
+        .find(|&index| crate::nls::spinner_verb(index) == "Brainstorming...")
         .unwrap();
     for run in 0..=index {
         timer.bind_turn(&TurnId::new(format!("long-word-{run}")).unwrap(), now);
@@ -278,5 +278,40 @@ fn tips_appear_below_the_running_indicator_and_stop_while_waiting() {
             crate::nls::Message::TipHelp
         };
         assert_eq!(working(&timer).tip(), Some(expected));
+    }
+}
+
+#[test]
+fn elapsed_time_uses_seconds_minutes_and_hours() {
+    let started = Instant::now();
+    let mut timer = StatusTimer::default();
+    timer.start(started);
+    let mut terminal = Terminal::new(TestBackend::new(80, 1)).unwrap();
+    for (seconds, expected) in [
+        (0, "0s"),
+        (59, "59s"),
+        (60, "1m 00s"),
+        (65, "1m 05s"),
+        (3600, "1h 00m 00s"),
+    ] {
+        timer.tick(started + Duration::from_secs(seconds));
+        terminal
+            .draw(|frame| {
+                TurnProgress {
+                    activity: TurnActivity::Starting,
+                    timer: &timer,
+                    interrupt_hint: None,
+                    show_tips: false,
+                }
+                .draw(frame, frame.area(), test_context())
+            })
+            .unwrap();
+        let text = (0..80)
+            .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
+            .collect::<String>();
+        assert!(
+            text.contains(&format!("Starting... · {expected}")),
+            "{text}"
+        );
     }
 }

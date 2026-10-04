@@ -22,7 +22,8 @@ ash-cli → code/tui → ash-app-server-client → shared App Server crates
 | 启动、事件循环与请求调度 | [app](tui/src/app)、[dispatch.rs](tui/src/app/dispatch.rs) |
 | 输入、历史、附件、补全与排队 | [composer](tui/src/thread/composer)、[共享输入历史](../ash-rs/message-history/README.md) |
 | 审批与提问 | [interaction](tui/src/thread/interaction) |
-| 正文、流式显示、缓存、执行输出与聊天进度 | [transcript](tui/src/thread/transcript)、[progress.rs](tui/src/thread/progress.rs)、[render](tui/src/render) |
+| 正文、流式显示、缓存与执行输出 | [transcript](tui/src/thread/transcript)、[render](tui/src/render) |
+| 本轮运行状态行、spinner verbs、耗时和中断提示 | [progress.rs](tui/src/thread/progress.rs)、[聊天布局](tui/src/app/chat_view.rs) |
 | fullscreen / inline 的页面、面板、鼠标与终端输出 | [LAYOUT.md](LAYOUT.md) |
 | 会话管理与 Issue 工作流 | [sessions](tui/src/sessions)、[issues.rs](tui/src/issues.rs) |
 | 设置、主题、快捷键与界面语言 | [config](tui/src/config)、[theme](tui/src/theme)、[keymap](tui/src/keymap)、[nls.rs](tui/src/nls.rs) |
@@ -200,7 +201,7 @@ dictationShortcut = "ctrl+g"
 
 终端的 `/voice` 用于听写，将识别文字写入当前草稿，供用户审阅、编辑和发送；发送后沿用当前编码任务的模型、工具和权限。终端不提供独立语音对话或按停顿自动发送的入口。听写启动、下载模型和录音期间，中断键（默认 `Ctrl+C`）先停止听写并保留草稿，不触发发送、不退出 TUI。停止完成后，中断键恢复聊天任务中断或退出的原有行为。下载期间输入 `/quit`，会先停止听写再退出。下载失败与停止同时发生时仍显示错误，不发送草稿。
 
-听写的模型检查、下载、加载和“正在听写”在 fullscreen 与 inline 中都显示于输入框上方的 tipline，停止听写快捷键与阶段文案放在同一行。`Starting`、`Working` 和计时属于当前聊天的跟进，显示在消息内容后面。位置、生命周期和同时运行时的行为见 [LAYOUT.md](LAYOUT.md#聊天进度与听写状态)。
+听写的模型检查、下载、加载和“正在听写”在 fullscreen 与 inline 中都显示于输入框上方的 tipline，停止听写快捷键与阶段文案放在同一行。本轮运行状态行固定在 tipline 上方，正文流式输出与历史滚动时保持可见，结束后收起。`Starting...`、`Working...`、`Cancelling...` 及其翻译以 `...` 表示进行中；等待批准或输入时使用静止标记。耗时显示为 `12s`、`1m 03s` 等紧凑格式，包含等待时间。位置、生命周期和同时运行时的行为见 [LAYOUT.md](LAYOUT.md#聊天进度与听写状态)。
 
 普通聊天输入框下方，两种模式都只占两行。fullscreen 第一行是权限与统计等 statusline，第二行是独立 hintline。inline 第一行显示模型等状态信息，第二行平时显示权限；面板、提问、审批等需要操作提示时，由 hintline 替换第二行的整行内容，返回普通输入后恢复权限，关闭权限显示时则恢复为空行。inline 的权限与 hintline 互斥，不增加第三行；这只改变显示，不修改权限策略。具体触发状态与恢复顺序见 [Inline 第二行的覆盖与恢复](LAYOUT.md#inline-第二行的覆盖与恢复)。
 

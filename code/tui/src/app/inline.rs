@@ -103,7 +103,6 @@ fn draw_content(
             context,
         );
         ChatHistoryView {
-            progress: None,
             jump_label: JUMP_LABEL,
             header: Some(&header),
             messages: &messages,
@@ -158,7 +157,6 @@ fn draw_content(
             Transcript::Tail(messages) => (messages, None),
         };
         ChatHistoryView {
-            progress: app.turn_progress(),
             jump_label: JUMP_LABEL,
             header: header.as_ref(),
             messages: &messages,

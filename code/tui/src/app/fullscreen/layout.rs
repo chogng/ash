@@ -42,7 +42,7 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
         };
     }
     if app.session_preview().is_some() {
-        let session = session_areas(terminal_area, 0, 0, 0, 0, 1, 1, 0, MIN_TRANSCRIPT_ROWS);
+        let session = session_areas(terminal_area, 0, 0, 0, 0, 0, 1, 1, 0, MIN_TRANSCRIPT_ROWS);
         return Layout {
             top_statusline: header,
             input: Rect::default(),

@@ -57,6 +57,7 @@ screenMode = "fullscreen" # 或 "inline"
 | --- | --- | --- | --- |
 | statusline | 模型、权限、环境与统计等状态信息 | 顶部 `top_statusline` 显示环境信息；底部一行显示权限与统计；模型靠近输入框 | 底部第一行显示模型等信息，第二行平时显示权限 |
 | hintline | 当前操作快捷键、等待结果或待完成快捷键提示 | 输入框下方独立一行，位于底部 statusline 之后 | 按需覆盖 statusline 第二行，与权限互斥显示，不增加第三行 |
+| progress | 本轮运行状态、耗时、中断键与长任务技巧 | 输入控制区，位于 tipline 上方；运行时占一至两行 | 活动视口的输入控制区，位于 tipline 上方；运行时占一至两行 |
 | tipline | 听写、临时反馈与导航提示 | 输入框上方一行 | 输入框上方一行 |
 
 fullscreen 的权限和 hintline 可以同时显示。inline 第二行在权限与 hintline 之间切换，第一行的模型、统计等聊天状态信息保持原位。命令面板、正文详情和管理页使用自己的容器，背景聊天 statusline 隐藏，底部由该容器显示操作提示。
@@ -113,9 +114,9 @@ fullscreen：
 │                                                                │
 │ 消息正文                                                       │
 │ 当前回复、工具记录                                             │
-│ 当前聊天进度                                                   │
 │                                                                │
 │ 目标 / 计划 / 待发送队列 / 提问                     [可选]     │
+│ progress：Working... · 12s · ctrl+c to interrupt               │
 │ tipline：正在听写 · 停止听写快捷键                             │
 │ ──────────────────────────────────────────────────────────     │
 │ > 输入正文                                                     │
@@ -135,8 +136,8 @@ inline：
   ……继续写入终端历史……
 ┌─ inline：活动视口 ──────────────────────────────────────────┐
 │ 当前回复、工具记录                                          │
-│ 当前聊天进度                                                │
 │ 目标 / 计划 / 待发送队列 / 提问                     [可选]  │
+│ progress：Working... · 12s · ctrl+c to interrupt            │
 │ tipline：正在听写 · 停止听写快捷键                          │
 │ ──────────────────────────────────────────────────────────  │
 │ > 输入正文                                                  │
@@ -153,7 +154,7 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
 
 ### 组合规则与验证
 
-[chat_view.rs](tui/src/app/chat_view.rs) 统一分配消息、目标、计划、队列、提问、tipline、输入、statusline、hintline 和 Agent 切换栏；[footer.rs](tui/src/app/footer.rs) 统一选择快捷键与听写提示。fullscreen 和 inline 各自提供空间预算、输入外观和页面容器。
+[chat_view.rs](tui/src/app/chat_view.rs) 统一分配消息、目标、计划、队列、提问、progress、tipline、输入、statusline、hintline 和 Agent 切换栏；[footer.rs](tui/src/app/footer.rs) 统一选择快捷键与听写提示。fullscreen 和 inline 各自提供空间预算、输入外观和页面容器。
 
 正常高度的普通聊天页中，inline 的 `session.statusline` 是两行矩形，`session.hintline` 是其中第二行的一行矩形；两个字段描述重叠区域。fullscreen 的底部 `session.statusline` 与 `session.hintline` 则是相邻的两个一行矩形。维护布局时按实际占行计算高度，不能将 inline 的两个矩形高度相加。
 
@@ -161,18 +162,22 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
 
 ## 聊天进度与听写状态
 
-`Starting`、`Working`、等待批准、等待输入和取消中属于当前聊天的执行反馈，跟在消息内容后面。听写的模型检查、下载、加载、正在听写和停止中属于输入状态，在两种模式的输入框上方显示。
+本轮运行状态行（turn status / activity indicator）固定在输入控制区，位于 tipline 上方。它回答当前是否仍在运行、处于什么阶段以及怎样停止；正文流式输出和历史滚动都不改变它的位置。转圈符号叫 spinner；状态行不显示完成百分比。
 
 | 内容 | fullscreen | inline |
 | --- | --- | --- |
-| 聊天进度、计时、中断提示和长任务技巧 | 消息区 `transcript`，紧跟当前聊天内容并随正文滚动 | 活动正文 `transcript`，紧跟当前回复并随正文滚动 |
+| 本轮状态、耗时、中断键和长任务技巧 | 固定的 `progress` 区域，位于 tipline 上方，不参与正文滚动 | 活动视口中固定的 `progress` 区域，位于 tipline 上方，不写入终端历史 |
 | 听写阶段与下载字节数 | 输入框上方的 `tipline` | 输入框上方的 `tipline` |
 | 停止听写快捷键 | 与听写状态一起显示在 `tipline` | 与听写状态一起显示在 `tipline` |
 | 输入框下方的固定区域 | statusline 一行，hintline 一行 | statusline 两行，hintline 按需覆盖第二行 |
 
-两种模式的听写阶段与停止快捷键都由共享 tipline 绘制，不替换底部统计、权限或操作提示。聊天进度由 [progress.rs](tui/src/thread/progress.rs) 绘制，[transcript/view.rs](tui/src/thread/transcript/view.rs) 将它放在聊天尾部并计算滚动高度。
+[progress.rs](tui/src/thread/progress.rs) 拥有状态行的内容，[chat_view.rs](tui/src/app/chat_view.rs) 分配区域并绘制；[transcript/view.rs](tui/src/thread/transcript/view.rs) 只负责正文及其滚动。两种模式的听写阶段与停止快捷键由共享 tipline 绘制，不替换统计、权限或操作提示。
 
-聊天进度随当前任务结束而消失，不成为持久化消息，也不写入 inline 的终端历史。模型检查和加载期间显示实际准备阶段，收到模型 `Ready` 通知后才显示“正在听写”。聊天与听写同时进行时，各自在上述位置显示；中断键先停止听写，聊天进度暂时隐藏“中断任务”提示，停止听写完成后恢复。
+启动、运行和取消中的状态以 `...` 结尾，例如 `Starting...`、`Working...`、`Cancelling...`。运行时的 spinner verb 每轮选择一次，本轮内保持不变；英文、日文、中文和法文都带相同的三点后缀。等待批准、等待输入和等待功能就绪使用静止圆圈和明确的阶段文字，不转圈。标记保留状态色，阶段、耗时和快捷键使用弱化文字色，让正文保持主要阅读位置。
+
+耗时按 `0s`、`59s`、`1m 00s`、`1h 00m 00s` 显示，从本轮开始累计，包含等待用户批准或回答的时间；隐藏状态行不会重置时钟。窄宽度优先保留中断快捷键，再裁剪阶段或省略耗时。运行八秒后可在状态行下显示一行技巧；等待用户操作时收起技巧。短终端先保留提问和输入，再分配状态行及可选提示。
+
+状态行随当前任务结束而收起，不成为持久化消息，也不写入 inline 的终端历史。模型检查和加载期间显示实际准备阶段，收到模型 `Ready` 通知后才显示“正在听写”。聊天与听写同时进行时，各自在上述位置显示；中断键先停止听写，运行状态行暂时隐藏“中断任务”提示，停止听写完成后恢复。
 
 ## Fullscreen
 
@@ -185,13 +190,14 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
 │ 顶部 statusline：分支 目录 Git 变更 上下文 Dashboard        │
 ├─────────────────────────────────────────────────────────────┤
 │ 消息区 transcript                                           │
-│ 用户消息、助手回复、工具执行记录和当前聊天进度              │
+│ 用户消息、助手回复和工具执行记录                            │
 │                                  回到底部 Jump to bottom ↓  │
 ├─────────────────────────────────────────────────────────────┤
 │ 目标区 goal                                      [可选]     │
 │ 计划区 plan                                      [可选]     │
 │ 待发送队列 queue                                 [可选]     │
 │ 提问区 request                                   [可选]     │
+│ 本轮运行状态行 progress                         [运行时]    │
 │ 输入框上方提示行 tipline                                    │
 ├─────────────────────────────────────────────────────────────┤
 │ 输入区域 composer / input                                   │
@@ -215,12 +221,13 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
 | 中文叫法 | 代码名称 | 看到的内容 / 边界 | 定位入口 |
 | --- | --- | --- | --- |
 | 顶部 statusline | `top_statusline` | 左边分支、当前 Project 工作目录；右边 Git 变更、上下文用量与 `[Dashboard]`；正常高度下其后留一空行 | [header.rs](tui/src/app/fullscreen/header.rs) |
-| 消息区 | `transcript` | 会话内容与滚动视口；当前聊天进度跟在内容后面，占据上方剩余空间 | [conversation.rs](tui/src/app/fullscreen/conversation.rs)、[transcript/view.rs](tui/src/thread/transcript/view.rs) |
+| 消息区 | `transcript` | 会话内容与滚动视口，占据控制区上方剩余空间 | [conversation.rs](tui/src/app/fullscreen/conversation.rs)、[transcript/view.rs](tui/src/thread/transcript/view.rs) |
 | 目标区 | `goal` | 当前目标信息 | [goal.rs](tui/src/thread/goal.rs) |
 | 计划区 | `plan` | 当前计划及步骤 | [plan.rs](tui/src/thread/plan.rs) |
 | 待发送队列 | `queue` | 排队等待发送的输入 | [queue.rs](tui/src/thread/queue.rs) |
 | 提问区 | `request` | Agent 向用户提出的问题和答案选项 | [interaction/query.rs](tui/src/thread/interaction/query.rs) |
 | 底部 statusline | `statusline` | 输入框下方、hintline 上方的一行；显示权限、缓存命中率、费用、资源和运行摘要 | [footer.rs](tui/src/app/fullscreen/footer.rs) |
+| 本轮运行状态行 | `progress` | 固定在 tipline 上方；显示阶段、耗时、中断键和可选技巧 | [chat_view.rs](tui/src/app/chat_view.rs)、[progress.rs](tui/src/thread/progress.rs) |
 | 输入框上方提示行 | `tipline` | 听写、临时提示和导航提示；正常布局预留一行 | [footer.rs](tui/src/app/fullscreen/footer.rs) 的 `draw_tip()`、[top_tip.rs](tui/src/app/top_tip.rs) |
 | 输入区域 | `composer` | 容纳输入框；需要审批时改为显示审批选项 | [fullscreen/composer.rs](tui/src/app/fullscreen/composer.rs) |
 | 实际输入框 | `input` | 普通情况下位于 `composer` 内；审批时高度为零 | [composer/surface.rs](tui/src/thread/composer/surface.rs) |
@@ -280,9 +287,10 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
   已定稿助手回复与工具单元
   ……继续写入终端历史……
 ┌─ 活动视口 ────────────────────────────────────────────────┐
-│ 活动正文 transcript：当前回复、工具内容和聊天进度         │
+│ 活动正文 transcript：当前回复、工具内容                   │
 │ 目标 goal / 计划 plan / 待发送队列 queue          [可选]  │
 │ 提问 request                                   [可选]     │
+│ 本轮运行状态行 progress                         [运行时]  │
 │ 输入上方提示 tipline：听写状态和临时提示                  │
 │ ──────────────────────────────────────────────────────    │
 │ > 输入正文                                                │
@@ -301,7 +309,7 @@ inline 与 fullscreen 共用 `SessionAreas` 和控制区位置计算，由 inlin
 | --- | --- |
 | 定稿历史与活动尾部分开输出，记录已写出的单元身份 | [output.rs](tui/src/app/inline/output.rs)、[scrollback.rs](tui/src/terminal/scrollback.rs) |
 | 欢迎信息在普通主屏输出时写入一次 | [header.rs](tui/src/app/inline/header.rs) |
-| 底部 statusline 第一行显示模型等配置信息，第二行平时显示权限，操作提示由 hintline 覆盖该行；听写使用输入框上方的 tipline，聊天进度跟在活动正文后面 | [footer.rs](tui/src/app/inline/footer.rs) |
+| 底部 statusline 第一行显示模型等配置信息，第二行平时显示权限，操作提示由 hintline 覆盖该行；听写使用输入框上方的 tipline，本轮运行状态固定在 tipline 上方，由 chat_view 绘制 | [footer.rs](tui/src/app/inline/footer.rs) |
 
 `Output` 在当前 Thread 内按稳定单元身份去重，普通重绘和重复快照不会再次写出已定稿块；旧分页内容留在正文浏览器中，避免插入较早消息打乱主屏输出顺序。切换 Thread 会重置输出记录，并绘制目标 Thread。
 
@@ -384,7 +392,7 @@ fullscreen 的 [pointer.rs](tui/src/app/fullscreen/pointer.rs) 聚合各组件�
 | 模式隔离与同一面板转交 | `just test ash-tui --lib app::mode_tests` |
 | 共用聊天组合与状态项布局 | `just test ash-tui --lib app::chat_view` |
 | 共用应用流程 | `just test ash-tui --lib app::` |
-| 聊天进度跟随回复、正文滚动与提示位置 | `just test ash-tui --lib chat_progress` |
+| 本轮状态固定、正文滚动、中断及提示位置 | `just test ash-tui --lib chat_progress` |
 | 听写准备、下载、录音状态与中断优先级 | `just test ash-tui --lib dictation` |
 | inline 定稿历史与活动聊天进度分离 | `just test ash-tui --lib inline_history_commits` |
 

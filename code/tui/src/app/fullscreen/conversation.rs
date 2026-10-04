@@ -17,7 +17,6 @@ pub(super) fn draw(
     if let Some(preview) = app.session_preview() {
         let messages = preview.messages();
         ChatHistoryView {
-            progress: None,
             jump_label: super::JUMP_LABEL,
             header: None,
             messages: &messages,
@@ -73,7 +72,6 @@ pub(super) fn draw(
     } else {
         let messages = app.visible_transcript_views();
         ChatHistoryView {
-            progress: app.turn_progress(),
             jump_label: super::JUMP_LABEL,
             header: None,
             messages: &messages,
