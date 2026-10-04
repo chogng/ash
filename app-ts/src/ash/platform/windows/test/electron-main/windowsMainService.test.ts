@@ -1,6 +1,11 @@
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { setup, teardown, test } from 'mocha';
+import type { BrowserWindow, HandlerDetails, WebContents } from 'electron';
+import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
+import { IAuxiliaryWindowsMainService } from '../../../auxiliaryWindow/electron-main/auxiliaryWindows.js';
+import { AuxiliaryWindowsMainService } from '../../../auxiliaryWindow/electron-main/auxiliaryWindowsMainService.js';
+import { nodeWorkspacePathService } from '../../../workspaces/node/workspaces.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../../window/common/window.js';
@@ -11,6 +16,13 @@ import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } fr
 import { WindowsMainService, windowOperationIpcRoute, workspaceRecoveryIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
 import type { IOpenConfiguration } from '../../electron-main/windows.js';
 import { WINDOW_OPEN_FILES_CHANNEL, validateWindowFilesRequest, validateWindowFilesResponse } from '../../../window/common/window.js';
+
+let windowServices: InstantiationService;
+setup(() => {
+	windowServices = new InstantiationService();
+	windowServices.registerSingleton(IAuxiliaryWindowsMainService, () => new AuxiliaryWindowsMainService(contents => (contents as unknown as TestWindow['webContents']).getOwnerBrowserWindow()));
+});
+teardown(() => windowServices.dispose());
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -74,6 +86,8 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	private readonly rendererListeners = new Map<string, Set<() => void>>();
 	private readonly onceListeners = new Map<string, Set<() => void>>();
 	public readonly webContents = {
+		getOwnerBrowserWindow: (): BrowserWindow => this as unknown as BrowserWindow,
+		isDestroyed: (): boolean => this.destroyed,
 		getZoomLevel: (): number => this.zoomLevel,
 		getZoomFactor: (): number => 1.2 ** this.zoomLevel,
 		setZoomLevel: (level: number): void => { this.zoomLevel = level; },
@@ -104,16 +118,17 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 		const listeners = this.onceListeners.get(event);
 		this.onceListeners.delete(event);
 		for (const listener of listeners ?? []) listener();
+		for (const listener of this.fullscreenListeners.get(event) ?? []) listener();
 	}
 	public on(event: 'close', listener: (event: { preventDefault(): void }) => void): void;
-	public on(event: 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
-	public on(event: 'close' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
+	public on(event: 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
+	public on(event: 'close' | 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
 		if (event === 'close') this.closeListeners.add(listener as (event: { preventDefault(): void }) => void);
 		else { const listeners = this.fullscreenListeners.get(event) ?? new Set<() => void>(); listeners.add(listener as () => void); this.fullscreenListeners.set(event, listeners); }
 	}
 	public off(event: 'close', listener: (event: { preventDefault(): void }) => void): void;
-	public off(event: 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
-	public off(event: 'close' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
+	public off(event: 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
+	public off(event: 'close' | 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
 		if (event === 'close') this.closeListeners.delete(listener as (event: { preventDefault(): void }) => void);
 		else this.fullscreenListeners.get(event)?.delete(listener as () => void);
 	}
@@ -298,7 +313,7 @@ test('WindowsMainService tracks auxiliary windows and releases them with their p
 	const parent = new TestWindow(1, 'Workbench');
 	const child = new TestWindow(2, 'Editor');
 	using service = createWindowsService(() => [parent], async () => undefined);
-	const registration = service.registerAuxiliaryWindow(child);
+	const registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
 	assert.deepEqual(service.perform(parent, { kind: 'list' }), [
 		{ id: 1, title: 'Workbench', focused: false },
 		{ id: 2, title: 'Editor', focused: false },
@@ -310,10 +325,86 @@ test('WindowsMainService tracks auxiliary windows and releases them with their p
 	assert.deepEqual(service.perform(parent, { kind: 'list' }), [{ id: 1, title: 'Workbench', focused: false }]);
 
 	const next = new TestWindow(3, 'Editor');
-	using nextRegistration = service.registerAuxiliaryWindow(next);
+	using nextRegistration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(next.webContents as unknown as WebContents, parent.id);
 	service.perform(parent, { kind: 'closeOthers' });
 	assert.deepEqual(next.calls, ['close']);
 	assert.equal(next.isDestroyed(), true);
+});
+
+test('auxiliary creation validates popup bounds independently of whether a position was restored', () => {
+	const service = windowServices.get(IAuxiliaryWindowsMainService);
+	const request = (features: string): HandlerDetails => ({ url: 'about:blank', features, frameName: '', disposition: 'new-window', referrer: { url: '', policy: 'default' } });
+	assert.deepEqual(service.createWindow(request('popup=yes,width=700,height=530')), { width: 700, height: 530 });
+	assert.deepEqual(service.createWindow(request('width=700,height=530,x=-120,y=90')), { width: 700, height: 530, x: -120, y: 90 });
+	assert.deepEqual(service.createWindow(request('left=120,top=90')), { x: 120, y: 90 });
+	for (const features of ['width=0', 'height=-1', 'x=NaN', 'width=', 'height=1.5']) {
+		assert.throws(() => service.createWindow(request(features)), /Invalid auxiliary window/);
+	}
+	assert.throws(() => service.createWindow({ ...request(''), url: 'https://example.com' }), /same-origin document/);
+});
+
+test('focused detached editors retain their parent workspace and focus when that workspace is reused', async () => {
+	const first = new TestWindow(1, 'First');
+	const second = new TestWindow(2, 'Second');
+	const child = new TestWindow(3, 'Editor');
+	using service = createWindowsService(() => [first, second], async () => undefined);
+	const folder = URI.file('/repo/project');
+	service.updateWorkspace(first.id, { id: 'first', uri: folder });
+	service.updateWorkspace(second.id, { id: 'second', uri: folder });
+	const auxiliary = windowServices.get(IAuxiliaryWindowsMainService);
+	using registration = auxiliary.registerWindow(child.webContents as unknown as WebContents, first.id);
+	child.focused = true;
+	child.emitFocus();
+	assert.equal(service.getLastActiveWindow(), first);
+	child.focused = false;
+	assert.equal(service.getLastActiveWindow(), first);
+	assert.equal(service.findWorkspace({ id: 'folder', uri: folder }), first);
+	second.emitFocus();
+	assert.equal(service.getLastActiveWindow(), second);
+	assert.equal(service.findWorkspace({ id: 'folder', uri: folder }), second);
+	child.focused = true;
+	child.emitFocus();
+	assert.equal(auxiliary.getWindowByWebContents(child.webContents as unknown as WebContents)?.parentId, first.id);
+	assert.equal(await service.openWorkspace({ id: 'first', uri: folder }, async () => assert.fail('must reuse parent workspace')), first);
+	assert.deepEqual({ parent: first.calls, child: child.calls }, { parent: [], child: ['focus'] });
+	child.destroy();
+	assert.deepEqual(auxiliary.getWindows(), []);
+	assert.equal(service.getLastActiveWindow(), second);
+});
+
+test('auxiliary registration resolves descendant ownership and detaches listeners on release', () => {
+	const auxiliary = windowServices.get(IAuxiliaryWindowsMainService);
+	const child = new TestWindow(2, 'Editor');
+	const descendant = new TestWindow(3, 'Nested Editor');
+	using registration = auxiliary.registerWindow(child.webContents as unknown as WebContents, 1);
+	using descendantRegistration = auxiliary.registerWindow(descendant.webContents as unknown as WebContents, child.id);
+	assert.deepEqual(auxiliary.getWindows().map(window => ({ id: window.id, parentId: window.parentId })), [{ id: 2, parentId: 1 }, { id: 3, parentId: 1 }]);
+	assert.throws(() => auxiliary.registerWindow(child.webContents as unknown as WebContents, 1), /already registered/);
+	registration.dispose();
+	assert.equal(child.isDestroyed(), true);
+	assert.equal(auxiliary.getWindowByWebContents(child.webContents as unknown as WebContents), undefined);
+	assert.throws(() => auxiliary.registerWindow(child.webContents as unknown as WebContents, 1), /closed before registration/);
+	windowServices.dispose();
+	assert.equal(descendant.isDestroyed(), true);
+});
+
+test('window service assembly rejects a missing auxiliary window owner', () => {
+	using services = new InstantiationService();
+	assert.throws(() => services.createInstance(WindowsMainService<TestWindow>, async () => undefined, process.platform, nodeWorkspacePathService), /Unknown service: auxiliaryWindowsMainService/);
+});
+
+test('an auxiliary renderer crash closes its window and removes it from window operations', () => {
+	const parent = new TestWindow(1, 'Workbench');
+	const child = new TestWindow(2, 'Editor');
+	using service = createWindowsService(() => [parent], async () => undefined);
+	const auxiliary = windowServices.get(IAuxiliaryWindowsMainService);
+	using registration = auxiliary.registerWindow(child.webContents as unknown as WebContents, parent.id);
+	child.emitRendererEvent('render-process-gone');
+	assert.deepEqual({ destroyed: child.isDestroyed(), auxiliary: auxiliary.getWindows(), windows: service.perform(parent, { kind: 'list' }) }, {
+		destroyed: true,
+		auxiliary: [],
+		windows: [{ id: 1, title: 'Workbench', focused: false }],
+	});
 });
 
 test('WindowsMainService owns an independent Sessions window after the Workbench closes', async () => {
@@ -546,7 +637,7 @@ function registerWindow(service: WindowsMainService<TestWindow>, window: TestWin
 }
 
 function createWindowsService(windows: () => readonly TestWindow[], create: ConstructorParameters<typeof WindowsMainService<TestWindow>>[0], platform: NodeJS.Platform = process.platform): WindowsMainService<TestWindow> {
-	const service = new WindowsMainService<TestWindow>(create, platform);
+	const service = windowServices.createInstance(WindowsMainService<TestWindow>, create, platform, nodeWorkspacePathService);
 	for (const window of windows()) {
 		if (window) registerWindow(service, window);
 	}
@@ -554,7 +645,7 @@ function createWindowsService(windows: () => readonly TestWindow[], create: Cons
 }
 
 test('platform window owner tracks activation, workspace changes and close without a product registry', () => {
-	using service = new WindowsMainService<TestWindow>(async () => undefined);
+	using service = windowServices.createInstance(WindowsMainService<TestWindow>, async () => undefined, process.platform, nodeWorkspacePathService);
 	const first = registerWindow(service, new TestWindow(1, 'First'), { id: 'first' });
 	const second = registerWindow(service, new TestWindow(2, 'Second'), { id: 'second' });
 	assert.equal(service.getLastActiveWindow(), second);
@@ -574,7 +665,7 @@ test('platform window owner tracks activation, workspace changes and close witho
 });
 
 test('platform window owner reuses the most recently active folder or workspace file', () => {
-	using service = new WindowsMainService<TestWindow>(async () => undefined);
+	using service = windowServices.createInstance(WindowsMainService<TestWindow>, async () => undefined, process.platform, nodeWorkspacePathService);
 	const folder = URI.file('/repo/project');
 	const first = registerWindow(service, new TestWindow(1, 'First'), { id: 'first', uri: folder });
 	const second = registerWindow(service, new TestWindow(2, 'Second'), { id: 'second', uri: folder });
@@ -587,7 +678,7 @@ test('platform window owner reuses the most recently active folder or workspace 
 });
 
 test('platform window owner coalesces opens through renderer startup and focuses the existing window', async () => {
-	using service = new WindowsMainService<TestWindow>(async () => undefined);
+	using service = windowServices.createInstance(WindowsMainService<TestWindow>, async () => undefined, process.platform, nodeWorkspacePathService);
 	const workspace = { id: 'pending' };
 	let finishStartup!: () => void;
 	const startup = new Promise<void>(resolve => { finishStartup = resolve; });
@@ -610,7 +701,7 @@ test('platform window owner coalesces opens through renderer startup and focuses
 });
 
 test('platform window owner releases a failed opening for an explicit retry', async () => {
-	using service = new WindowsMainService<TestWindow>(async () => undefined);
+	using service = windowServices.createInstance(WindowsMainService<TestWindow>, async () => undefined, process.platform, nodeWorkspacePathService);
 	const workspace = { id: 'failed' };
 	await assert.rejects(service.openWorkspace(workspace, async () => { throw new Error('startup failed'); }), /startup failed/);
 	const window = new TestWindow(1, 'Retry');

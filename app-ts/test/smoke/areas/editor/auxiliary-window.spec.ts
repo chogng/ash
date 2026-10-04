@@ -1,4 +1,5 @@
 import { expect, test } from '../../../automation/test.js';
+import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 
 test('detached editor window inherits workbench theme and accessibility state', async ({ workbench }) => {
 	const page = workbench.page;
@@ -56,5 +57,50 @@ test('detached editor window inherits workbench theme and accessibility state', 
 		}
 	} finally {
 		if (!popup.isClosed()) await popup.close();
+	}
+});
+
+test('detached editor windows participate in desktop window switching and close-other-windows', async ({ workbench, target, application }) => {
+	test.skip(target.kind !== 'electron', 'Requires desktop window operations.');
+	if (!('windows' in application)) {
+		throw new Error('Expected an Electron application');
+	}
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	await expect(workbench.editors.groupAt(0).tabs.last()).toContainText('Untitled');
+	await page.keyboard.press('F1');
+	const command = page.locator('.ash-quick-pick').getByRole('combobox');
+	await command.fill('Move Editor into New Window');
+	const opened = page.context().waitForEvent('page');
+	await command.press('Enter');
+	const popup = await opened;
+	try {
+		await expect(popup.locator('.ash-auxiliary-window-container .ash-workbench-editor')).toBeVisible();
+		const title = await popup.title();
+		await page.bringToFront();
+		await page.keyboard.press('F1');
+		await command.fill('Switch Window...');
+		await command.press('Enter');
+		await expect(command).toHaveAttribute('placeholder', 'Select a window');
+		await expect(page.locator('.ash-quick-pick-row-label')).toHaveCount(2);
+		await page.locator('.ash-quick-pick-row-label').filter({ hasText: title }).click();
+		await waitForElectronWindowState(application, popup, { focused: true });
+
+		await page.bringToFront();
+		await page.keyboard.press('F1');
+		await command.fill('Close Other Windows');
+		await command.press('Enter');
+		await expect.poll(() => popup.isClosed()).toBe(true);
+		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled' })).toHaveCount(1);
+		await page.keyboard.press('F1');
+		await command.fill('Switch Window...');
+		await command.press('Enter');
+		await expect(command).toHaveAttribute('placeholder', 'Select a window');
+		await expect(page.locator('.ash-quick-pick-row-label')).toHaveCount(1);
+		await command.press('Escape');
+	} finally {
+		if (!popup.isClosed()) {
+			await popup.close();
+		}
 	}
 });

@@ -67,7 +67,7 @@ import { URI } from "../../base/common/uri.js";
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
 import { LOCAL_FILE_SYSTEM_CHANGED_CHANNEL } from "../../platform/files/common/diskFileSystemProviderClient.js";
-import { IWindowsMainService, WindowControlsOverlay } from "../../platform/windows/electron-main/windows.js";
+import { IWindowsMainService, WindowControlsOverlay, type IOpenConfiguration } from "../../platform/windows/electron-main/windows.js";
 import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, trackWindowResourceChanges, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from "../../platform/windows/electron-main/windowsMainService.js";
@@ -105,6 +105,11 @@ import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.
 import { parseLaunchArguments, parseMainProcessArgv, windowsCommandLine } from '../../platform/environment/node/argvHelper.js';
 import { LaunchMainService, parseWindowLaunch, type IStartArguments } from '../../platform/launch/electron-main/launchMainService.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
+import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
+import { IAuxiliaryWindowsMainService } from '../../platform/auxiliaryWindow/electron-main/auxiliaryWindows.js';
+import { AuxiliaryWindowsMainService } from '../../platform/auxiliaryWindow/electron-main/auxiliaryWindowsMainService.js';
+import { nodeWorkspacePathService } from '../../platform/workspaces/node/workspaces.js';
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
 import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
 import { normalizeLocale } from '../../platform/languagePacks/common/languagePackCatalog.js';
@@ -238,8 +243,13 @@ export class AshApplication extends Disposable {
 	private readonly workbenchWindowData = new Map<number, WorkbenchWindowRecord>();
 	private readonly sessionsWindow = this._register(new MutableDisposable<SessionsWindowRecord>());
 	private sessionsWindowOpenQueue: Promise<void> = Promise.resolve();
-	private readonly windowsMainService: WindowsMainService<BrowserWindow> = this._register(new WindowsMainService<BrowserWindow>(
-		async (configuration, reuseWindow): Promise<BrowserWindow | undefined> => {
+	private readonly windowServices = this._register(new InstantiationService(new ServiceCollection([
+		IAuxiliaryWindowsMainService,
+		new SyncDescriptor(AuxiliaryWindowsMainService, [(contents: Electron.WebContents) => BrowserWindow.fromWebContents(contents)]),
+	])));
+	private readonly auxiliaryWindowsMainService = this.windowServices.get(IAuxiliaryWindowsMainService);
+	private readonly windowsMainService: WindowsMainService<BrowserWindow> = this._register(this.windowServices.createInstance(WindowsMainService<BrowserWindow>,
+		async (configuration: IOpenConfiguration | undefined, reuseWindow: BrowserWindow | undefined): Promise<BrowserWindow | undefined> => {
 			const workspaces = this.workspaces;
 			if (!workspaces) {
 				throw new Error('Workspace service is not initialized');
@@ -279,6 +289,7 @@ export class AshApplication extends Disposable {
 			return (await this.openWorkspace(workspace, workspaces, configuration?.forceNewWindow))?.window;
 		},
 		process.platform,
+		nodeWorkspacePathService,
 	));
 	private readonly dialogs = this._register(new DialogMainService({
 		showMessageBox: (options, window) => window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options),
@@ -326,10 +337,12 @@ export class AshApplication extends Disposable {
 			runCommand: (windowId, commandId, args) => {
 				if (commandId !== OPEN_AGENTS_WINDOW_COMMAND_ID) return;
 				const options = validateOpenAgentsWindow(args);
-				const record = this.workbenchWindowData.get(windowId);
+				const focused = BrowserWindow.fromId(windowId);
+				const parentId = focused ? this.auxiliaryWindowsMainService.getWindowByWebContents(focused.webContents)?.parentId : undefined;
+				const record = this.workbenchWindowData.get(parentId ?? windowId);
 				if (record) return this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), record.modeId, options);
 				const session = this.sessionsWindow.value;
-				if (session && this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY)?.id === windowId) {
+				if (session && this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY)?.id === (parentId ?? windowId)) {
 					return this.openSessionsWindow(session.workspaceContext.getWorkspace(), session.workspaceContext.getResolvedWorkspace(), session.modeId, options);
 				}
 			},
@@ -1467,18 +1480,12 @@ export class AshApplication extends Disposable {
 				void externalOpener.openExternal(details.url).catch(error => console.error('Could not open external link', error));
 				return { action: 'deny' };
 			}
-			const features = new URLSearchParams(details.features.replaceAll(',', '&'));
-			const x = Number(features.get('x'));
-			const y = Number(features.get('y'));
-			const width = Number(features.get('width'));
-			const height = Number(features.get('height'));
-			if (!features.has('x') || !features.has('y') || !Number.isSafeInteger(x) || !Number.isSafeInteger(y) || !Number.isSafeInteger(width) || !Number.isSafeInteger(height)) return { action: 'allow' };
-			return { action: 'allow', overrideBrowserWindowOptions: { x, y, width, height } };
+			return { action: 'allow', overrideBrowserWindowOptions: this.auxiliaryWindowsMainService.createWindow(details) };
 		});
 		const onDidCreateWindow = (child: BrowserWindow, details: { readonly url: string }): void => {
 			if (details.url !== 'about:blank') return;
 			const childResources = new DisposableStore();
-			childResources.add(this.windowsMainService.registerAuxiliaryWindow(child));
+			childResources.add(this.auxiliaryWindowsMainService.registerWindow(child.webContents, window.id));
 			auxiliaryWindows.set(child.id, childResources);
 			this.configureWindowNavigation(child, childResources);
 			child.once('closed', () => auxiliaryWindows.deleteAndDispose(child.id));
