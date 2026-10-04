@@ -11,6 +11,27 @@ import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { type TextMeasurer } from '../../common/viewModel.js';
 
+test('Leading hidden lines map to the start of the first visible line', () => {
+	using model = new TextModel('hidden\nalso hidden\nvisible\nlast');
+	using lines = createViewModelLines(model);
+	lines.setHiddenAreas([new Range(1, 1, 2, 12)]);
+	const converter = lines.createCoordinatesConverter();
+	assert.deepEqual(lines.projection.lines.map(line => line.logicalLineIndex), [2, 3]);
+	assert.deepEqual(converter.convertModelPositionToViewPosition(new Position(1, 4)), new Position(1, 1));
+	assert.deepEqual(converter.convertViewPositionToModelPosition(new Position(1, 1)), new Position(3, 1));
+	lines.setHiddenAreas([]);
+	assert.equal(lines.getViewLineCount(), 4);
+});
+
+test('Hidden lines retain a cursor row when the model shrinks to an empty document', () => {
+	using model = new TextModel('hidden\nvisible');
+	using lines = createViewModelLines(model);
+	lines.setHiddenAreas([new Range(1, 1, 1, 7)]);
+	model.reset('');
+	assert.equal(lines.getViewLineCount(), 1);
+	assert.equal(lines.getViewLineContent(1), '');
+});
+
 test("Visible visual-line projection removes hidden bodies while preserving wrapped header rows", () => {
 	using model = new TextModel("header\ninside\nend\nlast");
 	using folding = new EditorFoldingModel(model);

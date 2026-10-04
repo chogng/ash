@@ -11,15 +11,21 @@ export interface OutputLink {
 	readonly selection: Range;
 }
 
-const LocationPattern = /((?:[A-Za-z]:[\\/]|\/|\.\.?[\\/])?[^\s:(),]+(?:[\\/][^\s:(),]+)*\.[A-Za-z0-9_-]+)(?::(\d+)(?::(\d+))?|\((\d+),(\d+)\))/g;
+const LocationTokenPattern = /[^\s"'<>]+/g;
+const LocationPattern = /^((?:[A-Za-z]:)?[^\s:(),]+\.[A-Za-z0-9_-]+)(?::(\d+)(?::(\d+))?|\((\d+),(\d+)\))/;
+
 
 /** Detects file locations and returns only resources authorized by the current workspace. */
 export function detectOutputLinks(text: string, folders: readonly IWorkspaceFolder[]): readonly OutputLink[] {
 	const links: OutputLink[] = [];
-	for (const match of text.matchAll(LocationPattern)) {
+	// Tokenization keeps unsuccessful matches linear for long lines without file locations.
+	for (const token of text.matchAll(LocationTokenPattern)) {
+		const prefix = token[0].match(/^[[(]+/)?.[0].length ?? 0;
+		const match = LocationPattern.exec(token[0].slice(prefix));
+		if (!match) continue;
 		const label = match[0];
 		const candidate = match[1];
-		const startIndex = match.index;
+		const startIndex = token.index! + prefix;
 		if (!label || !candidate || startIndex === undefined) continue;
 		const resource = resolveWorkspaceResource(candidate, folders);
 		if (!resource) continue;

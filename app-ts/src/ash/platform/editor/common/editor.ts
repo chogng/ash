@@ -36,12 +36,14 @@ export const enum TextEditorSelectionSource {
 
 export interface ITextEditorOptions extends IEditorOptions {
 	readonly selectionSource?: TextEditorSelectionSource | string;
-	readonly selection?: {
-		readonly startLineNumber: number;
-		readonly startColumn: number;
-		readonly endLineNumber?: number;
-		readonly endColumn?: number;
-	};
+	readonly selection?: ITextEditorSelection;
+}
+
+export interface ITextEditorSelection {
+	readonly startLineNumber: number;
+	readonly startColumn: number;
+	readonly endLineNumber?: number;
+	readonly endColumn?: number;
 }
 
 export interface ITextResourceEditorInput {

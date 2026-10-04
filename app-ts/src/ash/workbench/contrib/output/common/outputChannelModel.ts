@@ -1,12 +1,18 @@
+import { URI } from '../../../../base/common/uri.js';
+import { IModelService } from '../../../../editor/common/services/model.js';
+import { ILanguageService } from '../../../../editor/common/languages/language.js';
+import type { ITextModel } from '../../../../editor/common/model.js';
+import { Range } from '../../../../editor/common/core/range.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import type { IOutputChannelChange, IOutputEntry, IOutputEntryInput, OutputEntrySeverity } from "../common/outputService.js";
+import { Disposable, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import type { IOutputChannelChange, IOutputEntry, IOutputEntryInput, OutputEntrySeverity } from "../../../services/output/common/output.js";
 
 const MaxRetainedEntries = 20_000;
 const MaxRetainedBytes = 4 * 1024 * 1024;
 
 /** Retained Output content contract used by channel implementations. */
 export interface IOutputChannelModel {
+	loadModel(): Promise<ITextModel>;
 	readonly entries: readonly IOutputEntry[];
 	readonly onDidChange: Event<IOutputChannelChange>;
 	append(entry: IOutputEntryInput): void;
@@ -23,6 +29,29 @@ export class InMemoryOutputChannelModel extends Disposable implements IOutputCha
 	private retainedBytes = 0;
 	private nextSequence = 1;
 	readonly onDidChange = this.changeEmitter.event;
+	private textModel: ITextModel | undefined;
+	private readonly modelListener = this._register(new MutableDisposable<IDisposable>());
+
+	constructor(
+		private readonly resource: URI,
+		private readonly languageId: string,
+		@IModelService private readonly modelService: IModelService,
+		@ILanguageService private readonly languageService: ILanguageService,
+	) {
+		super();
+		this._register(toDisposable(() => this.textModel?.dispose()));
+	}
+
+	public async loadModel(): Promise<ITextModel> {
+		this.assertNotDisposed();
+		if (!this.textModel) {
+			const model = this.modelService.createModel(this.getText(), this.languageService.createById(this.languageId), this.resource);
+			this.textModel = model;
+			// Views borrow the model through the resolver. Retained entries outlive its last reference.
+			this.modelListener.value = model.onWillDispose(() => { this.textModel = undefined; });
+		}
+		return this.textModel;
+	}
 
 	get entries(): readonly IOutputEntry[] {
 		return Object.freeze([...this.retainedEntries]);
@@ -31,7 +60,20 @@ export class InMemoryOutputChannelModel extends Disposable implements IOutputCha
 	append(input: IOutputEntryInput): void {
 		const entry = this.createEntry(input);
 		if (!entry) return;
+		const firstSequence = this.retainedEntries[0]?.sequence;
+		const previous = this.retainedEntries.at(-1);
 		this.retain(entry);
+		if (this.textModel) {
+			if (this.retainedEntries.at(-1) !== entry || (firstSequence !== undefined && firstSequence !== this.retainedEntries[0]?.sequence)) {
+				this.modelService.updateModel(this.textModel, this.getText());
+			} else {
+				const line = this.textModel.getLineCount();
+				const column = this.textModel.getLineMaxColumn(line);
+				// A CRLF can arrive in separate writes; the model already normalized its CR.
+				const text = previous?.text.endsWith('\r') && entry.text.startsWith('\n') ? entry.text.slice(1) : entry.text;
+				this.textModel.applyEdits([{ range: new Range(line, column, line, column), text }]);
+			}
+		}
 		this.changeEmitter.fire(Object.freeze({ kind: "append", appended: Object.freeze([entry]) }));
 	}
 
@@ -44,6 +86,7 @@ export class InMemoryOutputChannelModel extends Disposable implements IOutputCha
 		this.retainedEntries.length = 0;
 		this.retainedBytes = 0;
 		for (const entry of candidates) this.retain(entry);
+		if (this.textModel) this.modelService.updateModel(this.textModel, this.getText());
 		this.changeEmitter.fire(Object.freeze({ kind: "replace", appended: Object.freeze([...this.retainedEntries]) }));
 	}
 
@@ -51,6 +94,7 @@ export class InMemoryOutputChannelModel extends Disposable implements IOutputCha
 		if (this.retainedEntries.length === 0) return;
 		this.retainedEntries.length = 0;
 		this.retainedBytes = 0;
+		if (this.textModel) this.modelService.updateModel(this.textModel, "");
 		this.changeEmitter.fire(Object.freeze({ kind: "clear", appended: Object.freeze([]) }));
 	}
 

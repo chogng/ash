@@ -25,3 +25,5 @@ import './contrib/skills/browser/skills.contribution.js';
 import './contrib/onboarding/browser/onboarding.contribution.js';
 import './browser/parts/titlebar/commandCenterOnboarding.contribution.js';
 import './contrib/update/browser/update.contribution.js';
+
+import './contrib/output/browser/output.contribution.js';

@@ -1,7 +1,7 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IAppServerApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { ILogSink, LogEntry } from "../../../../platform/log/common/log.js";
-import type { IOutputChannel, IOutputService } from "../common/outputService.js";
+import type { IOutputChannel, IOutputService } from "../common/output.js";
 
 /** Owns built-in Window and App Server diagnostic Output channels. */
 export class SystemOutputService extends Disposable implements ILogSink {

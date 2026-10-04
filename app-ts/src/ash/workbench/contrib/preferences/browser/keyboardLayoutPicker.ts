@@ -11,7 +11,7 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../platform/qu
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IKeyboardShortcutTroubleshootingService } from '../../../services/keybinding/common/keyboardShortcutTroubleshooting.js';
-import { IOutputService } from '../../../services/output/common/outputService.js';
+import { IOutputService } from '../../../services/output/common/output.js';
 import {
 	ChangeKeyboardLayoutCommandId,
 	InspectKeyMappingsCommandId,

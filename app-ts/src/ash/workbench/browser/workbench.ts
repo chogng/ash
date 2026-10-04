@@ -1,3 +1,7 @@
+import { ITextResourcePropertiesService } from '../../editor/common/services/textResourceConfiguration.js';
+import { TextResourcePropertiesService } from '../services/textresourceProperties/common/textResourcePropertiesService.js';
+import { IModelService } from '../../editor/common/services/model.js';
+import { ModelService } from '../../editor/common/services/modelService.js';
 import { IAssetService } from '../../platform/assets/common/assetService.js';
 import { INetworkDiagnosticsService } from '../../platform/networkDiagnostics/common/networkDiagnosticsService.js';
 import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
@@ -265,13 +269,11 @@ import { ICodeIntelligenceDocumentService } from "../services/codeIntelligence/c
 import { AppServerLanguageServerStatusService } from "../services/language/browser/appServerLanguageServerStatusService.js";
 import { ILanguageDiagnosticsService } from "../services/language/common/languageDiagnosticsService.js";
 import { LanguageDiagnosticsMarkerBridge } from "../services/language/browser/languageDiagnosticsMarkerBridge.js";
-import { OutputService } from "../services/output/browser/outputService.js";
-import { IOutputService } from "../services/output/common/outputService.js";
+import { IOutputService } from "../services/output/common/output.js";
 import { IWorkbenchHostService } from "../services/host/common/workbenchHostService.js";
 import { BrowserEditorService } from "../services/editor/browser/browserEditorService.js";
 import { IEditorService } from "../services/editor/common/editorService.js";
 import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
-import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import type { ContextMenuServiceFactory } from "../../platform/contextview/browser/contextMenuService.js";
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
@@ -607,6 +609,8 @@ export class Workbench extends Disposable {
 		const languageConfigurationService = services.get(ILanguageConfigurationService);
 		const languageFeaturesService = this._register(new LanguageFeaturesService());
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
+		services.registerSingleton(ITextResourcePropertiesService, () => services.createInstance(TextResourcePropertiesService));
+		services.registerSingleton(IModelService, () => new ModelService(configuration, services.get(ITextResourcePropertiesService), languageService, languageFeaturesService, languageConfigurationService));
 		this._register(new DefaultPasteProvidersFeature(languageFeaturesService, workspaceContext));
 		this._register(new DefaultDropProvidersFeature(languageFeaturesService, workspaceContext));
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
@@ -758,8 +762,7 @@ export class Workbench extends Disposable {
 		this._register(lifecycleService.onWillShutdown(event => {
 			event.join(workingCopyBackupTracker.flush().then(() => storage.flush(WillSaveStateReason.SHUTDOWN)), "Workbench storage flush");
 		}));
-		const outputService = this._register(new OutputService({ storageService: storage }));
-		services.registerInstance(IOutputService, outputService);
+		const outputService = services.get(IOutputService);
 		const systemOutputService = this._register(new SystemOutputService(outputService, api.appServer));
 		this._register(logService.registerSink(systemOutputService));
 		const serviceContributionReady: Promise<void>[] = [];
@@ -1235,10 +1238,6 @@ export class Workbench extends Disposable {
 			},
 		});
 		services.registerInstance(IViewsService, viewsService);
-		this._register(outputService.onDidRequestShowChannel(request => {
-			if (request.focus === "take") viewsService.focusView(OUTPUT_VIEW_ID);
-			else viewsService.openView(OUTPUT_VIEW_ID);
-		}));
 		this._register(sidebar.onDidSelectComposite(
 			({ compositeId }) => {
 				if (sidebar.activeCompositeId === compositeId && layout.isPartVisible("sidebar")) {

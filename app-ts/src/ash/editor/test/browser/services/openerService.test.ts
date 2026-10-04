@@ -50,3 +50,14 @@ test('opener service requires its editor dependency at creation', () => {
 	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(OpenerService), /codeEditorService/);
 });
+
+test('opener passes a file URI and decoded selection to its code editor service', async () => {
+	using services = new InstantiationService();
+	const editors = editorService();
+	const opened: unknown[] = [];
+	editors.openCodeEditor = async input => { opened.push(input); return null; };
+	services.registerInstance(ICodeEditorService, editors);
+	using opener = services.createInstance(OpenerService);
+	await opener.open('file:///workspace/file.ts#12,7');
+	assert.deepEqual(opened, [{ resource: URI.file('/workspace/file.ts'), options: { selection: { startLineNumber: 12, startColumn: 7, endLineNumber: undefined, endColumn: undefined } } }]);
+});

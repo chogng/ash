@@ -28,9 +28,11 @@ export class CommandsQuickAccessProvider implements IQuickAccessProvider {
 
 	provide(picker: IQuickPick<IQuickPickItem>): DisposableStore {
 		const disposables = new DisposableStore();
+		// Quick Access moves focus into its picker after the provider is created.
+		const editor = this.codeEditorService.getFocusedCodeEditor() ?? this.codeEditorService.getActiveCodeEditor();
 		const menu = disposables.add(this.menuService.createMenu(MenuId.CommandPalette));
 		const updateItems = (): void => {
-			const editorCommands = this.codeEditorService.getActiveCodeEditor()?.getSupportedActions().map(action => {
+			const editorCommands = editor?.getSupportedActions().map(action => {
 				const keybinding = this.keybindingService.lookupKeybinding(action.id);
 				return {
 					commandId: action.id,

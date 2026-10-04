@@ -1,3 +1,4 @@
+import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { isRemoteResource } from '../../../../../platform/remote/common/remote.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -19,8 +20,9 @@ export class TextFileEditor extends TextResourceEditor {
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IDialogService dialogs: IDialogService,
+		@ITextModelService textModelService: ITextModelService,
 	) {
-		super(resourceStore, options, modelService, instantiationService, configurationService);
+		super(resourceStore, options, modelService, instantiationService, configurationService, textModelService);
 		this.saveErrorHandler = new TextFileSaveErrorHandler(dialogs);
 	}
 

@@ -1,9 +1,10 @@
+import { ITextModelService, type IResolvedTextEditorModel } from '../../../../editor/common/services/resolverService.js';
 import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
 import type { IModelContentChangedEvent } from '../../../../editor/common/textModelEvents.js';
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, MutableDisposable, type IDisposable, type IReference, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import * as strings from '../../../../base/common/strings.js';
@@ -27,7 +28,7 @@ import { type Range } from "../../../../editor/common/core/range.js";
 import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
 import { type ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
 import type { Selection } from "../../../../editor/common/core/selection.js";
-import type { TextModel } from '../../../../editor/common/model/textModel.js';
+import { TextModel } from '../../../../editor/common/model/textModel.js';
 import type { IModelDeltaDecoration } from '../../../../editor/common/model.js';
 import type { IViewZoneChangeAccessor } from '../../../../editor/browser/editorBrowser.js';
 import type { ICursorSelectionChangedEvent } from "../../../../editor/common/cursorEvents.js";
@@ -142,6 +143,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	readonly viewStateTypeId = "stanza.code.textView";
 	private readonly selectionChangeEmitter = this._register(new Emitter<EditorPaneSelectionChangeReason>());
 	readonly onDidChangeSelection = this.selectionChangeEmitter.event;
+	private readonly providedModel = this._register(new MutableDisposable<IReference<IResolvedTextEditorModel>>());
 	private readonly workingCopySlot = this._register(new MutableDisposable<IWorkingCopy>());
 	private readonly part = this._register(new MutableDisposable<EditorPanePart>());
 	private readonly statusListener = this._register(new MutableDisposable<IDisposable>());
@@ -175,6 +177,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		@ITextModelResourceService private readonly modelService: ITextModelResourceService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@ITextModelService private readonly textModelService: ITextModelService,
 	) {
 		super();
 		if (!resourceStore || typeof resourceStore.resolve !== "function" || typeof resourceStore.save !== "function" || typeof resourceStore.onDidChange !== "function") {
@@ -243,17 +246,21 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
 		const container = this.requireContainer();
 		throwIfCancelled(signal, "Code editor input loading was cancelled");
-		const modelReference = await this.modelService.acquire(input, signal);
+		const isProvidedResource = input.resource.scheme !== 'file' && this.textModelService.canHandleResource(input.resource);
+		const providedReference = isProvidedResource ? await this.textModelService.createModelReference(input.resource) : undefined;
+		const modelReference = isProvidedResource ? undefined : await this.modelService.acquire(input, signal);
+		const resolvedModel = providedReference ? providedReference.object.textEditorModel : modelReference!.model;
 		let part: EditorPanePart | undefined;
 		let workingCopy: EditorWorkingCopy | undefined;
 		const beforeSaveHooks: Array<() => void | Promise<void>> = [];
 		try {
 			throwIfCancelled(signal, "Code editor input loading was cancelled");
+			if (!(resolvedModel instanceof TextModel)) throw new TypeError('Text resource editor requires a TextModel');
 			part = this.createPart({
 				container,
-				model: modelReference.model,
+				model: resolvedModel,
 				ariaLabel: input.label,
-				readOnly: input.readOnly,
+				readOnly: isProvidedResource || input.readOnly,
 				textMateService: this.options.textMateService,
 				languageDiagnosticsService: this.options.languageDiagnosticsService,
 				accessibilityService: this.options.accessibilityService,
@@ -297,7 +304,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				onApplyWorkspaceEdit: this.options.onApplyWorkspaceEdit,
 				placeholder: this.options.placeholder,
 				showUnicodeHighlights: this.options.showUnicodeHighlights,
-				registerBeforeSave: hook => {
+				registerBeforeSave: isProvidedResource ? undefined : hook => {
 					beforeSaveHooks.push(hook);
 					return toDisposable(() => {
 						const index = beforeSaveHooks.indexOf(hook);
@@ -305,16 +312,16 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 					});
 				},
 			});
-			if (this.options.trimTrailingWhitespace) {
+			if (modelReference && this.options.trimTrailingWhitespace) {
 				beforeSaveHooks.unshift(() => {
 					const selections = [...(part?.getSelections?.() ?? [])];
-					const operations = trimTrailingWhitespace(modelReference.model, [], this.options.trimTrailingWhitespaceInRegexAndStrings ?? true);
-					if (operations.length > 0) modelReference.model.pushEditOperations(selections, operations, () => selections);
+					const operations = trimTrailingWhitespace(resolvedModel, [], this.options.trimTrailingWhitespaceInRegexAndStrings ?? true);
+					if (operations.length > 0) resolvedModel.pushEditOperations(selections, operations, () => selections);
 				});
 			}
-			if (this.options.insertFinalNewLine) {
+			if (modelReference && this.options.insertFinalNewLine) {
 				beforeSaveHooks.push(() => {
-					const model = modelReference.model;
+					const model = resolvedModel;
 					const lineCount = model.getLineCount();
 					if (!lineCount || strings.lastNonWhitespaceIndex(model.getLineContent(lineCount)) === -1) return;
 					const selections = [...(part?.getSelections?.() ?? [])];
@@ -322,7 +329,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 					model.pushEditOperations(selections, operations, () => selections);
 				});
 			}
-			workingCopy = new EditorWorkingCopy(
+			if (modelReference) workingCopy = new EditorWorkingCopy(
 				modelReference,
 				this.resourceStore,
 				input,
@@ -333,7 +340,8 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		} catch (error) {
 			part?.dispose();
 			workingCopy?.dispose();
-			if (!workingCopy) modelReference.dispose();
+			if (!workingCopy) modelReference?.dispose();
+			providedReference?.dispose();
 			throw error;
 		}
 		const shouldRestoreFocus = container.contains(container.ownerDocument.activeElement);
@@ -341,11 +349,12 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		this.part.value = part;
 		this.beforeSaveHooks = beforeSaveHooks;
 		this.workingCopySlot.value = workingCopy;
-		this.languageId = modelReference.model.getLanguageId();
+		this.providedModel.value = providedReference;
+		this.languageId = resolvedModel.getLanguageId();
 		const statusListeners = new DisposableStore();
 		// Declarative language registration can finish after a file has opened.
-		statusListeners.add(modelReference.model.onDidChangeLanguage(() => {
-			this.languageId = modelReference.model.getLanguageId();
+		statusListeners.add(resolvedModel.onDidChangeLanguage(() => {
+			this.languageId = resolvedModel.getLanguageId();
 			this.statusChangeEmitter.fire();
 		}));
 		statusListeners.add(part.onDidChangeCursorSelection(event => {
@@ -356,7 +365,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			this.statusChangeEmitter.fire();
 			this.selectionChangeEmitter.fire(EditorPaneSelectionChangeReason.EDIT);
 		}));
-		statusListeners.add(modelReference.onDidChangeExternalChange(() => {
+		if (modelReference) statusListeners.add(modelReference.onDidChangeExternalChange(() => {
 			if (modelReference.hasExternalChange) part.announceAccessibilityStatus?.("File changed on disk. Local edits are preserved.");
 			this.statusChangeEmitter.fire();
 		}));
@@ -374,6 +383,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		this.part.clear();
 		this.beforeSaveHooks = [];
 		this.workingCopySlot.clear();
+		this.providedModel.clear();
 		this.languageId = undefined;
 		this.statusChangeEmitter.fire();
 	}
@@ -421,7 +431,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	}
 
 	private handleSaveKeydown(event: KeyboardEvent): void {
-		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
+		if (this.providedModel.value || event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "s") return;
 		stopEvent(event);
 		if (this.saving) return;

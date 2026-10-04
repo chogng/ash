@@ -20,6 +20,7 @@ import { CommandsQuickAccessProvider } from '../../browser/commandsQuickAccess.j
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { CodeEditorService } from '../../../../services/editor/browser/codeEditorService.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
+import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 
 test('Command Palette finds localized commands by their English title and reports command errors', async () => {
 	using resources = new DisposableStore();
@@ -110,4 +111,39 @@ test('Command Palette does not show a dialog for cancelled commands', async () =
 	accept.fire(item);
 	await Promise.resolve();
 	assert.deepEqual(dialogs.model.dialogs, []);
+});
+
+test('Command Palette retains the focused embedded editor actions while its picker owns focus', async () => {
+	using resources = new DisposableStore();
+	using services = new InstantiationService();
+	services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
+	services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
+	let focused = true;
+	const editor = {
+		getId: () => 'output', hasTextFocus: () => focused, hasWidgetFocus: () => false,
+		getSupportedActions: () => [{ id: 'test.outputCommand', label: 'Output action', alias: 'Output action' }],
+	} as unknown as ICodeEditor;
+	const editors = services.get(ICodeEditorService);
+	editors.addCodeEditor(editor);
+	const executed: boolean[] = [];
+	const registry = new CommandRegistry();
+	resources.add(registry.register('test.outputCommand', () => { executed.push(focused); }));
+	const commands = resources.add(new CommandService(services, registry));
+	const contexts = resources.add(new ContextKeyService());
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(IMenuService, new MenuService(commands, contexts));
+	services.registerInstance(IDialogService, resources.add(new DialogService()));
+	const updated = resources.add(new Emitter<void>());
+	services.registerInstance(IKeybindingService, { lookupKeybinding: () => undefined, onDidUpdateKeybindings: updated.event } as unknown as IKeybindingService);
+	const accept = resources.add(new Emitter<IQuickPickItem>());
+	const picker = { items: [] as readonly IQuickPickItem[], onDidAccept: accept.event, hide: () => { focused = true; } } as unknown as IQuickPick<IQuickPickItem>;
+	resources.add(services.createInstance(CommandsQuickAccessProvider).provide(picker));
+	focused = false;
+	updated.fire();
+	const item = picker.items.find(candidate => candidate.description === 'test.outputCommand');
+	assert.ok(item);
+	accept.fire(item);
+	await Promise.resolve();
+	assert.deepEqual(executed, [true]);
+	editors.removeCodeEditor(editor);
 });

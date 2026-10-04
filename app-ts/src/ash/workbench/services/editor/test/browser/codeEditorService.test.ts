@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
+import { Range } from '../../../../../editor/common/core/range.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
+import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from '../../common/editorService.js';
+import type { IEditorPane } from '../../../../browser/parts/editor/editorPane.js';
 import { type IEditorPartsService as EditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
@@ -68,4 +73,39 @@ test('code editor services require their host and keep registrations within its 
 	assert.notEqual(first.get(ICodeEditorService), second.get(ICodeEditorService));
 	first.dispose();
 	assert.equal(second.get(ICodeEditorService).getActiveCodeEditor(), null);
+});
+
+test('code editor resource opening reaches the Workbench group with its selection and focus preferences', async () => {
+	using resources = new DisposableStore();
+	const services = resources.add(new InstantiationService());
+	const requests: Array<{ input: EditorInput; options: EditorOpenOptions; target: EditorOpenTarget }> = [];
+	let control: unknown;
+	services.registerInstance(IEditorPartsService, {
+		openEditor: async (input: EditorInput, options: EditorOpenOptions, target: EditorOpenTarget) => {
+			requests.push({ input, options, target });
+			return { getControl: () => control } as IEditorPane;
+		},
+	} as unknown as EditorPartsService);
+	services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
+	const service = services.get(ICodeEditorService);
+	using model = new TextModel('shared');
+	const container = document.createElement('div');
+	const source = document.createElement('button');
+	document.body.append(container, source);
+	resources.add(toDisposable(() => { container.remove(); source.remove(); }));
+	control = resources.add(createTestCodeEditor({ container, model, instantiationService: services }));
+	source.focus();
+	const resource = URI.file('/workspace/src/main.ts');
+	const editor = await service.openCodeEditor({ resource, options: { pinned: true, preserveFocus: true, selection: { startLineNumber: 12, startColumn: 7, endLineNumber: 13, endColumn: 2 } } }, null, true);
+	assert.equal(editor, control);
+	assert.equal(requests[0]?.input.resource, resource);
+	assert.equal(requests[0]?.target, 'sideGroup');
+	assert.deepEqual(requests[0]?.options.selection, new Range(12, 7, 13, 2));
+	assert.equal(requests[0]?.options.pinned, true);
+	assert.equal(requests[0]?.options.preserveFocus, true);
+	assert.equal(requests[0]?.options.selectionSource, TextEditorSelectionSource.NAVIGATION);
+	assert.equal(document.activeElement, source);
+	await service.openCodeEditor({ resource }, null);
+	assert.equal(service.getFocusedCodeEditor(), control);
+	assert.equal(requests[1]?.target, 'activeGroup');
 });

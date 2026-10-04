@@ -3,7 +3,7 @@ import { DialogSeverity, type IDialogService } from "../../../../platform/dialog
 import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type LanguageServerMessageNotification, type LanguageServerMessageSeverityDto, type LanguageServerProgressNotification, type LanguageServerStateDto, type LanguageServerStateNotification } from "../../../../platform/app-server/common/generated/index.js";
-import type { IOutputChannel, IOutputService } from "../../output/common/outputService.js";
+import type { IOutputChannel, IOutputService } from "../../output/common/output.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../statusbar/browser/statusbar.js";
 
 interface LanguageServerProgressState {

@@ -315,7 +315,7 @@ test("workbench configuration preserves combined override blocks in data and ins
 	assert.doesNotMatch((await service.read()).source, /"\[typescript\]"\s*:/u);
 });
 
-test("workbench configuration rejects unsupported write owners and resource overrides", async () => {
+test("workbench configuration accepts resource reads and rejects unsupported write owners", async () => {
 	const registry = new ConfigurationRegistry();
 	const tabSize = registry.registerConfiguration({
 		key: "editor.tabSize",
@@ -335,10 +335,9 @@ test("workbench configuration rejects unsupported write owners and resource over
 		service.updateValue(tabSize, 8, { resource: URI.parse("file:///workspace/file.ts") }, ConfigurationTarget.USER_LOCAL),
 		/does not support resource overrides/u,
 	);
-	assert.throws(
-		() => service.getValue(tabSize, { resource: URI.parse("file:///workspace/file.ts") }),
-		/does not support resource overrides/u,
-	);
+	assert.equal(service.getValue(tabSize, { resource: URI.parse("file:///workspace/file.ts") }), 6);
+	assert.equal(service.getValue(tabSize, { resource: URI.parse("output:/window") }), 6);
+	assert.equal(service.inspect(tabSize, { resource: URI.parse("output:/window") }).value, 6);
 });
 
 test("workbench configuration change compares values after language overrides", async () => {

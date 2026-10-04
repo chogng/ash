@@ -1,12 +1,16 @@
+import { installEditorTestGlobals } from '../../../../../editor/test/browser/editorTestGlobals.js';
+import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { IOutputService } from '../../../../services/output/common/output.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { Event } from "../../../../../base/common/event.js";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
+import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
-import { OutputService } from "../../../../../workbench/services/output/browser/outputService.js";
 import type { ITaskService } from "../../../../../workbench/services/tasks/common/taskService.js";
 import type { ITerminalService } from "../../../../../workbench/services/terminal/common/terminal.js";
 import type { IViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
@@ -14,6 +18,7 @@ import type { IViewsService } from "../../../../../workbench/services/views/brow
 test("Output projects channel selection and active-channel clearing into the Panel title", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
+	browser.window.HTMLCanvasElement.prototype.getContext = () => null;
 	let shownActions: readonly IAction[] = [];
 	const contextMenus: IContextMenuService = {
 		onDidShowContextMenu: Event.None,
@@ -22,14 +27,20 @@ test("Output projects channel selection and active-channel clearing into the Pan
 		hideContextMenu() {},
 	};
 	try {
-		using output = new OutputService();
+		const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
+		using outputResources = new DisposableStore();
+		const outputScope = workbenchInstantiationService(outputResources);
+		const output = outputScope.get(IOutputService);
 		using rust = output.createChannel({ id: "rust", label: "rust-analyzer" });
 		using typescript = output.createChannel({ id: "typescript", label: "TypeScript" });
 		rust.append({ severity: "warning", text: "check failed" });
 		typescript.append({ severity: "log", text: "server ready" });
-		const { OutputViewPane } = await import("../../../../../workbench/contrib/output/browser/outputViewPane.js");
-		using services = new InstantiationService();
-		using pane = new OutputViewPane(browser.window.document.body, { id: "ash.output.test", title: "Output" }, output, contextMenus, services);
+		const { OutputViewPane } = await import("../../../../../workbench/contrib/output/browser/outputView.js");
+		const overrides = outputResources.add(outputScope.createChild());
+		overrides.registerInstance(IContextMenuService, contextMenus);
+		const services = createCodeEditorServices(outputResources, overrides);
+		services.registerInstance(IAccessibleViewService, { ...toDisposable(() => {}), show: () => false, getOpenAriaHint: () => undefined });
+		using pane = services.createInstance(OutputViewPane, browser.window.document.body, { id: 'ash.output.test', title: 'Output' });
 		const titleActions = pane.partTitleProjection?.actions;
 		assert.ok(titleActions);
 		browser.window.document.body.append(pane.element, titleActions);
@@ -38,7 +49,7 @@ test("Output projects channel selection and active-channel clearing into the Pan
 		assert.ok(selectChannel);
 		assert.ok(clearOutput);
 		assert.ok(clearOutput.querySelector("svg.ash-icon"));
-		assert.match(pane.element.querySelector(".ash-output-content")?.textContent ?? "", /check failed/);
+		await waitFor(() => pane.element.querySelector(".stanza-editor-input") !== null);
 		clearOutput.click();
 		assert.deepEqual(rust.entries, []);
 		titleActions.querySelector<HTMLButtonElement>("[data-action-id='ash.output.selectChannel'] button")?.click();
@@ -46,9 +57,9 @@ test("Output projects channel selection and active-channel clearing into the Pan
 		assert.ok(typescriptAction);
 		await typescriptAction.run();
 		assert.equal(output.activeChannel, typescript);
-		assert.match(pane.element.querySelector(".ash-output-content")?.textContent ?? "", /server ready/);
+		assert.equal(typescript.getText(), "server ready");
 	} finally {
-		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+		installedGlobals.dispose();
 		browser.window.close();
 	}
 });
@@ -56,6 +67,7 @@ test("Output projects channel selection and active-channel clearing into the Pan
 test("Tasks projects its refresh action into the Panel title", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
+	browser.window.HTMLCanvasElement.prototype.getContext = () => null;
 	let refreshCount = 0;
 	const tasks = {
 		tasks: [],
@@ -88,7 +100,7 @@ test("Tasks projects its refresh action into the Panel title", async () => {
 		refreshTasks.click();
 		await waitFor(() => refreshCount === 2);
 	} finally {
-		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+		installedGlobals.dispose();
 		browser.window.close();
 	}
 });
@@ -101,7 +113,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	}
 }
 
-function installDomGlobals(browser: JSDOM): readonly string[] {
+function installDomGlobals(browser: JSDOM): IDisposable {
 	const globals = {
 		window: browser.window,
 		document: browser.window.document,
@@ -111,7 +123,13 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 		Event: browser.window.Event,
 		MouseEvent: browser.window.MouseEvent,
 		navigator: browser.window.navigator,
+		HTMLCanvasElement: browser.window.HTMLCanvasElement,
+		HTMLButtonElement: browser.window.HTMLButtonElement,
+		KeyboardEvent: browser.window.KeyboardEvent,
+		InputEvent: browser.window.InputEvent,
+		NodeFilter: browser.window.NodeFilter,
+		PointerEvent: browser.window.MouseEvent,
+		ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
 	};
-	for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, value });
-	return Object.keys(globals);
+	return installEditorTestGlobals(globals);
 }

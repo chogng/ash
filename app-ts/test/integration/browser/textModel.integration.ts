@@ -1,3 +1,5 @@
+import { ITextModelService } from '../../../src/ash/editor/common/services/resolverService.js';
+import { TextModelResolverService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResolverService.js';
 import { BrowserTextMateService } from '../../../src/ash/workbench/services/textMate/browser/browserTextMateService.js';
 import { createLanguageExtensions } from './languageExtensions.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
@@ -166,6 +168,7 @@ services.registerSingleton(IMarkerDecorationsService, () => services.createInsta
 services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
 services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
 services.registerInstance(ITextModelResourceService, models);
+services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 const themeService = disposables.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, themeService);
 disposables.add(bindColorTheme(themeService, root));

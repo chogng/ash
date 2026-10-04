@@ -1,3 +1,6 @@
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import type { URI } from '../../../../base/common/uri.js';
+import type { ITextModel } from '../../../../editor/common/model.js';
 import type { Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
@@ -56,12 +59,14 @@ export interface IOutputChannelRevealRequest {
  * when their capability is no longer available.
  */
 export interface IOutputChannel extends IDisposable {
+	readonly uri: URI;
 	readonly descriptor: IOutputChannelDescriptor;
 	readonly id: string;
 	readonly label: string;
 	readonly kind: OutputChannelKind;
 	readonly entries: readonly IOutputEntry[];
 	readonly onDidChange: Event<IOutputChannelChange>;
+	loadModel(): Promise<ITextModel>;
 	append(entry: IOutputEntryInput): void;
 	appendLine(entry: IOutputEntryInput): void;
 	replace(entries: IOutputEntryInput | readonly IOutputEntryInput[]): void;
@@ -72,6 +77,7 @@ export interface IOutputChannel extends IDisposable {
 
 /** Window-scoped registry, active selection, and reveal intent for Output. */
 export interface IOutputService {
+	readonly filters: IOutputViewFilters;
 	readonly channels: readonly IOutputChannel[];
 	readonly activeChannel: IOutputChannel | undefined;
 	readonly onDidChangeChannels: Event<void>;
@@ -84,3 +90,30 @@ export interface IOutputService {
 }
 
 export const IOutputService = createServiceIdentifier<IOutputService>("outputService");
+
+export const OUTPUT_VIEW_ID = "ash.output";
+export const SHOW_OUTPUT_COMMAND_ID = "workbench.action.output.show";
+export const SHOW_OUTPUT_CHANNELS_COMMAND_ID = "workbench.action.output.showChannels";
+export const CLEAR_OUTPUT_COMMAND_ID = "workbench.action.output.clear";
+export const OPEN_OUTPUT_IN_EDITOR_COMMAND_ID = "workbench.action.output.openInEditor";
+export const EXPORT_OUTPUT_COMMAND_ID = "workbench.action.output.export";
+
+export const OUTPUT_MODE_ID = 'Log';
+export const LOG_MODE_ID = 'log';
+export const OutputSeverities: readonly OutputEntrySeverity[] = Object.freeze(['trace', 'debug', 'information', 'warning', 'error', 'log']);
+
+/** Structured producer metadata drives view filtering without changing shared text. */
+export interface IOutputViewFilters {
+	readonly text: string;
+	readonly onDidChange: Event<void>;
+	setText(text: string): void;
+	isSeverityVisible(severity: OutputEntrySeverity): boolean;
+	setSeverityVisible(severity: OutputEntrySeverity, visible: boolean): void;
+	setMinimumSeverity(severity: OutputEntrySeverity): void;
+	isCategoryVisible(category: string): boolean;
+	setCategoryVisible(category: string, visible: boolean): void;
+	reset(): void;
+	matches(entry: IOutputEntry): boolean;
+}
+
+export const CONTEXT_IN_OUTPUT = new RawContextKey<boolean>('inOutput', false);

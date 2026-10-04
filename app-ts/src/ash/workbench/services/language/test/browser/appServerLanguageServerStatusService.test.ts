@@ -1,8 +1,10 @@
+import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { IOutputService } from '../../../output/common/output.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import { DialogService } from "../../../dialogs/common/dialogService.js";
-import { OutputService } from "../../../output/browser/outputService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../statusbar/browser/statusbar.js";
 import { AppServerLanguageServerStatusService } from "../../browser/appServerLanguageServerStatusService.js";
 import { type ServerNotification } from "../../../../../platform/app-server/common/generated/index.js";
@@ -10,7 +12,8 @@ import { type ServerNotification } from "../../../../../platform/app-server/comm
 test("language-server status service publishes channels and only projects active work-done progress", () => {
 	const events = new FakeServerEvents();
 	using dialogs = new DialogService();
-	using output = new OutputService();
+	using outputResources = new DisposableStore();
+	const output = workbenchInstantiationService(outputResources).get(IOutputService);
 	using statusbar = new StatusbarService();
 	const reveals: Array<[string, string]> = [];
 	using revealListener = output.onDidRequestShowChannel(request => reveals.push([request.channel.id, request.focus]));
@@ -41,7 +44,8 @@ test("language-server status service publishes channels and only projects active
 test("language-server lifecycle is projected from the backend state machine", () => {
 	const events = new FakeServerEvents();
 	using dialogs = new DialogService();
-	using output = new OutputService();
+	using outputResources = new DisposableStore();
+	const output = workbenchInstantiationService(outputResources).get(IOutputService);
 	using statusbar = new StatusbarService();
 	using service = new AppServerLanguageServerStatusService(events, dialogs, output, statusbar);
 

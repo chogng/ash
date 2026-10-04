@@ -7,7 +7,7 @@ import type { ILogService } from "../../../../platform/log/common/log.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalService } from "../../terminal/common/terminal.js";
 import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, type TaskRunStatus } from "../common/taskService.js";
-import type { IOutputChannel, IOutputService, OutputEntrySeverity } from "../../output/common/outputService.js";
+import type { IOutputChannel, IOutputService, OutputEntrySeverity } from "../../output/common/output.js";
 import { cargoWorkspaceTasks, parsePackageTasks, parseWorkspaceTasks } from "../common/workspaceTasks.js";
 
 const TASK_TERMINAL_DIMENSIONS = Object.freeze({ rows: 24, cols: 80 });

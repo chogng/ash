@@ -5,7 +5,7 @@ import { IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionHostFle
 import { ILanguageFeaturesService, type LanguageProviderBatch, type LanguageProviderBatchRegistration } from '../../../editor/common/services/languageFeatures.js';
 import { ITaskService, type TaskProvider, type TaskProviderRegistration } from '../../services/tasks/common/taskService.js';
 import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from '../../services/testing/common/testingService.js';
-import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from '../../services/output/common/outputService.js';
+import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from '../../services/output/common/output.js';
 import { createExtensionHostLanguageProviderBatch, extensionHostLanguageProviderId, unsupportedExtensionHostLanguageOperations, type ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
 import { createExtensionHostTaskProvider, createExtensionHostTestProfileProvider, extensionHostCanonicalTaskId, extensionHostWorkflowProviderId } from './extensionHostWorkflowBridge.js';
 

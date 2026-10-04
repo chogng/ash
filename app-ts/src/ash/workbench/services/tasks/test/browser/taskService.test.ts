@@ -1,3 +1,6 @@
+import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { IOutputService } from '../../../output/common/output.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter, Event } from "../../../../../base/common/event.js";
@@ -7,7 +10,6 @@ import { FileKind, FileNotFoundError, type IFileBytes, type IFileService, type I
 import { type IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
 import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, type ITerminalService, type TerminalInstanceState } from "../../../../services/terminal/common/terminal.js";
 import { TaskService } from "../../browser/taskService.js";
-import { OutputService } from "../../../output/browser/outputService.js";
 
 test("TaskService discovers tasks, writes one terminal command, and tracks its exit", async () => {
 	const root = URI.file("C:\\project");
@@ -24,7 +26,8 @@ test("TaskService discovers tasks, writes one terminal command, and tracks its e
 		getWorkspaceFolder: () => null,
 	};
 	using terminals = new FakeTerminalService();
-	using output = new OutputService();
+	using outputResources = new DisposableStore();
+	const output = workbenchInstantiationService(outputResources).get(IOutputService);
 	using service = new TaskService(files, workspace, terminals, output);
 	const tasks = await service.refresh();
 	assert.deepEqual(tasks.map(task => task.id), ["cargo:build", "cargo:check", "vscode:0:lint", "cargo:test", "pnpm:test", "cargo:run"]);

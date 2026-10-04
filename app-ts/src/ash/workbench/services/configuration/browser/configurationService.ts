@@ -91,7 +91,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 		if (sectionOrOverrides === undefined && overrides !== undefined) throw new TypeError('Configuration overrides require a configuration section');
 		const resolvedOverrides = section === undefined ? sectionOrOverrides : overrides;
 		if (resolvedOverrides !== undefined && !isConfigurationOverrides(resolvedOverrides)) throw new TypeError('Configuration overrides are invalid');
-		assertNoResourceOverride(resolvedOverrides, 'Workbench configuration');
+		// Reads use the current configuration domain; the resource identifies the consumer, not a write target.
 		if (section !== undefined) return this.resolveSection(section, resolvedOverrides) as T;
 		const result: Record<string, unknown> = {};
 		for (const key of this.registry.getConfigurations()) setConfigurationValue(result, key, this.resolveSection(key, resolvedOverrides));
@@ -130,7 +130,6 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 
 	inspect<T>(key: string, overrides?: IConfigurationOverrides): IConfigurationValue<Readonly<T>> {
 		if (overrides !== undefined && !isConfigurationOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
-		assertNoResourceOverride(overrides, 'Workbench configuration');
 		const configuration = this.requireConfiguration(key);
 		const hasBase = this.configuredValues.has(key);
 		const base = this.configuredValues.get(key) as Readonly<T> | undefined;
@@ -352,7 +351,6 @@ function configurationChangeEvent(
 		change,
 		affectsConfiguration(configuration: string, overrides?: IConfigurationOverrides): boolean {
 			if (overrides !== undefined && !isConfigurationOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
-			assertNoResourceOverride(overrides, 'Workbench configuration');
 			if (![...affectedKeys].some(key => key === configuration || key.startsWith(`${configuration}.`))) return false;
 			if (!overrides) return true;
 			const before = resolveSection(previous, registry, configuration, overrides.overrideIdentifier);

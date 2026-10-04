@@ -2,7 +2,31 @@ import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { URI } from '../../../base/common/uri.js';
 import type { ITextEditorOptions } from '../../editor/common/editor.js';
+import type { ITextEditorSelection } from '../../editor/common/editor.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+
+export function withSelection(uri: URI, selection: ITextEditorSelection): URI {
+	const end = selection.endLineNumber === undefined ? '' : `-${selection.endLineNumber},${selection.endColumn ?? 1}`;
+	return uri.with({ fragment: `${selection.startLineNumber},${selection.startColumn}${end}` });
+}
+
+/** Separates editor coordinates before the resource enters file or model resolution. */
+export function extractSelection(uri: URI): { selection: ITextEditorSelection | undefined; uri: URI } {
+	const points = uri.fragment.split('-');
+	if (points.length > 2 || points.some(point => !/^L?\d+(,\d+)?$/.test(point))) {
+		return { uri, selection: undefined };
+	}
+	const coordinates = points.map(point => point.replace(/^L/, '').split(',').map(Number));
+	if (coordinates.flat().some(value => !Number.isSafeInteger(value) || value < 1)) {
+		return { uri, selection: undefined };
+	}
+	const start = coordinates[0]!;
+	const end = coordinates[1];
+	return {
+		uri: uri.with({ fragment: '' }),
+		selection: { startLineNumber: start[0]!, startColumn: start[1] ?? 1, endLineNumber: end?.[0], endColumn: end ? end[1] ?? 1 : undefined },
+	};
+}
 
 export interface OpenOptions {
 	readonly openExternal?: boolean;

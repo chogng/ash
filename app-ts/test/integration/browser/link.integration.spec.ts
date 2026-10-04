@@ -1,4 +1,12 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+const pageErrors = new WeakMap<Page, string[]>();
+test.beforeEach(({ page }) => {
+	const errors: string[] = [];
+	pageErrors.set(page, errors);
+	page.on('pageerror', error => errors.push(error.message));
+});
+test.afterEach(({ page }) => { expect(pageErrors.get(page)).toEqual([]); });
 
 test('ordinary links route pointer and keyboard activation through the opener', async ({ page }) => {
 	await page.goto('/link.html');
@@ -83,24 +91,95 @@ test('link colors and keyboard focus follow all four product themes', async ({ p
 	expect(await page.locator('#custom-link .ash-link').evaluate(element => getComputedStyle(element).color)).toBe('rgb(255, 128, 128)');
 });
 
-test('Output file links open the detected position and release old rows and hovers', async ({ page }) => {
+test('Output editor links open their reported position from the keyboard', async ({ page }) => {
 	await page.goto('/link.html');
-	const link = page.getByRole('button', { name: 'src/main.ts:12:7', exact: true });
-	await link.focus();
-	await link.press('Enter');
-	await link.press('Space');
-	await link.click();
-	await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.files)).toEqual(Array(3).fill({ resource: 'file:///workspace/src/main.ts', line: 12, column: 7 }));
-	await page.mouse.move(0, 0);
-	await link.hover();
-	await expect(page.getByRole('tooltip')).toHaveText('file:///workspace/src/main.ts');
-	await page.evaluate(() => window.ashLinkIntegration.appendOutput());
-	await expect(page.locator('#output .ash-link')).toHaveCount(2);
-	await expect(page.getByRole('tooltip')).toHaveCount(0);
-	await page.evaluate(() => window.ashLinkIntegration.clearOutput());
-	await expect(page.locator('#output .ash-link')).toHaveCount(0);
+	const editor = page.locator('#output .stanza-editor-input');
+	await expect(page.locator('#output .view-lines')).toContainText('src/main.ts:12:7');
+	await editor.focus();
+	await page.keyboard.press('ControlOrMeta+Home');
+	await page.evaluate(() => window.ashLinkIntegration.runOpenLink());
+	await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.files)).toEqual([{ resource: 'file:///workspace/src/main.ts', line: 12, column: 7 }]);
 	await page.evaluate(() => window.ashLinkIntegration.disposeOutput());
 	await expect(page.locator('#output .ash-view-pane')).toHaveCount(0);
+});
+
+test('Output panel and resource editor share live text while filters only change panel visibility', async ({ page }) => {
+	await page.goto('/link.html');
+	await page.evaluate(() => window.ashLinkIntegration.openOutputEditor());
+	await page.evaluate(() => window.ashLinkIntegration.appendOutput());
+	await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.getOutputState())).toEqual({
+		panelText: 'src/main.ts:12:7: check this file\nsrc/other.ts(4,2): next file\n',
+		editorText: 'src/main.ts:12:7: check this file\nsrc/other.ts(4,2): next file\n',
+		sameModel: true, readonly: true,
+	});
+	await page.evaluate(() => window.ashLinkIntegration.filterOutput('other'));
+	await expect(page.locator('#output .view-lines')).not.toContainText('check this file');
+	await expect(page.locator('#output .view-lines')).toContainText('next file');
+	await expect(page.locator('#live-output-editor .view-lines')).toContainText('check this file');
+	const input = page.locator('#live-output-editor .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.insertText('must not change');
+	expect((await page.evaluate(() => window.ashLinkIntegration.getOutputState())).editorText).not.toContain('must not change');
+	await page.evaluate(() => window.ashLinkIntegration.clearOutput());
+	await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.getOutputState())).toEqual({ panelText: '', editorText: '', sameModel: true, readonly: true });
+	await page.evaluate(() => { window.ashLinkIntegration.disposeOutput(); window.ashLinkIntegration.appendOutput(); });
+	await expect(page.locator('#live-output-editor .view-lines')).toContainText('next file');
+});
+
+test('Output follows new lines until scrolling pauses it and Find returns focus to its editor', async ({ page }) => {
+	await page.goto('/link.html');
+	await expect(page.locator('#output .view-lines')).toContainText('check this file');
+	await page.evaluate(() => window.ashLinkIntegration.appendOutputLines(60));
+	await expect.poll(() => page.evaluate(() => {
+		const scroll = window.ashLinkIntegration.getOutputScroll();
+		return scroll.end > 0 && scroll.top === scroll.end;
+	})).toBe(true);
+	await page.locator('#output .stanza-editor').hover();
+	await page.mouse.wheel(0, -5000);
+	await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.getOutputScroll().top)).toBe(0);
+	const follow = page.getByRole('button', { name: 'Auto Scroll', exact: true });
+	await expect(follow).toHaveAttribute('aria-pressed', 'false');
+	await page.evaluate(() => window.ashLinkIntegration.appendOutputLines(10));
+	expect(await page.evaluate(() => window.ashLinkIntegration.getOutputScroll().top)).toBe(0);
+	await follow.click();
+	await expect.poll(() => page.evaluate(() => {
+		const scroll = window.ashLinkIntegration.getOutputScroll();
+		return scroll.top === scroll.end;
+	})).toBe(true);
+	const input = page.locator('#output .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('ControlOrMeta+f');
+	const find = page.locator('#output').getByRole('textbox', { name: 'Find', exact: true });
+	await find.fill('live line 40');
+	await find.press('Enter');
+	await find.press('Escape');
+	await expect(input).toBeFocused();
+	await expect(page.locator('#output .view-lines')).toContainText('live line 40');
+});
+
+test('Output severity and filter focus use theme colors in all four themes', async ({ page }) => {
+	await page.goto('/link.html');
+	const warning = page.locator('#output .ash-output-warning').first();
+	await expect(warning).toHaveText(/check this file/u);
+	const filter = page.getByRole('searchbox', { name: 'Filter Output', exact: true });
+	for (const index of [0, 1, 2, 3]) {
+		await page.evaluate(index => window.ashLinkIntegration.setTheme(index), index);
+		await filter.focus();
+		const colors = await warning.evaluate(element => {
+			const probe = document.createElement('span');
+			element.after(probe);
+			probe.style.color = 'var(--ash-warning-foreground)';
+			const warningColor = getComputedStyle(probe).color;
+			probe.style.color = 'var(--ash-focus-border)';
+			const focusColor = getComputedStyle(probe).color;
+			probe.remove();
+			const input = document.querySelector('#output .ash-output-filter-input')!;
+			return { warning: getComputedStyle(element).color, warningColor, focus: getComputedStyle(input).borderColor, focusColor, width: getComputedStyle(input).borderWidth };
+		});
+		expect(colors.warning).toBe(colors.warningColor);
+		expect(colors.focus).toBe(colors.focusColor);
+		expect(colors.width).toBe('1px');
+	}
 });
 
 test('touch activation opens an ordinary link once', async ({ browser }) => {

@@ -10,7 +10,26 @@ test('Output channels open from the product command palette', async ({ workbench
 	await workbench.quickaccess.select('Window');
 	const output = workbench.page.locator('[data-view-id="ash.output"]');
 	await expect(output).toBeVisible();
-	await expect(output.getByRole('log')).toContainText('Workbench restored');
+	await output.getByRole('searchbox', { name: 'Filter Output', exact: true }).fill('Workbench restored');
+	const input = output.locator('.stanza-editor-input');
+	await expect(output.locator('.view-lines')).toContainText('Workbench restored');
+	await input.focus();
+	await workbench.page.keyboard.press('Alt+F1');
+	const help = workbench.page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+	await expect(help.locator('.ash-accessible-view-content')).toHaveValue(/Output is a read-only editor/u);
+	await workbench.page.keyboard.press('Escape');
+	await expect(input).toBeFocused();
+	await workbench.quickaccess.runCommand('workbench.action.output.openInEditor');
+	const editor = workbench.editors.groupAt(0).content;
+	await expect(editor.locator('.view-lines')).toContainText('Workbench restored');
+	await output.getByRole('searchbox', { name: 'Filter Output', exact: true }).fill('no_output_matches_this');
+	await expect(output.locator('.view-lines')).toHaveCount(0);
+	await expect(editor.locator('.view-lines')).toContainText('Workbench restored');
+	await output.getByRole('searchbox', { name: 'Filter Output', exact: true }).fill('Workbench restored');
+	await expect(output.locator('.view-lines')).toContainText('Workbench restored');
+	await workbench.quickaccess.runCommand('workbench.action.output.clear');
+	await expect(editor.locator('.view-lines')).not.toContainText('Workbench restored');
+	await expect(output.locator('.view-lines')).not.toContainText('Workbench restored');
 });
 
 test('Output task file links open the editor at their line and column from the keyboard', async ({ target, testWorkspace, workbench }) => {
@@ -29,16 +48,21 @@ test('Output task file links open the editor at their line and column from the k
 	await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
 	await workbench.quickaccess.select('Tasks');
 	const output = workbench.page.locator('[data-view-id="ash.output"]');
-	const link = output.getByRole('button', { name: 'src/link-target.ts:12:7', exact: true }).first();
-	await expect(link).toBeVisible();
-	await link.focus();
-	await link.press('Enter');
+	const input = output.locator('.stanza-editor-input');
+	await expect(output.locator('.view-lines')).toContainText('src/link-target.ts:12:7');
+	await input.focus();
+	await workbench.page.keyboard.press('ControlOrMeta+f');
+	const find = output.getByRole('textbox', { name: 'Find', exact: true });
+	await find.fill('src/link-target.ts:12:7');
+	await find.press('Enter');
+	await find.press('Escape');
+	await workbench.quickaccess.runCommand('editor.action.openLink');
 	const group = workbench.editors.groupAt(0);
 	await expect(group.tabs.filter({ hasText: 'link-target.ts' })).toBeVisible();
 	await expect(group.editor.input).toBeFocused();
 	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('Line 12, column 7');
 	await workbench.quickaccess.runCommand('workbench.action.output.clear');
-	await expect(output.locator('.ash-link')).toHaveCount(0);
+	await expect(output.locator('.view-lines')).not.toContainText('src/link-target.ts:12:7');
 });
 
 interface ExternalOpening {
@@ -125,7 +149,7 @@ test('editor document links open from the keyboard and modifier click', async ({
 	}
 });
 
-test('editor Open Link command is localized after a display-language restart', async ({ target, workbench, restartWorkbench }) => {
+test('editor Open Link and Output help are localized after a display-language restart', async ({ target, workbench, restartWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code command palette.');
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
@@ -139,6 +163,16 @@ test('editor Open Link command is localized after a display-language restart', a
 	await picker.getByRole('combobox').fill('打开链接');
 	await expect(picker.locator('.ash-quick-pick-row-label').filter({ hasText: /^打开链接$/u })).toBeVisible();
 	await picker.getByRole('combobox').press('Escape');
+	await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
+	await workbench.quickaccess.select('Window');
+	const output = workbench.page.locator('[data-view-id="ash.output"]');
+	await expect(output.getByRole('searchbox', { name: '筛选输出', exact: true })).toBeVisible();
+	await output.locator('.stanza-editor-input').focus();
+	await workbench.page.keyboard.press('Alt+F1');
+	const help = workbench.page.locator('.ash-accessible-view-dialog');
+	await expect(help.locator('.ash-accessible-view-content')).toHaveValue(/输出是只读编辑器/u);
+	await workbench.page.keyboard.press('Escape');
+	await expect(output.locator('.stanza-editor-input')).toBeFocused();
 });
 
 test.describe('SCM external opening', () => {

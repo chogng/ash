@@ -471,10 +471,13 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 
 	private createVisibleProjection(source: EditorVisualLineProjection): EditorVisualLineProjection {
 		if (this.hiddenAreas.length === 0) return source;
-		const visibleLogicalLines = Object.freeze(Array.from(
+		const visibleLogicalLines = Array.from(
 			{ length: source.logicalLineCount },
 			(_, lineIndex) => this.isLogicalLineVisible(lineIndex),
-		));
+		);
+		// A text editor retains one cursor row when hidden ranges cover a shrinking model.
+		if (!visibleLogicalLines.some(Boolean)) visibleLogicalLines[0] = true;
+		Object.freeze(visibleLogicalLines);
 		const lines = source.lines.filter(line => visibleLogicalLines[line.logicalLineIndex]);
 		const anchors = createVisualLineAnchors(source, visibleLogicalLines, lines);
 		return EditorVisualLineProjection.fromVisibleLines(source.modelVersion, source.logicalLineCount, lines, anchors);
@@ -672,6 +675,9 @@ class ViewModelCoordinatesConverter implements ICoordinatesConverter {
 		const viewLineIndex = projection.firstVisualLineIndex(position.lineNumber - 1);
 		if (projection.lineAt(viewLineIndex)!.logicalLineIndex !== position.lineNumber - 1) {
 			const viewLineNumber = viewLineIndex + 1;
+			if (projection.lineAt(viewLineIndex)!.logicalLineIndex >= position.lineNumber) {
+				return new Position(viewLineNumber, projection.getViewLineData(this.model, viewLineNumber).minColumn);
+			}
 			return new Position(viewLineNumber, projection.getViewLineData(this.model, viewLineNumber).maxColumn);
 		}
 		return projection.convertModelPositionToViewPosition(position, affinity);
@@ -720,8 +726,8 @@ function createVisualLineAnchors(
 			previousVisible = last[logicalLineIndex]!;
 			anchors.push(first[logicalLineIndex]!);
 		} else {
-			if (previousVisible < 0) throw new Error('A visible-line projection must retain the first logical line');
-			anchors.push(previousVisible);
+			// Leading hidden lines anchor to the first visible row; folded bodies anchor to their preceding header.
+			anchors.push(previousVisible < 0 ? 0 : previousVisible);
 		}
 	}
 	return Object.freeze(anchors);

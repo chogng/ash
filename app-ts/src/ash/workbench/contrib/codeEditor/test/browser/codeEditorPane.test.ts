@@ -24,6 +24,8 @@ import { EDITOR_FONT_DEFAULTS } from "../../../../../editor/common/config/fontIn
 import type { EditorPaneOptions, EditorPanePart, EditorPanePartOptions } from "../../../../browser/parts/editor/textResourceEditor.js";
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
+import { TextModelResolverService } from '../../../../services/textmodelResolver/common/textModelResolverService.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../../../../editor/common/services/languageFeatureDebounce.js';
 import { ILanguageConfigurationService } from '../../../../../editor/common/languages/languageConfigurationRegistry.js';
@@ -715,6 +717,7 @@ function paneServices(models: ITextModelResourceService, languages?: LanguageFea
 	const services = new InstantiationService();
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(ITextModelResourceService, models);
+	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	services.registerSingleton(ILanguageFeatureDebounceService, () => new LanguageFeatureDebounceService());
 	services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	services.registerInstance(ILogService, new NullLoggerService());
@@ -769,6 +772,7 @@ test('code editor creation rejects a missing language configuration registration
 	using languages = new LanguageFeaturesService();
 	using services = new InstantiationService();
 	services.registerInstance(ITextModelResourceService, models);
+	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	services.registerInstance(ILanguageFeaturesService, languages);

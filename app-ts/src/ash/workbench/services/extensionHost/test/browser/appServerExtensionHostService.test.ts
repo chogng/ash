@@ -1,3 +1,5 @@
+import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -19,8 +21,7 @@ import { AppServerExtensionHostService } from "../../browser/appServerExtensionH
 import { MainThreadExtensionApi } from '../../../../api/browser/mainThreadExtensionApi.js';
 import { createExtensionHostLanguageProviderBatch } from '../../../../api/browser/extensionHostLanguageBridge.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
-import { IOutputService } from '../../../output/common/outputService.js';
-import { OutputService } from "../../../output/browser/outputService.js";
+import { IOutputService } from '../../../output/common/output.js';
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
 
@@ -203,7 +204,8 @@ test("projects bounded Extension Host stderr incrementally into extension-owned 
 	const tasks = new ProviderSink<TaskProvider>();
 	const tests = new ProviderSink<TestProfileProvider>();
 	using languages = new LanguageFeaturesService();
-	using output = new OutputService();
+	using outputResources = new DisposableStore();
+	const output = workbenchInstantiationService(outputResources).get(IOutputService);
 	using services = createServices(api, languages, tasks, tests, output);
 	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 30_000);
 	await service.start();
@@ -230,7 +232,8 @@ test("projects ordered extension-created named Output channels without replaying
 	const tasks = new ProviderSink<TaskProvider>();
 	const tests = new ProviderSink<TestProfileProvider>();
 	using languages = new LanguageFeaturesService();
-	using output = new OutputService();
+	using outputResources = new DisposableStore();
+	const output = workbenchInstantiationService(outputResources).get(IOutputService);
 	const reveals: string[] = [];
 	output.onDidRequestShowChannel(request => reveals.push(request.focus));
 	using services = createServices(api, languages, tasks, tests, output);
@@ -256,7 +259,8 @@ test("projects ordered extension-created named Output channels without replaying
 
 test('extension API requires its domain services before registering any contributions', () => {
 	using services = new InstantiationService();
-	using output = new OutputService();
+	using outputResources = new DisposableStore();
+	const output = workbenchInstantiationService(outputResources).get(IOutputService);
 	using diagnostics = output.createChannel({ id: 'host-diagnostics', label: 'Host' });
 	const commands = new CommandRegistry();
 	services.registerInstance(IExtensionHostApi, new FakeExtensionHostApi(snapshot(1, 'acme.run')));
@@ -321,7 +325,8 @@ test('extension API releases named output and providers when its host stops', as
 	const commands = new CommandRegistry();
 	const tasks = new ProviderSink<TaskProvider>();
 	const tests = new ProviderSink<TestProfileProvider>();
-	using output = new OutputService();
+	using outputResources = new DisposableStore();
+	const output = workbenchInstantiationService(outputResources).get(IOutputService);
 	using languages = new LanguageFeaturesService();
 	using services = createServices(api, languages, tasks, tests, output);
 	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
@@ -344,7 +349,8 @@ test('extension API resets output for a new process and ignores stale output eve
 		{ sequence: 2, incarnation: 3, activationGeneration: 11, operation: { operation: 'append', channelId: 'review', text: 'old', severity: 'log', category: undefined } },
 	];
 	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [], '', events));
-	using output = new OutputService();
+	using outputResources = new DisposableStore();
+	const output = workbenchInstantiationService(outputResources).get(IOutputService);
 	using languages = new LanguageFeaturesService();
 	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), output);
 	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
@@ -465,15 +471,10 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 }
 
 function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService): InstantiationService {
-	const services = new InstantiationService();
+	const services = workbenchInstantiationService(undefined, undefined, { languageFeatures: languages, output });
 	services.registerInstance(IExtensionHostApi, api);
-	services.registerInstance(ILanguageFeaturesService, languages);
 	services.registerInstance(ITaskService, tasks as unknown as ITaskService);
 	services.registerInstance(ITestingService, tests as unknown as ITestingService);
-	if (output) {
-		services.registerInstance(IOutputService, output);
-	} else {
-		services.registerSingleton(IOutputService, () => new OutputService());
-	}
+
 	return services;
 }

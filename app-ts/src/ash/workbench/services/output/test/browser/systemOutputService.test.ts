@@ -1,7 +1,9 @@
+import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { IOutputService } from '../../common/output.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import type { AppServerConnectionState, IAppServerApi } from "../../../../../platform/app-server/common/appServerApi.js";
-import { OutputService } from "../../browser/outputService.js";
 import { SystemOutputService } from "../../browser/systemOutputService.js";
 
 test("SystemOutputService projects App Server lifecycle", async () => {
@@ -11,7 +13,8 @@ test("SystemOutputService projects App Server lifecycle", async () => {
 		getSlashCommands: async () => [],
 		onConnectionState: listener => { listeners.add(listener); return { dispose: () => listeners.delete(listener) }; },
 	};
-	using output = new OutputService();
+	using outputResources = new DisposableStore();
+	const output = workbenchInstantiationService(outputResources).get(IOutputService);
 	using service = new SystemOutputService(output, appServer);
 	await Promise.resolve();
 	for (const listener of listeners) listener("crashed");

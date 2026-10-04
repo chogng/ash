@@ -3,7 +3,7 @@ import { CommandsRegistry } from "../../../../platform/commands/common/commands.
 import { ILogService } from "../../../../platform/log/common/log.js";
 import { registerWorkbenchServiceContribution } from "../../../browser/workbenchServiceContributions.js";
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import { IOutputService } from "../../output/common/outputService.js";
+import { IOutputService } from "../../output/common/output.js";
 import { ITaskService } from "../../tasks/common/taskService.js";
 import { ITestingService } from "../../testing/common/testingService.js";
 import { IExtensionHostService } from "../common/extensionHostService.js";

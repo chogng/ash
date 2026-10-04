@@ -1,3 +1,6 @@
+import { ITextModelService } from '../../../editor/common/services/resolverService.js';
+import { ITextModelResourceService } from '../../services/textmodelResolver/common/textModelResourceService.js';
+import { TextModelResolverService } from '../../services/textmodelResolver/common/textModelResolverService.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { ILanguageService } from '../../../editor/common/languages/language.js';
@@ -41,6 +44,8 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	if (!services.has(IDecorationsService)) services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));
 	if (!services.has(ILanguageService)) services.registerSingleton(ILanguageService, () => new LanguageService());
 	if (!services.has(IFileTextModelService)) services.registerSingleton(IFileTextModelService, () => new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }), save: async () => ({ revision: undefined }) }));
+	if (!services.has(ITextModelResourceService)) services.registerSingleton(ITextModelResourceService, () => services.get(IFileTextModelService));
+	if (!services.has(ITextModelService)) services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));
 	return services;
 }

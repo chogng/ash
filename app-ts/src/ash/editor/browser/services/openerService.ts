@@ -3,7 +3,7 @@ import { AbstractDisposable, type IDisposable, toDisposable } from '../../../bas
 import { URI } from '../../../base/common/uri.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { getWindow, windowOpenNoOpener } from '../../../base/browser/dom.js';
-import { normalizeExternalUrl } from '../../../platform/opener/common/opener.js';
+import { normalizeExternalUrl, extractSelection } from '../../../platform/opener/common/opener.js';
 import type {
 	IExternalOpener,
 	IExternalUriResolver,
@@ -42,9 +42,10 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 		};
 		this._openers.push({
 			open: async (target, options) => {
-				const resource = typeof target === 'string' ? URI.parse(target) : target;
+				const parsed = extractSelection(typeof target === 'string' ? URI.parse(target) : target);
+				const resource = parsed.uri;
 				const editor = await editorService.openCodeEditor(
-					{ resource, options: options?.editorOptions },
+					{ resource, options: { ...options?.editorOptions, selection: parsed.selection ?? options?.editorOptions?.selection } },
 					editorService.getFocusedCodeEditor(),
 					options?.openToSide,
 				);
