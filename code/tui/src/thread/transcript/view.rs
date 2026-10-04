@@ -7,8 +7,7 @@ pub(crate) use scroll::TranscriptScrollTarget;
 
 use super::CellView;
 use super::ChatHistoryRenderCache;
-use super::history_cell::DETAIL_ACTION_LABEL;
-use super::history_cell::DETAIL_CONTINUATION;
+use super::message_response::ResponseAction;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -173,20 +172,16 @@ impl ChatHistoryView<'_> {
             if cell.can_expand && logical_row == cell_start && position.x == content_area.x {
                 return Some(ChatHistoryPointerTarget::Toggle(cell_id.clone()));
             }
-            let details_row = self
+            let details_action = self
                 .render_cache
                 .measure(cell, area.width, context, || {
                     cell.lines(context, Some(self.render_cache), area.width)
                 })
-                .details_row;
+                .details_action;
             if cell.has_details
-                && details_row.is_some_and(|row| logical_row == cell_start.saturating_add(row))
-                && position.x >= content_area.x
-                && position.x
-                    < content_area.x.saturating_add(
-                        ((DETAIL_CONTINUATION.len() + DETAIL_ACTION_LABEL.len()) as u16)
-                            .min(content_area.width),
-                    )
+                && details_action.is_some_and(|action| {
+                    action.contains(logical_row - cell_start, position.x - content_area.x)
+                })
             {
                 return Some(ChatHistoryPointerTarget::Details(cell_id.clone()));
             }
@@ -509,7 +504,7 @@ fn render_cells(
                     .measure(cell, area.width, context, || {
                         cell.lines(context, Some(cache), area.width)
                     })
-                    .details_row,
+                    .details_action,
                 viewport_start,
                 pointer,
                 context,
@@ -528,7 +523,7 @@ fn render_pointer_feedback(
     area: Rect,
     cell: &CellView<'_>,
     cell_start: usize,
-    details_row: Option<usize>,
+    details_action: Option<ResponseAction>,
     viewport_start: usize,
     pointer: ChatHistoryPointerState<'_>,
     context: RenderContext<'_>,
@@ -552,19 +547,21 @@ fn render_pointer_feedback(
     }
     let details_hovered = pointer.hovered_details == Some(cell_id);
     let details_pressed = pointer.pressed_details == Some(cell_id);
-    if let Some(details_row) = details_row
+    if let Some(action) = details_action
         && (details_hovered || details_pressed)
     {
-        render_action_feedback(
-            frame,
-            area,
-            cell_start.saturating_add(details_row),
-            viewport_start,
-            (DETAIL_CONTINUATION.len() + DETAIL_ACTION_LABEL.len()) as u16,
-            details_hovered,
-            details_pressed,
-            context,
-        );
+        for row in action.rows {
+            render_action_feedback(
+                frame,
+                area,
+                cell_start.saturating_add(row.row),
+                viewport_start,
+                row.width,
+                details_hovered,
+                details_pressed,
+                context,
+            );
+        }
     }
 }
 

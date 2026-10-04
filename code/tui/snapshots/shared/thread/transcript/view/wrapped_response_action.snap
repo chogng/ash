@@ -1,0 +1,25 @@
+---
+source: code/tui/src/thread/transcript/view/render_tests.rs
+expression: visible_buffer(buffer).trim_end()
+---
+●
+Thought
+ └─ line
+    line
+    line
+    line
+    line
+    line
+    line
+    line
+    line
+    line
+    line
+    line
+    … 2
+    line
+    s om
+    itte
+    d
+    view
+    full

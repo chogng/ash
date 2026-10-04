@@ -1,14 +1,13 @@
 use super::CellLines;
 use super::CellMode;
 use super::CellView;
-use super::DetailFormat;
 use super::HistoryCell;
 use super::MessageRole;
 use super::cache::ChatHistoryRenderCache;
 use super::finish_lines;
 use super::prefixed_body;
-use super::push_detail_lines;
 use crate::render::RenderContext;
+use crate::thread::transcript::message_response::MessageResponse;
 use std::borrow::Cow;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -149,9 +148,9 @@ impl HistoryCell for ContentCell {
             0
         };
         if let Some(detail) = self.detail(view.mode) {
-            push_detail_lines(&mut lines, DetailFormat::Plain, &detail, context);
+            MessageResponse::plain(&detail, context).append_to(&mut lines, width, context);
         }
-        let details_line = finish_lines(&mut lines, view, context);
+        let details_action = finish_lines(&mut lines, view, context, width);
         CellLines {
             wrapping: if rich {
                 super::LineWrapping::Prewrapped
@@ -161,7 +160,7 @@ impl HistoryCell for ContentCell {
             hyperlinks,
             lines,
             user_input_lines: input_lines,
-            details_line,
+            details_action,
         }
     }
 }

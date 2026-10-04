@@ -1,5 +1,4 @@
 use super::CellView;
-use super::DetailFormat;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -7,17 +6,10 @@ use crate::render::interaction_style;
 use crate::render::prefix_lines;
 use crate::render::push_owned_lines;
 use crate::render::styled_text_lines;
-use ash_ansi_escape::ansi_text;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
-
-// Details sit beneath their parent without reusing its status marker column.
-// Keep the branch, continuation rows and full-detail action on the same text column.
-pub(in crate::thread::transcript) const DETAIL_PREFIX: &str = " └─ ";
-pub(in crate::thread::transcript) const DETAIL_CONTINUATION: &str = "    ";
-pub(in crate::thread::transcript) const DETAIL_ACTION_LABEL: &str = "view full";
 
 pub(in crate::thread::transcript) fn prefixed_body(
     text: &str,
@@ -53,38 +45,4 @@ pub(super) fn selected_style(selected: bool, context: RenderContext<'_>) -> Styl
     } else {
         Style::default()
     }
-}
-
-pub(in crate::thread::transcript) fn push_detail_lines(
-    lines: &mut Vec<Line<'static>>,
-    format: DetailFormat,
-    detail: &str,
-    context: RenderContext<'_>,
-) {
-    if matches!(format, DetailFormat::Plain) {
-        let detail_lines = prefix_lines(
-            styled_text_lines(detail, Style::default().fg(context.muted())),
-            Span::styled(DETAIL_PREFIX, Style::default().fg(context.muted())),
-            Span::raw(DETAIL_CONTINUATION),
-        );
-        push_owned_lines(&detail_lines, lines);
-        return;
-    }
-
-    let mut output = ansi_text(detail).lines;
-    if output.is_empty() {
-        output.push(Line::default());
-    }
-    for line in &mut output {
-        for span in &mut line.spans {
-            if span.style.fg.is_none() {
-                span.style.fg = Some(context.muted());
-            }
-        }
-    }
-    lines.extend(prefix_lines(
-        output,
-        Span::styled(DETAIL_PREFIX, Style::default().fg(context.muted())),
-        Span::raw(DETAIL_CONTINUATION),
-    ));
 }

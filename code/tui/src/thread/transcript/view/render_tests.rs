@@ -316,6 +316,79 @@ fn multiline_command_output_keeps_detail_prefix_alignment() {
 }
 
 #[test]
+fn wrapped_command_response_preserves_gutter_unicode_and_ansi_with_and_without_cache() {
+    let mut rendered = Vec::new();
+    for revision in [0, 1] {
+        let messages = vec![
+            CellView::local_command("/out".into(), CommandStatus::Succeeded, None)
+                .with_detail("界界\x1b[31mABCDEFGHI\x1b[0mGH\n  tail")
+                .with_cell_id("command")
+                .with_render_revision(revision),
+        ];
+        let scroll = ChatHistoryScroll::default();
+        let cache = ChatHistoryRenderCache::default();
+        let view = ChatHistoryView {
+            jump_label: "Jump to bottom",
+            header: None,
+            messages: &messages,
+            scroll: &scroll,
+            render_cache: &cache,
+            pointer: Default::default(),
+        };
+        let mut terminal = Terminal::new(TestBackend::new(12, 5)).unwrap();
+        // The second frame also exercises reuse of the cached physical rows.
+        for _ in 0..2 {
+            terminal
+                .draw(|frame| view.render(frame, frame.area(), test_context()))
+                .unwrap();
+        }
+        let buffer = terminal.backend().buffer();
+        assert_eq!(buffer[(1, 1)].symbol(), "└");
+        assert_eq!(buffer[(4, 1)].symbol(), "界");
+        assert_eq!(buffer[(8, 1)].symbol(), "A");
+        assert_eq!(buffer[(8, 1)].fg, Color::Red);
+        assert_eq!(buffer[(4, 2)].symbol(), "E");
+        assert_eq!(buffer[(4, 2)].fg, Color::Red);
+        assert_eq!(buffer[(9, 2)].symbol(), "G");
+        assert_eq!(buffer[(9, 2)].fg, Color::Reset);
+        assert_eq!(buffer[(1, 2)].symbol(), " ");
+        assert_eq!(buffer[(6, 3)].symbol(), "t");
+        assert_eq!(buffer[(0, 0)].bg, test_context().user_message_background());
+        assert_eq!(buffer[(0, 1)].bg, test_context().background());
+        rendered.push(buffer.clone());
+    }
+    assert_eq!(visible_buffer(&rendered[0]), visible_buffer(&rendered[1]));
+    crate::tui_assert_snapshot!("wrapped_command_response", visible_buffer(&rendered[0]));
+}
+
+#[test]
+fn response_in_a_terminal_narrower_than_its_gutter_retains_a_content_column() {
+    let messages = vec![
+        CellView::local_command("/x".into(), CommandStatus::Succeeded, None).with_detail("AB"),
+    ];
+    let scroll = ChatHistoryScroll::default();
+    let cache = ChatHistoryRenderCache::default();
+    let view = ChatHistoryView {
+        jump_label: "Jump to bottom",
+        header: None,
+        messages: &messages,
+        scroll: &scroll,
+        render_cache: &cache,
+        pointer: Default::default(),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(3, 5)).unwrap();
+    terminal
+        .draw(|frame| view.render(frame, frame.area(), test_context()))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(1, 2)].symbol(), "└");
+    assert_eq!(buffer[(2, 2)].symbol(), "A");
+    assert_eq!(buffer[(2, 3)].symbol(), "B");
+    assert_eq!(buffer[(0, 2)].bg, test_context().background());
+    crate::tui_assert_snapshot!("response_in_three_columns", visible_buffer(buffer));
+}
+
+#[test]
 fn expanded_plain_details_use_the_same_indent_as_command_results() {
     let messages = vec![
         CellView::plain(MessageRole::Reasoning, "one\ntwo".into()).with_presentation(true, false),
@@ -447,6 +520,81 @@ fn wrapped_details_link_remains_visible_in_a_narrow_terminal() {
         ),
         Some(ChatHistoryPointerTarget::Details("reasoning".into()))
     );
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(4, row + 1)].symbol(), "f");
+    for action_row in [row, row + 1] {
+        assert_eq!(
+            view.pointer_target_at(
+                area,
+                ratatui::layout::Position::new(7, action_row),
+                test_context(),
+            ),
+            Some(ChatHistoryPointerTarget::Details("reasoning".into()))
+        );
+    }
+    crate::tui_assert_snapshot!("wrapped_response_action", visible_buffer(buffer).trim_end());
+
+    let hovered = ChatHistoryView {
+        pointer: ChatHistoryPointerState {
+            hovered_details: Some("reasoning"),
+            ..Default::default()
+        },
+        ..view
+    };
+    terminal
+        .draw(|frame| hovered.render(frame, area, test_context()))
+        .unwrap();
+    for action_row in [row, row + 1] {
+        assert_eq!(
+            terminal.backend().buffer()[(7, action_row)].bg,
+            test_context().hover_background()
+        );
+    }
+
+    // Resize against the same layout cache: the two action rows now have different
+    // widths, and the first column beyond either visible row must be inert.
+    let wider_area = Rect::new(0, 0, 10, 60);
+    let mut wider = Terminal::new(TestBackend::new(10, 60)).unwrap();
+    wider
+        .draw(|frame| hovered.render(frame, wider_area, test_context()))
+        .unwrap();
+    let buffer = wider.backend().buffer();
+    let first = (0..60).find(|&y| buffer[(4, y)].symbol() == "v").unwrap();
+    assert_eq!(buffer[(4, first + 1)].symbol(), "f");
+    for (y, last_column) in [(first, 8), (first + 1, 7)] {
+        assert_eq!(
+            buffer[(last_column, y)].bg,
+            test_context().hover_background()
+        );
+        assert_eq!(buffer[(last_column + 1, y)].bg, test_context().background());
+        assert_eq!(
+            hovered.pointer_target_at(
+                wider_area,
+                ratatui::layout::Position::new(last_column, y),
+                test_context(),
+            ),
+            Some(ChatHistoryPointerTarget::Details("reasoning".into()))
+        );
+        assert_eq!(
+            hovered.pointer_target_at(
+                wider_area,
+                ratatui::layout::Position::new(last_column + 1, y),
+                test_context(),
+            ),
+            None
+        );
+    }
+}
+
+fn visible_buffer(buffer: &Buffer) -> String {
+    crate::terminal::text::text_in_range(
+        buffer,
+        crate::terminal::text::ScreenSelectionRange::new(
+            ratatui::layout::Position::new(buffer.area.x, buffer.area.y),
+            ratatui::layout::Position::new(buffer.area.right() - 1, buffer.area.bottom() - 1),
+        ),
+    )
+    .unwrap()
 }
 
 #[test]

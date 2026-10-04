@@ -30,7 +30,7 @@ fn unchanged_cell_reuses_the_rendered_buffer() {
             hyperlinks: Vec::new(),
             lines: styled_text_lines("cached text", Style::default()),
             user_input_lines: 0,
-            details_line: None,
+            details_action: None,
         }
     };
 
@@ -62,7 +62,7 @@ fn revision_width_theme_and_mode_replace_the_same_cell_entry() {
                     hyperlinks: Vec::new(),
                     lines: styled_text_lines("cached text", Style::default()),
                     user_input_lines: 0,
-                    details_line: None,
+                    details_action: None,
                 }
             },
         )
@@ -92,7 +92,7 @@ fn messages_without_a_content_revision_are_not_cached() {
                 hyperlinks: Vec::new(),
                 lines: styled_text_lines("temporary", Style::default()),
                 user_input_lines: 0,
-                details_line: None,
+                details_action: None,
             }
         });
     }
@@ -117,7 +117,7 @@ fn oversized_cells_are_rendered_without_entering_the_cache() {
             .map(|line| ratatui::text::Line::from(line.to_owned()))
             .collect(),
         user_input_lines: 0,
-        details_line: None,
+        details_action: None,
     });
 
     assert!(matches!(prepared, PreparedCell::Lines { .. }));

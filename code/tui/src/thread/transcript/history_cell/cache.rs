@@ -150,7 +150,7 @@ impl ChatHistoryRenderCache {
         }
         let height = render().layout(width);
         if let Some(key) = key {
-            self.insert_layout(key, height);
+            self.insert_layout(key, height.clone());
         }
         height
     }
@@ -261,7 +261,7 @@ impl ChatHistoryRenderCache {
             .borrow()
             .get(&key.cell_id)
             .filter(|entry| entry.key == *key)
-            .map(|entry| entry.layout)
+            .map(|entry| entry.layout.clone())
     }
 
     fn insert_layout(&self, key: CacheKey, layout: CellLayout) {

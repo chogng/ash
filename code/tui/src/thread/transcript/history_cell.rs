@@ -7,17 +7,13 @@ pub(crate) use cache::ChatHistoryRenderCache;
 pub(super) use content::ContentCell;
 pub(super) use local_command::LocalCommandCell;
 pub(crate) use local_command::LocalCommandCompletion;
-pub(super) use text::DETAIL_ACTION_LABEL;
-pub(super) use text::DETAIL_CONTINUATION;
-pub(super) use text::DETAIL_PREFIX;
 pub(super) use text::prefixed_body;
-pub(super) use text::push_detail_lines;
 
+use super::message_response::MessageResponse;
+use super::message_response::ResponseAction;
 use super::model::TranscriptCell;
 use crate::render::RenderContext;
-use crate::render::action_style;
 use ratatui::text::Line;
-use ratatui::text::Span;
 use std::borrow::Cow;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -47,10 +43,10 @@ pub(super) enum CellMode {
     History,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(super) struct CellLayout {
     pub(super) height: usize,
-    pub(super) details_row: Option<usize>,
+    pub(super) details_action: Option<ResponseAction>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -64,7 +60,7 @@ pub(super) struct CellLines {
     pub(super) lines: Vec<Line<'static>>,
     pub(super) hyperlinks: Vec<Vec<crate::terminal::hyperlinks::Hyperlink>>,
     pub(super) user_input_lines: usize,
-    pub(super) details_line: Option<usize>,
+    pub(super) details_action: Option<ResponseAction>,
 }
 
 impl CellLines {
@@ -78,17 +74,14 @@ impl CellLines {
     pub(super) fn layout(&self, width: u16) -> CellLayout {
         CellLayout {
             height: self.line_height(&self.lines, width),
-            details_row: self
-                .details_line
-                .map(|line| self.line_height(&self.lines[..line], width)),
+            details_action: self.details_action.clone().map(|mut action| {
+                for row in &mut action.rows {
+                    row.row = self.line_height(&self.lines[..row.row], width);
+                }
+                action
+            }),
         }
     }
-}
-
-#[derive(Clone, Copy)]
-pub(super) enum DetailFormat {
-    Plain,
-    Ansi,
 }
 
 /// A concrete transcript item owns its text, display lines and expansion behavior.
@@ -193,14 +186,10 @@ pub(super) fn finish_lines(
     lines: &mut Vec<Line<'static>>,
     view: &CellView<'_>,
     context: RenderContext<'_>,
-) -> Option<usize> {
-    let details_line = (view.expanded && view.has_details).then_some(lines.len());
-    if view.expanded && view.has_details {
-        lines.push(Line::from(Span::styled(
-            format!("{DETAIL_CONTINUATION}{DETAIL_ACTION_LABEL}"),
-            action_style(context),
-        )));
-    }
+    width: u16,
+) -> Option<ResponseAction> {
+    let details_action = (view.expanded && view.has_details)
+        .then(|| MessageResponse::append_full_details_action(lines, width, context));
     lines.push(Line::default());
-    details_line
+    details_action
 }

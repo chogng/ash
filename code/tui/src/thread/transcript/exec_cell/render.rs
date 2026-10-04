@@ -6,13 +6,11 @@ use crate::thread::transcript::history_cell::CellLines;
 use crate::thread::transcript::history_cell::CellMode;
 use crate::thread::transcript::history_cell::CellView;
 use crate::thread::transcript::history_cell::ChatHistoryRenderCache;
-use crate::thread::transcript::history_cell::DETAIL_PREFIX;
-use crate::thread::transcript::history_cell::DetailFormat;
 use crate::thread::transcript::history_cell::HistoryCell;
 use crate::thread::transcript::history_cell::MessageRole;
 use crate::thread::transcript::history_cell::finish_lines;
 use crate::thread::transcript::history_cell::prefixed_body;
-use crate::thread::transcript::history_cell::push_detail_lines;
+use crate::thread::transcript::message_response::MessageResponse;
 use ash_ansi_escape::ansi_text;
 use ratatui::style::Style;
 use ratatui::text::Line;
@@ -52,7 +50,7 @@ impl HistoryCell for ExecCell {
         view: &CellView<'_>,
         context: RenderContext<'_>,
         _cache: Option<&ChatHistoryRenderCache>,
-        _width: u16,
+        width: u16,
     ) -> CellLines {
         let color = match self.status() {
             CommandStatus::Submitted | CommandStatus::Running => context.warning(),
@@ -75,29 +73,27 @@ impl HistoryCell for ExecCell {
                             .find(|line| !line.trim().is_empty())
                     })
                     .map(|line| truncate_utf8(&line, 160));
-                let mut spans = vec![
-                    Span::styled(DETAIL_PREFIX, Style::default().fg(context.muted())),
-                    Span::styled(label, Style::default().fg(context.danger())),
-                ];
+                let mut spans = vec![Span::styled(label, Style::default().fg(context.danger()))];
                 if let Some(reason) = reason {
                     spans.push(Span::styled(
                         format!(" — {reason}"),
                         Style::default().fg(context.muted()),
                     ));
                 }
-                lines.push(Line::from(spans));
+                MessageResponse::styled(vec![Line::from(spans)])
+                    .append_to(&mut lines, width, context);
             }
         }
         if let Some(detail) = self.detail(view.mode) {
-            push_detail_lines(&mut lines, DetailFormat::Ansi, &detail, context);
+            MessageResponse::ansi(&detail, context).append_to(&mut lines, width, context);
         }
-        let details_line = finish_lines(&mut lines, view, context);
+        let details_action = finish_lines(&mut lines, view, context, width);
         CellLines {
             wrapping: crate::thread::transcript::history_cell::LineWrapping::Words,
             hyperlinks: Vec::new(),
             lines,
             user_input_lines: 0,
-            details_line,
+            details_action,
         }
     }
 }

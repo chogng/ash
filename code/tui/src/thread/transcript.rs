@@ -2,6 +2,7 @@ pub(crate) mod batch;
 mod exec_cell;
 mod history_cell;
 mod markdown;
+mod message_response;
 mod model;
 mod streaming;
 pub(crate) use streaming::StreamDisplay;
