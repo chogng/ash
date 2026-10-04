@@ -37,6 +37,30 @@ fn invalid_persisted_value_and_multi_key_shortcut_are_rejected() {
 }
 
 #[test]
+fn local_shortcut_edit_rejects_invalid_siblings_without_writing_the_profile() {
+    let profile = tempfile::tempdir().unwrap();
+    let path = profile.path().join("config.toml");
+    let document = "[tui]\nshowTip = false\n";
+    std::fs::write(&path, document).unwrap();
+    let store =
+        LocalDictationSettings::open(profile.path(), &profile.path().join("state.db")).unwrap();
+    assert_eq!(
+        store.read().unwrap_err(),
+        "Unknown [tui] configuration key: showTip."
+    );
+    let document = std::fs::read_to_string(&path).unwrap();
+    let mut candidate = DictationShortcutSettings::default()
+        .with_shortcut("ctrl+y")
+        .unwrap();
+    candidate.revision = store.store.read_snapshot().unwrap().revision;
+    assert_eq!(
+        store.write(candidate).unwrap_err(),
+        "Unknown [tui] configuration key: showTip."
+    );
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), document);
+}
+
+#[test]
 fn local_profile_persists_shortcut_and_preserves_other_tui_values() {
     let profile = tempfile::tempdir().unwrap();
     let path = profile.path().join("config.toml");

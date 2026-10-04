@@ -1,0 +1,20 @@
+---
+source: code/tui/src/app/completion_tests.rs
+expression: text
+---
+  /work/ash                                                        [Dashboard]  
+                                                                                
+● 未 知 的  [tui] 配 置 键 ： showTip。                                                 
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ────────────────────────────────────────────────────────────────────────────  
+  > keep this draft                                                             
+  ─────────────────────────────────────────────────────────── Automatic model   
+  ⏸ Manual                                                                      
+  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

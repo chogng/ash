@@ -1137,6 +1137,18 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Commande inconnue : {0}.",
     ),
     translation(
+        "Unknown [tui] configuration key: {0}.",
+        "不明な [tui] 設定キー: {0}。",
+        "未知的 [tui] 配置键：{0}。",
+        "Clé de configuration [tui] inconnue : {0}.",
+    ),
+    translation(
+        "Invalid [tui].theme: expected a non-empty theme name.",
+        "無効な [tui].theme: 空でないテーマ名が必要です。",
+        "无效的 [tui].theme：需要非空主题名称。",
+        "[tui].theme invalide : un nom de thème non vide est requis.",
+    ),
+    translation(
         "Ask the configured advisor for a second opinion",
         "設定済みのアドバイザーにセカンドオピニオンを聞く",
         "向已配置的顾问征求第二意见",

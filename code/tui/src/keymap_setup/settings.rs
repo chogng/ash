@@ -72,7 +72,7 @@ where
     T: JsonRpcTransport,
 {
     let config = client.read_config().map_err(|error| error.to_string())?;
-    let settings = settings_from_tui(&config.tui)?;
+    let settings = crate::config::TuiSettings::from_tui(&config.tui)?.keymap;
     let choices = keymap_choices(
         settings.keymap.setup_actions(),
         &settings.diagnostics,
@@ -107,10 +107,11 @@ where
         .cloned()
         .unwrap_or_else(|| Value::Array(Vec::new()));
     let (document, notice) = edited_document(current, &edit)?;
-    compile_settings(&document)?;
 
     let mut tui = config.tui.0;
     tui.insert(CONFIG_KEY.into(), document);
+    let tui = FrontendConfigDto(tui);
+    crate::config::TuiSettings::from_tui(&tui)?;
     client
         .update_config(ConfigUpdateParams {
             advisor: Default::default(),
@@ -126,12 +127,12 @@ where
             grep_backend: Patch::Missing,
             git: Patch::Missing,
             gui: Patch::Missing,
-            tui: Patch::Value(FrontendConfigDto(tui)),
+            tui: Patch::Value(tui),
         })
         .map_err(|error| error.to_string())?;
 
     let config = client.read_config().map_err(|error| error.to_string())?;
-    let settings = settings_from_tui(&config.tui)?;
+    let settings = crate::config::TuiSettings::from_tui(&config.tui)?.keymap;
     let choices = keymap_choices(
         settings.keymap.setup_actions(),
         &settings.diagnostics,

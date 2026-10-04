@@ -736,7 +736,7 @@ fn theme_selection_updates_the_tui_toml_section() {
     crate::theme::set_preference(&mut client, "ash-code-light".into()).unwrap();
 
     assert_eq!(
-        crate::theme::preference(&client.read_config().unwrap()),
+        crate::theme::preference(&client.read_config().unwrap()).unwrap(),
         "ash-code-light"
     );
     drop(client);

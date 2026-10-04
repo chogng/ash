@@ -95,6 +95,61 @@ fn tool_count_threshold_switches_the_entire_mcp_catalog() {
 }
 
 #[test]
+fn catalog_changes_keep_meta_definitions_stable_and_reject_previous_bindings() {
+    let original = project_mcp_service(Arc::new(CatalogTools::with_count(16)));
+    let updated = project_mcp_service(Arc::new(CatalogTools::with_count(17)));
+    assert_eq!(original.definitions(), updated.definitions());
+
+    let search = ToolCall {
+        id: ash_protocol::ToolCallId::new("search-original").unwrap(),
+        name: ToolName::new(MCP_SEARCH_TOOLS_NAME).unwrap(),
+        arguments: serde_json::json!({"query": "tool 7"}),
+    };
+    let review = original.prepare(&search).unwrap();
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let ash_action_policy::ExecutionDecision::RunUnsandboxed { grant_id } =
+        decide_mcp_catalog_search(&review, &cancellation.token()).unwrap()
+    else {
+        panic!("catalog search must receive its read-only grant");
+    };
+    let ToolExecutionOutput::Success(result) = original
+        .execute(
+            &search,
+            &ToolAuthorization::UnsandboxedGrant { grant_id },
+            &cancellation.token(),
+        )
+        .unwrap()
+    else {
+        panic!("catalog search must succeed");
+    };
+    let result: serde_json::Value = serde_json::from_str(&result).unwrap();
+    let binding = &result["tools"][0];
+    let call = ToolCall {
+        id: ash_protocol::ToolCallId::new("call-original-binding").unwrap(),
+        name: ToolName::new(MCP_CALL_TOOL_NAME).unwrap(),
+        arguments: serde_json::json!({
+            "tool": binding["name"],
+            "catalog_digest": binding["catalog_digest"],
+            "definition_digest": binding["definition_digest"],
+            "arguments": {"value": 7}
+        }),
+    };
+    original.prepare(&call).unwrap();
+    assert!(updated.prepare(&call).is_err());
+    assert!(
+        updated
+            .execute(
+                &call,
+                &ToolAuthorization::UnsandboxedGrant {
+                    grant_id: ash_action_policy::GrantId::new("test")
+                },
+                &cancellation.token(),
+            )
+            .is_err()
+    );
+}
+
+#[test]
 fn token_threshold_is_inclusive_and_uses_the_stable_v1_estimate() {
     let at_limit = definition_with_token_estimate(MCP_DIRECT_TOKEN_LIMIT);
     assert_eq!(estimate_definition_tokens(&[at_limit.clone()]), 5_000);

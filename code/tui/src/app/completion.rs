@@ -5,7 +5,6 @@ use super::dispatch::ProductCommandOutput;
 use crate::config;
 use crate::config::Event as ConfigEvent;
 use crate::host::Event as HostEvent;
-use crate::keymap_setup;
 use crate::keymap_setup::Event as KeymapEvent;
 use crate::models;
 use crate::models::Event as ModelEvent;
@@ -19,7 +18,6 @@ use crate::sessions::SessionCompletion;
 use crate::skills::Event as SkillEvent;
 use crate::skills::SkillRefreshCompletion;
 use crate::status::Event as StatusEvent;
-use crate::status::StatusLineSettings;
 use crate::thread::ActiveTurnUpdate;
 use crate::thread::Event as ThreadEvent;
 use crate::thread::ThreadCompletion;
@@ -639,6 +637,14 @@ pub(super) fn apply_tui_config(
     model_catalog: Option<&ash_app_server_protocol::protocol::model::ModelListResult>,
     app: &mut App,
 ) {
+    let settings = match config::TuiSettings::from_tui(&config.tui) {
+        Ok(settings) => settings,
+        Err(error) => {
+            // A profile error must not change the active Turn's status or input focus.
+            app.update(HostEvent::OperationCompleted(Err(error)));
+            return;
+        }
+    };
     if let Some(super::command_panel::CommandPanel::Memories(panel)) =
         app.panels_mut().command_mut()
     {
@@ -651,18 +657,9 @@ pub(super) fn apply_tui_config(
                 .enabled,
         );
     }
-    match config::TerminalSettings::from_tui(&config.tui) {
-        Ok(settings) => app.update(ConfigEvent::SettingsReceived(settings)),
-        Err(error) => app.update(ThreadEvent::FailureReported(error)),
-    }
-    match keymap_setup::settings_from_tui(&config.tui) {
-        Ok(settings) => app.update(KeymapEvent::SettingsReceived(settings)),
-        Err(error) => app.update(ThreadEvent::FailureReported(error)),
-    }
-    match StatusLineSettings::from_tui(&config.tui) {
-        Ok(settings) => app.update(StatusEvent::LineSettingsReceived(settings)),
-        Err(error) => app.update(ThreadEvent::FailureReported(error)),
-    }
+    app.update(ConfigEvent::SettingsReceived(settings.terminal));
+    app.update(KeymapEvent::SettingsReceived(settings.keymap));
+    app.update(StatusEvent::LineSettingsReceived(settings.status_line));
     app.update(ModelEvent::SummaryReceived(
         crate::models::ModelSummary::from_catalog(
             config.model,

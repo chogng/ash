@@ -29,6 +29,88 @@ impl JsonRpcTransport for RecordingTransport {
 }
 
 #[test]
+fn invalid_complete_tui_candidate_is_rejected_before_config_update() {
+    let mut config = empty_config_snapshot();
+    config
+        .tui
+        .0
+        .insert("showTip".into(), serde_json::json!(false));
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        requests: requests.clone(),
+        responses: VecDeque::new(),
+    });
+    let error = super::set_settings(
+        &mut client,
+        crate::config::ConfigEdit {
+            server_config: config,
+            providers: ProviderListResult {
+                providers: Vec::new(),
+            },
+            terminal: crate::config::TerminalSettings::default(),
+            status_line: crate::status::StatusLineSettings::default(),
+        },
+    )
+    .err()
+    .unwrap();
+    assert_eq!(
+        error.to_string(),
+        "Unknown [tui] configuration key: showTip."
+    );
+    assert!(requests.lock().unwrap().is_empty());
+}
+
+#[test]
+fn feature_editors_reject_invalid_siblings_before_config_update() {
+    for editor in ["theme", "keybindings", "statusLine"] {
+        let mut config = empty_config_snapshot();
+        config
+            .tui
+            .0
+            .insert("showTip".into(), serde_json::json!(false));
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let mut client = AppServerClient::new(RecordingTransport {
+            requests: requests.clone(),
+            responses: VecDeque::from([response(1, serde_json::to_value(&config).unwrap())]),
+        });
+        let error = match editor {
+            "theme" => crate::theme::set_preference(&mut client, "ash-code-light".into())
+                .err()
+                .unwrap()
+                .to_string(),
+            "keybindings" => crate::keymap_setup::set_keymap(
+                &mut client,
+                crate::keymap_setup::KeymapEdit {
+                    expected_revision: config.revision,
+                    command_id: "ashCode.action.copyLastResponse".into(),
+                    kind: crate::keymap_setup::KeymapEditKind::ClearUser,
+                },
+            )
+            .err()
+            .unwrap(),
+            "statusLine" => crate::status::execute(
+                &mut client,
+                crate::status::Command::EditLine(crate::status::StatusLineEdit {
+                    expected_revision: config.revision,
+                    item: crate::status::StatusLineItem::GitChanges,
+                    enabled: false,
+                }),
+            )
+            .err()
+            .unwrap(),
+            _ => unreachable!(),
+        };
+        assert_eq!(
+            error, "Unknown [tui] configuration key: showTip.",
+            "{editor}"
+        );
+        let requests = requests.lock().unwrap();
+        assert_eq!(requests.len(), 1, "{editor}");
+        assert_eq!(requests[0]["method"], "config/read", "{editor}");
+    }
+}
+
+#[test]
 fn advisor_model_selection_updates_global_config() {
     let mut current = empty_config_snapshot();
     current.revision = 4;
@@ -615,7 +697,7 @@ fn config_reset_saves_with_revision_and_preserves_other_values() {
     current
         .tui
         .0
-        .insert("other".into(), serde_json::json!(["keep"]));
+        .insert("theme".into(), serde_json::json!("ash-code-light"));
     let mut editor = crate::config::ConfigEditor::new(crate::config::config_choices(
         &current,
         &ProviderListResult {
@@ -664,7 +746,7 @@ fn config_reset_saves_with_revision_and_preserves_other_values() {
     assert_eq!(params["expectedRevision"], 7);
     assert_eq!(params["tui"]["inputMode"], "standard");
     assert_eq!(params["tui"]["memoryDiagnostics"], true);
-    assert_eq!(params["tui"]["other"], serde_json::json!(["keep"]));
+    assert_eq!(params["tui"]["theme"], serde_json::json!("ash-code-light"));
     assert!(params.get("gui").is_none());
     assert!(params.get("model").is_none());
 }

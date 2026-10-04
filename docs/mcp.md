@@ -26,6 +26,8 @@
 MCP 客户端把外部 Server 的工具转换成 Ash 的工具目录。外部客户端控制 Ash 统一使用
 [`App Server API`](ash-app-server-api.md)，不提供第二套 MCP Agent 接口。
 
+大目录通过 `search_tools` 与 `call_mcp_tool` 发现和调用。两者的工具描述保持固定，目录与定义摘要通过搜索结果和调用参数传递；目录更新后，旧目录的绑定会被拒绝，调用方须重新搜索。目录身份不进入工具描述，避免目录更新改写模型的工具前缀。
+
 | 场景 | 使用的边界 | 当前状态 |
 | --- | --- | --- |
 | Ash 连接外部 MCP Server | `ash-rmcp-client` 建立单连接，`ash-mcp` 管理多 Server 和工具目录 | 工具纵向切片已实现 |

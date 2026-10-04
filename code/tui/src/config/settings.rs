@@ -4,6 +4,55 @@ use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// The TUI applies a complete candidate only after every feature owner has validated it.
+/// Persistence remains opaque, so editing one field still preserves unrelated stored values.
+pub(crate) struct TuiSettings {
+    pub(crate) terminal: TerminalSettings,
+    pub(crate) status_line: crate::status::StatusLineSettings,
+    pub(crate) keymap: crate::keymap_setup::KeymapSettings,
+    pub(crate) dictation: super::DictationShortcutSettings,
+}
+
+impl TuiSettings {
+    pub(crate) fn from_tui(section: &FrontendConfigDto) -> Result<Self, String> {
+        let terminal = TerminalSettings::from_tui(section)?;
+        let unknown = section.0.keys().find(|key| {
+            !TerminalSettings::KEYS.contains(&key.as_str())
+                && !matches!(
+                    key.as_str(),
+                    "theme"
+                        | "pinnedModels"
+                        | "keybindings"
+                        | "statusLine"
+                        | "statusLineStyle"
+                        | "showGitChangesAsDiff"
+                        | "dictationShortcutEnabled"
+                        | "dictationShortcut"
+                )
+        });
+        if let Some(key) = unknown {
+            let mut message = crate::nls::Text::template(
+                "Unknown [tui] configuration key: {0}.",
+                vec![crate::nls::Text::literal(key)],
+            );
+            message.localize(terminal.language());
+            return Err(message.to_string());
+        }
+        let status_line = crate::status::StatusLineSettings::from_tui(section)?;
+        let keymap = crate::keymap_setup::settings_from_tui(section)?;
+        let dictation = super::DictationShortcutSettings::from_tui(&section.0)?;
+        crate::models::pinned_models(section)?;
+        crate::theme::preference_from_tui(section)
+            .map_err(|message| crate::nls::localize(terminal.language(), &message).into_owned())?;
+        Ok(Self {
+            terminal,
+            status_line,
+            keymap,
+            dictation,
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum KeyHintStyle {

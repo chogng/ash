@@ -31,4 +31,5 @@ pub(crate) use request::CommandCompletion;
 pub(crate) use request::execute;
 pub(crate) use resource::ThemeResource;
 pub(crate) use settings::preference;
+pub(crate) use settings::preference_from_tui;
 pub(crate) use settings::set_preference;

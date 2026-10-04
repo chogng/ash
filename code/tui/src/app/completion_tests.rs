@@ -7,6 +7,100 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
 #[test]
+fn invalid_complete_tui_reload_preserves_settings_and_draft_in_both_modes() {
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = App::for_dir(std::path::Path::new("/work/ash"));
+        let mut terminal = crate::config::TerminalSettings::default();
+        terminal.set_screen_mode(mode);
+        app.update(crate::config::Event::SettingsReceived(terminal));
+        app.insert_text("keep this draft");
+        let before = app
+            .status_line()
+            .top_text_for_width(80, app.status_line_runtime());
+        let mut config = crate::test_support::empty_config_snapshot();
+        config
+            .tui
+            .0
+            .insert("language".into(), serde_json::json!("zh-CN"));
+        config
+            .tui
+            .0
+            .insert("screenMode".into(), serde_json::json!("inline"));
+        config
+            .tui
+            .0
+            .insert("statusLine".into(), serde_json::json!([]));
+        config
+            .tui
+            .0
+            .insert("showTip".into(), serde_json::json!(false));
+        super::apply_tui_config(config, None, &mut app);
+        assert_eq!(app.screen_mode(), mode);
+        assert_eq!(app.language(), crate::nls::Language::English);
+        assert_eq!(
+            app.status_line()
+                .top_text_for_width(80, app.status_line_runtime()),
+            before
+        );
+        assert_eq!(app.input(), "keep this draft");
+        assert_eq!(app.status(), &Status::Ready);
+        assert!(
+            app.messages()
+                .last()
+                .unwrap()
+                .text()
+                .contains("未知的 [tui] 配置键：showTip。")
+        );
+
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 16)).unwrap();
+        terminal
+            .draw(|frame| crate::app::frame::draw(frame, &app))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let text = (0..16)
+            .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n");
+        crate::tui_assert_snapshot!(app = &app; "invalid_tui_configuration", text);
+    }
+}
+
+#[test]
+fn invalid_tui_reload_does_not_mark_the_running_turn_as_failed() {
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = App::new();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.insert_text("start this turn");
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        let turn = TurnId::new("running-turn").unwrap();
+        app.set_active_turn(turn.clone());
+        app.insert_text("keep this follow-up");
+        let mut config = crate::test_support::empty_config_snapshot();
+        config
+            .tui
+            .0
+            .insert("showTip".into(), serde_json::json!(false));
+
+        super::apply_tui_config(config, None, &mut app);
+
+        assert_eq!(app.active_turn(), Some(&turn));
+        assert_eq!(app.status(), &Status::Working);
+        assert_eq!(app.input(), "keep this follow-up");
+        assert_eq!(app.screen_mode(), mode);
+        assert!(app.messages().last().unwrap().text().contains("showTip"));
+    }
+}
+
+#[test]
 fn turn_start_failure_preserves_an_active_turn_that_appeared_during_the_request() {
     let mut app = App::new();
     app.insert_text("first");

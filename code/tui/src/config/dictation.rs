@@ -35,7 +35,7 @@ impl Default for DictationShortcutSettings {
 }
 
 impl DictationShortcutSettings {
-    fn from_tui(values: &BTreeMap<String, Value>) -> Result<Self, String> {
+    pub(super) fn from_tui(values: &BTreeMap<String, Value>) -> Result<Self, String> {
         let enabled = match values.get(ENABLED_KEY) {
             Some(Value::Bool(enabled)) => *enabled,
             Some(_) => {
@@ -96,7 +96,10 @@ impl LocalDictationSettings {
             .store
             .read_snapshot()
             .map_err(|error| error.to_string())?;
-        let mut settings = DictationShortcutSettings::from_tui(&snapshot.values.tui)?;
+        let mut settings = super::TuiSettings::from_tui(
+            &ash_app_server_protocol::protocol::config::FrontendConfigDto(snapshot.values.tui),
+        )?
+        .dictation;
         settings.revision = snapshot.revision;
         Ok(settings)
     }
@@ -119,7 +122,9 @@ impl LocalDictationSettings {
         let mut tui = snapshot.values.tui;
         tui.insert(ENABLED_KEY.into(), Value::Bool(candidate.enabled));
         tui.insert(SHORTCUT_KEY.into(), Value::String(candidate.shortcut));
-        DictationShortcutSettings::from_tui(&tui)?;
+        super::TuiSettings::from_tui(
+            &ash_app_server_protocol::protocol::config::FrontendConfigDto(tui.clone()),
+        )?;
         self.store
             .apply(ConfigCommandRequest {
                 command_id: crate::client::new_command_id("tui-dictation-shortcut"),

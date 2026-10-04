@@ -319,6 +319,7 @@ fn write_pins<T: JsonRpcTransport>(
         "pinnedModels".into(),
         serde_json::to_value(pins).map_err(|error| ModelCommandError(error.to_string()))?,
     );
+    crate::config::TuiSettings::from_tui(&tui).map_err(ModelCommandError)?;
     client.update_config(ConfigUpdateParams {
         advisor: Default::default(),
         time_context: Default::default(),

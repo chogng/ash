@@ -32,6 +32,7 @@ pub(crate) use request::set_settings;
 pub(crate) use settings::GlyphSet;
 pub(crate) use settings::KeyHintStyle;
 pub(crate) use settings::TerminalSettings;
+pub(crate) use settings::TuiSettings;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct IssueConfigEdit {

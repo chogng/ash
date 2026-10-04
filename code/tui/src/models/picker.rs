@@ -374,7 +374,7 @@ impl ListSelection<ModelSelectionAction> {
     }
 }
 
-pub(super) fn pinned_models(tui: &FrontendConfigDto) -> Result<Vec<ModelRefDto>, String> {
+pub(crate) fn pinned_models(tui: &FrontendConfigDto) -> Result<Vec<ModelRefDto>, String> {
     let pins: Vec<ModelRefDto> = tui
         .0
         .get("pinnedModels")

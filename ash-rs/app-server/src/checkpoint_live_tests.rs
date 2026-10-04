@@ -41,6 +41,190 @@ impl ModelEventSink for IgnoreDeltas {
     }
 }
 
+#[test]
+fn manual_compaction_persists_before_restart_and_preserves_the_next_request() {
+    struct CompletionObserver(std::sync::mpsc::Sender<core_api::TurnExecutionFinished>);
+    impl core_api::TurnExecutionObserver for CompletionObserver {
+        fn will_execute(&self, _: &core_api::TurnExecutionStarted) -> Result<(), CoreError> {
+            Ok(())
+        }
+
+        fn did_finish(&self, event: &core_api::TurnExecutionFinished) {
+            self.0.send(event.clone()).unwrap();
+        }
+    }
+
+    struct ScriptedModel(Mutex<Vec<ModelRequest>>);
+    impl ModelService for ScriptedModel {
+        fn invoke(
+            &self,
+            _: ModelSelection<'_>,
+            request: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            let mut requests = self.0.lock().unwrap();
+            let text = match requests.len() {
+                // A real compaction candidate must be longer than its bounded summary.
+                0 => "Validate the release candidate, publish, then monitor.\n".repeat(40),
+                1 => "Release checkpoint: validate the candidate before publishing.".into(),
+                2 => "Start by validating the release candidate.".into(),
+                _ => panic!("unexpected extra model invocation"),
+            };
+            requests.push(request.clone());
+            Ok(ModelResponse {
+                output: vec![ash_protocol::ResponseItem::Text(text)],
+                usage: None,
+                billing: None,
+                stop_reason: ash_protocol::StopReason::Completed,
+            })
+        }
+    }
+
+    let directory = tempfile::tempdir().unwrap();
+    let database = directory.path().join("compaction.sqlite");
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        ash_state::SqliteThreadStore::open(&database).unwrap(),
+    )));
+    let thread = threads
+        .start_thread(
+            &NoThreadWorktreeBinder,
+            core_api::StartThreadRequest {
+                execution_target: None,
+                branch_name: None,
+                agent_id: None,
+                agent: None,
+                command_id: CommandId::new("compaction-thread").unwrap(),
+                title: "Release plan".into(),
+            },
+        )
+        .unwrap()
+        .thread_id;
+    let start_turn = |threads: &ThreadController, key: &str, text: &str| {
+        threads
+            .start_turn(
+                &thread,
+                ash_core::StartTurnRequest {
+                    mode: Default::default(),
+                    advisor: None,
+                    command_id: CommandId::new(key).unwrap(),
+                    expected_sequence: core_api::SequenceExpectation::Any,
+                    model: None,
+                    reasoning_effort: None,
+                    kind: Default::default(),
+                    instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                    policy_revision: "test-policy-v1".into(),
+                    approval_mode: ash_protocol::ApprovalMode::Manual,
+                    tool_mode: ash_protocol::ToolMode::Direct,
+                    tool_profile: None,
+                    activated_skills: vec![],
+                    input: vec![ash_protocol::UserInput::Text { text: text.into() }],
+                },
+            )
+            .unwrap()
+            .turn_id
+    };
+    let model = Arc::new(ScriptedModel(Mutex::new(Vec::new())));
+    let (finished_tx, finished_rx) = std::sync::mpsc::channel();
+    let observer = Arc::new(CompletionObserver(finished_tx));
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+        .with_execution_observer(observer.clone());
+    let execute =
+        |executor: &TurnExecutor, threads: &ThreadController, turn: &ash_protocol::TurnId| {
+            executor.start(&thread, turn).unwrap();
+            let finished = finished_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+            assert_eq!(&finished.turn_id, turn);
+            assert_eq!(
+                finished.terminal_state,
+                core_api::TurnExecutionTerminalState::Completed,
+                "turn {turn}: {:?}",
+                threads
+                    .read_thread(&thread)
+                    .unwrap()
+                    .turns
+                    .last()
+                    .unwrap()
+                    .failure
+            );
+        };
+    let turn = start_turn(&threads, "plan-release", "Plan the release.");
+    execute(&executor, &threads, &turn);
+    let compact = threads
+        .start_context_compaction(
+            &thread,
+            ash_core::StartContextCompactionRequest {
+                command_id: CommandId::new("compact-release").unwrap(),
+                expected_sequence: core_api::SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                retention_prompt: Some("Preserve the release ordering.".into()),
+            },
+        )
+        .unwrap()
+        .turn_id;
+    execute(&executor, &threads, &compact);
+    let committed = threads.read_thread(&thread).unwrap();
+    assert_eq!(committed.context_checkpoints.len(), 1);
+    assert_eq!(
+        committed.turns.last().unwrap().status,
+        TurnStatus::Completed
+    );
+    drop(executor);
+    drop(threads);
+
+    // Reopen the database before any subsequent turn can regenerate context state.
+    let store = ash_state::SqliteThreadStore::open(&database).unwrap();
+    let events = thread_store::ThreadStore::load(&store, &thread).unwrap();
+    assert!(events.iter().any(|record| matches!(
+        &record.event,
+        ash_protocol::ThreadEvent::ContextCheckpointCommitted { checkpoint, .. }
+            if checkpoint == &committed.context_checkpoints[0]
+    )));
+    let threads = Arc::new(ThreadController::with_store(Arc::new(store)));
+    let recovered = threads.read_thread(&thread).unwrap();
+    assert_eq!(recovered.context_checkpoints, committed.context_checkpoints);
+    assert_eq!(recovered.sequence, committed.sequence);
+    let turn = start_turn(
+        &threads,
+        "continue-release",
+        "Continue with the first step.",
+    );
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+        .with_execution_observer(observer);
+    execute(&executor, &threads, &turn);
+    let requests = model.0.lock().unwrap();
+    assert_eq!(requests.len(), 3);
+    let before = serde_json::to_string(&requests[0].input).unwrap();
+    let compaction = serde_json::to_string(&requests[1].input).unwrap();
+    let continuation = serde_json::to_string(&requests[2].input).unwrap();
+    assert!(before.contains("Plan the release."));
+    assert!(compaction.contains("Plan the release."));
+    assert!(compaction.contains("Preserve the release ordering."));
+    assert!(requests[1].tools.is_empty());
+    assert_eq!(
+        continuation
+            .matches("Release checkpoint: validate the candidate before publishing.")
+            .count(),
+        1
+    );
+    assert!(!continuation.contains("Plan the release."));
+    assert!(continuation.contains("Continue with the first step."));
+    assert!(
+        requests[2]
+            .instructions
+            .as_ref()
+            .unwrap()
+            .contains(ash_prompts::AGENT_INSTRUCTIONS.body())
+    );
+    assert_eq!(
+        threads
+            .read_thread(&thread)
+            .unwrap()
+            .context_checkpoints
+            .len(),
+        1
+    );
+}
+
 impl ModelService for Luna {
     fn invoke(
         &self,

@@ -1,9 +1,89 @@
 use super::GlyphSet;
 use super::KeyHintStyle;
 use super::TerminalSettings;
+use super::TuiSettings;
 use crate::nls::Language;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use std::collections::BTreeMap;
+
+#[test]
+fn complete_tui_candidate_accepts_fields_from_every_feature_owner() {
+    let section = FrontendConfigDto(BTreeMap::from([
+        ("screenMode".into(), serde_json::json!("inline")),
+        ("language".into(), serde_json::json!("zh-CN")),
+        ("theme".into(), serde_json::json!("graphite")),
+        ("keybindings".into(), serde_json::json!([])),
+        (
+            "statusLine".into(),
+            serde_json::json!(["model", "git-branch"]),
+        ),
+        ("statusLineStyle".into(), serde_json::json!("rich")),
+        ("showGitChangesAsDiff".into(), serde_json::json!(true)),
+        ("dictationShortcutEnabled".into(), serde_json::json!(true)),
+        ("dictationShortcut".into(), serde_json::json!("ctrl+y")),
+        (
+            "pinnedModels".into(),
+            serde_json::json!([{"provider":"openai", "model":"gpt-test"}]),
+        ),
+    ]));
+    let settings = TuiSettings::from_tui(&section).unwrap();
+    assert_eq!(
+        settings.terminal.screen_mode(),
+        crate::terminal::ScreenMode::Inline
+    );
+    assert_eq!(settings.terminal.language(), Language::Chinese);
+    assert_eq!(
+        settings.status_line.style(),
+        crate::status::StatusLineStyle::Rich
+    );
+    assert!(settings.status_line.show_git_changes_as_diff());
+    assert_eq!(
+        settings
+            .status_line
+            .items()
+            .map(|item| item.id())
+            .collect::<Vec<_>>(),
+        ["model", "git-branch"]
+    );
+}
+
+#[test]
+fn complete_tui_candidate_reports_unknown_keys_in_the_selected_language() {
+    let section = FrontendConfigDto(BTreeMap::from([
+        ("language".into(), serde_json::json!("zh-CN")),
+        ("showTip".into(), serde_json::json!(false)),
+    ]));
+    let error = TuiSettings::from_tui(&section).err().unwrap();
+    assert_eq!(error, "未知的 [tui] 配置键：showTip。");
+    // A narrow field writer retains the opaque table even when this TUI cannot apply it.
+    let updated = TerminalSettings::default().write_to_tui(&section).unwrap();
+    assert_eq!(updated.0["showTip"], false);
+}
+
+#[test]
+fn complete_tui_candidate_checks_values_owned_by_other_features() {
+    for (key, value) in [
+        ("keybindings", serde_json::json!(false)),
+        ("statusLine", serde_json::json!(["model", "model"])),
+        ("dictationShortcut", serde_json::json!("g")),
+        (
+            "pinnedModels",
+            serde_json::json!([{"provider":"openai", "model":""}]),
+        ),
+        ("theme", serde_json::json!(false)),
+    ] {
+        let section = FrontendConfigDto(BTreeMap::from([(key.into(), value)]));
+        assert!(TuiSettings::from_tui(&section).is_err(), "{key}");
+    }
+    let section = FrontendConfigDto(BTreeMap::from([
+        ("language".into(), serde_json::json!("zh-CN")),
+        ("theme".into(), serde_json::json!(" ")),
+    ]));
+    assert_eq!(
+        TuiSettings::from_tui(&section).err().unwrap(),
+        "无效的 [tui].theme：需要非空主题名称。"
+    );
+}
 
 #[test]
 fn tui_table_defaults_missing_terminal_fields() {

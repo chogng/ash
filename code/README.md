@@ -212,7 +212,7 @@ dictationShortcut = "ctrl+g"
 
 `autoUpdate` 在“通用”页签中以单行选项切换：`latest` 跟随每次发布，`stable` 只跟随显式晋升的版本，`never` 不自动检查；缺省为 `latest`。CLI 在本地 TUI 启动时和运行期间读取这个 profile 设置，源码构建和其他安装方式不会被改写。下载、签名校验、诊断和版本切换契约见 [CLI README](../ash-cli/README.md#remote-connections-and-updates)。
 
-`language` 只接受 `en`、`ja`、`zh-CN`、`fr`，缺省为 `en`。当前实现会立即切换 Config 根页面；供应商名、语言服务器标识、模型回复、代码和用户内容保持原文。编辑任一设置时都会保留未知的 `[tui]` 同级字段，无效语言值会报告配置错误。
+`language` 只接受 `en`、`ja`、`zh-CN`、`fr`，缺省为 `en`。当前实现会立即切换 Config 根页面；供应商名、语言服务器标识、模型回复、代码和用户内容保持原文。TUI 在启动、读取 Config 和重载时校验完整 `[tui]` 表，未知配置键或无效值会报告错误；无效重载保留上一份有效设置、当前草稿和正在运行的任务状态。各字段仍由终端设置、状态栏、快捷键、模型、主题和听写功能分别解释，后端不解释 TUI 字段。单字段序列化保留其他同级字段，Config 保存前须通过完整候选校验。
 
 目录权限不属于 TUI profile 设置，只保存在对应 Session。用户主题内容保存为 `<profile>/code/themes/*.json`。每个文件最多 1 MiB；目录最多读取 128 个常规 JSON 文件；`id` 必须是小写 kebab-case，`label` 为 1–80 个已去除首尾空格的字符，`appearance` 只能是 `dark` 或 `light`，`colors` 最多覆盖 64 项且颜色必须是 `#RRGGBB`。未知字段、未知颜色名、重复/保留 ID 和不支持的版本都会使该主题文件单独失效。
 

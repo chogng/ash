@@ -71,7 +71,7 @@ where
     T: JsonRpcTransport,
 {
     let config = client.read_config().map_err(|error| error.to_string())?;
-    let catalog = resource.catalog(preference(&config))?;
+    let catalog = resource.catalog(preference(&config)?)?;
     let choices = if custom {
         custom_theme_choices(&catalog)
     } else {

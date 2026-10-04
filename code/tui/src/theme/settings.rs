@@ -18,6 +18,8 @@ where
     let config = client.read_config()?;
     let mut tui = config.tui.0;
     tui.insert("theme".into(), serde_json::Value::String(theme));
+    let tui = FrontendConfigDto(tui);
+    crate::config::TuiSettings::from_tui(&tui).map_err(ThemeSettingsError)?;
     client.update_config(ConfigUpdateParams {
         advisor: Default::default(),
         time_context: Default::default(),
@@ -32,18 +34,22 @@ where
         grep_backend: Patch::Missing,
         git: Patch::Missing,
         gui: Patch::Missing,
-        tui: Patch::Value(FrontendConfigDto(tui)),
+        tui: Patch::Value(tui),
     })?;
     Ok(())
 }
 
-pub(crate) fn preference(config: &ConfigReadResult) -> &str {
-    config
-        .tui
-        .0
-        .get("theme")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("system")
+pub(crate) fn preference(config: &ConfigReadResult) -> Result<&str, String> {
+    crate::config::TuiSettings::from_tui(&config.tui)?;
+    preference_from_tui(&config.tui)
+}
+
+pub(crate) fn preference_from_tui(section: &FrontendConfigDto) -> Result<&str, String> {
+    match section.0.get("theme") {
+        None => Ok("system"),
+        Some(serde_json::Value::String(name)) if !name.trim().is_empty() => Ok(name),
+        Some(_) => Err("Invalid [tui].theme: expected a non-empty theme name.".into()),
+    }
 }
 
 #[derive(Debug)]

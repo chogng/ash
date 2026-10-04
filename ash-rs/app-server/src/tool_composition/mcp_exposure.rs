@@ -115,7 +115,7 @@ impl McpMetaToolService {
                 )
             })
             .collect();
-        let meta_definitions = meta_definitions(&catalog_digest);
+        let meta_definitions = meta_definitions();
         Self {
             tools,
             definitions,
@@ -447,13 +447,13 @@ fn digest_json(value: &impl serde::Serialize) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
-fn meta_definitions(catalog_digest: &str) -> Vec<ToolDefinition> {
+fn meta_definitions() -> Vec<ToolDefinition> {
+    // Catalog identity travels in search results and call arguments. Keeping it out of
+    // declarations preserves the model's tool prefix when a new catalog is published.
     vec![
         ToolDefinition {
             name: ToolName::new(MCP_SEARCH_TOOLS_NAME).expect("static tool name is valid"),
-            description: format!(
-                "Search the frozen MCP catalog by capability. Returns at most five exact definitions and bindings. Catalog: {catalog_digest}."
-            ),
+            description: "Search the frozen MCP catalog by capability. Returns at most five exact definitions and bindings.".into(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -469,9 +469,7 @@ fn meta_definitions(catalog_digest: &str) -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: ToolName::new(MCP_CALL_TOOL_NAME).expect("static tool name is valid"),
-            description: format!(
-                "Call one MCP definition returned by search_tools using its exact frozen binding. Catalog: {catalog_digest}."
-            ),
+            description: "Call one MCP definition returned by search_tools using its exact frozen binding.".into(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {

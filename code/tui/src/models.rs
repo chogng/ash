@@ -42,6 +42,7 @@ pub(crate) use picker::ModelOption;
 pub(crate) use picker::ModelPickerData;
 pub(crate) use picker::ModelSelectionAction;
 pub(crate) use picker::model_choices;
+pub(crate) use picker::pinned_models;
 pub(crate) use request::execute;
 pub(crate) use request::remove_provider_pins;
 #[cfg(test)]

@@ -4,13 +4,11 @@ use super::ConfigEdit;
 use super::ConfigEditResult;
 use super::Event;
 use super::ProviderApiKeyEdit;
-use super::TerminalSettings;
 use super::advisor_choices;
 use super::config_choices;
 use crate::client::new_command_id;
 use crate::nls;
 use crate::nls::Message;
-use crate::status::StatusLineSettings;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
@@ -71,9 +69,9 @@ where
         Command::OpenAdvisor => (|| -> Result<Event, ConfigCommandError> {
             let config = client.read_config().map_err(ConfigCommandError::from)?;
             let models = client.list_models().map_err(ConfigCommandError::from)?;
-            let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
-            let status_line =
-                StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+            let settings = super::TuiSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+            let terminal = settings.terminal;
+            let status_line = settings.status_line;
             let providers = client.list_providers().map_err(ConfigCommandError::from)?;
             Ok(Event::AdvisorOpened {
                 root: config_choices(&config, &providers, terminal, status_line),
@@ -117,7 +115,9 @@ fn select_advisor<T: JsonRpcTransport>(
     selection: String,
 ) -> Result<ConfigEditResult, ConfigCommandError> {
     let config = client.read_config()?;
-    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let terminal = super::TuiSettings::from_tui(&config.tui)
+        .map_err(ConfigCommandError)?
+        .terminal;
     let advisor = if selection == "clear" {
         None
     } else if selection == "off" {
@@ -176,8 +176,9 @@ fn set_advisor<T: JsonRpcTransport>(
         tui: Patch::Missing,
     })?;
     let config = client.read_config()?;
-    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
-    let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let settings = super::TuiSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let terminal = settings.terminal;
+    let status_line = settings.status_line;
     let providers = client.list_providers()?;
     let result = ConfigEditResult {
         terminal,
@@ -218,8 +219,9 @@ fn set_memories<T: JsonRpcTransport>(
         tui: Patch::Missing,
     })?;
     let config = client.read_config()?;
-    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
-    let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let settings = super::TuiSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let terminal = settings.terminal;
+    let status_line = settings.status_line;
     Ok(ConfigEditResult {
         terminal,
         status_line: status_line.clone(),
@@ -239,8 +241,9 @@ fn set_issue_settings<T: JsonRpcTransport>(
         },
     )?;
     let config = client.read_config()?;
-    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
-    let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let settings = super::TuiSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let terminal = settings.terminal;
+    let status_line = settings.status_line;
     let providers = client.list_providers()?;
     Ok(ConfigEditResult {
         terminal,
@@ -270,8 +273,9 @@ fn set_git_settings<T: JsonRpcTransport>(
         tui: Patch::Missing,
     })?;
     let config = client.read_config()?;
-    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
-    let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let settings = super::TuiSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let terminal = settings.terminal;
+    let status_line = settings.status_line;
     Ok(ConfigEditResult {
         terminal,
         status_line: status_line.clone(),
@@ -372,9 +376,9 @@ where
     T: JsonRpcTransport,
 {
     let server_config = client.read_config()?;
-    let terminal = TerminalSettings::from_tui(&server_config.tui).map_err(ConfigCommandError)?;
-    let status_line =
-        StatusLineSettings::from_tui(&server_config.tui).map_err(ConfigCommandError)?;
+    let settings = super::TuiSettings::from_tui(&server_config.tui).map_err(ConfigCommandError)?;
+    let terminal = settings.terminal;
+    let status_line = settings.status_line;
     let providers = client.list_providers()?;
     Ok(config_choices(
         &server_config,
@@ -423,6 +427,7 @@ where
         .write_to_tui(&edit.server_config.tui)
         .map_err(ConfigCommandError)?;
     let tui = edit.status_line.write_to_tui(&tui);
+    super::TuiSettings::from_tui(&tui).map_err(ConfigCommandError)?;
     client.update_config(ConfigUpdateParams {
         advisor: Default::default(),
         time_context: Default::default(),
@@ -440,8 +445,9 @@ where
         tui: Patch::Value(tui),
     })?;
     let config = client.read_config()?;
-    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
-    let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let settings = super::TuiSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let terminal = settings.terminal;
+    let status_line = settings.status_line;
     Ok(ConfigEditResult {
         terminal,
         status_line: status_line.clone(),

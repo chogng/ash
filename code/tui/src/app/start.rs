@@ -90,8 +90,9 @@ pub(super) fn start(
         .map(|catalog| catalog.diagnostics)
         .unwrap_or_default();
     let initial_config = client.read_config()?;
-    let terminal_settings = crate::config::TerminalSettings::from_tui(&initial_config.tui)
-        .map_err(std::io::Error::other)?;
+    let terminal_settings = crate::config::TuiSettings::from_tui(&initial_config.tui)
+        .map_err(std::io::Error::other)?
+        .terminal;
     let show_home = recovery.is_none()
         && (start_empty
             || terminal_settings.screen_mode() == crate::terminal::ScreenMode::Fullscreen);
@@ -155,7 +156,8 @@ pub(super) fn start(
     let initial_model_catalog = client.list_models()?;
     let model_picker =
         crate::models::ModelPickerData::new(initial_model_catalog, initial_config.clone());
-    let theme_preference = theme_feature::preference(&initial_config);
+    let theme_preference =
+        theme_feature::preference(&initial_config).map_err(std::io::Error::other)?;
     match theme_resource.load(theme_preference) {
         Ok(loaded) => {
             for diagnostic in loaded.diagnostics {

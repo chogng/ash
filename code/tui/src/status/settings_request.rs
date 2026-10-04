@@ -51,7 +51,7 @@ where
     T: JsonRpcTransport,
 {
     let config = client.read_config().map_err(|error| error.to_string())?;
-    let settings = StatusLineSettings::from_tui(&config.tui)?;
+    let settings = crate::config::TuiSettings::from_tui(&config.tui)?.status_line;
     let choices = list_selection(&settings, config.revision);
     Ok(StatusLineEditorUpdate { settings, choices })
 }
@@ -70,9 +70,10 @@ where
                 .into(),
         );
     }
-    let mut settings = StatusLineSettings::from_tui(&config.tui)?;
+    let mut settings = crate::config::TuiSettings::from_tui(&config.tui)?.status_line;
     settings.set(edit.item, edit.enabled);
     let tui = settings.write_to_tui(&config.tui);
+    crate::config::TuiSettings::from_tui(&tui)?;
     client
         .update_config(ConfigUpdateParams {
             advisor: Default::default(),
@@ -93,7 +94,7 @@ where
         .map_err(|error| error.to_string())?;
 
     let config = client.read_config().map_err(|error| error.to_string())?;
-    let settings = StatusLineSettings::from_tui(&config.tui)?;
+    let settings = crate::config::TuiSettings::from_tui(&config.tui)?.status_line;
     let choices = list_selection(&settings, config.revision);
     Ok(StatusLineEditorUpdate { settings, choices })
 }
