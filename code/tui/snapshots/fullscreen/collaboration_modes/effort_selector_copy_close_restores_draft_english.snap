@@ -1,10 +1,9 @@
 ---
 source: code/tui/src/app/collaboration_modes_tests.rs
-expression: render_effort(&app)
+expression: frame_text(terminal.backend().buffer())
 ---
   .                                                                [Dashboard]
 
-● Multitask enabled. Thinking effort is unchanged.
 
 
 
@@ -20,9 +19,10 @@ expression: render_effort(&app)
 
 
 
-                                                                   ← Dashboard
+
+                                                   Copied 6 chars to clipboard
   ────────────────────────────────────────────────────────────────────────────
-  >
-  ───────────────────────────────────────────────────────── test-model (high)
+  > keep this draft
+  ─────────────────────────────────────────────────────────── Automatic model
   ⏸ Manual
   Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

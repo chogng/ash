@@ -27,16 +27,37 @@ impl<'a> RenderContext<'a> {
         if opacity >= 1.0 {
             return style;
         }
+        let background = match (self.background(), self.theme.terminal_background()) {
+            (Color::Reset, Some([r, g, b])) => Color::Rgb(r, g, b),
+            (background, _) => background,
+        };
+        Self::interpolate_foreground(style, background, opacity)
+    }
+
+    /// Blends theme text colors while preserving terminal color depth and interaction backgrounds.
+    pub(crate) fn blend_style(
+        self,
+        style: ratatui::style::Style,
+        target: Color,
+        amount: f32,
+    ) -> ratatui::style::Style {
+        Self::interpolate_foreground(style, target, 1.0 - amount)
+    }
+
+    fn interpolate_foreground(
+        style: ratatui::style::Style,
+        background: Color,
+        opacity: f32,
+    ) -> ratatui::style::Style {
+        if opacity >= 1.0 {
+            return style;
+        }
         let blend = |foreground: [u8; 3], background: [u8; 3]| {
             std::array::from_fn(|index| {
                 (f32::from(background[index])
                     + (f32::from(foreground[index]) - f32::from(background[index])) * opacity)
                     .round() as u8
             })
-        };
-        let background = match (self.background(), self.theme.terminal_background()) {
-            (Color::Reset, Some([r, g, b])) => Color::Rgb(r, g, b),
-            (background, _) => background,
         };
         match (style.fg, background) {
             (Some(Color::Rgb(r, g, b)), Color::Rgb(br, bg, bb)) => {

@@ -2,7 +2,7 @@
 source: code/tui/src/app/collaboration_modes_tests.rs
 expression: "format!(\"{history}\\n{}\", render_effort(&app))"
 ---
-● 已 开 启 多 任 务 协 作 ， 由  Ash 协 调  Agent； 推 理 强 度 保 持 不 变 。                        
+● 已 开 启 多 任 务 协 作 ； 推 理 强 度 保 持 不 变 。                                           
                                                                                 
 
 

@@ -1,6 +1,6 @@
 ---
 source: code/tui/src/app/collaboration_modes_tests.rs
-expression: render_effort(&app)
+expression: frame_text(buffer)
 ---
   .                                                                [Dashboard]
 
@@ -16,7 +16,7 @@ expression: render_effort(&app)
 
 
 
-
+                                                   Copied 6 chars to clipboard
 ────────────────────────────────────────────────────────────────────────────────
   Thinking effort
    Faster                                           Smarter

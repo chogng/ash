@@ -914,13 +914,8 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "推理强度",
         "Niveau de raisonnement",
     ),
-    translation(
-        "Less reasoning → More reasoning",
-        "少ない推論 → 多い推論",
-        "较少推理 → 更多推理",
-        "Moins de raisonnement → Plus de raisonnement",
-    ),
-    translation("Current: {0}", "現在: {0}", "当前：{0}", "Actuel : {0}"),
+    translation("Faster", "速く", "更快", "Plus rapide"),
+    translation("Smarter", "賢く", "更聪明", "Plus intelligent"),
     translation(
         "toggle multitask",
         "マルチタスクを切り替え",
@@ -928,16 +923,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "basculer le mode multitâche",
     ),
     translation(
-        "Ash coordinates",
-        "Ash が協調実行",
-        "由 Ash 协调",
-        "Coordonné par Ash",
-    ),
-    translation(
-        "Multitask enabled. Ash coordinates agents; thinking effort is unchanged.",
-        "マルチタスクを有効にしました。Ash がエージェントを調整し、推論レベルは変わりません。",
-        "已开启多任务协作，由 Ash 协调 Agent；推理强度保持不变。",
-        "Mode multitâche activé. Ash coordonne les agents ; le niveau de raisonnement reste inchangé.",
+        "Multitask enabled. Thinking effort is unchanged.",
+        "マルチタスクを有効にしました。推論レベルは変わりません。",
+        "已开启多任务协作；推理强度保持不变。",
+        "Mode multitâche activé. Le niveau de raisonnement reste inchangé.",
     ),
     translation(
         "Multitask disabled. Thinking effort is unchanged.",

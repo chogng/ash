@@ -53,7 +53,12 @@ pub(super) fn layout_for(app: &App, available: Rect) -> ModalLayout {
         .len() as u16;
         let height = body_rows
             .saturating_add(3 + hint_rows)
-            .min(available.height);
+            // The dock replaces the input and bottom chrome, but keeps feedback above it.
+            .min(
+                available
+                    .height
+                    .saturating_sub(super::layout::header_rows(available) + 1),
+            );
         let surface = Rect::new(
             available.x,
             available.bottom() - height,
@@ -279,6 +284,15 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
             app.key_hint_style(),
             context,
         );
+        if matches!(panel, CommandPanel::Effort(_)) {
+            crate::app::footer::draw_tip(
+                frame,
+                super::layout(app, frame.area()).session.tipline,
+                app,
+                None,
+                context,
+            );
+        }
     }
 }
 

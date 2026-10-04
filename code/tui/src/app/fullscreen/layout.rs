@@ -8,7 +8,8 @@ use crate::thread::composer as chat_input;
 use ratatui::layout::Rect;
 
 pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
-    let header_rows = terminal_area.height.saturating_sub(8).min(2);
+    let screen_area = terminal_area;
+    let header_rows = header_rows(terminal_area);
     let header = Rect::new(
         terminal_area.x + 2.min(terminal_area.width),
         terminal_area.y,
@@ -25,15 +26,19 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
         app.command_panel(),
         Some(crate::app::command_panel::CommandPanel::Effort(_))
     ) {
-        let dock = super::modal::layout_for(app, terminal_area);
+        let dock = super::modal::layout_for(app, screen_area);
+        let tip_rows = u16::from(dock.surface.y > terminal_area.y);
+        let tip_y = dock.surface.y.saturating_sub(tip_rows);
         return Layout {
             top_statusline: header,
             input: Rect::default(),
             session: SessionAreas {
                 transcript: Rect {
-                    height: dock.surface.y.saturating_sub(terminal_area.y),
+                    height: tip_y.saturating_sub(terminal_area.y),
                     ..terminal_area
                 },
+                tipline: Rect::new(terminal_area.x, tip_y, terminal_area.width, tip_rows),
+                hintline: dock.footer,
                 ..SessionAreas::default()
             },
         };
@@ -87,6 +92,10 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
         session: chat.session,
         input: chat.input,
     }
+}
+
+pub(super) fn header_rows(area: Rect) -> u16 {
+    area.height.saturating_sub(8).min(2)
 }
 
 pub(in crate::app) struct Layout {

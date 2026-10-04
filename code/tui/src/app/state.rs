@@ -3596,7 +3596,7 @@ impl App {
                     Ok(options::EffortSelection::Mode(mode)) => {
                         self.set_collaboration_mode(mode);
                         let notice = if mode == ash_protocol::CollaborationMode::Multitask {
-                            "Multitask enabled. Ash coordinates agents; thinking effort is unchanged."
+                            "Multitask enabled. Thinking effort is unchanged."
                         } else {
                             "Multitask disabled. Thinking effort is unchanged."
                         };

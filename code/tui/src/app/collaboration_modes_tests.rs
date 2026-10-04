@@ -45,6 +45,17 @@ fn render(app: &App) -> String {
         .join("\n")
 }
 
+fn frame_text(buffer: &ratatui::buffer::Buffer) -> String {
+    crate::terminal::text::text_in_range(
+        buffer,
+        crate::terminal::text::ScreenSelectionRange::new(
+            buffer.area.as_position(),
+            ratatui::layout::Position::new(buffer.area.right() - 1, buffer.area.bottom() - 1),
+        ),
+    )
+    .unwrap()
+}
+
 #[test]
 fn collaboration_shortcuts_preserve_drafts_permissions_and_history_search() {
     for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
@@ -581,6 +592,152 @@ fn collaboration_effort_selector_applies_a_supported_value_and_restores_focus() 
 }
 
 #[test]
+fn fullscreen_effort_drag_copy_keeps_tip_above_panel_and_hints_below() {
+    use crossterm::event::MouseButton;
+    use crossterm::event::MouseEvent;
+    use crossterm::event::MouseEventKind;
+    use ratatui::layout::Position;
+    use ratatui::layout::Rect;
+
+    for (language, label, suffix) in [
+        (crate::nls::Language::English, "Faster", "english"),
+        (crate::nls::Language::Chinese, "更快", "chinese"),
+    ] {
+        let mut app = App::new();
+        let mut settings = TerminalSettings::default();
+        settings.set_language(language);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        app.insert_text("keep this draft");
+        app.open_command_panel(super::command_panel::CommandPanel::Effort(
+            effort_data()
+                .effort_selector(app.collaboration_mode())
+                .unwrap(),
+        ));
+        let area = Rect::new(0, 0, 80, 24);
+        let areas = super::fullscreen::layout(&app, area).session;
+        assert_eq!(areas.tipline.height, 1);
+        assert_eq!(areas.transcript.bottom(), areas.tipline.y);
+        assert_eq!(areas.hintline.bottom(), area.bottom());
+        assert!(areas.composer.is_empty());
+        assert!(areas.statusline.is_empty());
+        assert!(areas.agent_thread_switcher.is_empty());
+
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|frame| super::frame::draw(frame, &app))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let first_char = label.chars().next().unwrap().to_string();
+        let index = buffer
+            .content
+            .iter()
+            .position(|cell| cell.symbol() == first_char)
+            .unwrap() as u16;
+        let start = Position::new(index % 80, index / 80);
+        let end = Position::new(
+            start.x + crate::render::display_width(label) as u16 - 1,
+            start.y,
+        );
+        let mouse = |kind, position: Position| MouseEvent {
+            kind,
+            column: position.x,
+            row: position.y,
+            modifiers: KeyModifiers::NONE,
+        };
+        for (kind, position) in [
+            (MouseEventKind::Down(MouseButton::Left), start),
+            (MouseEventKind::Drag(MouseButton::Left), end),
+        ] {
+            super::fullscreen::pointer::handle_mouse(&mut app, area, mouse(kind, position));
+        }
+        let super::fullscreen::pointer::MouseAction::Selection(Some(
+            super::fullscreen::selection::ScreenSelectionOutcome::Selection(range),
+        )) = super::fullscreen::pointer::handle_mouse(
+            &mut app,
+            area,
+            mouse(MouseEventKind::Up(MouseButton::Left), end),
+        )
+        else {
+            panic!("dragging the effort description must select text");
+        };
+        let text = crate::terminal::text::text_in_range(buffer, range).unwrap();
+        assert_eq!(text, label);
+        let mut copied = None;
+        super::fullscreen::selection::apply_copied_text(&mut app, &text, |text| {
+            copied = Some(text.to_owned());
+            Ok(())
+        });
+        assert_eq!(copied.as_deref(), Some(label));
+        let notice = format!("Copied {} chars to clipboard", label.chars().count());
+        assert_eq!(app.top_tip().text(None), Some(notice.as_str()));
+        let notice = crate::nls::localize(language, &notice).into_owned();
+        terminal
+            .draw(|frame| super::frame::draw(frame, &app))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let row_text = |y| {
+            crate::terminal::text::text_in_range(
+                buffer,
+                crate::terminal::text::ScreenSelectionRange::new(
+                    Position::new(0, y),
+                    Position::new(79, y),
+                ),
+            )
+            .unwrap()
+        };
+        assert!(row_text(areas.tipline.y).trim_end().ends_with(&notice));
+        assert!(!row_text(areas.hintline.y).contains(&notice));
+        assert!(row_text(areas.hintline.y).contains("Enter"));
+        assert!(row_text(areas.hintline.y).contains("Esc"));
+        assert_eq!(
+            buffer[start].bg,
+            app.render_context().screen_selection_background()
+        );
+        assert_ne!(buffer[(start.x, areas.tipline.y)].bg, buffer[start].bg);
+        assert_eq!(app.input(), "keep this draft");
+        assert!(app.command_panel().is_some());
+        crate::tui_assert_snapshot!(app = &app; format!("effort_selector_drag_copy_{suffix}"), frame_text(buffer));
+
+        for (width, height) in [(40, 24), (80, 12), (40, 12), (40, 9)] {
+            let area = Rect::new(0, 0, width, height);
+            let areas = super::fullscreen::layout(&app, area);
+            assert_eq!(areas.session.tipline.height, 1);
+            assert!(areas.session.tipline.y >= areas.top_statusline.bottom());
+            assert_eq!(areas.session.transcript.bottom(), areas.session.tipline.y);
+            let mut terminal =
+                ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).unwrap();
+            terminal
+                .draw(|frame| super::frame::draw(frame, &app))
+                .unwrap();
+            let buffer = terminal.backend().buffer();
+            let tip = crate::terminal::text::text_in_range(
+                buffer,
+                crate::terminal::text::ScreenSelectionRange::new(
+                    Position::new(0, areas.session.tipline.y),
+                    Position::new(width - 1, areas.session.tipline.y),
+                ),
+            )
+            .unwrap();
+            assert!(tip.trim_end().ends_with(&notice));
+            if width == 40 && height == 24 {
+                crate::tui_assert_snapshot!(app = &app; format!("effort_selector_drag_copy_narrow_{suffix}"), frame_text(buffer));
+            }
+        }
+        key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+        assert!(app.command_panel().is_none());
+        assert!(app.chat_input_focused());
+        assert_eq!(app.input(), "keep this draft");
+        let areas = super::fullscreen::layout(&app, area).session;
+        assert_eq!(areas.tipline.bottom(), areas.composer.y);
+        terminal
+            .draw(|frame| super::frame::draw(frame, &app))
+            .unwrap();
+        crate::tui_assert_snapshot!(app = &app; format!("effort_selector_copy_close_restores_draft_{suffix}"), frame_text(terminal.backend().buffer()));
+    }
+}
+
+#[test]
 fn collaboration_inline_statusline_can_be_enabled_and_localized() {
     use crate::status::StatusLineItem;
     use crate::status::StatusLineSettings;
@@ -803,7 +960,10 @@ fn fullscreen_effort_narrow_chinese_keeps_controls_and_draft_isolated() {
     )
     .unwrap();
     assert!(content.contains("推理强度"));
-    assert!(content.contains("当前：high"));
+    assert!(content.contains("更快"));
+    assert!(content.contains("更聪明"));
+    assert!(!content.contains("当前："));
+    assert!(!content.contains("由 Ash 协调"));
     assert!(content.contains("Enter 应用"));
     assert!(content.contains("Esc 取消"));
     assert!(!content.contains("原来的草稿"));
