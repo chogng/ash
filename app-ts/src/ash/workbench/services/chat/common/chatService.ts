@@ -216,7 +216,14 @@ export interface ThreadGoalUpdate {
 export interface UserInputOption { readonly label: string; readonly description: string }
 export interface UserInputQuestion { readonly id: string; readonly header: string; readonly question: string; readonly options?: readonly UserInputOption[]; readonly allowFreeForm: boolean }
 export interface RequestUserInput { readonly questions: readonly UserInputQuestion[] }
-export interface ActionApprovalRequest { readonly reason: string }
+export interface ActionApprovalCapability {
+	readonly kind: 'fileRead' | 'fileWrite' | 'processSpawn' | 'network' | 'credentialUse' | 'externalMutation' | 'systemConfiguration' | 'userInterface';
+	readonly scope: string;
+}
+export interface ActionApprovalRequest {
+	readonly reason: string;
+	readonly capabilities: readonly ActionApprovalCapability[];
+}
 export interface DynamicToolCall { readonly callId: string; readonly name: string; readonly definitionDigest: string; readonly arguments: unknown }
 
 export type AgentRequest =

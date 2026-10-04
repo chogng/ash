@@ -45,6 +45,11 @@ pub(crate) struct GitServiceCommitChanges {
     pub(crate) changes: Vec<GitCommitChange>,
 }
 
+pub(crate) struct GitServiceBranches {
+    pub(crate) branches: Vec<GitBranch>,
+    pub(crate) checked_out_elsewhere: HashSet<String>,
+}
+
 pub(crate) enum GitConflictResolution {
     Edited(String),
     Current,
@@ -184,21 +189,7 @@ impl GitService {
         self.mutate_paths(GitPathMutation::Stage, paths)
     }
 
-    pub(crate) fn local_branches(&self) -> Result<Vec<GitBranch>, GitServiceError> {
-        self.ensure_readable()?;
-        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
-        runtime.block_on(async {
-            let repository = self.open_repository().await?;
-            self.client
-                .local_branches(&repository)
-                .await
-                .map_err(GitServiceError::Git)
-        })
-    }
-
-    pub(crate) fn checked_out_branches_elsewhere(
-        &self,
-    ) -> Result<HashSet<String>, GitServiceError> {
+    pub(crate) fn local_branches(&self) -> Result<GitServiceBranches, GitServiceError> {
         self.ensure_readable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
@@ -208,11 +199,20 @@ impl GitService {
                 .worktrees(&repository)
                 .await
                 .map_err(GitServiceError::Git)?;
-            Ok(worktrees
+            let checked_out_elsewhere = worktrees
                 .into_iter()
                 .filter(|worktree| worktree.checkout_root() != repository.worktree_root())
                 .filter_map(|worktree| worktree.branch().map(str::to_owned))
-                .collect())
+                .collect();
+            let branches = self
+                .client
+                .local_branches(&repository)
+                .await
+                .map_err(GitServiceError::Git)?;
+            Ok(GitServiceBranches {
+                branches,
+                checked_out_elsewhere,
+            })
         })
     }
 
@@ -842,3 +842,7 @@ pub(crate) fn lock_for_request<'a, T>(
         }
     }
 }
+
+#[cfg(all(test, unix))]
+#[path = "git_service_tests.rs"]
+mod tests;

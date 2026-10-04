@@ -473,3 +473,30 @@ test('Input construction rejects a missing window dictation service', () => {
 	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, []), /Unknown service: chatSpeechToTextService/);
 });
+
+test('approval shows every exact target as text and dispatches both decisions', async () => {
+	const responses: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	const scopes = ['/tmp/a file.txt', String.raw`C:\Users\name\file.txt`, String.raw`\\server\share\file.txt`, '<img src=x onerror=alert(1)>', 'api.example.test'];
+	const state: ChatInputState = {
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: { requestId: 'approval-1', request: { type: 'approval', request: { reason: 'Review these actions', capabilities: scopes.map((scope, index) => ({ kind: index === 4 ? 'network' : 'fileWrite', scope })) } } },
+	};
+	part.render(state);
+	const interaction = part.element.querySelector('.ash-chat-interaction')!;
+	assert.deepEqual([...interaction.querySelectorAll('code')].map(node => node.textContent), scopes);
+	assert.equal(interaction.querySelector('img'), null);
+	assert.equal(interaction.querySelector('ul')?.getAttribute('aria-label'), 'Requested actions and targets');
+	const focusedDecision = interaction.querySelector<HTMLButtonElement>('button')!;
+	focusedDecision.focus();
+	part.render({ ...state, queuedMessages: 1 });
+	assert.equal(document.activeElement, focusedDecision);
+	for (const label of ['Decline', 'Approve once']) {
+		const button = [...interaction.querySelectorAll('button')].find(button => button.textContent === label)!;
+		button.click();
+	}
+	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'decline' } }, { type: 'approval', response: { decision: 'approveOnce' } }]);
+	part.render({ ...state, interaction: undefined });
+	assert.equal(interaction.childElementCount, 0);
+	assert.equal((interaction as HTMLElement).hidden, true);
+});

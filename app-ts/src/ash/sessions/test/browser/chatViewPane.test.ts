@@ -1,3 +1,6 @@
+import { ChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { ChatInputEditors } from '../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
+import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { createTestModel } from '../../../platform/app-server/test/common/testAppServerProtocol.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
 import { ILanguageModelsService, LanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
@@ -3025,4 +3028,84 @@ test("Advisor transcript groups the call and renders advice as a disclosure", ()
 	assert.equal(container.querySelector("summary")?.textContent, "Advisor · test/reviewer");
 	assert.equal(container.querySelector("strong")?.textContent, "cancellation");
 	assert.match(container.textContent ?? "", /120 input · 8 output/);
+});
+
+test('reconnection keeps a draft and blocks submission until thread subscription finishes', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const fake = fakeApi({ sessions: [activeSession] });
+	const pending = new DeferredPromise<Awaited<ReturnType<typeof fake.api.thread.subscribe>>>();
+	let subscriptions = 0;
+	using chat = createChatService({ ...fake.api, thread: { ...fake.api.thread, subscribe: params => ++subscriptions === 1 ? fake.api.thread.subscribe(params) : pending.p } });
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	using contextView = new BrowserContextViewService(document.body);
+	const services = createInputServices(contextView, chat);
+	const delegate: ChatInputDelegate = {
+		send: text => model.send(text),
+		executeCommand: async () => {}, executeServerCommand: async () => {}, interrupt: async () => {},
+		selectModel: async () => {}, selectReasoningEffort: async () => {}, selectAutomaticModel: async () => {},
+		listAgents: async () => [], selectAgent: () => {}, selectMode: () => {},
+		openModelSettings: async () => {}, resolveInteraction: async () => {},
+	};
+	using part = services.createInstance(ChatInputPart, document.body, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, []);
+	using changed = model.onDidChange(() => part.render(model.inputState));
+	part.render(model.inputState);
+	part.appendToDraft('Keep this draft');
+	fake.emitReady();
+	assert.equal(subscriptions, 2);
+	assert.equal(model.inputState.phase, 'loading');
+	await part.acceptInput();
+	assert.equal(fake.turnStartRequests.length, 0);
+	assert.equal((await part.captureDraft())?.draft.text, 'Keep this draft');
+	await pending.complete(await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }));
+	await waitFor(() => model.inputState.phase === 'ready');
+	assert.equal((await part.captureDraft())?.draft.text, 'Keep this draft');
+	await part.acceptInput();
+	assert.deepEqual(fake.turnStartRequests.map(request => request.input), [[{ type: 'text', text: 'Keep this draft' }]]);
+});
+
+test('stream updates preserve message order and survive an older refresh snapshot', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	let currentThread = thread();
+	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
+	const read = new DeferredPromise<Awaited<ReturnType<typeof fake.api.thread.read>>>();
+	let reads = 0;
+	using chat = createChatService({ ...fake.api, thread: { ...fake.api.thread, read: () => { reads++; return read.p; } } });
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	const emit = (revision: number, itemId: string, text: string, transient = true): void => fake.emit({
+		method: 'session/thread/transcript/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 1, revision, changes: [{ type: 'upsert', entry: { type: 'item', entryId: `item:${itemId}`, turnId: 'turn-1', transient, item: { type: 'agentMessage', itemId, turnId: 'turn-1', text } } }] },
+	});
+	emit(2, 'first', 'Partial');
+	emit(3, 'second', 'Later message');
+	// A revision gap triggers a snapshot read while the first message keeps streaming.
+	emit(5, 'gap', 'Not applied');
+	await waitFor(() => reads === 1);
+	emit(4, 'first', 'Completed', false);
+	emit(3, 'first', 'Stale duplicate');
+	assert.deepEqual(model.items.map(item => [item.id, item.text, item.transient]), [['item:first', 'Completed', false], ['item:second', 'Later message', true]]);
+	await read.complete(await fake.api.thread.read({ sessionId: 'session-1', threadId: 'thread-1' }));
+	await nextTask();
+	assert.deepEqual(model.items.map(item => item.text), ['Completed', 'Later message']);
+	currentThread = thread('Recovered');
+	fake.emitReady();
+	await waitFor(() => model.inputState.phase === 'ready');
+	assert.deepEqual(model.items.map(item => item.text), ['Recovered']);
+	emit(4, 'item-1', 'Replayed duplicate');
+	assert.deepEqual(model.items.map(item => item.text), ['Recovered']);
+});
+
+test('approval capabilities reach the composer through committed backend notifications', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const fake = fakeApi({ sessions: [activeSession] });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	const interaction = { requestId: 'approval-1', request: { type: 'approval' as const, request: { actionDigest: 'action', policyRevision: 'policy', reason: 'Review this write', capabilities: [{ kind: 'fileWrite' as const, scope: String.raw`C:\Users\name\file.txt` }] } } };
+	fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 2, update: { type: 'committed', event: { type: 'interactionRequested', threadId: 'thread-1', turnId: 'turn-1', interaction } } } });
+	assert.deepEqual(model.inputState.interaction?.request, interaction.request);
+	await nextTask();
 });

@@ -1,5 +1,16 @@
 {
 	"ash": {
+		"chat.approval.targets": "请求的操作与目标",
+		"chat.approval.fileRead": "读取文件",
+		"chat.approval.fileWrite": "写入文件",
+		"chat.approval.processSpawn": "运行命令",
+		"chat.approval.network": "访问网络",
+		"chat.approval.credentialUse": "使用凭据",
+		"chat.approval.externalMutation": "修改外部资源",
+		"chat.approval.systemConfiguration": "修改系统设置",
+		"chat.approval.userInterface": "操作用户界面",
+		"chat.approval.decline": "拒绝",
+		"chat.approval.approveOnce": "批准一次",
 		"chatEditing.toolbar": "审核 Agent 修改",
 		"chatEditing.review": "审核 Agent 修改",
 		"chatEditing.previous": "上一处修改",

@@ -87,6 +87,17 @@
   margin: 0 0 8px;
 }
 
+.ash-chat-approval-capabilities {
+  margin: 0 0 var(--ash-spacing-size80);
+  padding-inline-start: var(--ash-spacing-size200);
+}
+
+.ash-chat-approval-capabilities li {
+  margin-block: var(--ash-spacing-size40);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .ash-chat-interaction-actions {
   display: flex;
   justify-content: flex-end;

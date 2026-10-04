@@ -81,6 +81,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	protected readonly onDidChangeInput = this.inputChanges.event;
 	private readonly delegate: ChatInputDelegate;
 	private readonly interactionListeners = this._register(new DisposableStore());
+	private renderedInteraction: ChatInputState['interaction'];
 	private readonly attachmentListeners = this._register(new DisposableStore());
 	protected readonly attachmentModel = this._register(new ChatAttachmentModel());
 	private readonly status: HTMLDivElement;
@@ -536,9 +537,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private renderInteraction(state: ChatInputState): void {
+		const interaction = state.interaction;
+		// Streaming and catalog updates must not replace the approval button under keyboard focus.
+		if (interaction && interaction === this.renderedInteraction) return;
+		this.renderedInteraction = interaction;
 		this.interactionListeners.clear();
 		this.interaction.replaceChildren();
-		const interaction = state.interaction;
 		if (!interaction) {
 			this.interaction.hidden = true;
 			return;
@@ -549,12 +553,35 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			case "approval": {
 				const reason = h(this.element.ownerDocument, "p");
 				reason.textContent = request.request.reason;
+				const capabilities = h(this.element.ownerDocument, "ul");
+				capabilities.className = "ash-chat-approval-capabilities";
+				capabilities.setAttribute('aria-label', localize('chat.approval.targets', 'Requested actions and targets'));
+				const labels = {
+					fileRead: localize('chat.approval.fileRead', 'Read file'),
+					fileWrite: localize('chat.approval.fileWrite', 'Write file'),
+					processSpawn: localize('chat.approval.processSpawn', 'Run command'),
+					network: localize('chat.approval.network', 'Access network'),
+					credentialUse: localize('chat.approval.credentialUse', 'Use credential'),
+					externalMutation: localize('chat.approval.externalMutation', 'Change external resource'),
+					systemConfiguration: localize('chat.approval.systemConfiguration', 'Change system settings'),
+					userInterface: localize('chat.approval.userInterface', 'Control user interface'),
+				};
+				for (const capability of request.request.capabilities) {
+					const item = h(this.element.ownerDocument, "li");
+					const label = h(this.element.ownerDocument, "span");
+					label.textContent = labels[capability.kind];
+					const scope = h(this.element.ownerDocument, "code");
+					// The backend owns scope syntax: paths, commands and domains must remain exact.
+					scope.textContent = capability.scope;
+					item.append(label, this.element.ownerDocument.createTextNode(': '), scope);
+					capabilities.append(item);
+				}
 				const actions = h(this.element.ownerDocument, "div");
 				actions.className = "ash-chat-interaction-actions";
-				const decline = this.interactionButton("Decline");
-				const approve = this.interactionButton("Approve once", true);
+				const decline = this.interactionButton(localize('chat.approval.decline', 'Decline'));
+				const approve = this.interactionButton(localize('chat.approval.approveOnce', 'Approve once'), true);
 				actions.append(decline, approve);
-				this.interaction.append(reason, actions);
+				this.interaction.append(reason, capabilities, actions);
 				this.interactionListeners.add(addDisposableListener(decline, "click", () => void this.delegate.resolveInteraction({
 					type: "approval",
 					response: { decision: "decline" },

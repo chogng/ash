@@ -835,13 +835,11 @@ impl GitRepositoryRuntime {
     }
 
     fn local_branches_locked(&self) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
-        let occupied = self
-            .service
-            .checked_out_branches_elsewhere()
-            .map_err(GitRuntimeError::Service)?;
         self.service
             .local_branches()
-            .map(|branches| {
+            .map(|result| {
+                let occupied = result.checked_out_elsewhere;
+                let branches = result.branches;
                 branches
                     .into_iter()
                     .map(|branch| GitBranchDto {

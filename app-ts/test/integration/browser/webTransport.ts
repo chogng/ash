@@ -5,6 +5,7 @@ declare global {
 	interface Window {
 		ashWebTransportIntegration: {
 			start(): void;
+			reconnect(): void;
 			send(frame: string): void;
 			dispose(): void;
 			messages: Array<{ event: string; payload: unknown }>;
@@ -22,6 +23,7 @@ window.ashWebTransportIntegration = {
 		}
 		transport.send(WEB_APP_SERVER_CONNECT_EVENT, { protocolVersion: 1 });
 	},
+	reconnect() { transport?.send(WEB_APP_SERVER_CONNECT_EVENT, { protocolVersion: 1 }); },
 	send(frame) { transport?.send(WEB_APP_SERVER_FRAME_EVENT, { frame }); },
 	dispose() { transport?.dispose(); },
 	messages,
