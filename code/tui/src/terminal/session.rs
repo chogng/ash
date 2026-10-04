@@ -40,7 +40,7 @@ pub(crate) struct TerminalSession {
     terminal: Terminal<CrosstermBackend<Stdout>>,
     modes: TerminalModeGuard<CrosstermModeOperations>,
     rendered_frame: Option<Buffer>,
-    hyperlinks: super::hyperlinks::FrameLinks,
+    hyperlinks: crate::render::links::FrameLinks,
     cursor_color: CursorColor,
     inline_height: u16,
     inline_active: bool,
@@ -128,7 +128,11 @@ impl TerminalSession {
     pub(crate) fn append_history(
         &mut self,
         height: usize,
-        mut render: impl FnMut(&mut Buffer, usize, &std::cell::RefCell<super::hyperlinks::FrameLinks>),
+        mut render: impl FnMut(
+            &mut Buffer,
+            usize,
+            &std::cell::RefCell<crate::render::links::FrameLinks>,
+        ),
     ) -> io::Result<()> {
         super::scrollback::append(&mut self.terminal, height, |buffer, offset| {
             let links = std::cell::RefCell::default();
@@ -175,7 +179,7 @@ impl TerminalSession {
 
     pub(crate) fn draw<F>(&mut self, render: F) -> io::Result<()>
     where
-        F: FnOnce(&mut ratatui::Frame<'_>, &std::cell::RefCell<super::hyperlinks::FrameLinks>),
+        F: FnOnce(&mut ratatui::Frame<'_>, &std::cell::RefCell<crate::render::links::FrameLinks>),
     {
         let links = std::cell::RefCell::default();
         let completed = self.terminal.draw(|frame| render(frame, &links))?;

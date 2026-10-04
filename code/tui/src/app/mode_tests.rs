@@ -750,3 +750,40 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
         assert_eq!(app.input(), "preserved draft");
     }
 }
+
+#[test]
+fn cached_error_updates_language_while_joined_emoji_remains_one_input_glyph_in_both_modes() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        switch(&mut app, mode);
+        app.update(ThreadEvent::FailureReported("Error".into()));
+        app.insert_text("x👩‍💻z");
+        app.handle_key_in_area(
+            KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL),
+            Rect::new(0, 0, 10, 16),
+        );
+        let mut terminal = Terminal::new(TestBackend::new(10, 16)).unwrap();
+        terminal
+            .draw(|frame| super::frame::draw(frame, &app))
+            .unwrap();
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        settings.set_language(crate::nls::Language::Chinese);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        terminal
+            .draw(|frame| super::frame::draw(frame, &app))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        assert!(buffer.content.iter().any(|cell| cell.symbol() == "👩‍💻"));
+        assert!(buffer.content.iter().any(|cell| cell.symbol() == "错"));
+        let output = crate::terminal::text::text_in_range(
+            buffer,
+            crate::terminal::text::ScreenSelectionRange::new(
+                Position::new(0, 0),
+                Position::new(9, 15),
+            ),
+        )
+        .unwrap();
+        crate::tui_assert_snapshot!(app = &app; "unicode_input_after_language_change", output);
+    }
+}

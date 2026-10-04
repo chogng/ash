@@ -966,3 +966,34 @@ fn render_first_row(
         .map(|column| terminal.backend().buffer()[(column, 0)].symbol())
         .collect()
 }
+
+#[test]
+fn nested_markdown_prefixes_leave_content_space_at_narrow_widths() {
+    for source in ["> > hello", "> - hello", "> > [hello](https://example.com)"] {
+        let cell = CellView::plain(MessageRole::Agent, source.into());
+        for width in 1..12 {
+            let rows = cell.lines(test_context(), None, width);
+            assert!(
+                rows.lines
+                    .iter()
+                    .all(|row| row.width() <= usize::from(width)),
+                "width {width}: {source}"
+            );
+            assert!(
+                rows.hyperlinks
+                    .iter()
+                    .flatten()
+                    .all(|link| link.columns.end <= usize::from(width))
+            );
+        }
+    }
+    let cell = CellView::plain(MessageRole::Agent, "> > hello".into());
+    let rows = cell.lines(test_context(), None, 3);
+    insta::assert_snapshot!(rows.lines.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n").trim_end(), @"
+● h
+  e
+  l
+  l
+  o
+");
+}

@@ -1,7 +1,8 @@
 //! Unicode display-cell wrapping shared by chat_input layout and rendering.
 
+use crate::render::display_width;
 use std::ops::Range;
-use unicode_width::UnicodeWidthChar;
+use unicode_segmentation::UnicodeSegmentation;
 
 pub(super) const PROMPT_WIDTH: usize = 2;
 
@@ -70,8 +71,8 @@ fn wrap_line(
     let mut consumed_width = 0_usize;
     let mut cursor_position = cursor_width.filter(|width| *width == 0).map(|_| (0, 0));
 
-    for (byte_index, character) in line.char_indices() {
-        let character_width = character.width().unwrap_or(0);
+    for (byte_index, glyph) in line.grapheme_indices(true) {
+        let character_width = display_width(glyph);
         let current_width = *widths.last().unwrap();
         if character_width > 0
             && current_width > 0
@@ -81,8 +82,8 @@ fn wrap_line(
             ranges.push(byte_index..byte_index);
             widths.push(0);
         }
-        lines.last_mut().unwrap().push(character);
-        ranges.last_mut().unwrap().end = byte_index + character.len_utf8();
+        lines.last_mut().unwrap().push_str(glyph);
+        ranges.last_mut().unwrap().end = byte_index + glyph.len();
         let wrapped_width = widths.last().unwrap().saturating_add(character_width);
         *widths.last_mut().unwrap() = wrapped_width;
         consumed_width = consumed_width.saturating_add(character_width);
@@ -101,12 +102,6 @@ fn wrap_line(
         cursor_position = Some((row + 1, 0));
     }
     (lines, ranges, cursor_position)
-}
-
-fn display_width(text: &str) -> usize {
-    text.chars()
-        .map(|character| character.width().unwrap_or(0))
-        .sum()
 }
 
 #[cfg(test)]

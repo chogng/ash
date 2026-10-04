@@ -1,15 +1,17 @@
 pub(crate) mod batch;
+mod cache;
 mod exec_cell;
 mod history_cell;
 mod markdown;
+mod markdown_cache;
 mod message_response;
 mod model;
 mod streaming;
 pub(crate) use streaming::StreamDisplay;
 mod view;
 
+pub(crate) use cache::ChatHistoryRenderCache;
 pub(crate) use history_cell::CellView;
-pub(crate) use history_cell::ChatHistoryRenderCache;
 pub(crate) use history_cell::CommandStatus;
 pub(crate) use history_cell::LocalCommandCompletion;
 pub(crate) use history_cell::MessageRole;

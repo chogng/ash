@@ -3,9 +3,9 @@ use super::CellMode;
 use super::CellView;
 use super::HistoryCell;
 use super::MessageRole;
-use super::cache::ChatHistoryRenderCache;
 use super::prefixed_body;
 use crate::render::RenderContext;
+use crate::thread::transcript::markdown_cache::MarkdownCache;
 use crate::thread::transcript::message_response::MessageResponse;
 use std::borrow::Cow;
 
@@ -61,7 +61,7 @@ impl HistoryCell for ContentCell {
         &self,
         view: &CellView<'_>,
         context: RenderContext<'_>,
-        cache: Option<&ChatHistoryRenderCache>,
+        cache: Option<&MarkdownCache>,
         width: u16,
     ) -> CellLines {
         let (marker, color) = match self.role {
@@ -86,24 +86,12 @@ impl HistoryCell for ContentCell {
                     crate::render::highlight_code(code, language, context.into())
                 }
             };
-            let gutter_width = usize::from(width.saturating_sub(1)).min(2);
+            let gutter_width = crate::render::prefix_width(usize::from(width), 2);
             let body_width = usize::from(width) - gutter_width;
-            let mut rows = if let Some(cache) = cache {
-                cache.markdown(
-                    view.cell_id.as_deref(),
-                    &source,
-                    body_width,
-                    context,
-                    &mut highlight,
-                )
+            let mut rows = if let Some((cache, id)) = cache.zip(view.cell_id.as_deref()) {
+                cache.render(id, &source, body_width, context, &mut highlight)
             } else {
-                super::super::streaming::StreamingRender::default().render(
-                    "",
-                    &source,
-                    body_width,
-                    context,
-                    &mut highlight,
-                )
+                MarkdownCache::default().render("", &source, body_width, context, &mut highlight)
             };
             if rows.is_empty() {
                 rows.push(Default::default());

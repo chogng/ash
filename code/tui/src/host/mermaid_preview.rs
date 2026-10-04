@@ -1,6 +1,7 @@
 //! Browser documents for complete Mermaid diagrams in assistant messages.
 
-use super::markdown;
+use crate::render::links::PreviewLinks;
+use crate::render::markdown;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::HashMap;
@@ -21,6 +22,7 @@ static NEXT_TEMP_FILE: AtomicU64 = AtomicU64::new(0);
 pub(crate) struct MermaidPreviews {
     directory: PathBuf,
     seen_revisions: HashMap<String, u64>,
+    links: PreviewLinks,
 }
 
 impl MermaidPreviews {
@@ -28,6 +30,7 @@ impl MermaidPreviews {
         Self {
             directory: profile_root.join("ash-code").join("mermaid-previews"),
             seen_revisions: HashMap::new(),
+            links: PreviewLinks::default(),
         }
     }
 
@@ -40,7 +43,6 @@ impl MermaidPreviews {
         if self.seen_revisions.get(cell_id) == Some(&revision) {
             return Ok(());
         }
-        self.seen_revisions.insert(cell_id.to_owned(), revision);
         let sources = markdown::closed_mermaid_sources(markdown_source);
         for source in sources {
             if source.len() > MAX_SOURCE_BYTES || source.trim().is_empty() {
@@ -48,23 +50,21 @@ impl MermaidPreviews {
             }
             self.write_document(&source)
                 .map_err(|error| error.to_string())?;
+            let url = Url::from_file_path(self.path(&source))
+                .expect("preview paths are absolute profile paths");
+            self.links.insert(&source, url.into());
         }
+        self.seen_revisions.insert(cell_id.to_owned(), revision);
         Ok(())
     }
 
     pub(crate) fn reset_message_revisions(&mut self) {
         self.seen_revisions.clear();
+        self.links.clear();
     }
 
-    pub(crate) fn url(&self, source: &str) -> Option<String> {
-        if source.len() > MAX_SOURCE_BYTES {
-            return None;
-        }
-        let path = self.path(source);
-        is_regular_file(&path)
-            .then(|| Url::from_file_path(path).ok())
-            .flatten()
-            .map(Into::into)
+    pub(crate) fn links(&self) -> &PreviewLinks {
+        &self.links
     }
 
     fn path(&self, source: &str) -> PathBuf {

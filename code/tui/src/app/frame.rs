@@ -13,7 +13,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
 pub(crate) fn draw_with_links(
     frame: &mut Frame<'_>,
     app: &App,
-    links: &std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,
+    links: &std::cell::RefCell<crate::render::links::FrameLinks>,
 ) {
     match app.screen_mode() {
         crate::terminal::ScreenMode::Fullscreen => fullscreen::draw(frame, app, links),

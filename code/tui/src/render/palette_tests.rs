@@ -30,11 +30,11 @@ fn render_theme_maps_its_colors_for_each_terminal_capability() {
     let ansi16 = RenderTheme::from_palette(palette, ColorLevel::Ansi16);
     let monochrome = RenderTheme::from_palette(palette, ColorLevel::Monochrome);
     assert_eq!(
-        super::RenderContext::new(&true_color, 0).cursor_color(),
+        crate::render::RenderContext::new(&true_color, 0).cursor_color(),
         Some([154, 145, 235])
     );
     assert_eq!(
-        super::RenderContext::new(&monochrome, 0).cursor_color(),
+        crate::render::RenderContext::new(&monochrome, 0).cursor_color(),
         None
     );
 

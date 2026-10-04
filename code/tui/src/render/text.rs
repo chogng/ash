@@ -106,6 +106,11 @@ pub(crate) fn wrap_lines(lines: Vec<Line<'static>>, width: usize) -> Vec<Line<'s
         .collect()
 }
 
+/// Prefixes may shrink on narrow surfaces, but must leave room for content.
+pub(crate) fn prefix_width(width: usize, desired: usize) -> usize {
+    desired.min(width.saturating_sub(1))
+}
+
 pub(crate) fn display_width(text: &str) -> usize {
     text.width()
 }

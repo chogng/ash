@@ -366,6 +366,25 @@ fullscreen 的 [pointer.rs](tui/src/app/fullscreen/pointer.rs) 聚合各组件�
 
 文字按空白分隔的词换行；过宽的词按完整 Unicode 组合字符分行，路径和 URL 内的标点不额外提供断行机会。ANSI 颜色或 Markdown 样式切换不会改变断行位置。一个组合字符跨多个颜色片段时采用起始字符的样式，终端不能为同一个字形分别着色。软换行处的分隔空白由断行取代，排版不改写记录中的原始消息数据。
 
+
+### 渲染链路与缓存归属
+
+页面组合、功能内容、文字排版与终端写出各有自己的负责方。绘制、测量、滚动和鼠标命中使用同一份排版结果；排版读取显式输入，不写预览文件，也不判断文件是否存在。
+
+| 内容 | 负责方与约定 |
+| --- | --- |
+| 整页、活动视口、焦点与浮层组合 | `app/fullscreen`、`app/inline`；共用 `app/chat_view.rs` 的聊天控制区，两种模式分别维护输出生命周期 |
+| 字形宽度、正文换行与前缀预算 | [render/text.rs](tui/src/render/text.rs)；输入框共用完整 Unicode 字形及宽度，保留自己的字节范围、光标与选区；消息标识、Markdown 引用和列表的前缀共同占用宽度，窄窗口缩短前缀并留下正文空间 |
+| 主题颜色与显示输入 | [render/palette.rs](tui/src/render/palette.rs) 保存调色板与终端颜色转换；[render/context.rs](tui/src/render/context.rs) 提供主题版本、语言、已准备的预览地址及当前帧链接输出 |
+| 链接文字、来源列与当前帧范围 | [render/links.rs](tui/src/render/links.rs)；链接范围跟随排版与裁剪，链接目标不进入文字或复制 buffer；[terminal/hyperlinks.rs](tui/src/terminal/hyperlinks.rs) 只在写出时编码 OSC 8 |
+| Mermaid 预览文件 | [host/mermaid_preview.rs](tui/src/host/mermaid_preview.rs) 在消息更新后准备文件，成功后发布地址；排版只查询内存中的地址，地址变化推进版本并使相关缓存失效 |
+| 记录行、测量信息与屏幕 buffer 缓存 | [transcript/cache.rs](tui/src/thread/transcript/cache.rs)；按记录身份、内容版本、流式可见边界、宽度、主题、语言、预览地址版本及展开/选中状态复用，测量行与 buffer 共用有界预算 |
+| Markdown 块复用与代码块高亮状态 | [transcript/markdown_cache.rs](tui/src/thread/transcript/markdown_cache.rs)；文字或显示输入变化时重排受影响块，代码高亮状态单独判断语言、主题和完整源码前缀；具体记录只接收这类内容缓存，不接收屏幕 buffer 缓存 |
+| 正文视口与动作几何 | [transcript/view/layout.rs](tui/src/thread/transcript/view/layout.rs)；一次测量产生行高、动作区域、可见区、滚动偏移和跳转按钮位置，绘制与命中消费同一结果 |
+
+流式消息的显示节奏仍由 `transcript/streaming.rs` 负责：它决定显示到哪段源码、何时提交，不保存 Markdown 排版缓存，也不在绘制期间推进源码边界。`MessageResponse` 及其私有前缀组件继续留在正文模块。
+
+
 ## 页面与状态归属
 
 | 内容 | 保存与维护位置 |

@@ -3,8 +3,8 @@
 mod table;
 
 use crate::render::RenderContext;
-use crate::terminal::hyperlinks::HyperlinkLine;
-use crate::terminal::hyperlinks::wrap;
+use crate::render::links::HyperlinkLine;
+use crate::render::links::wrap;
 use pulldown_cmark::CodeBlockKind;
 use pulldown_cmark::Event;
 use pulldown_cmark::Options;
@@ -84,7 +84,7 @@ pub(crate) fn blocks(source: &str) -> Vec<MarkdownBlock<'_>> {
     result
 }
 
-pub(super) fn closed_mermaid_sources(source: &str) -> Vec<String> {
+pub(crate) fn closed_mermaid_sources(source: &str) -> Vec<String> {
     let mut sources = Vec::new();
     for block in blocks(source) {
         let mut code = None;
@@ -284,7 +284,7 @@ pub(crate) fn render(
                 // Local destinations remain visible and copyable; arbitrary file URLs are not
                 // promoted to executable terminal links.
                 if let Some(target) = writer.link.take()
-                    && crate::terminal::hyperlinks::web_destination(&target).is_none()
+                    && crate::render::links::web_destination(&target).is_none()
                 {
                     writer.text(&format!(" ({target})"));
                 }
@@ -365,7 +365,7 @@ impl Writer<'_> {
             // Recognize bare web URLs without changing their visible spelling.
             for word in text.split_inclusive(char::is_whitespace) {
                 let candidate = word.trim_end().trim_end_matches(['.', ',', ';', '!', '?']);
-                let destination = crate::terminal::hyperlinks::web_destination(candidate);
+                let destination = crate::render::links::web_destination(candidate);
                 let style = if destination.is_some() {
                     self.style().add_modifier(Modifier::UNDERLINED)
                 } else {
@@ -378,7 +378,10 @@ impl Writer<'_> {
         }
     }
     fn indent(&self) -> usize {
-        self.quote * 2 + self.list_widths.iter().sum::<usize>()
+        crate::render::prefix_width(
+            self.width,
+            self.quote * 2 + self.list_widths.iter().sum::<usize>(),
+        )
     }
     fn available_width(&self) -> usize {
         self.width.saturating_sub(self.indent()).max(1)
@@ -409,7 +412,10 @@ impl Writer<'_> {
                 " ".repeat(list_width)
             };
             row.prefix(Span::styled(
-                format!("{quote}{indent}{list_prefix}"),
+                crate::render::truncate_to_width(
+                    &format!("{quote}{indent}{list_prefix}"),
+                    self.indent(),
+                ),
                 Style::default().fg(self.context.muted()),
             ));
             self.rows.push(row);

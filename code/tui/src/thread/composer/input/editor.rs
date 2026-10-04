@@ -1,5 +1,6 @@
 //! Unicode-safe chat_input editor state and atomic element handling.
 
+use crate::render::display_width;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -8,7 +9,6 @@ use std::ops::Range;
 use std::time::Duration;
 use std::time::Instant;
 use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -622,14 +622,14 @@ impl TextArea {
 
     fn previous_boundary(&self) -> Option<usize> {
         self.text[..self.cursor]
-            .char_indices()
+            .grapheme_indices(true)
             .next_back()
             .map(|(index, _)| index)
     }
 
     fn next_boundary(&self) -> Option<usize> {
         self.text[self.cursor..]
-            .char_indices()
+            .grapheme_indices(true)
             .nth(1)
             .map(|(offset, _)| self.cursor + offset)
             .or_else(|| (self.cursor < self.text.len()).then_some(self.text.len()))
@@ -638,8 +638,8 @@ impl TextArea {
 
 fn boundary_for_display_width(text: &str, target_width: usize) -> usize {
     let mut width: usize = 0;
-    for (index, character) in text.char_indices() {
-        let character_width = character.width().unwrap_or(0);
+    for (index, glyph) in text.grapheme_indices(true) {
+        let character_width = display_width(glyph);
         if width.saturating_add(character_width) > target_width {
             return index;
         }

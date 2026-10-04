@@ -5,10 +5,10 @@ use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::history_cell::CellLines;
 use crate::thread::transcript::history_cell::CellMode;
 use crate::thread::transcript::history_cell::CellView;
-use crate::thread::transcript::history_cell::ChatHistoryRenderCache;
 use crate::thread::transcript::history_cell::HistoryCell;
 use crate::thread::transcript::history_cell::MessageRole;
 use crate::thread::transcript::history_cell::prefixed_body;
+use crate::thread::transcript::markdown_cache::MarkdownCache;
 use crate::thread::transcript::message_response::MessageResponse;
 use ash_ansi_escape::ansi_text;
 use ratatui::style::Style;
@@ -48,7 +48,7 @@ impl HistoryCell for ExecCell {
         &self,
         view: &CellView<'_>,
         context: RenderContext<'_>,
-        _cache: Option<&ChatHistoryRenderCache>,
+        _cache: Option<&MarkdownCache>,
         width: u16,
     ) -> CellLines {
         let color = match self.status() {

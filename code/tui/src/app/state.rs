@@ -31,6 +31,7 @@ use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImage;
 use crate::host::clipboard::ClipboardImageAvailability;
+use crate::host::mermaid_preview::MermaidPreviews;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
 use crate::keymap::AppKeymapContext;
@@ -50,7 +51,6 @@ use crate::models::ModelChoices;
 use crate::models::ModelSelectionAction;
 use crate::projects::Command as ProjectCommand;
 use crate::projects::Event as ProjectEvent;
-use crate::render::MermaidPreviews;
 use crate::render::RenderContext;
 use crate::render::RenderTheme;
 use crate::render::ThemePalette;
@@ -347,7 +347,7 @@ impl App {
         let context = RenderContext::new(&self.render_theme, self.render_theme_revision)
             .with_language(self.language());
         match &self.mermaid_previews {
-            Some(previews) => context.with_mermaid_previews(previews),
+            Some(previews) => context.with_preview_links(previews.links()),
             None => context,
         }
     }

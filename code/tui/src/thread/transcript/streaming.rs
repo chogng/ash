@@ -1,9 +1,6 @@
 //! Owns the visible source boundary and commit deadlines of live transcript messages.
 //! Canonical text remains in TranscriptModel; rendering never advances this state.
 mod chunking;
-mod render;
-
-pub(super) use render::StreamingRender;
 
 use self::chunking::ChunkingPolicy;
 use super::CellView;

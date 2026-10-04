@@ -144,7 +144,7 @@ pub(super) fn reconcile_status_line_focus(app: &mut App) {
 pub(super) fn draw(
     frame: &mut Frame<'_>,
     app: &App,
-    links: &std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,
+    links: &std::cell::RefCell<crate::render::links::FrameLinks>,
 ) {
     let context = app.render_context().with_hyperlinks(links);
     frame.render_widget(

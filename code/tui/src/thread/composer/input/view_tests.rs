@@ -101,3 +101,13 @@ fn pointer_positions_follow_rules_wide_characters_and_wrapping() {
         None
     );
 }
+
+#[test]
+fn clicking_the_halves_of_a_joined_emoji_uses_whole_glyph_byte_bounds() {
+    let area = Rect::new(0, 0, 5, 5);
+    let left = super::cursor_at(area, "x👩‍💻z", 0, 4, None, Position::new(3, 1));
+    let right = super::cursor_at(area, "x👩‍💻z", 0, 4, None, Position::new(4, 1));
+    assert_eq!((left.byte, left.glyph_byte), (1, Some(1)));
+    assert_eq!((right.byte, right.glyph_byte), (12, Some(1)));
+    assert_eq!((left.row_start, left.row_end), (0, 12));
+}

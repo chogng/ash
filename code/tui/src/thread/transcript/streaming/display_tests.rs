@@ -186,7 +186,7 @@ fn source_boundaries_survive_table_reflow_and_resize_without_advancing_time() {
     display.advance(now + COMMIT_INTERVAL);
     let prefix = visible(&display, &model)[0].clone();
     let deadline = display.deadline();
-    let mut render = StreamingRender::default();
+    let render = crate::thread::transcript::markdown_cache::MarkdownCache::default();
     let mut highlight = |_: usize, _: &str, code: &str| {
         code.lines()
             .map(|line| ratatui::text::Line::raw(line.to_owned()))
@@ -212,7 +212,7 @@ fn source_boundaries_survive_table_reflow_and_resize_without_advancing_time() {
         crate::render::test_context(),
         &mut highlight,
     );
-    let fresh = StreamingRender::default().render(
+    let fresh = crate::thread::transcript::markdown_cache::MarkdownCache::default().render(
         "a",
         source,
         36,

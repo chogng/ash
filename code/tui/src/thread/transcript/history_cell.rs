@@ -1,9 +1,9 @@
-mod cache;
 mod content;
 mod local_command;
 mod text;
 
-pub(crate) use cache::ChatHistoryRenderCache;
+use super::ChatHistoryRenderCache;
+use super::markdown_cache::MarkdownCache;
 pub(super) use content::ContentCell;
 pub(super) use local_command::LocalCommandCell;
 pub(crate) use local_command::LocalCommandCompletion;
@@ -55,7 +55,7 @@ pub(super) struct CellLayout {
 #[derive(Debug, Default)]
 pub(super) struct CellLines {
     pub(super) lines: Vec<Line<'static>>,
-    pub(super) hyperlinks: Vec<Vec<crate::terminal::hyperlinks::Hyperlink>>,
+    pub(super) hyperlinks: Vec<Vec<crate::render::links::Hyperlink>>,
     pub(super) user_input_rows: usize,
     pub(super) details_action: Option<ResponseAction>,
 }
@@ -115,7 +115,7 @@ pub(super) trait HistoryCell: std::fmt::Debug {
         &self,
         view: &CellView<'_>,
         context: RenderContext<'_>,
-        cache: Option<&ChatHistoryRenderCache>,
+        cache: Option<&MarkdownCache>,
         width: u16,
     ) -> CellLines;
 }
@@ -193,6 +193,11 @@ impl CellView<'_> {
         if width == 0 {
             return CellLines::default();
         }
-        self.owner().lines(self, context, cache, width)
+        self.owner().lines(
+            self,
+            context,
+            cache.map(ChatHistoryRenderCache::markdown),
+            width,
+        )
     }
 }

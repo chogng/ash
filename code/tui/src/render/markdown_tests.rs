@@ -165,10 +165,10 @@ fn mermaid_diagrams_render_after_closing_and_keep_theme_and_container_width() {
 #[test]
 fn mermaid_browser_link_uses_only_ash_created_preview_files() {
     let profile = tempfile::tempdir().unwrap();
-    let mut previews = crate::render::MermaidPreviews::new(profile.path());
+    let mut previews = crate::host::mermaid_preview::MermaidPreviews::new(profile.path());
     let source = "```mermaid\nflowchart LR\nA --> B\n```";
     previews.prepare_message("agent-1", 1, source).unwrap();
-    let context = test_context().with_mermaid_previews(&previews);
+    let context = test_context().with_preview_links(previews.links());
     let rows = blocks(source)
         .iter()
         .flat_map(|block| {
@@ -189,7 +189,7 @@ fn mermaid_browser_link_uses_only_ash_created_preview_files() {
     assert!(link.destination.ends_with(".html"));
     let chinese = test_context()
         .with_language(crate::nls::Language::Chinese)
-        .with_mermaid_previews(&previews);
+        .with_preview_links(previews.links());
     let translated = blocks(source)
         .iter()
         .flat_map(|block| {

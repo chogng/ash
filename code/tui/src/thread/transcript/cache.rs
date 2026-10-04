@@ -1,10 +1,7 @@
-use super::CellLayout;
-use super::CellLines;
 use super::CellView;
+use super::history_cell::CellLayout;
+use super::history_cell::CellLines;
 use crate::render::RenderContext;
-use crate::render::StreamingCodeHighlighter;
-use crate::render::code_within_limits;
-use crate::render::highlight_code;
 use crate::render::line_to_borrowed;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -22,9 +19,6 @@ use std::sync::Arc;
 const MAX_CACHE_ENTRIES: usize = 256;
 const MAX_CACHE_CELLS: usize = 250_000;
 const MAX_CELL_CELLS: usize = 65_536;
-const MAX_CODE_BLOCKS: usize = 64;
-const MAX_CODE_SOURCE_BYTES: usize = 2 * 1024 * 1024;
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CellRenderMode {
     Normal,
@@ -40,6 +34,8 @@ struct CacheKey {
     visible_source_end: Option<usize>,
     width: u16,
     theme_revision: u64,
+    language: crate::nls::Language,
+    preview_revision: u64,
     mode: CellRenderMode,
 }
 
@@ -61,6 +57,8 @@ impl CacheKey {
             visible_source_end: cell.visible_source_end,
             width,
             theme_revision: context.theme_revision(),
+            language: context.language(),
+            preview_revision: context.preview_revision(),
             mode,
         })
     }
@@ -95,29 +93,7 @@ struct CacheEntries {
 pub(crate) struct ChatHistoryRenderCache {
     entries: RefCell<CacheEntries>,
     layouts: RefCell<HashMap<String, LayoutEntry>>,
-    code_blocks: RefCell<CodeBlockEntries>,
-    markdown: RefCell<super::super::streaming::StreamingRender>,
-}
-
-#[derive(Debug, Default)]
-struct CodeBlockEntries {
-    entries: VecDeque<CodeBlockEntry>,
-    source_bytes: usize,
-}
-
-#[derive(Debug)]
-struct CodeBlockEntry {
-    key: (String, usize),
-    render: CodeBlockRender,
-}
-
-#[derive(Debug)]
-struct CodeBlockRender {
-    language: String,
-    theme_revision: u64,
-    complete_source: String,
-    complete_lines: Vec<Line<'static>>,
-    highlighter: Option<StreamingCodeHighlighter>,
+    markdown: super::markdown_cache::MarkdownCache,
 }
 
 impl ChatHistoryRenderCache {
@@ -134,8 +110,7 @@ impl ChatHistoryRenderCache {
             .entries
             .retain(|entry| ids.contains(&entry.key.cell_id));
         entries.cells = entries.entries.iter().map(|entry| entry.cost).sum();
-        self.code_blocks.borrow_mut().retain(&ids);
-        self.markdown.borrow_mut().retain(&ids);
+        self.markdown.retain(&ids);
     }
 
     pub(in crate::thread::transcript) fn measure(
@@ -284,51 +259,11 @@ impl ChatHistoryRenderCache {
     pub(crate) fn clear(&self) {
         *self.entries.borrow_mut() = CacheEntries::default();
         self.layouts.borrow_mut().clear();
-        *self.code_blocks.borrow_mut() = CodeBlockEntries::default();
-        *self.markdown.borrow_mut() = Default::default();
+        self.markdown.clear();
     }
 
-    pub(crate) fn markdown(
-        &self,
-        id: Option<&str>,
-        source: &str,
-        width: usize,
-        context: RenderContext<'_>,
-        highlight: &mut impl FnMut(usize, &str, &str) -> Vec<Line<'static>>,
-    ) -> Vec<crate::terminal::hyperlinks::HyperlinkLine> {
-        if let Some(id) = id {
-            self.markdown
-                .borrow_mut()
-                .render(id, source, width, context, highlight)
-        } else {
-            super::super::streaming::StreamingRender::default()
-                .render("", source, width, context, highlight)
-        }
-    }
-
-    pub(crate) fn highlight_code_block(
-        &self,
-        cell_id: Option<&str>,
-        block_index: usize,
-        language: &str,
-        source: &str,
-        context: RenderContext<'_>,
-    ) -> Vec<Line<'static>> {
-        let Some(cell_id) = cell_id else {
-            return highlight_code(source, language, context.into());
-        };
-        let key = (cell_id.to_owned(), block_index);
-        let mut blocks = self.code_blocks.borrow_mut();
-        if !code_within_limits(source) {
-            blocks.remove(&key);
-            return highlight_code(source, language, context.into());
-        }
-        let mut block = blocks
-            .take(&key)
-            .unwrap_or_else(|| CodeBlockRender::new(language, source, context));
-        let lines = block.update(language, source, context);
-        blocks.insert(key, block);
-        lines
+    pub(super) fn markdown(&self) -> &super::markdown_cache::MarkdownCache {
+        &self.markdown
     }
 
     fn insert(&self, key: CacheKey, cell: CachedCell, cost: usize) {
@@ -362,145 +297,11 @@ impl ChatHistoryRenderCache {
     }
 }
 
-impl CodeBlockEntries {
-    fn retain(&mut self, cell_ids: &HashSet<&String>) {
-        self.entries.retain(|entry| cell_ids.contains(&entry.key.0));
-        self.source_bytes = self
-            .entries
-            .iter()
-            .map(|entry| entry.render.complete_source.len())
-            .sum();
-    }
-
-    fn take(&mut self, key: &(String, usize)) -> Option<CodeBlockRender> {
-        let index = self.entries.iter().position(|entry| &entry.key == key)?;
-        let entry = self
-            .entries
-            .remove(index)
-            .expect("the matching code block entry exists");
-        self.source_bytes = self
-            .source_bytes
-            .saturating_sub(entry.render.complete_source.len());
-        Some(entry.render)
-    }
-
-    fn remove(&mut self, key: &(String, usize)) {
-        let _ = self.take(key);
-    }
-
-    fn insert(&mut self, key: (String, usize), render: CodeBlockRender) {
-        self.source_bytes = self
-            .source_bytes
-            .saturating_add(render.complete_source.len());
-        self.entries.push_back(CodeBlockEntry { key, render });
-        while self.entries.len() > MAX_CODE_BLOCKS || self.source_bytes > MAX_CODE_SOURCE_BYTES {
-            let Some(entry) = self.entries.pop_front() else {
-                break;
-            };
-            self.source_bytes = self
-                .source_bytes
-                .saturating_sub(entry.render.complete_source.len());
-        }
-    }
-}
-
-impl CodeBlockRender {
-    fn new(language: &str, source: &str, context: RenderContext<'_>) -> Self {
-        let (complete, _) = complete_source(source);
-        let (highlighter, complete_lines) = StreamingCodeHighlighter::start(
-            complete,
-            language,
-            context.into(),
-            context.theme_revision(),
-        )
-        .expect("a complete code prefix is accepted by the streaming highlighter");
-        Self {
-            language: language.to_owned(),
-            theme_revision: context.theme_revision(),
-            complete_source: complete.to_owned(),
-            complete_lines,
-            highlighter: Some(highlighter),
-        }
-    }
-
-    fn update(
-        &mut self,
-        language: &str,
-        source: &str,
-        context: RenderContext<'_>,
-    ) -> Vec<Line<'static>> {
-        let (complete, partial) = complete_source(source);
-        let reusable = self.language == language
-            && self.theme_revision == context.theme_revision()
-            && complete.starts_with(&self.complete_source);
-        if reusable && complete.len() > self.complete_source.len() {
-            let appended = &complete[self.complete_source.len()..];
-            let highlighter = self
-                .highlighter
-                .take()
-                .expect("code block render state owns its highlighter");
-            if let Some((highlighter, lines)) =
-                highlighter.append(appended, context.into(), context.theme_revision())
-            {
-                self.highlighter = Some(highlighter);
-                self.complete_source.push_str(appended);
-                self.complete_lines.extend(lines);
-            } else {
-                let replacement = StreamingCodeHighlighter::start(
-                    complete,
-                    language,
-                    context.into(),
-                    context.theme_revision(),
-                )
-                .expect("a complete code prefix is accepted by the streaming highlighter");
-                self.replace(language, complete, context, replacement);
-            }
-        } else if !reusable || complete.len() < self.complete_source.len() {
-            let replacement = StreamingCodeHighlighter::start(
-                complete,
-                language,
-                context.into(),
-                context.theme_revision(),
-            )
-            .expect("a complete code prefix is accepted by the streaming highlighter");
-            self.replace(language, complete, context, replacement);
-        }
-
-        if !partial.is_empty() {
-            return highlight_code(source, language, context.into());
-        }
-        let mut lines = self.complete_lines.clone();
-        if lines.is_empty() {
-            lines.push(Line::default());
-        }
-        lines
-    }
-
-    fn replace(
-        &mut self,
-        language: &str,
-        complete: &str,
-        context: RenderContext<'_>,
-        replacement: (StreamingCodeHighlighter, Vec<Line<'static>>),
-    ) {
-        self.language = language.to_owned();
-        self.theme_revision = context.theme_revision();
-        self.complete_source = complete.to_owned();
-        self.highlighter = Some(replacement.0);
-        self.complete_lines = replacement.1;
-    }
-}
-
-fn complete_source(source: &str) -> (&str, &str) {
-    let complete_len = source.rfind('\n').map_or(0, |index| index + 1);
-    source.split_at(complete_len)
-}
-
 pub(crate) enum PreparedCell {
     Buffered(Arc<RenderedCell>),
     Lines {
         foreground: Color,
-        hyperlinks: Vec<Vec<crate::terminal::hyperlinks::Hyperlink>>,
+        hyperlinks: Vec<Vec<crate::render::links::Hyperlink>>,
         lines: Vec<Line<'static>>,
         background: Color,
         user_input_background: Color,
@@ -511,7 +312,7 @@ pub(crate) enum PreparedCell {
 impl PreparedCell {
     pub(crate) fn place_links(
         &self,
-        links: &mut crate::terminal::hyperlinks::FrameLinks,
+        links: &mut crate::render::links::FrameLinks,
         area: Rect,
         source_row: usize,
     ) {
@@ -576,7 +377,7 @@ fn fill_user_input_background(
 #[derive(Debug)]
 pub(crate) struct RenderedCell {
     buffer: Buffer,
-    hyperlinks: Vec<Vec<crate::terminal::hyperlinks::Hyperlink>>,
+    hyperlinks: Vec<Vec<crate::render::links::Hyperlink>>,
 }
 
 impl RenderedCell {

@@ -66,7 +66,7 @@ enum Transcript<'a> {
 pub(super) fn draw(
     frame: &mut Frame<'_>,
     app: &App,
-    links: &std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,
+    links: &std::cell::RefCell<crate::render::links::FrameLinks>,
 ) {
     let transcript = if output::expanded(app) {
         Transcript::Full
@@ -79,7 +79,7 @@ pub(super) fn draw(
 fn draw_content(
     frame: &mut Frame<'_>,
     app: &App,
-    links: &std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,
+    links: &std::cell::RefCell<crate::render::links::FrameLinks>,
     transcript: Transcript<'_>,
 ) {
     let context = app.render_context().with_hyperlinks(links);

@@ -1,4 +1,7 @@
+mod layout;
 mod scroll;
+use super::history_cell::CellLayout;
+use layout::TranscriptLayout;
 
 pub(crate) use scroll::ChatHistoryScroll;
 pub(crate) use scroll::TranscriptScrollAnchor;
@@ -20,7 +23,6 @@ use ratatui::style::Modifier;
 use ratatui::style::Style;
 #[cfg(test)]
 use ratatui::text::Line;
-use unicode_width::UnicodeWidthStr;
 
 pub(crate) struct ChatHistoryView<'a> {
     pub(crate) jump_label: &'a str,
@@ -51,8 +53,9 @@ pub(crate) struct ChatHistoryPointerState<'a> {
 impl Renderable for ChatHistoryView<'_> {
     fn desired_height(&self, width: u16, context: RenderContext<'_>) -> u16 {
         let message_rows = self
-            .measured_heights(width, context)
+            .measure_cells(width, context)
             .into_iter()
+            .map(|cell| cell.height)
             .sum::<usize>();
         header_rows(self.header)
             .saturating_add(message_rows)
@@ -60,48 +63,39 @@ impl Renderable for ChatHistoryView<'_> {
     }
 
     fn render(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
-        let heights = self.measured_heights(area.width, context);
-        let header_rows = header_rows(self.header);
-        let (content_area, _) = scroll_areas(area, header_rows, &heights, self.scroll);
-        let total_rows = header_rows.saturating_add(heights.iter().sum::<usize>());
-        let bottom_offset = total_rows.saturating_sub(usize::from(content_area.height));
-        let viewport_start = viewport_offset(
-            self.messages,
-            header_rows,
-            &heights,
-            self.scroll,
-            bottom_offset,
-        );
+        let layout = self.layout(area, context);
         render_header(
             frame.buffer_mut(),
-            content_area,
+            layout.content,
             self.header,
-            viewport_start,
+            layout.viewport_start,
         );
         render_cells(
             frame,
-            content_area,
-            header_rows,
-            viewport_start,
+            &layout,
             self.messages,
-            &heights,
             self.render_cache,
             self.pointer,
             context,
         );
-        render_jump_to_bottom(
-            frame,
-            self.jump_area(area, context),
-            self.jump_label,
-            self.pointer,
-            context,
-        );
+        render_jump_to_bottom(frame, layout.jump, self.jump_label, self.pointer, context);
     }
 }
 
 impl ChatHistoryView<'_> {
-    fn measured_heights(&self, width: u16, context: RenderContext<'_>) -> Vec<usize> {
-        measured_heights(self.messages, self.render_cache, width, context)
+    fn measure_cells(&self, width: u16, context: RenderContext<'_>) -> Vec<CellLayout> {
+        measure_cells(self.messages, self.render_cache, width, context)
+    }
+
+    fn layout(&self, area: Rect, context: RenderContext<'_>) -> TranscriptLayout {
+        TranscriptLayout::new(
+            area,
+            header_rows(self.header),
+            self.messages,
+            self.scroll,
+            self.measure_cells(area.width, context),
+            self.jump_label,
+        )
     }
 
     pub(crate) fn scroll_target(
@@ -111,26 +105,8 @@ impl ChatHistoryView<'_> {
         direction: TranscriptScrollDirection,
         rows: usize,
     ) -> Option<TranscriptScrollTarget> {
-        let heights = self.measured_heights(area.width, context);
-        scroll_target_from_heights(
-            area,
-            header_rows(self.header),
-            self.messages,
-            self.scroll,
-            &heights,
-            direction,
-            rows,
-        )
-    }
-
-    pub(crate) fn jump_area(&self, area: Rect, context: RenderContext<'_>) -> Option<Rect> {
-        let heights = self.measured_heights(area.width, context);
-        let mut target =
-            jump_to_bottom_area(area, header_rows(self.header), &heights, self.scroll)?;
-        let width = self.jump_label.width().min(usize::from(area.width)) as u16;
-        target.x = area.x + (area.width - width) / 2;
-        target.width = width;
-        Some(target)
+        self.layout(area, context)
+            .scroll_target(self.messages, direction, rows)
     }
 
     pub(crate) fn pointer_target_at(
@@ -139,30 +115,19 @@ impl ChatHistoryView<'_> {
         position: ratatui::layout::Position,
         context: RenderContext<'_>,
     ) -> Option<ChatHistoryPointerTarget> {
-        if self
-            .jump_area(area, context)
-            .is_some_and(|target| target.contains(position))
-        {
+        let layout = self.layout(area, context);
+        if layout.jump.is_some_and(|target| target.contains(position)) {
             return Some(ChatHistoryPointerTarget::JumpToBottom);
         }
-        let heights = self.measured_heights(area.width, context);
-        let header_rows = header_rows(self.header);
-        let (content_area, _) = scroll_areas(area, header_rows, &heights, self.scroll);
+        let content_area = layout.content;
+        let viewport_start = layout.viewport_start;
         if !content_area.contains(position) {
             return None;
         }
-        let total_rows = header_rows.saturating_add(heights.iter().sum::<usize>());
-        let bottom_offset = total_rows.saturating_sub(usize::from(content_area.height));
-        let viewport_start = viewport_offset(
-            self.messages,
-            header_rows,
-            &heights,
-            self.scroll,
-            bottom_offset,
-        );
         let logical_row = viewport_start.saturating_add(usize::from(position.y - content_area.y));
-        let mut cell_start = header_rows;
-        for (cell, height) in self.messages.iter().zip(heights) {
+        let mut cell_start = layout.header_rows;
+        for (cell, measured) in self.messages.iter().zip(&layout.cells) {
+            let height = measured.height;
             let cell_end = cell_start.saturating_add(height);
             if logical_row < cell_start || logical_row >= cell_end {
                 cell_start = cell_end;
@@ -172,14 +137,9 @@ impl ChatHistoryView<'_> {
             if cell.can_expand && logical_row == cell_start && position.x == content_area.x {
                 return Some(ChatHistoryPointerTarget::Toggle(cell_id.clone()));
             }
-            let details_action = self
-                .render_cache
-                .measure(cell, area.width, context, || {
-                    cell.lines(context, Some(self.render_cache), area.width)
-                })
-                .details_action;
+            let details_action = &measured.details_action;
             if cell.has_details
-                && details_action.is_some_and(|action| {
+                && details_action.as_ref().is_some_and(|action| {
                     action.contains(logical_row - cell_start, position.x - content_area.x)
                 })
             {
@@ -201,46 +161,15 @@ pub(crate) fn scroll_target(
     direction: TranscriptScrollDirection,
     rows: usize,
 ) -> Option<TranscriptScrollTarget> {
-    let heights = measured_heights(messages, render_cache, area.width, context);
-    scroll_target_from_heights(
+    TranscriptLayout::new(
         area,
         header_rows,
         messages,
         scroll,
-        &heights,
-        direction,
-        rows,
+        measure_cells(messages, render_cache, area.width, context),
+        "",
     )
-}
-
-fn scroll_target_from_heights(
-    area: Rect,
-    header_rows: usize,
-    messages: &[CellView<'_>],
-    scroll: &ChatHistoryScroll,
-    heights: &[usize],
-    direction: TranscriptScrollDirection,
-    rows: usize,
-) -> Option<TranscriptScrollTarget> {
-    let (content_area, _) = scroll_areas(area, header_rows, heights, scroll);
-    let bottom_offset = header_rows
-        .saturating_add(heights.iter().sum::<usize>())
-        .saturating_sub(usize::from(content_area.height));
-    let current = viewport_offset(messages, header_rows, heights, scroll, bottom_offset);
-    let target = match direction {
-        TranscriptScrollDirection::Up => current.saturating_sub(rows),
-        TranscriptScrollDirection::Down => current.saturating_add(rows),
-    };
-    if target >= bottom_offset {
-        return scroll
-            .anchor()
-            .is_some()
-            .then_some(TranscriptScrollTarget::FollowLatest);
-    }
-    if target == current {
-        return None;
-    }
-    anchor_at(messages, header_rows, heights, target).map(TranscriptScrollTarget::Anchor)
+    .scroll_target(messages, direction, rows)
 }
 
 pub(crate) fn first_scroll_target(
@@ -260,113 +189,6 @@ pub(crate) fn first_scroll_target(
             })
         })
     })
-}
-
-fn jump_to_bottom_area(
-    area: Rect,
-    header_rows: usize,
-    heights: &[usize],
-    scroll: &ChatHistoryScroll,
-) -> Option<Rect> {
-    if area.width == 0 || area.height == 0 {
-        return None;
-    }
-    let total_rows = header_rows.saturating_add(heights.iter().sum::<usize>());
-    let bottom_offset = total_rows.saturating_sub(usize::from(area.height));
-    if bottom_offset == 0 || scroll.anchor().is_none() {
-        return None;
-    }
-    let width = area.width;
-    let x = area.x.saturating_add((area.width - width) / 2);
-    Some(Rect::new(x, area.bottom().saturating_sub(1), width, 1))
-}
-
-fn scroll_areas(
-    area: Rect,
-    header_rows: usize,
-    heights: &[usize],
-    scroll: &ChatHistoryScroll,
-) -> (Rect, Option<Rect>) {
-    let jump_area = jump_to_bottom_area(area, header_rows, heights, scroll);
-    let content_area = if jump_area.is_some() {
-        Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1))
-    } else {
-        area
-    };
-    (content_area, jump_area)
-}
-
-fn viewport_offset(
-    messages: &[CellView<'_>],
-    header_rows: usize,
-    heights: &[usize],
-    scroll: &ChatHistoryScroll,
-    bottom_offset: usize,
-) -> usize {
-    let Some(anchor) = scroll.anchor() else {
-        return bottom_offset;
-    };
-    if let TranscriptScrollAnchor::Header { line_offset } = anchor {
-        return (*line_offset)
-            .min(header_rows.saturating_sub(1))
-            .min(bottom_offset);
-    }
-    let TranscriptScrollAnchor::Cell {
-        cell_id,
-        line_offset,
-    } = anchor
-    else {
-        unreachable!();
-    };
-    let mut start = header_rows;
-    for (cell, height) in messages.iter().zip(heights) {
-        if cell.cell_id.as_deref() == Some(cell_id.as_str()) {
-            return start
-                .saturating_add((*line_offset).min(height.saturating_sub(1)))
-                .min(bottom_offset);
-        }
-        start = start.saturating_add(*height);
-    }
-    bottom_offset
-}
-
-fn anchor_at(
-    messages: &[CellView<'_>],
-    header_rows: usize,
-    heights: &[usize],
-    target: usize,
-) -> Option<TranscriptScrollAnchor> {
-    if target < header_rows {
-        return Some(TranscriptScrollAnchor::Header {
-            line_offset: target,
-        });
-    }
-    let mut start = header_rows;
-    for (index, (cell, height)) in messages.iter().zip(heights).enumerate() {
-        let end = start.saturating_add(*height);
-        if target < end {
-            let line_offset = target.saturating_sub(start);
-            if line_offset == height.saturating_sub(1)
-                && let Some(cell_id) = messages
-                    .get(index.saturating_add(1))
-                    .and_then(|cell| cell.cell_id.as_ref())
-            {
-                return Some(TranscriptScrollAnchor::Cell {
-                    cell_id: cell_id.clone(),
-                    line_offset: 0,
-                });
-            }
-            return cell
-                .cell_id
-                .as_ref()
-                .map(|cell_id| TranscriptScrollAnchor::Cell {
-                    cell_id: cell_id.clone(),
-                    line_offset: line_offset.min(height.saturating_sub(2)),
-                });
-        }
-        start = end;
-    }
-    None
 }
 
 fn render_jump_to_bottom(
@@ -407,21 +229,19 @@ fn message_lines<'a>(messages: &'a [CellView<'_>], context: RenderContext<'_>) -
         .collect()
 }
 
-fn measured_heights(
+fn measure_cells(
     messages: &[CellView<'_>],
     cache: &ChatHistoryRenderCache,
     width: u16,
     context: RenderContext<'_>,
-) -> Vec<usize> {
+) -> Vec<CellLayout> {
     cache.retain_cells(messages);
     messages
         .iter()
         .map(|cell| {
-            cache
-                .measure(cell, width, context, || {
-                    cell.lines(context, Some(cache), width)
-                })
-                .height
+            cache.measure(cell, width, context, || {
+                cell.lines(context, Some(cache), width)
+            })
         })
         .collect()
 }
@@ -459,19 +279,18 @@ fn render_header(target: &mut Buffer, area: Rect, header: Option<&Buffer>, viewp
 
 fn render_cells(
     frame: &mut Frame<'_>,
-    area: Rect,
-    header_rows: usize,
-    viewport_start: usize,
+    layout: &TranscriptLayout,
     messages: &[CellView<'_>],
-    heights: &[usize],
     cache: &ChatHistoryRenderCache,
     pointer: ChatHistoryPointerState<'_>,
     context: RenderContext<'_>,
 ) {
+    let area = layout.content;
+    let viewport_start = layout.viewport_start;
     let viewport_end = viewport_start.saturating_add(usize::from(area.height));
-    let mut cell_start = header_rows;
-    for (cell, height) in messages.iter().zip(heights) {
-        let cell_end = cell_start.saturating_add(*height);
+    let mut cell_start = layout.header_rows;
+    for (cell, measured) in messages.iter().zip(&layout.cells) {
+        let cell_end = cell_start.saturating_add(measured.height);
         let visible_start = cell_start.max(viewport_start);
         let visible_end = cell_end.min(viewport_end);
         if visible_start < visible_end {
@@ -500,11 +319,7 @@ fn render_cells(
                 area,
                 cell,
                 cell_start,
-                cache
-                    .measure(cell, area.width, context, || {
-                        cell.lines(context, Some(cache), area.width)
-                    })
-                    .details_action,
+                measured.details_action.clone(),
                 viewport_start,
                 pointer,
                 context,

@@ -156,9 +156,10 @@ impl PrefixedBlock {
             return Vec::new();
         }
         // When the terminal is narrower than the gutter, retain one content column.
-        let gutter = display_width(self.initial)
-            .max(display_width(self.continuation))
-            .min(usize::from(width - 1));
+        let gutter = crate::render::prefix_width(
+            usize::from(width),
+            display_width(self.initial).max(display_width(self.continuation)),
+        );
         let body_width = usize::from(width) - gutter;
         let mut rows = crate::render::wrap_lines(body, body_width);
         for (index, row) in rows.iter_mut().enumerate() {

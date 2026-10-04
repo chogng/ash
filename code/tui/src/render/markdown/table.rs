@@ -1,6 +1,6 @@
 use crate::render::RenderContext;
-use crate::terminal::hyperlinks::HyperlinkLine;
-use crate::terminal::hyperlinks::wrap;
+use crate::render::links::HyperlinkLine;
+use crate::render::links::wrap;
 use pulldown_cmark::Alignment;
 use ratatui::style::Style;
 use ratatui::text::Span;

@@ -1,12 +1,16 @@
+mod context;
 mod highlight;
 mod highlight_streaming;
 mod interaction;
 mod layout;
+pub(crate) mod links;
 pub(crate) mod markdown;
-mod mermaid_preview;
 mod palette;
 mod text;
 
+pub(crate) use context::RenderContext;
+#[cfg(test)]
+pub(crate) use context::test_context;
 pub(crate) use highlight::SyntaxPalette;
 pub(crate) use highlight::code_within_limits;
 pub(crate) use highlight::highlight_code;
@@ -18,18 +22,15 @@ pub(crate) use interaction::interaction_style;
 pub(crate) use interaction::selection_marker;
 pub(crate) use layout::bottom_anchored_area;
 pub(crate) use layout::horizontal_margin;
-pub(crate) use mermaid_preview::MermaidPreviews;
-pub(crate) use palette::RenderContext;
 pub(crate) use palette::RenderTheme;
 pub(crate) use palette::ThemePalette;
 pub(crate) use palette::ThemeRgb;
-#[cfg(test)]
-pub(crate) use palette::test_context;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 pub(crate) use text::display_width;
 pub(crate) use text::line_to_borrowed;
 pub(crate) use text::prefix_lines;
+pub(crate) use text::prefix_width;
 pub(crate) use text::push_owned_lines;
 pub(crate) use text::styled_text_lines;
 pub(crate) use text::truncate_to_width;

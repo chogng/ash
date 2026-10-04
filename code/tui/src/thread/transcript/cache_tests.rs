@@ -4,7 +4,6 @@ use super::MAX_CELL_CELLS;
 use super::PreparedCell;
 use crate::render::RenderTheme;
 use crate::render::ThemePalette;
-use crate::render::highlight_code;
 use crate::render::styled_text_lines;
 use crate::render::test_context;
 use crate::thread::transcript::CellView;
@@ -172,18 +171,25 @@ fn oversized_cells_are_rendered_without_entering_the_cache() {
 }
 
 #[test]
-fn transcript_code_blocks_reuse_incremental_parser_state() {
+fn language_change_rebuilds_rows_and_buffers_without_changing_the_message() {
     let cache = ChatHistoryRenderCache::default();
-    let context = test_context();
-    let message = CellView::plain(MessageRole::Agent, String::new())
-        .with_cell_id("streaming-agent")
+    let cell = CellView::plain(MessageRole::Error, "Error".into())
+        .with_cell_id("localized-error")
         .with_render_revision(1);
-    let first = "fn main() {\n";
-    let complete = "fn main() {\n    let value = 1;\n}\n";
-
-    cache.highlight_code_block(message.cell_id.as_deref(), 0, "rust", first, context);
-    let rendered =
-        cache.highlight_code_block(message.cell_id.as_deref(), 0, "rust", complete, context);
-
-    assert_eq!(rendered, highlight_code(complete, "rust", context.into()));
+    let area = ratatui::layout::Rect::new(0, 0, 16, 2);
+    let english = test_context();
+    cache.measure(&cell, 16, english, || cell.lines(english, Some(&cache), 16));
+    cache.prepare(&cell, 16, english, || cell.lines(english, Some(&cache), 16));
+    let chinese = test_context().with_language(crate::nls::Language::Chinese);
+    let prepared = cache.prepare(&cell, 16, chinese, || cell.lines(chinese, Some(&cache), 16));
+    let mut actual = ratatui::buffer::Buffer::empty(area);
+    prepared.render(&mut actual, area, 0);
+    let fresh = ChatHistoryRenderCache::default();
+    let mut expected = ratatui::buffer::Buffer::empty(area);
+    fresh
+        .prepare(&cell, 16, chinese, || cell.lines(chinese, Some(&fresh), 16))
+        .render(&mut expected, area, 0);
+    assert_eq!(actual, expected);
+    assert_eq!(actual[(2, 0)].symbol(), "错");
+    assert_eq!(cell.text(), "Error");
 }

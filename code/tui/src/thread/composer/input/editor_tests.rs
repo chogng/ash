@@ -354,3 +354,21 @@ fn newline_insertion_preserves_atomic_element_ranges() {
     assert_eq!(textarea.cursor_line(), 1);
     assert_eq!(textarea.element_range(element), Some(6..13));
 }
+
+#[test]
+fn arrows_and_backspace_treat_joined_emoji_as_one_editing_unit() {
+    let mut editor = super::TextArea::new();
+    editor.insert_text("x👩‍💻z");
+    editor.move_left();
+    assert_eq!(editor.cursor(), 12);
+    editor.move_left();
+    assert_eq!(editor.cursor(), 1);
+    editor.move_right();
+    assert_eq!(editor.cursor(), 12);
+    editor.handle_key(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Backspace,
+        crossterm::event::KeyModifiers::NONE,
+    ));
+    assert_eq!(editor.text(), "xz");
+    assert_eq!(editor.cursor(), 1);
+}

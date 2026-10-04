@@ -295,8 +295,8 @@ fn thread_id() -> ThreadId {
 #[test]
 fn markdown_updates_render_links_and_tables_without_changing_canonical_messages() {
     use crate::render::Renderable;
+    use crate::render::links::FrameLinks;
     use crate::render::test_context;
-    use crate::terminal::hyperlinks::FrameLinks;
     use crate::thread::transcript::ChatHistoryPointerState;
     use crate::thread::transcript::ChatHistoryRenderCache;
     use crate::thread::transcript::ChatHistoryScroll;

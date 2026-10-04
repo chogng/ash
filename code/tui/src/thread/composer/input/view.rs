@@ -1,6 +1,7 @@
 use super::wrap::PROMPT_WIDTH;
 use super::wrap::wrap_input;
 use crate::render::RenderContext;
+use crate::render::display_width;
 use ratatui::Frame;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
@@ -12,7 +13,7 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 use std::ops::Range;
-use unicode_width::UnicodeWidthChar;
+use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ChatInputCursor {
@@ -195,13 +196,13 @@ pub(crate) fn cursor_at(
     let line = &wrapped.lines[row];
     let range = &wrapped.byte_ranges[row];
     let mut width = 0;
-    for (offset, character) in line.char_indices() {
-        let character_width = character.width().unwrap_or(0);
+    for (offset, glyph) in line.grapheme_indices(true) {
+        let character_width = display_width(glyph);
         if column < width + character_width {
             let glyph_byte = range.start + offset;
             return InputHit {
                 byte: glyph_byte
-                    + usize::from((column - width) * 2 >= character_width) * character.len_utf8(),
+                    + usize::from((column - width) * 2 >= character_width) * glyph.len(),
                 glyph_byte: (position.x >= text_x).then_some(glyph_byte),
                 row_start: range.start,
                 row_end: range.end,

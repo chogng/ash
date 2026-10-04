@@ -39,3 +39,14 @@ fn wide_character_moves_whole_to_the_next_visual_row() {
         }
     );
 }
+
+#[test]
+fn joined_emoji_and_combining_marks_wrap_on_whole_glyph_boundaries() {
+    let wrapped = wrap_input("x👩‍💻z", 0, 4, 5);
+    assert_eq!(wrapped.lines, ["x👩‍💻", "z"]);
+    assert_eq!(wrapped.byte_ranges, [0..12, 12..13]);
+    assert_eq!((wrapped.cursor_row, wrapped.cursor_column), (1, 1));
+    let wrapped = wrap_input("ae\u{301}z", 0, 3, 4);
+    assert_eq!(wrapped.lines, ["ae\u{301}", "z"]);
+    assert_eq!(wrapped.byte_ranges, [0..4, 4..5]);
+}

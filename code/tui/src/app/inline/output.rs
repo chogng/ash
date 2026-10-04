@@ -82,7 +82,7 @@ impl Output {
         &self,
         frame: &mut ratatui::Frame<'_>,
         app: &App,
-        links: &std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,
+        links: &std::cell::RefCell<crate::render::links::FrameLinks>,
     ) {
         super::draw_content(frame, app, links, super::Transcript::Tail(self.tail(app)));
     }

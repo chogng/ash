@@ -4,9 +4,9 @@ use super::CellView;
 use super::CommandStatus;
 use super::HistoryCell;
 use super::MessageRole;
-use super::cache::ChatHistoryRenderCache;
 use super::prefixed_body;
 use crate::render::RenderContext;
+use crate::thread::transcript::markdown_cache::MarkdownCache;
 use crate::thread::transcript::message_response::MessageResponse;
 use std::borrow::Cow;
 
@@ -32,7 +32,7 @@ impl HistoryCell for LocalCommandCell {
         &self,
         view: &CellView<'_>,
         context: RenderContext<'_>,
-        _cache: Option<&ChatHistoryRenderCache>,
+        _cache: Option<&MarkdownCache>,
         width: u16,
     ) -> CellLines {
         let (marker, color) = if self.status == CommandStatus::Running {

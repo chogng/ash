@@ -1,5 +1,5 @@
 mod event_source;
-pub(crate) mod hyperlinks;
+mod hyperlinks;
 mod scrollback;
 mod session;
 mod terminal_probe;
