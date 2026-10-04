@@ -67,6 +67,7 @@ fn builtins_follow_enum_presentation_order() {
             .collect::<Vec<_>>(),
         {
             let mut names = vec![
+                "context",
                 "status",
                 "usage",
                 "statusline",
@@ -107,7 +108,7 @@ fn builtins_follow_enum_presentation_order() {
             names
         }
     );
-    assert_eq!(definitions.len(), 36);
+    assert_eq!(definitions.len(), 37);
 }
 
 #[test]

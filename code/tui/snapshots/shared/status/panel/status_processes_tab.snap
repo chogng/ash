@@ -2,7 +2,7 @@
 source: code/tui/src/status/panel_tests.rs
 expression: terminal.backend().to_string()
 ---
-"   Thread    Processes                                                          "
+"   Session    Diagnostics                                                       "
 "  Total:                        240.0 MiB · 12.4%                               "
 "  TUI:                          140.0 MiB · 8.4%                                "
 "  App Server:                   100.0 MiB · 4.0%                                "

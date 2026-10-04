@@ -1594,15 +1594,11 @@ fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
 
 #[test]
 fn detail_tabs_use_the_same_mouse_routing_as_list_tabs() {
-    use crate::status::RemainingContextWindow;
     use crate::status::StatusViewData;
     let mut app = crate::app::App::new();
     app.update(crate::status::Event::PanelOpened(
         crate::status::status_panel(StatusViewData {
             model: "test/model",
-            full_context_window: None,
-            available_context_window: None,
-            remaining_context_window: RemainingContextWindow::Unknown,
             usage: &ash_protocol::ModelUsageSummary::default(),
             reference_cost: &ash_protocol::ModelReferenceCostSummary::default(),
             session_id: "session",
@@ -1616,7 +1612,9 @@ fn detail_tabs_use_the_same_mouse_routing_as_list_tabs() {
             match super::target_at(&app, area, ratatui::layout::Position::new(x, y)) {
                 Some(
                     target @ super::Target::Panel(
-                        crate::app::command_panel::CommandPanelPointerTarget::Tab(1),
+                        crate::app::command_panel::CommandPanelPointerTarget::List(
+                            crate::widgets::list_selection::ListSelectionPointerTarget::Tab(1),
+                        ),
                     ),
                 ) => Some(target),
                 _ => None,

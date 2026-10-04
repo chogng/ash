@@ -209,7 +209,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Keymap(KeymapCommand::OpenEditor | KeymapCommand::Edit(_)) => {
             Some(RequestKey::Keymap)
         }
-        AppCommand::Status(StatusCommand::OpenPanel) => Some(RequestKey::Thread),
+        AppCommand::Context(_) => Some(RequestKey::Thread),
         AppCommand::Status(StatusCommand::OpenLineEditor | StatusCommand::EditLine(_)) => {
             Some(RequestKey::StatusLine)
         }

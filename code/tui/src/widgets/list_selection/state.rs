@@ -624,6 +624,18 @@ impl ListSelectionState {
         item.has_expandable_details() && item.id().is_some_and(|id| self.expanded.contains(id))
     }
 
+    /// Feature activation uses the same expansion state as horizontal navigation and rendering.
+    pub(crate) fn toggle_selected_details(&mut self) {
+        if self
+            .selected_item()
+            .is_some_and(ListSelectionItem::has_expandable_details)
+            && let Some(id) = self.selected_item_id()
+            && !self.expanded.remove(&id)
+        {
+            self.expanded.insert(id);
+        }
+    }
+
     pub(crate) fn title(&self) -> &str {
         &self.model.title
     }

@@ -1,6 +1,5 @@
 use super::AppServerResourcesView;
 use super::ProcessResourcesView;
-use super::RemainingContextWindow;
 use super::StatusPanelOutcome;
 use super::StatusViewData;
 use super::status_panel;
@@ -26,18 +25,13 @@ use ratatui::style::Modifier;
 
 #[test]
 fn mouse_scroll_keeps_the_status_tab_and_clamps_to_its_content() {
-    let usage = usage();
-    let cost = reference_cost();
-    let mut panel = panel(&usage, &cost);
+    let mut panel = panel(&usage(), &reference_cost());
     let area = Rect::new(0, 0, 80, 4);
     for _ in 0..100 {
         panel.scroll(crate::widgets::navigation::Navigation::Next, area);
     }
-    assert_eq!(panel.tabs.active_index(), Some(0));
-    assert_eq!(
-        usize::from(panel.scroll[0]),
-        panel.session.content_height(80) - 4
-    );
+    assert_eq!(panel.pages.active_tab_index(), 0);
+    assert_eq!(usize::from(panel.scroll[0]), panel.session_height(80) - 4);
     assert_eq!(panel.scroll[1], 0);
     for _ in 0..100 {
         panel.scroll(crate::widgets::navigation::Navigation::Previous, area);
@@ -46,36 +40,22 @@ fn mouse_scroll_keeps_the_status_tab_and_clamps_to_its_content() {
 }
 
 #[test]
-fn status_panel_exposes_model_accounting_context_and_conversation_identity() {
+fn status_panel_exposes_thread_totals_and_conversation_identity() {
     let usage = usage();
     let reference_cost = reference_cost();
     let panel = panel(&usage, &reference_cost);
-
-    assert_eq!(panel.title(), "Status");
+    assert_eq!(panel.title(), "Session status");
+    assert_eq!(panel.usage.rows().len(), 8);
     assert_eq!(
-        panel
-            .session
-            .rows()
-            .iter()
-            .map(|row| (row.label(), row.value()))
-            .collect::<Vec<_>>(),
-        vec![
-            ("Model", "openai/gpt"),
-            ("Full context window", "1,000,000 tokens"),
-            ("Available context window", "894,880 tokens"),
-            ("Remaining context window", "~771,424 tokens (86.2%)"),
-            ("Model calls", "4"),
-            ("Input tokens", "10,000 tokens"),
-            ("Cached input", "7,500 tokens"),
-            ("Cached input share", "75.0%"),
-            ("Cache writes", "500 tokens"),
-            ("Output tokens", ">=1,200 tokens"),
-            ("Reasoning output", "unknown"),
-            ("Reference cost", "$0.01008"),
-            ("Session ID", "session-1"),
-            ("Thread ID", "thread-2"),
-        ]
+        row_value(panel.usage.rows(), "Input tokens"),
+        "10,000 tokens"
     );
+    assert_eq!(
+        row_value(panel.usage.rows(), "Output tokens"),
+        ">=1,200 tokens"
+    );
+    assert_eq!(row_value(panel.identity.rows(), "Session ID"), "session-1");
+    assert_eq!(row_value(panel.identity.rows(), "Thread ID"), "thread-2");
 }
 
 #[test]
@@ -83,31 +63,16 @@ fn status_panel_requests_full_content_height_and_renders_bold_labels() {
     let usage = usage();
     let reference_cost = reference_cost();
     let panel = panel(&usage, &reference_cost);
-    assert_eq!(desired_height(&panel, 100), 15);
+    assert_eq!(desired_height(&panel, 100), 14);
     assert!(desired_height(&panel, 24) > desired_height(&panel, 100));
-    let backend = TestBackend::new(100, desired_height(&panel, 100));
-    let mut terminal = Terminal::new(backend).unwrap();
-
+    let mut terminal = Terminal::new(TestBackend::new(100, desired_height(&panel, 100))).unwrap();
     terminal.draw(|frame| draw_panel(frame, &panel)).unwrap();
-
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(3, 0)].symbol(), "T");
-    assert_eq!(buffer[(2, 0)].symbol(), " ");
-    assert_eq!(buffer[(10, 0)].symbol(), " ");
-    assert_eq!(
-        buffer[(3, 0)].fg,
-        test_context().accent_surface_foreground()
-    );
-    assert_eq!(
-        buffer[(3, 0)].bg,
-        test_context().accent_surface_background()
-    );
+    assert_eq!(buffer[(3, 0)].symbol(), "S");
     assert_eq!(buffer[(2, 1)].symbol(), "M");
     assert!(buffer[(2, 1)].modifier.contains(Modifier::BOLD));
-    assert_eq!(buffer[(7, 1)].symbol(), ":");
-    assert!(buffer[(7, 1)].modifier.contains(Modifier::BOLD));
-    assert_eq!(buffer[(28, 1)].symbol(), "o");
-    assert!(!buffer[(28, 1)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buffer[(22, 7)].fg, test_context().muted());
+    crate::tui_assert_snapshot!("status_session_overview", terminal.backend().to_string());
 }
 
 #[test]
@@ -145,12 +110,15 @@ fn status_panel_updates_process_rows_without_resetting_each_tab_scroll() {
         Rect::new(2, 1, 76, 7),
     );
     assert_eq!(
-        row_value(panel.processes.rows(), "Total"),
+        row_value(panel.diagnostics.rows(), "Total"),
         "240.0 MiB · 12.4%"
     );
-    assert_eq!(row_value(panel.processes.rows(), "TUI"), "140.0 MiB · 8.4%");
     assert_eq!(
-        row_value(panel.processes.rows(), "App Server"),
+        row_value(panel.diagnostics.rows(), "TUI"),
+        "140.0 MiB · 8.4%"
+    );
+    assert_eq!(
+        row_value(panel.diagnostics.rows(), "App Server"),
         "100.0 MiB · 4.0%"
     );
 }
@@ -170,13 +138,13 @@ fn memory_diagnostics_survives_resource_updates_and_is_localized() {
         panel.apply_memory_diagnostics(status);
         panel.apply_process_resources(ProcessResourcesView::default());
         assert_eq!(
-            row_value(panel.processes.rows(), "Memory diagnostics"),
+            row_value(panel.diagnostics.rows(), "Memory diagnostics"),
             label
         );
     }
     panel.localize(crate::nls::Language::Japanese);
     panel.apply_memory_diagnostics(crate::memory::Status::Recording);
-    assert_eq!(row_value(panel.processes.rows(), "メモリ診断"), "記録中");
+    assert_eq!(row_value(panel.diagnostics.rows(), "メモリ診断"), "記録中");
     panel.handle_key(
         KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
         Rect::new(2, 1, 76, 7),
@@ -251,80 +219,57 @@ fn status_panel_scrolls_when_allocated_height_is_shorter_than_content() {
     let usage = usage();
     let reference_cost = reference_cost();
     let mut panel = panel(&usage, &reference_cost);
-    let backend = TestBackend::new(80, 8);
+    panel.handle_key(
+        KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
+        Rect::new(2, 1, 76, 3),
+    );
+    let backend = TestBackend::new(80, 4);
     let mut terminal = Terminal::new(backend).unwrap();
 
     assert_eq!(
         panel.handle_key(
             KeyEvent::new(KeyCode::End, KeyModifiers::NONE),
-            Rect::new(2, 1, 76, 7)
+            Rect::new(2, 1, 76, 3)
         ),
         StatusPanelOutcome::Consumed
     );
     terminal.draw(|frame| draw_panel(frame, &panel)).unwrap();
 
     let rendered = terminal.backend().to_string();
-    assert!(rendered.contains("Thread ID:"));
+    assert!(rendered.contains("Memory diagnostics:"));
     assert!(!rendered.contains("Thread version:"));
     assert!(!rendered.contains("Full context window"));
     assert_eq!(
         panel.handle_key(
             KeyEvent::new(KeyCode::Home, KeyModifiers::NONE),
-            Rect::new(2, 1, 76, 7)
+            Rect::new(2, 1, 76, 3)
         ),
         StatusPanelOutcome::Consumed
     );
     assert_eq!(
         panel.handle_key(
             KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
-            Rect::new(2, 1, 76, 7)
+            Rect::new(2, 1, 76, 3)
         ),
         StatusPanelOutcome::Dismiss
     );
 }
 
 #[test]
-fn status_panel_switches_tabs_with_keyboard() {
-    let usage = usage();
-    let reference_cost = reference_cost();
-    let mut panel = panel(&usage, &reference_cost);
-    let height_before = desired_height(&panel, 80);
-
-    assert_eq!(panel.tabs.active_index(), Some(0));
+fn status_panel_switches_read_only_pages_with_keyboard() {
+    let mut panel = panel(&usage(), &reference_cost());
+    let area = Rect::new(2, 1, 76, 15);
+    assert_eq!(panel.pages.active_tab_index(), 0);
+    panel.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), area);
+    assert_eq!(panel.pages.active_tab_index(), 1);
+    panel.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT), area);
+    assert_eq!(panel.pages.active_tab_index(), 0);
+    panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), area);
+    assert_eq!(panel.pages.active_tab_index(), 0);
     assert_eq!(
-        panel.handle_key(
-            KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
-            Rect::new(2, 1, 76, 7)
-        ),
-        StatusPanelOutcome::Consumed
+        panel.key_hints().text(),
+        "Tab tabs · ↑/↓ scroll · Esc close"
     );
-    assert_eq!(panel.tabs.active_index(), Some(1));
-    assert_eq!(
-        panel.handle_key(
-            KeyEvent::new(KeyCode::Left, KeyModifiers::NONE),
-            Rect::new(2, 1, 76, 7)
-        ),
-        StatusPanelOutcome::Consumed
-    );
-    assert_eq!(panel.tabs.active_index(), Some(0));
-    assert_eq!(
-        panel.handle_key(
-            KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
-            Rect::new(2, 1, 76, 7)
-        ),
-        StatusPanelOutcome::Consumed
-    );
-    assert_eq!(panel.tabs.active_index(), Some(1));
-    assert_eq!(
-        panel.handle_key(
-            KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
-            Rect::new(2, 1, 76, 7)
-        ),
-        StatusPanelOutcome::Consumed
-    );
-    assert_eq!(panel.tabs.active_index(), Some(0));
-    assert_eq!(desired_height(&panel, 80), height_before);
-    assert_eq!(panel.key_hints().text(), "Tab to switch · Esc to close");
 }
 
 #[test]
@@ -339,7 +284,7 @@ fn status_panel_does_not_invent_a_cache_share_or_exact_cost() {
         complete: false,
     };
     let panel = panel(&usage, &reference_cost);
-    let rows = panel.session.rows();
+    let rows = panel.usage.rows();
 
     assert_eq!(row_value(rows, "Cached input"), ">=7,500 tokens");
     assert_eq!(row_value(rows, "Cached input share"), "unknown");
@@ -352,12 +297,6 @@ fn panel<'a>(
 ) -> super::StatusPanel {
     status_panel(StatusViewData {
         model: "openai/gpt",
-        full_context_window: Some(1_000_000),
-        available_context_window: Some(894_880),
-        remaining_context_window: RemainingContextWindow::Estimated {
-            remaining_tokens: 771_424,
-            available_tokens: 894_880,
-        },
         usage,
         reference_cost,
         session_id: "thread:session-1",
@@ -383,7 +322,7 @@ fn draw_panel(frame: &mut Frame<'_>, panel: &super::StatusPanel) {
         content.height.saturating_sub(tab_rows),
     );
     panel.draw_tabs(frame, tabs, None, None, test_context());
-    panel.draw_body(frame, body, test_context());
+    panel.draw_body(frame, body, None, None, test_context());
 }
 
 fn row_value<'a>(rows: &'a [crate::widgets::detail_list::DetailListRow], label: &str) -> &'a str {

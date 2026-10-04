@@ -273,8 +273,8 @@ pub(in crate::app) fn activate_header_target(
             Some(crate::projects::Command::OpenRoots.into())
         }
         Target::Context => {
-            app.open_command_panel(CommandPanel::loading("Status", "Loading context…"));
-            Some(crate::status::Command::OpenPanel.into())
+            app.open_command_panel(CommandPanel::loading("Context", "Loading context…"));
+            Some(crate::context::Command::OpenPanel.into())
         }
         Target::Dashboard => {
             if app.session_manager_view().is_some() {

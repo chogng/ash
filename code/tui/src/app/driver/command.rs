@@ -349,35 +349,36 @@ impl AppDriver {
                     origin,
                 );
             }
+            AppCommand::Context(command) => {
+                let name = command.request_name();
+                let mut client = self.client.clone();
+                let scope = self.conversation.as_ref().map(|current| {
+                    (
+                        current.conversation.session_id().clone(),
+                        current.conversation.thread_id().clone(),
+                    )
+                });
+                self.requests.spawn_presentation(
+                    request_key,
+                    name,
+                    move || {
+                        let scope = scope.as_ref().map(|(session_id, thread_id)| {
+                            crate::context::RequestScope {
+                                session_id,
+                                thread_id,
+                            }
+                        });
+                        crate::context::load_panel(&mut client, scope)
+                            .map(crate::context::Event::Opened)
+                            .map_err(|error| error.to_string())
+                    },
+                    &mut self.app,
+                    origin,
+                );
+            }
             AppCommand::Status(command) => {
                 let name = command.request_name();
                 let mut client = self.client.clone();
-                if matches!(command, status_line::Command::OpenPanel) {
-                    let scope = self.conversation.as_ref().map(|current| {
-                        (
-                            current.conversation.session_id().clone(),
-                            current.conversation.thread_id().clone(),
-                        )
-                    });
-                    self.requests.spawn_presentation(
-                        request_key,
-                        name,
-                        move || {
-                            let scope = scope.as_ref().map(|(session_id, thread_id)| {
-                                status_line::StatusRequestScope {
-                                    session_id,
-                                    thread_id,
-                                }
-                            });
-                            status_line::load_status_panel(&mut client, scope)
-                                .map(status_line::Event::PanelOpened)
-                                .map_err(|error| error.to_string())
-                        },
-                        &mut self.app,
-                        origin,
-                    );
-                    return CommandEffect::None;
-                }
                 self.requests.spawn_presentation(
                     request_key,
                     name,

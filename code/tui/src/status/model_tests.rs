@@ -500,14 +500,14 @@ fn context_progress_requires_matching_model_and_clears_on_thread_switch() {
         },
     )));
     assert_eq!(
-        line.context_header_segments(false)
+        line.context_header_segments(false, crate::nls::Language::English)
             .iter()
             .map(|segment| segment.text())
             .collect::<String>(),
         "[~40 / 100]"
     );
     assert_eq!(
-        line.context_header_segments(true)
+        line.context_header_segments(true, crate::nls::Language::English)
             .iter()
             .map(|segment| segment.text())
             .collect::<String>(),

@@ -27,6 +27,7 @@ pub(crate) enum AppCommand {
     Sessions(crate::sessions::Command),
     Skills(crate::skills::Command),
     Status(crate::status::Command),
+    Context(crate::context::Command),
     Theme(crate::theme::Command),
     Thread(crate::thread::Command),
     OpenWorkspace { path: PathBuf },
@@ -43,7 +44,7 @@ impl AppCommand {
             Self::Git(crate::git::Command::OpenWorktrees) => Some("Project worktrees"),
             Self::Projects(crate::projects::Command::OpenRoots) => Some("Switch project folder"),
             Self::Projects(crate::projects::Command::OpenAddRoot) => Some("Add project folder"),
-            Self::Status(crate::status::Command::OpenPanel) => Some("Status"),
+            Self::Context(_) => Some("Context"),
             Self::Keymap(crate::keymap_setup::Command::OpenEditor) => Some("Shortcuts"),
             Self::Status(crate::status::Command::OpenLineEditor) => Some("Status line"),
             Self::Theme(crate::theme::Command::OpenPicker) => Some("Theme"),
@@ -67,7 +68,8 @@ impl AppCommand {
                     TuiSlashCommandAction::Mcp => Some("MCP"),
                     TuiSlashCommandAction::Hooks => Some("Hooks"),
                     TuiSlashCommandAction::Connectors => Some("Connectors"),
-                    TuiSlashCommandAction::Status => Some("Status"),
+                    TuiSlashCommandAction::Context => Some("Context"),
+                    TuiSlashCommandAction::Status => Some("Session status"),
                     TuiSlashCommandAction::Usage => Some("Usage"),
                     TuiSlashCommandAction::Rewind => Some("Rewind"),
                     TuiSlashCommandAction::AddDir => Some("Directories"),
@@ -112,3 +114,5 @@ app_command_from!(crate::issues::Command, Issues);
 app_command_from!(crate::memories::Command, Memories);
 
 app_command_from!(crate::guardian::Command, Guardian);
+
+app_command_from!(crate::context::Command, Context);

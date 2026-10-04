@@ -168,7 +168,7 @@ fn every_header_action_has_its_own_hit_target_and_activation() {
     ));
     assert!(matches!(
         activate(super::Target::Context).1,
-        Some(AppCommand::Status(crate::status::Command::OpenPanel))
+        Some(AppCommand::Context(crate::context::Command::OpenPanel))
     ));
     let (app, command) = activate(super::Target::Dashboard);
     assert!(command.is_none());
@@ -268,7 +268,7 @@ fn keyboard_focus_reaches_header_and_context_uses_the_existing_progress_bar() {
     assert!(context_cell.modifier.contains(Modifier::UNDERLINED));
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::Status(crate::status::Command::OpenPanel))
+        Some(AppCommand::Context(crate::context::Command::OpenPanel))
     ));
 }
 

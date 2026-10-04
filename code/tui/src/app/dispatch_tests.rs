@@ -334,15 +334,26 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     let mut conversation = ActiveConversation::start(&mut client, "commands".into()).unwrap();
     let mut app = App::new();
 
-    execute(
-        &mut conversation,
-        &mut client,
-        invocation(TuiSlashCommandAction::Status, ""),
-        &mut app,
-    );
-    assert!(matches!(app.command_panel(), Some(CommandPanel::Status(_))));
-    assert!(app.overlay().is_none());
-    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    for command in [
+        TuiSlashCommandAction::Context,
+        TuiSlashCommandAction::Status,
+    ] {
+        execute(
+            &mut conversation,
+            &mut client,
+            invocation(command, ""),
+            &mut app,
+        );
+        assert!(matches!(
+            (command, app.command_panel()),
+            (
+                TuiSlashCommandAction::Context,
+                Some(CommandPanel::Context(_))
+            ) | (TuiSlashCommandAction::Status, Some(CommandPanel::Status(_)))
+        ));
+        assert!(app.overlay().is_none());
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    }
 
     execute(
         &mut conversation,

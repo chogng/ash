@@ -2591,7 +2591,7 @@ fn help_uses_the_runtime_command_catalog_and_descriptions() {
         .expect("the local command is included in help");
     assert_eq!(
         status.description(),
-        Some("show the active session, thread, and model")
+        Some("show session state and thread totals")
     );
     assert!(commands.iter().all(|item| item.label() != "/diagnose"));
 
@@ -2956,9 +2956,6 @@ fn status_panel_receives_current_and_live_memory_diagnostics_status() {
     let reference_cost = ash_protocol::ModelReferenceCostSummary::default();
     app.update(StatusEvent::PanelOpened(status_panel(StatusViewData {
         model: "openai/gpt",
-        full_context_window: None,
-        available_context_window: None,
-        remaining_context_window: crate::status::RemainingContextWindow::Unknown,
         usage: &usage,
         reference_cost: &reference_cost,
         session_id: "session-1",
@@ -2997,9 +2994,6 @@ fn explicit_navigation_closes_panels_while_context_updates_preserve_them() {
     let reference_cost = ash_protocol::ModelReferenceCostSummary::default();
     app.update(StatusEvent::PanelOpened(status_panel(StatusViewData {
         model: "openai/gpt",
-        full_context_window: None,
-        available_context_window: None,
-        remaining_context_window: crate::status::RemainingContextWindow::Unknown,
         usage: &usage,
         reference_cost: &reference_cost,
         session_id: "session-1",

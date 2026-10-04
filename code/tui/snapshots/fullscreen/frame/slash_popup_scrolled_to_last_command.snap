@@ -10,7 +10,7 @@ expression: rendered
                                                                                 
                                                                                 
                                                                                 
-  ───────────────────────────────────────────────────────────────────── 36/36   
+  ───────────────────────────────────────────────────────────────────── 37/37   
   /issue                     select issues to develop together                 │
   /pr                        ask the Agent to create or inspect a pull request │
   /marketplace               find and install Marketplace packages             │

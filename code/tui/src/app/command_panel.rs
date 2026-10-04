@@ -68,6 +68,7 @@ pub(super) enum CommandPanelBody<'a> {
     Provider(&'a crate::config::provider::Panel),
     KeyCapture(&'a KeyCapture),
     Status(&'a StatusPanel),
+    Context(&'a crate::context::Panel),
     Shortcuts(&'a super::help::Shortcuts),
 }
 
@@ -76,7 +77,6 @@ pub(super) enum CommandPanelPointerTarget {
     Provider(crate::config::provider::Target),
     Effort(crate::models::EffortSelectorTarget),
     Memories(crate::memories::Target),
-    Tab(usize),
     List(list_selection::ListSelectionPointerTarget),
 }
 
@@ -85,6 +85,7 @@ impl CommandPanelBody<'_> {
         match self {
             Self::Selection(_)
             | Self::Effort(_)
+            | Self::Context(_)
             | Self::Status(_)
             | Self::Shortcuts(_)
             | Self::Details { .. } => true,
@@ -120,6 +121,7 @@ pub(crate) enum CommandPanel {
     Skills(ListSelection<SkillSelectionAction>),
     Usage(ListSelection<()>),
     Status(StatusPanel),
+    Context(crate::context::Panel),
     StatusLine(ListSelection<StatusLineSelectionAction>),
     Theme(ThemePicker),
 }
@@ -232,16 +234,16 @@ impl CommandPanel {
             CommandPanelBody::Memories(memories) => memories
                 .target_at(tabs, body, position)
                 .map(CommandPanelPointerTarget::Memories),
-            _ => self.list_selection().map_or_else(
-                || {
-                    self.tab_at(tabs, position)
-                        .map(CommandPanelPointerTarget::Tab)
-                },
-                |selection| {
-                    list_selection::pointer_target_at(selection, tabs, body, position)
-                        .map(CommandPanelPointerTarget::List)
-                },
-            ),
+            CommandPanelBody::Context(panel) => panel
+                .pointer_target_at(body, position)
+                .map(CommandPanelPointerTarget::List),
+            CommandPanelBody::Status(panel) => panel
+                .pointer_target_at(tabs, body, position)
+                .map(CommandPanelPointerTarget::List),
+            _ => self.list_selection().and_then(|selection| {
+                list_selection::pointer_target_at(selection, tabs, body, position)
+                    .map(CommandPanelPointerTarget::List)
+            }),
         }
     }
 
@@ -269,10 +271,6 @@ impl CommandPanel {
                 }
                 _ => CommandPanelOutcome::Consumed,
             },
-            CommandPanelPointerTarget::Tab(index) => {
-                self.select_tab(index);
-                CommandPanelOutcome::Consumed
-            }
             CommandPanelPointerTarget::List(target) => self.handle_click(&target, area, click),
         }
     }
@@ -444,6 +442,10 @@ impl CommandPanel {
             Self::Skills(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Skills)
             }
+            Self::Context(content) => match content.handle_key(key, area) {
+                crate::context::Outcome::Consumed => CommandPanelOutcome::Consumed,
+                crate::context::Outcome::Dismiss => CommandPanelOutcome::Dismiss,
+            },
             Self::Status(content) => match content.handle_key(key, area) {
                 StatusPanelOutcome::Consumed => CommandPanelOutcome::Consumed,
                 StatusPanelOutcome::Dismiss => CommandPanelOutcome::Dismiss,
@@ -485,7 +487,7 @@ impl CommandPanel {
             Self::Rewind(content) => content.handle_paste(pasted),
             Self::Sessions(content) => content.handle_paste(pasted),
             Self::Skills(content) => content.handle_paste(pasted),
-            Self::Status(_) | Self::Effort(_) | Self::Shortcuts(_) => {}
+            Self::Context(_) | Self::Status(_) | Self::Effort(_) | Self::Shortcuts(_) => {}
             Self::StatusLine(content) => content.handle_paste(pasted),
             Self::Theme(content) => content.handle_paste(pasted),
         }
@@ -527,6 +529,7 @@ impl CommandPanel {
             }
             Self::Effort(_) => {}
             Self::Shortcuts(panel) => panel.localize(language),
+            Self::Context(content) => content.localize(language),
             Self::Status(content) => content.localize(language),
             Self::Theme(content) => content.selection_mut().localize(language),
         }
@@ -555,7 +558,7 @@ impl CommandPanel {
             Self::Rewind(selection) => Some(selection.state()),
             Self::Sessions(selection) => Some(selection.state()),
             Self::Skills(selection) => Some(selection.state()),
-            Self::Status(_) | Self::Effort(_) | Self::Shortcuts(_) => None,
+            Self::Context(_) | Self::Status(_) | Self::Effort(_) | Self::Shortcuts(_) => None,
             Self::StatusLine(selection) => Some(selection.state()),
             Self::Theme(picker) => Some(picker.selection()),
         }
@@ -586,7 +589,7 @@ impl CommandPanel {
             Self::Skills(selection) => Some(selection.state_mut()),
             Self::StatusLine(selection) => Some(selection.state_mut()),
             Self::Theme(picker) => Some(picker.selection_mut()),
-            Self::Status(_) | Self::Effort(_) | Self::Shortcuts(_) => None,
+            Self::Context(_) | Self::Status(_) | Self::Effort(_) | Self::Shortcuts(_) => None,
         }
     }
 
@@ -596,6 +599,18 @@ impl CommandPanel {
         area: Rect,
         click: list_selection::ListSelectionClick,
     ) -> CommandPanelOutcome {
+        if let Self::Context(panel) = self {
+            return match panel.handle_click(target, area) {
+                crate::context::Outcome::Consumed => CommandPanelOutcome::Consumed,
+                crate::context::Outcome::Dismiss => CommandPanelOutcome::Dismiss,
+            };
+        }
+        if let Self::Status(panel) = self {
+            return match panel.handle_click(target, area) {
+                StatusPanelOutcome::Consumed => CommandPanelOutcome::Consumed,
+                StatusPanelOutcome::Dismiss => CommandPanelOutcome::Dismiss,
+            };
+        }
         if let Self::Config(editor) = self {
             return CommandPanelOutcome::Config(editor.handle_click(target, click));
         }
@@ -681,6 +696,7 @@ impl CommandPanel {
             Self::Rewind(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Sessions(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Skills(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Context(panel) => CommandPanelBody::Context(panel),
             Self::Status(panel) => CommandPanelBody::Status(panel),
             Self::Shortcuts(panel) => CommandPanelBody::Shortcuts(panel),
             Self::StatusLine(selection) => CommandPanelBody::Selection(selection.state()),
@@ -699,8 +715,7 @@ impl CommandPanel {
     ) {
         let body = self.body();
         let tab_index = |target: Option<&CommandPanelPointerTarget>| match target {
-            Some(CommandPanelPointerTarget::Tab(index))
-            | Some(CommandPanelPointerTarget::List(
+            Some(CommandPanelPointerTarget::List(
                 list_selection::ListSelectionPointerTarget::Tab(index),
             )) => Some(*index),
             Some(CommandPanelPointerTarget::Memories(crate::memories::Target::List(
@@ -736,23 +751,11 @@ impl CommandPanel {
             Self::Rewind(content) => content.key_hints(),
             Self::Sessions(content) => content.key_hints(),
             Self::Skills(content) => content.key_hints(),
+            Self::Context(content) => content.key_hints(),
             Self::Status(content) => content.key_hints(),
             Self::Shortcuts(content) => content.key_hints(),
             Self::StatusLine(content) => content.key_hints(),
             Self::Theme(content) => content.key_hints(),
-        }
-    }
-
-    pub(super) fn tab_at(&self, area: Rect, position: ratatui::layout::Position) -> Option<usize> {
-        match self {
-            Self::Status(panel) => panel.tab_at(area, position),
-            _ => None,
-        }
-    }
-
-    pub(super) fn select_tab(&mut self, index: usize) {
-        if let Self::Status(panel) = self {
-            panel.select_tab(index);
         }
     }
 
@@ -945,6 +948,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Shortcuts(_) => "Keyboard shortcuts",
             Self::Provider(_) => "Custom provider",
             Self::KeyCapture(capture) => capture.title(),
+            Self::Context(panel) => panel.title(),
             Self::Status(panel) => panel.title(),
         };
         crate::nls::localize(language, title)
@@ -954,6 +958,7 @@ impl<'a> CommandPanelBody<'a> {
         match self {
             Self::Details { .. } | Self::Shortcuts(_) => 0,
             Self::Selection(selection) => selection.tab_rows(width),
+            Self::Context(_) => 0,
             Self::Status(panel) => panel.tab_rows(width),
             Self::Memories(panel) => panel.tab_rows(width),
             Self::Effort(_)
@@ -978,6 +983,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Prompt(prompt) => prompt.desired_height(),
             Self::Dialog(dialog) => dialog.body_rows(width),
             Self::KeyCapture(capture) => capture.desired_height(),
+            Self::Context(panel) => panel.body_rows(width),
             Self::Status(panel) => panel.body_rows(width),
             Self::Provider(panel) => panel.body_rows(),
         }
@@ -993,6 +999,7 @@ impl<'a> CommandPanelBody<'a> {
             | Self::Prompt(_)
             | Self::Dialog(_)
             | Self::KeyCapture(_)
+            | Self::Context(_)
             | Self::Status(_)
             | Self::Provider(_) => None,
         }
@@ -1010,6 +1017,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Selection(selection) => {
                 list_selection::draw_tabs(frame, area, selection, hovered_tab, pressed_tab, context)
             }
+            Self::Context(_) => {}
             Self::Status(panel) => panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context),
             Self::Memories(panel) => {
                 panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context)
@@ -1102,7 +1110,12 @@ impl<'a> CommandPanelBody<'a> {
             Self::Prompt(prompt) => text_prompt::draw(frame, area, prompt, context),
             Self::Dialog(dialog) => dialog.draw(frame, area, context),
             Self::KeyCapture(capture) => key_capture::draw(frame, area, capture, context),
-            Self::Status(panel) => panel.draw_body(frame, area, context),
+            Self::Context(panel) => {
+                panel.draw_body(frame, area, list(hovered), list(pressed), context)
+            }
+            Self::Status(panel) => {
+                panel.draw_body(frame, area, list(hovered), list(pressed), context)
+            }
             Self::Provider(panel) => {
                 panel.draw_with_pointer(frame, area, provider(hovered), provider(pressed), context)
             }

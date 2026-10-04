@@ -92,6 +92,20 @@ where
                 .into(),
             );
         }
+        TuiSlashCommandAction::Context => {
+            output.events.push(
+                crate::context::Event::Opened(crate::context::load_panel(
+                    client,
+                    conversation
+                        .as_ref()
+                        .map(|conversation| crate::context::RequestScope {
+                            session_id: conversation.session_id(),
+                            thread_id: conversation.thread_id(),
+                        }),
+                )?)
+                .into(),
+            );
+        }
         TuiSlashCommandAction::Usage => {
             output.events.push(
                 crate::usage::load(client)

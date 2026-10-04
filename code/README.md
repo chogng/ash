@@ -28,7 +28,7 @@ ash-cli → code/tui → ash-app-server-client → shared App Server crates
 | 会话管理与 Issue 工作流 | [sessions](tui/src/sessions)、[issues.rs](tui/src/issues.rs) |
 | 设置、主题、快捷键与界面语言 | [config](tui/src/config)、[theme](tui/src/theme)、[keymap](tui/src/keymap)、[nls.rs](tui/src/nls.rs) |
 | 扩展、Connector 与目录授权 | 对应功能模块；目录授权见 [dirs.rs](tui/src/dirs.rs) |
-| 状态、额度与内存诊断 | [status](tui/src/status)、[usage.rs](tui/src/usage.rs)、[memory.rs](tui/src/memory.rs) |
+| 上下文、会话状态、账户额度与内存诊断 | [context.rs](tui/src/context.rs)、[status](tui/src/status)、[usage.rs](tui/src/usage.rs)、[memory.rs](tui/src/memory.rs) |
 | 听写 | [state.rs](tui/src/app/state.rs)、[请求调度](tui/src/app/driver/command.rs)；App Server 的 [realtime-voice](../ash-rs/realtime-voice/README.md) 负责识别与模型安装，`ash-voice-host` 负责音频 |
 | 终端、ANSI 转换与 Mermaid 排版 | [终端检测](terminal-detection/README.md)、[ansi-escape](ansi-escape/README.md)、[mermaid](mermaid/README.md) |
 
@@ -96,6 +96,16 @@ Queue 保存完整草稿，包括图片、长粘贴和绑定的 Skill。恢复�
 
 命令补全只替换光标所在的首行命令名，保留参数、图片和粘贴绑定。例如 `/mod provider/model` 补全为 `/model provider/model`。移除命令后的空格后可以重新编辑名称。未知命令或不接受参数却带参数的命令按普通消息处理；已注册产品命令没有实现路径时不能冒充成功。
 
+三个查询命令按统计范围分开，fullscreen 和 inline 使用同一个功能面板：
+
+| 命令 | 内容与范围 |
+| --- | --- |
+| `/context` | “上下文”面板展示最近请求的上下文占用、可用输入容量与输出及安全预留；fullscreen 顶部上下文入口打开同一面板。尚未请求或等待统计时明确显示等待状态，缺少可用输入容量时不显示百分比。 |
+| `/status` | “会话状态”面板分为“会话”和“诊断”两个页签。“会话”页展示模型、会话与线程 ID，以及“本线程累计消耗”：调用次数、token 与缓存统计、参考成本；“诊断”页展示进程资源与内存诊断状态。 |
+| `/usage` | “Usage”（中文为“额度”）面板展示账户的订阅限额、重置时间、余额或积分；每次打开重新查询，页签切换只使用本次结果。供应商支持范围见[订阅计划接入与额度](../docs/subscriptions.md#账户额度与刷新)。 |
+
+上下文占用与线程累计消耗分别读取最近请求和整个线程的统计；上下文压缩后，累计消耗不会随之减少。估算上下文用量带 `~` 标记；缺失的统计保持等待或未知，不从累计消耗推算上下文占用。面板只展示证据，功能启停由对应配置或操作入口负责。两种模式的展开、滚动和退出行为见[上下文与会话状态面板](LAYOUT.md#上下文与会话状态面板)。
+
 `/resume`、`/rewind`、`/add-dir`、`/branch`、`/fork`、`/model`、`/theme` 和 `/new` 支持行内参数；产品命令拒绝图片参数。命令后输入空格且参数尚为空时，光标后方以置灰样式（`context.muted()`）显示行内虚提示（如 `<path>`、`<model>`、`<theme>` 等），提示用户后续参数含义；用户输入非空白参数字符或光标移开时虚提示自动消失。命令回显和结果始终更新同一正文单元。
 
 `/model` 无参数时列出内置目录模型；本机 Kimi Desktop 或 Kimi Code CLI 连接就绪时，还会向对应端点查询当前型号。有离散推理档位的模型显示方块并可用左右键调整；深色格表示当前已启用的强度，浅色格表示剩余档位，未修改时采用模型的默认强度。右侧为支持的模型提供 `Fast on/off` 和 `272k / 1m` 两个入口，可点击，也可用 `Tab` / `Shift+Tab` 在当前行的 effort、Fast、上下文之间循环聚焦，左右键调整当前项。只显示可用设置，跳过不可设置的项；上下换模型后从 effort 开始，没有 effort 时从第一个可设置项开始，整行没有设置时 Tab 保持原位。模型选择器不提供 `none` effort 档位；原配置为 `none` 时从第一个有效档位开始。这两项即时保存到当前连接的模型配置，面板保持打开，不改变当前选中的模型和未确认的推理档位；Enter 应用模型与推理档位，Esc 关闭面板。effort、Fast、上下文各占固定列；不支持某项的行留空，后面的设置保持对齐。窄终端优先显示当前聚焦的设置。Fast 按模型和连接能力启用：OpenAI 使用服务档，Claude 按型号使用加速推理或 Priority，Gemini / Grok API 使用优先处理，MiniMax 和 Kimi Code 使用对应的 highspeed 型号；未声明支持的模型或连接不开放开关。上下文档位适用于所有声明至少 1m 容量的模型，用于后端预算与自动压缩，不改变模型声明的最大容量。GPT 模型默认使用 272k 预算，显式保存的上下文设置优先。按 `/` 聚焦搜索框，搜索中的 `/` 作为字符输入；Esc 先退出搜索，再关闭面板。固定模型排在列表顶部；已固定和未固定两组内部都保持模型目录原序，不按固定时间排序。取消固定后回到未固定组中的原有位置，键盘焦点仍留在同一个模型上。底部提示按当前选中模型的状态显示 `p 固定` 或 `p 取消固定`，只显示当前可执行的动作。没有候选时提示在 `/config` 配置提供商。模型出现在目录中不保证凭据或远端权限有效，实际调用仍由运行时校验。各型号可选档位见[内置模型表](../docs/models/ash-host-models.md#推理档位)。
@@ -147,7 +157,7 @@ Connector 操作见 [request.rs](tui/src/connectors/request.rs)：设备码复�
 
 “配置 → 提供商”按订阅和 API 分组，打开连接设置；账户页用于查看账户、登录和取消登录，已连接时按 `l` 退出，Esc 返回列表，未完成的登录可再次进入查看。首次进入读取账户与模型，后端变化通知刷新页面。提供商身份、端点、凭据优先级与认证存储由[账户接入](../docs/login.md)和[认证存储与验收](../ash-rs/docs/changes/chatgpt-auth/verification.md)维护。
 
-资源采样由可见状态行项目和 Processes 页共同决定；没有需求时停止采样。关闭 Git 显示只停止状态行专属工作，不能停止 ChangeTurn 的目录跟随。
+资源采样由可见状态行项目和 `/status` 的诊断页共同决定；没有需求时停止采样。关闭 Git 显示只停止状态行专属工作，不能停止 ChangeTurn 的目录跟随。
 
 ## Issue 工作流接入
 

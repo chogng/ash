@@ -3,22 +3,22 @@ source: code/tui/src/app/fullscreen/frame_tests.rs
 expression: rendered
 ---
   .                                                                [Dashboard]  
-                                                                                
-        ┌── Status ────────────────────────────────────────────────[✗]─┐        
+        ┌── Session status ────────────────────────────────────────[✗]─┐        
         │                                                              │        
-        │   Thread    Processes                                        │        
+        │   Session    Diagnostics                                     │        
         │                                                              │        
-        │  Model:                    openai/gpt                        │        
-        │  Full context window:      100,000 tokens                    │        
-        │  Available context window: 90,000 tokens                     │        
-        │  Remaining context window: 80,000 tokens (88.8%)             │        
-        │  Model calls:              0                                 │        
-        │  Input tokens:             0 tokens                          │        
-        │  Cached input:             0 tokens                          │        
-        │  Cached input share:       unknown                           │        
-        │  Cache writes:             0 tokens                          │        
-  ──────│  Output tokens:            0 tokens                          │──────  
-  > /   └──────────────────────────────────────────────────────────────┘        
-  ─────────────────────────────────────────────────────────── Automatic model   
+        │  Model:      openai/gpt                                      │        
+        │  Session ID: session-1                                       │        
+        │  Thread ID:  thread-1                                        │        
+        │                                                              │        
+        │  Thread totals                                               │        
+        │  Model calls:        0                                       │        
+        │  Input tokens:       0 tokens                                │        
+        │  Cached input:       0 tokens                                │        
+        │  Cached input share: unknown                                 │        
+        │  Cache writes:       0 tokens                                │        
+  ──────│  Output tokens:      0 tokens                                │──────  
+  > /   │  Reasoning output:   0 tokens                                │        
+  ──────└──────────────────────────────────────────────────────────────┘model   
                                                                                 
-  Tab to switch · Esc to close
+  Tab tabs · ↑/↓ scroll · Esc close

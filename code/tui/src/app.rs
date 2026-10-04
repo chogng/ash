@@ -46,6 +46,9 @@ mod requests;
 mod session_manager_tests;
 mod start;
 mod state;
+#[cfg(test)]
+#[path = "app/status_tests.rs"]
+mod status_tests;
 mod top_tip;
 #[cfg(test)]
 #[path = "app/usage_tests.rs"]

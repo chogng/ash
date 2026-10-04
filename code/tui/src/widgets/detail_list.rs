@@ -134,6 +134,14 @@ pub(crate) fn draw_body_scrolled(
     );
 }
 
+pub(crate) fn body_lines<'a>(detail: &'a DetailList, context: RenderContext<'_>) -> Vec<Line<'a>> {
+    detail_lines(
+        detail,
+        Style::default().add_modifier(Modifier::BOLD),
+        Style::default().fg(context.muted()),
+    )
+}
+
 fn detail_lines<'a>(
     detail: &'a DetailList,
     label_style: Style,

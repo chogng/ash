@@ -1,0 +1,83 @@
+---
+source: code/tui/src/app/status_tests.rs
+expression: text
+---
+Session
+─ 会话状态 ─────────────────────────────
+                                        
+   会话    诊断                         
+  模型:    test/model                   
+  会话 ID: session-test                 
+  线程 ID: thread-test                  
+                                        
+  本线程累计消耗                        
+  模型调用:     4                       
+  输入令牌:     120,000 tokens          
+  缓存输入:     0 tokens                
+  缓存输入占比: 0.0%                    
+                                        
+  Tab 标签页 · ↑/↓ 滚动 · Esc 关闭      
+
+Session · bottom
+─ 会话状态 ─────────────────────────────
+                                        
+   会话    诊断                         
+  本线程累计消耗                        
+  模型调用:     4                       
+  输入令牌:     120,000 tokens          
+  缓存输入:     0 tokens                
+  缓存输入占比: 0.0%                    
+  缓存写入:     0 tokens                
+  输出令牌:     0 tokens                
+  推理输出:     0 tokens                
+  参考成本:     未知                    
+                                        
+  Tab 标签页 · ↑/↓ 滚动 · Esc 关闭      
+
+Thread totals
+─ 会话状态 ─────────────────────────────
+                                        
+   会话    诊断                         
+  模型:    test/model                   
+  会话 ID: session-test                 
+  线程 ID: thread-test                  
+                                        
+  本线程累计消耗                        
+  模型调用:     4                       
+  输入令牌:     120,000 tokens          
+  缓存输入:     0 tokens                
+  缓存输入占比: 0.0%                    
+                                        
+  Tab 标签页 · ↑/↓ 滚动 · Esc 关闭      
+
+Diagnostics
+─ 会话状态 ─────────────────────────────
+                                        
+   会话    诊断                         
+  总计:       正在收集                  
+  TUI:        正在收集                  
+  App Server: included in the TUI       
+  process                               
+  内存诊断:   已禁用                    
+                                        
+                                        
+                                        
+                                        
+                                        
+  Tab 标签页 · ↑/↓ 滚动 · Esc 关闭      
+
+Closed
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+────────────────────────────────────────
+> status draft!                         
+────────────────────────────────────────
+                                        
+  ⏸ 手动

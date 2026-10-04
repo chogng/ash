@@ -80,7 +80,7 @@ pub(crate) fn context_header_line(
     surface: Style,
 ) -> Line<'static> {
     styled_segments(
-        status_line.context_header_segments(progress),
+        status_line.context_header_segments(progress, context.language()),
         context,
         surface,
     )

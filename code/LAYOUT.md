@@ -46,7 +46,7 @@ screenMode = "fullscreen" # 或 "inline"
 | 缓存命中率与参考费用 | `cache-hit-rate`、`reference-cost` | 底部 statusline | 底部 statusline |
 | 内存与 CPU | `memory`、`cpu` | 底部 statusline | 底部 statusline |
 
-模型、任务模式和权限的内容由共用状态组件负责；可点击的顶部上下文摘要保留原有显示与交互。状态项在每种模式中只显示一次；关闭后同时从两种模式隐藏，对应标签、分隔符和标签占用的宽度一起消失。任务模式仍保留默认 Agent 不显示名称的约定。
+模型、任务模式和权限的内容由共用状态组件负责；fullscreen 顶部上下文摘要点击或按 Enter 后打开独立的 `/context` 面板。状态项在每种模式中只显示一次；关闭后同时从两种模式隐藏，对应标签、分隔符和标签占用的宽度一起消失。任务模式仍保留默认 Agent 不显示名称的约定。
 
 工作目录和 Dashboard 属于页面导航入口，不是 StatusLine 状态项，不纳入上述开关。关闭 Git 状态的显示只影响展示及其专属额外计算，不停止基础 Git 状态跟随。
 
@@ -166,6 +166,16 @@ inline 的 footer 第一行按配置顺序与可用宽度绘制模型、任务�
 
 测试分别验证两种模式的完整文本与区域位置：状态项开关、状态项不重复、听写与权限同时可见、运行时显示当前权限、空闲时显示所选权限、窄宽度裁剪，第二行被操作提示覆盖及恢复，以及模式切换后配置与草稿保持不变。页面焦点、历史输出与终端恢复仍由各模式的测试覆盖。
 
+### 上下文与会话状态面板
+
+`/context` 和 `/status` 分别由 [context.rs](tui/src/context.rs) 与 [status/panel.rs](tui/src/status/panel.rs) 保存功能状态。命令职责和统计范围见 [README](README.md#命令与补全)。fullscreen 将它们放在按内容高度分配的居中模态框中；inline 在临时备用屏幕里显示面板，隐藏实际输入框。两种模式承载同一个功能面板，外框、页面位置与操作提示由各自容器负责。
+
+“上下文”面板没有页签，先显示最近请求的用量摘要和进度条，再显示可展开的“容量说明”。Enter 切换展开状态，左右键也可展开或收起；fullscreen 点击该行走相同动作，摘要文字是只读内容。短窗口保留顶部摘要，↑/↓、PageUp/PageDown、Home/End 滚动下方容量说明。进度条的分母是可用输入预算；用量达到预算的 90% 时使用警示色，超过预算时条形填满并保留真实百分比。尚未请求、等待统计或缺少可用容量时不绘制进度条。
+
+“会话状态”面板使用“会话 / 诊断”两个页签，Tab / Shift+Tab、左右键和 fullscreen 页签点击使用共享页签操作。“会话”页先展示身份信息，再以“本线程累计消耗”标题展示统计；两个页签分别保留滚动位置，↑/↓、PageUp/PageDown、Home/End 滚动当前页正文。可见的“诊断”页请求详细进程采样；查看上下文或会话信息不增加这项采样需求，StatusLine 的独立采样需求仍按配置计算。
+
+切换屏幕模式时保留同一个面板的展开状态、页签和滚动位置。Esc 关闭后恢复原草稿与输入焦点；已关闭或被其他面板替换的查询，其迟到结果不会重新打开旧面板。inline 不接管鼠标，使用相同的键盘动作。
+
 ## 聊天进度与听写状态
 
 本轮运行状态行（turn status / activity indicator）固定在输入控制区，位于 tipline 上方。它回答当前是否仍在运行、处于什么阶段以及怎样停止；正文流式输出和历史滚动都不改变它的位置。转圈符号叫 spinner；状态行不显示完成百分比。
@@ -242,7 +252,7 @@ inline 的 footer 第一行按配置顺序与可用宽度绘制模型、任务�
 
 顶部右侧显示工作区/会话状态摘要；聊天进度与听写状态的位置见[聊天进度与听写状态](#聊天进度与听写状态)。`tipline` 优先显示听写，其余时间显示临时提示或首页引导；权限与适用的 Dashboard 入口提示共用底部 hintline，其他交互显示对应操作提示。输入区下分隔线上的模型与任务模式标签由 [fullscreen/composer.rs](tui/src/app/fullscreen/composer.rs) 绘制。
 
-顶部 statusline 的分支、工作目录、上下文和 Dashboard 是彼此独立的交互项。点击分支打开本地分支选择；点击工作目录打开同一 Project、同一 Environment 下的根目录选择并由 CLI host 重建 workspace 连接；上下文静止时显示 `已用 / 容量`，hover 或键盘焦点时复用 StatusLine 的 Context 进度条；Dashboard 打开 Session 管理页。空输入时按 `F6` 聚焦标题栏，左右键移动，`Enter` 激活，`Esc` 返回输入。
+顶部 statusline 的分支、工作目录、上下文和 Dashboard 是彼此独立的交互项。点击分支打开本地分支选择；点击工作目录打开同一 Project、同一 Environment 下的根目录选择并由 CLI host 重建 workspace 连接；上下文静止时显示 `已用 / 容量`，hover 或键盘焦点时复用 StatusLine 的 Context 进度条，缺少百分比时显示本地化的“上下文”文字入口，激活后打开 `/context`；Dashboard 打开 Session 管理页。空输入时按 `F6` 聚焦标题栏，左右键移动，`Enter` 激活，`Esc` 返回输入。
 
 标题栏交互项是轻量文字入口：hover 和按下只改变前景色与文字强调，不绘制背景色；键盘焦点额外使用下划线，不能与鼠标 hover 混为同一状态。弹窗、列表和输入控件仍使用各自的共享 hover surface。
 
@@ -456,6 +466,7 @@ fullscreen 的 [pointer.rs](tui/src/app/fullscreen/pointer.rs) 聚合各组件�
 | 模式隔离与同一面板转交 | `just test ash-tui --lib app::mode_tests` |
 | 共用聊天组合与状态项布局 | `just test ash-tui --lib app::chat_view` |
 | 共用应用流程 | `just test ash-tui --lib app::` |
+| 上下文与会话状态面板、窄窗口、模式转交及迟到结果隔离 | `just test-tui-unit app::status_tests` |
 | 本轮状态固定、正文滚动、中断及提示位置 | `just test ash-tui --lib chat_progress` |
 | 听写准备、下载、录音状态与中断优先级 | `just test ash-tui --lib dictation` |
 | inline 定稿历史与活动聊天进度分离 | `just test ash-tui --lib inline_history_commits` |

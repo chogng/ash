@@ -18,7 +18,6 @@ use crate::models::ModelSummary;
 use crate::render::test_context;
 use crate::sessions::Event as SessionEvent;
 use crate::status::Event as StatusEvent;
-use crate::status::RemainingContextWindow;
 use crate::status::StatusLineItem;
 use crate::status::StatusLineSettings;
 use crate::status::StatusViewData;
@@ -325,9 +324,6 @@ fn status_command_panel_uses_the_shared_title_and_close_hint() {
     let reference_cost = ash_protocol::ModelReferenceCostSummary::default();
     let panel = CommandPanel::status(status_panel(StatusViewData {
         model: "openai/gpt",
-        full_context_window: None,
-        available_context_window: None,
-        remaining_context_window: RemainingContextWindow::Unknown,
         usage: &usage,
         reference_cost: &reference_cost,
         session_id: "session-1",
@@ -350,9 +346,9 @@ fn status_command_panel_uses_the_shared_title_and_close_hint() {
             .contains(Modifier::BOLD)
     );
     let text = render(&app, 80, 20);
-    assert!(text.contains("Thread"));
-    assert!(text.contains("Processes"));
-    assert!(text.contains("Esc to close"));
+    assert!(text.contains("Session"));
+    assert!(text.contains("Diagnostics"));
+    assert!(text.contains("Esc close"));
     assert!(text.contains("[✗]"));
 }
 
@@ -456,9 +452,6 @@ fn process_resource_demand_follows_the_content_that_is_actually_visible() {
     let reference_cost = ash_protocol::ModelReferenceCostSummary::default();
     app.update(StatusEvent::PanelOpened(status_panel(StatusViewData {
         model: "openai/gpt",
-        full_context_window: None,
-        available_context_window: None,
-        remaining_context_window: RemainingContextWindow::Unknown,
         usage: &usage,
         reference_cost: &reference_cost,
         session_id: "session-1",
@@ -537,12 +530,6 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
     let reference_cost = ash_protocol::ModelReferenceCostSummary::default();
     app.update(StatusEvent::PanelOpened(status_panel(StatusViewData {
         model: "openai/gpt",
-        full_context_window: Some(100_000),
-        available_context_window: Some(90_000),
-        remaining_context_window: RemainingContextWindow::Exact {
-            remaining_tokens: 80_000,
-            available_tokens: 90_000,
-        },
         usage: &usage,
         reference_cost: &reference_cost,
         session_id: "session-1",
@@ -556,10 +543,10 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
     app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(app.input(), "/");
     let rendered = render(&app, 80, 20);
-    assert!(rendered.contains("Status"));
-    assert!(rendered.contains("Thread"));
-    assert!(rendered.contains("Processes"));
-    assert!(rendered.contains("Tab to switch · Esc to close"));
+    assert!(rendered.contains("Session status"));
+    assert!(rendered.contains("Session"));
+    assert!(rendered.contains("Diagnostics"));
+    assert!(rendered.contains("Tab tabs · ↑/↓ scroll · Esc close"));
     crate::tui_assert_snapshot!(app = &app; "status_panel_adaptive_height", rendered);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -1631,7 +1618,8 @@ fn bare_slash_renders_the_first_command_window() {
     assert!(rendered.contains("/statusline"));
     assert!(rendered.contains("/skills"));
     assert!(rendered.contains("/memories"));
-    assert!(rendered.contains("/mcp"));
+    assert!(rendered.contains("/context"));
+    assert!(!rendered.contains("/mcp"));
     assert!(rendered.contains("/usage"));
     assert!(!rendered.contains("/resume"));
     assert!(!rendered.contains("/archive-thread"));

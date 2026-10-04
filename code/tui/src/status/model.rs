@@ -521,10 +521,18 @@ impl StatusLineModel {
         }
     }
 
-    pub(super) fn context_header_segments(&self, progress: bool) -> Vec<StatusLineSegment> {
+    pub(super) fn context_header_segments(
+        &self,
+        progress: bool,
+        language: crate::nls::Language,
+    ) -> Vec<StatusLineSegment> {
         let (text, percentage, used, capacity) = self.context_measurement();
         let mut segments = vec![StatusLineSegment::chrome("[")];
-        if progress {
+        if progress && percentage.is_none() {
+            segments.push(StatusLineSegment::chrome(crate::nls::localize_owned(
+                language, "Context",
+            )));
+        } else if progress {
             segments.extend(progress_segments(&text, percentage));
         } else {
             let ratio = match (used, capacity) {
@@ -629,7 +637,7 @@ fn progress_segments(text: &str, percentage: Option<usize>) -> Vec<StatusLineSeg
     segments
 }
 
-fn compact_tokens(tokens: u64) -> String {
+pub(crate) fn compact_tokens(tokens: u64) -> String {
     let (value, suffix) = if tokens >= 1_000_000 {
         (tokens as f64 / 1_000_000.0, "m")
     } else if tokens >= 1_000 {

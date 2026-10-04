@@ -14,7 +14,6 @@ use crate::client::new_command_id;
 impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
-            Self::OpenPanel => "ash-tui-read-status",
             Self::OpenLineEditor => "ash-tui-read-status-line",
             Self::EditLine(_) => "ash-tui-set-status-line",
         }
@@ -26,7 +25,6 @@ where
     T: JsonRpcTransport,
 {
     match command {
-        Command::OpenPanel => Err("the status panel requires the active Thread scope".into()),
         Command::OpenLineEditor => read_status_line(client).map(Event::LineEditorOpened),
         Command::EditLine(edit) => set_status_line(client, edit).map(Event::LineEditorUpdated),
     }

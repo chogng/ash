@@ -18,6 +18,7 @@ use ash_slash_commands::SlashCommandCatalog;
 #[derive(Clone, Copy, Debug, EnumIter, Eq, IntoStaticStr, PartialEq)]
 #[strum(serialize_all = "kebab-case")]
 pub(crate) enum TuiSlashCommandAction {
+    Context,
     Status,
     Usage,
     #[strum(serialize = "statusline")]
@@ -84,8 +85,9 @@ impl TuiSlashCommandAction {
         let description = match self {
             Self::Pr => "ask the Agent to create or inspect a pull request",
             Self::Issue => "select issues to develop together",
-            Self::Status => "show the active session, thread, and model",
-            Self::Usage => "show subscription quotas and reset times",
+            Self::Status => "show session state and thread totals",
+            Self::Context => "show context usage and available input capacity",
+            Self::Usage => "show account quotas, balances, and reset times",
             Self::StatusLine => "choose the items shown in the status line",
             Self::Dashboard => "open Dashboard",
             Self::Subagents => "focus the current Session Thread list",

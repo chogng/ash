@@ -57,6 +57,21 @@ pub(super) fn layout_for(app: &App, available: Rect) -> ModalLayout {
         return ModalLayout::new(available, width, height);
     }
     if app.overlay().is_none()
+        && let Some(panel @ (CommandPanel::Status(_) | CommandPanel::Context(_))) =
+            app.command_panel()
+    {
+        let width = (available.width.saturating_mul(3) / 4).clamp(64, 100);
+        let content_width = ModalLayout::new(available, width, available.height)
+            .content
+            .width;
+        let body = panel.body();
+        let height = body
+            .tab_rows(content_width)
+            .saturating_add(body.body_rows(content_width, app.render_context()))
+            .saturating_add(4);
+        return ModalLayout::new(available, width, height);
+    }
+    if app.overlay().is_none()
         && let Some(CommandPanel::Effort(selector)) = app.command_panel()
     {
         let width = PanelLayout::content_width(available.width);

@@ -23,17 +23,17 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
-    OpenPanel,
     OpenLineEditor,
     EditLine(StatusLineEdit),
 }
 
 pub(crate) use model::StatusLineModel;
 pub(crate) use model::StatusLineRuntime;
-pub(crate) use panel::RemainingContextWindow;
+pub(crate) use model::compact_tokens;
 pub(crate) use panel::StatusPanel;
 pub(crate) use panel::StatusPanelOutcome;
 pub(crate) use panel::StatusViewData;
+pub(crate) use panel::format_token_count;
 pub(crate) use panel::status_panel;
 pub(crate) use panel_request::StatusRequestScope;
 pub(crate) use panel_request::load_status_panel;

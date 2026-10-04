@@ -4,6 +4,7 @@ mod app;
 mod client;
 mod config;
 mod connectors;
+mod context;
 mod dirs;
 mod extensions;
 mod git;

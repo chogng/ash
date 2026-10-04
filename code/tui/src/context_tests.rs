@@ -1,7 +1,7 @@
-//! Status panel request tests.
+//! Latest-request context measurement tests.
 
-use super::remaining_context_window;
-use crate::status::RemainingContextWindow;
+use super::Usage as ContextUsage;
+use super::context_usage;
 use ash_protocol::ApprovalMode;
 use ash_protocol::ModelContextUsage;
 use ash_protocol::ModelContextUsageSource;
@@ -18,15 +18,15 @@ use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
 
 #[test]
-fn remaining_context_uses_only_the_latest_matching_turn_window() {
+fn context_usage_keeps_the_measurement_source_and_pending_state() {
     let selected_model = model("gpt-ash");
     let mut thread = thread(selected_model.clone());
 
     assert_eq!(
-        remaining_context_window(Some(90_000), Some(&selected_model), &thread),
-        RemainingContextWindow::Exact {
-            remaining_tokens: 65_000,
-            available_tokens: 90_000,
+        context_usage(&thread),
+        ContextUsage::Measured {
+            used_tokens: 25_000,
+            source: ash_protocol::ModelContextUsageSource::ProviderReported
         }
     );
 
@@ -35,18 +35,38 @@ fn remaining_context_uses_only_the_latest_matching_turn_window() {
         source: ModelContextUsageSource::Estimated,
     });
     assert_eq!(
-        remaining_context_window(Some(90_000), Some(&selected_model), &thread),
-        RemainingContextWindow::Estimated {
-            remaining_tokens: 60_000,
-            available_tokens: 90_000,
+        context_usage(&thread),
+        ContextUsage::Measured {
+            used_tokens: 30_000,
+            source: ash_protocol::ModelContextUsageSource::Estimated
         }
     );
 
-    thread.turns[0].model = Some(model("another-model"));
+    thread.turns[0].context_usage = None;
+    assert_eq!(context_usage(&thread), ContextUsage::Pending);
+}
+
+#[test]
+fn context_usage_waits_for_the_latest_turn_and_preserves_the_reported_total() {
+    let selected = model("gpt-ash");
+    let mut thread = thread(selected.clone());
+    let mut latest = thread.turns[0].clone();
+    latest.context_usage = None;
+    thread.turns.push(latest);
+    assert_eq!(context_usage(&thread), ContextUsage::Pending);
+    thread.turns[1].context_usage = Some(ModelContextUsage {
+        used_tokens: 1_200_000,
+        source: ModelContextUsageSource::ProviderReported,
+    });
     assert_eq!(
-        remaining_context_window(Some(90_000), Some(&selected_model), &thread),
-        RemainingContextWindow::Unknown
+        context_usage(&thread),
+        ContextUsage::Measured {
+            used_tokens: 1_200_000,
+            source: ModelContextUsageSource::ProviderReported,
+        }
     );
+    thread.turns.clear();
+    assert_eq!(context_usage(&thread), ContextUsage::NotStarted);
 }
 
 fn model(name: &str) -> ModelRef {

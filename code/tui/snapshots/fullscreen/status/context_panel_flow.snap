@@ -1,0 +1,81 @@
+---
+source: code/tui/src/app/status_tests.rs
+expression: text
+---
+Overview
+  .                                                                [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+        ┌── Context ───────────────────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │  ~12.3k / 90k tokens used                                    │        
+        │  test/model                                                  │        
+        │  ███████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ~13.7% │        
+        │  Remaining input budget: ~77.7k tokens                       │        
+        │  Latest request · estimated                                  │        
+        │                                                              │        
+        │> Capacity details                                          + │        
+        │                                                              │        
+        └──────────────────────────────────────────────────────────────┘        
+                                                                                
+                                                                                
+  ────────────────────────────────────────────────────────────────────────────  
+  > draft to preserve                                                           
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  ↑/↓ scroll · Enter details · Esc close                                        
+
+Expanded capacity
+  .                                                                [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+        ┌── Context ───────────────────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │  ~12.3k / 90k tokens used                                    │        
+        │  test/model                                                  │        
+        │  ███████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ~13.7% │        
+        │  Remaining input budget: ~77.7k tokens                       │        
+        │  Latest request · estimated                                  │        
+        │                                                              │        
+        │> Capacity details                                          - │        
+        │    Full context window: 100,000 tokens                       │        
+        │    Output and safety reserve: 10,000 tokens                  │        
+        │    Available input budget: 90,000 tokens                     │        
+        │                                                              │        
+        └──────────────────────────────────────────────────────────────┘        
+                                                                                
+  ────────────────────────────────────────────────────────────────────────────  
+  > draft to preserve                                                           
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  ↑/↓ scroll · Enter details · Esc close                                        
+
+Closed · input restored
+  .                                                                [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ────────────────────────────────────────────────────────────────────────────  
+  > draft to preserve!                                                          
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  ⏸ Manual

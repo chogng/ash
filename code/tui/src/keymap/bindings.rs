@@ -763,7 +763,18 @@ pub(crate) static MODAL_EDITING_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
         .with_note("editing in progress")
         .with_binding(CANCEL)
 });
-pub(crate) static STATUS_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[TAB_NEXT, CLOSE]));
+pub(crate) static STATUS_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
+    KeyHints::compact()
+        .with_compact_action("Tab", "tabs")
+        .with_compact_action("↑/↓", "scroll")
+        .with_compact_action("Esc", "close")
+});
+pub(crate) static CONTEXT_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
+    KeyHints::compact()
+        .with_compact_action("↑/↓", "scroll")
+        .with_compact_action("Enter", "details")
+        .with_compact_action("Esc", "close")
+});
 pub(crate) static TAB_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[TABS, ENTER_LIST, CLOSE]));
 pub(crate) static APPROVAL_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[APPROVE]));
