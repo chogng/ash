@@ -1,6 +1,7 @@
 use super::cancellation_reason;
 use super::failure_code;
 use super::output_event_dto;
+use super::registration_dto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostCancellationReasonDto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostFailureCodeDto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostOutputOperationDto;
@@ -9,7 +10,36 @@ use ash_editor_extension_host::ExtensionHostOutputEvent;
 use ash_editor_extension_host::HostEventContext;
 use ash_editor_extension_host::HostOutputOperation;
 use ash_editor_extension_host::HostOutputSeverity;
+use ash_editor_extension_host::RegistrationDescriptor;
+use ash_editor_extension_host::RegistrationKind;
 use ash_editor_extension_host::SequencedExtensionHostOutputEvent;
+
+#[test]
+fn channel_and_link_registrations_preserve_frontend_subscription_fields() {
+    for (kind, expected) in [
+        (
+            RegistrationKind::DataChannel {
+                channel_id: "editTelemetry".into(),
+            },
+            serde_json::json!({"registrationId":"provider","kind":"dataChannel","channelId":"editTelemetry"}),
+        ),
+        (
+            RegistrationKind::LinkPresentationProvider {
+                uri_pattern: "^https://example.com/".into(),
+                presentation_kind: "issue".into(),
+            },
+            serde_json::json!({"registrationId":"provider","kind":"linkPresentationProvider","uriPattern":"^https://example.com/","presentationKind":"issue"}),
+        ),
+    ] {
+        let dto = registration_dto(RegistrationDescriptor {
+            registration_id: "provider".into(),
+            kind,
+        });
+        let value = serde_json::to_value(dto).unwrap();
+        assert_eq!(value, expected);
+        let _: ash_app_server_protocol::protocol::extension_host::ExtensionHostRegistrationDescriptorDto = serde_json::from_value(value).unwrap();
+    }
+}
 
 #[test]
 fn cancellation_reasons_are_projected_without_losing_authority_revocation() {

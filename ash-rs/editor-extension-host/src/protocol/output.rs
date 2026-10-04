@@ -68,7 +68,8 @@ pub enum HostOutputSeverity {
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
-    tag = "operation"
+    tag = "operation",
+    deny_unknown_fields
 )]
 pub enum HostOutputOperation {
     Create {
@@ -101,13 +102,39 @@ pub enum HostOutputOperation {
 }
 
 /// Unsolicited, process-fenced Output event carried on the Host RPC stdout stream.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExtensionHostOutputEvent {
     #[serde(flatten)]
     pub context: HostEventContext,
     #[serde(flatten)]
     pub operation: HostOutputOperation,
+}
+
+impl<'de> Deserialize<'de> for ExtensionHostOutputEvent {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Wire {
+            protocol_version: u16,
+            incarnation: u64,
+            activation_generation: u64,
+            #[serde(flatten)]
+            operation: serde_json::Map<String, serde_json::Value>,
+        }
+        // Decode the tagged operation separately to preserve strict fields on the flattened wire shape.
+        let wire = Wire::deserialize(deserializer)?;
+        let operation = serde_json::from_value(serde_json::Value::Object(wire.operation))
+            .map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            context: HostEventContext {
+                protocol_version: wire.protocol_version,
+                incarnation: wire.incarnation,
+                activation_generation: wire.activation_generation,
+            },
+            operation,
+        })
+    }
 }
 
 impl ExtensionHostOutputEvent {

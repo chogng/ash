@@ -33,6 +33,91 @@ fn activation() -> ActivateParams {
 }
 
 #[test]
+fn channel_and_link_registrations_require_their_declared_capabilities() {
+    let registrations = [
+        (
+            ExtensionCapability::DataChannel,
+            RegistrationKind::DataChannel {
+                channel_id: "editTelemetry".into(),
+            },
+        ),
+        (
+            ExtensionCapability::LinkPresentationProvider,
+            RegistrationKind::LinkPresentationProvider {
+                uri_pattern: "^https://example.com/issues/".into(),
+                presentation_kind: "issue".into(),
+            },
+        ),
+    ];
+    for (capability, kind) in registrations {
+        let mut params = activation();
+        params.capabilities = vec![capability];
+        let mut request = ExtensionHostRequest {
+            context: RequestContext::new(1, 2, 3),
+            request: HostRequestKind::Activate(params),
+        };
+        let response = ExtensionHostResponse {
+            context: request.context,
+            response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+                registrations: vec![RegistrationDescriptor {
+                    registration_id: "subscription".into(),
+                    kind,
+                }],
+            })),
+        };
+        response
+            .validate_for(&request, &ExtensionHostLimits::default())
+            .unwrap();
+        let decoded: ExtensionHostResponse =
+            serde_json::from_value(serde_json::to_value(&response).unwrap()).unwrap();
+        assert_eq!(decoded, response);
+        let mut unknown = serde_json::to_value(&response).unwrap();
+        unknown["body"]["body"]["registrations"][0]["ambientAuthority"] = json!(true);
+        assert!(serde_json::from_value::<ExtensionHostResponse>(unknown).is_err());
+        if let HostRequestKind::Activate(params) = &mut request.request {
+            params.capabilities = vec![ExtensionCapability::Command];
+        }
+        assert!(
+            response
+                .validate_for(&request, &ExtensionHostLimits::default())
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn link_registration_rejects_unknown_kinds_and_oversized_patterns() {
+    let mut params = activation();
+    params.capabilities = vec![ExtensionCapability::LinkPresentationProvider];
+    let request = ExtensionHostRequest {
+        context: RequestContext::new(1, 2, 3),
+        request: HostRequestKind::Activate(params),
+    };
+    for (uri_pattern, presentation_kind) in [
+        ("^https://example.com/".into(), "unknown".into()),
+        ("x".repeat(2049), "issue".into()),
+    ] {
+        let response = ExtensionHostResponse {
+            context: request.context,
+            response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+                registrations: vec![RegistrationDescriptor {
+                    registration_id: "issues".into(),
+                    kind: RegistrationKind::LinkPresentationProvider {
+                        uri_pattern,
+                        presentation_kind,
+                    },
+                }],
+            })),
+        };
+        assert!(
+            response
+                .validate_for(&request, &ExtensionHostLimits::default())
+                .is_err()
+        );
+    }
+}
+
+#[test]
 fn request_round_trip_preserves_all_stale_response_fences() {
     let request = ExtensionHostRequest {
         context: RequestContext::new(7, 3, 11),

@@ -3,6 +3,7 @@ import './contrib/memory/browser/memory.contribution.js';
 import './contrib/trace/browser/trace.contribution.js';
 import './services/dialogs/common/dialogService.js';
 import './services/dataChannel/browser/dataChannelService.js';
+import './api/browser/mainThreadDataChannels.contribution.js';
 import './contrib/bulkEdit/browser/bulkEditService.js';
 /**
  * Shared Workbench registrations loaded by every renderer host.

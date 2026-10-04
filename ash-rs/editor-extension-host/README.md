@@ -19,7 +19,7 @@ API。
 | Activation authority | 每次激活和调用前获取 `ActivationLease` | Adapter 同时复核 source artifact/admission lease 与 directory capability |
 | Process supervision | 每扩展一个进程、incarnation fencing、停用、关闭和有界重启 | 平台 launcher 安装 sandbox、hard limits 和 killable process tree |
 | Host RPC v1 | 版本、请求相关性、严格 shape、注册 ceiling 和 byte limits | 扩展程序实现协议；App Server 把注册投影到领域 owner |
-| Provider invocation | 路由到精确 registration、deadline、并发取消和结果校验 | Command、Language、Debug、Tasks、Testing 定义 payload 与消费结果 |
+| Provider invocation | 路由到精确 registration、deadline、并发取消和结果校验 | Command、Language、Debug、Tasks、Testing、DataChannel、LinkPresentation 定义 payload 与消费结果 |
 | Diagnostics / Output | 返回 typed `ExtensionHostError`，保留有界 stderr，并接收受配额约束的扩展命名 Output 事件 | App Server 清洗故障并把 Output 事件投影到 Workbench Output 服务 |
 
 出现以下代码表示 ownership 漂移：本 crate 扫描 Marketplace/Plugin 目录、持久化 enable/grant、解释
@@ -87,8 +87,8 @@ stdout 顺序发送 `append`、`replace`、`clear`、`show` 和 `dispose`。监�
 按 sequence 增量投影。初次连接会重放内容事件以恢复频道，但不会重放旧 `show` 事件抢占焦点。
 
 生命周期顺序固定为 `Initialize → Activate → Invoke* → Deactivate → Shutdown`。`Activate` 一次返回完整
-注册集合，只有整批验证通过才成为 `ExtensionHostSnapshot.registrations`。当前 registration kinds 为
-当前注册类型包括命令、语言供应商、调试适配器、任务供应商与测试配置供应商；语言 v1 的 operation
+注册集合，只有整批验证通过才成为 `ExtensionHostSnapshot.registrations`。当前注册类型包括命令、
+语言供应商、调试适配器、任务供应商、测试配置供应商、数据通道与链接展示供应商；语言 v1 的 operation
 ceiling 包含 completion、Parameter Hints、definition、hover、references、rename、formatting、code
 action、code lens、document symbols、folding、document links/colors、semantic tokens、Inlay Hints 与
 Linked Editing。
@@ -97,6 +97,19 @@ Linked Editing。
 也不会据此决定何时启动。`capabilities` 则是强制 registration ceiling：进程不能通过 activation 响应
 注册 manifest 未声明的 provider kind。协议支持的 provider kind 不等于 App Server/Workbench 已有对应
 业务适配器。
+
+`dataChannel` 注册携带 `channelId`，要求 manifest 声明 `dataChannel` capability，只能调用
+`receiveData`，payload 为 `{ "data": <JSON value> }`。它将当前窗口发布的数据按订阅顺序交给扩展，
+不是扩展向前端发送任意事件的通道。每个订阅最多保留 32 个待发送事件；超额事件拒绝入队并记录错误，
+不会重放断连期间或已退役进程的数据。`editTelemetry` 的数据为 `{ eventName, data }`；编辑器当前发布
+补全接受状态和持续时间，不含文档正文。产品遥测采集保持关闭，扩展转发单独由订阅控制。
+
+`linkPresentationProvider` 注册携带 `uriPattern` 与 `presentationKind`，要求同名 capability，只能调用
+`provideLinkPresentation`，payload 为 `{ "resource": "<URI>" }`。Frontend 为正在显示的匹配链接发起
+查询；返回 `null` 表示使用原文，否则须返回平台 `ILinkPresentation` 的合法 kind、文字、状态与非负
+变更计数。首次立即查询，成功后每 30 秒更新；查询失败记录错误并恢复原文。移除链接、注销供应商、
+连接关闭或进程替换均取消调用，旧进程的迟到结果不会更新新链接。注册 regex 的语法由 Frontend 校验，
+Host 限制 pattern 为 2048 bytes 并验证展示 kind。
 
 默认 `ExtensionHostLimits` 为：
 

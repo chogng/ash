@@ -37,7 +37,7 @@ manifest，同时 package 原始 bytes/digest 保持不变。通用 `asset` 不�
 
 当前声明式装载链已接入 App Server 与 Workbench。Legacy Plugin 与 Marketplace executable source 都会
 先规范化为 Host deployment，Host runtime 不解析任何 package manifest。App Server broker 以及
-Workbench 的 Commands/Language/Tasks/task-backed Testing 窄桥已实现；由于生产
+Workbench 的 Commands/Language/Tasks/task-backed Testing、数据通道和链接展示接入已实现；由于生产
 launcher 尚未实现，默认产品仍以 capability=false 失败关闭，不能描述为可启用第三方代码的生产路径。
 后续章节分别说明两条流程、所有权、信任与失败边界、完成度及演进。
 
@@ -128,7 +128,7 @@ Manifest activation events 当前是经过验证并传给 runtime 的 facts；`a
 | Host fleet 生命周期、刷新和连接状态 | `IExtensionHostService` implementation | 扩展 provider 注册、generated DTO 作为 domain API |
 | 扩展 API 的 Workbench 接入、原子注册、调用和 Output 生命周期 | `workbench/api/browser` | 进程监管、WebSocket、App Server 协议定义 |
 | Renderer Host service 安装与启动阻塞 | Code 产品入口选择的 `workbench/contrib/extensionHost` | 通用 Workbench 或 Academic 产品隐式安装 |
-| Commands、Language、Debug、Tasks、Testing 注册与调用 shape | 各自 Workbench domain owner | package 安装、进程监管 |
+| Commands、Language、Debug、Tasks、Testing、DataChannel、LinkPresentation 注册与调用 shape | 各自 Workbench domain owner | package 安装、进程监管 |
 
 Frontend common contract 使用 Workbench 自己的 snapshot/descriptor/failure 类型；generated DTO 和
 资源传输 shape 只存在于运行时 adapter。`src/ash/base` 不认识扩展、语言、grammar 或 Host RPC。
@@ -141,6 +141,12 @@ Frontend common contract 使用 Workbench 自己的 snapshot/descriptor/failure 
 替换注册集合会取消旧集合的调用；提交失败保留上一组有效注册。断线、停止或释放宿主服务会撤销注册并释放
 扩展命名 Output。输出按扩展 ID、激活代次和进程 incarnation 隔离，重新连接恢复内容但不重放旧的显示请求。
 此层当前接入已有 Host RPC v1 可执行扩展；没有新增 JavaScript 扩展加载器、`vscode` 模块或 VS Code 扩展兼容承诺。
+
+数据通道和链接展示由 `workbench/api/browser/mainThreadDataChannels.ts` 单独管理，通用扩展 API
+不重复注册这两类贡献。Web、Electron 和 Sessions 入口都装配共享的平台契约与 Workbench 服务。
+编辑器补全结束事件经 `DataChannelForwardingTelemetryService` 发布到 `editTelemetry`，再通过现有
+`IExtensionHostApi` 与生成协议、Renderer 专属连接交给 App Server。Main 继续只转发消息；没有新增
+进程、连接、持久状态或文件写入路径。Rust Host 拥有进程与授权门禁，前端拥有通道订阅和链接显示。
 
 静态 `package.json` catalog 与 executable consumer manifest 之间没有隐式转换。未来即使共享安装
 UI，也必须保留两种 package identity、authority、generation 和 failure semantics；不能把“静态资源目录可读”转换成
@@ -196,6 +202,14 @@ request ID、无效 Output 操作、超限 frame/Output 队列或未声明 capab
 | Debug Adapter | debugger type | Runtime contract 已实现；Frontend 当前只保留 snapshot 并报告 unsupported bridge，不启动 DAP session |
 | Task Provider | task type | 已接入；只发布用户可选择的 canonical Task，不自动执行命令 |
 | Test Profile Provider | provider ID、label | 已接入 task-backed profile；不冒充完整 test tree/controller API |
+| Data Channel | channel ID；只允许 receiveData | 已接入；当前窗口事件按订阅顺序交给授权扩展 |
+| Link Presentation Provider | URI pattern、presentation kind；只允许 provideLinkPresentation | 已接入；Chat 链接展示 title、status、reference 与变更数，保留原目标和键盘焦点 |
+
+这两类注册分别要求 manifest 声明 `dataChannel`、`linkPresentationProvider` capability。数据通道只
+接收前端发布的数据；链接供应商只接收正在展示的匹配 URI。查询结果按平台类型校验后以文本更新链接，
+不会执行扩展返回的 HTML。订阅队列、更新周期、取消与迟到结果隔离约定见
+[Host RPC v1](../ash-rs/editor-extension-host/README.md#4-host-rpc-v1)。产品不收集或上传遥测；
+`editTelemetry` 目前只发布补全接受状态与持续时间，扩展订阅不等同于新增产品遥测采集。
 
 扩展命名 Output 是带背压的事件流，不是静态 registration kind，也不扩大 manifest capability ceiling。
 扩展必须先 `create` channel，随后才可 `append`、`replace`、`clear`、`show` 或 `dispose`。Supervisor 分配
@@ -302,6 +316,7 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 | 扩展命名 Output event stream | 已实现 | process-fenced create/append/replace/clear/show/dispose、bounded retention 与 Workbench sequence projection tests |
 | App Server Host fleet、目录 Grant gate、async invoke/cancel/read | 已实现 | exact operation broker、连接配额/TTL、退役取消与 changed notification |
 | Workbench Commands/Language/Tasks/Testing bridge | 已实现（窄契约） | 原子投影、取消、stale fence 与 last-good 测试；Testing 仅 task-backed profile |
+| Workbench DataChannel/LinkPresentation bridge | 已实现 | 按扩展进程注册订阅、有序发送、取消与重连；Chat 链接语义和键盘行为由 Playwright 验证 |
 | Workbench executable Debug bridge | 尚未完成 | registration 可见并产生诊断，但没有异步 Host-broker DAP session seam |
 | 生产第三方 platform launcher | 尚未完成 | 无 launcher 时 capability=false；可信开发 launcher 不计生产支持 |
 | Activation-event-driven lazy start | 尚未完成 | Manifest/协议携带 facts；尚无完整事件匹配调度证据 |

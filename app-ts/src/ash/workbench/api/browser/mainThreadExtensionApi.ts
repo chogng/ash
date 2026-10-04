@@ -1,8 +1,6 @@
 import { Disposable, DisposableMap, toDisposable } from '../../../base/common/lifecycle.js';
 import type { CommandDefinition, CommandRegistration, CommandRegistry } from '../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
-import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
-import { MainThreadDataChannels } from './mainThreadDataChannels.js';
 import { IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostLanguageRegistration, type ExtensionHostRegistration, type ExtensionHostRuntime } from '../../../platform/extensionHost/common/extensionHostApi.js';
 import { ILanguageFeaturesService, type LanguageProviderBatch, type LanguageProviderBatchRegistration } from '../../../editor/common/services/languageFeatures.js';
 import { ITaskService, type TaskProvider, type TaskProviderRegistration } from '../../services/tasks/common/taskService.js';
@@ -41,7 +39,6 @@ interface ExtensionNamedOutputCursor {
 
 /** Applies executable-extension registrations to Workbench services for one host connection. */
 export class MainThreadExtensionApi extends Disposable {
-	private readonly dataChannels: MainThreadDataChannels;
 	private readonly commandRegistration: CommandRegistration;
 	private readonly languageRegistration: LanguageProviderBatchRegistration;
 	private readonly taskRegistration: TaskProviderRegistration;
@@ -61,14 +58,12 @@ export class MainThreadExtensionApi extends Disposable {
 		@ITaskService tasks: ITaskService,
 		@ITestingService testing: ITestingService,
 		@IOutputService private readonly outputService: IOutputService,
-		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
 		this.commandRegistration = this._register(commands.registerMany([]));
 		this.languageRegistration = this._register(languageFeatures.registerProviderBatch({}));
 		this.taskRegistration = this._register(tasks.registerTaskProviders([]));
 		this.testRegistration = this._register(testing.registerTestProfileProviders([]));
-		this.dataChannels = this._register(instantiationService.createInstance(MainThreadDataChannels, invocationTimeoutMillis));
 		this._register(toDisposable(() => {
 			this.activeContributions?.controller.abort('Extension API was disposed');
 			this.activeContributions = undefined;
@@ -91,13 +86,11 @@ export class MainThreadExtensionApi extends Disposable {
 			throw error;
 		}
 		this.projectOutput(snapshot);
-		this.dataChannels.update(snapshot);
 		return contributions.issues;
 	}
 
 	public clear(): void {
 		this.assertNotDisposed();
-		this.dataChannels.clear();
 		this.revokeContributions();
 		for (const key of this.namedOutputChannels.keys()) {
 			this.namedOutputChannels.deleteAndDispose(key);

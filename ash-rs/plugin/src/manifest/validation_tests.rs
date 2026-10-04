@@ -50,7 +50,9 @@ fn valid_manifest() -> Value {
                         "languageProvider",
                         "debugAdapter",
                         "taskProvider",
-                        "testProfileProvider"
+                        "testProfileProvider",
+                        "dataChannel",
+                        "linkPresentationProvider"
                     ]
                 }
             ],
@@ -126,6 +128,14 @@ fn strict_v1_manifest_parses_typed_security_fields() {
     assert_eq!(
         editor_extension.capabilities[1],
         crate::EditorExtensionCapability::LanguageProvider
+    );
+    assert_eq!(
+        editor_extension.capabilities[5],
+        crate::EditorExtensionCapability::DataChannel
+    );
+    assert_eq!(
+        editor_extension.capabilities[6],
+        crate::EditorExtensionCapability::LinkPresentationProvider
     );
     let declarative_extension = &manifest.contributions.declarative_extensions[0];
     assert_eq!(declarative_extension.id.as_str(), "review-theme");

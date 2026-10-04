@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::num::NonZeroU64;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
@@ -215,9 +214,9 @@ fn supervisor(
     ExtensionHostSupervisor::new(
         launcher,
         ExtensionLaunchCommand::new(
-            PathBuf::from("/immutable/review-host"),
+            std::env::temp_dir().join("immutable/review-host"),
             Vec::<String>::new(),
-            PathBuf::from("/immutable"),
+            std::env::temp_dir().join("immutable"),
             BTreeMap::new(),
         )
         .unwrap(),

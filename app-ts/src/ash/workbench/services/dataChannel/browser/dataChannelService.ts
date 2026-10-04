@@ -93,9 +93,9 @@ export class LinkPresentationService extends Disposable implements ILinkPresenta
 		const watcher = entry.provider.createLinkPresentationWatcher(resource);
 		entry.watchers.add(watcher);
 		return Object.assign(toDisposable(() => {
-				entry.watchers.delete(watcher);
-				watcher.dispose();
-			}), { presentation: watcher.presentation });
+			entry.watchers.delete(watcher);
+			watcher.dispose();
+		}), { presentation: watcher.presentation });
 	}
 
 	private isEnabled(entry: ProviderEntry): boolean {

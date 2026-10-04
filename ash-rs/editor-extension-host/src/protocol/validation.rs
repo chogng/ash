@@ -86,8 +86,16 @@ pub(super) fn validate_registrations(
                 validate_short_text(uri_pattern, 2048, "link URI pattern")?;
                 if !matches!(
                     presentation_kind.as_str(),
-                    "resource" | "issue" | "pullRequest" | "commit" | "file" | "folder"
-                        | "session" | "chat" | "repository" | "branch"
+                    "resource"
+                        | "issue"
+                        | "pullRequest"
+                        | "commit"
+                        | "file"
+                        | "folder"
+                        | "session"
+                        | "chat"
+                        | "repository"
+                        | "branch"
                 ) {
                     return Err(protocol_error("link presentation kind is invalid"));
                 }

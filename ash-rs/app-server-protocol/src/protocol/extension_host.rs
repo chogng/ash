@@ -190,13 +190,34 @@ pub struct ExtensionHostFailureDto {
 }
 
 /// One provider registration published atomically by an activated extension process.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[derive(Clone, Debug, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExtensionHostRegistrationDescriptorDto {
     #[schemars(length(min = 1, max = 256))]
     pub registration_id: String,
     #[serde(flatten)]
     pub kind: ExtensionHostRegistrationKindDto,
+}
+
+impl<'de> Deserialize<'de> for ExtensionHostRegistrationDescriptorDto {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Wire {
+            registration_id: String,
+            #[serde(flatten)]
+            kind: serde_json::Map<String, Value>,
+        }
+        // Serde's flattened tagged enum cannot report consumed fields to the outer strict object.
+        // The enum itself checks every remaining field; the public schema retains its closed shape.
+        let wire = Wire::deserialize(deserializer)?;
+        let kind =
+            serde_json::from_value(Value::Object(wire.kind)).map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            registration_id: wire.registration_id,
+            kind,
+        })
+    }
 }
 
 /// Registration types understood by the App Server provider brokers in Host RPC v1.

@@ -45,7 +45,7 @@ const PRODUCT_MANIFEST: &[u8] = br#"{
     "executable": "editor-runtime",
     "runtimeApiVersion": 1,
     "activationEvents": [{"type": "onCommand", "id": "demo.run"}],
-    "capabilities": ["command"]
+    "capabilities": ["command", "dataChannel", "linkPresentationProvider"]
   }]
 }"#;
 
@@ -80,6 +80,14 @@ fn signed_product_sidecar_requires_independent_admission_and_manager_lease() {
         "marketplace:marketplace.demo-plugin@test:editor-extension:demo"
     );
     assert_eq!(deployment.params.activation_events, ["onCommand:demo.run"]);
+    assert_eq!(
+        deployment.params.capabilities,
+        [
+            ash_editor_extension_host::ExtensionCapability::Command,
+            ash_editor_extension_host::ExtensionCapability::DataChannel,
+            ash_editor_extension_host::ExtensionCapability::LinkPresentationProvider,
+        ]
+    );
     assert!(deployment.authority.authorizes());
     let lease = deployment.authority.acquire().unwrap();
     manager

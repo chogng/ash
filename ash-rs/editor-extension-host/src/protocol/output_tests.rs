@@ -19,8 +19,11 @@ fn output_event_is_process_fenced_and_serializes_as_an_unsolicited_operation() {
     };
 
     event.validate(&ExtensionHostLimits::default()).unwrap();
+    let encoded = serde_json::to_value(&event).unwrap();
+    let decoded: ExtensionHostOutputEvent = serde_json::from_value(encoded.clone()).unwrap();
+    assert_eq!(decoded, event);
     assert_eq!(
-        serde_json::to_value(event).unwrap(),
+        encoded.clone(),
         json!({
             "protocolVersion": 1,
             "incarnation": 3,
@@ -32,6 +35,9 @@ fn output_event_is_process_fenced_and_serializes_as_an_unsolicited_operation() {
             "category": "lifecycle"
         })
     );
+    let mut unknown = encoded;
+    unknown["ambientAuthority"] = json!(true);
+    assert!(serde_json::from_value::<ExtensionHostOutputEvent>(unknown).is_err());
 }
 
 #[test]

@@ -22,6 +22,20 @@ import { type CursorsController } from '../../../../common/cursor/cursor.js';
 import { type ICursorSelectionChangedEvent } from '../../../../common/cursorEvents.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 import { EditorOptions, type EditorOption } from '../../../../common/config/editorOptions.js';
+import { IDataChannelService, type IDataChannelEvent } from '../../../../../platform/dataChannel/common/dataChannel.js';
+import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
+
+function registerCompletionTelemetry(services: InstantiationService): IDataChannelEvent[] {
+	const events: IDataChannelEvent[] = [];
+	services.registerInstance(ITelemetryService, NullTelemetryService);
+	services.registerInstance(IDataChannelService, {
+		_serviceBrand: undefined,
+		onDidSendData: Event.None,
+		getDataChannel: channelId => ({ sendData: data => events.push({ channelId, data }) }),
+	});
+	return events;
+}
 
 class TestResizeObserver {
 	observe(): void {}
@@ -56,6 +70,7 @@ test('Registered editor commands retrigger inline completions after their edit',
 	const commandId = 'editor.test.inlineCompletionTrigger';
 	TriggerInlineEditCommandsRegistry.registerCommand(commandId);
 	using services = new InstantiationService();
+	const telemetry = registerCompletionTelemetry(services);
 	using contexts = new ContextKeyService();
 	services.registerInstance(IContextKeyService, contexts);
 	services.registerInstance(IInlineCompletionsService, inlineCompletionsService);
@@ -79,6 +94,10 @@ test('Registered editor commands retrigger inline completions after their edit',
 	await controller.trigger();
 	assert.equal(contexts.getValue('inlineSuggestionVisible'), true);
 	controller.dispose();
+	assert.deepEqual(telemetry.map(event => ({ channelId: event.channelId, eventName: (event.data as { eventName: string }).eventName, accepted: (event.data as { data: { accepted: boolean } }).data.accepted })), [
+		{ channelId: 'editTelemetry', eventName: 'inlineCompletion.endOfLife', accepted: false },
+		{ channelId: 'editTelemetry', eventName: 'inlineCompletion.endOfLife', accepted: false },
+	]);
 	assert.equal(contexts.getValue('inlineSuggestionVisible'), false);
 	assert.equal(viewport.domNode.domNode.querySelector('.stanza-editor-inline-completion'), null);
 
@@ -101,6 +120,7 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 	});
 	using service = new InlineCompletionsService();
 	using services = new InstantiationService();
+	const telemetry = registerCompletionTelemetry(services);
 	services.registerInstance(IContextKeyService, new ContextKeyService());
 	assert.throws(() => services.createInstance(InlineCompletionsController, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; }), /Unknown service/);
 	services.registerInstance(IInlineCompletionsService, service);
@@ -113,6 +133,12 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 	await controller.trigger();
 	await flushPromises();
 	controller.accept();
+	assert.equal(telemetry.length, 1);
+	const lifetime = telemetry[0]!.data as { eventName: string; data: { accepted: boolean; durationMs: number } };
+	assert.equal(lifetime.eventName, 'inlineCompletion.endOfLife');
+	assert.deepEqual(Object.keys(lifetime.data).sort(), ['accepted', 'durationMs']);
+	assert.equal(lifetime.data.accepted, true);
+	assert.ok(lifetime.data.durationMs >= 0);
 	assert.equal(model.getText(), 'const name = value');
 	assert.deepEqual(selections.getSelection().getPosition(), new Position(1, 19));
 	selections.context.model.undo();

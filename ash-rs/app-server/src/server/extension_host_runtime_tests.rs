@@ -113,6 +113,23 @@ fn invocation_operations_are_brokered_by_registration_kind() {
     assert!(registration_allows_operation(&language, "hover"));
     assert!(!registration_allows_operation(&language, "rename"));
     assert!(!registration_allows_operation(&debug, "execute"));
+    let channel = RegistrationKind::DataChannel {
+        channel_id: "editTelemetry".into(),
+    };
+    let link = RegistrationKind::LinkPresentationProvider {
+        uri_pattern: "^https://example.com/issues/".into(),
+        presentation_kind: "issue".into(),
+    };
+    assert!(registration_allows_operation(&channel, "receiveData"));
+    assert!(!registration_allows_operation(
+        &channel,
+        "provideLinkPresentation"
+    ));
+    assert!(registration_allows_operation(
+        &link,
+        "provideLinkPresentation"
+    ));
+    assert!(!registration_allows_operation(&link, "receiveData"));
 }
 
 #[test]

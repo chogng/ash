@@ -68,7 +68,7 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 				const editing = services.get(IChatEditingService);
 				return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
 			} : undefined,
-			contributionIds: ['chat.edits.editorOverlay'],
+			contributionIds: ['chat.edits.editorOverlay', 'workbench.contrib.dataChannels'],
 			modeId,
 			createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
 			createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),

@@ -1,5 +1,7 @@
 import '../workbench/contrib/skills/browser/skills.contribution.js';
 import '../workbench/services/dialogs/common/dialogService.js';
+import '../workbench/services/dataChannel/browser/dataChannelService.js';
+import '../workbench/api/browser/mainThreadDataChannels.contribution.js';
 import '../workbench/contrib/bulkEdit/browser/bulkEditService.js';
 import '../workbench/contrib/chat/browser/chatEditing/chatEditing.contribution.js';
 import './contrib/files/browser/files.contribution.js';

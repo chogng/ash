@@ -127,6 +127,9 @@ import { IMenuService } from "../../platform/actions/common/actions.js";
 import { MenuService } from "../../platform/actions/common/menuService.js";
 import { CommandsRegistry, ICommandService } from "../../platform/commands/common/commands.js";
 import { IContextKeyService, ContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
+import { IExtensionHostApi } from '../../platform/extensionHost/common/extensionHostApi.js';
+import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
 import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
 import { BrowserContextViewService } from "../../platform/contextview/browser/contextViewService.js";
 import { HoverService, IHoverService } from "../../platform/hover/browser/hoverService.js";
@@ -273,6 +276,8 @@ export class Workbench extends Disposable {
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
 		services.registerInstance(IAssetService, options.api.assets);
+		services.registerInstance(IExtensionHostApi, options.api.extensionHost);
+		services.registerInstance(ITelemetryService, NullTelemetryService);
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);
 		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));

@@ -85,6 +85,10 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	registerTestDictationOnboarding(services);
 	return services;
 }
+function createChatListWidget(container: HTMLElement, options: ConstructorParameters<typeof ChatListWidget>[1] = {}): InstanceType<typeof ChatListWidget> {
+	const services = inputResources.add(createTestEditorServices());
+	return services.createInstance(ChatListWidget, container, options);
+}
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const unavailableFileService = {
 	readFileBytes: async () => { throw new Error('File read is unavailable in this test'); },
@@ -647,8 +651,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 
 test("Empty chat transcripts do not render a redundant placeholder", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	using listServices = createTestEditorServices(undefined, undefined, dom.window.document);
-	using list = listServices.createInstance(ChatListWidget, dom.window.document.body, {});
+	using list = createChatListWidget(dom.window.document.body);
 
 	list.render([]);
 
@@ -659,8 +662,7 @@ test("Empty chat transcripts do not render a redundant placeholder", () => {
 
 test("Chat transcript reuses unchanged messages while replacing changed content", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	using listServices = createTestEditorServices(undefined, undefined, dom.window.document);
-	using list = listServices.createInstance(ChatListWidget, dom.window.document.body, {});
+	using list = createChatListWidget(dom.window.document.body);
 	const first = { id: "first", type: "agentMessage" as const, text: "Original **answer**", transient: false };
 	const second = { id: "second", type: "userMessage" as const, text: "Question", transient: false };
 	list.render([first, second]);
@@ -681,8 +683,7 @@ test("Chat transcript reuses unchanged messages while replacing changed content"
 
 test("Chat transcript keeps the first visible message in place when history is prepended", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	using listServices = createTestEditorServices(undefined, undefined, dom.window.document);
-	using list = listServices.createInstance(ChatListWidget, dom.window.document.body, {});
+	using list = createChatListWidget(dom.window.document.body);
 	const viewport = list.element.querySelector<HTMLElement>(".ash-scrollbar-viewport")!;
 	const transcript = list.element.querySelector<HTMLElement>(".ash-chat-transcript")!;
 	Object.defineProperties(viewport, {
@@ -712,9 +713,8 @@ test("Chat transcript keeps the first visible message in place when history is p
 test("Turn error cards invoke their typed action without interpreting message text", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	let requestedAction: ChatTurnErrorAction | undefined;
-	using listServices = createTestEditorServices(undefined, undefined, dom.window.document);
-	using list = listServices.createInstance(ChatListWidget, dom.window.document.body, {
-		onDidRequestErrorAction: (action: ChatTurnErrorAction) => { requestedAction = action; },
+	using list = createChatListWidget(dom.window.document.body, {
+		onDidRequestErrorAction: (action) => { requestedAction = action; },
 	});
 	const item = chatTurnErrorListItem(failedTurn("providerAuth", false, "same opaque message"));
 	assert.ok(item);
@@ -733,7 +733,7 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	using domLifetime = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorResources = new DisposableStore();
-	const editorServices = editorResources.add(createCodeEditorServices(editorResources).createChild());
+	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources)));
 	editorServices.registerInstance(IDictationService, undefined);
 	editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
@@ -2822,8 +2822,7 @@ function recordingDialogService(messages: IMessageDialogOptions[]): IDialogServi
 
 test("Audio history identifies the sender and recording duration", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	using listServices = createTestEditorServices(undefined, undefined, dom.window.document);
-	using list = listServices.createInstance(ChatListWidget, dom.window.document.body, {});
+	using list = createChatListWidget(dom.window.document.body);
 	list.render([chatListItem({
 		type: "userAudioAttachment", itemId: "audio", turnId: "turn",
 		attachment: { contentDigest: "sha256:audio", mediaType: "wav", encodedBytes: 32044, durationMs: 1001 },
@@ -3022,8 +3021,7 @@ test("Advisor transcript groups the call and renders advice as a disclosure", ()
 	assert.equal(items.length, 1);
 	assert.equal(items[0]?.type, "advisor");
 	const container = document.createElement("div");
-	using listServices = createTestEditorServices(undefined, undefined, container.ownerDocument);
-	using widget = listServices.createInstance(ChatListWidget, container, {});
+	using widget = createChatListWidget(container);
 	widget.render(items);
 	assert.equal(container.querySelector("summary")?.textContent, "Advisor · test/reviewer");
 	assert.equal(container.querySelector("strong")?.textContent, "cancellation");

@@ -137,12 +137,33 @@ pub enum LanguageProviderOperation {
 }
 
 /// One runtime registration returned atomically from activation.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RegistrationDescriptor {
     pub registration_id: String,
     #[serde(flatten)]
     pub kind: RegistrationKind,
+}
+
+impl<'de> Deserialize<'de> for RegistrationDescriptor {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Wire {
+            registration_id: String,
+            #[serde(flatten)]
+            kind: serde_json::Map<String, Value>,
+        }
+        // Internally tagged enums do not consume flattened fields for an outer deny_unknown_fields.
+        // Decode the remaining fields through the strict enum so valid variants and unknown fields stay distinct.
+        let wire = Wire::deserialize(deserializer)?;
+        let kind =
+            serde_json::from_value(Value::Object(wire.kind)).map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            registration_id: wire.registration_id,
+            kind,
+        })
+    }
 }
 
 /// Narrow v1 contribution types that App Server brokers can project to domain owners.

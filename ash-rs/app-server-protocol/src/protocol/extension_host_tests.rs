@@ -68,6 +68,20 @@ fn registration_descriptor_matches_host_rpc_v1_shape() {
 }
 
 #[test]
+fn channel_and_link_registration_wire_shapes_round_trip_and_reject_extra_fields() {
+    for mut fixture in [
+        json!({"registrationId":"edits","kind":"dataChannel","channelId":"editTelemetry"}),
+        json!({"registrationId":"issues","kind":"linkPresentationProvider","uriPattern":"^https://example.com/","presentationKind":"issue"}),
+    ] {
+        let descriptor: ExtensionHostRegistrationDescriptorDto =
+            serde_json::from_value(fixture.clone()).unwrap();
+        assert_eq!(serde_json::to_value(descriptor).unwrap(), fixture);
+        fixture["ambientAuthority"] = json!(true);
+        assert!(serde_json::from_value::<ExtensionHostRegistrationDescriptorDto>(fixture).is_err());
+    }
+}
+
+#[test]
 fn generated_typescript_uses_camel_case_registration_fields() {
     let typescript = crate::typescript_files()
         .into_iter()
@@ -79,6 +93,9 @@ fn generated_typescript_uses_camel_case_registration_fields() {
     assert!(typescript.contains("taskType: string"));
     assert!(typescript.contains("\"kind\": \"testProfileProvider\""));
     assert!(typescript.contains("providerId: string"));
+    assert!(typescript.contains("channelId: string"));
+    assert!(typescript.contains("uriPattern: string"));
+    assert!(typescript.contains("presentationKind: string"));
     assert!(!typescript.contains("\"kind\": \"testController\""));
     assert!(!typescript.contains("controllerId"));
     assert!(!typescript.contains("language_ids"));

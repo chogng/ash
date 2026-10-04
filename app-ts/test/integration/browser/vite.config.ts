@@ -19,6 +19,7 @@ export default defineConfig({
 				marketplace: resolve(import.meta.dirname, "marketplace.html"),
 				advisor: resolve(import.meta.dirname, "advisor.html"),
 				chatInput: resolve(import.meta.dirname, "chatInput.html"),
+				dataChannel: resolve(import.meta.dirname, 'dataChannel.html'),
 				markdown: resolve(import.meta.dirname, 'markdown.html'),
 				themes: resolve(import.meta.dirname, "themes.html"),
 				webTransport: resolve(import.meta.dirname, 'webTransport.html'),
