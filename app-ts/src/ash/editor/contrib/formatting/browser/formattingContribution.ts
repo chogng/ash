@@ -3,43 +3,14 @@ import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { DocumentTextStyleAttributes, DocumentTextStyleFontFamily } from "../../../common/model/documentSchema.js";
+import type { DocumentTextStyleFontFamily } from "../../../common/model/documentSchema.js";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import type { DocumentEditorContributionContext, DocumentFormattingContribution, DocumentFormattingState } from "../../../browser/editorExtensions.js";
 
-export type FormattingContext = "none" | "text" | "code";
+type FormattingContributionOptions = Pick<DocumentEditorContributionContext, 'documentActions' | 'onToggleMark' | 'onSetTextStyle' | 'onClearTextStyle' | 'onRunDocumentAction'>;
 
-export interface FormattingDocumentAction {
-	readonly id: string;
-	readonly label: string;
-}
-
-export interface FormattingState {
-	readonly context: FormattingContext;
-	readonly readOnly: boolean;
-	readonly bold: boolean;
-	readonly italic: boolean;
-	readonly fontFamily: DocumentTextStyleFontFamily | undefined;
-	readonly fontSize: number | undefined;
-	readonly checkedDocumentActionIds: ReadonlySet<string>;
-}
-
-export interface FormattingContributionOptions {
-	readonly documentActions: readonly FormattingDocumentAction[];
-	readonly onToggleMark: (markType: "strong" | "em") => void;
-	readonly onSetTextStyle: (attrs: DocumentTextStyleAttributes) => void;
-	readonly onClearTextStyle: () => void;
-	readonly onRunDocumentAction: (actionId: string) => void;
-}
-
-/**
- * Optional persistent document-formatting contribution.
- *
- * The contribution composes the shared ToolBar for runnable commands with
- * native selects for typography values. Its host supplies only formatting
- * state and document-command callbacks, keeping editor lifecycle independent
- * from this Word-like presentation surface.
- */
-export class FormattingContribution extends Disposable {
+/** The host owns formatting state and document commands; this contribution owns its controls and listeners. */
+export class FormattingContribution extends Disposable implements DocumentFormattingContribution {
 	readonly element: HTMLDivElement;
 	private readonly inlineActions: ToolBar;
 	private readonly documentActions: ToolBar;
@@ -133,7 +104,7 @@ export class FormattingContribution extends Disposable {
 		});
 	}
 
-	setState(state: FormattingState): void {
+	setState(state: DocumentFormattingState): void {
 		const hasTextContext = state.context === "text";
 		this.element.dataset.context = state.context;
 		this.inlineActions.element.hidden = !hasTextContext;

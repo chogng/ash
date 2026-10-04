@@ -905,13 +905,13 @@ test('switching a Workbench file keeps keyboard input on the new editor and rele
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('fn other() {\n  answer();\n}\n!');
 });
 
-test('Code bundle activates text editor contributions and releases their UI', async ({ page }) => {
+test('Shared bundle activates text editor contributions without mounting document controls and releases their UI', async ({ page }) => {
 	await openEditor(page);
 	const ids = await page.evaluate(() => window.ashTextModelIntegration.getBundleIds());
 	expect(ids).toContain('editor.contrib.clipboard');
 	expect(await page.evaluate(() => window.ashTextModelIntegration.hasClipboardContribution())).toBe(true);
 	expect(ids).toContain('editor.contrib.findController');
-	expect(ids).not.toContain('editor.contrib.documentFormatting');
+	expect(ids).toContain('editor.contrib.documentFormatting');
 	expect(ids).not.toContain('editor.contrib.collaboration');
 	expect(await page.evaluate(() => window.ashTextModelIntegration.hasPlaceholderContribution())).toBe(true);
 	await expect(page.locator('.stanza-editor')).toBeVisible();

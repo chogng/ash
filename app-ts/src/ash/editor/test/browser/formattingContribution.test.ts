@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { FormattingContribution } from '../../contrib/formatting/browser/formattingContribution.js';
 
-test('Academic formatting contribution releases select listeners with its toolbar', () => {
+test('Document formatting contribution releases select listeners with its toolbar', () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
 	const styles: unknown[] = [];
 	const contribution = new FormattingContribution(environment.window.document.body, {

@@ -32,7 +32,7 @@ test('Constructor and hook contributions reject duplicate IDs in either registra
 	assert.equal(EditorExtensionsRegistry.getSomeEditorContributions(['test.registry.constructor', 'test.registry.hook']).length, 2);
 });
 
-test("Code bundle explicitly registers independently selectable editor capabilities", async () => {
+test("Code bundle registers shared capabilities and installs document formatting only for document editors", async () => {
 	await import("../../editor.code.all.js");
 	const ids = new Set(EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id));
 	for (const id of [
@@ -64,7 +64,9 @@ test("Code bundle explicitly registers independently selectable editor capabilit
 	const actionIds = new Set([...EditorExtensionsRegistry.getEditorActions()].map(action => action.id));
 	assert.equal(actionIds.has('editor.action.commentLine'), true);
 	assert.equal(actionIds.has('editor.action.blockComment'), true);
-	assert.equal(ids.has("editor.contrib.documentFormatting"), false);
+	const documentFormatting = EditorExtensionsRegistry.getEditorContributions().find(contribution => contribution.id === 'editor.contrib.documentFormatting');
+	assert.ok(documentFormatting && !('ctor' in documentFormatting));
+	assert.doesNotThrow(() => documentFormatting.install?.({ kind: 'text' } as never));
 	const triggerCommands = new Set(TriggerInlineEditCommandsRegistry.getRegisteredCommands());
 	for (const id of [
 		'editor.action.removeBrackets',
