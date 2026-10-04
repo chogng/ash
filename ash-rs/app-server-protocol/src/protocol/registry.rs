@@ -825,6 +825,12 @@ use crate::protocol::git::GitChangeFileResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeStatusDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCheckIgnoreCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCheckIgnoreCancelResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCheckIgnoreCancelStatusDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCheckIgnoreParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCheckIgnoreResult;
@@ -892,6 +898,7 @@ use crate::protocol::git::GitGraphResult;
 use crate::protocol::git::GitHeadDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitHistoryResult;
+use crate::protocol::git::GitIgnoreChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitIndexDiffResult;
 #[cfg(any(test, feature = "export"))]
@@ -3874,6 +3881,12 @@ client_methods! {
         params: GitCheckIgnoreParams,
         response: GitCheckIgnoreResult,
         serialization: RepositoryExclusive,
+        cancellation: "operationId",
+    },
+    GitCheckIgnoreCancel => "git/checkIgnore/cancel" {
+        params: GitCheckIgnoreCancelParams,
+        response: GitCheckIgnoreCancelResult,
+        serialization: None,
     },
     GitTextDiff => "git/textDiff" {
         params: GitRepositoryParams,
@@ -4436,6 +4449,9 @@ server_notifications! {
     },
     GitStatusChanged => "git/statusChanged" {
         params: GitStatusChanged,
+    },
+    GitIgnoreChanged => "git/ignoreChanged" {
+        params: GitIgnoreChanged,
     },
     GitRepositoriesChanged => "git/repositoriesChanged" {
         params: EmptyParams,
@@ -5499,6 +5515,10 @@ typescript_bindings! {
     GitRepositoryChangeDto,
     GitStatusResult,
     GitCheckIgnoreParams,
+    GitCheckIgnoreCancelParams,
+    GitCheckIgnoreCancelResult,
+    GitCheckIgnoreCancelStatusDto,
+    GitIgnoreChanged,
     GitCheckIgnoreResult,
     GitStatusChanged,
     GitBranchDto,

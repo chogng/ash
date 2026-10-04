@@ -11,6 +11,31 @@ import { WorkspaceContextService } from "../../../../services/workspaces/browser
 import { GitService } from "../../browser/gitService.js";
 import { GitConfiguration } from '../../common/gitConfiguration.js';
 import { GitWorkspaceError } from '../../common/gitService.js';
+import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
+
+test('GitService maps ignore notifications to their repository and forwards query cancellation', async () => {
+	let notify!: (event: ServerNotification) => void;
+	let queryToken: CancellationToken | undefined;
+	const api = {
+		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }, { id: 'nested', label: 'nested', path: 'nested' }] }),
+		checkIgnore: async (_params: unknown, token: CancellationToken) => { queryToken = token; return { ignoredPaths: [] }; },
+	} as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'disconnected', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi: IServerEventApi = { subscribe: listener => { notify = listener; return toDisposable(() => undefined); } };
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
+	await service.listRepositories();
+	const changes: string[][] = [];
+	using listener = service.onDidChangeIgnore(resources => changes.push(resources.map(resource => resource.path)));
+	notify({ method: 'git/ignoreChanged', params: { repositoryId: 'nested', paths: ['cache', 'src/file'] } });
+	notify({ method: 'git/ignoreChanged', params: { repositoryId: 'root', paths: [] } });
+	notify({ method: 'git/ignoreChanged', params: { repositoryId: 'removed', paths: [] } });
+	assert.deepEqual(changes, [['/workspace/nested/cache', '/workspace/nested/src/file'], ['/workspace']]);
+	using cancellation = new CancellationTokenSource();
+	await service.checkIgnore([URI.file('/workspace/nested/cache')], cancellation.token);
+	assert.equal(queryToken, cancellation.token);
+});
 
 test('GitService retries failed branch queries and reads worktree occupancy afresh', async () => {
 	let attempt = 0;
@@ -186,7 +211,7 @@ test("GitService keeps empty windows off the App Server and becomes ready with a
 	assert.equal(readyEvents, 1);
 	assert.equal(repositoryCalls, 1);
 	assert.equal(service.activeRepository?.id, repositoryId);
-	assert.equal((await service.status()).workspacePath, "/workspace");
+	assert.equal((await service.status()).workspacePath, URI.file('/workspace').fsPath);
 	assert.equal(statusCalls, 1);
 });
 
@@ -230,8 +255,8 @@ test("GitService routes resources and requests to an explicitly selected reposit
 
 	const repositories = await service.listRepositories();
 	assert.deepEqual(repositories.map(repository => [repository.id, repository.root.fsPath]), [
-		[rootId, "/workspace"],
-		[nestedId, "/workspace/packages/nested"],
+		[rootId, URI.file('/workspace').fsPath],
+		[nestedId, URI.file('/workspace/packages/nested').fsPath],
 	]);
 	assert.equal(service.repositoryForResource(URI.file("/workspace/packages/nested/src/file.ts"))?.id, nestedId);
 	assert.equal(service.repositoryForResource(URI.file("/workspace/root.ts"))?.id, rootId);
@@ -241,7 +266,7 @@ test("GitService routes resources and requests to an explicitly selected reposit
 
 	const selected = await service.selectRepository(nestedId);
 	assert.equal(service.activeRepository?.id, nestedId);
-	assert.equal(selected.workspacePath, "/workspace/packages/nested");
+	assert.equal(selected.workspacePath, URI.file('/workspace/packages/nested').fsPath);
 	assert.deepEqual(statusRequests, [nestedId]);
 });
 
@@ -345,7 +370,7 @@ test('GitService maps integration state and binds partial staging to exact revie
 	assert.equal((await service.catalog('root')).operation, 'rebase');
 	const result = await service.executeCommand({ kind: 'continue', operation: 'rebase' }, 'root');
 	assert.equal(result.outcome, 'conflicted');
-	assert.equal(result.status.workspacePath, '/workspace');
+	assert.equal(result.status.workspacePath, URI.file('/workspace').fsPath);
 	await service.editIndex('file.txt', 'unstaged', { original: null, modified: 'new\n', hunks: [] }, { kind: 'lines', start: 1, end: 1 }, 'root');
 	assert.deepEqual(calls, [
 		{ repositoryId: 'root' },

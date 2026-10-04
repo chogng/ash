@@ -9,6 +9,41 @@ import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_CAPABILITY_V
 import { connectWebRendererApi } from "../../../../platform/app-server/browser/webRendererApi.js";
 import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from "../../common/appServerTransport.js";
 import { AppServerProtocolClient } from "../../../../platform/app-server/browser/appServerProtocolClient.js";
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+
+test('Git ignore cancellation reaches the server and consumes the original terminal response', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	using cancellation = new CancellationTokenSource();
+	const pending = connected.api.git.checkIgnore({ repositoryId: 'root', paths: ['cache'] }, cancellation.token);
+	const originalIndex = transport.requests.length - 1;
+	const original = transport.requests[originalIndex]!;
+	const rejected = assert.rejects(pending, isCancellationError);
+	cancellation.cancel();
+	const cancelIndex = transport.requests.length - 1;
+	assert.equal(transport.requests[cancelIndex]!.method, 'git/checkIgnore/cancel');
+	assert.deepEqual(transport.requests[cancelIndex]!.params, { operationId: (original.params as { operationId: string }).operationId });
+	transport.respondAt(cancelIndex, { status: 'requested' });
+	transport.rejectAt(originalIndex, { code: -32800, message: 'RequestCancelled', data: { kind: 'RequestCancelled' } });
+	await rejected;
+	const count = transport.requests.length;
+	await assert.rejects(connected.api.git.checkIgnore({ paths: ['cache'] }, cancellation.token), isCancellationError);
+	assert.equal(transport.requests.length, count);
+});
+
+test('Git ignore preserves the server result when completion wins the cancellation race', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	using cancellation = new CancellationTokenSource();
+	const pending = connected.api.git.checkIgnore({ paths: ['cache'] }, cancellation.token);
+	const queryIndex = transport.requests.length - 1;
+	cancellation.cancel();
+	transport.respondAt(-1, { status: 'completed' });
+	transport.respondAt(queryIndex, { ignoredPaths: ['cache'] });
+	assert.deepEqual(await pending, { ignoredPaths: ['cache'] });
+});
 
 const connectorHostServices = {
 	openerService: { openExternal: async () => undefined },

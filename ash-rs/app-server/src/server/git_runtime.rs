@@ -19,6 +19,7 @@ use ash_app_server_protocol::protocol::git::GitDiffStatisticsDto;
 use ash_app_server_protocol::protocol::git::GitFetchModeDto;
 use ash_app_server_protocol::protocol::git::GitGraphResult;
 use ash_app_server_protocol::protocol::git::GitHeadDto;
+use ash_app_server_protocol::protocol::git::GitIgnoreChanged;
 use ash_app_server_protocol::protocol::git::GitReferenceDto;
 use ash_app_server_protocol::protocol::git::GitReferenceKindDto;
 use ash_app_server_protocol::protocol::git::GitRemoteDto;
@@ -94,6 +95,7 @@ struct GitRepositoryRuntime {
     operation: Arc<Mutex<()>>,
     common_dir: PathBuf,
     identity: GitRepository,
+    ignore_watch_paths: Mutex<Vec<PathBuf>>,
     state: Mutex<GitRuntimeState>,
     graph_sessions: Mutex<HashMap<u64, GraphSession>>,
     next_graph_token: AtomicU64,
@@ -309,10 +311,11 @@ impl GitRuntime {
         &self,
         repository_id: Option<&str>,
         paths: &[PathBuf],
+        cancellation: &CancellationToken,
     ) -> Result<Vec<PathBuf>, GitRuntimeError> {
         self.repository(repository_id)?
             .service
-            .check_ignore(paths)
+            .check_ignore(paths, cancellation)
             .map_err(GitRuntimeError::Service)
     }
 
@@ -844,10 +847,14 @@ impl GitRepositoryRuntime {
         let Ok((repository, _)) = service.snapshot() else {
             return Ok(None);
         };
+        let ignore_watch_paths = service
+            .ignore_watch_paths(&repository)
+            .map_err(GitRuntimeError::Service)?;
         Ok(Some(Self {
             operation: ash_git::repository_operation_lock(&repository),
             common_dir: dunce::simplified(repository.common_dir()).to_path_buf(),
             identity: repository,
+            ignore_watch_paths: Mutex::new(ignore_watch_paths),
             service,
             descriptor,
             stream_instance_id: new_stream_instance_id()?,
@@ -1427,6 +1434,77 @@ impl GitRepositoryRuntime {
         let _ = self.status();
     }
 
+    fn ignore_change(
+        &self,
+        event: &FileWatcherEvent,
+    ) -> Result<Option<GitIgnoreChanged>, GitRuntimeError> {
+        let root = self.service.dir_root();
+        let mut affected = Vec::new();
+        let mut all = matches!(event, FileWatcherEvent::RescanRequired { .. });
+        let sources = self
+            .ignore_watch_paths
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?
+            .clone();
+        if let FileWatcherEvent::PathsChanged { paths } = event {
+            for path in paths {
+                // File events can use the user's workspace alias; query paths use its canonical root.
+                let path = match path.strip_prefix(self.service.dir().requested_path()) {
+                    Ok(relative) => self.service.dir().canonical_path().join(relative),
+                    Err(_) => path.clone(),
+                };
+                if sources
+                    .iter()
+                    .any(|source| &path == source || source.starts_with(&path))
+                {
+                    all = true;
+                    break;
+                }
+                if path.starts_with(self.identity.git_dir())
+                    || path.starts_with(self.identity.common_dir())
+                {
+                    continue;
+                }
+                let scope = if path.file_name().is_some_and(|name| name == ".gitignore") {
+                    path.parent().expect("ignore file has a parent")
+                } else {
+                    path.as_path()
+                };
+                if root.starts_with(scope) {
+                    all = true;
+                    break;
+                }
+                if let Ok(relative) = scope.strip_prefix(&root) {
+                    affected.push(
+                        relative
+                            .to_str()
+                            .ok_or(GitRuntimeError::Boundary)?
+                            .replace('\\', "/"),
+                    );
+                }
+            }
+        }
+        if all {
+            let updated = self
+                .service
+                .ignore_watch_paths(&self.identity)
+                .map_err(GitRuntimeError::Service)?;
+            *self
+                .ignore_watch_paths
+                .lock()
+                .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))? = updated;
+            affected.clear();
+        } else if affected.is_empty() {
+            return Ok(None);
+        }
+        affected.sort();
+        affected.dedup();
+        Ok(Some(GitIgnoreChanged {
+            repository_id: self.descriptor.id.clone(),
+            paths: affected,
+        }))
+    }
+
     fn invalidate_graphs(&self) -> Result<(), GitRuntimeError> {
         self.graph_sessions
             .lock()
@@ -1471,6 +1549,17 @@ impl GitRepositoryRuntime {
                 ancestor = directory.parent();
             }
         }
+        paths.extend(
+            self.ignore_watch_paths
+                .lock()
+                .expect("ignore watch paths poisoned")
+                .iter()
+                .cloned()
+                .map(|path| WatchPath {
+                    path,
+                    recursive: false,
+                }),
+        );
         paths.sort_by(|left, right| {
             left.path
                 .cmp(&right.path)
@@ -1718,35 +1807,61 @@ fn watch_git(
         let Ok(mut registration) = subscriber.register_paths(watched_paths.clone()) else {
             return;
         };
-        // Register before the first read so a mutation during that read schedules another read.
-        let refresh_runtime = Arc::clone(&git_runtime);
-        let _ = tokio::task::spawn_blocking(move || refresh_runtime.refresh_from_watcher()).await;
+        // Re-read sources after registering so startup config changes cannot leave missing watches.
+        let mut initial = Some(FileWatcherEvent::RescanRequired {
+            watched_paths: watched_paths
+                .iter()
+                .map(|watch| watch.path.clone())
+                .collect(),
+        });
         drop(git_runtime);
         let mut receiver = DebouncedWatchReceiver::new(receiver, GIT_WATCH_DEBOUNCE);
         loop {
-            tokio::select! {
+            let event = if let Some(event) = initial.take() {
+                event
+            } else {
+                tokio::select! {
                 _ = &mut shutdown => break,
                 event = receiver.recv() => {
-                    if event.is_none() {
-                        break;
-                    }
-                    let Some(git_runtime) = runtime.upgrade() else {
+                    let Some(event) = event else {
                         break;
                     };
-                    let refresh_runtime = Arc::clone(&git_runtime);
-                    let _ = tokio::task::spawn_blocking(move || {
-                        refresh_runtime.refresh_from_watcher();
-                    }).await;
-                    let next_paths = git_runtime.watched_paths();
-                    if next_paths != watched_paths
-                        && let Ok(next_registration) =
-                            subscriber.register_paths(next_paths.clone())
-                    {
+                    event
+                }
+                }
+            };
+            let Some(git_runtime) = runtime.upgrade() else {
+                break;
+            };
+            let refresh_runtime = Arc::clone(&git_runtime);
+            let change =
+                match tokio::task::spawn_blocking(move || refresh_runtime.ignore_change(&event))
+                    .await
+                {
+                    Ok(Ok(change)) => change,
+                    error => {
+                        log::warn!("Unable to refresh Git ignore rules: {error:?}");
+                        continue;
+                    }
+                };
+            let next_paths = git_runtime.watched_paths();
+            if next_paths != watched_paths {
+                match subscriber.register_paths(next_paths.clone()) {
+                    Ok(next_registration) => {
                         registration = next_registration;
                         watched_paths = next_paths;
                     }
+                    Err(error) => {
+                        log::warn!("Unable to register Git ignore watches: {error}");
+                        break;
+                    }
                 }
             }
+            // Consumers can edit a newly selected excludesFile as soon as they receive this hint.
+            if let Some(change) = change {
+                git_runtime.updates.publish_git_ignore_changed(change);
+            }
+            let _ = tokio::task::spawn_blocking(move || git_runtime.refresh_from_watcher()).await;
         }
         drop(registration);
     });

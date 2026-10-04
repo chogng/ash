@@ -36,6 +36,40 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { restoreFocus } from '../../../../base/browser/focus.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { FocusedViewContext } from '../../../common/contextkeys.js';
+import { REPOSITORIES_VIEW_PANE_ID, SCMRepositoriesViewPane } from './scmRepositoriesViewPane.js';
+
+for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+	AccessibleViewRegistry.register({
+		type,
+		priority: 100,
+		name: 'scmRepositories',
+		when: FocusedViewContext.isEqualTo(REPOSITORIES_VIEW_PANE_ID),
+		getProvider: accessor => {
+			const document = accessor.get(ILayoutService).mainContainer.ownerDocument;
+			const focused = document.activeElement as HTMLElement;
+			const list = document.querySelector<HTMLElement>('.ash-scm-repositories-list')!;
+			const content = type === AccessibleViewType.Help
+				? localize('scm.repositories.help', 'Repositories lists the source control repositories and worktrees available in this workspace. Use Up and Down Arrow to navigate, and Enter or Space to select a repository. Selection updates Changes, Graph and the status bar. Click the branch name in the status bar to switch branches. Each row shows the repository name, branch and changed file count. Repositories with the same name also show a distinguishing path.')
+				: [...list.querySelectorAll<HTMLElement>('[role="option"]')].map(row => row.getAttribute('aria-label')).join('\n');
+			return new AccessibleContentProvider(AccessibleViewProviderId.ScmRepositories, { type }, () => content, () => restoreFocus(focused), AccessibilityVerbositySettingId.ScmRepositories);
+		},
+	});
+}
+
+registerWorkbenchContribution('workbench.contrib.scmRepositories', WorkbenchPhase.BlockRestore, accessor => {
+	const resources = new DisposableStore();
+	const scm = accessor.get(ISCMService);
+	const count = accessor.get(IContextKeyService).createKey<number>('scm.providerCount', 0);
+	const update = (): void => count.set([...scm.repositories].length);
+	resources.add(toDisposable(() => count.reset()));
+	resources.add(scm.onDidAddRepository(update));
+	resources.add(scm.onDidRemoveRepository(update));
+	update();
+	return resources;
+});
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({
@@ -149,6 +183,15 @@ export function registerGitViews(
 		order: 3,
 	});
 	registry.registerStaticViews(WorkbenchViewContainerId.Git, [
+		{
+			id: REPOSITORIES_VIEW_PANE_ID,
+			title: 'Repositories',
+			localizationKey: { bundle: 'ash.views', key: 'repositories' },
+			order: 0,
+			when: ContextKeyExpr.and(ContextKeyExpr.has('scm.providerCount'), ContextKeyExpr.notEquals('scm.providerCount', 1)),
+			canToggleVisibility: true,
+			ctorDescriptor: new SyncDescriptor(SCMRepositoriesViewPane),
+		},
 		{
 			id: GIT_VIEW_ID,
 			title: "Changes",

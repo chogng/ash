@@ -210,6 +210,10 @@ tree 指纹。事务 journal 位于 Git common directory，进程重启后可以
 - 文件、提交和切分支操作返回新的 `GitStatusResult`；创建/删除分支返回分支列表，后端同时推进状态 revision、清理旧 graph cursor 并通知所有连接。worktree 操作返回路径或清单，不改变当前检出的分支；首次打开 View 也会自动刷新；
 - App Server 监听已授权目录、Git metadata 和目录上层 repository `.gitignore`，以 100ms
   debounce 合并 burst；事件只触发重新查询，不直接成为 Git 状态；
+- 忽略装饰使用独立的 `git/ignoreChanged` 通知：普通文件变化只查询相关路径，嵌套 `.gitignore`
+  变化只查询所在目录。index、`info/exclude`、Git 配置（包括 include）和 Git 解析出的全局排除
+  文件变化查询对应仓库；这些文件在工作区外也纳入监听。前端保留已完成的颜色直到查询结束，
+  合并异步完成通知并跳过相同结果；查询取消通过操作 ID 传到后端，终止排队或正在执行的 Git 查询；
 - watcher 比较 HEAD、文件、分支、标签、remote 配置、stash 和整合状态；外部命令仅修改引用也会推进 revision、清理旧历史分页并通过 `git/statusChanged` 通知所有连接。实际状态未改变时保留 revision 和分页；
 - 已授权目录即使尚无仓库也持续监听。外部 init、嵌套仓库创建、移动或删除会更新仓库清单，并发送 `git/repositoriesChanged {}`；客户端重新查询 `git/repositories`。仍存在的仓库保留原有状态流和分页，不因清单扫描重新创建；
 - SCM View 只在相同 `streamInstanceId` 内按 revision 拒绝旧 notification/response；连接重新

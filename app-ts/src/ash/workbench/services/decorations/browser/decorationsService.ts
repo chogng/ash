@@ -1,4 +1,6 @@
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
+import { equals } from '../../../../base/common/objects.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -34,6 +36,12 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 	private readonly styles = new Map<string, DecorationStyle>();
 	private readonly style: HTMLStyleElement;
 	private nextStyleId = 0;
+	private readonly pendingChanges = new Map<string, URI>();
+	private readonly changeScheduler = this._register(new RunOnceScheduler(() => {
+		const resources = [...this.pendingChanges.values()];
+		this.pendingChanges.clear();
+		this.fireChange(resources);
+	}, 0));
 	public readonly onDidChangeDecorations = this.changed.event;
 
 	constructor(document: Document, @ILogService private readonly logService: ILogService) {
@@ -49,14 +57,22 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 		const state: ProviderState = { provider, resources: new DisposableStore(), cache: new Map() };
 		this.providers.add(state);
 		state.resources.add(provider.onDidChange(resources => {
-			const affected = resources.length ? resources : [...state.cache.values()].map(entry => entry.resource);
+			const affected: URI[] = [];
 			for (const [key, entry] of state.cache) {
 				if (!resources.length || resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(entry.resource, resource))) {
 					entry.cancellation.dispose(true);
-					state.cache.delete(key);
+					// A refresh replaces the completed value only when its query finishes; labels
+					// must not lose their color while an asynchronous provider is still working.
+					const refreshed: CachedDecoration = { resource: entry.resource, cancellation: new CancellationTokenSource(), data: entry.data };
+					state.cache.set(key, refreshed);
+					if (this.query(state, key, refreshed)) {
+						affected.push(entry.resource);
+					}
 				}
 			}
-			this.fireChange(affected);
+			if (affected.length) {
+				this.fireChange(affected);
+			}
 		}));
 		this.fireChange();
 		return toDisposable(() => {
@@ -121,7 +137,8 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 		});
 	}
 
-	private query(state: ProviderState, key: string, entry: CachedDecoration): void {
+	/** Returns whether a synchronous result changed the completed value. */
+	private query(state: ProviderState, key: string, entry: CachedDecoration): boolean {
 		try {
 			const result = state.provider.provideDecorations(entry.resource, entry.cancellation.token);
 			if (result instanceof Promise) {
@@ -130,27 +147,49 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 					if (state.cache.get(key) !== entry || this.isDisposed) {
 						return;
 					}
+					const changed = !equals(entry.data, data);
 					entry.data = data;
 					entry.cancellation.dispose();
-					this.fireChange([entry.resource]);
+					if (changed) {
+						this.scheduleChange(entry.resource);
+					}
 				}, error => this.reportError(state, entry, error));
+				return false;
 			} else {
+				const changed = !equals(entry.data, result);
 				entry.data = result;
 				entry.cancellation.dispose();
+				return changed;
 			}
 		} catch (error) {
 			this.reportError(state, entry, error);
 		}
+		return false;
 	}
 
 	private reportError(state: ProviderState, entry: CachedDecoration, error: unknown): void {
 		if (!entry.cancellation.token.isCancellationRequested && !isCancellationError(error)) {
 			this.logService.error('decorations', `Unable to query ${state.provider.label}`, error);
+			if (state.cache.get(extUriBiasedIgnorePathCase.getComparisonKey(entry.resource)) === entry && !this.isDisposed) {
+				if (entry.data) {
+					entry.data = undefined;
+					this.scheduleChange(entry.resource);
+				}
+			}
 		}
 		entry.cancellation.dispose();
 	}
 
+	private scheduleChange(resource: URI): void {
+		this.pendingChanges.set(extUriBiasedIgnorePathCase.getComparisonKey(resource), resource);
+		this.changeScheduler.schedule();
+	}
+
 	private fireChange(resources?: readonly URI[]): void {
+		if (!resources) {
+			this.pendingChanges.clear();
+			this.changeScheduler.cancel();
+		}
 		this.changed.fire({ affectsResource: uri => !resources || resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(uri, resource) || extUriBiasedIgnorePathCase.isEqualOrParent(resource, uri)) });
 	}
 
@@ -184,6 +223,7 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 		}
 		this.providers.clear();
 		this.styles.clear();
+		this.pendingChanges.clear();
 		super.disposeCore();
 	}
 }

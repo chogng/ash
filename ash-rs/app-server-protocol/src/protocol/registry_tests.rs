@@ -268,6 +268,26 @@ fn declared_key_is_required_before_dispatch() {
 
 #[test]
 fn cancellable_method_resolves_its_declared_operation_identity() {
+    assert_eq!(
+        definition("git/checkIgnore")
+            .cancellation_operation_id(
+                &serde_json::json!({"operationId":"ignore-1","paths":["cache"]})
+            )
+            .unwrap()
+            .as_deref(),
+        Some("ignore-1")
+    );
+    assert!(
+        definition("git/checkIgnore")
+            .cancellation_operation_id(&serde_json::json!({"paths":["cache"]}))
+            .is_err()
+    );
+    assert_eq!(
+        definition("git/checkIgnore/cancel")
+            .serialization_scope(&serde_json::json!({"operationId":"ignore-1"}))
+            .unwrap(),
+        None
+    );
     let operation_id = definition("language/hover")
         .cancellation_operation_id(&serde_json::json!({
             "operationId": "hover-1",

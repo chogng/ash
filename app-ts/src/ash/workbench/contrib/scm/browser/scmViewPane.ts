@@ -25,8 +25,6 @@ type TreeElement =
 
 /** Displays resources and actions from the selected SCM provider. */
 export class ScmViewPane extends ViewPane {
-	private readonly repositorySelectorContainer: HTMLLabelElement;
-	private readonly repositorySelector: HTMLSelectElement;
 	private readonly commitInput: HTMLTextAreaElement;
 	private readonly commitButton: Button;
 	private readonly statusElement: HTMLDivElement;
@@ -38,12 +36,11 @@ export class ScmViewPane extends ViewPane {
 	private renderedProvider: ISCMProvider | undefined;
 	private renderedGroups: readonly ISCMResourceGroup[] | undefined;
 	private commitTooltip = 'Commit staged changes';
-	private busy = false;
 
 	constructor(
 		container: HTMLElement,
 		options: IViewPaneOptions,
-		@ISCMService private readonly scmService: ISCMService,
+		@ISCMService scmService: ISCMService,
 		@ISCMViewService private readonly scmViewService: ISCMViewService,
 		@IResourceLabelService resourceLabelService: IResourceLabelService,
 		@IContextMenuService private readonly contextMenuProvider: IContextMenuProvider,
@@ -55,13 +52,6 @@ export class ScmViewPane extends ViewPane {
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.contentElement.classList.add('ash-scm');
 		const document = container.ownerDocument;
-		this.repositorySelectorContainer = h(document, 'label');
-		this.repositorySelectorContainer.className = 'ash-scm-repository-selector';
-		const repositorySelectorLabel = h(document, 'span');
-		repositorySelectorLabel.textContent = 'Repository';
-		this.repositorySelector = h(document, 'select');
-		this.repositorySelector.setAttribute('aria-label', 'Active source control repository');
-		this.repositorySelectorContainer.append(repositorySelectorLabel, this.repositorySelector);
 		const commitForm = h(document, 'form');
 		commitForm.className = 'ash-scm-commit-form';
 		this.commitInput = h(document, 'textarea');
@@ -85,7 +75,7 @@ export class ScmViewPane extends ViewPane {
 		this.statusElement.setAttribute('aria-live', 'polite');
 		const changesContainer = h(document, 'div');
 		changesContainer.className = 'ash-scm-changes';
-		this.contentElement.append(this.repositorySelectorContainer, commitForm, this.statusElement, changesContainer);
+		this.contentElement.append(commitForm, this.statusElement, changesContainer);
 		this.tree = this._register(new WorkbenchObjectTree<TreeElement>(changesContainer, {
 			configurationService,
 			ariaLabel: localize('scm.changesTree', 'Source control changes'),
@@ -118,7 +108,6 @@ export class ScmViewPane extends ViewPane {
 				this.tree.toggleCollapsed(event.element.id);
 			}
 		}));
-		this._register(addDisposableListener(this.repositorySelector, 'change', () => void this.selectRepository(this.repositorySelector.value)));
 		this._register(addDisposableListener(commitForm, 'submit', event => { event.preventDefault(); void this.commit(); }));
 		this._register(addDisposableListener(this.commitInput, 'input', () => {
 			const provider = this.provider;
@@ -146,29 +135,13 @@ export class ScmViewPane extends ViewPane {
 		this.render();
 	}
 
-	private async selectRepository(id: string): Promise<void> {
-		const repository = this.scmService.getRepository(id);
-		if (!repository || repository.id === this.scmViewService.activeRepository?.id) return;
-		this.busy = true;
-		this.render();
-		try {
-			await repository.provider.activate();
-			if (!this.isDisposed) this.scmViewService.selectRepository(id);
-		} catch (error) {
-			if (!this.isDisposed) this.statusElement.textContent = error instanceof Error ? error.message : String(error);
-		} finally {
-			this.busy = false;
-			if (!this.isDisposed) this.render();
-		}
-	}
-
 	public async refresh(): Promise<void> {
 		await this.provider?.refresh();
 	}
 
 	private async commit(): Promise<void> {
 		const provider = this.provider;
-		if (!provider || this.busy || provider.isBusy) return;
+		if (!provider || provider.isBusy) return;
 		provider.input.value = this.commitInput.value;
 		await provider.input.accept();
 		if (!this.isDisposed && this.provider === provider) {
@@ -180,21 +153,11 @@ export class ScmViewPane extends ViewPane {
 
 	private render(): void {
 		if (this.isDisposed) return;
-		const repositories = [...this.scmService.repositories];
 		const active = this.scmViewService.activeRepository;
 		const provider = active?.provider;
-		this.repositorySelector.replaceChildren(...repositories.map(repository => {
-			const option = h(this.element.ownerDocument, 'option');
-			option.value = repository.id;
-			option.textContent = repository.provider.rootUri ? `${repository.provider.label} — ${repository.provider.rootUri.fsPath}` : repository.provider.label;
-			option.selected = repository.id === active?.id;
-			return option;
-		}));
-		this.repositorySelectorContainer.hidden = repositories.length <= 1;
-		this.repositorySelector.disabled = this.busy || repositories.length <= 1;
 		this.commitInput.placeholder = provider?.input.placeholder ?? '';
 		if (provider && this.commitInput.value !== provider.input.value) this.commitInput.value = provider.input.value;
-		this.commitInput.disabled = this.busy || !provider?.input.enabled;
+		this.commitInput.disabled = !provider?.input.enabled;
 		const buttonLabel = provider?.input.buttonLabel ?? 'Commit';
 		if (this.commitButton.label !== buttonLabel) this.commitButton.label = buttonLabel;
 		const buttonTooltip = provider?.input.buttonTooltip ?? 'Commit';
@@ -202,7 +165,7 @@ export class ScmViewPane extends ViewPane {
 			this.commitTooltip = buttonTooltip;
 			this.commitButton.setTitle(buttonTooltip);
 		}
-		this.commitButton.enabled = !this.busy && provider?.isBusy !== true && provider?.input.enabled === true && provider.input.canAccept;
+		this.commitButton.enabled = provider?.isBusy !== true && provider?.input.enabled === true && provider.input.canAccept;
 		this.statusElement.textContent = provider?.statusMessage ?? (this.workspaceContext.getWorkbenchState() === WorkbenchState.EMPTY
 			? 'Open a folder to use source control.'
 			: 'No source control repository found in the open folder.');
@@ -218,7 +181,7 @@ export class ScmViewPane extends ViewPane {
 				})),
 			})));
 		}
-		for (const item of this.actionViewItems) item.setBusy(this.busy || provider?.isBusy === true);
+		for (const item of this.actionViewItems) item.setBusy(provider?.isBusy === true);
 	}
 
 	private renderGroup(group: ISCMResourceGroup): HTMLElement {
@@ -290,7 +253,7 @@ export class ScmViewPane extends ViewPane {
 			ariaLabel,
 			presentation: 'inherit-foreground',
 			actionViewItemProvider: (action, options) => {
-				const item = new ScmActionViewItem(action, () => this.busy || this.provider?.isBusy === true, options);
+				const item = new ScmActionViewItem(action, () => this.provider?.isBusy === true, options);
 				this.actionViewItems.add(item);
 				resources.add(toDisposable(() => this.actionViewItems.delete(item)));
 				return item;

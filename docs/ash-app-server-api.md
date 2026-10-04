@@ -177,10 +177,10 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "typst": true,
     "updateReplay": true,
     "contracts": {
-      "sessions": { "version": 15 },
-      "threads": { "version": 15 },
-      "turns": { "version": 15 },
-      "projects": { "version": 15 }
+      "sessions": { "version": 16 },
+      "threads": { "version": 16 },
+      "turns": { "version": 16 },
+      "projects": { "version": 16 }
     }
   },
   "slashCommands": [
@@ -344,7 +344,8 @@ Desktop 当前实现和 Playwright 后续边界见
 | `git/indexDiff` | repository/path/comparison | 返回当前 index 对比文本和可选的更改块 |
 | `git/indexEdit` | repository/path/comparison | 比较两侧预期文本，按选中的块或行更新 index；过期时返回 `GitIndexChanged`，不重试旧选择 |
 | `git/repositories` | authorized dirs | 列出从已授权 `Dir` 中发现的稳定 repository identity |
-| `git/checkIgnore` | repository | 批量查询 1–5000 个仓库相对路径，返回被忽略的路径；遵循嵌套规则、排除规则与 tracked 状态，不递归列出忽略目录，也不进入待提交列表 |
+| `git/checkIgnore` | repository | 携带连接内唯一的 `operationId`，批量查询 1–5000 个仓库相对路径，返回被忽略的路径；遵循嵌套规则、排除规则与 tracked 状态，不递归列出忽略目录，也不进入待提交列表 |
+| `git/checkIgnore/cancel` | connection/operation | 按 `operationId` 取消同一连接的忽略查询，包括排队和执行中的查询；返回 `requested`、`alreadyRequested` 或 `completed`，原查询仍返回终态响应 |
 | `git/status` | repository | 按可选 `repositoryId` 读取 HEAD、upstream 和 index/worktree change snapshot |
 | `git/textDiff` | repository | 读取 status 及有界 UTF-8 HEAD/worktree text diff projection |
 | `git/graph` | repository | 以 `limit`/`cursor` 读取一页 history、local/remote-tracking refs 和 credential-free remote identity，并返回 `hasMore`/`nextCursor` |
@@ -576,6 +577,12 @@ Watcher 初始化失败时显式 `git/status` 与 mutation 仍可用。客户端
 `streamInstanceId` 内比较 revision 并忽略不大于当前 revision 的通知或响应；实例变化表示
 App Server 已重启，客户端必须接受新 snapshot，并在连接重新 ready 时主动执行 `git/status`
 恢复权威状态。
+
+忽略规则变化通过 `git/ignoreChanged { repositoryId, paths }` 单独通知同一授权范围的连接，
+不依赖待提交列表变化。`paths` 是仓库相对路径；目录路径包含其后代，空列表表示整个仓库。
+普通文件变化只使相关路径失效；`.gitignore` 变化使所在目录失效；index、Git 配置、
+`info/exclude` 或 Git 解析出的全局排除文件变化使对应仓库失效。客户端重新查询这些范围，
+保留已完成的装饰直到新结果到达，并合并异步完成通知；相同结果不触发重绘。
 
 `git/textDiff` 返回同一 directory 范围内的 `GitStatusResult`、每个可展示文本变化的 original/
 modified UTF-8 source，以及文件级和聚合增删行统计。单侧文件上限为 2 MiB；binary、symlink、
@@ -959,6 +966,7 @@ mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElap
 - `skills/changed`，payload 为新的 catalog `generation`；
 - `marketplace/changed`，payload 为 profile Marketplace 安装状态的 `instanceId` 与新 `generation`；
 - `git/statusChanged`，payload 为新的 directory Git status；
+- `git/ignoreChanged`，payload 为 repository identity 和受影响的忽略查询路径；
 - `git/repositoriesChanged`，空 payload，表示当前授权目录的仓库清单已变；
 - `fs/changed`，payload 为相对路径变化或 scoped rescan hint；
 - `project/changed`，payload 为已提交的完整 Project 视图，只投递产品 host。

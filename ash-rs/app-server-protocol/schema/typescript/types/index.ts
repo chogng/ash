@@ -420,6 +420,9 @@ export type { GitChangeFileComparisonDto } from './GitChangeFileComparisonDto.js
 export type { GitChangeFileParams } from './GitChangeFileParams.js';
 export type { GitChangeFileResult } from './GitChangeFileResult.js';
 export type { GitChangeStatusDto } from './GitChangeStatusDto.js';
+export type { GitCheckIgnoreCancelParams } from './GitCheckIgnoreCancelParams.js';
+export type { GitCheckIgnoreCancelResult } from './GitCheckIgnoreCancelResult.js';
+export type { GitCheckIgnoreCancelStatusDto } from './GitCheckIgnoreCancelStatusDto.js';
 export type { GitCheckIgnoreParams } from './GitCheckIgnoreParams.js';
 export type { GitCheckIgnoreResult } from './GitCheckIgnoreResult.js';
 export type { GitCloneParams } from './GitCloneParams.js';
@@ -455,6 +458,7 @@ export type { GitGraphParams } from './GitGraphParams.js';
 export type { GitGraphResult } from './GitGraphResult.js';
 export type { GitHeadDto } from './GitHeadDto.js';
 export type { GitHistoryResult } from './GitHistoryResult.js';
+export type { GitIgnoreChanged } from './GitIgnoreChanged.js';
 export type { GitIndexDiffResult } from './GitIndexDiffResult.js';
 export type { GitIndexEditParams } from './GitIndexEditParams.js';
 export type { GitIndexHunkDto } from './GitIndexHunkDto.js';

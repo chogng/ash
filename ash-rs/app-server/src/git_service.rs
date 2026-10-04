@@ -148,20 +148,34 @@ impl GitService {
             .map_err(GitServiceError::Git)
     }
 
-    pub(crate) fn check_ignore(&self, paths: &[PathBuf]) -> Result<Vec<PathBuf>, GitServiceError> {
+    pub(crate) fn check_ignore(
+        &self,
+        paths: &[PathBuf],
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<PathBuf>, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        runtime.block_on(async {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
+                result = async {
+                    let repository = self.client.open_repository(&self.projection_root).await?;
+                    self.client.check_ignore(&repository, paths).await
+                } => result.map_err(GitServiceError::Git),
+            }
+        })
+    }
+
+    pub(crate) fn ignore_watch_paths(
+        &self,
+        repository: &GitRepository,
+    ) -> Result<Vec<PathBuf>, GitServiceError> {
         self.ensure_readable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
-        runtime.block_on(async {
-            let repository = self
-                .client
-                .open_repository(&self.projection_root)
-                .await
-                .map_err(GitServiceError::Git)?;
-            self.client
-                .check_ignore(&repository, paths)
-                .await
-                .map_err(GitServiceError::Git)
-        })
+        runtime
+            .block_on(self.client.ignore_watch_paths(repository))
+            .map_err(GitServiceError::Git)
     }
 
     pub(crate) fn dir(&self) -> &Dir {

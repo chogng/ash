@@ -184,6 +184,8 @@ import type { GitBranchSwitchParams } from './types/GitBranchSwitchParams.js';
 import type { GitCatalogResult } from './types/GitCatalogResult.js';
 import type { GitChangeFileParams } from './types/GitChangeFileParams.js';
 import type { GitChangeFileResult } from './types/GitChangeFileResult.js';
+import type { GitCheckIgnoreCancelParams } from './types/GitCheckIgnoreCancelParams.js';
+import type { GitCheckIgnoreCancelResult } from './types/GitCheckIgnoreCancelResult.js';
 import type { GitCheckIgnoreParams } from './types/GitCheckIgnoreParams.js';
 import type { GitCheckIgnoreResult } from './types/GitCheckIgnoreResult.js';
 import type { GitCloneParams } from './types/GitCloneParams.js';
@@ -776,6 +778,7 @@ export interface AppServerRequestMap {
   "git/clone": { params: GitCloneParams; response: GitCloneResult };
   "git/status": { params: GitRepositoryParams; response: GitStatusResult };
   "git/checkIgnore": { params: GitCheckIgnoreParams; response: GitCheckIgnoreResult };
+  "git/checkIgnore/cancel": { params: GitCheckIgnoreCancelParams; response: GitCheckIgnoreCancelResult };
   "git/textDiff": { params: GitRepositoryParams; response: GitTextDiffResult };
   "git/branch/list": { params: GitRepositoryParams; response: GitBranchListResult };
   "git/history": { params: GitRepositoryParams; response: GitHistoryResult };
@@ -1136,6 +1139,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "git/clone": { method: "git/clone" },
   "git/status": { method: "git/status" },
   "git/checkIgnore": { method: "git/checkIgnore" },
+  "git/checkIgnore/cancel": { method: "git/checkIgnore/cancel" },
   "git/textDiff": { method: "git/textDiff" },
   "git/branch/list": { method: "git/branch/list" },
   "git/history": { method: "git/history" },

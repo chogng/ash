@@ -7,11 +7,18 @@ use std::sync::OnceLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-use ash_app_server_protocol::protocol::language::LanguageCancelStatusDto;
 use ash_app_server_protocol::protocol::registry::SerializationAccess;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
 use std::path::PathBuf;
+
+/// Outcome of cancelling a connection-owned operation, before or during execution.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum RequestCancelStatus {
+    Requested,
+    AlreadyRequested,
+    Completed,
+}
 
 /// Backend admission keys contain resolved domain identities, never caller-selected aliases.
 #[derive(Clone, Debug)]
@@ -431,21 +438,21 @@ impl RequestCancellationRegistry {
         &self,
         connection_id: u64,
         operation_id: String,
-    ) -> LanguageCancelStatusDto {
+    ) -> RequestCancelStatus {
         let mut state = lock(&self.state);
         let operation = (connection_id, operation_id);
         if let Some(source) = state.active_operations.get(&operation) {
             if source.token().is_cancelled() {
-                return LanguageCancelStatusDto::AlreadyRequested;
+                return RequestCancelStatus::AlreadyRequested;
             }
             source.cancel();
-            return LanguageCancelStatusDto::Requested;
+            return RequestCancelStatus::Requested;
         }
         if state.completed_operations.contains(&operation) {
-            return LanguageCancelStatusDto::Completed;
+            return RequestCancelStatus::Completed;
         }
         if state.requested_before_start.contains(&operation) {
-            return LanguageCancelStatusDto::AlreadyRequested;
+            return RequestCancelStatus::AlreadyRequested;
         }
         let CancellationRegistryState {
             requested_before_start,
@@ -457,7 +464,7 @@ impl RequestCancellationRegistry {
             requested_before_start_order,
             operation,
         );
-        LanguageCancelStatusDto::Requested
+        RequestCancelStatus::Requested
     }
 
     pub(super) fn finish(&self, connection_id: u64, request_id: u64) {

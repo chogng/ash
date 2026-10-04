@@ -152,6 +152,13 @@ impl AppServer {
             .request_cancellations
             .cancel_operation(connection.connection_id, params.operation_id);
         self.request_scheduler.cancel_waiting_requests();
+        use super::request_serialization::RequestCancelStatus;
+        use ash_app_server_protocol::protocol::language::LanguageCancelStatusDto;
+        let status = match status {
+            RequestCancelStatus::Requested => LanguageCancelStatusDto::Requested,
+            RequestCancelStatus::AlreadyRequested => LanguageCancelStatusDto::AlreadyRequested,
+            RequestCancelStatus::Completed => LanguageCancelStatusDto::Completed,
+        };
         result(&LanguageCancelResult { status })
     }
 

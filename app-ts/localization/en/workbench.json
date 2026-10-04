@@ -133,7 +133,8 @@
 		"runAndDebug": "Run and Debug",
 		"debugConsole": "Debug Console",
 		"ports": "Ports",
-		"refactorPreview": "Refactor Preview"
+		"refactorPreview": "Refactor Preview",
+		"repositories": "Repositories"
 	},
 	"ash.regions": {
 		"primarySidebar": "Primary sidebar",

@@ -13,6 +13,7 @@ import type { DocumentCollaborationPresenceSnapshot } from './types/DocumentColl
 import type { DocumentCollaborationUpdate } from './types/DocumentCollaborationUpdate.js';
 import type { ExtensionHostChanged } from './types/ExtensionHostChanged.js';
 import type { FsChanged } from './types/FsChanged.js';
+import type { GitIgnoreChanged } from './types/GitIgnoreChanged.js';
 import type { GitStatusChanged } from './types/GitStatusChanged.js';
 import type { LanguageDiagnosticsNotification } from './types/LanguageDiagnosticsNotification.js';
 import type { LanguageServerMessageNotification } from './types/LanguageServerMessageNotification.js';
@@ -64,6 +65,7 @@ export interface AppServerNotificationMap {
   "skills/changed": SkillsChanged;
   "extensionHost/changed": ExtensionHostChanged;
   "git/statusChanged": GitStatusChanged;
+  "git/ignoreChanged": GitIgnoreChanged;
   "git/repositoriesChanged": Record<string, never>;
   "turnChanges/changed": TurnChangesChanged;
   "project/changed": ProjectChanged;
@@ -118,6 +120,7 @@ export const APP_SERVER_NOTIFICATIONS: {
   "skills/changed": { method: "skills/changed" },
   "extensionHost/changed": { method: "extensionHost/changed" },
   "git/statusChanged": { method: "git/statusChanged" },
+  "git/ignoreChanged": { method: "git/ignoreChanged" },
   "git/repositoriesChanged": { method: "git/repositoriesChanged" },
   "turnChanges/changed": { method: "turnChanges/changed" },
   "project/changed": { method: "project/changed" },

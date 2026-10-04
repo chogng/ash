@@ -1,0 +1,61 @@
+.ash-scm-repositories {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.ash-scm-repositories-list {
+	min-width: 0;
+	font-size: var(--ash-font-size-body1);
+}
+
+.ash-scm-repository {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, auto) auto;
+	align-items: center;
+	gap: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
+	color: var(--ash-foreground);
+}
+
+.ash-scm-repository:hover {
+	background: var(--ash-list-hover-background);
+}
+
+.ash-scm-repository.checked {
+	background: var(--ash-list-inactive-selection-background);
+}
+
+.ash-scm-repositories-list:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
+
+.ash-scm-repositories-list:focus-visible .ash-scm-repository.focused {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
+
+.ash-scm-repository-name,
+.ash-scm-repository-branch,
+.ash-scm-repository-path {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-scm-repository-branch,
+.ash-scm-repository-path {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label2);
+}
+
+.ash-scm-repository-path {
+	display: none;
+	grid-column: 1 / -1;
+}
+
+.ash-scm-repository.has-path > .ash-scm-repository-path {
+	display: block;
+}

@@ -17,6 +17,8 @@ pub struct GitRepositoryParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitCheckIgnoreParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub repository_id: Option<String>,
@@ -28,6 +30,37 @@ pub struct GitCheckIgnoreParams {
 #[serde(rename_all = "camelCase")]
 pub struct GitCheckIgnoreResult {
     pub ignored_paths: Vec<String>,
+}
+
+/// Cancels an ignore query owned by the requesting connection, including queued work.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitCheckIgnoreCancelParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitCheckIgnoreCancelStatusDto {
+    Requested,
+    AlreadyRequested,
+    Completed,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCheckIgnoreCancelResult {
+    pub status: GitCheckIgnoreCancelStatusDto,
+}
+
+/// Repository-relative paths whose ignore classification may have changed.
+/// An empty path list invalidates the entire repository; directory paths include descendants.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitIgnoreChanged {
+    pub repository_id: String,
+    pub paths: Vec<String>,
 }
 
 /// Repository URL and host-selected parent directory for a desktop clone.

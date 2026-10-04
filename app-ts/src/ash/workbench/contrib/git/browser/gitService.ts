@@ -1,6 +1,7 @@
 import type { GitCommand, GitCommandResult, GitCatalog, GitIndexDiff, GitIndexSelection, GitCommitDetails } from '../common/gitService.js';
 import type { ConfigReadResult, GitConfigDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../platform/app-server/common/generated/index.js";
 import { Emitter } from "../../../../base/common/event.js";
+import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from "../../../../base/common/uri.js";
@@ -27,6 +28,7 @@ export class GitService extends Disposable implements IGitService {
 	readonly canCloneRepository: boolean;
 	private readonly _onDidChangeStatus = this._register(new Emitter<GitStatus>());
 	private readonly _onDidChangeRepositoryStatus = this._register(new Emitter<GitStatus>());
+	private readonly ignoreChanged = this._register(new Emitter<readonly URI[]>());
 	private readonly _onDidChangeRepositories = this._register(new Emitter<readonly GitRepository[]>());
 	private readonly _onDidChangeActiveRepository = this._register(new Emitter<GitRepository | undefined>());
 	private readonly _onDidBecomeReady = this._register(new Emitter<void>());
@@ -45,6 +47,7 @@ export class GitService extends Disposable implements IGitService {
 
 	readonly onDidChangeStatus = this._onDidChangeStatus.event;
 	readonly onDidChangeRepositoryStatus = this._onDidChangeRepositoryStatus.event;
+	readonly onDidChangeIgnore = this.ignoreChanged.event;
 	readonly onDidChangeRepositories = this._onDidChangeRepositories.event;
 	readonly onDidChangeActiveRepository = this._onDidChangeActiveRepository.event;
 	readonly onDidBecomeReady = this._onDidBecomeReady.event;
@@ -69,6 +72,13 @@ export class GitService extends Disposable implements IGitService {
 		this.canCloneRepository = options.canCloneRepository;
 		this.api = options.api;
 		const events = options.eventApi.subscribe(event => {
+			if (event.method === 'git/ignoreChanged') {
+				const repository = this.repositoryList.find(candidate => candidate.id === event.params.repositoryId);
+				if (repository) {
+					this.ignoreChanged.fire(event.params.paths.length ? event.params.paths.map(path => URI.joinPath(repository.root, path)) : [repository.root]);
+				}
+				return;
+			}
 			if (event.method === 'git/repositoriesChanged' && this.hasWorkspaceFolder()) {
 				// A catalog hint supersedes any discovery started before the backend membership changed.
 				++this.discoveryGeneration;
@@ -168,7 +178,7 @@ export class GitService extends Disposable implements IGitService {
 		return toGitStatus(await this.api.status({ repositoryId: repository.id }), repository);
 	}
 
-	async checkIgnore(resources: readonly URI[]): Promise<readonly URI[]> {
+	async checkIgnore(resources: readonly URI[], token = CancellationToken.None): Promise<readonly URI[]> {
 		const groups = new Map<string, Map<string, URI>>();
 		for (const resource of resources) {
 			const repository = this.repositoryForResource(resource);
@@ -186,7 +196,7 @@ export class GitService extends Disposable implements IGitService {
 			const paths = [...resourcesByPath.keys()];
 			const ignored: URI[] = [];
 			for (let offset = 0; offset < paths.length; offset += 5000) {
-				const result = await this.api.checkIgnore({ repositoryId, paths: paths.slice(offset, offset + 5000) });
+				const result = await this.api.checkIgnore({ repositoryId, paths: paths.slice(offset, offset + 5000) }, token);
 				for (const path of result.ignoredPaths) {
 					ignored.push(resourcesByPath.get(path)!);
 				}

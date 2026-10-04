@@ -1,4 +1,5 @@
 import type { Event } from "../../../../base/common/event.js";
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import type { URI } from "../../../../base/common/uri.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { GitAutofetch } from './gitConfiguration.js';
@@ -243,7 +244,8 @@ export interface IGitService {
 	getRepository(repositoryId?: string): Promise<GitRepository>;
 	selectRepository(repositoryId: string): Promise<GitStatus>;
 	repositoryForResource(resource: URI): GitRepository | undefined;
-	checkIgnore(resources: readonly URI[]): Promise<readonly URI[]>;
+	readonly onDidChangeIgnore: Event<readonly URI[]>;
+	checkIgnore(resources: readonly URI[], token?: CancellationToken): Promise<readonly URI[]>;
 	status(repositoryId?: string): Promise<GitStatus>;
 	history(repositoryId?: string): Promise<readonly GitCommitSummary[]>;
 	branches(repositoryId?: string): Promise<readonly GitBranch[]>;

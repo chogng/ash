@@ -1,4 +1,5 @@
-import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
@@ -7,7 +8,7 @@ import { expect, test } from '../../../automation/test.js';
 test.describe('Git ignore decorations', () => {
 	test.use({ gitRepository: true });
 	test.beforeEach(async ({ target, testWorkspace }) => {
-		if (target.kind !== 'electron' || target.appServerMode !== 'required') return;
+		if (target.appServerMode !== 'required' || target.workbenchMode !== 'code') return;
 		const root = testWorkspace.directory;
 		await mkdir(join(root, 'ignored-dir'));
 		await writeFile(join(root, 'ignored-dir', 'child.txt'), 'ignored');
@@ -17,7 +18,7 @@ test.describe('Git ignore decorations', () => {
 	});
 
 	test('Explorer grays ignored files and expanded directories and updates after ignore rules change', async ({ target, testWorkspace, workbench }) => {
-		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the desktop Git backend');
+		test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Git backend');
 		const page = workbench.page;
 		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 		if (await showSidebar.isVisible()) await showSidebar.click();
@@ -42,11 +43,68 @@ test.describe('Git ignore decorations', () => {
 		for (const name of ['main.ts', 'keep.tmp']) {
 			await expect(explorer.locator('.ash-icon-label').filter({ has: page.getByText(name, { exact: true }) })).not.toHaveAttribute('aria-label', /Ignored by Git/u);
 		}
+		await page.evaluate(ignoredColor => {
+			const explorer = document.querySelector('.ash-explorer')!;
+			const failures = new Set<string>();
+			let samples = 0;
+			let frame = 0;
+			const sample = () => {
+				for (const label of explorer.querySelectorAll('.ash-icon-label')) {
+					const text = label.querySelector('.ash-icon-label-text');
+					if (!text || !['ignored.log', 'ignored-dir', 'child.txt'].includes(text.textContent!)) continue;
+					samples += 1;
+					const color = getComputedStyle(text).color;
+					if (color !== ignoredColor || !label.getAttribute('aria-label')?.includes('Ignored by Git')) {
+						failures.add(`${text.textContent}: ${color}, ${label.getAttribute('aria-label')}`);
+					}
+				}
+			};
+			// Retrying a final CSS assertion misses the undecorated interval between queries.
+			const observer = new MutationObserver(sample);
+			observer.observe(explorer, { attributes: true, childList: true, subtree: true });
+			const tick = () => { sample(); frame = requestAnimationFrame(tick); };
+			frame = requestAnimationFrame(tick);
+			(window as typeof window & { stopIgnoreColorMonitor: () => { samples: number; failures: string[] } }).stopIgnoreColorMonitor = () => {
+				observer.disconnect();
+				cancelAnimationFrame(frame);
+				return { samples, failures: [...failures] };
+			};
+		}, ignoredColor);
+		for (let index = 0; index < 4; index += 1) {
+			await writeFile(join(testWorkspace.directory, 'ignored-dir', 'child.txt'), `build output ${index}`);
+			const name = `refresh-${index}.txt`;
+			await writeFile(join(testWorkspace.directory, name), `change ${index}`);
+			await expect(explorer.locator('.ash-icon-label').filter({ has: page.getByText(name, { exact: true }) })).toHaveAttribute('aria-label', `${name}, Untracked`);
+		}
+		const observation = await page.evaluate(() => (window as typeof window & { stopIgnoreColorMonitor: () => { samples: number; failures: string[] } }).stopIgnoreColorMonitor());
+		expect(observation.samples).toBeGreaterThan(0);
+		expect(observation.failures).toEqual([]);
 		await writeFile(join(testWorkspace.directory, '.gitignore'), '*.tmp\n!keep.tmp\nmain.ts\n');
 		await expect(ignored).not.toHaveAttribute('aria-label', /Ignored by Git/u);
 		await expect(child).not.toHaveAttribute('aria-label', /Ignored by Git/u);
 		await expect(ignored.locator('.ash-icon-label-text')).not.toHaveCSS('color', ignoredColor);
 		const run = promisify(execFile);
+		// Rules outside the workspace have no file-service event; the Git watcher owns them.
+		const external = await mkdtemp(join(tmpdir(), 'ash-ignore-rules-'));
+		try {
+			const rules = join(external, 'ignore');
+			await writeFile(rules, 'ignored.log\n');
+			await run('git', ['config', 'core.excludesFile', rules], { cwd: testWorkspace.directory });
+			await expect(ignored).toHaveAttribute('aria-label', 'ignored.log, Ignored by Git');
+			await writeFile(rules, '');
+			await expect(ignored).not.toHaveAttribute('aria-label', /Ignored by Git/u);
+			await writeFile(join(testWorkspace.directory, 'ignored-dir', '.gitignore'), 'child.txt\n');
+			await expect(child).toHaveAttribute('aria-label', 'child.txt, Ignored by Git');
+			await writeFile(join(testWorkspace.directory, 'ignored-dir', '.gitignore'), '');
+			await expect(child).not.toHaveAttribute('aria-label', /Ignored by Git/u);
+			await writeFile(join(testWorkspace.directory, '.git', 'info', 'exclude'), 'ignored.log\n');
+			await expect(ignored).toHaveAttribute('aria-label', 'ignored.log, Ignored by Git');
+			await run('git', ['add', '-f', 'ignored.log'], { cwd: testWorkspace.directory });
+			await expect(ignored).not.toHaveAttribute('aria-label', /Ignored by Git/u);
+		} finally {
+			await run('git', ['config', '--unset', 'core.excludesFile'], { cwd: testWorkspace.directory });
+			await rm(external, { recursive: true, force: true });
+		}
 		const status = await run('git', ['status', '--porcelain'], { cwd: testWorkspace.directory });
 		expect(status.stdout).toContain('keep.tmp');
 	});

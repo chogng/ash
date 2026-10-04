@@ -17,7 +17,8 @@ pub const APP_SERVER_PROTOCOL_REVISION: u32 = 12;
 // Version 13 requires separate current observations in Guardian environment responses.
 // Version 14 scopes recent Guardian commands across local project Sessions with provenance.
 // Version 15 requires backend scan defaults, adjustable history scope, aggregate samples and coverage.
-pub const APP_SERVER_CAPABILITY_VERSION: u32 = 15;
+// Version 16 requires cancellable Git ignore queries and scoped ignore-change notifications.
+pub const APP_SERVER_CAPABILITY_VERSION: u32 = 16;
 
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[
     CapabilityRequirement::exact("sessions", APP_SERVER_CAPABILITY_VERSION),

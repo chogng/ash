@@ -245,7 +245,17 @@
 		"scm.history.deletions": "删除 {0} 行（-）",
 		"scm.history.verbosityTitle": "提交详情无障碍帮助",
 		"scm.history.verbosityDescription": "提交详情获得焦点时，提示如何打开无障碍帮助。",
-		"scm.history.detailsHelp": "提交详情显示作者、相对和完整时间、完整提交说明，以及文件数和增删行数。在操作工具栏中使用左右方向键，可复制完整提交 ID 或在浏览器中打开提交。使用 Shift+Tab 阅读和滚动提交说明。Escape 返回提交行。按 <keybinding:editor.action.accessibleView> 以纯文本阅读这些详情。"
+		"scm.history.detailsHelp": "提交详情显示作者、相对和完整时间、完整提交说明，以及文件数和增删行数。在操作工具栏中使用左右方向键，可复制完整提交 ID 或在浏览器中打开提交。使用 Shift+Tab 阅读和滚动提交说明。Escape 返回提交行。按 <keybinding:editor.action.accessibleView> 以纯文本阅读这些详情。",
+		"scm.repositories.label": "源代码管理仓库",
+		"scm.repositories.verbosityInvalid": "仓库无障碍详细提示必须设为布尔值。",
+		"scm.repositories.helpHint": "按 Alt+F1 打开无障碍帮助。",
+		"scm.repositories.changes": "{0} 个已更改文件",
+		"scm.repositories.description": "{0}，{1}，{2} 个已更改文件",
+		"scm.repositories.selected": "已选择仓库 {0}",
+		"scm.repositories.selectFailed": "无法选择仓库：{0}",
+		"scm.repositories.verbosityTitle": "仓库无障碍帮助",
+		"scm.repositories.verbosityDescription": "源代码管理仓库获得焦点时，提示如何打开无障碍帮助。",
+		"scm.repositories.help": "仓库列表显示此工作区中可用的源代码管理仓库和工作树。使用上下方向键浏览，按 Enter 或空格选择仓库。选择后会同步更新更改、提交图和状态栏。点击状态栏中的分支名称可切换分支。每一行显示仓库名称、分支和已更改文件数。同名仓库还会显示用于区分的路径。"
 	},
 	"ash.workbench": {
 		"command.scm.quickDiff.next": "转到下一个快速差异更改",

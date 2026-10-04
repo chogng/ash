@@ -50,6 +50,7 @@ import { GitHistoryProvider } from '../../../git/browser/gitHistoryProvider.js';
 import { GitSCMContribution, GitSCMProvider, type GitSCMProviderServices } from '../../../git/browser/gitSCMProvider.js';
 import { SCMService } from '../../common/scmService.js';
 import { SCMViewService } from '../../browser/scmViewService.js';
+import { SCMRepositoriesViewPane } from '../../browser/scmRepositoriesViewPane.js';
 import { ISCMService, ISCMViewService, type ISCMProvider } from '../../common/scm.js';
 
 const testDialogs: IDialogService = {
@@ -156,7 +157,7 @@ test("SCM diff inputs open live files and keep deleted files on the readable sid
 	assert.equal(deleted.goToFile, deleted.original);
 });
 
-test("Git contribution registers Changes, Agent Review, and Graph as ordered panes", async () => {
+test("Git contribution registers Repositories before Changes and hides it for a single provider", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 
@@ -168,9 +169,16 @@ test("Git contribution registers Changes, Agent Review, and Graph as ordered pan
 		registerGitViews(registry);
 
 		const views = registry.getViews(WorkbenchViewContainerId.Git);
-		assert.deepEqual(views.map((view) => view.id), [GIT_VIEW_ID, GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID]);
-		assert.deepEqual(views.map((view) => view.title), ["Changes", "Agent Review", "Graph"]);
-		assert.deepEqual(views.map((view) => view.collapsed === true), [false, true, true]);
+		assert.deepEqual(views.map((view) => view.id), ['workbench.scm.repositories', GIT_VIEW_ID, GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID]);
+		assert.deepEqual(views.map((view) => view.title), ['Repositories', "Changes", "Agent Review", "Graph"]);
+		assert.deepEqual(views.map((view) => view.collapsed === true), [false, false, true, true]);
+		const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
+		using context = new ContextKeyService();
+		const providerCount = context.createKey<number>('scm.providerCount', 0);
+		assert.deepEqual([0, 1, 2].map(count => {
+			providerCount.set(count);
+			return views[0].when!.evaluate(context);
+		}), [false, false, true]);
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -1199,15 +1207,16 @@ test("ScmViewPane groups App Server Git status", async () => {
 		statusListener(external);
 		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "4 changed files");
 
-		const repositorySelector = pane.element.querySelector<HTMLSelectElement>('[aria-label="Active source control repository"]');
-		assert.ok(repositorySelector);
-		assert.equal(repositorySelector.closest("label")?.hidden, false);
-		assert.deepEqual([...repositorySelector.options].map(option => option.textContent), ["workspace — /workspace", "nested — /workspace/nested"]);
-		repositorySelector.value = nestedStatus.repositoryId;
-		repositorySelector.dispatchEvent(new browser.window.Event("change", { bubbles: true }));
+		assert.equal(pane.element.querySelector('select'), null);
+		const hoverService: IHoverService = { setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() {} };
+		using repositoriesPane = new SCMRepositoriesViewPane(browser.window.document.body, { id: 'workbench.scm.repositories', title: 'Repositories' }, scmService, viewService, hoverService, configuration);
+		repositoriesPane.setVisible(true);
+		const repositoryRows = repositoriesPane.element.querySelectorAll<HTMLElement>('[role="option"]');
+		assert.deepEqual([...repositoryRows].map(row => row.querySelector('.ash-scm-repository-name')?.textContent), ['workspace', 'nested']);
+		repositoryRows[1].click();
 		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "No changes.");
 		assert.deepEqual(selectedRepositories, [nestedStatus.repositoryId]);
-		assert.equal(repositorySelector.value, nestedStatus.repositoryId);
+		assert.equal(repositoryRows[1].getAttribute('aria-selected'), 'true');
 
 		assert.equal(requestCount, 3);
 

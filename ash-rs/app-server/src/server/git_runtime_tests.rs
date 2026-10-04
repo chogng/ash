@@ -23,6 +23,66 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[test]
+fn ignore_changes_keep_directory_scope_and_do_not_cross_authorized_connections() {
+    use ash_file_watcher::FileWatcherEvent;
+    let repository = TestRepository::init();
+    repository.write("nested/.gitignore", "*.log\n");
+    let external = TestRepository::init();
+    external.write("rules", "*.cache\n");
+    let rules = external.root().join("rules");
+    repository.git(&["config", "core.excludesFile", rules.to_str().unwrap()]);
+    let broker = Arc::new(UpdateBroker::default());
+    let queue = NotificationQueue::default();
+    let unrelated = NotificationQueue::default();
+    broker.register(1, false, &queue);
+    broker.fork_scope().register(2, false, &unrelated);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let owner = runtime.repository(None).unwrap();
+    for (paths, expected) in [
+        (
+            vec![owner.service.dir_root().join("nested/.gitignore")],
+            serde_json::json!(["nested"]),
+        ),
+        (
+            vec![owner.service.dir_root().join("nested/file.log")],
+            serde_json::json!(["nested/file.log"]),
+        ),
+        (
+            vec![owner.identity.git_dir().join("index")],
+            serde_json::json!([]),
+        ),
+        (vec![rules.clone()], serde_json::json!([])),
+    ] {
+        let change = owner
+            .ignore_change(&FileWatcherEvent::PathsChanged { paths })
+            .unwrap()
+            .unwrap();
+        owner.updates.publish_git_ignore_changed(change);
+        let events = queue.drain();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["method"], "git/ignoreChanged");
+        assert_eq!(events[0]["params"]["repositoryId"], owner.descriptor.id);
+        assert_eq!(events[0]["params"]["paths"], expected);
+        assert!(unrelated.drain().is_empty());
+    }
+    assert!(
+        owner
+            .ignore_change(&FileWatcherEvent::PathsChanged {
+                paths: vec![owner.identity.git_dir().join("refs/heads/main")],
+            })
+            .unwrap()
+            .is_none()
+    );
+    assert!(queue.drain().is_empty());
+    assert!(
+        owner
+            .watched_paths()
+            .iter()
+            .any(|watch| watch.path == rules && !watch.recursive)
+    );
+}
+
+#[test]
 fn branch_mutations_refresh_all_connections_and_invalidate_history_cursors() {
     let repository = TestRepository::init();
     for value in ["initial", "updated"] {

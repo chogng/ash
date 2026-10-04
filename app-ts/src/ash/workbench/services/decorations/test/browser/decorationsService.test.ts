@@ -14,6 +14,30 @@ import type { IDecorationData } from '../../common/decorations.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
+test('DecorationsService merges async completion notifications and skips unchanged refreshes', async () => {
+	const dom = new JSDOM('<!doctype html><head></head><body></body>');
+	using decorations = new DecorationsService(dom.window.document, new NullLoggerService());
+	using changes = new Emitter<readonly URI[]>();
+	using provider = decorations.registerDecorationsProvider({ label: 'Async', onDidChange: changes.event, provideDecorations: async () => ({ color: 'description.foreground', tooltip: 'Ignored' }) });
+	const resources = ['first', 'second', 'third'].map(name => URI.file(`/workspace/${name}`));
+	const notifications: boolean[][] = [];
+	using listener = decorations.onDidChangeDecorations(event => notifications.push(resources.map(resource => event.affectsResource(resource))));
+	const initial = new DeferredPromise<void>();
+	using initialListener = decorations.onDidChangeDecorations(() => { initialListener.dispose(); void initial.complete(); });
+	decorations.getDecoration(resources[0]!, false);
+	decorations.getDecoration(resources[1]!, false);
+	await initial.p;
+	assert.deepEqual(notifications, [[true, true, false]]);
+	const next = new DeferredPromise<void>();
+	using nextListener = decorations.onDidChangeDecorations(() => { nextListener.dispose(); void next.complete(); });
+	changes.fire(resources.slice(0, 2));
+	assert.equal(notifications.length, 1);
+	decorations.getDecoration(resources[2]!, false);
+	await next.p;
+	assert.deepEqual(notifications, [[true, true, false], [false, false, true]]);
+	dom.window.close();
+});
+
 test('DecorationsService caches provider queries and removes styles when labels and providers release them', () => {
 	const dom = new JSDOM('<!doctype html><head></head><body></body>');
 	using services = new InstantiationService();
@@ -66,11 +90,88 @@ test('DecorationsService discards cancelled results after invalidation and provi
 	assert.equal(decorations.getDecoration(uri, false), undefined);
 	const notifications: boolean[] = [];
 	using listener = decorations.onDidChangeDecorations(event => notifications.push(event.affectsResource(uri)));
+	const updated = new DeferredPromise<void>();
+	using updatedListener = decorations.onDidChangeDecorations(() => { updatedListener.dispose(); void updated.complete(); });
 	await second.complete({ tooltip: 'Current result', color: 'description.foreground' });
-	await Promise.resolve();
+	await updated.p;
 	assert.deepEqual(notifications, [true]);
 	using result = decorations.getDecoration(uri, false)!;
 	assert.equal(result.tooltip, 'Current result');
+	provider.dispose();
+	assert.equal(decorations.getDecoration(uri, false), undefined);
+	dom.window.close();
+});
+
+test('DecorationsService keeps resolved colors during async refresh and clears them when the current query completes', async () => {
+	const dom = new JSDOM('<!doctype html><head></head><body></body>');
+	using decorations = new DecorationsService(dom.window.document, new NullLoggerService());
+	using changes = new Emitter<readonly URI[]>();
+	const folder = URI.file('/workspace/cache');
+	const uri = URI.joinPath(folder, 'file');
+	const initial = new DeferredPromise<IDecorationData | undefined>();
+	const superseded = new DeferredPromise<IDecorationData | undefined>();
+	const current = new DeferredPromise<IDecorationData | undefined>();
+	const queries = [initial, superseded, current];
+	const tokens: CancellationToken[] = [];
+	using provider = decorations.registerDecorationsProvider({
+		label: 'Async', onDidChange: changes.event,
+		provideDecorations: (resource, token) => {
+			if (resource.path === folder.path) {
+				return undefined;
+			}
+			tokens.push(token);
+			return queries[tokens.length - 1]!.p;
+		},
+	});
+	assert.equal(decorations.getDecoration(uri, false), undefined);
+	await initial.complete({ color: 'description.foreground', tooltip: 'Ignored', bubble: true });
+	await Promise.resolve();
+	using resolved = decorations.getDecoration(uri, false)!;
+	assert.equal(resolved.tooltip, 'Ignored');
+	changes.fire([folder]);
+	using refreshing = decorations.getDecoration(uri, false)!;
+	assert.equal(refreshing.labelClassName, resolved.labelClassName);
+	changes.fire([]);
+	assert.equal(tokens[1]!.isCancellationRequested, true);
+	await superseded.complete(undefined);
+	await Promise.resolve();
+	using stillRefreshing = decorations.getDecoration(uri, false)!;
+	assert.equal(stillRefreshing.tooltip, 'Ignored');
+	// Parent aggregation must retain the same completed child state while its query runs.
+	using parent = decorations.getDecoration(folder, true)!;
+	assert.equal(parent.tooltip, 'Ignored');
+	await current.complete(undefined);
+	await Promise.resolve();
+	assert.equal(decorations.getDecoration(uri, false), undefined);
+	assert.equal(decorations.getDecoration(folder, true), undefined);
+	dom.window.close();
+});
+
+test('DecorationsService clears the completed decoration on refresh failure or provider removal', async () => {
+	const dom = new JSDOM('<!doctype html><head></head><body></body>');
+	using decorations = new DecorationsService(dom.window.document, new NullLoggerService());
+	using changes = new Emitter<readonly URI[]>();
+	const uri = URI.file('/workspace/file');
+	const pending = new DeferredPromise<IDecorationData | undefined>();
+	let refresh = false;
+	using provider = decorations.registerDecorationsProvider({
+		label: 'Async', onDidChange: changes.event,
+		provideDecorations: () => refresh ? pending.p : { color: 'description.foreground', tooltip: 'Ignored' },
+	});
+	using initial = decorations.getDecoration(uri, false)!;
+	refresh = true;
+	changes.fire([uri]);
+	using retained = decorations.getDecoration(uri, false)!;
+	assert.equal(retained.tooltip, 'Ignored');
+	await pending.error(new Error('Query failed'));
+	await Promise.resolve();
+	assert.equal(decorations.getDecoration(uri, false), undefined);
+	refresh = false;
+	changes.fire([uri]);
+	using restored = decorations.getDecoration(uri, false)!;
+	assert.equal(restored.tooltip, 'Ignored');
+	refresh = true;
+	changes.fire([uri]);
 	provider.dispose();
 	assert.equal(decorations.getDecoration(uri, false), undefined);
 	dom.window.close();

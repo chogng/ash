@@ -63,6 +63,16 @@
 		"scm.history.deletions": "{0} deletions(-)",
 		"scm.history.verbosityTitle": "Commit details accessibility help",
 		"scm.history.verbosityDescription": "Announce how to open accessibility help when commit details receive focus.",
-		"scm.history.detailsHelp": "Commit details show the author, relative and full time, complete message, and file and line change counts. Use Left and Right Arrow in the actions toolbar to copy the full commit ID or open the commit in a browser. Use Shift+Tab to read and scroll the message. Escape returns to the commit. Press <keybinding:editor.action.accessibleView> to read these details as plain text."
+		"scm.history.detailsHelp": "Commit details show the author, relative and full time, complete message, and file and line change counts. Use Left and Right Arrow in the actions toolbar to copy the full commit ID or open the commit in a browser. Use Shift+Tab to read and scroll the message. Escape returns to the commit. Press <keybinding:editor.action.accessibleView> to read these details as plain text.",
+		"scm.repositories.label": "Source control repositories",
+		"scm.repositories.verbosityInvalid": "Repositories accessibility verbosity must be a boolean.",
+		"scm.repositories.helpHint": "Press Alt+F1 for accessibility help.",
+		"scm.repositories.changes": "{0} changed files",
+		"scm.repositories.description": "{0}, {1}, {2} changed files",
+		"scm.repositories.selected": "Selected repository {0}",
+		"scm.repositories.selectFailed": "Could not select repository: {0}",
+		"scm.repositories.verbosityTitle": "Repositories accessibility help",
+		"scm.repositories.verbosityDescription": "Announce how to open accessibility help when source control repositories receive focus.",
+		"scm.repositories.help": "Repositories lists the source control repositories and worktrees available in this workspace. Use Up and Down Arrow to navigate, and Enter or Space to select a repository. Selection updates Changes, Graph and the status bar. Click the branch name in the status bar to switch branches. Each row shows the repository name, branch and changed file count. Repositories with the same name also show a distinguishing path."
 	}
 }

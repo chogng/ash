@@ -2,6 +2,9 @@ import type { AppServerProtocolClient } from "../../app-server/browser/appServer
 import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IGitApi } from "../common/gitApi.js";
+import { CancellationToken } from '../../../base/common/cancellation.js';
+import { CancellationError } from '../../../base/common/errors.js';
+import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
 
 export function createDisconnectedGitApi(unavailable: UnavailableOperation): IGitApi {
 	return {
@@ -56,7 +59,29 @@ export function createAppServerGitApi(connection: AppServerProtocolClient): IGit
 		updateConfig: (params) => appServerRequest(connection, "config/update", params),
 		repositories: () => appServerRequest(connection, "git/repositories", {}),
 		status: (params) => appServerRequest(connection, "git/status", params),
-		checkIgnore: params => appServerRequest(connection, 'git/checkIgnore', params),
+		checkIgnore: async (params, token = CancellationToken.None) => {
+			if (token.isCancellationRequested) {
+				throw new CancellationError();
+			}
+			const operationId = `git-ignore-${crypto.randomUUID()}`;
+			const result = appServerRequest(connection, 'git/checkIgnore', { ...params, operationId });
+			let cancellation: Promise<unknown> | undefined;
+			using listener = token.onCancellationRequested(() => {
+				// Keep the original request registered until the server sends its terminal response.
+				cancellation = appServerRequest(connection, 'git/checkIgnore/cancel', { operationId });
+				void cancellation.catch(() => undefined);
+			});
+			try {
+				return await result;
+			} catch (error) {
+				if (error instanceof AppServerRemoteError && error.errorName === 'RequestCancelled') {
+					throw new CancellationError();
+				}
+				throw error;
+			} finally {
+				await cancellation;
+			}
+		},
 		history: (params) => appServerRequest(connection, "git/history", params),
 		branches: (params) => appServerRequest(connection, "git/branch/list", params),
 		createBranch: params => appServerRequest(connection, 'git/branch/create', params),

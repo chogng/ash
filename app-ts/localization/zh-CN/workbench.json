@@ -655,7 +655,8 @@
 		"runAndDebug": "运行和调试",
 		"debugConsole": "调试控制台",
 		"ports": "端口",
-		"refactorPreview": "重构预览"
+		"refactorPreview": "重构预览",
+		"repositories": "仓库"
 	},
 	"ash.regions": {
 		"primarySidebar": "主侧栏",

@@ -9396,6 +9396,22 @@
         {
           "properties": {
             "method": {
+              "const": "git/checkIgnore/cancel",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitCheckIgnoreCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/textDiff",
               "type": "string"
             },
@@ -14957,6 +14973,22 @@
             },
             "result": {
               "$ref": "#/$defs/GitCheckIgnoreResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/checkIgnore/cancel",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitCheckIgnoreCancelResult"
             }
           },
           "required": [
@@ -22784,9 +22816,48 @@
       ],
       "type": "string"
     },
+    "GitCheckIgnoreCancelParams": {
+      "additionalProperties": false,
+      "description": "Cancels an ignore query owned by the requesting connection, including queued work.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId"
+      ],
+      "type": "object"
+    },
+    "GitCheckIgnoreCancelResult": {
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/GitCheckIgnoreCancelStatusDto"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
+    },
+    "GitCheckIgnoreCancelStatusDto": {
+      "enum": [
+        "requested",
+        "alreadyRequested",
+        "completed"
+      ],
+      "type": "string"
+    },
     "GitCheckIgnoreParams": {
       "description": "Bounded paths relative to one authorized repository; directories do not expand recursively.",
       "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
         "paths": {
           "items": {
             "type": "string"
@@ -22803,6 +22874,7 @@
         }
       },
       "required": [
+        "operationId",
         "paths"
       ],
       "type": "object"
@@ -23970,6 +24042,25 @@
       },
       "required": [
         "commits"
+      ],
+      "type": "object"
+    },
+    "GitIgnoreChanged": {
+      "description": "Repository-relative paths whose ignore classification may have changed.\nAn empty path list invalidates the entire repository; directory paths include descendants.",
+      "properties": {
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "repositoryId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repositoryId",
+        "paths"
       ],
       "type": "object"
     },
@@ -35811,6 +35902,22 @@
             },
             "params": {
               "$ref": "#/$defs/GitStatusChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/ignoreChanged",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitIgnoreChanged"
             }
           },
           "required": [

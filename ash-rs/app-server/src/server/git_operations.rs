@@ -13,6 +13,9 @@ use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use ash_app_server_protocol::protocol::git::GitCatalogResult;
 use ash_app_server_protocol::protocol::git::GitChangeFileParams;
+use ash_app_server_protocol::protocol::git::GitCheckIgnoreCancelParams;
+use ash_app_server_protocol::protocol::git::GitCheckIgnoreCancelResult;
+use ash_app_server_protocol::protocol::git::GitCheckIgnoreCancelStatusDto;
 use ash_app_server_protocol::protocol::git::GitCheckIgnoreParams;
 use ash_app_server_protocol::protocol::git::GitCheckIgnoreResult;
 use ash_app_server_protocol::protocol::git::GitCloneParams;
@@ -237,18 +240,46 @@ impl AppServer {
         )
     }
 
-    pub(super) fn git_check_ignore(&self, value: &Value) -> Result<Value, RpcError> {
+    pub(super) fn git_check_ignore(
+        &self,
+        value: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: GitCheckIgnoreParams = decode(value)?;
         let paths = paths(params.paths)?;
         let ignored = self
             .git_runtime_service()?
-            .check_ignore_for(params.repository_id.as_deref(), &paths)
+            .check_ignore_for(params.repository_id.as_deref(), &paths, cancellation)
             .map_err(git_error)?;
         let ignored_paths = ignored
             .iter()
             .map(|path| worktree_path(path))
             .collect::<Result<Vec<_>, _>>()?;
         result(&GitCheckIgnoreResult { ignored_paths })
+    }
+
+    pub(super) fn git_check_ignore_cancel(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        use super::request_serialization::RequestCancelStatus;
+        let params: GitCheckIgnoreCancelParams = decode(value)?;
+        if params.operation_id.is_empty() || params.operation_id.chars().count() > 128 {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let status = match self
+            .request_cancellations
+            .cancel_operation(connection.connection_id, params.operation_id)
+        {
+            RequestCancelStatus::Requested => GitCheckIgnoreCancelStatusDto::Requested,
+            RequestCancelStatus::AlreadyRequested => {
+                GitCheckIgnoreCancelStatusDto::AlreadyRequested
+            }
+            RequestCancelStatus::Completed => GitCheckIgnoreCancelStatusDto::Completed,
+        };
+        self.request_scheduler.cancel_waiting_requests();
+        result(&GitCheckIgnoreCancelResult { status })
     }
 
     pub(super) fn git_branch_list(&self, value: &Value) -> Result<Value, RpcError> {

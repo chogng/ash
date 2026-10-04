@@ -2,6 +2,7 @@ import type { GitCompareChangesParams, GitCompareChangesResult, GitCommitMessage
 import type { GitInitParams, GitCatalogResult, GitCommandParams, GitCommandResult, GitIndexDiffResult, GitIndexEditParams } from '../../app-server/common/generated/index.js';
 import type { ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitChangeFileResult, GitConflictFileParams, GitConflictFileResult, GitCompleteConflictParams, GitCloneParams, GitCloneResult, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult, GitFetchParams, GitGraphParams, GitGraphResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams, GitStatusResult } from "../../app-server/common/generated/index.js";
 import type { GitCheckIgnoreParams, GitCheckIgnoreResult } from '../../app-server/common/generated/index.js';
+import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { GitBranchCreateParams, GitBranchDeleteParams, GitWorktreeCreateParams, GitWorktreeCreateResult, GitWorktreeDeleteParams, GitWorktreeListResult, GitWorktreeResolveParams, GitWorktreeResolveResult } from '../../app-server/common/generated/index.js';
 
 export interface IGitApi {
@@ -15,7 +16,7 @@ export interface IGitApi {
 	updateConfig(params: ConfigUpdateParams): Promise<ConfigCommandResult>;
 	repositories(): Promise<GitRepositoriesResult>;
 	status(params: GitRepositoryParams): Promise<GitStatusResult>;
-	checkIgnore(params: GitCheckIgnoreParams): Promise<GitCheckIgnoreResult>;
+	checkIgnore(params: Omit<GitCheckIgnoreParams, 'operationId'>, token?: CancellationToken): Promise<GitCheckIgnoreResult>;
 	history(params: GitRepositoryParams): Promise<GitHistoryResult>;
 	branches(params: GitRepositoryParams): Promise<GitBranchListResult>;
 	createBranch(params: GitBranchCreateParams): Promise<GitBranchListResult>;

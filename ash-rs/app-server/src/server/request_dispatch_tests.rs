@@ -135,7 +135,11 @@ fn check_ignore_dispatch_queries_authorized_paths_and_rejects_directory_escape()
         (3, json!(["../outside"]), Value::Null),
         (4, json!([]), Value::Null),
     ] {
-        client.send(id, "git/checkIgnore", json!({"paths":paths}));
+        client.send(
+            id,
+            "git/checkIgnore",
+            json!({"operationId":format!("ignore-{id}"),"paths":paths}),
+        );
         let response = loop {
             let message = client.read();
             if message["id"] == id {
@@ -146,6 +150,55 @@ fn check_ignore_dispatch_queries_authorized_paths_and_rejects_directory_escape()
             assert_eq!(response["error"]["code"], -32602, "{response}");
         } else {
             assert_eq!(response["result"], expected, "{response}");
+        }
+    }
+    let held = server
+        .request_scheduler
+        .acquire(
+            0,
+            RequestSerializationScope::Global {
+                access: SerializationAccess::Exclusive,
+            },
+        )
+        .unwrap();
+    client.send(
+        5,
+        "git/checkIgnore",
+        json!({"operationId":"ignore-queued", "paths":["ignored.log"]}),
+    );
+    client.send(
+        6,
+        "git/checkIgnore/cancel",
+        json!({"operationId":"ignore-queued"}),
+    );
+    let mut responses = Vec::new();
+    while responses.len() < 2 {
+        let response = client.read();
+        if response["id"] == 5 || response["id"] == 6 {
+            responses.push(response);
+        }
+    }
+    assert!(
+        responses
+            .iter()
+            .any(|message| message["id"] == 5 && message["error"]["message"] == "RequestCancelled")
+    );
+    assert!(
+        responses
+            .iter()
+            .any(|message| message["id"] == 6 && message["result"]["status"] == "requested")
+    );
+    drop(held);
+    client.send(
+        7,
+        "git/checkIgnore/cancel",
+        json!({"operationId":"ignore-2"}),
+    );
+    loop {
+        let response = client.read();
+        if response["id"] == 7 {
+            assert_eq!(response["result"], json!({"status":"completed"}));
+            break;
         }
     }
     client.close();

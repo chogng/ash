@@ -4,6 +4,20 @@ import { Extensions, type IConfigurationRegistry } from '../../../../platform/co
 import { Registry } from '../../../../platform/registry/common/platform.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.ScmRepositories,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('scm.repositories.verbosityInvalid', 'Repositories accessibility verbosity must be a boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('scm.repositories.verbosityTitle', 'Repositories accessibility help'),
+		description: localize('scm.repositories.verbosityDescription', 'Announce how to open accessibility help when source control repositories receive focus.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ScmHistoryDetails,
 	defaultValue: true,
 	parse(value: unknown): boolean {

@@ -146,6 +146,94 @@ impl GitRepositorySnapshot {
 }
 
 impl GitClient {
+    /// Files outside the worktree that can change ignore classification, including config includes.
+    /// Git resolves config paths so its HOME, XDG and core.excludesFile rules remain authoritative.
+    pub async fn ignore_watch_paths(&self, repository: &GitRepository) -> GitResult<Vec<PathBuf>> {
+        use std::ffi::OsString;
+        let root = repository.worktree_root();
+        let mut paths = vec![
+            repository.git_dir().join("index"),
+            repository.git_dir().join("config.worktree"),
+            repository.common_dir().join("config"),
+            repository.common_dir().join("info/exclude"),
+        ];
+        for variable in ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"] {
+            let output = self
+                .run_query(root, ["var", variable])
+                .await?
+                .require_success()?;
+            for value in output
+                .stdout
+                .split(|byte| *byte == b'\n')
+                .filter(|value| !value.is_empty())
+            {
+                paths.push(path_from_git_bytes(value, &output.command)?);
+            }
+        }
+        let output = self
+            .run_query(root, ["config", "--null", "--show-origin", "--list"])
+            .await?
+            .require_success()?;
+        let bytes = output.stdout.strip_suffix(&[0]).ok_or_else(|| {
+            GitError::invalid_output(&output.command, "config origins were not NUL-terminated")
+        })?;
+        let records = bytes.split(|byte| *byte == 0).collect::<Vec<_>>();
+        if records.len() % 2 != 0 {
+            return Err(GitError::invalid_output(
+                &output.command,
+                "config origin has no value",
+            ));
+        }
+        for record in records.chunks_exact(2) {
+            if let Some(path) = record[0].strip_prefix(b"file:") {
+                let path = path_from_git_bytes(path, &output.command)?;
+                paths.push(if path.is_absolute() {
+                    path
+                } else {
+                    root.join(path)
+                });
+            }
+        }
+        let default = std::env::var_os("XDG_CONFIG_HOME")
+            .filter(|path| !path.is_empty())
+            .map(|path| PathBuf::from(path).join("git/ignore").into_os_string())
+            .unwrap_or_else(|| OsString::from("~/.config/git/ignore"));
+        let output = self
+            .run_query(
+                root,
+                [
+                    OsString::from("config"),
+                    OsString::from("--null"),
+                    OsString::from("--path"),
+                    OsString::from("--default"),
+                    default,
+                    OsString::from("--get"),
+                    OsString::from("core.excludesFile"),
+                ],
+            )
+            .await?
+            .require_success()?;
+        let bytes = output.stdout.strip_suffix(&[0]).ok_or_else(|| {
+            GitError::invalid_output(&output.command, "ignore path was not NUL-terminated")
+        })?;
+        if !bytes.is_empty() {
+            let path = path_from_git_bytes(bytes, &output.command)?;
+            paths.push(if path.is_absolute() {
+                path
+            } else {
+                root.join(path)
+            });
+        }
+        for path in paths.clone() {
+            if let Ok(target) = dunce::canonicalize(path) {
+                paths.push(target);
+            }
+        }
+        paths.sort();
+        paths.dedup();
+        Ok(paths)
+    }
+
     /// Queries ignore rules for repository-relative paths without listing ignored directory trees.
     /// Tracked files are excluded by Git, and negated matches are not ignored decorations.
     pub async fn check_ignore(

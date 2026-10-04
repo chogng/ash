@@ -4,10 +4,10 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+use super::RequestCancelStatus;
 use super::RequestCancellationRegistry;
 use super::RequestScheduler;
 use super::RequestSerializationScope;
-use ash_app_server_protocol::protocol::language::LanguageCancelStatusDto;
 use ash_app_server_protocol::protocol::registry::SerializationAccess;
 
 fn session(id: &str, access: SerializationAccess) -> RequestSerializationScope {
@@ -182,19 +182,19 @@ fn cancellation_requested_before_start_reaches_the_operation() {
 
     assert_eq!(
         registry.cancel_operation(1, "operation-1".into()),
-        LanguageCancelStatusDto::Requested
+        RequestCancelStatus::Requested
     );
     let cancellation = registry.start(1, 10, Some("operation-1".into())).unwrap();
 
     assert!(cancellation.is_cancelled());
     assert_eq!(
         registry.cancel_operation(1, "operation-1".into()),
-        LanguageCancelStatusDto::AlreadyRequested
+        RequestCancelStatus::AlreadyRequested
     );
     registry.finish(1, 10);
     assert_eq!(
         registry.cancel_operation(1, "operation-1".into()),
-        LanguageCancelStatusDto::Completed
+        RequestCancelStatus::Completed
     );
 }
 
@@ -206,7 +206,7 @@ fn equal_operation_ids_on_different_connections_are_isolated() {
 
     assert_eq!(
         registry.cancel_operation(1, "same".into()),
-        LanguageCancelStatusDto::Requested
+        RequestCancelStatus::Requested
     );
     assert!(first.is_cancelled());
     assert!(!second.is_cancelled());

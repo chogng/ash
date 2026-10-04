@@ -12,6 +12,52 @@ use crate::GitClient;
 use crate::test_support::TestRepository;
 
 #[tokio::test(flavor = "current_thread")]
+async fn ignore_watch_paths_include_git_resolved_external_rules_and_config_includes() {
+    let repository = TestRepository::init();
+    let external = TestRepository::init();
+    external.write("rules", "*.cache\n");
+    external.write("included.config", "[core]\n\texcludesFile = rules\n");
+    let include = external.root().join("included.config");
+    repository.git(&["config", "include.path", include.to_str().unwrap()]);
+    // Relative excludesFile paths are relative to the worktree, rather than the include file.
+    repository.write("rules", "*.cache\n");
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let paths = client.ignore_watch_paths(&opened).await.unwrap();
+    for path in [
+        include,
+        repository.root().join("rules"),
+        opened.git_dir().join("index"),
+        opened.common_dir().join("info/exclude"),
+    ] {
+        assert!(paths.contains(&path), "missing watch source: {path:?}");
+    }
+    let rules = external.root().join("rules");
+    external.write(
+        "included.config",
+        &format!(
+            "[core]\n\texcludesFile = {}\n",
+            rules.to_str().unwrap().replace('\\', "/")
+        ),
+    );
+    assert!(
+        client
+            .ignore_watch_paths(&opened)
+            .await
+            .unwrap()
+            .contains(&rules)
+    );
+    external.write("included.config", "[core]\n\texcludesFile =\n");
+    assert!(
+        !client
+            .ignore_watch_paths(&opened)
+            .await
+            .unwrap()
+            .contains(&rules)
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn check_ignore_honors_nested_negated_excluded_and_tracked_paths() {
     let repository = TestRepository::init();
     repository.write("tracked.log", "tracked\n");

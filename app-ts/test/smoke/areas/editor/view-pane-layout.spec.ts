@@ -10,6 +10,8 @@ test('multiple view panes resize independently and restore their layout after re
 	let changes = container.locator('[data-view-id="ash.gitView"]');
 	let review = container.locator('[data-view-id="ash.gitAgentReview"]');
 	let graph = container.locator('[data-view-id="ash.gitGraph"]');
+	await expect(container.locator('[data-view-id="workbench.scm.repositories"]')).toBeHidden();
+	await expect(changes.getByRole('combobox')).toHaveCount(0);
 	const header = (pane: typeof graph) => pane.locator('.ash-pane-view-header-button');
 	const height = (pane: typeof graph) => pane.evaluate(element => element.getBoundingClientRect().height);
 	await expect(header(changes)).toHaveAttribute('aria-expanded', 'true');
