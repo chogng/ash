@@ -226,6 +226,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 			assert.equal(repositoryId, "repo-1");
 			return status;
 		},
+		branches: async () => [],
 		graph: async (query: GraphQuery, repositoryId?: string) => {
 			if (workspaceError) throw workspaceError;
 			graphRequests.push(query);
@@ -307,7 +308,12 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		assert.equal(pane.element.querySelector(".ash-scm-graph-graph.merge")?.querySelectorAll(".ash-scm-graph-node").length, 2);
 		assert.equal(pane.element.querySelector<SVGSVGElement>(".ash-scm-graph-graph.merge")?.style.width, "44px");
 		assert.ok((pane.element.querySelector(".ash-scm-graph-graph.merge")?.querySelectorAll(".ash-scm-graph-path").length ?? 0) > 1);
-		assert.match(pane.element.querySelector(".ash-scm-graph-metadata")?.textContent ?? "", /^1234567 · /);
+		assert.equal(pane.element.querySelector('.ash-scm-graph-metadata'), null);
+		const commitHover = hoverOptions.find(options => options.target.classList.contains('current'))!;
+		const content = typeof commitHover.content === 'function' ? commitHover.content() : commitHover.content;
+		assert.ok(content instanceof browser.window.HTMLElement);
+		assert.equal(content.querySelector('.ash-scm-graph-hover-subject')?.textContent, 'Wire SCM panes');
+		assert.equal(content.querySelector('.ash-scm-graph-hover-metadata')?.textContent, `1234567890abcdef · ${new Date(1_753_000_000_000).toLocaleString()}`);
 
 		const fetch = pane.element.querySelector<HTMLButtonElement>('[data-action-id="ash.git.fetch"] > button');
 		assert.ok(fetch);
@@ -366,6 +372,7 @@ test("SCMHistoryViewPane loads the complete history across graph pages", async (
 		onDidBecomeReady: noEvent,
 		onDidChangeActiveRepository: noEvent,
 		status: async () => status,
+		branches: async () => [],
 		graph: async (query: GraphQuery) => {
 			graphRequests.push(query);
 			const firstPage = [
@@ -447,6 +454,7 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		onDidBecomeReady: noEvent,
 		onDidChangeActiveRepository: noEvent,
 		status: async () => status,
+		branches: async () => [],
 		graph: async (_query: GraphQuery) => ({ commits, references: [], remotes: [], hasMore: false, nextCursor: undefined }),
 	} as unknown as IGitService;
 	const hoverService: IHoverService = {
@@ -518,6 +526,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 			head: { type: "branch", name: "main", objectId, upstream: undefined },
 			changes: [],
 		}),
+		branches: async () => [],
 		graph: async () => ({
 			commits: [{ objectId, parentObjectIds: [parentObjectId], timestampSeconds: 1_753_000_000, subject: "Change editor files" }],
 			references: [{ name: "main", objectId, kind: "localBranch" as const, remoteName: undefined, current: true }],
@@ -634,7 +643,8 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 	];
 	const git = {
 		status: async () => ({ repositoryId: 'repo-1', head: { type: 'branch', name: 'main', objectId } }),
-		graph: async () => ({ commits: [{ objectId, parentObjectIds: [parentId, '3'.repeat(40)], subject: 'Review commit', timestampSeconds: 1 }], references: [], hasMore: false }),
+		branches: async () => [],
+		graph: async () => ({ commits: [{ objectId, parentObjectIds: [parentId, '3'.repeat(40)], subject: 'Review commit', timestampSeconds: 1 }], references: [], remotes: [], hasMore: false }),
 		commitChanges: async (id: string, repository?: string) => {
 			requests.push({ id, repository });
 			return { parentObjectId: parentId, changes };

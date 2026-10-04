@@ -126,6 +126,62 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Review all files' })).toHaveCount(1);
 });
 
+test('SCM history reserves title width and reveals metadata on pointer and keyboard focus', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+	const cwd = testWorkspace.directory;
+	const subject = 'History metadata: a long title that uses the space previously occupied by the commit hash and date';
+	await run('git', ['commit', '--amend', '-m', subject], { cwd });
+	const { stdout } = await run('git', ['show', '-s', '--format=%H%n%ct', 'HEAD'], { cwd });
+	const [hash, timestamp] = stdout.trim().split('\n');
+	const page = workbench.page;
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	const header = history.locator('.ash-pane-view-header');
+	await header.click();
+	const commit = history.getByRole('treeitem', { name: /History metadata:/u });
+	await expect(commit).toBeVisible();
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
+	for (const width of [280, 560]) {
+		const sidebarBounds = (await sidebar.boundingBox())!;
+		const sashBounds = (await sash.boundingBox())!;
+		const x = sashBounds.x + sashBounds.width / 2;
+		const y = sashBounds.y + sashBounds.height / 2;
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x + width - sidebarBounds.width, y);
+		await page.mouse.up();
+		await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeCloseTo(width, 0);
+		await expect(commit.locator('.ash-scm-graph-metadata')).toHaveCount(0);
+		const geometry = await commit.evaluate(element => {
+			const graph = element.querySelector('.ash-scm-graph-graph')!.getBoundingClientRect();
+			const title = element.querySelector('.ash-scm-graph-subject')!.getBoundingClientRect();
+			const row = element.querySelector('.ash-scm-graph-row')!.getBoundingClientRect();
+			return { left: title.left - graph.right, right: row.right - title.right };
+		});
+		expect(geometry.left).toBeCloseTo(0, 1);
+		expect(geometry.right).toBeCloseTo(8, 1);
+	}
+	const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
+	const metadata = `${hash} · ${await page.evaluate(value => new Date(Number(value) * 1000).toLocaleString(), timestamp)}`;
+	await commit.locator('.ash-scm-graph-subject').hover();
+	await expect(hover.locator('.ash-scm-graph-hover-subject')).toHaveText(subject);
+	await expect(hover.locator('.ash-scm-graph-hover-metadata')).toHaveText(metadata);
+	await page.keyboard.press('Escape');
+	await expect(hover).toHaveCount(0);
+	await header.hover();
+	await header.locator('.ash-pane-view-header-button').focus();
+	await commit.focus();
+	await expect(hover.locator('.ash-scm-graph-hover-metadata')).toHaveText(metadata);
+	await expect(commit).toHaveAttribute('aria-describedby', (await hover.getAttribute('id'))!);
+	await page.keyboard.press('Escape');
+	await expect(hover).toHaveCount(0);
+	await expect(commit).toBeFocused();
+	await commit.press('Enter');
+	await expect(commit).toHaveAttribute('aria-expanded', 'true');
+	await expect(commit.getByRole('button', { name: /main\.ts/ })).toBeVisible();
+});
+
 test('SCM history references and actions overlay long titles without changing row widths', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 	const cwd = testWorkspace.directory;
@@ -208,6 +264,8 @@ test('SCM history references and actions overlay long titles without changing ro
 		await expect(actions).toBeVisible();
 		expect(await subject.boundingBox()).toEqual(beforeHover);
 		await commit.press('Tab');
+		await expect(remoteLabel).toBeFocused();
+		await remoteLabel.press('Tab');
 		await expect.poll(() => actions.evaluate(element => element.contains(document.activeElement))).toBe(true);
 		await page.keyboard.press('Home');
 		await expect(actions.getByRole('button', { name: 'Open Changes', exact: true })).toBeFocused();

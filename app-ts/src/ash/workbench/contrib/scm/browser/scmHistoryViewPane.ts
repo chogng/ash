@@ -12,12 +12,12 @@ import { DisposableStore, MutableDisposable, toDisposable } from "../../../../ba
 import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { Action2, IMenuService, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { IContextKeyService, type IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { registerOpenEditorListeners, type IOpenEditorOptions } from "../../../../platform/editor/browser/editor.js";
 import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import { IResourceLabelService, type ResourceLabels } from "../../../browser/labels.js";
-import { SCMHistoryUnavailableError, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryProvider, type SCMHistoryItemChangeViewModelTreeElement, type SCMHistoryItemViewModelTreeElement } from '../common/history.js';
+import { SCMHistoryUnavailableError, type ISCMHistoryItemComparison, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryProvider, type SCMHistoryItemChangeViewModelTreeElement, type SCMHistoryItemViewModelTreeElement } from '../common/history.js';
 import { ISCMViewService } from '../common/scm.js';
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
@@ -38,13 +38,13 @@ registerAction2(class extends Action2 {
 		});
 	}
 
-	public override async run(accessor: ServicesAccessor, element: SCMHistoryItemViewModelTreeElement): Promise<void> {
+	public override async run(accessor: ServicesAccessor, element: SCMHistoryItemViewModelTreeElement, comparison?: ISCMHistoryItemComparison): Promise<void> {
 		if (element?.type !== 'historyItemViewModel') { return; }
 		const { repository, historyItemViewModel } = element;
 		const provider = repository.provider.historyProvider;
 		if (!provider) { return; }
 		const historyItem = historyItemViewModel.historyItem;
-		const changes = await provider.provideHistoryItemChanges(historyItem.id, historyItem.parentIds[0]);
+		const changes = await provider.provideHistoryItemChanges(historyItem.id, comparison?.baseId ?? historyItem.parentIds[0]);
 		const items: MultiDiffEditorInputItem[] = [];
 		let binaryFiles = 0;
 		for (const change of changes ?? []) {
@@ -63,9 +63,12 @@ registerAction2(class extends Action2 {
 		if (binaryFiles > 0) {
 			accessor.get(INotificationService).info(localize('scm.history.binaryFiles', '{0} binary files cannot be shown in the text comparison.', binaryFiles));
 		}
-		if (items.length === 0) { return; }
-		const resource = URI.from({ scheme: 'ash-multi-diff', path: `/scm-history/${repository.id}/${historyItem.id}` });
-		const title = `${historyItem.displayId ?? historyItem.id} · ${historyItem.subject}`;
+		if (items.length === 0) {
+			if (changes?.length === 0) { accessor.get(INotificationService).info(localize('scm.history.noChanges', 'There are no changes between these versions.')); }
+			return;
+		}
+		const resource = URI.from({ scheme: 'ash-multi-diff', path: `/scm-history/${repository.id}/${comparison?.baseId ?? 'parent'}/${historyItem.id}` });
+		const title = comparison?.label ?? `${historyItem.displayId ?? historyItem.id} · ${historyItem.subject}`;
 		await accessor.get(IEditorService).openEditor(createMultiDiffEditorInput(resource, items, title, { kind: 'snapshot', repositoryId: repository.id, label: historyItem.displayId ?? historyItem.id }), { pinned: true });
 	}
 });
@@ -107,7 +110,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService private readonly contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService) {
 		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.scmViewService = scmViewService;
@@ -220,7 +223,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.list.className = "ash-scm-graph-list";
 			this.list.setAttribute("role", "tree");
 			this.list.setAttribute('aria-label', this.graphLabel);
-			this.list.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a commit to expand its files. Use Tab to reach Open Changes and press Enter to compare all text files in that commit. The same action is available in the commit context menu.'));
+			this.list.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a commit to expand its files. Press Shift+F10 or the Context Menu key for commit actions: view or compare changes, create a branch, cherry-pick, copy commit information, or add to Chat. Use Tab to reach reference badges and Open Changes. Press Enter on a reference badge for branch actions. Checkout includes detached commits; More includes creating a tag.'));
 			children.push(this.list);
 		}
 		if (page.hasMore) children.push(this.renderMore());
@@ -378,23 +381,26 @@ export class SCMHistoryViewPane extends ViewPane {
 		subject.className = "ash-scm-graph-subject";
 		subject.textContent = historyItem.subject;
 		details.append(subject);
+		const repository = this.scmViewService.activeRepository;
+		const menuTarget: SCMHistoryItemViewModelTreeElement | undefined = repository ? { repository, historyItemViewModel, type: 'historyItemViewModel' } : undefined;
+		const scope = this.hovers.add(this.contextKeyService.createScoped(item));
+		scope.setContext('scmHistoryProviderId', repository?.provider.providerId ?? '');
+		scope.setContext('scmHistoryItemHasRemote', (historyItem.remoteLinks?.length ?? 0) > 0);
+		scope.setContext('scmHistoryItemHasBranch', historyItem.references?.some(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch') ?? false);
+		scope.setContext('scmHistoryItemHasUpstream', historyItem.references?.some(reference => reference.upstream !== undefined) ?? false);
 		const visibleReferences = historyItemReferences(historyItem, this.head);
 		const overlay = h(document, 'div');
 		overlay.className = 'ash-scm-graph-overlay';
-		if (visibleReferences.length > 0) { overlay.append(this.renderReferenceLabels(visibleReferences)); }
-		const metadata = h(document, "span");
-		metadata.className = "ash-scm-graph-metadata";
-		const date = historyItem.timestamp === undefined ? undefined : new Date(historyItem.timestamp);
-		metadata.textContent = date ? `${historyItem.displayId ?? historyItem.id} · ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : historyItem.displayId ?? historyItem.id;
+		if (visibleReferences.length > 0) { overlay.append(this.renderReferenceLabels(visibleReferences, menuTarget, scope)); }
 		const row = h(document, "div");
 		row.className = "ash-scm-graph-row";
-		row.append(graph, details, metadata);
-		const repository = this.scmViewService.activeRepository;
+		row.append(graph, details);
 		if (repository) {
 			const actions = h(document, 'div');
 			actions.className = 'ash-scm-graph-actions';
 			this.hovers.add(new MenuWorkbenchToolBar(actions, this.menuService, this.contextMenuService, MenuId.SCMHistoryItemContext, {
 				ariaLabel: localize('scm.history.commitActions', 'Commit actions'),
+				contextKeyService: scope,
 				menuOptions: { arg: { repository, historyItemViewModel, type: 'historyItemViewModel' } satisfies SCMHistoryItemViewModelTreeElement },
 				toolbarOptions: { primaryGroup: 'inline' },
 			}));
@@ -405,37 +411,39 @@ export class SCMHistoryViewPane extends ViewPane {
 		const expanded = this.expanded.get(historyItem.id);
 		if (expanded) item.append(this.renderCommitChanges(historyItemViewModel, expanded));
 		this.hovers.add(addDisposableListener(item, "click", (event) => {
-			if ((event.target as Element).closest(".ash-scm-graph-change, .ash-scm-graph-actions")) return;
+			if ((event.target as Element).closest(".ash-scm-graph-change, .ash-scm-graph-actions, .ash-scm-graph-label")) return;
 			void this.toggleCommit(historyItem);
 		}));
-		this.hovers.add(addDisposableListener(item, "keydown", (event) => {
-			if (event.target !== item || (event.key !== "Enter" && event.key !== " ")) return;
-			event.preventDefault();
-			void this.toggleCommit(historyItem);
+		this.hovers.add(addDisposableListener(item, "keydown", event => {
+			if (event.target !== item) { return; }
+			if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+				event.preventDefault();
+				if (menuTarget) { this.showHistoryMenu(menuTarget, scope, item); }
+			} else if (event.key === 'Enter' || event.key === ' ') {
+				event.preventDefault();
+				void this.toggleCommit(historyItem);
+			}
 		}));
 		this.hovers.add(addDisposableListener(item, "contextmenu", event => {
 			event.preventDefault();
 			event.stopPropagation();
-			const repository = this.scmViewService.activeRepository;
-			if (!repository) return;
-			this.contextMenuService.showContextMenu({
-				getAnchor: () => ({
-					x: event.clientX,
-					y: event.clientY,
-					targetWindow: event.view ?? undefined,
-				}),
-				menuId: MenuId.SCMHistoryItemContext,
-				menuActionOptions: { arg: {
-					repository,
-					historyItemViewModel,
-					type: 'historyItemViewModel',
-				} satisfies SCMHistoryItemViewModelTreeElement },
-			});
+			if (menuTarget) { this.showHistoryMenu(menuTarget, scope, item, event); }
 		}));
 		return item;
 	}
 
-	private renderReferenceLabels(references: readonly ISCMHistoryItemRef[]): HTMLSpanElement {
+	private showHistoryMenu(target: SCMHistoryItemViewModelTreeElement, scope: IScopedContextKeyService, focus: HTMLElement, event?: MouseEvent): void {
+		focus.focus();
+		this.contextMenuService.showContextMenu({
+			getAnchor: () => event ? { x: event.clientX, y: event.clientY, targetWindow: event.view ?? undefined } : focus,
+			menuId: target.references ? MenuId.for('SCMHistoryItemRefContext') : MenuId.SCMHistoryItemContext,
+			contextKeyService: scope,
+			menuActionOptions: { arg: target },
+			onHide: cancelled => { if (cancelled) { focus.focus(); } },
+		});
+	}
+
+	private renderReferenceLabels(references: readonly ISCMHistoryItemRef[], target: SCMHistoryItemViewModelTreeElement | undefined, rowScope: IScopedContextKeyService): HTMLSpanElement {
 		const document = this.graphElement.ownerDocument;
 		const container = h(document, "span");
 		container.className = "ash-scm-graph-label-container";
@@ -468,8 +476,34 @@ export class SCMHistoryViewPane extends ViewPane {
 			const label = h(document, "span");
 			label.className = `ash-scm-graph-label ${kind}`;
 			label.dataset.icon = icon.id;
-			label.setAttribute('role', 'img');
+			label.setAttribute('role', 'button');
+			label.tabIndex = 0;
+			label.setAttribute('aria-haspopup', 'menu');
 			label.setAttribute('aria-label', names);
+			const scope = this.hovers.add(rowScope.createScoped(label));
+			scope.setContext('scmHistoryItemHasBranch', group.some(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch'));
+			scope.setContext('scmHistoryItemHasUpstream', group.some(reference => reference.upstream !== undefined));
+			scope.setContext('scmHistoryRefCanDelete', group.some(reference => reference.category === 'localBranch' && reference.id !== this.head?.id));
+			if (target) {
+				const menuTarget = { ...target, references: group };
+				this.hovers.add(addDisposableListener(label, 'click', event => {
+					event.stopPropagation();
+					this.showHistoryMenu(menuTarget, scope, label);
+				}));
+				this.hovers.add(addDisposableListener(label, 'contextmenu', event => {
+					event.preventDefault();
+					event.stopPropagation();
+					this.showHistoryMenu(menuTarget, scope, label, event);
+				}));
+				this.hovers.add(addDisposableListener(label, 'keydown', event => {
+					if (event.key === 'Enter' || event.key === ' ' || event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+						event.preventDefault();
+						event.stopPropagation();
+						this.showHistoryMenu(menuTarget, scope, label);
+					}
+				}));
+			}
+
 			if (group.length > 1) {
 				const count = h(document, 'span');
 				count.className = 'ash-scm-graph-label-count';

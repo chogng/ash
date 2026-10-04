@@ -29,8 +29,6 @@
   --scm-graph-lane-5: color-mix(in srgb, var(--ash-success-foreground) 70%, var(--ash-foreground));
   --scm-graph-lane-6: color-mix(in srgb, var(--ash-warning-foreground) 70%, var(--ash-foreground));
   --scm-graph-lane-7: color-mix(in srgb, var(--ash-error-foreground) 70%, var(--ash-foreground));
-  container-name: ash-scm-graph;
-  container-type: inline-size;
   min-height: 0;
   flex: 1 1 auto;
   padding: 2px 0 8px;
@@ -88,7 +86,7 @@
 .ash-scm-graph-row {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 22px;
   align-items: center;
@@ -199,6 +197,10 @@
   line-height: 18px;
 }
 
+.ash-scm-graph-label:focus-visible {
+  outline-color: var(--ash-focus-border);
+}
+
 .ash-scm-graph-label > .ash-icon {
   width: var(--ash-lxicon-font-size-compact);
   height: var(--ash-lxicon-font-size-compact);
@@ -215,17 +217,6 @@
 .ash-scm-graph-label.head {
   color: var(--ash-list-active-selection-foreground);
   background: var(--ash-list-active-selection-background);
-}
-
-.ash-scm-graph-metadata {
-  flex: 0 0 auto;
-  margin-left: 8px;
-  overflow: hidden;
-  color: var(--ash-muted-foreground);
-  font-size: var(--ash-font-size-label2);
-  font-variant-numeric: tabular-nums;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .ash-scm-graph-overlay {
@@ -328,12 +319,6 @@
 
 .ash-scm-graph-load-more > .ash-scm-empty {
   padding: 0;
-}
-
-@container ash-scm-graph (max-width: 360px) {
-  .ash-scm-graph-metadata {
-    display: none;
-  }
 }
 
 .ash-scm-graph-hover {
