@@ -2,9 +2,7 @@ import { Disposable, MutableDisposable, type IDisposable } from '../../../../bas
 import { Emitter } from '../../../../base/common/event.js';
 import { ILabelService } from '../../../../platform/label/common/labelService.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { WorkbenchModeRegistry } from '../../../common/workbenchMode.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { IWorkbenchModeService } from '../../../services/workbenchMode/common/workbenchModeService.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 
 /** Owns the document title for one window and its window-scoped editor service. */
@@ -19,11 +17,11 @@ export class WindowTitle extends Disposable {
 
 	constructor(
 		private readonly targetWindow: Window,
+		private readonly productName: string,
 		@IEditorService private readonly editorService: IEditorService,
 		@IWorkspaceContextService private readonly workspaceService: IWorkspaceContextService,
 		@IWorkingCopyService private readonly workingCopyService: IWorkingCopyService,
 		@ILabelService private readonly labelService: ILabelService,
-		@IWorkbenchModeService private readonly modeService: IWorkbenchModeService,
 	) {
 		super();
 		this._register(editorService.onDidActiveEditorChange(() => this.handleActiveEditorChange()));
@@ -54,7 +52,7 @@ export class WindowTitle extends Disposable {
 		if (workspaceName) {
 			segments.push(workspaceName);
 		}
-		segments.push(WorkbenchModeRegistry.get(this.modeService.currentModeId).title);
+		segments.push(this.productName);
 		const title = segments.join(' — ');
 		if (this.targetWindow.document.title !== title) {
 			this.targetWindow.document.title = title;

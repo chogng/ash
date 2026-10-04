@@ -29,7 +29,6 @@ import { startWorkbench } from "./workbench.js";
 import { BrowserStorageService, migrateBrowserStorage } from '../services/storage/browser/storageService.js';
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
-import { switchBrowserWorkbenchMode } from "../services/workbenchMode/browser/browserWorkbenchModeHost.js";
 import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { BrowserLifecycleService } from '../services/lifecycle/browser/lifecycleService.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
@@ -64,7 +63,6 @@ export async function createWebWorkbench(
 		workspace: workspaceFromIdentifier(options.workspace ?? getEmptyWorkspaceIdentifier()),
 		createContextMenuService: createBrowserContextMenuService,
 		createTitlebarPart: createBrowserTitlebarPart,
-		switchWorkbenchMode: options.switchWorkbenchMode ?? (targetModeId => switchBrowserWorkbenchMode(window, targetModeId)),
 	});
 }
 
@@ -114,7 +112,6 @@ export async function startWebWorkbench(
 			container: host?.container ??
 				document.querySelector<HTMLElement>("#app") ??
 				document.body,
-			switchWorkbenchMode: host?.switchWorkbenchMode,
 		});
 		workbench.add(instance);
 		workbench.add(addDisposableListener(window, "pagehide", () => {

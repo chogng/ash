@@ -299,8 +299,6 @@ import { WorkbenchQuickInputService } from "../services/quickinput/browser/quick
 import { ChatContextPickService } from "../services/chat/browser/chatContextPickService.js";
 import { IChatContextPickService } from "../services/chat/common/chatContextService.js";
 import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
-import { WorkbenchModeService } from "../services/workbenchMode/browser/workbenchModeService.js";
-import { IWorkbenchModeService } from "../services/workbenchMode/common/workbenchModeService.js";
 import { WindowTitle } from './parts/titlebar/windowTitle.js';
 import { BrowserClipboardService } from "../../platform/clipboard/browser/clipboardService.js";
 import { IClipboardService } from "../../platform/clipboard/common/clipboardService.js";
@@ -334,7 +332,6 @@ export interface IStartWorkbenchOptions {
 	readonly userThemeService?: IUserThemeServiceContract;
 	readonly createContextMenuService: ContextMenuServiceFactory;
 	readonly createTitlebarPart: TitlebarPartFactory;
-	readonly switchWorkbenchMode: (modeId: WorkbenchModeId) => Promise<void>;
 }
 
 /** Starts the browser workbench and binds its commands to the initial UI. */
@@ -364,7 +361,6 @@ export async function startWorkbench({
 	userThemeService,
 	createContextMenuService,
 	createTitlebarPart,
-	switchWorkbenchMode,
 	browserViewApi,
 }: IStartWorkbenchOptions): Promise<Workbench> {
 	const themes = new ExtensionColorThemeService(api.extensions, api.events);
@@ -394,7 +390,6 @@ export async function startWorkbench({
 			userThemeService,
 			createContextMenuService,
 			createTitlebarPart,
-			switchWorkbenchMode,
 			browserViewApi,
 			browserFileSystemProvider,
 			webWorkspaceClient,
@@ -454,7 +449,6 @@ export class Workbench extends Disposable {
 		userThemeService: IUserThemeServiceContract | undefined,
 		createContextMenuService: ContextMenuServiceFactory,
 		createTitlebarPart: TitlebarPartFactory,
-		switchWorkbenchMode: (modeId: WorkbenchModeId) => Promise<void>,
 		browserViewApi: IBrowserViewApi | undefined,
 		browserFileSystemProvider: HTMLFileSystemProvider | undefined,
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
@@ -703,12 +697,6 @@ export class Workbench extends Disposable {
 		const lifecycleService = this.lifecycleService = this._register(createLifecycleService(services));
 		services.registerInstance(ILifecycleService, lifecycleService);
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
-		services.registerInstance(IWorkbenchModeService, this._register(new WorkbenchModeService({
-			currentModeId: modeId,
-			configurationService: configuration,
-			lifecycleService,
-			switchHostMode: switchWorkbenchMode,
-		})));
 		const layoutService = this._register(services.createInstance(WorkbenchLayout, workbenchRoot, {
 			workbenchState,
 			defaultLayout,
@@ -980,7 +968,7 @@ export class Workbench extends Disposable {
 			});
 			const windowServices = resources.add(services.createChild());
 			windowServices.registerSingleton(IEditorService, () => new BrowserEditorService(part));
-			resources.add(windowServices.createInstance(WindowTitle, getWindow(container)));
+			resources.add(windowServices.createInstance(WindowTitle, getWindow(container), mode.title));
 			return {
 				part,
 				resources: [resources],
@@ -997,7 +985,7 @@ export class Workbench extends Disposable {
 		// Commands follow focus across windows; each window title follows only that window's EditorPart.
 		const mainWindowServices = this._register(services.createChild());
 		mainWindowServices.registerSingleton(IEditorService, () => new BrowserEditorService(editor));
-		const windowTitle = this._register(mainWindowServices.createInstance(WindowTitle, ownerWindow));
+		const windowTitle = this._register(mainWindowServices.createInstance(WindowTitle, ownerWindow, mode.title));
 		const titlebar = this._register(createTitlebarPart(workbenchRoot, {
 			windowTitle,
 			menuService: menus,

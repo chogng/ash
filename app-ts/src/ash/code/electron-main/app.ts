@@ -37,7 +37,6 @@ import { BrowserAutomationMainService } from "../../platform/browser/electron-ma
 import { BrowserTargetRegistry } from "../../platform/browser/electron-main/browserTargetRegistry.js";
 import { configurationValues } from '../../platform/configuration/common/configurationIpc.js';
 import { formatNlsMessage } from '../../nls.js';
-import { editJsonObjectProperty } from '../../base/common/json.js';
 import { ConfigurationMainService } from "../../platform/configuration/electron-main/configurationMainService.js";
 import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
 import { developmentArtifactsPath } from "../../platform/environment/node/developmentArtifacts.js";
@@ -112,7 +111,6 @@ import type { LanguagePackCatalog } from '../../platform/languagePacks/common/la
 import { LanguagePackStore } from '../../platform/languagePacks/node/languagePackStore.js';
 import { LANGUAGE_PACK_READ_CHANNEL, LANGUAGE_PACK_WRITE_CHANNEL, NLS_CONFIGURATION_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
 import { HOST_RESTART_CHANNEL } from '../../platform/window/common/window.js';
-import { workbenchModeIpcRoutes } from "../../workbench/services/workbenchMode/electron-main/workbenchModeIpc.js";
 export type AppServerStartupMode = "required" | "disabled";
 
 export interface AshApplicationOptions {
@@ -1330,7 +1328,6 @@ export class AshApplication extends Disposable {
 					bindings.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID),
 				),
 			}),
-			...workbenchModeIpcRoutes(modeId => this.scheduleWorkbenchModeSwitch(record, modeId)),
 			...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
 			...workspaceContextIpcRoutes(workspaceContext),
 			workspaceRecoveryIpcRoute(identifiers => this.windowsMainService.restoreWorkspaces(identifiers, async identifier => (await this.openWorkspace(identifier, workspaces))?.window)),
@@ -1664,70 +1661,6 @@ export class AshApplication extends Disposable {
 			}
 		}
 		throw new Error(operation === 'install' ? 'No writable bin directory is available in PATH' : 'The ash command is not installed in PATH');
-	}
-
-	private scheduleWorkbenchModeSwitch(record: WorkbenchWindowRecord, modeId: WorkbenchModeId): void {
-		if (record.modeId === modeId) return;
-		setImmediate(() => {
-			void this.switchWorkbenchMode(record, modeId).catch(error => this.reportWorkbenchModeSwitchFailure(record, error));
-		});
-	}
-
-	private async switchWorkbenchMode(record: WorkbenchWindowRecord, modeId: WorkbenchModeId): Promise<void> {
-		if (record.window.isDestroyed() || record.modeId === modeId) return;
-		const previousModeId = record.modeId;
-		const previousDefaultModeId = this.defaultModeId;
-		this.globalKeybindings.removeWindow(record.id);
-		record.modeId = modeId;
-		this.defaultModeId = modeId;
-		try {
-			await this.loadRendererEntry(record.window, this.resolveRendererEntry("workbench", modeId));
-		} catch (error) {
-			record.modeId = previousModeId;
-			this.defaultModeId = previousDefaultModeId;
-			let persistenceError: unknown;
-			try {
-				await this.persistWorkbenchModeId(previousDefaultModeId);
-			} catch (candidate) {
-				persistenceError = candidate;
-			}
-			try {
-				await this.loadRendererEntry(record.window, this.resolveRendererEntry("workbench", previousModeId));
-			} catch (rollbackError) {
-				throw new AggregateError([error, persistenceError, rollbackError].filter(candidate => candidate !== undefined), "Workbench mode switch and rollback both failed");
-			}
-			if (persistenceError !== undefined) throw new AggregateError([error, persistenceError], "Workbench mode switch failed and its persisted preference could not be restored");
-			throw error;
-		}
-	}
-
-	private async persistWorkbenchModeId(modeId: WorkbenchModeId): Promise<void> {
-		const configuration = this.services.configuration;
-		const snapshot = configuration.read();
-		if (configurationValues(snapshot.document)[WorkbenchModeConfigurationKey] === modeId) return;
-		await configuration.update({
-			expectedRevision: snapshot.revision,
-			document: {
-				version: 1,
-				source: editJsonObjectProperty(snapshot.document.source, WorkbenchModeConfigurationKey, modeId),
-			},
-		});
-	}
-
-	private async reportWorkbenchModeSwitchFailure(record: WorkbenchWindowRecord, error: unknown): Promise<void> {
-		console.error("Failed to switch Workbench mode", error);
-		if (record.window.isDestroyed()) return;
-		const detail = error instanceof Error ? error.message : "The requested mode could not be loaded";
-		await this.dialogs.showMessageBox({
-			type: "error",
-			title: `${AshApplicationName} mode switch failed`,
-			message: "The requested Workbench mode could not be loaded.",
-			detail: detail.slice(0, 8_000),
-			buttons: ["OK"],
-			defaultId: 0,
-			cancelId: 0,
-			noLink: true,
-		}, record.window);
 	}
 
 	private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall", modeId: WorkbenchModeId = this.defaultModeId): RendererEntry {

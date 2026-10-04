@@ -16,7 +16,7 @@ Ash Desktop 当前只有 Code 工作台。Academic 是可在同一窗口打开�
 | `editor/contrib/academic` | 论文结构和编辑能力；不决定工作台模式 |
 | `DocumentEditorTextModelService` | 按规范化资源地址共享一个模型及工作副本，最后一个视图关闭时释放 |
 
-Browser 与 Electron 各保留一个 Workbench 启动入口，只加载 Code。模式定义仍由中央注册表拥有，loader 使用完整的类型映射；未知模式明确报错。通用代码编辑器排除已注册的结构化文档，文档编辑器按相同配置完成匹配与实例化。Academic 匹配 `.ash-academic`、`.ash-paper` 或其内容类型。
+Browser 与 Electron 各保留一个 Workbench 启动入口，只加载 Code。静态启动信息仍由中央注册表拥有，loader 使用完整的类型映射；未知模式明确报错。工作台不提供运行时模式切换服务、宿主切换回调或切换 IPC。通用代码编辑器排除已注册的结构化文档，文档编辑器按相同配置完成匹配与实例化。Academic 匹配 `.ash-academic`、`.ash-paper` 或其内容类型。
 
 `TextModel` 是内容、版本与撤销的唯一来源。多个论文视图共享编辑内容、脏状态、保存修订和备份身份；关闭一个视图不销毁其他视图。结构化文件只接受版本化文档格式，损坏 JSON 或纯文本不会被隐式当成论文正文。普通文档类型、转换命令和 Work 模式仍属于后续设计。
 
@@ -35,7 +35,7 @@ Browser 与 Electron 各保留一个 Workbench 启动入口，只加载 Code。�
 
 ## 窗口与状态
 
-Workbench、独立编辑器窗口和 Code Sessions 使用共享应用身份及用户数据根。窗口标题由各自的 `WindowTitle` 根据当前文件、未保存状态、工作区和 Code 产品名称更新，监听随窗口释放。
+Workbench、独立编辑器窗口和 Code Sessions 使用共享应用身份及用户数据根。启动装配把产品名称传给主窗口与辅助窗口的 `WindowTitle`。各自的标题根据当前文件、未保存状态和工作区更新，监听随窗口释放。
 
 Code Sessions 保持独立页面。Workbench 通过 Titlebar action 请求打开 Agents 窗口；Main 持有窗口创建、复用与关闭，Sessions 使用自己的会话状态。`sessions` 可以复用 `workbench` 能力，`workbench` 不反向导入 `sessions`。详情见 [Sessions 说明](../app-ts/src/ash/sessions/README.md)。
 

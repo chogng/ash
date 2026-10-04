@@ -28,7 +28,6 @@ import { startWorkbench, type Workbench } from '../browser/workbench.js';
 import { WorkbenchModeId } from '../common/workbenchMode.js';
 import { createElectronWorkbenchContextMenuService } from '../services/contextmenu/electron-browser/contextMenuService.js';
 import { loadUserThemes } from '../services/themes/browser/workbenchThemeService.js';
-import { switchElectronWorkbenchMode } from '../services/workbenchMode/electron-browser/electronWorkbenchModeHost.js';
 import { ElectronLifecycleService } from '../services/lifecycle/electron-browser/lifecycleService.js';
 import { createElectronTitlebarPartFactory } from './parts/titlebar/titlebarPart.js';
 import { NativeDialogHandler } from './parts/dialogs/dialogHandler.js';
@@ -123,7 +122,6 @@ export class DesktopMain extends Disposable {
 				userThemeService: userThemes,
 				createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
 				createTitlebarPart: createElectronTitlebarPartFactory(api.nativeMenubar),
-				switchWorkbenchMode: switchElectronWorkbenchMode,
 			}));
 			const subscription = api.workspace.onDidChange(workspace => {
 				void this.updateWorkspace(workbench, workspace);

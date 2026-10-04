@@ -7,9 +7,7 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { ILabelService, LabelService } from '../../../../../../platform/label/common/labelService.js';
 import { IWorkspaceContextService, type IWorkspace } from '../../../../../../platform/workspace/common/workspace.js';
-import { WorkbenchModeId } from '../../../../../common/workbenchMode.js';
 import { IEditorService, type EditorInput } from '../../../../../services/editor/common/editorService.js';
-import { IWorkbenchModeService } from '../../../../../services/workbenchMode/common/workbenchModeService.js';
 import { BrowserWorkingCopyService } from '../../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../../services/workingCopy/common/workingCopyService.js';
 import { WorkspaceContextService } from '../../../../../services/workspaces/browser/workspaceContextService.js';
@@ -24,7 +22,7 @@ interface TestContext {
 	readonly editors: TestEditorService;
 }
 
-function createContext(resources: DisposableStore, modeId: WorkbenchModeId = WorkbenchModeId.Code): TestContext {
+function createContext(resources: DisposableStore): TestContext {
 	const dom = new JSDOM('<!doctype html><title>Previous title</title>');
 	resources.add(toDisposable(() => dom.window.close()));
 	const services = resources.add(new InstantiationService());
@@ -36,20 +34,14 @@ function createContext(resources: DisposableStore, modeId: WorkbenchModeId = Wor
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	services.registerInstance(ILabelService, labels);
 	services.registerInstance(IEditorService, editors);
-	services.registerInstance(IWorkbenchModeService, {
-		currentModeId: modeId,
-		availableModes: [],
-		async switchMode() {},
-		async resetMode() {},
-	});
 	return { dom, services, workspace, workingCopies, labels, editors };
 }
 
 test('WindowTitle replaces the startup title and follows workspace changes in each product', () => {
-	for (const [mode, product] of [[WorkbenchModeId.Code, 'Ash Code']] as const) {
+	for (const product of ['Ash Code', 'Embedded Ash']) {
 		using resources = new DisposableStore();
-		const context = createContext(resources, mode);
-		resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window));
+		const context = createContext(resources);
+		resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, product));
 		assert.equal(context.dom.window.document.title, product);
 		context.workspace.updateWorkspace({ id: 'project', folders: [{ id: 'root', index: 0, name: '研究项目', uri: URI.file('/project') }] });
 		assert.equal(context.dom.window.document.title, `研究项目 — ${product}`);
@@ -63,7 +55,7 @@ test('WindowTitle replaces the startup title and follows workspace changes in ea
 test('WindowTitle follows active resources, labels, dirty registrations, save and unregister', async () => {
 	using resources = new DisposableStore();
 	const context = createContext(resources);
-	resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window));
+	resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code'));
 	const input = { resource: URI.file('/project/draft.ts'), label: '草稿.ts', onDidChangeLabel: resources.add(new Emitter<void>()).event };
 	await context.editors.openEditor(input);
 	assert.equal(context.dom.window.document.title, '草稿.ts — Ash Code');
@@ -90,7 +82,7 @@ test('WindowTitle releases the previous editor label and all subscriptions on di
 	const labelChanged = resources.add(new Emitter<void>());
 	const input = { resource: URI.file('/draft.ts'), label: 'Draft', onDidChangeLabel: labelChanged.event };
 	await context.editors.openEditor(input);
-	const title = resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window));
+	const title = resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code'));
 	input.label = 'Renamed';
 	labelChanged.fire();
 	assert.equal(context.dom.window.document.title, 'Renamed — Ash Code');
@@ -112,8 +104,8 @@ test('WindowTitle keeps main and auxiliary editor scopes independent', async () 
 	const scope = resources.add(context.services.createChild());
 	const popupEditors = resources.add(new TestEditorService());
 	scope.registerInstance(IEditorService, popupEditors);
-	resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window));
-	const popupTitle = resources.add(scope.createInstance(WindowTitle, popup.window as unknown as Window));
+	resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code'));
+	const popupTitle = resources.add(scope.createInstance(WindowTitle, popup.window as unknown as Window, 'Ash Code'));
 	await context.editors.openEditor({ resource: URI.file('/main.ts') });
 	await popupEditors.openEditor({ resource: URI.file('/detached.ts') });
 	assert.deepEqual([context.dom.window.document.title, popup.window.document.title], ['main.ts — Ash Code', 'detached.ts — Ash Code']);
@@ -127,7 +119,7 @@ test('WindowTitle keeps main and auxiliary editor scopes independent', async () 
 
 test('WindowTitle rejects creation without its required services', () => {
 	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(WindowTitle, {} as Window), /Unknown service: editorService/);
+	assert.throws(() => services.createInstance(WindowTitle, {} as Window, 'Ash Code'), /Unknown service: editorService/);
 });
 
 class TestEditorService extends Disposable implements IEditorService {
