@@ -35,7 +35,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import { ISCMService, ISCMViewService, SCMHistoryBusyContext, SCMHistoryProviderIdContext } from '../../scm/common/scm.js';
 import { IQuickDiffService } from '../../scm/common/quickDiff.js';

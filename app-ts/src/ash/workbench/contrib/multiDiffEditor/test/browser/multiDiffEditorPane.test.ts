@@ -1,3 +1,4 @@
+import type { IViewsService } from '../../../../services/views/common/viewsService.js';
 import type { MultiDiffEditorPaneOptions } from '../../browser/multiDiffEditorPane.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { validateJsonValue } from '../../../../../base/common/jsonValue.js';
@@ -158,8 +159,8 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 		viewsService: {
 			openView: async () => undefined,
 			focusView: async (viewId: string) => { focusedViews.push(viewId); return true; },
-			getViewWithId: () => undefined,
-		},
+			getViewWithId: () => null,
+		} as unknown as IViewsService,
 		fileActions: {
 			menuService: menus,
 			contextMenuProvider: { showContextMenu(options) { contextMenus.push(options.getActions().map(action => action.label)); } },

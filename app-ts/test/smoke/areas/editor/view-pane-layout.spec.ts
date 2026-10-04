@@ -2,6 +2,30 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('view commands reveal retained containers and focus the requested view', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires the Code workbench.');
+	const page = workbench.page;
+	const output = page.locator('[data-view-id="ash.output"]');
+	await workbench.quickaccess.runCommand('workbench.action.output.show');
+	await expect(output).toBeVisible();
+	await expect.poll(() => output.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+	const retained = await output.elementHandle();
+	try {
+		await workbench.quickaccess.runCommand('workbench.action.togglePanel');
+		await expect(output).toBeHidden();
+		await workbench.quickaccess.runCommand('workbench.action.output.show');
+		await expect(output).toBeVisible();
+		await expect.poll(() => output.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+		expect(await output.evaluate((element, previous) => element === previous, retained)).toBe(true);
+		await workbench.quickaccess.runCommand('workbench.files.action.focusOpenEditorsView');
+		const files = page.locator('[data-view-id="workbench.explorer.openEditorsView"]');
+		await expect(files).toBeVisible();
+		await expect.poll(() => files.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+	} finally {
+		await retained?.dispose();
+	}
+});
+
 test('multiple view panes resize independently and restore their layout after reload', async ({ target, workbench, reloadWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code workbench.');
 	let page = workbench.page;

@@ -3,7 +3,7 @@ import { Action2, MenuId, registerAction2 } from '../../../../../platform/action
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IViewsService } from '../../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { TerminalViewPane } from '../../../terminal/browser/terminalView.js';
 import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';
 
@@ -31,7 +31,7 @@ registerAction2(class TerminalStopVoiceAction extends Action2 {
 		});
 	}
 	public override run(accessor: ServicesAccessor): Promise<void> | undefined {
-		const view = accessor.get(IViewsService).getViewWithId(TERMINAL_VIEW_ID);
+		const view = accessor.get(IViewsService).getActiveViewWithId(TERMINAL_VIEW_ID);
 		return view instanceof TerminalViewPane ? view.stopVoice() : undefined;
 	}
 });

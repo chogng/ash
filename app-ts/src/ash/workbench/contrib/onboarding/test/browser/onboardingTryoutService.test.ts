@@ -6,7 +6,7 @@ import { CommandsRegistry, ICommandService } from '../../../../../platform/comma
 import { DialogResult, IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { INotificationService, NotificationSeverity, type NotificationOptions } from '../../../../../platform/notification/common/notification.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { IViewsService } from '../../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IOnboardingScenarioService } from '../../common/onboardingScenarioService.js';
 import { createOnboardingTryoutLink, registerOnboardingTryout } from '../../common/onboardingTryout.js';
@@ -26,7 +26,7 @@ suite('OnboardingTryoutService', () => {
 			async showSteps() { shown += 1; return 'completed' as const; },
 			resetAll() {},
 		});
-		services.registerInstance(IViewsService, { openView: async () => undefined, focusView: async () => false, getViewWithId: () => undefined });
+		services.registerInstance(IViewsService, { openView: async () => undefined, focusView: async () => false, getViewWithId: () => undefined } as unknown as IViewsService);
 		services.registerInstance(IDialogService, {
 			onWillShowDialog: Event.None,
 			onDidShowDialog: Event.None,

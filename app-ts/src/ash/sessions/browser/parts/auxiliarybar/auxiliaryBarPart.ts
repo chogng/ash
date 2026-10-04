@@ -2,7 +2,7 @@ import "./media/auxiliaryBarPart.css";
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { AuxiliarybarPart } from '../../../../workbench/browser/parts/auxiliarybar/auxiliarybarPart.js';
-import { IViewDescriptorService } from '../../../../workbench/services/views/common/viewDescriptorService.js';
+import { IViewDescriptorService } from '../../../../workbench/common/views.js';
 
 /** Hosts Code details and Design properties; editor tabs own their navigation. */
 export class AuxiliaryBarPart extends AuxiliarybarPart {

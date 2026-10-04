@@ -18,7 +18,7 @@ import { IQuickInputService, type IQuickPickItem } from "../../../../platform/qu
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { IWorkbenchHostService } from "../../../services/host/common/workbenchHostService.js";
 import { IOutputService, type IOutputChannel, OUTPUT_MODE_ID, LOG_MODE_ID, CLEAR_OUTPUT_COMMAND_ID, EXPORT_OUTPUT_COMMAND_ID, OPEN_OUTPUT_IN_EDITOR_COMMAND_ID, OUTPUT_VIEW_ID, SHOW_OUTPUT_CHANNELS_COMMAND_ID, SHOW_OUTPUT_COMMAND_ID } from "../../../services/output/common/output.js";
-import { IViewsService } from "../../../services/views/browser/viewsService.js";
+import { IViewsService } from "../../../services/views/common/viewsService.js";
 
 interface OutputChannelQuickPickItem extends IQuickPickItem {
 	readonly channel: IOutputChannel;

@@ -9,17 +9,14 @@ import {
 	ViewContainerLocation,
 	WorkbenchViewRegistry,
 } from "../../../workbench/common/views.js";
-import {
-	ViewDescriptorService,
-} from "../../../workbench/services/views/common/viewDescriptorService.js";
+import { ViewDescriptorService } from "../../../workbench/services/views/browser/viewDescriptorService.js";
 
 test("view descriptor models project registry and context visibility", () => {
 	using contextKeys = new ContextKeyService();
 	const registry = new WorkbenchViewRegistry();
 	using descriptors = new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry,
-	});
+	}, contextKeys);
 	using containerRegistration = registry.registerViewContainer({
 		id: "test.sidebar",
 		title: "Test",
@@ -95,9 +92,8 @@ test("view descriptor service resolves default containers by location", () => {
 		isDefault: true,
 	});
 	using descriptors = new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry,
-	});
+	}, contextKeys);
 
 	assert.equal(
 		descriptors.getDefaultViewContainer(
@@ -118,7 +114,7 @@ test("view descriptor service keeps a window-local container order", () => {
 	using first = registry.registerViewContainer({ id: "test.first", title: "First", location: ViewContainerLocation.Panel, order: 10 });
 	using second = registry.registerViewContainer({ id: "test.second", title: "Second", location: ViewContainerLocation.Panel, order: 20 });
 	using third = registry.registerViewContainer({ id: "test.third", title: "Third", location: ViewContainerLocation.Panel, order: 30 });
-	using descriptors = new ViewDescriptorService({ contextKeyService: contextKeys, registry });
+	using descriptors = new ViewDescriptorService({ registry }, contextKeys);
 	const changes: ViewContainerLocation[] = [];
 	using listener = descriptors.onDidChangeViewContainerOrder((location) => changes.push(location));
 

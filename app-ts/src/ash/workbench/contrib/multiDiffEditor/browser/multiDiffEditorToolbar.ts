@@ -15,7 +15,7 @@ import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.j
 import { VIEW_ID } from '../../files/common/files.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { IGitService } from '../../../contrib/git/common/gitService.js';
-import type { IViewsService } from '../../../services/views/browser/viewsService.js';
+import type { IViewsService } from '../../../services/views/common/viewsService.js';
 import { createGitMultiDiffEditorInput } from './scmMultiDiffAction.js';
 import { createMultiDiffEditorInput, type GitMultiDiffScope, type MultiDiffEditorInput, type MultiDiffEditorSource } from './multiDiffEditorInput.js';
 import { IMultiDiffSourceResolverService } from './multiDiffSourceResolverService.js';

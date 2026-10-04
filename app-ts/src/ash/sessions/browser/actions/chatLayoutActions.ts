@@ -10,7 +10,7 @@ import { IQuickInputService, type IQuickPickItem } from '../../../platform/quick
 import { IChatService } from "../../../workbench/services/chat/common/chatService.js";
 import type { ModelProviderCredentialStatus } from '../../../workbench/services/chat/common/chatService.js';
 import { IPreferencesService } from "../../../workbench/services/preferences/common/preferences.js";
-import { IViewsService } from "../../../workbench/services/views/browser/viewsService.js";
+import { IViewsService } from "../../../workbench/services/views/common/viewsService.js";
 import { AgentSessionsSidebarVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
 import { ChatViewPane } from "../chatViewPane.js";
 

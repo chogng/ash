@@ -8,7 +8,7 @@ import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 
 import { localize, type ILocalizationService } from "../../services/localization/common/localizationService.js";
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../common/views.js";
-import type { IViewDescriptorService } from "../../services/views/common/viewDescriptorService.js";
+import type { IViewDescriptorService } from "../../common/views.js";
 import { CompositeBarAction, CompositeActionViewItem, CompositeOverflowActivityAction, CompositeOverflowActivityActionViewItem, type IActivityHoverOptions } from "./compositeBarActions.js";
 import { h } from "../../../base/browser/dom.js";
 import { observeResize } from "../../../base/browser/observer.js";

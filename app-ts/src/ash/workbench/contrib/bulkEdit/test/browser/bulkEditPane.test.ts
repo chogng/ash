@@ -24,7 +24,7 @@ import { AccessibilityVerbositySettingId } from '../../../../../platform/accessi
 import '../../../../contrib/accessibility/browser/accessibilityConfiguration.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { IViewsService } from '../../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { isMultiDiffEditorInput } from '../../../multiDiffEditor/browser/multiDiffEditorInput.js';
 import '../../browser/preview/bulkEdit.contribution.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
@@ -312,7 +312,7 @@ async function withPane(run: (pane: BulkEditPane, browser: JSDOM, configuration:
 
 test('standard preview commands change grouping, selection and the accepted edits', async () => {
 	await withPane(async (pane, _browser, _configuration, services) => {
-		services.registerInstance(IViewsService, { openView: async () => pane, getViewWithId: () => pane, focusView: async () => { pane.focus(); return true; } });
+		services.registerInstance(IViewsService, { openView: async () => pane, getViewWithId: () => pane, focusView: async () => { pane.focus(); return true; } } as unknown as IViewsService);
 		using commands = new CommandService(services);
 		const edits = ResourceEdit.convert({ entries: [{ kind: 'textDocument', resource: URI.file('/workspace/one.ts'), edits: [{ range: new Range(1, 1, 1, 2), text: 'A' }, { range: new Range(1, 2, 1, 3), text: 'B' }] }] });
 		const pending = pane.setInput(edits, new AbortController().signal);

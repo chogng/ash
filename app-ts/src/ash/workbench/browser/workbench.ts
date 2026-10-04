@@ -148,14 +148,10 @@ import {
 } from "../services/workspaces/browser/workspaceOpenService.js";
 import { RecentWorkspacesService } from "../services/workspaces/browser/recentWorkspacesService.js";
 import { IRecentWorkspacesService } from "../services/workspaces/common/recentWorkspacesService.js";
-import {
-	IViewDescriptorService,
-	ViewDescriptorService,
-} from "../services/views/common/viewDescriptorService.js";
-import {
-	IViewsService,
-	ViewsService,
-} from "../services/views/browser/viewsService.js";
+import { IViewDescriptorService } from "../common/views.js";
+import { ViewDescriptorService } from "../services/views/browser/viewDescriptorService.js";
+import { IViewsService } from "../services/views/common/viewsService.js";
+import { ViewsService } from "../services/views/browser/viewsService.js";
 import {
 	WorkbenchConfigurationService,
 } from "../services/configuration/browser/configurationService.js";
@@ -869,9 +865,7 @@ export class Workbench extends Disposable {
 			}));
 		services.registerInstance(IAccessibilityService, accessibilityService);
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
-		const viewDescriptors = this._register(new ViewDescriptorService({
-			contextKeyService: contextKeys,
-		}));
+		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, {}));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		const contributions = this._register(
 			WorkbenchContributionsRegistry.createHost(services),
@@ -1081,7 +1075,8 @@ export class Workbench extends Disposable {
 		]);
 		const panes = this._register(instantiationService.createInstance(PaneCompositePartService, paneParts));
 		services.registerInstance(IPaneCompositePartService, panes);
-		services.registerInstance(IViewsService, instantiationService.createInstance(ViewsService));
+		const views = this._register(instantiationService.createInstance(ViewsService));
+		services.registerInstance(IViewsService, views);
 		this.restoreActiveViewContainers = async () => {
 			const openings: Promise<unknown>[] = [];
 			for (const [location, part] of paneParts) {
@@ -1089,8 +1084,8 @@ export class Workbench extends Disposable {
 				const visible = layout.isPartVisible(panes.getPartId(location));
 				const container = requiredViewContainerToRestore(viewDescriptors, location, part.getCompositeIdToRestore());
 				// Restore retained content without changing the saved visibility of its region.
-				openings.push(panes.openPaneComposite(container.id, location));
-				if (!visible) { panes.hideActivePaneComposite(location); }
+				openings.push(views.openViewContainer(container.id));
+				if (!visible) { views.closeViewContainer(container.id); }
 			}
 			await Promise.all(openings);
 		};
@@ -1098,10 +1093,10 @@ export class Workbench extends Disposable {
 		for (const [location, part] of paneParts) {
 			this._register(part.onDidSelectComposite(({ compositeId }) => {
 				if (location === ViewContainerLocation.Sidebar && part.activeCompositeId === compositeId && layout.isPartVisible('sidebar')) {
-					panes.hideActivePaneComposite(location);
+					views.closeViewContainer(compositeId);
 					return;
 				}
-				void panes.openPaneComposite(compositeId, location).catch(onUnexpectedError);
+				void views.openViewContainer(compositeId).catch(onUnexpectedError);
 			}));
 		}
 		lifecycleService.phase = LifecyclePhase.Ready;

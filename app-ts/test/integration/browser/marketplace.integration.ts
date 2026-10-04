@@ -30,7 +30,7 @@ import { MarketplaceViewPane } from '../../../src/ash/workbench/contrib/marketpl
 import '../../../src/ash/workbench/contrib/marketplace/browser/marketplace.contribution.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
-import { IViewsService } from '../../../src/ash/workbench/services/views/browser/viewsService.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { SkillsSettingsContent } from '../../../src/ash/workbench/contrib/skills/browser/skillsSettingsContent.js';
 import { LanguageServerSettingsContent } from '../../../src/ash/workbench/contrib/language/browser/languageServerSettingsContent.js';
 

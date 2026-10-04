@@ -6,7 +6,7 @@ import { IDialogService } from "../../../../../platform/dialogs/common/dialogs.j
 import { SyncDescriptor } from "../../../../../platform/instantiation/common/descriptors.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../../common/views.js";
-import { IViewsService } from "../../../../services/views/browser/viewsService.js";
+import { IViewsService } from "../../../../services/views/common/viewsService.js";
 import { BulkEditPane } from "./bulkEditPane.js";
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../../nls.js';

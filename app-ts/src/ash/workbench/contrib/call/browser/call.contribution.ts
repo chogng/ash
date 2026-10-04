@@ -11,7 +11,7 @@ import { SyncDescriptor } from '../../../../platform/instantiation/common/descri
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ViewContainerLocation, ViewsRegistry } from '../../../common/views.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { CallViewPane } from './callViewPane.js';
 import './media/call.css';
 

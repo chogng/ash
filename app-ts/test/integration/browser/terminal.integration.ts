@@ -1,5 +1,5 @@
 import '../../../src/ash/workbench/contrib/terminalContrib/voice/browser/terminal.voice.contribution.js';
-import { IViewsService } from '../../../src/ash/workbench/services/views/browser/viewsService.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ITerminalService } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
@@ -133,7 +133,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 	services.registerInstance(IDictationService, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => {}, cancelPreparation: async () => {}, start: async (callback) => { transcript = callback; return { stop: async () => { stops++; } }; } });
 	services.registerInstance(IContextKeyService, context);
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
-	services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } });
+	services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } } as unknown as IViewsService);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);
 	services.registerInstance(IPreferencesService, { openSettings: async () => {} } as unknown as IPreferencesService);

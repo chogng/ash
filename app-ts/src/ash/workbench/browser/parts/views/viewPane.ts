@@ -17,6 +17,8 @@ export abstract class ViewPane extends Pane implements IView {
 	private visible = false;
 	private readonly bodyVisibility = this._register(new Emitter<boolean>());
 	readonly onDidChangeBodyVisibility = this.bodyVisibility.event;
+	private readonly visibility = this._register(new Emitter<boolean>());
+	public readonly onDidChangeVisibility = this.visibility.event;
 
 	protected constructor(container: HTMLElement, options: IViewPaneOptions) {
 		super(container, options);
@@ -59,6 +61,7 @@ export abstract class ViewPane extends Pane implements IView {
 		if (this.visible === visible) return;
 		this.visible = visible;
 		this.element.hidden = !visible;
+		this.visibility.fire(visible);
 		if (this.isExpanded()) this.bodyVisibility.fire(visible);
 	}
 }

@@ -5,7 +5,7 @@ import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nati
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from '../../workbench/common/views.js';
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from '../../workbench/contrib/chat/common/chat.js';
 import { IChatSessionNavigationService, type IChatSessionNavigationService as IChatSessionNavigationServiceContract } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
-import { IViewsService } from '../../workbench/services/views/browser/viewsService.js';
+import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { ChatViewPane } from './chatViewPane.js';
 import './actions/chatActions.js';

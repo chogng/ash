@@ -56,10 +56,11 @@ import { SessionsManagementService as BaseSessionsManagementService } from "../.
 import { AppServerSessionsProvider } from "../../contrib/providers/appServer/browser/appServerSessionsProvider.js";
 import type { ISession } from "../../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
-import { IViewsService, ViewsService } from "../../../workbench/services/views/browser/viewsService.js";
+import { IViewsService } from "../../../workbench/services/views/common/viewsService.js";
+import { ViewsService } from "../../../workbench/services/views/browser/viewsService.js";
 import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../../platform/dialogs/common/dialogs.js';
-import { ViewDescriptorService } from "../../../workbench/services/views/common/viewDescriptorService.js";
+import { ViewDescriptorService } from "../../../workbench/services/views/browser/viewDescriptorService.js";
 import { WorkbenchQuickInputService } from "../../../workbench/services/quickinput/browser/quickInputService.js";
 import { h } from "../../../base/browser/dom.js";
 import type { IFileService } from '../../../platform/files/common/files.js';
@@ -293,9 +294,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry: new WorkbenchViewRegistry(),
-	});
+	}, contextKeys);
 	const services = new InstantiationService();
 	let preferencesEditorTarget: string | undefined;
 	using chat = createChatService(api);
@@ -320,7 +320,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		openView: async () => chatView,
 		focusView: async () => true,
 		getViewWithId: () => chatView,
-	});
+	} as unknown as IViewsService);
 	let shownContextMenuActions: readonly IAction[] = [];
 	const contextMenuService = {
 		showContextMenu: (options: { readonly getActions: () => readonly IAction[] }) => {
@@ -845,15 +845,14 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry: new WorkbenchViewRegistry(),
-	});
+	}, contextKeys);
 	services.registerInstance(ISessionsManagementService, sessions);
 	services.registerInstance(IViewsService, {
 		openView: async () => undefined,
 		focusView: async () => true,
 		getViewWithId: () => undefined,
-	});
+	} as unknown as IViewsService);
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
 	const layout = testLayoutService();
@@ -967,19 +966,18 @@ test("the New Chat slash command opens an untitled session", async () => {
 	using sessions = new SessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry: new WorkbenchViewRegistry(),
-	});
+	}, contextKeys);
 	services.registerInstance(ISessionsManagementService, sessions);
 	let focusedView: string | undefined;
 	services.registerInstance(IViewsService, {
 		openView: async () => undefined,
-		focusView: async (viewId) => {
+		focusView: async (viewId: string) => {
 			focusedView = viewId;
 			return true;
 		},
 		getViewWithId: () => undefined,
-	});
+	} as unknown as IViewsService);
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
 	const layout = testLayoutService();
@@ -1050,15 +1048,14 @@ test("failed first send keeps the untitled session and its input draft", async (
 	using sessions = new SessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry: new WorkbenchViewRegistry(),
-	});
+	}, contextKeys);
 	services.registerInstance(ISessionsManagementService, sessions);
 	services.registerInstance(IViewsService, {
 		openView: async () => undefined,
 		focusView: async () => true,
 		getViewWithId: () => undefined,
-	});
+	} as unknown as IViewsService);
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
 	const layout = testLayoutService();
@@ -1140,9 +1137,8 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry: new WorkbenchViewRegistry(),
-	});
+	}, contextKeys);
 	using commands = new CommandService(new InstantiationService());
 	const menuService = new MenuService(commands, contextKeys);
 	const layout = testLayoutService();
@@ -1216,12 +1212,12 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IViewsService, {
 		openView: async () => undefined,
-		focusView: async (viewId) => {
+		focusView: async (viewId: string) => {
 			focusedView = viewId;
 			return true;
 		},
 		getViewWithId: () => undefined,
-	});
+	} as unknown as IViewsService);
 	using commands = new CommandService(services);
 	await sessions.initialize();
 
@@ -1262,29 +1258,37 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 	registerChatViews(registry);
 	using contextKeys = new ContextKeyService();
 	using descriptors = new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry,
-	});
+	}, contextKeys);
 	let focused = 0;
 	let opened = 0;
 	const view = {
+		element: h(testStorageEnvironment.window.document, "div"),
 		id: CHAT_VIEW_ID,
 		focus: () => focused++,
 		isVisible: () => true,
 		setVisible: () => undefined,
 	};
 	const paneContainer = {
+		panes: [],
+		onDidChangeViewVisibility: Event.None,
+		onDidAddViews: Event.None,
+		onDidRemoveViews: Event.None,
+		onDidFocusView: Event.None,
+		onDidBlurView: Event.None,
 		getView: (viewId: string) => viewId === CHAT_VIEW_ID ? view : undefined,
-		openView: async (viewId: string) => {
+		openView: (viewId: string, focus = false) => {
 			assert.equal(viewId, CHAT_VIEW_ID);
+			if (focus) view.focus();
 			opened++;
 			return view;
 		},
 	} as unknown as ViewPaneContainer;
 	const { IPaneCompositePartService } = await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
-	const { IViewDescriptorService } = await import('../../../workbench/services/views/common/viewDescriptorService.js');
+	const { IViewDescriptorService } = await import('../../../workbench/common/views.js');
 	using services = new InstantiationService();
 	services.registerInstance(IViewDescriptorService, descriptors);
+	services.registerInstance(IContextKeyService, contextKeys);
 	const composite = Object.assign(paneContainer, { id: CHAT_VIEW_CONTAINER_ID }) as import("../../../workbench/browser/parts/views/paneComposite.js").PaneComposite;
 	services.registerInstance(IPaneCompositePartService, {
 		onDidPaneCompositeOpen: Event.None,
@@ -1295,14 +1299,14 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 		hideActivePaneComposite() {},
 		getLastActivePaneCompositeId: () => CHAT_VIEW_CONTAINER_ID,
 	} as import('../../../workbench/services/panecomposite/browser/panecomposite.js').IPaneCompositePartService);
-	const service = services.createInstance(ViewsService);
+	using service = services.createInstance(ViewsService);
 
 	assert.equal(service.getViewWithId(CHAT_VIEW_ID), view);
 	assert.equal(opened, 0);
 	assert.equal(await service.focusView(CHAT_VIEW_ID), true);
 	assert.equal(opened, 1);
 	assert.equal(focused, 1);
-	assert.equal(await service.openView("missing"), undefined);
+	assert.equal(await service.openView("missing"), null);
 });
 
 test("SessionsManagementService restores and creates active Threads", async () => {

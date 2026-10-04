@@ -13,7 +13,7 @@ import { IContextMenuService } from "../../../../../platform/contextview/browser
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import type { ITaskService } from "../../../../../workbench/services/tasks/common/taskService.js";
 import type { ITerminalService } from "../../../../../workbench/services/terminal/common/terminal.js";
-import type { IViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
+import type { IViewsService } from "../../../../../workbench/services/views/common/viewsService.js";
 
 test("Output projects channel selection and active-channel clearing into the Panel title", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
@@ -84,7 +84,7 @@ test("Tasks projects its refresh action into the Panel title", async () => {
 		dispose() {},
 		[Symbol.dispose]() {},
 	} as ITaskService;
-	const views: IViewsService = { openView: async () => undefined, focusView: async () => false, getViewWithId: () => undefined };
+	const views = { openView: async () => null, focusView: async () => false, getViewWithId: () => null } as unknown as IViewsService;
 	const terminals = { instances: [] } as unknown as ITerminalService;
 	try {
 		const { TasksViewPane } = await import("../../../../../workbench/contrib/tasks/browser/tasksViewPane.js");

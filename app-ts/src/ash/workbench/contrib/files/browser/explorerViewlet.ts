@@ -6,7 +6,7 @@ import { SyncDescriptor } from '../../../../platform/instantiation/common/descri
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
 import { type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { VIEW_ID } from '../common/files.js';
 import { EmptyView } from './views/emptyView.js';
 import { ExplorerView } from './views/explorerView.js';

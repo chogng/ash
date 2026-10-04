@@ -7,7 +7,7 @@ import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../c
 import type { IStorageService } from "../../../../platform/storage/common/storage.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { ILocalizationService, LocalizationKey } from "../../../services/localization/common/localizationService.js";
-import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
+import type { IViewDescriptorService } from "../../../common/views.js";
 import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
 import { ActivityBarPosition } from '../../../common/configuration.js';
 

@@ -14,7 +14,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { type ITestCase, type ITestCaseResult, type ITestProfile, type ITestRun, ITestingService } from '../../../services/testing/common/testingService.js';
 import { ITerminalService } from '../../../services/terminal/common/terminal.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { TERMINAL_VIEW_ID } from '../../terminal/common/terminal.js';
 import { testStateLabel } from './testingLabels.js';

@@ -116,8 +116,10 @@ import { EditorPart, IEditorPart } from '../../workbench/browser/parts/editor/ed
 import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
 import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
-import { IViewDescriptorService, ViewDescriptorService } from '../../workbench/services/views/common/viewDescriptorService.js';
-import { IViewsService, ViewsService } from '../../workbench/services/views/browser/viewsService.js';
+import { IViewDescriptorService } from '../../workbench/common/views.js';
+import { ViewDescriptorService } from '../../workbench/services/views/browser/viewDescriptorService.js';
+import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
+import { ViewsService } from '../../workbench/services/views/browser/viewsService.js';
 import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
 import { pickWorkspaceFolder } from './workspaceSelection.js';
 import type { WorkbenchPart } from "../../workbench/browser/part.js";
@@ -480,7 +482,7 @@ export class Workbench extends Disposable {
 
 		let auxiliarybar: AuxiliaryBarPart | undefined;
 		const titlebar = this._register(new TitlebarPart(this.domNode, menus, contextMenus));
-		const viewDescriptors = this._register(new ViewDescriptorService({ contextKeyService: contextKeys, registry: SessionsViewRegistry }));
+		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		services.registerSingleton(IDesignEditorService, () => services.createInstance(DesignEditorService));
 		const sidebar = this._register(services.createInstance(SidebarPart, this.domNode, sessions, view, teams, quickInputService, async () => {
@@ -616,7 +618,8 @@ export class Workbench extends Disposable {
 			[ViewContainerLocation.AuxiliaryBar, auxiliarybar],
 		])));
 		services.registerInstance(IPaneCompositePartService, panes);
-		services.registerInstance(IViewsService, services.createInstance(ViewsService));
+		const views = this._register(services.createInstance(ViewsService));
+		services.registerInstance(IViewsService, views);
 		const parts = new Map<SessionsPartId, WorkbenchPart>([
 			["titlebar", titlebar],
 			['activitybar', activitybar],
@@ -627,9 +630,9 @@ export class Workbench extends Disposable {
 			['panel', panel],
 		]);
 		layout.createWorkbenchLayout(parts);
-		for (const [location, part] of [[ViewContainerLocation.Sidebar, sidebar], [ViewContainerLocation.Panel, panel], [ViewContainerLocation.AuxiliaryBar, auxiliarybar]] as const) {
+		for (const part of [sidebar, panel, auxiliarybar]) {
 			this._register(part.onDidSelectComposite(event => {
-				void panes.openPaneComposite(event.compositeId, location, true).catch(error => notificationService.error(String(error)));
+				void views.openViewContainer(event.compositeId, true).catch(error => notificationService.error(String(error)));
 			}));
 		}
 		const layoutController = this._register(services.createInstance(DesktopLayoutController, sidebar));

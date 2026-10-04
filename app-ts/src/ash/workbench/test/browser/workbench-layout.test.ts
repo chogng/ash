@@ -1,3 +1,4 @@
+import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { HoverPosition } from "../../../base/browser/ui/hover/hoverWidget.js";
 import { createTestEditorServices } from '../common/testEditorServices.js';
 import assert from "node:assert/strict";
@@ -80,7 +81,7 @@ const { EditorPart } = await import(
 	"../../../workbench/browser/parts/editor/editorPart.js"
 );
 const { ViewDescriptorService } = await import(
-	"../../../workbench/services/views/common/viewDescriptorService.js"
+	"../../../workbench/services/views/browser/viewDescriptorService.js"
 );
 const {
 	ViewContainerLocation,
@@ -375,7 +376,7 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 			disposables.add(registry.registerViewContainer({ id, title: id, location: ViewContainerLocation.Sidebar }));
 		}
 		const contextKeys = disposables.add(new ContextKeyService());
-		const views = disposables.add(new ViewDescriptorService({ registry, contextKeyService: contextKeys }));
+		const views = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
 		const bar = disposables.add(new CompositeBar(harness.container, {
 			activityHoverOptions: { position: () => HoverPosition.RIGHT }, viewDescriptorService: views,
 			location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical',
@@ -713,7 +714,7 @@ test("Git sidebar uses its preferred reset width and merges a lone view into the
 		{ id: "test.graph", title: "Graph", ctorDescriptor: new SyncDescriptor(GitTestView) },
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contextKeys, registry }));
+	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
 	const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar);
 	assert.ok(descriptor);
 	const model = viewDescriptors.getViewContainerModel(descriptor.id);
@@ -1096,9 +1097,8 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	}));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry,
-	}));
+	}, contextKeys));
 	const sidebar = disposables.add(new SidebarPart(dom.window.document.body, {
 		viewDescriptorService: viewDescriptors,
 		contextKeyService: contextKeys,
@@ -1298,9 +1298,8 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 	}));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry,
-	}));
+	}, contextKeys));
 	const createStorage = (workspaceId: string) => new BrowserStorageService({
 		ownerWindow: dom.window as unknown as Window,
 		applicationId: "code",
@@ -1373,9 +1372,8 @@ test("Sidebar can host Agent Sidebar composites", () => {
 	}));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry,
-	}));
+	}, contextKeys));
 	const agentSidebar = disposables.add(new SidebarPart(dom.window.document.body, {
 		viewDescriptorService: viewDescriptors,
 		contextKeyService: contextKeys,
@@ -1440,9 +1438,8 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	const menuService = new MenuService(commands, contextKeys);
 	const contextMenuProvider: IContextMenuProvider = { showContextMenu() {} };
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry,
-	}));
+	}, contextKeys));
 	const panel = disposables.add(new PanelPart(dom.window.document.body, {
 		viewDescriptorService: viewDescriptors,
 		contextKeyService: contextKeys,
@@ -1537,9 +1534,8 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
 	}
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry,
-	}));
+	}, contextKeys));
 	const selections: string[] = [];
 	let overflowActions: readonly IAction[] = [];
 	let hideOverflowMenu: (() => void) | undefined;
@@ -1613,7 +1609,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 		disposables.add(registry.registerViewContainer({ id, title, location: ViewContainerLocation.Sidebar }));
 	}
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contextKeys, registry }));
+	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
 	const storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'code', workspaceId: 'test', backend: dom.window.localStorage, flushInterval: 0 });
 	const firstBar = new DisposableStore();
 	let actions: readonly IAction[] = [];
@@ -1674,7 +1670,7 @@ test("CompositeBar retains the startup language of View Container labels", () =>
 		location: ViewContainerLocation.Panel,
 	}));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contextKeys, registry }));
+	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
 	const localeChanges = new Emitter<string>();
 	let locale = "en";
 	const localization = {
@@ -1713,9 +1709,8 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry,
-	}));
+	}, contextKeys));
 	const descriptor = viewDescriptors.getDefaultViewContainer(
 		ViewContainerLocation.AuxiliaryBar,
 	);
@@ -1820,9 +1815,8 @@ test("PaneComposite rejects ambiguous title projections from multiple Views", ()
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
-		contextKeyService: contextKeys,
 		registry,
-	}));
+	}, contextKeys));
 	const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Panel);
 	assert.ok(descriptor);
 	const composite = new PaneComposite(dom.window.document.body, {
@@ -1854,7 +1848,7 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 		disposables.add(registry.registerViewContainer({ id, title, order, location: ViewContainerLocation.Panel }));
 	}
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contextKeys, registry }));
+	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
 	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
@@ -2016,7 +2010,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 	const storageOptions = { ownerWindow: dom.window as unknown as Window, applicationId: 'activity-order', workspaceId: 'first', flushInterval: 0 };
 	const storage = disposables.add(new BrowserStorageService(storageOptions));
 	const contexts = disposables.add(new ContextKeyService());
-	const descriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contexts, registry }));
+	const descriptors = disposables.add(new ViewDescriptorService({ registry }, contexts));
 	const bar = disposables.add(new CompositeBar(dom.window.document.body, {
 		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: descriptors,
 		location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: storage,
@@ -2026,7 +2020,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 	assert.equal(bar.activeCompositeId, 'second');
 	await storage.flush();
 	const restoredStorage = disposables.add(new BrowserStorageService({ ...storageOptions, workspaceId: 'second' }));
-	const restoredDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contexts, registry }));
+	const restoredDescriptors = disposables.add(new ViewDescriptorService({ registry }, contexts));
 	const restored = disposables.add(new CompositeBar(dom.window.document.body, {
 		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: restoredDescriptors,
 		location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: restoredStorage,
@@ -2037,20 +2031,32 @@ test('Activity Bar restores user container order in a new window and keeps the a
 });
 
 
+class TestRuntimeView extends ViewPane {
+	constructor(container: HTMLElement, options: IViewPaneOptions) {
+		super(container, options);
+		this.contentElement.textContent = options.title;
+	}
+}
+
 test('Pane composite service reveals retained Parts and publishes visibility changes once', async () => {
 	const { PaneCompositePartService } = await import('../../../workbench/browser/parts/paneCompositePartService.js');
 	const { IPaneCompositePartService } = await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
-	const { IViewDescriptorService } = await import('../../../workbench/services/views/common/viewDescriptorService.js');
+	const { IViewDescriptorService } = await import('../../../workbench/common/views.js');
 	const { IContextKeyService } = await import('../../../platform/contextkey/browser/contextKeyService.js');
 	const { ILocalizationService } = await import('../../../workbench/services/localization/common/localizationService.js');
-	const { IViewsService, ViewsService } = await import('../../../workbench/services/views/browser/viewsService.js');
+	const { IViewsService } = await import('../../../workbench/services/views/common/viewsService.js');
+	const { ViewsService } = await import('../../../workbench/services/views/browser/viewsService.js');
 	using resources = new DisposableStore();
 	const registry = new WorkbenchViewRegistry();
 	registry.registerStaticViewContainer({ id: 'test.panel.first', title: 'First', location: ViewContainerLocation.Panel });
 	registry.registerStaticViewContainer({ id: 'test.panel.second', title: 'Second', location: ViewContainerLocation.Panel });
-	registry.registerStaticViews('test.panel.first', [{ id: 'test.panel.view', title: 'View', canToggleVisibility: true, ctorDescriptor: new SyncDescriptor(TestPanelView) }]);
+	registry.registerStaticViews('test.panel.first', [
+		{ id: 'test.panel.view', title: 'View', canToggleVisibility: true, ctorDescriptor: new SyncDescriptor(TestRuntimeView) },
+		{ id: 'test.panel.hidden', title: 'Hidden', hideByDefault: true, canToggleVisibility: true, ctorDescriptor: new SyncDescriptor(TestRuntimeView) },
+	]);
+	registry.registerStaticViews('test.panel.second', [{ id: 'test.panel.conditional', title: 'Conditional', when: ContextKeyExpr.has('test.enabled'), ctorDescriptor: new SyncDescriptor(TestRuntimeView) }]);
 	const context = resources.add(new ContextKeyService());
-	const descriptors = resources.add(new ViewDescriptorService({ contextKeyService: context, registry }));
+	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
 	const panel = resources.add(new PanelPart(browserEnvironment.window.document.body, { viewDescriptorService: descriptors }));
 	panel.setVisible(false);
 	const services = resources.add(new InstantiationService());
@@ -2065,7 +2071,8 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	const parts = new Map([[ViewContainerLocation.Panel, panel]]);
 	const panes = resources.add(services.createInstance(PaneCompositePartService, parts));
 	services.registerInstance(IPaneCompositePartService, panes);
-	services.registerInstance(IViewsService, services.createInstance(ViewsService));
+	const runtimeViews = resources.add(services.createInstance(ViewsService));
+	services.registerInstance(IViewsService, runtimeViews);
 	const events: string[] = [];
 	resources.add(panes.onDidPaneCompositeOpen(event => events.push(`open:${event.composite.id}`)));
 	resources.add(panes.onDidPaneCompositeClose(event => events.push(`close:${event.composite.id}`)));
@@ -2080,10 +2087,59 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 		active: 'test.panel.first', visible: true,
 	});
 	const views = services.get(IViewsService);
+	const runtimeEvents: string[] = [];
+	resources.add(views.onDidChangeViewContainerVisibility(event => runtimeEvents.push(`container:${event.id}:${event.visible}`)));
+	resources.add(views.onDidChangeViewVisibility(event => runtimeEvents.push(`view:${event.id}:${event.visible}`)));
+	resources.add(views.onDidChangeFocusedView(() => runtimeEvents.push(`focus:${views.getFocusedView()?.id ?? ''}`)));
 	assert.equal(await views.openView('test.panel.view'), first!.getView('test.panel.view'));
 	assert.equal(await views.focusView('test.panel.view'), true);
-	assert.equal(await views.openView('missing'), undefined);
+	assert.equal(views.getFocusedViewName(), 'View');
+	assert.equal(context.getValue('focusedView'), 'test.panel.view');
+	assert.equal(await views.openView('test.panel.conditional', true), null);
+	assert.equal(views.getVisibleViewContainer(ViewContainerLocation.Panel)?.id, 'test.panel.first');
+	const oldViewBlurred = new Promise<void>(resolve => {
+		resources.add(first!.getView('test.panel.view')!.onDidBlur(resolve));
+	});
+	assert.equal(await views.openView('test.panel.hidden', true), first!.getView('test.panel.hidden'));
+	await oldViewBlurred;
+	assert.deepEqual({ focused: views.getFocusedView()?.id, context: context.getValue('focusedView') }, { focused: 'test.panel.hidden', context: 'test.panel.hidden' });
+	assert.equal(views.isViewVisible('test.panel.hidden'), true);
+	views.closeView('test.panel.hidden');
+	assert.deepEqual({ visible: views.isViewVisible('test.panel.hidden'), container: views.isViewContainerVisible('test.panel.first'), expanded: first!.getView('test.panel.hidden')!.isExpanded() }, { visible: false, container: true, expanded: false });
+	await views.openView('test.panel.hidden', true);
+	views.closeViewContainer('test.panel.first');
+	assert.deepEqual({ focused: views.getFocusedView(), context: context.getValue('focusedView'), active: views.getActiveViewWithId('test.panel.view'), retained: views.getViewWithId('test.panel.view') }, { focused: null, context: '', active: null, retained: first!.getView('test.panel.view') });
+	const closedEvents = [...runtimeEvents];
+	views.closeViewContainer('test.panel.first');
+	assert.deepEqual(runtimeEvents, closedEvents);
+	await views.openViewContainer('test.panel.second');
+	views.closeViewContainer('test.panel.first');
+	assert.equal(views.isViewContainerVisible('test.panel.second'), true);
+	assert.equal(views.getActiveViewPaneContainerWithId('test.panel.first'), null);
+	assert.equal(views.isViewContainerActive('test.panel.first'), true);
+	await views.openView('test.panel.view', true);
+	assert.equal(views.getViewWithId('test.panel.view'), first!.getView('test.panel.view'));
+	assert.ok(runtimeEvents.includes('view:test.panel.hidden:false'));
+	assert.ok(runtimeEvents.includes('focus:'));
+	const dynamicRegistration = resources.add(registry.registerViewContainer({ id: 'test.panel.dynamic', title: 'Dynamic', location: ViewContainerLocation.Panel }));
+	resources.add(registry.registerViews('test.panel.dynamic', [{ id: 'test.dynamic.view', title: 'Dynamic view', ctorDescriptor: new SyncDescriptor(TestRuntimeView) }]));
+	await views.openView('test.dynamic.view', true);
+	const dynamic = panel.getComposite('test.panel.dynamic')!;
+	views.closeView('test.dynamic.view');
+	assert.equal(views.isViewContainerVisible('test.panel.dynamic'), false);
+	assert.equal(views.getFocusedView(), null);
+	await views.openView('test.dynamic.view', true);
+	dynamicRegistration.dispose();
+	assert.deepEqual({ disposed: dynamic.isDisposed, retained: panel.getComposite('test.panel.dynamic'), view: views.getViewWithId('test.dynamic.view'), focused: views.getFocusedView(), active: views.isViewContainerActive('test.panel.dynamic') }, { disposed: true, retained: undefined, view: null, focused: null, active: false });
+	assert.equal(await views.openView('missing'), null);
 	assert.equal(await panes.openPaneComposite('missing', ViewContainerLocation.Panel), undefined);
 	using incomplete = new InstantiationService();
 	assert.throws(() => incomplete.createInstance(PaneCompositePartService, parts), /service/i);
+	assert.throws(() => incomplete.createInstance(ViewDescriptorService, { registry }), /service/i);
+	assert.throws(() => incomplete.createInstance(ViewsService), /service/i);
+	await views.openView('test.panel.view', true);
+	const beforeDisposal = [...runtimeEvents];
+	runtimeViews.dispose();
+	await panes.openPaneComposite('test.panel.second', ViewContainerLocation.Panel);
+	assert.deepEqual({ events: runtimeEvents, context: context.getValue('focusedView'), retained: first!.isDisposed }, { events: beforeDisposal, context: '', retained: false });
 });

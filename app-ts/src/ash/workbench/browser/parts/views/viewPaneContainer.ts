@@ -1,9 +1,8 @@
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import { Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Emitter } from "../../../../base/common/event.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
-import { FocusedViewContext } from "../../../common/contextkeys.js";
 import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor } from "../../../common/views.js";
 import { ViewPane } from "./viewPane.js";
 import { h } from "../../../../base/browser/dom.js";
@@ -37,18 +36,27 @@ export class ViewPaneContainer extends Disposable {
 	private readonly model: IViewContainerModel;
 	private readonly instantiationService: IInstantiationService;
 	private readonly localizationService: ILocalizationService | undefined;
-	private readonly focusedView: IContextKey<string>;
 	private readonly onDidFailCreateView: (
 		error: unknown,
 		viewId: string,
 	) => void;
-	private readonly _panes = new Map<string, ViewPaneItem>();
+	private readonly _panes = this._register(new DisposableMap<string, ViewPaneItem>());
 	private readonly paneView: PaneView;
 	private readonly headersVisible: boolean;
 	private mountedPanes: ViewPane[] = [];
 	private syncing = false;
 	private didLayout = false;
 	private visible = true;
+	private readonly viewsAdded = this._register(new Emitter<readonly ViewPane[]>());
+	private readonly viewsRemoved = this._register(new Emitter<readonly ViewPane[]>());
+	private readonly viewVisibility = this._register(new Emitter<{ view: ViewPane; visible: boolean }>());
+	private readonly viewFocus = this._register(new Emitter<ViewPane>());
+	private readonly viewBlur = this._register(new Emitter<ViewPane>());
+	public readonly onDidAddViews = this.viewsAdded.event;
+	public readonly onDidRemoveViews = this.viewsRemoved.event;
+	public readonly onDidChangeViewVisibility = this.viewVisibility.event;
+	public readonly onDidFocusView = this.viewFocus.event;
+	public readonly onDidBlurView = this.viewBlur.event;
 
 	constructor(container: HTMLElement, options: ViewPaneContainerOptions, @IStorageService private readonly storageService: IStorageService) {
 		super();
@@ -70,19 +78,8 @@ export class ViewPaneContainer extends Disposable {
 			((error, viewId) => {
 				console.error(`Unable to create view pane '${viewId}'`, error);
 			});
-		this.focusedView = FocusedViewContext.bindTo(
-			options.contextKeyService,
-		);
 		this._register(toDisposable(() => {
-			if (
-				[...this._panes.values()].some(
-					(item) => item.pane.id === this.focusedView.get(),
-				)
-			) {
-				this.focusedView.reset();
-			}
-			for (const item of this._panes.values()) item.dispose();
-			this._panes.clear();
+			this._panes.clearAndDisposeAll();
 			this.mountedPanes.length = 0;
 		}));
 		this._register(this.paneView.onDidSashChange(() => this.saveState()));
@@ -129,7 +126,7 @@ export class ViewPaneContainer extends Disposable {
 		if (this.visible === visible) return;
 		this.visible = visible;
 		this.element.hidden = !visible;
-		for (const item of this._panes.values()) {
+		for (const [, item] of this._panes) {
 			item.pane.setVisible(visible && this.model.isVisible(item.pane.id));
 		}
 	}
@@ -168,8 +165,8 @@ export class ViewPaneContainer extends Disposable {
 			this.mountedPanes = this.mountedPanes.filter(pane => desiredIds.has(pane.id));
 			for (const [viewId, item] of this._panes) {
 				if (registeredIds.has(viewId)) continue;
-				this._panes.delete(viewId);
-				item.dispose();
+				this.viewsRemoved.fire([item.pane]);
+				this._panes.deleteAndDispose(viewId);
 			}
 			for (const descriptor of desired) {
 				if (this._panes.has(descriptor.id)) continue;
@@ -181,8 +178,14 @@ export class ViewPaneContainer extends Disposable {
 					continue;
 				}
 				pane.setVisible(this.visible);
-				const item = new ViewPaneItem(pane, this.readSize(descriptor.id) ?? 200, this.focusedView);
+				const item = new ViewPaneItem(pane, this.readSize(descriptor.id) ?? 200);
 				this._panes.set(descriptor.id, item);
+				item.listenToViewEvents(
+					visible => this.viewVisibility.fire({ view: pane, visible }),
+					() => this.viewFocus.fire(pane),
+					() => this.viewBlur.fire(pane),
+				);
+				this.viewsAdded.fire([pane]);
 				item.listenToLayout(() => this.saveState());
 			}
 			let index = 0;
@@ -267,22 +270,23 @@ export class ViewPaneContainer extends Disposable {
 }
 
 class ViewPaneItem extends Disposable {
+	public listenToViewEvents(visibility: (visible: boolean) => void, focus: () => void, blur: () => void): void {
+		this._register(this.pane.onDidChangeBodyVisibility(visibility));
+		this._register(this.pane.onDidFocus(focus));
+		this._register(this.pane.onDidBlur(blur));
+		this._register(this.pane.onDidChangeVisibility(visible => {
+			// Hiding a focused pane does not consistently produce a DOM blur event.
+			if (!visible) blur();
+		}));
+		this._register(toDisposable(blur));
+	}
+
 	listenToLayout(listener: () => void): void {
 		this._register(this.pane.onDidChangeExpansionState(listener));
 	}
-	constructor(
-		readonly pane: ViewPane,
-		public size: number,
-		focusedView: IContextKey<string>,
-	) {
+
+	constructor(readonly pane: ViewPane, public size: number) {
 		super();
 		this._register(pane);
-		this._register(pane.onDidFocus(() => focusedView.set(pane.id)));
-		this._register(pane.onDidBlur(() => {
-			if (focusedView.get() === pane.id) focusedView.reset();
-		}));
-		this._register(toDisposable(() => {
-			if (focusedView.get() === pane.id) focusedView.reset();
-		}));
 	}
 }

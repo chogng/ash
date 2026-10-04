@@ -5,7 +5,7 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 import { type ITaskRun, ITaskService, type IWorkspaceTask } from "../../../services/tasks/common/taskService.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { TERMINAL_VIEW_ID } from "../../terminal/common/terminal.js";
-import { IViewsService } from "../../../services/views/browser/viewsService.js";
+import { IViewsService } from "../../../services/views/common/viewsService.js";
 import { ITerminalService } from "../../../services/terminal/common/terminal.js";
 
 /** Code-owned task catalog and execution status view. */

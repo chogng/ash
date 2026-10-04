@@ -25,7 +25,7 @@ import { type IEditorPaneWithViewState } from '../../../browser/parts/editor/edi
 import { EditorPaneVisibility } from '../../../browser/parts/editor/editorPane.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { IGitService } from '../../../contrib/git/common/gitService.js';
-import type { IViewsService } from '../../../services/views/browser/viewsService.js';
+import type { IViewsService } from '../../../services/views/common/viewsService.js';
 import { GIT_VIEW_ID } from '../../scm/browser/scmViewPane.js';
 import { createGitMultiDiffEditorInput } from './scmMultiDiffAction.js';
 import { isMultiDiffEditorInput, MULTI_DIFF_EDITOR_ID, multiDiffEditorItemKey, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from './multiDiffEditorInput.js';

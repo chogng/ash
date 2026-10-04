@@ -6,7 +6,7 @@ import { extUri } from '../../../../base/common/resources.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import { ITestingService } from '../../../services/testing/common/testingService.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { REFRESH_TESTS_COMMAND_ID, RUN_ALL_TESTS_COMMAND_ID, TESTING_VIEW_ID } from '../common/testing.js';
 
 registerAction2(class RunAllTestsAction extends Action2 {

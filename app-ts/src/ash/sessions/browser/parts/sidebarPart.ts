@@ -6,7 +6,7 @@ import { ActivityBarPosition } from '../../../workbench/common/configuration.js'
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
 import { SidebarPart as WorkbenchSidebarPart } from '../../../workbench/browser/parts/sidebar/sidebarPart.js';
-import { IViewDescriptorService } from '../../../workbench/services/views/common/viewDescriptorService.js';
+import { IViewDescriptorService } from '../../../workbench/common/views.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { SessionsList } from "./sessionsList.js";

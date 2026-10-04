@@ -2,7 +2,7 @@ import { EditorContributionInstantiation, registerEditorContribution } from '../
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { localize } from '../../../../nls.js';
 import { TestingEditorContribution } from './testingEditorContribution.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";

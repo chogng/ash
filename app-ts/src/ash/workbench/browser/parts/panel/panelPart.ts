@@ -4,7 +4,7 @@ import type { IStorageService } from "../../../../platform/storage/common/storag
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { ViewContainerLocation } from "../../../common/views.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
-import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
+import type { IViewDescriptorService } from "../../../common/views.js";
 import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
 
 /** Construction inputs for the bottom Panel Composite host. */

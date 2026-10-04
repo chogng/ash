@@ -3,7 +3,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/c
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { IMarkerService } from "../../../../platform/markers/common/markers.js";
 import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
-import { IViewsService } from "../../../services/views/browser/viewsService.js";
+import { IViewsService } from "../../../services/views/common/viewsService.js";
 import { ProblemsStatusContribution } from "./problemsStatus.js";
 import { ProblemsViewPane } from "./problemsViewPane.js";
 import "./media/problems.css";

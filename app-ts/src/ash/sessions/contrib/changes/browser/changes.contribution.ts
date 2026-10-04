@@ -6,7 +6,7 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
-import { IViewsService } from '../../../../workbench/services/views/browser/viewsService.js';
+import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import { ChangesViewPane } from './changesView.js';
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';

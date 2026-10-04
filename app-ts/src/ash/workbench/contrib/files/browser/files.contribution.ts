@@ -5,7 +5,7 @@ import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { OpenEditorsFocusedContext } from '../common/files.js';
 import { DirtyFilesIndicator } from '../common/dirtyFilesIndicator.js';
 import { IActivityService } from '../../../services/activity/common/activity.js';
@@ -117,7 +117,7 @@ AccessibleViewRegistry.register({
 	name: 'openEditorsHelp',
 	when: OpenEditorsFocusedContext.isEqualTo(true),
 	getProvider: accessor => {
-		const view = accessor.get(IViewsService).getViewWithId(OpenEditorsView.ID);
+		const view = accessor.get(IViewsService).getActiveViewWithId(OpenEditorsView.ID);
 		if (!(view instanceof OpenEditorsView)) return undefined;
 		const focused = view.element.ownerDocument.activeElement;
 		return new AccessibleContentProvider(
@@ -136,7 +136,7 @@ AccessibleViewRegistry.register({
 	name: 'openEditorsView',
 	when: OpenEditorsFocusedContext.isEqualTo(true),
 	getProvider: accessor => {
-		const view = accessor.get(IViewsService).getViewWithId(OpenEditorsView.ID);
+		const view = accessor.get(IViewsService).getActiveViewWithId(OpenEditorsView.ID);
 		if (!(view instanceof OpenEditorsView)) return undefined;
 		const focused = view.element.ownerDocument.activeElement;
 		const content = view.getAccessibleContent();

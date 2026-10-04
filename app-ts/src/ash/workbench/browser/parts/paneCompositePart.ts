@@ -13,7 +13,7 @@ import type { IContextKey } from "../../../platform/contextkey/common/contextkey
 import type { IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { ActiveAgentSidebarContext, ActiveAuxiliaryContext, ActivePanelContext, ActiveViewletContext } from '../../common/contextkeys.js';
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../common/views.js";
-import type { IViewDescriptorService } from "../../services/views/common/viewDescriptorService.js";
+import type { IViewDescriptorService } from "../../common/views.js";
 import { CompositePart } from "./compositePart.js";
 import { CompositeBar, type CompositeBarPresentation, type CompositeBarSelectionEvent } from "./compositeBar.js";
 import type { PartTitleProjection } from "./views/viewPane.js";
@@ -126,6 +126,17 @@ export class PaneCompositePart extends CompositePart {
 		}
 
 		this.setCompositeBarVisible(options.compositeBarVisible ?? true);
+		this._register(this.viewDescriptorService.onDidChangeViewContainers(({ removed }) => {
+			for (const container of removed) {
+				if (container.location !== this.location) continue;
+				const active = this.activeCompositeId === container.id;
+				this.removeComposite(container.id);
+				if (active) {
+					this.activeCompositeContext?.reset();
+					this.setTitleProjection(undefined);
+				}
+			}
+		}));
 	}
 
 	/** Resolves the last valid workspace selection, then falls back to the Registry default. */

@@ -5,7 +5,7 @@ import { IContextKeyService } from '../../../platform/contextkey/browser/context
 import { ViewContainerLocation } from '../../common/views.js';
 import { IWorkbenchLayoutService, type WorkbenchPartId } from '../../services/layout/browser/layoutService.js';
 import { ILocalizationService } from '../../services/localization/common/localizationService.js';
-import { IViewDescriptorService } from '../../services/views/common/viewDescriptorService.js';
+import { IViewDescriptorService } from '../../common/views.js';
 import { type IPaneCompositePartService, type PaneCompositeEvent } from '../../services/panecomposite/browser/panecomposite.js';
 import type { PaneCompositePart } from './paneCompositePart.js';
 import { PaneComposite } from './views/paneComposite.js';

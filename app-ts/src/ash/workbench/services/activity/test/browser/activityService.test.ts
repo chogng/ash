@@ -6,7 +6,7 @@ import { ContextKeyService } from '../../../../../platform/contextkey/browser/co
 import { CompositeBar } from '../../../../browser/parts/compositeBar.js';
 import { HoverPosition } from '../../../../../base/browser/ui/hover/hoverWidget.js';
 import { ViewContainerLocation, ViewsRegistry } from '../../../../common/views.js';
-import { ViewDescriptorService } from '../../../views/common/viewDescriptorService.js';
+import { ViewDescriptorService } from '../../../views/browser/viewDescriptorService.js';
 import { ActivityService } from '../../browser/activityService.js';
 import { NumberBadge } from '../../common/activity.js';
 import { BrowserStorageService } from '../../../storage/browser/storageService.js';
@@ -20,7 +20,7 @@ test('ActivityService combines concurrent counts and descriptions and releases o
 	const registry = ViewsRegistry;
 	using container = registry.registerViewContainer({ id: 'test', title: 'Test', location: ViewContainerLocation.Sidebar });
 	using contextKeys = new ContextKeyService();
-	using views = new ViewDescriptorService({ registry, contextKeyService: contextKeys });
+	using views = new ViewDescriptorService({ registry }, contextKeys);
 	using bar = new CompositeBar(dom.window.document.body, { activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: views, location: ViewContainerLocation.Sidebar, ariaLabel: 'Views' });
 	using activity = new ActivityService(bar);
 	using first = activity.showViewContainerActivity('test', new NumberBadge(2, '2 unsaved files'));
@@ -53,7 +53,7 @@ test('Activity Bar badge menu uses Chinese labels and restores independent visib
 		using firstContainer = ViewsRegistry.registerViewContainer({ id: 'badge-first', title: 'First', location: ViewContainerLocation.Sidebar });
 		using secondContainer = ViewsRegistry.registerViewContainer({ id: 'badge-second', title: 'Second', location: ViewContainerLocation.Sidebar });
 		using contexts = new ContextKeyService();
-		using views = new ViewDescriptorService({ contextKeyService: contexts });
+		using views = new ViewDescriptorService({}, contexts);
 		const options = { ownerWindow: dom.window as unknown as Window, applicationId: 'badge-test', workspaceId: 'first', flushInterval: 0 };
 		using storage = new BrowserStorageService(options);
 		let actions: readonly IAction[] = [];

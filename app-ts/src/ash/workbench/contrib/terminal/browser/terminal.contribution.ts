@@ -4,7 +4,7 @@ import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/c
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
-import { IViewsService } from "../../../services/views/browser/viewsService.js";
+import { IViewsService } from "../../../services/views/common/viewsService.js";
 import { TERMINAL_VIEW_ID } from "../common/terminal.js";
 import { TerminalViewPane } from "./terminalView.js";
 

@@ -6,7 +6,7 @@ import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IDebugService } from "../../../services/debug/common/debugService.js";
 import { IDebugConsoleService } from "../../../services/debug/common/debugConsoleService.js";
-import { IViewsService } from "../../../services/views/browser/viewsService.js";
+import { IViewsService } from "../../../services/views/common/viewsService.js";
 import { CLEAR_DEBUG_CONSOLE_COMMAND_ID, CONTINUE_DEBUG_COMMAND_ID, DEBUG_CONSOLE_VIEW_ID, DEBUG_VIEW_ID, FOCUS_DEBUG_CONSOLE_COMMAND_ID, PAUSE_DEBUG_COMMAND_ID, RESTART_DEBUG_COMMAND_ID, START_DEBUG_COMMAND_ID, STEP_INTO_DEBUG_COMMAND_ID, STEP_OUT_DEBUG_COMMAND_ID, STEP_OVER_DEBUG_COMMAND_ID, STOP_ALL_DEBUG_COMMAND_ID, STOP_DEBUG_COMMAND_ID } from "../common/debug.js";
 
 registerAction2(class ToggleBreakpointAction extends Action2 {

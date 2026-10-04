@@ -3,7 +3,7 @@ import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { PanelPart as WorkbenchPanelPart } from '../../../workbench/browser/parts/panel/panelPart.js';
 import { IMenuService, MenuId } from '../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
-import { IViewDescriptorService } from '../../../workbench/services/views/common/viewDescriptorService.js';
+import { IViewDescriptorService } from '../../../workbench/common/views.js';
 import { ILocalizationService } from '../../../workbench/services/localization/common/localizationService.js';
 
 /** Retains Code's tool views without creating terminal processes when the panel is hidden. */

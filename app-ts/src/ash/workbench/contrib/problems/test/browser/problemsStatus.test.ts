@@ -4,7 +4,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { MarkerService, MarkerSeverity } from "../../../../../platform/markers/common/markers.js";
 import { ProblemsStatusContribution } from "../../../../../workbench/contrib/problems/browser/problemsStatus.js";
 import { StatusbarAlignment, StatusbarService } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
-import type { IViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
+import type { IViewsService } from "../../../../../workbench/services/views/common/viewsService.js";
 
 test("Problems status projects and updates workspace error and warning counts", async () => {
 	using markerService = new MarkerService();

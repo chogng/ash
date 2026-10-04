@@ -14,7 +14,7 @@ import type { GitHistoryProvider } from '../../../git/browser/gitHistoryProvider
 import { GitSwitchBranchCommandId } from '../../../git/common/gitCommands.js';
 import type { GitStatus, IGitService } from '../../../git/common/gitService.js';
 import { StatusbarAlignment, StatusbarService } from '../../../../services/statusbar/browser/statusbar.js';
-import type { IViewsService } from '../../../../services/views/browser/viewsService.js';
+import type { IViewsService } from '../../../../services/views/common/viewsService.js';
 import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 import type { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 

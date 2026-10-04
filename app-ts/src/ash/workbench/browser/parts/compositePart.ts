@@ -1,5 +1,5 @@
 import { Emitter } from "../../../base/common/event.js";
-import { toDisposable } from "../../../base/common/lifecycle.js";
+import { DisposableMap } from "../../../base/common/lifecycle.js";
 import { WorkbenchPart } from "../part.js";
 import { PaneComposite } from "./views/paneComposite.js";
 
@@ -10,7 +10,7 @@ import { PaneComposite } from "./views/paneComposite.js";
  * add their standard title and CompositeBar through PaneCompositePart.
  */
 export abstract class CompositePart extends WorkbenchPart {
-	private readonly composites = new Map<string, PaneComposite>();
+	private readonly composites = this._register(new DisposableMap<string, PaneComposite>());
 	private activeComposite: PaneComposite | undefined;
 	private readonly compositeOpened = this._register(new Emitter<PaneComposite>());
 	private readonly compositeClosed = this._register(new Emitter<PaneComposite>());
@@ -20,19 +20,30 @@ export abstract class CompositePart extends WorkbenchPart {
 	protected constructor(container: HTMLElement, id: string) {
 		super(container, id);
 		this.contentDomNode.classList.add("ash-composite-content");
-		this._register(toDisposable(() => this.composites.clear()));
 	}
 
 	addComposite(composite: PaneComposite): void {
 		if (this.composites.has(composite.id)) {
 			throw new Error(`Composite already exists in Part: ${composite.id}`);
 		}
-		this.composites.set(composite.id, this._register(composite));
+		this.composites.set(composite.id, composite);
 		composite.setVisible(false);
 	}
 
 	getComposite(compositeId: string): PaneComposite | undefined {
 		return this.composites.get(compositeId);
+	}
+
+	protected removeComposite(compositeId: string): boolean {
+		const composite = this.composites.get(compositeId);
+		if (!composite) { return false; }
+		if (this.activeComposite === composite) {
+			const visible = composite.isVisible();
+			this.activeComposite = undefined;
+			composite.setVisible(false);
+			if (visible) { this.compositeClosed.fire(composite); }
+		}
+		return this.composites.deleteAndDispose(compositeId);
 	}
 
 	showComposite(compositeId: string): void {

@@ -13,7 +13,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ViewContainerLocation, ViewsRegistry } from '../../../common/views.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { MemoriesViewPane } from './memoriesViewPane.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({

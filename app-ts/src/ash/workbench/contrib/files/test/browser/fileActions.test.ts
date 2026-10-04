@@ -4,7 +4,7 @@ import { isMenuItem, MenuId, MenusRegistry } from '../../../../../platform/actio
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
-import { IViewsService } from '../../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { FileEditorInput } from '../../browser/editors/fileEditorInput.js';
 import { REVEAL_IN_EXPLORER_COMMAND_ID } from '../../browser/fileConstants.js';
 import { MultipleEditorsSelectedInGroupContext, ResourceSchemeContext } from '../../../../common/contextkeys.js';
@@ -660,13 +660,13 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 	services.registerInstance(IEditorGroupsService, { getGroup: (id: string) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
 	services.registerInstance(INativeHostService, { revealFile: async path => { effects.push(['finder', path]); } } as INativeHostApi);
 	services.registerInstance(IViewsService, {
-		openView: async id => {
+		openView: async (id: string) => {
 			effects.push(['open', id]);
 			return { id, focus: () => { effects.push(['focus']); }, isVisible: () => true, setVisible() {} };
 		},
 		focusView: async () => false,
-		getViewWithId: () => undefined,
-	});
+		getViewWithId: () => null,
+	} as unknown as IViewsService);
 	using commands = new CommandService(services);
 	using context = new ContextKeyService();
 	context.setContext(ResourceSchemeContext.key, clicked.resource.scheme);

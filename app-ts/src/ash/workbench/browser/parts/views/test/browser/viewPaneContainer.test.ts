@@ -114,7 +114,7 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 	const { ViewPane } = await import("../../../../../../workbench/browser/parts/views/viewPane.js");
 	const { SyncDescriptor } = await import("../../../../../../platform/instantiation/common/descriptors.js");
 	const { WorkbenchViewRegistry } = await import("../../../../../../workbench/common/views.js");
-	const { ViewDescriptorService } = await import("../../../../../../workbench/services/views/common/viewDescriptorService.js");
+	const { ViewDescriptorService } = await import("../../../../../../workbench/services/views/browser/viewDescriptorService.js");
 	let created = 0;
 	let disposed = 0;
 	class TestView extends ViewPane {
@@ -136,7 +136,7 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 		{ id: "test.first", title: "First", ctorDescriptor: new SyncDescriptor(TestView) },
 		{ id: "test.second", title: "Second", collapsed: true, ctorDescriptor: new SyncDescriptor(TestView) },
 	]);
-	using descriptors = new ViewDescriptorService({ registry, contextKeyService: contextKeys });
+	using descriptors = new ViewDescriptorService({ registry }, contextKeys);
 	using storage = createStorage("test");
 	const options = { viewContainer, model: descriptors.getViewContainerModel(viewContainer.id), instantiationService: services, contextKeyService: contextKeys };
 	assert.throws(() => services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options), /Unknown service: storageService/);

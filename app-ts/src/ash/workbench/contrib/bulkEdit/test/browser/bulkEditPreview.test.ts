@@ -26,7 +26,7 @@ import { BulkEditService } from '../../browser/bulkEditService.js';
 import { IBulkEditService, ResourceEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { IViewsService } from '../../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -139,7 +139,7 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 			using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
 			browser.window.document.body.append(pane.element);
 			pane.setVisible(true);
-			services.registerInstance(IViewsService, { openView: async () => pane, getViewWithId: () => pane, focusView: async () => { pane.focus(); return true; } });
+			services.registerInstance(IViewsService, { openView: async () => pane, getViewWithId: () => pane, focusView: async () => { pane.focus(); return true; } } as unknown as IViewsService);
 			using bulkEdits = services.createInstance(BulkEditService);
 			services.registerInstance(IBulkEditService, bulkEdits);
 			using contribution = services.createInstance(BulkEditPreviewContribution);

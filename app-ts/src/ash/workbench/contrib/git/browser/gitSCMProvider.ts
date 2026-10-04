@@ -13,7 +13,7 @@ import type { IDialogService } from '../../../../platform/dialogs/common/dialogs
 import type { IEditorOptions } from '../../../../platform/editor/common/editor.js';
 import { createDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
-import type { IViewsService } from '../../../services/views/browser/viewsService.js';
+import type { IViewsService } from '../../../services/views/common/viewsService.js';
 import type { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import { OpenScmMultiDiffEditorCommandId, type OpenScmMultiDiffEditorOptions, type OpenScmMultiDiffEditorResult } from '../../multiDiffEditor/browser/scmMultiDiffAction.js';
 import { repositoryFileUri, resolveGitChangeInputs } from './gitChangeEditorInput.js';

@@ -7,7 +7,7 @@ import type { ServicesAccessor } from "../../../platform/instantiation/common/in
 import { IQuickInputService, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
 import type { SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
-import { IViewsService } from "../../../workbench/services/views/browser/viewsService.js";
+import { IViewsService } from "../../../workbench/services/views/common/viewsService.js";
 import { CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
 
 registerAction2(class OpenChatAction extends Action2 {

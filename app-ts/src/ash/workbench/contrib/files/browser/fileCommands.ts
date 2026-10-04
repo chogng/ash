@@ -9,7 +9,7 @@ import { IWorkspaceContextService, workspaceRelativePath } from '../../../../pla
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { resolveCommandsContext } from '../../../browser/parts/editor/editorCommandsContext.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IExplorerService } from './files.js';
 import { VIEW_ID } from '../common/files.js';
 import { EditorResourceAccessor, SideBySideEditor } from '../../../common/editor.js';

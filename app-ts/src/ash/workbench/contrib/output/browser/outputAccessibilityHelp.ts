@@ -4,7 +4,7 @@ import { AccessibleContentProvider, AccessibleViewType, AccessibleViewProviderId
 import type { IAccessibleViewImplementation } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { CONTEXT_IN_OUTPUT, OUTPUT_VIEW_ID } from '../../../services/output/common/output.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 
 export class OutputAccessibilityHelp implements IAccessibleViewImplementation {
 	public readonly type = AccessibleViewType.Help;
@@ -13,7 +13,7 @@ export class OutputAccessibilityHelp implements IAccessibleViewImplementation {
 	public readonly when = CONTEXT_IN_OUTPUT.isEqualTo(true);
 
 	public getProvider(accessor: ServicesAccessor): AccessibleContentProvider | undefined {
-		const view = accessor.get(IViewsService).getViewWithId(OUTPUT_VIEW_ID);
+		const view = accessor.get(IViewsService).getActiveViewWithId(OUTPUT_VIEW_ID);
 		if (!(view instanceof OutputViewPane)) {
 			return undefined;
 		}

@@ -8,6 +8,7 @@ import type {
 } from "../../platform/contextkey/common/contextkey.js";
 import type { SyncDescriptor } from "../../platform/instantiation/common/descriptors.js";
 import type { Icon } from "../../base/common/icon.js";
+import { createServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
 import type { LocalizationKey } from "../../nls.js";
 
 /** Workbench region capable of hosting registered view containers. */
@@ -66,6 +67,17 @@ export interface IViewDescriptorsChangeEvent {
 export interface IView {
 	readonly id: string;
 
+	focus(): void;
+	isVisible(): boolean;
+	setVisible(visible: boolean): void;
+}
+
+/** Runtime operations available without depending on the browser implementation. */
+export interface IViewPaneContainer {
+	readonly id: string;
+	readonly panes: readonly IView[];
+	getView(id: string): IView | undefined;
+	openView(id: string, focus?: boolean): IView | undefined;
 	focus(): void;
 	isVisible(): boolean;
 	setVisible(visible: boolean): void;
@@ -362,3 +374,43 @@ function validateId(id: string, kind: string): void {
 function validateTitle(title: string, kind: string): void {
 	if (!title.trim()) throw new TypeError(`${kind} title must not be empty`);
 }
+
+/** Change to the containers available in one workbench window. */
+export interface IViewContainersChangeEvent {
+	readonly added: readonly IViewContainerDescriptor[];
+	readonly removed: readonly IViewContainerDescriptor[];
+}
+
+/**
+ * Window-scoped access to context-aware view container models.
+ *
+ * Implementations project realm-wide static declarations into independent
+ * per-window visibility state.
+ */
+export interface IViewDescriptorService {
+	readonly viewContainers: readonly IViewContainerDescriptor[];
+	readonly onDidChangeViewContainers: Event<IViewContainersChangeEvent>;
+	readonly onDidChangeViewContainerOrder: Event<ViewContainerLocation>;
+
+	getViewContainers(
+		location: ViewContainerLocation,
+	): readonly IViewContainerDescriptor[];
+	getDefaultViewContainer(
+		location: ViewContainerLocation,
+	): IViewContainerDescriptor | undefined;
+	getViewContainerById(id: string): IViewContainerDescriptor | null;
+	getViewDescriptorById(id: string): IViewDescriptor | null;
+	getViewContainerForView(
+		viewId: string,
+	): IViewContainerDescriptor | undefined;
+	getViewContainerModel(
+		containerId: string,
+	): IViewContainerModel;
+	moveViewContainer(location: ViewContainerLocation, containerId: string, targetContainerId: string | undefined, position: "before" | "after"): void;
+	setViewContainerOrder(location: ViewContainerLocation, containerIds: readonly string[]): void;
+}
+
+export const IViewDescriptorService =
+	createServiceIdentifier<IViewDescriptorService>(
+		"viewDescriptorService",
+	);

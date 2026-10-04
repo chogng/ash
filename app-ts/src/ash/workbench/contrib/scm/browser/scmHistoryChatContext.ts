@@ -1,10 +1,11 @@
+import type { IView } from '../../../common/views.js';
 import { localize2 } from '../../../../nls.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { CHAT_VIEW_ID } from '../../chat/common/chat.js';
 import { IChatContextPickService, type ChatContextAttachment, type ChatContextPick, type IChatContextTarget } from '../../../services/chat/common/chatContextService.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import type { SCMHistoryItemChangeViewModelTreeElement, SCMHistoryItemViewModelTreeElement } from '../common/history.js';
 import { ISCMService, type ISCMService as ISCMServiceType } from '../common/scm.js';
 
@@ -82,7 +83,7 @@ async function historyPicks(scmService: ISCMServiceType, rawQuery: string): Prom
 }
 
 async function revealChat(accessor: ServicesAccessor): Promise<IChatContextTarget | undefined> {
-	return await accessor.get(IViewsService).openView(CHAT_VIEW_ID) as IChatContextTarget | undefined;
+	return await accessor.get(IViewsService).openView<IView & IChatContextTarget>(CHAT_VIEW_ID) ?? undefined;
 }
 
 registerAction2(class extends Action2 {

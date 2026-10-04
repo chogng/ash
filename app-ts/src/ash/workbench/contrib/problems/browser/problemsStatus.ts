@@ -3,7 +3,7 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 import { MarkerSeverity, type IMarkerService } from "../../../../platform/markers/common/markers.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
-import type { IViewsService } from "../../../services/views/browser/viewsService.js";
+import type { IViewsService } from "../../../services/views/common/viewsService.js";
 
 const ProblemsPriority = 700;
 

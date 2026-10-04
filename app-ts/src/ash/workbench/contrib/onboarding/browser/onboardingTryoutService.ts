@@ -2,7 +2,7 @@ import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import type { OnboardingOutcome } from '../common/onboardingScenario.js';
 import { IOnboardingScenarioService } from '../common/onboardingScenarioService.js';
 import { type IOnboardingTryout, type IOnboardingTryoutService, onboardingTryoutRegistry, parseOnboardingTryoutLink } from '../common/onboardingTryout.js';

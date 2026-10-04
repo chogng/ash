@@ -20,7 +20,7 @@ import { FocusedViewContext, IsSessionsWindowContext, ResourceSchemeContext, Wor
 import { resolveCommandsContext } from '../../../../workbench/browser/parts/editor/editorCommandsContext.js';
 import { FileDownload } from '../../../../workbench/contrib/files/browser/fileImportExport.js';
 import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
-import { IViewsService } from '../../../../workbench/services/views/browser/viewsService.js';
+import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import { SESSIONS_FILES_EMPTY_VIEW_ID, SESSIONS_FILES_VIEW_ID, SessionsExplorerEmptyView, SessionsExplorerView } from './filesView.js';
 
 export const SESSIONS_FILES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.filesContainer';
