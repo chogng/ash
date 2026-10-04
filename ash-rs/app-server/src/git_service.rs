@@ -383,10 +383,61 @@ impl GitService {
         })
     }
 
+    pub(crate) fn compare_changes(
+        &self,
+        object_id: &str,
+        base_reference: &str,
+        mode: ash_git::GitComparisonMode,
+    ) -> Result<GitServiceCommitChanges, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            let (base, changes) = self
+                .client
+                .compare_changes(&repository, object_id, base_reference, mode)
+                .await
+                .map_err(GitServiceError::Git)?;
+            Ok(GitServiceCommitChanges {
+                repository,
+                parent_object_id: Some(base),
+                changes,
+            })
+        })
+    }
+
+    pub(crate) fn commit_message(&self, object_id: &str) -> Result<String, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            self.client
+                .commit_message(&repository, object_id)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
+    pub(crate) fn commit_details(
+        &self,
+        object_id: &str,
+    ) -> Result<ash_git::GitCommitDetails, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            self.client
+                .commit_details(&repository, object_id)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
     pub(crate) fn commit_file(
         &self,
         object_id: &str,
         path: &Path,
+        comparison_base: Option<&str>,
     ) -> Result<GitCommitFile, GitServiceError> {
         self.ensure_readable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
@@ -394,11 +445,26 @@ impl GitService {
             let repository = self.open_repository().await?;
             let dir_prefix = self.repository_prefix(&repository)?;
             let repository_path = dir_prefix.join(path);
-            let (parent_object_id, changes) = self
-                .client
-                .commit_changes(&repository, object_id)
-                .await
-                .map_err(GitServiceError::Git)?;
+            let (parent_object_id, changes) = match comparison_base {
+                Some(base) => {
+                    let (base, changes) = self
+                        .client
+                        .compare_changes(
+                            &repository,
+                            object_id,
+                            base,
+                            ash_git::GitComparisonMode::Direct,
+                        )
+                        .await
+                        .map_err(GitServiceError::Git)?;
+                    (Some(base), changes)
+                }
+                None => self
+                    .client
+                    .commit_changes(&repository, object_id)
+                    .await
+                    .map_err(GitServiceError::Git)?,
+            };
             let change = changes
                 .iter()
                 .find(|change| change.path() == repository_path)

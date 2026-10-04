@@ -192,10 +192,14 @@ import type { GitCommandParams } from './types/GitCommandParams.js';
 import type { GitCommandResult } from './types/GitCommandResult.js';
 import type { GitCommitChangesParams } from './types/GitCommitChangesParams.js';
 import type { GitCommitChangesResult } from './types/GitCommitChangesResult.js';
+import type { GitCommitDetailsResult } from './types/GitCommitDetailsResult.js';
 import type { GitCommitFileParams } from './types/GitCommitFileParams.js';
 import type { GitCommitFileResult } from './types/GitCommitFileResult.js';
+import type { GitCommitMessageResult } from './types/GitCommitMessageResult.js';
 import type { GitCommitParams } from './types/GitCommitParams.js';
 import type { GitCommitResult } from './types/GitCommitResult.js';
+import type { GitCompareChangesParams } from './types/GitCompareChangesParams.js';
+import type { GitCompareChangesResult } from './types/GitCompareChangesResult.js';
 import type { GitCompleteConflictParams } from './types/GitCompleteConflictParams.js';
 import type { GitConflictFileParams } from './types/GitConflictFileParams.js';
 import type { GitConflictFileResult } from './types/GitConflictFileResult.js';
@@ -777,6 +781,9 @@ export interface AppServerRequestMap {
   "git/history": { params: GitRepositoryParams; response: GitHistoryResult };
   "git/graph": { params: GitGraphParams; response: GitGraphResult };
   "git/commitChanges": { params: GitCommitChangesParams; response: GitCommitChangesResult };
+  "git/compareChanges": { params: GitCompareChangesParams; response: GitCompareChangesResult };
+  "git/commitMessage": { params: GitCommitChangesParams; response: GitCommitMessageResult };
+  "git/commitDetails": { params: GitCommitChangesParams; response: GitCommitDetailsResult };
   "git/commitFile": { params: GitCommitFileParams; response: GitCommitFileResult };
   "git/changeFile": { params: GitChangeFileParams; response: GitChangeFileResult };
   "git/conflictFile": { params: GitConflictFileParams; response: GitConflictFileResult };
@@ -1134,6 +1141,9 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "git/history": { method: "git/history" },
   "git/graph": { method: "git/graph" },
   "git/commitChanges": { method: "git/commitChanges" },
+  "git/compareChanges": { method: "git/compareChanges" },
+  "git/commitMessage": { method: "git/commitMessage" },
+  "git/commitDetails": { method: "git/commitDetails" },
   "git/commitFile": { method: "git/commitFile" },
   "git/changeFile": { method: "git/changeFile" },
   "git/conflictFile": { method: "git/conflictFile" },

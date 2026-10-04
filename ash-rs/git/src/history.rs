@@ -48,7 +48,82 @@ impl GitCommitFile {
     }
 }
 
+/// Whether history compares two trees or changes since their common ancestor.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GitComparisonMode {
+    Direct,
+    MergeBase,
+}
+
+/// Commit metadata and first-parent change totals, read only when details are requested.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitCommitDetails {
+    pub author_name: String,
+    pub author_email: String,
+    pub timestamp_seconds: i64,
+    pub message: String,
+    pub statistics: GitCommitStatistics,
+}
+
+/// Binary paths contribute to the file count, but have no added or deleted line count.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct GitCommitStatistics {
+    pub files: usize,
+    pub additions: u64,
+    pub deletions: u64,
+}
+
 impl GitClient {
+    /// Uses the same first-parent comparison as history expansion, including root and merge commits.
+    pub async fn commit_details(
+        &self,
+        repository: &GitRepository,
+        object_id: &str,
+    ) -> GitResult<GitCommitDetails> {
+        validate_object_id(object_id)?;
+        let output = self
+            .run_query(
+                repository.worktree_root(),
+                [
+                    "show",
+                    "--first-parent",
+                    "--numstat",
+                    "--find-renames",
+                    "-z",
+                    "--format=format:%an%x00%ae%x00%ct%x00%B%x00",
+                    object_id,
+                    "--",
+                ],
+            )
+            .await?;
+        let mut fields = output.stdout.splitn(5, |byte| *byte == 0);
+        let mut text = || -> GitResult<String> {
+            let value = fields.next().ok_or_else(|| {
+                GitError::invalid_output(&output.command, "commit details omitted metadata")
+            })?;
+            std::str::from_utf8(value).map(str::to_owned).map_err(|_| {
+                GitError::invalid_output(&output.command, "commit details were not UTF-8")
+            })
+        };
+        let author_name = text()?;
+        let author_email = text()?;
+        let timestamp_seconds = text()?.parse().map_err(|_| {
+            GitError::invalid_output(&output.command, "commit timestamp was invalid")
+        })?;
+        let message = text()?.trim_end_matches('\n').to_owned();
+        let statistics = fields.next().ok_or_else(|| {
+            GitError::invalid_output(&output.command, "commit details omitted statistics")
+        })?;
+        let statistics = statistics.strip_prefix(b"\n").unwrap_or(statistics);
+        Ok(GitCommitDetails {
+            author_name,
+            author_email,
+            timestamp_seconds,
+            message,
+            statistics: crate::objects::commit_statistics(statistics, &output.command)?,
+        })
+    }
+
     /// Lists files changed by a commit relative to its first parent.
     ///
     /// Root commits are compared with the empty tree. Merge commits intentionally use their first
@@ -95,6 +170,61 @@ impl GitClient {
             parent_object_id,
             parse_commit_changes(&output.stdout, &output.command)?,
         ))
+    }
+
+    /// Compares immutable commits; the base may be a ref selected by the user.
+    pub async fn compare_changes(
+        &self,
+        repository: &GitRepository,
+        object_id: &str,
+        base_reference: &str,
+        mode: GitComparisonMode,
+    ) -> GitResult<(String, Vec<GitCommitChange>)> {
+        validate_object_id(object_id)?;
+        let base = self.resolve_commit(repository, base_reference).await?;
+        let base = match mode {
+            GitComparisonMode::Direct => base,
+            GitComparisonMode::MergeBase => {
+                let output = self
+                    .run_query(repository.worktree_root(), ["merge-base", &base, object_id])
+                    .await?;
+                let base = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                validate_object_id(&base)?;
+                base
+            }
+        };
+        let output = self
+            .run_query(
+                repository.worktree_root(),
+                [
+                    "diff",
+                    "--name-status",
+                    "--find-renames",
+                    "-z",
+                    &base,
+                    object_id,
+                    "--",
+                ],
+            )
+            .await?;
+        Ok((base, parse_commit_changes(&output.stdout, &output.command)?))
+    }
+
+    pub async fn commit_message(
+        &self,
+        repository: &GitRepository,
+        object_id: &str,
+    ) -> GitResult<String> {
+        validate_object_id(object_id)?;
+        let output = self
+            .run_query(
+                repository.worktree_root(),
+                ["show", "--no-patch", "--format=%B", object_id, "--"],
+            )
+            .await?;
+        String::from_utf8(output.stdout)
+            .map(|message| message.trim_end_matches('\n').to_owned())
+            .map_err(|_| GitError::invalid_output(output.command, "commit message was not UTF-8"))
     }
 
     /// Reads the before/after bytes for one changed path at a commit and its first parent.

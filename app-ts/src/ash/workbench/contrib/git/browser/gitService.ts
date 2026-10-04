@@ -1,4 +1,4 @@
-import type { GitCommand, GitCommandResult, GitCatalog, GitIndexDiff, GitIndexSelection } from '../common/gitService.js';
+import type { GitCommand, GitCommandResult, GitCatalog, GitIndexDiff, GitIndexSelection, GitCommitDetails } from '../common/gitService.js';
 import type { ConfigReadResult, GitConfigDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../platform/app-server/common/generated/index.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -10,7 +10,7 @@ import type { IGitApi } from "../../../../platform/git/common/gitApi.js";
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { getRemoteWorkspacePath, isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import type { IWorkspaceContextService, IWorkspaceFolder } from "../../../../platform/workspace/common/workspace.js";
-import { GitWorkspaceError, type GitBranch, type GitChangeFile, type GitChangeFileComparison, type GitConflictFile, type GitConflictResolution, type GitCommitChanges, type GitCommitFile, type GitCommitResult, type GitCommitSummary, type GitHead, type GitRepository, type GitRepositoryChange, type GitStatus, type GraphPage, type GraphQuery, type IGitService } from "../common/gitService.js";
+import { GitWorkspaceError, type GitBranch, type GitChangeFile, type GitChangeFileComparison, type GitConflictFile, type GitConflictResolution, type GitCommitChanges, type GitComparisonChanges, type GitCommitFile, type GitCommitResult, type GitCommitSummary, type GitHead, type GitRepository, type GitRepositoryChange, type GitStatus, type GraphPage, type GraphQuery, type IGitService } from "../common/gitService.js";
 import { GitConfiguration, type GitAutofetch } from '../common/gitConfiguration.js';
 import type { GitWorktree } from '../common/gitService.js';
 
@@ -289,6 +289,23 @@ export class GitService extends Disposable implements IGitService {
 		};
 	}
 
+	public async compareChanges(objectId: string, baseReference: string, mode: 'direct' | 'mergeBase', repositoryId?: string): Promise<GitComparisonChanges> {
+		const repository = await this.getRepository(repositoryId);
+		const result = await this.api.compareChanges({ repositoryId: repository.id, objectId, baseReference, mode });
+		return { baseObjectId: result.baseObjectId, changes: result.changes.map(change => ({ ...change, originalPath: change.originalPath ?? undefined })) };
+	}
+
+	public async commitMessage(objectId: string, repositoryId?: string): Promise<string> {
+		const repository = await this.getRepository(repositoryId);
+		return (await this.api.commitMessage({ repositoryId: repository.id, objectId })).message;
+	}
+
+	public async commitDetails(objectId: string, repositoryId?: string): Promise<GitCommitDetails> {
+		const repository = await this.getRepository(repositoryId);
+		const result = await this.api.commitDetails({ repositoryId: repository.id, objectId });
+		return { authorName: result.authorName, authorEmail: result.authorEmail, timestampSeconds: result.timestampSeconds, message: result.message, statistics: { ...result.statistics } };
+	}
+
 	async commitChanges(objectId: string, repositoryId?: string): Promise<GitCommitChanges> {
 		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.commitChanges({ repositoryId: repository.id, objectId });
@@ -298,9 +315,9 @@ export class GitService extends Disposable implements IGitService {
 		};
 	}
 
-	async commitFile(objectId: string, path: string, repositoryId?: string): Promise<GitCommitFile> {
+	async commitFile(objectId: string, path: string, repositoryId?: string, parentObjectId?: string): Promise<GitCommitFile> {
 		const repository = await this.getRepository(repositoryId);
-		const result = await this.api.commitFile({ repositoryId: repository.id, objectId, path });
+		const result = await this.api.commitFile({ repositoryId: repository.id, objectId, path, parentObjectId });
 		return { original: { ...result.original }, modified: { ...result.modified } };
 	}
 

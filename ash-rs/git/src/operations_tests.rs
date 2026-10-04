@@ -116,6 +116,7 @@ async fn integration_conflicts_can_be_inspected_aborted_and_continued() {
             reference: "topic".into(),
         },
         GitCommand::CherryPick {
+            mainline: None,
             reference: topic.clone(),
         },
     ] {
@@ -275,4 +276,121 @@ async fn initialization_rejects_nested_repositories_and_remote_deletion_uses_a_n
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn graph_commands_create_at_selected_commit_and_checkout_without_discarding_edits() {
+    let source = TestRepository::init();
+    source.write("file.txt", "before\n");
+    source.commit_all("Root");
+    let root = source.git(&["rev-parse", "HEAD"]);
+    source.write("file.txt", "after\n");
+    source.commit_all("Latest");
+    let latest = source.git(&["rev-parse", "HEAD"]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    client
+        .execute_command(
+            &repository,
+            &GitCommand::CreateBranchAt {
+                name: "from-root".into(),
+                object_id: root.clone(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(source.git(&["rev-parse", "from-root"]), root);
+    assert_eq!(source.git(&["rev-parse", "HEAD"]), latest);
+    assert!(
+        client
+            .execute_command(
+                &repository,
+                &GitCommand::CreateBranchAt {
+                    name: "from-root".into(),
+                    object_id: root.clone()
+                }
+            )
+            .await
+            .is_err()
+    );
+    source.write("file.txt", "local edits\n");
+    assert!(
+        client
+            .execute_command(
+                &repository,
+                &GitCommand::CheckoutDetached {
+                    object_id: root.clone()
+                }
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(source.read("file.txt"), "local edits\n");
+    assert_eq!(source.git(&["symbolic-ref", "--short", "HEAD"]), "main");
+    source.git(&["restore", "file.txt"]);
+    client
+        .execute_command(
+            &repository,
+            &GitCommand::CheckoutDetached {
+                object_id: root.clone(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(source.git(&["rev-parse", "HEAD"]), root);
+    assert_eq!(source.read("file.txt"), "before\n");
+    source.git(&[
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/test/history.git",
+    ]);
+    source.git(&["update-ref", "refs/remotes/origin/topic", &latest]);
+    client
+        .execute_command(
+            &repository,
+            &GitCommand::CheckoutRemoteBranch {
+                name: "tracked".into(),
+                reference: "origin/topic".into(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(source.git(&["symbolic-ref", "--short", "HEAD"]), "tracked");
+    assert_eq!(
+        source.git(&["rev-parse", "--abbrev-ref", "@{upstream}"]),
+        "origin/topic"
+    );
+}
+
+#[tokio::test]
+async fn graph_cherry_pick_replays_a_merge_relative_to_the_chosen_parent() {
+    let source = TestRepository::init();
+    source.write("base.txt", "base\n");
+    source.commit_all("Root");
+    let root = source.git(&["rev-parse", "HEAD"]);
+    source.git(&["switch", "-c", "topic"]);
+    source.write("topic.txt", "topic\n");
+    source.commit_all("Topic");
+    source.git(&["switch", "main"]);
+    source.write("main.txt", "main\n");
+    source.commit_all("Main");
+    source.git(&["merge", "--no-ff", "topic", "-m", "Merge"]);
+    let merge = source.git(&["rev-parse", "HEAD"]);
+    source.git(&["switch", "-c", "replay", &root]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    client
+        .execute_command(
+            &repository,
+            &GitCommand::CherryPick {
+                reference: merge,
+                mainline: Some(2),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(source.read("main.txt"), "main\n");
+    assert!(!source.path("topic.txt").exists());
+    assert_eq!(source.git(&["rev-parse", "HEAD^"]), root);
 }

@@ -102,14 +102,14 @@ test.describe('Git branch lifecycle', () => {
 		await input.press('Enter');
 		await expect.poll(async () => (await run('git', ['branch', '--list', 'ui-topic'], { cwd })).stdout.trim()).toBe('ui-topic');
 		expect((await run('git', ['branch', '--show-current'], { cwd })).stdout.trim()).toBe('main');
-		await expect(history.getByRole('img', { name: /(?:^|, )ui-topic(?:, |$)/u })).toBeVisible();
+		await expect(history.getByRole('button', { name: /(?:^|, )ui-topic(?:, |$)/u })).toBeVisible();
 
 		await workbench.quickaccess.runCommand('git.deleteBranch');
 		const picker = page.locator('.ash-quick-pick');
 		await picker.getByRole('combobox').fill('ui-topic');
 		await workbench.dialogs.confirm(application, 'Git: Delete Branch', 'Delete Branch', () => picker.getByRole('combobox').press('Enter'));
 		await expect.poll(async () => (await run('git', ['branch', '--list', 'ui-topic'], { cwd })).stdout.trim()).toBe('');
-		await expect(history.getByRole('img', { name: /(?:^|, )ui-topic(?:, |$)/u })).toHaveCount(0);
+		await expect(history.getByRole('button', { name: /(?:^|, )ui-topic(?:, |$)/u })).toHaveCount(0);
 	});
 });
 

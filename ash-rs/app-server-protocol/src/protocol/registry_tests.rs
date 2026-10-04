@@ -128,6 +128,9 @@ fn git_operations_declare_repository_access_and_validate_selectors() {
     for method in [
         "git/command",
         "git/catalog",
+        "git/compareChanges",
+        "git/commitMessage",
+        "git/commitDetails",
         "git/indexDiff",
         "git/indexEdit",
         "git/fetch",
@@ -373,6 +376,11 @@ fn git_intents_round_trip_reviewed_identities_and_reject_open_ended_commands() {
         serde_json::json!({"command":{"kind":"popStash","objectId":"a".repeat(40)}}),
         serde_json::json!({"command":{"kind":"continue","operation":"cherryPick"}}),
         serde_json::json!({"command":{"kind":"undoCommit","expectedHead":"a".repeat(40)}}),
+        serde_json::json!({"repositoryId":"selected","command":{"kind":"createBranchAt","name":"review","objectId":"a".repeat(40)}}),
+        serde_json::json!({"command":{"kind":"checkoutDetached","objectId":"a".repeat(40)}}),
+        serde_json::json!({"command":{"kind":"checkoutRemoteBranch","name":"review","reference":"origin/topic"}}),
+        serde_json::json!({"command":{"kind":"cherryPick","reference":"a".repeat(40)}}),
+        serde_json::json!({"command":{"kind":"cherryPick","reference":"a".repeat(40),"mainline":2}}),
     ] {
         let decoded: GitCommandParams = serde_json::from_value(value.clone()).unwrap();
         assert_eq!(serde_json::to_value(decoded).unwrap(), value);
@@ -382,6 +390,7 @@ fn git_intents_round_trip_reviewed_identities_and_reject_open_ended_commands() {
         serde_json::json!({"kind":"continue","operation":"reset"}),
         serde_json::json!({"kind":"stash","message":"review","mode":"all"}),
         serde_json::json!({"kind":"undoCommit"}),
+        serde_json::json!({"kind":"cherryPick","reference":"a".repeat(40),"mainline":-1}),
     ] {
         assert!(
             serde_json::from_value::<GitCommandParams>(serde_json::json!({"command":command}))

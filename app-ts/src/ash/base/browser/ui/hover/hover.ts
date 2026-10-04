@@ -2,8 +2,9 @@ import { Emitter } from "../../../common/event.js";
 import { Disposable, MutableDisposable, DisposableStore, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { addDisposableListener, getWindow, isHTMLElement, isNode, h } from "../../dom.js";
 import { disposableWindowTimeout } from "../../scheduler.js";
+import { restoreFocus } from '../../focus.js';
 import { getAriaAttribute, setAriaAttribute } from "../aria/aria.js";
-import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, type ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
 import { HoverPosition } from './hoverWidget.js';
 
 export type HoverContentValue = string | HTMLElement | undefined;
@@ -75,6 +76,7 @@ export class Hover extends Disposable {
 	private descriptionApplied = false;
 	private _visible = false;
 	private pointerDown = false;
+	private hoverFocused = false;
 
 	constructor(options: HoverOptions) {
 		super();
@@ -211,12 +213,17 @@ export class Hover extends Disposable {
 		this.tooltipListeners.add(addDisposableListener(
 			tooltip,
 			"focusin",
-			() => this.hideTimer.clear(),
+			() => {
+				this.hoverFocused = true;
+				this.hideTimer.clear();
+			},
 		));
 		this.tooltipListeners.add(addDisposableListener(
 			tooltip,
 			"focusout",
 			(event) => {
+				// ContextView hides its DOM before reporting Escape, blurring actions with no next target.
+				if (event.relatedTarget) this.hoverFocused = this.isInsideHover(event.relatedTarget);
 				if (
 					isNode(event.relatedTarget) &&
 					this.element.contains(event.relatedTarget)
@@ -351,12 +358,15 @@ export class Hover extends Disposable {
 		this.descriptionApplied = false;
 	}
 
-	private didHide(_reason?: ContextViewHideReason): void {
+	private didHide(reason?: ContextViewHideReason): void {
 		const wasVisible = this._visible;
+		const returnFocus = reason === ContextViewHideReason.Escape && this.hoverFocused;
 		this._visible = false;
+		this.hoverFocused = false;
 		this.tooltip = undefined;
 		if (!this.tooltipListeners.isDisposed) this.tooltipListeners.clear();
 		this.restoreDescription();
+		if (returnFocus) restoreFocus(this.element);
 		if (wasVisible) this._onDidHide.fire();
 	}
 }

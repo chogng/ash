@@ -1,4 +1,4 @@
-import { localize2, localize } from '../../../../nls.js';
+import { localize2, localize, getNLSLanguage } from '../../../../nls.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { observeElementSize } from "../../../../base/browser/observer.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
@@ -13,11 +13,12 @@ import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolb
 import { Action2, IMenuService, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextKeyService, type IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
+import { IContextMenuService, IContextViewService } from "../../../../platform/contextview/browser/contextView.js";
 import { registerOpenEditorListeners, type IOpenEditorOptions } from "../../../../platform/editor/browser/editor.js";
-import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
+import { IHoverService, type IManagedHover } from "../../../../platform/hover/browser/hoverService.js";
 import { IResourceLabelService, type ResourceLabels } from "../../../browser/labels.js";
-import { SCMHistoryUnavailableError, type ISCMHistoryItemComparison, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryProvider, type SCMHistoryItemChangeViewModelTreeElement, type SCMHistoryItemViewModelTreeElement } from '../common/history.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { SCMHistoryUnavailableError, type ISCMHistoryItemDetails, type ISCMHistoryItemComparison, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryProvider, type SCMHistoryItemChangeViewModelTreeElement, type SCMHistoryItemViewModelTreeElement } from '../common/history.js';
 import { ISCMViewService } from '../common/scm.js';
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
@@ -110,7 +111,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService private readonly contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService private readonly contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService, @IAccessibleViewService private readonly accessibleView: IAccessibleViewService, @IContextViewService private readonly contextViewService: IContextViewService) {
 		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.scmViewService = scmViewService;
@@ -223,7 +224,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.list.className = "ash-scm-graph-list";
 			this.list.setAttribute("role", "tree");
 			this.list.setAttribute('aria-label', this.graphLabel);
-			this.list.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a commit to expand its files. Press Shift+F10 or the Context Menu key for commit actions: view or compare changes, create a branch, cherry-pick, copy commit information, or add to Chat. Use Tab to reach reference badges and Open Changes. Press Enter on a reference badge for branch actions. Checkout includes detached commits; More includes creating a tag.'));
+			this.list.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a commit to expand its files. Press Shift+F10 or the Context Menu key for commit actions: view or compare changes, create a branch, cherry-pick, copy commit information, or add to Chat. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that commit. Press Enter on a reference badge for branch actions. Checkout includes detached commits; More includes creating a tag. Press Alt+Down Arrow to focus commit details and use its actions; Escape returns to the commit.'));
 			children.push(this.list);
 		}
 		if (page.hasMore) children.push(this.renderMore());
@@ -366,15 +367,6 @@ export class SCMHistoryViewPane extends ViewPane {
 		item.setAttribute("role", "treeitem");
 		item.setAttribute("aria-expanded", String(this.expanded.has(historyItem.id)));
 		if (current) item.setAttribute("aria-current", "true");
-		this.hovers.add(this.hoverService.setupHover({
-			target: item,
-			content: () => this.renderCommitHover(historyItem),
-			groupId: "scm.history.items",
-			anchorAlignment: AnchorAlignment.Left,
-			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
-			anchorPosition: AnchorPosition.Below,
-			gap: 8,
-		}));
 		const details = h(document, "span");
 		details.className = "ash-scm-graph-details";
 		const subject = h(document, "span");
@@ -388,6 +380,29 @@ export class SCMHistoryViewPane extends ViewPane {
 		scope.setContext('scmHistoryItemHasRemote', (historyItem.remoteLinks?.length ?? 0) > 0);
 		scope.setContext('scmHistoryItemHasBranch', historyItem.references?.some(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch') ?? false);
 		scope.setContext('scmHistoryItemHasUpstream', historyItem.references?.some(reference => reference.upstream !== undefined) ?? false);
+		const hoverContent = this.hovers.add(new MutableDisposable<DisposableStore>());
+		let hoverToolbar: MenuWorkbenchToolBar | undefined;
+		let commitHover: IManagedHover | undefined;
+		if (menuTarget) {
+			commitHover = this.hovers.add(this.hoverService.setupHover({
+				target: item,
+				content: () => {
+					const resources = new DisposableStore();
+					hoverContent.value = resources;
+					const card = this.renderCommitHover(menuTarget, scope, resources, () => {
+						// Relayout loaded details without replacing the lazy factory or its focused actions.
+						if (commitHover!.visible) this.contextViewService.layout();
+					});
+					hoverToolbar = card.toolbar;
+					return card.domNode;
+				},
+				groupId: 'scm.history.items',
+				anchorAlignment: AnchorAlignment.Left,
+				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+				anchorPosition: AnchorPosition.Below,
+				gap: 8,
+			}));
+		}
 		const visibleReferences = historyItemReferences(historyItem, this.head);
 		const overlay = h(document, 'div');
 		overlay.className = 'ash-scm-graph-overlay';
@@ -416,7 +431,11 @@ export class SCMHistoryViewPane extends ViewPane {
 		}));
 		this.hovers.add(addDisposableListener(item, "keydown", event => {
 			if (event.target !== item) { return; }
-			if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+			if (event.altKey && event.key === 'ArrowDown') {
+				event.preventDefault();
+				commitHover?.show();
+				hoverToolbar?.focus();
+			} else if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
 				event.preventDefault();
 				if (menuTarget) { this.showHistoryMenu(menuTarget, scope, item); }
 			} else if (event.key === 'Enter' || event.key === ' ') {
@@ -483,7 +502,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			const scope = this.hovers.add(rowScope.createScoped(label));
 			scope.setContext('scmHistoryItemHasBranch', group.some(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch'));
 			scope.setContext('scmHistoryItemHasUpstream', group.some(reference => reference.upstream !== undefined));
-			scope.setContext('scmHistoryRefCanDelete', group.some(reference => reference.category === 'localBranch' && reference.id !== this.head?.id));
+			scope.setContext('scmHistoryRefCanDelete', group.some(reference => reference.canDelete === true));
 			if (target) {
 				const menuTarget = { ...target, references: group };
 				this.hovers.add(addDisposableListener(label, 'click', event => {
@@ -632,18 +651,100 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 	}
 
-	private renderCommitHover(historyItem: ISCMHistoryItem): HTMLDivElement {
+	private renderCommitHover(target: SCMHistoryItemViewModelTreeElement, scope: IScopedContextKeyService, resources: DisposableStore, layout: () => void): { domNode: HTMLDivElement; toolbar: MenuWorkbenchToolBar } {
+		const historyItem = target.historyItemViewModel.historyItem;
 		const document = this.graphElement.ownerDocument;
 		const hover = h(document, "div");
 		hover.className = "ash-scm-graph-hover";
+		const hoverScope = resources.add(scope.createScoped(hover));
+		hoverScope.setContext('scmHistoryDetailsFocused', true);
+		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ScmHistoryDetails);
+		if (hint) hover.setAttribute('aria-description', hint);
+		const details = h(document, 'div');
+		details.className = 'ash-scm-graph-hover-details';
+		details.setAttribute('aria-busy', 'true');
+		const status = h(document, 'div');
+		status.className = 'ash-scm-graph-hover-status';
+		status.setAttribute('role', 'status');
+		status.textContent = localize('scm.history.loadingDetails', 'Loading commit details…');
 		const subject = h(document, "div");
 		subject.className = "ash-scm-graph-hover-subject";
 		subject.textContent = historyItem.subject;
-		const metadata = h(document, "div");
-		metadata.className = "ash-scm-graph-hover-metadata";
-		metadata.textContent = historyItem.timestamp === undefined ? historyItem.id : `${historyItem.id} · ${new Date(historyItem.timestamp).toLocaleString()}`;
-		hover.append(subject, metadata);
-		return hover;
+		details.append(subject, status);
+		const footer = h(document, 'div');
+		footer.className = 'ash-scm-graph-hover-footer';
+		const hash = h(document, 'code');
+		hash.className = 'ash-scm-graph-hover-hash';
+		hash.textContent = historyItem.displayId ?? historyItem.id;
+		hash.title = historyItem.id;
+		hash.setAttribute('aria-label', localize('scm.history.commitId', 'Commit {0}', historyItem.id));
+		const actions = h(document, 'div');
+		actions.className = 'ash-scm-graph-hover-actions';
+		const toolbar = resources.add(new MenuWorkbenchToolBar(actions, this.menuService, this.contextMenuService, MenuId.for('SCMHistoryItemHover'), {
+			ariaLabel: localize('scm.history.commitActions', 'Commit actions'),
+			contextKeyService: scope,
+			menuOptions: { arg: target },
+			toolbarOptions: { primaryGroup: 'inline' },
+		}));
+		if (hint) toolbar.element.setAttribute('aria-description', hint);
+		footer.append(hash, actions);
+		hover.append(details, footer);
+		void this.resolveCommitHover(target, details, status, resources, layout);
+		return { domNode: hover, toolbar };
+	}
+
+	private async resolveCommitHover(target: SCMHistoryItemViewModelTreeElement, details: HTMLElement, status: HTMLElement, resources: DisposableStore, layout: () => void): Promise<void> {
+		try {
+			const result = await target.repository.provider.historyProvider!.resolveHistoryItemDetails(target.historyItemViewModel.historyItem.id);
+			if (resources.isDisposed) { return; }
+			this.renderCommitDetails(details, target.historyItemViewModel.historyItem.subject, result);
+		} catch {
+			if (resources.isDisposed) { return; }
+			status.textContent = localize('scm.history.detailsFailed', 'Unable to load commit details.');
+		}
+		details.setAttribute('aria-busy', 'false');
+		layout();
+	}
+
+	private renderCommitDetails(container: HTMLElement, subjectText: string, details: ISCMHistoryItemDetails): void {
+		const document = container.ownerDocument;
+		const author = h(document, 'div');
+		author.className = 'ash-scm-graph-hover-author';
+		appendIcon(Lxicon.account, author);
+		const name = h(document, 'span');
+		name.textContent = details.authorName;
+		name.title = details.authorEmail;
+		const time = h(document, 'time');
+		time.className = 'ash-scm-graph-hover-time';
+		const date = new Date(details.timestamp);
+		time.dateTime = date.toISOString();
+		const seconds = Math.round((details.timestamp - Date.now()) / 1000);
+		const units = [{ unit: 'year', seconds: 31_536_000 }, { unit: 'month', seconds: 2_592_000 }, { unit: 'day', seconds: 86_400 }, { unit: 'hour', seconds: 3_600 }, { unit: 'minute', seconds: 60 }, { unit: 'second', seconds: 1 }] as const;
+		const unit = units.find(candidate => Math.abs(seconds) >= candidate.seconds) ?? units.at(-1)!;
+		const relative = new Intl.RelativeTimeFormat(getNLSLanguage(), { numeric: 'auto' }).format(Math.round(seconds / unit.seconds), unit.unit);
+		time.textContent = localize('scm.history.commitTime', '{0} ({1})', relative, date.toLocaleString(getNLSLanguage()));
+		author.append(name, time);
+		const subject = h(document, 'div');
+		subject.className = 'ash-scm-graph-hover-subject';
+		subject.textContent = subjectText;
+		const message = h(document, 'div');
+		message.className = 'ash-scm-graph-hover-message';
+		message.tabIndex = 0;
+		message.textContent = details.message.startsWith(subjectText) ? details.message.slice(subjectText.length).replace(/^\n+/, '') : details.message;
+		const statistics = h(document, 'div');
+		statistics.className = 'ash-scm-graph-hover-statistics';
+		const files = h(document, 'span');
+		files.textContent = localize('scm.history.filesChanged', '{0} files changed', details.statistics.files);
+		const additions = h(document, 'span');
+		additions.className = 'ash-scm-graph-hover-additions';
+		additions.textContent = localize('scm.history.additions', '{0} insertions(+)', details.statistics.additions);
+		const deletions = h(document, 'span');
+		deletions.className = 'ash-scm-graph-hover-deletions';
+		deletions.textContent = localize('scm.history.deletions', '{0} deletions(-)', details.statistics.deletions);
+		statistics.append(files, additions, deletions);
+		container.replaceChildren(author, subject);
+		if (message.textContent) { container.append(message); }
+		container.append(statistics);
 	}
 }
 

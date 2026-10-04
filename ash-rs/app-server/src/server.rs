@@ -2840,6 +2840,9 @@ impl AppServer {
                 self.git_graph(connection.connection_id, &request.params)
             }
             Some(ClientMethod::GitCommitChanges) => self.git_commit_changes(&request.params),
+            Some(ClientMethod::GitCompareChanges) => self.git_compare_changes(&request.params),
+            Some(ClientMethod::GitCommitMessage) => self.git_commit_message(&request.params),
+            Some(ClientMethod::GitCommitDetails) => self.git_commit_details(&request.params),
             Some(ClientMethod::GitCommitFile) => self.git_commit_file(&request.params),
             Some(ClientMethod::GitChangeFile) => self.git_change_file(&request.params),
             Some(ClientMethod::GitConflictFile) => self.git_conflict_file(&request.params),

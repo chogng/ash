@@ -323,18 +323,69 @@
 
 .ash-scm-graph-hover {
   display: grid;
-  max-width: min(420px, calc(100vw - 32px));
-  gap: 4px;
+  width: min(440px, calc(100vw - 32px));
+  gap: var(--ash-spacing-size80);
+}
+
+.ash-scm-graph-hover-details {
+  display: grid;
+  gap: var(--ash-spacing-size80);
+  min-width: 0;
+}
+
+.ash-scm-graph-hover-author,
+.ash-scm-graph-hover-statistics,
+.ash-scm-graph-hover-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ash-spacing-size80);
+}
+
+.ash-scm-graph-hover-author > .ash-icon {
+  width: var(--ash-lxicon-font-size);
+  height: var(--ash-lxicon-font-size);
+}
+
+.ash-scm-graph-hover-author,
+.ash-scm-graph-hover-subject,
+.ash-scm-graph-hover-message {
+  overflow-wrap: anywhere;
 }
 
 .ash-scm-graph-hover-subject {
   font-weight: var(--ash-font-weight-semi-bold);
 }
 
-.ash-scm-graph-hover-metadata {
-  overflow-wrap: anywhere;
+.ash-scm-graph-hover-message {
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.ash-scm-graph-hover-time,
+.ash-scm-graph-hover-status,
+.ash-scm-graph-hover-statistics {
   color: var(--ash-muted-foreground);
   font-size: var(--ash-font-size-label2);
+}
+
+.ash-scm-graph-hover-additions {
+  color: var(--ash-success-foreground);
+}
+
+.ash-scm-graph-hover-deletions {
+  color: var(--ash-error-foreground);
+}
+
+.ash-scm-graph-hover-footer {
+  border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  padding-top: var(--ash-spacing-size80);
+}
+
+.ash-scm-graph-hover-hash {
+  color: var(--ash-muted-foreground);
+  user-select: text;
 }
 
 .ash-scm-remote-actions {

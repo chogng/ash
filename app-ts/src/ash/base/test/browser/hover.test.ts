@@ -13,6 +13,10 @@ Object.defineProperties(environment.window, {
 	innerWidth: { configurable: true, value: 800 },
 	innerHeight: { configurable: true, value: 600 },
 });
+Object.defineProperty(environment.window.Element.prototype, 'scrollTo', {
+	configurable: true,
+	value(this: Element, left: number, top: number) { this.scrollLeft = left; this.scrollTop = top; },
+});
 
 const { ContextView } = await import("../../browser/ui/contextview/contextview.js");
 const { Hover } = await import("../../browser/ui/hover/hover.js");
@@ -47,6 +51,25 @@ test("Hover replaces native title with managed accessible content", () => {
 	hover.dispose();
 	assert.equal(target.title, "Native title");
 	contextView.dispose();
+});
+
+test("Hover returns focus to its target when Escape dismisses focused content", () => {
+	const container = requiredElement<HTMLElement>('main');
+	const target = requiredElement<HTMLButtonElement>('#target');
+	using contextView = new ContextView(container);
+	const content = h(environment.window.document, 'div');
+	const details = h(environment.window.document, 'span');
+	const action = h(environment.window.document, 'button');
+	content.append(details, action);
+	using hover = new Hover({ target, content, contextViewProvider: contextView });
+	hover.show();
+	action.focus();
+	details.textContent = 'Loaded details';
+	assert.equal(environment.window.document.activeElement, action);
+	assert.equal(contextView.element.querySelector('.ash-hover')?.textContent, 'Loaded details');
+	action.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.equal(hover.visible, false);
+	assert.equal(environment.window.document.activeElement, target);
 });
 
 test("Hover skips empty content and sticky persistence requires explicit dismissal", async () => {

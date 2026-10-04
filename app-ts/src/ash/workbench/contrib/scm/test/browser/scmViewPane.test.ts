@@ -10,6 +10,9 @@ import { SCMActiveRepositoryController } from '../../browser/activity.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { IDecorationsService } from '../../../../services/decorations/common/decorations.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../../../nls.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -17,6 +20,7 @@ import type { IEditorOptions } from '../../../../../platform/editor/common/edito
 import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
 import assert from "node:assert/strict";
 import { Emitter, Event } from '../../../../../base/common/event.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
 import { suite, test } from "mocha";
@@ -32,7 +36,7 @@ import { getSingletonServiceDescriptors } from '../../../../../platform/instanti
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { IResourceLabelService, ResourceLabels, DEFAULT_LABELS_CONTAINER, IResourceIconRenderer } from "../../../../browser/labels.js";
-import { GitWorkspaceError, IGitService, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
+import { GitWorkspaceError, IGitService, type GitCommitDetails, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
 import { IEditorService, type EditorInput, type EditorOpenOptions, type EditorOpenTarget } from "../../../../../workbench/services/editor/common/editorService.js";
 import type { IViewsService } from '../../../../../workbench/services/views/browser/viewsService.js';
 import { WorkbenchState, IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -179,6 +183,9 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 	await import('../../browser/scm.contribution.js');
 	await import('../../../git/browser/git.contribution.js');
 	const graphRequests: GraphQuery[] = [];
+	const detailRequests: string[] = [];
+	let delayedDetails: Promise<GitCommitDetails> | undefined;
+	let detailsError: Error | undefined;
 	const [
 		{ ContextKeyService },
 		{ MenuService },
@@ -226,6 +233,13 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 			assert.equal(repositoryId, "repo-1");
 			return status;
 		},
+		commitDetails: async (id: string, repositoryId?: string) => {
+			detailRequests.push(id);
+			assert.equal(repositoryId, 'repo-1');
+			if (detailsError) { throw detailsError; }
+			if (delayedDetails) { return delayedDetails; }
+			return { authorName: 'History Author', authorEmail: 'author@example.invalid', timestampSeconds: 1_753_000_000, message: 'Wire SCM panes\n\n    Full explanation.', statistics: { files: 3, additions: 12, deletions: 4 } };
+		},
 		branches: async () => [],
 		graph: async (query: GraphQuery, repositoryId?: string) => {
 			if (workspaceError) throw workspaceError;
@@ -259,7 +273,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 	try {
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService());
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} }, { container: browser.window.document.body, show: () => true, hide() {}, layout() {} });
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelectorAll(".ash-scm-graph-commit").length === 2);
 		assert.equal(pane.element.querySelector('[role="tree"]')?.getAttribute('aria-label'), 'Graph');
@@ -309,11 +323,60 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		assert.equal(pane.element.querySelector<SVGSVGElement>(".ash-scm-graph-graph.merge")?.style.width, "44px");
 		assert.ok((pane.element.querySelector(".ash-scm-graph-graph.merge")?.querySelectorAll(".ash-scm-graph-path").length ?? 0) > 1);
 		assert.equal(pane.element.querySelector('.ash-scm-graph-metadata'), null);
-		const commitHover = hoverOptions.find(options => options.target.classList.contains('current'))!;
+		assert.deepEqual(detailRequests, []);
+		const commitHover = hoverOptions.filter(options => options.target.classList.contains('current')).at(-1)!;
 		const content = typeof commitHover.content === 'function' ? commitHover.content() : commitHover.content;
 		assert.ok(content instanceof browser.window.HTMLElement);
 		assert.equal(content.querySelector('.ash-scm-graph-hover-subject')?.textContent, 'Wire SCM panes');
-		assert.equal(content.querySelector('.ash-scm-graph-hover-metadata')?.textContent, `1234567890abcdef · ${new Date(1_753_000_000_000).toLocaleString()}`);
+		await waitFor(() => content.querySelector('.ash-scm-graph-hover-details')?.getAttribute('aria-busy') === 'false');
+		assert.deepEqual(detailRequests, ['1234567890abcdef']);
+		assert.equal(content.querySelector('.ash-scm-graph-hover-author > span')?.textContent, 'History Author');
+		assert.equal(content.querySelector('.ash-scm-graph-hover-message')?.textContent, '    Full explanation.');
+		assert.equal(content.querySelector('time')?.getAttribute('datetime'), new Date(1_753_000_000_000).toISOString());
+		assert.equal(content.querySelector('.ash-scm-graph-hover-hash')?.getAttribute('aria-label'), 'Commit 1234567890abcdef');
+		assert.deepEqual([...content.querySelectorAll('.ash-scm-graph-hover-statistics > span')].map(element => element.textContent), ['3 files changed', '12 insertions(+)', '4 deletions(-)']);
+		assert.ok(content.querySelector('[data-action-id="git.graph.copyHash"] button'));
+		assert.ok(content.querySelector('[data-action-id="git.graph.openRemote"] button'));
+		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		try {
+			const localized = (commitHover.content as () => HTMLElement)();
+			assert.equal(localized.querySelector('[role="status"]')?.textContent, '正在读取提交详情…');
+			await waitFor(() => localized.querySelector('.ash-scm-graph-hover-details')?.getAttribute('aria-busy') === 'false');
+			assert.deepEqual([...localized.querySelectorAll('.ash-scm-graph-hover-statistics > span')].map(element => element.textContent), ['修改了 3 个文件', '新增 12 行（+）', '删除 4 行（-）']);
+			Object.defineProperty(browser.window.Element.prototype, 'scrollTo', { configurable: true, value() {} });
+			services.registerInstance(ILayoutService, { mainContainer: browser.window.document.body } as ILayoutService);
+			const tooltip = browser.window.document.createElement('div');
+			tooltip.className = 'ash-hover';
+			tooltip.id = 'test-scm-details';
+			tooltip.append(localized);
+			browser.window.document.body.append(tooltip);
+			commitHover.target.setAttribute('aria-describedby', tooltip.id);
+			localized.querySelector<HTMLButtonElement>('button')!.focus();
+			const help = AccessibleViewRegistry.getImplementations().find(implementation => implementation.name === 'scmHistoryDetails' && implementation.type === AccessibleViewType.Help)!;
+			using provider = help.getProvider(services)!;
+			assert.match(provider.provideContent(), /完整提交说明/);
+			provider.dispose();
+			assert.equal(browser.window.document.activeElement, commitHover.target);
+			tooltip.remove();
+			commitHover.target.removeAttribute('aria-describedby');
+			detailsError = new Error('Git command failed');
+			const failed = (commitHover.content as () => HTMLElement)();
+			await waitFor(() => failed.querySelector('.ash-scm-graph-hover-details')?.getAttribute('aria-busy') === 'false');
+			assert.equal(failed.querySelector('[role="status"]')?.textContent, '无法读取提交详情。');
+			assert.equal(failed.querySelector('.ash-scm-graph-hover-statistics'), null);
+		} finally {
+			resetNlsResolver();
+			detailsError = undefined;
+		}
+		const delayed = new DeferredPromise<GitCommitDetails>();
+		delayedDetails = delayed.p;
+		const retired = (commitHover.content as () => HTMLElement)();
+		const replacement = (commitHover.content as () => HTMLElement)();
+		await delayed.complete({ authorName: 'Late author', authorEmail: '', timestampSeconds: 1_753_000_000, message: 'Wire SCM panes', statistics: { files: 0, additions: 0, deletions: 0 } });
+		await waitFor(() => replacement.querySelector('.ash-scm-graph-hover-details')?.getAttribute('aria-busy') === 'false');
+		assert.equal(retired.querySelector('.ash-scm-graph-hover-author'), null, 'A replaced card ignores its pending details result');
+		delayedDetails = undefined;
 
 		const fetch = pane.element.querySelector<HTMLButtonElement>('[data-action-id="ash.git.fetch"] > button');
 		assert.ok(fetch);
@@ -395,7 +458,7 @@ test("SCMHistoryViewPane loads the complete history across graph pages", async (
 	try {
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.pagination.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService());
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.pagination.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} }, { container: browser.window.document.body, show: () => true, hide() {}, layout() {} });
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-graph-list") !== null);
 		const list = pane.element.querySelector(".ash-scm-graph-list");
@@ -467,7 +530,7 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 	try {
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.virtualized.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService());
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.virtualized.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} }, { container: browser.window.document.body, show: () => true, hide() {}, layout() {} });
 		const graph = pane.element.querySelector<HTMLElement>(".ash-scm-graph");
 		assert.ok(graph);
 		Object.defineProperty(graph, "clientHeight", { configurable: true, value: 100 });
@@ -562,7 +625,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 	try {
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.changes.test", title: "Graph" }, history.viewService, menuService, contextMenuService, contextKeyService, hoverService, editorService, testResourceLabelService());
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.changes.test", title: "Graph" }, history.viewService, menuService, contextMenuService, contextKeyService, hoverService, editorService, testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} }, { container: browser.window.document.body, show: () => true, hide() {}, layout() {} });
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-graph-commit") !== null);
 
@@ -663,7 +726,7 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 		using history = createHistoryViewFixture(git);
 		const { SCMHistoryViewPane } = await import('../../browser/scmHistoryViewPane.js');
 		const hover: IHoverService = { setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() {} };
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history-multidiff', title: 'Graph' }, history.viewService, menus, testContextMenuProvider as IContextMenuService, contextKeys, hover, testEditorService(opened), testResourceLabelService());
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history-multidiff', title: 'Graph' }, history.viewService, menus, testContextMenuProvider as IContextMenuService, contextKeys, hover, testEditorService(opened), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} }, { container: browser.window.document.body, show: () => true, hide() {}, layout() {} });
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('.ash-scm-graph-actions button') !== null);
 		const commit = pane.element.querySelector<HTMLElement>('.ash-scm-graph-commit')!;

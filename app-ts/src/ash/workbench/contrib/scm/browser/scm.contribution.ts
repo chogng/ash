@@ -33,6 +33,29 @@ import './scm.service.contribution.js';
 import { ISCMService, ISCMViewService, SCMHistoryBusyContext } from '../common/scm.js';
 import { SCMActiveRepositoryController } from './activity.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { restoreFocus } from '../../../../base/browser/focus.js';
+
+for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+	AccessibleViewRegistry.register({
+		type,
+		priority: 100,
+		name: 'scmHistoryDetails',
+		when: ContextKeyExpr.has('scmHistoryDetailsFocused'),
+		getProvider: accessor => {
+			const document = accessor.get(ILayoutService).mainContainer.ownerDocument;
+			const card = document.activeElement!.closest<HTMLElement>('.ash-scm-graph-hover')!;
+			const tooltip = card.closest<HTMLElement>('.ash-hover')!;
+			const commit = document.querySelector<HTMLElement>(`[aria-describedby~="${tooltip.id}"]`)!;
+			// Opening the modal dismisses the hover, so capture its readable content and return target first.
+			const content = type === AccessibleViewType.Help
+				? localize('scm.history.detailsHelp', 'Commit details show the author, relative and full time, complete message, and file and line change counts. Use Left and Right Arrow in the actions toolbar to copy the full commit ID or open the commit in a browser. Use Shift+Tab to read and scroll the message. Escape returns to the commit. Press <keybinding:editor.action.accessibleView> to read these details as plain text.')
+				: `${card.innerText}\n${card.querySelector<HTMLElement>('.ash-scm-graph-hover-hash')!.title}`;
+			return new AccessibleContentProvider(AccessibleViewProviderId.ScmHistoryDetails, { type }, () => content, () => restoreFocus(commit), AccessibilityVerbositySettingId.ScmHistoryDetails);
+		},
+	});
+}
 
 export const GIT_AGENT_REVIEW_VIEW_ID = "ash.gitAgentReview";
 export const GIT_GRAPH_VIEW_ID = 'ash.gitGraph';

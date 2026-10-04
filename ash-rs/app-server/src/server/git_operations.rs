@@ -22,9 +22,14 @@ use ash_app_server_protocol::protocol::git::GitCommandOutcomeDto;
 use ash_app_server_protocol::protocol::git::GitCommandParams;
 use ash_app_server_protocol::protocol::git::GitCommandResult;
 use ash_app_server_protocol::protocol::git::GitCommitChangesParams;
+use ash_app_server_protocol::protocol::git::GitCommitDetailsResult;
 use ash_app_server_protocol::protocol::git::GitCommitFileParams;
+use ash_app_server_protocol::protocol::git::GitCommitMessageResult;
 use ash_app_server_protocol::protocol::git::GitCommitParams;
 use ash_app_server_protocol::protocol::git::GitCommitResult as GitCommitResultDto;
+use ash_app_server_protocol::protocol::git::GitCommitStatisticsDto;
+use ash_app_server_protocol::protocol::git::GitCompareChangesParams;
+use ash_app_server_protocol::protocol::git::GitComparisonModeDto;
 use ash_app_server_protocol::protocol::git::GitCompleteConflictParams;
 use ash_app_server_protocol::protocol::git::GitConflictFileParams;
 use ash_app_server_protocol::protocol::git::GitFetchModeDto;
@@ -294,16 +299,80 @@ impl AppServer {
         )
     }
 
+    pub(super) fn git_compare_changes(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitCompareChangesParams = decode(value)?;
+        validate_object_id(&params.object_id)?;
+        if params.base_reference.is_empty()
+            || params.base_reference.len() > 1024
+            || params.base_reference.contains('\0')
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let mode = match params.mode {
+            GitComparisonModeDto::Direct => ash_git::GitComparisonMode::Direct,
+            GitComparisonModeDto::MergeBase => ash_git::GitComparisonMode::MergeBase,
+        };
+        result(
+            &self
+                .git_runtime_service()?
+                .compare_changes_for(
+                    params.repository_id.as_deref(),
+                    &params.object_id,
+                    &params.base_reference,
+                    mode,
+                )
+                .map_err(git_error)?,
+        )
+    }
+
+    pub(super) fn git_commit_message(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitCommitChangesParams = decode(value)?;
+        validate_object_id(&params.object_id)?;
+        let message = self
+            .git_runtime_service()?
+            .commit_message_for(params.repository_id.as_deref(), &params.object_id)
+            .map_err(git_error)?;
+        result(&GitCommitMessageResult { message })
+    }
+
+    pub(super) fn git_commit_details(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitCommitChangesParams = decode(value)?;
+        validate_object_id(&params.object_id)?;
+        let details = self
+            .git_runtime_service()?
+            .commit_details_for(params.repository_id.as_deref(), &params.object_id)
+            .map_err(git_error)?;
+        result(&GitCommitDetailsResult {
+            author_name: details.author_name,
+            author_email: details.author_email,
+            timestamp_seconds: details.timestamp_seconds,
+            message: details.message,
+            statistics: GitCommitStatisticsDto {
+                files: details.statistics.files,
+                additions: details.statistics.additions,
+                deletions: details.statistics.deletions,
+            },
+        })
+    }
+
     pub(super) fn git_commit_file(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitCommitFileParams = decode(value)?;
         validate_object_id(&params.object_id)?;
+        if let Some(base) = params.parent_object_id.as_deref() {
+            validate_object_id(base)?;
+        }
         let path = paths(vec![params.path])?
             .pop()
             .expect("validated commit file path");
         result(
             &self
                 .git_runtime_service()?
-                .commit_file_for(params.repository_id.as_deref(), &params.object_id, &path)
+                .commit_file_for(
+                    params.repository_id.as_deref(),
+                    &params.object_id,
+                    &path,
+                    params.parent_object_id.as_deref(),
+                )
                 .map_err(git_error)?,
         )
     }
@@ -764,6 +833,15 @@ fn comparison(
 }
 fn command(command: GitCommandDto) -> ash_git::GitCommand {
     match command {
+        GitCommandDto::CreateBranchAt { name, object_id } => {
+            ash_git::GitCommand::CreateBranchAt { name, object_id }
+        }
+        GitCommandDto::CheckoutDetached { object_id } => {
+            ash_git::GitCommand::CheckoutDetached { object_id }
+        }
+        GitCommandDto::CheckoutRemoteBranch { name, reference } => {
+            ash_git::GitCommand::CheckoutRemoteBranch { name, reference }
+        }
         GitCommandDto::RenameBranch { name, new_name } => {
             ash_git::GitCommand::RenameBranch { name, new_name }
         }
@@ -772,7 +850,13 @@ fn command(command: GitCommandDto) -> ash_git::GitCommand {
         }
         GitCommandDto::Merge { reference } => ash_git::GitCommand::Merge { reference },
         GitCommandDto::Rebase { reference } => ash_git::GitCommand::Rebase { reference },
-        GitCommandDto::CherryPick { reference } => ash_git::GitCommand::CherryPick { reference },
+        GitCommandDto::CherryPick {
+            reference,
+            mainline,
+        } => ash_git::GitCommand::CherryPick {
+            reference,
+            mainline,
+        },
         GitCommandDto::Continue { operation } => ash_git::GitCommand::Continue {
             operation: integration(operation),
         },

@@ -52,6 +52,7 @@ test('SCM history picker filters commits and resolves bounded context lazily', a
 		onDidBecomeReady: Event.None,
 		onDidChangeRepositoryStatus: Event.None,
 		status: async () => ({ workspacePath: '/workspace', head: { type: 'branch', name: 'main', objectId: commit.objectId, upstream: undefined } }),
+		branches: async () => [],
 		graph: async () => {
 			graphRequests += 1;
 			return {
@@ -115,6 +116,7 @@ test('SCM history attachments cap files and preserve binary or missing sides', a
 		onDidBecomeReady: Event.None,
 		onDidChangeRepositoryStatus: Event.None,
 		status: async () => ({ repositoryId: 'repo-1', head: { type: 'branch', name: 'main', objectId: commit.objectId, upstream: undefined }, changes: [] }),
+		branches: async () => [],
 		graph: async () => ({ commits: [commit], references: [], remotes: [], hasMore: false, nextCursor: undefined }),
 		commitChanges: async () => ({ parentObjectId: commit.parentObjectIds[0], changes }),
 		commitFile: async () => {

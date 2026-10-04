@@ -15,10 +15,10 @@ mod memories_live_tests;
 
 #[path = "automation_tests.rs"]
 mod automation_tests;
-#[path = "infrastructure_tests.rs"]
-mod infrastructure_tests;
 #[path = "backup_tests.rs"]
 mod backup_tests;
+#[path = "infrastructure_tests.rs"]
+mod infrastructure_tests;
 #[path = "memory_tests.rs"]
 mod memory_tests;
 use ash_action_policy::ActionDigest;
@@ -6475,6 +6475,81 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
         commit_file["result"]["modified"]["text"],
         "from app server\n"
     );
+
+    let message = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":12,"method":"git/commitMessage","params":{"objectId":committed_object_id}}),
+    );
+    assert_eq!(message["result"]["message"], "app server update");
+    let details = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":120,"method":"git/commitDetails","params":{"objectId":committed_object_id}}),
+    );
+    assert!(details.get("error").is_none(), "{details}");
+    assert_eq!(details["result"]["message"], "app server update");
+    assert_eq!(details["result"]["authorName"], "Ash Test");
+    assert_eq!(
+        details["result"]["statistics"],
+        serde_json::json!({"files":1,"additions":1,"deletions":0})
+    );
+    let output = std::process::Command::new("git")
+        .current_dir(&dir)
+        .args(["rev-parse", "HEAD~2"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let base = String::from_utf8(output.stdout).unwrap().trim().to_string();
+    let compared = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":13,"method":"git/compareChanges","params":{"objectId":committed_object_id,"baseReference":base,"mode":"direct"}}),
+    );
+    assert!(compared.get("error").is_none(), "{compared}");
+    assert_eq!(compared["result"]["baseObjectId"], base.trim());
+    let file = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":14,"method":"git/commitFile","params":{"objectId":committed_object_id,"path":"local.txt","parentObjectId":base.trim()}}),
+    );
+    assert_eq!(file["result"]["original"]["kind"], "missing");
+    assert_eq!(file["result"]["modified"]["text"], "from app server\n");
+
+    let earlier_shared = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":15,"method":"git/commitFile","params":{"objectId":committed_object_id,"path":"shared.txt","parentObjectId":base}}),
+    );
+    assert_eq!(earlier_shared["result"]["original"]["text"], "initial\n");
+    assert_eq!(earlier_shared["result"]["modified"]["text"], "from peer\n");
+    let merge_base = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":16,"method":"git/compareChanges","params":{"objectId":committed_object_id,"baseReference":base,"mode":"mergeBase"}}),
+    );
+    assert_eq!(merge_base["result"]["baseObjectId"], base);
+    for (id, params) in [
+        (
+            17,
+            serde_json::json!({"objectId":committed_object_id,"baseReference":"--help","mode":"direct"}),
+        ),
+        (
+            18,
+            serde_json::json!({"objectId":"HEAD","baseReference":base,"mode":"direct"}),
+        ),
+        (
+            19,
+            serde_json::json!({"objectId":committed_object_id,"baseReference":base,"mode":"unknown"}),
+        ),
+    ] {
+        let rejected = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":"git/compareChanges","params":params}),
+        );
+        assert!(rejected.get("error").is_some(), "{rejected}");
+    }
 
     drop(server);
     std::fs::remove_dir_all(root).unwrap();

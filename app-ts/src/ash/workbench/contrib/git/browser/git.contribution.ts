@@ -17,8 +17,12 @@ import type { CancellationToken } from '../../../../base/common/cancellation.js'
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import type { URI } from '../../../../base/common/uri.js';
+import { URI } from '../../../../base/common/uri.js';
 
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
+import { IOpenerService } from '../../../../platform/opener/common/openerService.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import type { SCMHistoryItemViewModelTreeElement, ISCMHistoryItemComparison, ISCMHistoryItemRef } from '../../scm/common/history.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
@@ -26,7 +30,7 @@ import { foreground } from '../../../../platform/theme/common/colors/baseColors.
 import { IDecorationsService, type IDecorationData, type IDecorationsProvider } from '../../../services/decorations/common/decorations.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -192,7 +196,9 @@ function isGitHistoryActionTarget(value: unknown): value is GitHistoryActionTarg
 		typeof (value as GitHistoryActionTarget).runTitleOperation === 'function';
 }
 
-const repositoryCommands: readonly { readonly kind: GitCommand['kind']; readonly id: string; readonly key: string; readonly title: string }[] = [
+type RepositoryCommandKind = Exclude<GitCommand['kind'], 'createBranchAt' | 'checkoutDetached' | 'checkoutRemoteBranch'>;
+
+const repositoryCommands: readonly { readonly kind: RepositoryCommandKind; readonly id: string; readonly key: string; readonly title: string }[] = [
 	{ kind: 'renameBranch', id: 'git.renameBranch', key: 'git.renameBranchTitle', title: 'Git: Rename Branch' },
 	{ kind: 'deleteRemoteBranch', id: 'git.deleteRemoteBranch', key: 'git.deleteRemoteBranchTitle', title: 'Git: Delete Remote Branch' },
 	{ kind: 'merge', id: 'git.merge', key: 'git.mergeBranchTitle', title: 'Git: Merge Branch' },
@@ -240,7 +246,7 @@ for (const definition of repositoryCommands) {
 	});
 }
 
-async function prepareGitCommand(accessor: ServicesAccessor, kind: GitCommand['kind'], repositoryId: string): Promise<GitCommand | undefined> {
+async function prepareGitCommand(accessor: ServicesAccessor, kind: RepositoryCommandKind, repositoryId: string): Promise<GitCommand | undefined> {
 	const git = accessor.get(IGitService);
 	const input = accessor.get(IQuickInputService);
 	const prompt = (placeHolder: string, value?: string) => input.input({
@@ -451,4 +457,164 @@ async function runIndexSelection(accessor: ServicesAccessor, comparison: GitChan
 	}
 	await git.editIndex(path, comparison, reviewed, selection, repository.id);
 	accessor.get(INotificationService).info(localize('git.indexEdited', 'Selected changes updated in the index.'));
+}
+
+const graphCheckoutMenu = MenuId.for('SCMHistoryItemCheckout');
+const graphMoreMenu = MenuId.for('SCMHistoryItemMore');
+const graphRefMenu = MenuId.for('SCMHistoryItemRefContext');
+const gitGraphWhen = SCMHistoryProviderIdContext.isEqualTo('git');
+
+// SCM's inline Open Changes action leads the context menu; Git groups follow it.
+MenusRegistry.appendMenuItem(MenuId.SCMHistoryItemContext, { submenu: graphCheckoutMenu, title: localize2('git.graph.checkout', 'Checkout'), group: 'scm_2_checkout', when: gitGraphWhen });
+MenusRegistry.appendMenuItem(MenuId.SCMHistoryItemContext, { submenu: graphMoreMenu, title: localize2('git.graph.more', 'More…'), group: 'scm_4_more', when: gitGraphWhen });
+
+type GraphActionKind = 'openRemote' | 'checkoutBranch' | 'checkoutDetached' | 'createBranch' | 'deleteBranch' | 'createTag' | 'cherryPick' | 'compareRemote' | 'compareMergeBase' | 'compare' | 'copyHash' | 'copyMessage';
+
+const graphActions: readonly { kind: GraphActionKind; title: ReturnType<typeof localize2>; menu: MenuId; group: string; order: number; when?: ReturnType<typeof ContextKeyExpr.has> }[] = [
+	{ kind: 'openRemote', title: localize2('git.graph.openRemote', 'Open Commit in Browser'), menu: MenuId.SCMHistoryItemContext, group: 'scm_0_open', order: 1, when: ContextKeyExpr.has('scmHistoryItemHasRemote') },
+	{ kind: 'compare', title: localize2('git.graph.compare', 'Compare with…'), menu: MenuId.SCMHistoryItemContext, group: 'scm_1_compare', order: 1 },
+	{ kind: 'compareRemote', title: localize2('git.graph.compareRemote', 'Compare with Remote…'), menu: MenuId.SCMHistoryItemContext, group: 'scm_1_compare', order: 2, when: ContextKeyExpr.has('scmHistoryItemHasUpstream') },
+	{ kind: 'compareMergeBase', title: localize2('git.graph.compareMergeBase', 'Compare with Merge Base…'), menu: MenuId.SCMHistoryItemContext, group: 'scm_1_compare', order: 3 },
+	{ kind: 'checkoutBranch', title: localize2('git.graph.checkoutBranch', 'Switch to Branch…'), menu: graphCheckoutMenu, group: '1_branch', order: 1, when: ContextKeyExpr.has('scmHistoryItemHasBranch') },
+	{ kind: 'checkoutDetached', title: localize2('git.graph.checkoutDetached', 'Checkout Commit (Detached)'), menu: graphCheckoutMenu, group: '2_commit', order: 1 },
+	{ kind: 'createBranch', title: localize2('git.graph.createBranch', 'Create Branch…'), menu: MenuId.SCMHistoryItemContext, group: 'scm_3_edit', order: 1 },
+	{ kind: 'cherryPick', title: localize2('git.graph.cherryPick', 'Cherry Pick'), menu: MenuId.SCMHistoryItemContext, group: 'scm_3_edit', order: 2 },
+	{ kind: 'createTag', title: localize2('git.graph.createTag', 'Create Tag…'), menu: graphMoreMenu, group: '1_tag', order: 1 },
+	{ kind: 'copyHash', title: localize2('git.graph.copyHash', 'Copy Commit Hash'), menu: MenuId.SCMHistoryItemContext, group: 'scm_5_copy', order: 1 },
+	{ kind: 'copyMessage', title: localize2('git.graph.copyMessage', 'Copy Commit Message'), menu: MenuId.SCMHistoryItemContext, group: 'scm_5_copy', order: 2 },
+	{ kind: 'copyHash', title: localize2('git.graph.copyHash', 'Copy Commit Hash'), menu: MenuId.for('SCMHistoryItemHover'), group: 'inline', order: 1 },
+	{ kind: 'openRemote', title: localize2('git.graph.openRemote', 'Open Commit in Browser'), menu: MenuId.for('SCMHistoryItemHover'), group: 'inline', order: 2, when: ContextKeyExpr.has('scmHistoryItemHasRemote') },
+	{ kind: 'checkoutBranch', title: localize2('git.graph.checkoutBranch', 'Switch to Branch…'), menu: graphRefMenu, group: '1_branch', order: 1, when: ContextKeyExpr.has('scmHistoryItemHasBranch') },
+	{ kind: 'deleteBranch', title: localize2('git.graph.deleteBranch', 'Delete Branch…'), menu: graphRefMenu, group: '2_delete', order: 1, when: ContextKeyExpr.has('scmHistoryRefCanDelete') },
+	{ kind: 'compareRemote', title: localize2('git.graph.compareRemote', 'Compare with Remote…'), menu: graphRefMenu, group: '3_compare', order: 1, when: ContextKeyExpr.has('scmHistoryItemHasUpstream') },
+	{ kind: 'compareMergeBase', title: localize2('git.graph.compareMergeBase', 'Compare with Merge Base…'), menu: graphRefMenu, group: '3_compare', order: 2 },
+	{ kind: 'compare', title: localize2('git.graph.compare', 'Compare with…'), menu: graphRefMenu, group: '3_compare', order: 3 },
+];
+
+for (const kind of new Set(graphActions.map(action => action.kind))) {
+	const entries = graphActions.filter(action => action.kind === kind);
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({ id: `git.graph.${kind}`, title: entries[0].title, menu: entries.map(entry => ({ id: entry.menu, group: entry.group, order: entry.order, when: ContextKeyExpr.and(gitGraphWhen, entry.when) })) });
+		}
+
+		public override async run(accessor: ServicesAccessor, element: SCMHistoryItemViewModelTreeElement): Promise<void> {
+			if (element?.type !== 'historyItemViewModel' || element.repository.provider.providerId !== 'git') { return; }
+			try {
+				await runGraphAction(accessor, kind, element);
+			} catch (error) {
+				accessor.get(INotificationService).error(localize('git.commandFailed', 'Git operation failed: {0}', gitErrorMessage(error)));
+			}
+		}
+	});
+}
+
+async function runGraphAction(accessor: ServicesAccessor, kind: GraphActionKind, element: SCMHistoryItemViewModelTreeElement): Promise<void> {
+	const git = accessor.get(IGitService);
+	const repositoryId = element.repository.provider.id;
+	const commit = element.historyItemViewModel.historyItem;
+	const references = element.references ?? commit.references ?? [];
+	const input = accessor.get(IQuickInputService);
+	const notifications = accessor.get(INotificationService);
+	const promptName = (placeHolder: string, value?: string): Promise<string | undefined> => input.input({ placeHolder, value, validateInput: async name => name.trim() ? undefined : localize('git.valueRequired', 'Enter a value.') });
+	const chooseReference = async (items: readonly ISCMHistoryItemRef[], placeHolder: string): Promise<ISCMHistoryItemRef | undefined> => {
+		if (items.length === 1) { return items[0]; }
+		return (await pickGitItem(input, items.map(reference => ({ label: reference.name, reference })), placeHolder))?.reference;
+	};
+	let command: GitCommand;
+	switch (kind) {
+		case 'copyHash':
+			await accessor.get(IClipboardService).writeText(commit.id);
+			return;
+		case 'copyMessage':
+			await accessor.get(IClipboardService).writeText(await git.commitMessage(commit.id, repositoryId));
+			return;
+		case 'openRemote': {
+			const links = commit.remoteLinks ?? [];
+			const selected = links.length === 1 ? links[0] : (await pickGitItem(input, links.map(link => ({ label: link.name, description: link.uri.toString(), link })), localize('git.graph.chooseRemote', 'Choose a hosting remote')))?.link;
+			if (selected) { await accessor.get(IOpenerService).openExternal(selected.uri.toString()); }
+			return;
+		}
+		case 'checkoutBranch': {
+			const reference = await chooseReference(references.filter(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch'), localize('git.graph.chooseBranch', 'Choose a branch at this commit'));
+			if (!reference) { return; }
+			if (reference.category === 'localBranch') {
+				await git.switchBranch(reference.name, repositoryId);
+				return;
+			}
+			const defaultName = reference.description ? reference.name.slice(reference.description.length + 1) : reference.name;
+			const name = await promptName(localize('git.graph.trackingBranchName', 'Name for the new local tracking branch'), defaultName);
+			if (name === undefined) { return; }
+			command = { kind: 'checkoutRemoteBranch', name: name.trim(), reference: reference.name };
+			break;
+		}
+		case 'checkoutDetached': {
+			const confirmed = await accessor.get(IDialogService).confirm({ title: localize('git.graph.checkoutDetached', 'Checkout Commit (Detached)'), message: localize('git.graph.detachedConfirm', 'Check out commit {0}? HEAD will be detached. Create a branch before making new commits.', commit.displayId ?? commit.id), primaryButton: localize('git.graph.checkout', 'Checkout') });
+			if (!confirmed.confirmed) { return; }
+			command = { kind: 'checkoutDetached', objectId: commit.id };
+			break;
+		}
+		case 'createBranch':
+		case 'createTag': {
+			const name = await promptName(kind === 'createBranch' ? localize('git.graph.branchName', 'Branch name (created at the selected commit without switching)') : localize('git.tagName', 'Tag name'));
+			if (name === undefined) { return; }
+			command = kind === 'createBranch' ? { kind: 'createBranchAt', name: name.trim(), objectId: commit.id } : { kind: 'createTag', name: name.trim(), reference: commit.id };
+			break;
+		}
+		case 'deleteBranch': {
+			const branches = await git.branches(repositoryId);
+			const deletable = references.filter(reference => reference.category === 'localBranch' && branches.some(branch => branch.name === reference.name && !branch.current && !branch.checkedOutElsewhere));
+			const reference = await chooseReference(deletable, localize('git.graph.chooseBranchToDelete', 'Choose a local branch to delete'));
+			if (!reference) { return; }
+			if (!(await accessor.get(IDialogService).confirm({ title: localize('git.graph.deleteBranch', 'Delete Branch…'), message: localize('git.graph.deleteBranchConfirm', 'Delete local branch {0}? Git will reject branches with unmerged commits or a worktree using them.', reference.name), primaryButton: localize('git.graph.delete', 'Delete') })).confirmed) { return; }
+			await git.deleteBranch(reference.name, repositoryId);
+			return;
+		}
+		case 'cherryPick': {
+			if (commit.parentIds.length > 1) {
+				const selected = await pickGitItem(input, commit.parentIds.map((parent, index) => ({ label: localize('git.graph.mainlineParent', 'Parent {0} ({1})', index + 1, parent.slice(0, 7)), mainline: index + 1 })), localize('git.graph.chooseMainline', 'Choose the parent to use as the base of this merge commit'));
+				if (!selected) { return; }
+				command = { kind: 'cherryPick', reference: commit.id, mainline: selected.mainline };
+			} else {
+				command = { kind: 'cherryPick', reference: commit.id };
+			}
+			break;
+		}
+		case 'compare':
+		case 'compareMergeBase':
+		case 'compareRemote': {
+			let baseReference: string | undefined;
+			let baseLabel: string | undefined;
+			if (kind === 'compareRemote') {
+				const reference = await chooseReference(references.filter(reference => reference.upstream !== undefined), localize('git.graph.chooseUpstream', 'Choose the branch whose remote you want to compare'));
+				baseLabel = reference?.upstream;
+				baseReference = baseLabel === undefined ? undefined : `refs/remotes/${baseLabel}`;
+			} else {
+				const [branches, catalog] = await Promise.all([git.branches(repositoryId), git.catalog(repositoryId)]);
+				const options: Array<IQuickPickItem & { reference?: string }> = [
+					...branches.map(branch => ({ label: branch.name, description: branch.objectId.slice(0, 7), reference: `refs/heads/${branch.name}` })),
+					...catalog.tags.map(tag => ({ label: tag.name, description: tag.objectId.slice(0, 7), reference: `refs/tags/${tag.name}` })),
+					{ label: localize('git.graph.enterReference', 'Enter Commit or Reference…') },
+				];
+				const selected = await pickGitItem(input, options, localize('git.graph.compareBase', 'Choose the left side to compare with selected commit {0} on the right', commit.displayId ?? commit.id));
+				if (!selected) { return; }
+				baseLabel = selected.reference ? selected.label : undefined;
+				baseReference = selected.reference ?? (await promptName(localize('git.graph.reference', 'Commit hash, branch, tag or remote reference (left side)')))?.trim();
+			}
+			if (!baseReference) { return; }
+			const mode = kind === 'compareMergeBase' ? 'mergeBase' : 'direct';
+			const comparison = await git.compareChanges(commit.id, baseReference, mode, repositoryId);
+			const label = mode === 'mergeBase'
+				? localize('git.graph.mergeBaseTitle', 'Merge base with {0} ({1}) → {2}', baseLabel ?? baseReference, comparison.baseObjectId.slice(0, 7), commit.displayId ?? commit.id)
+				: localize('git.graph.compareTitle', '{0} ({1}) → {2}', baseLabel ?? baseReference, comparison.baseObjectId.slice(0, 7), commit.displayId ?? commit.id);
+			await accessor.get(ICommandService).executeCommand('workbench.scm.action.graph.viewChanges', element, { baseId: comparison.baseObjectId, label } satisfies ISCMHistoryItemComparison);
+			return;
+		}
+	}
+	const result = await git.executeCommand(command, repositoryId);
+	if (result.outcome === 'conflicted') {
+		notifications.warning(localize('git.integrationConflicts', 'Git stopped on conflicts. Resolve the files in Source Control, then run Git: Continue. Use Git: Abort to cancel an integration.'));
+	} else {
+		notifications.info(localize('git.commandCompleted', 'Git operation completed.'));
+	}
 }

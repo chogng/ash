@@ -36,14 +36,14 @@ test('External Git init and ref changes update status and history without a manu
 	const history = await openHistoryGraph(page);
 	await expect(history.getByRole('treeitem', { name: /External baseline/ }).first()).toBeVisible();
 	await run('git', ['branch', 'external-topic'], { cwd });
-	await expect(history.getByRole('img', { name: 'external-topic', exact: true })).toBeVisible();
+	await expect(history.getByRole('button', { name: 'external-topic', exact: true })).toBeVisible();
 	await run('git', ['tag', '-a', 'external-tag', '-m', 'External tag', '--'], { cwd, env: { ...process.env, GIT_COMMITTER_NAME: 'Ash Test', GIT_COMMITTER_EMAIL: 'ash@example.invalid' } });
-	const tag = history.getByRole('img', { name: 'external-tag', exact: true });
+	const tag = history.getByRole('button', { name: 'external-tag', exact: true });
 	await expect(tag).toBeVisible();
 	await expect(tag).toHaveAttribute('data-icon', 'tag');
 	await run('git', ['pack-refs', '--all', '--prune'], { cwd });
 	await run('git', ['branch', '-d', 'external-topic'], { cwd });
-	await expect(history.getByRole('img', { name: 'external-topic', exact: true })).toHaveCount(0);
+	await expect(history.getByRole('button', { name: 'external-topic', exact: true })).toHaveCount(0);
 	await run('git', ['tag', '-d', 'external-tag'], { cwd });
 	await expect(tag).toHaveCount(0);
 	expect((await run('git', ['status', '--porcelain'], { cwd })).stdout).toBe('');
@@ -103,9 +103,9 @@ test('External Git refs refresh two Workbench windows sharing the backend', asyn
 			await expect(history.getByRole('treeitem', { name: /Shared baseline/ }).first()).toBeVisible();
 		}
 		await run('git', ['branch', 'shared-topic'], { cwd });
-		for (const history of histories) await expect(history.getByRole('img', { name: 'shared-topic', exact: true })).toBeVisible();
+		for (const history of histories) await expect(history.getByRole('button', { name: 'shared-topic', exact: true })).toBeVisible();
 		await run('git', ['branch', '-d', 'shared-topic'], { cwd });
-		for (const history of histories) await expect(history.getByRole('img', { name: 'shared-topic', exact: true })).toHaveCount(0);
+		for (const history of histories) await expect(history.getByRole('button', { name: 'shared-topic', exact: true })).toHaveCount(0);
 	} finally {
 		await close();
 	}

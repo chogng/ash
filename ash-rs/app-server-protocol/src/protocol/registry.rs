@@ -847,17 +847,29 @@ use crate::protocol::git::GitCommitChangesParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitChangesResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommitDetailsResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitFileContentDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitFileParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitFileResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommitMessageResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommitStatisticsDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitSummaryDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCompareChangesParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCompareChangesResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitComparisonModeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCompleteConflictParams;
 #[cfg(any(test, feature = "export"))]
@@ -3888,6 +3900,21 @@ client_methods! {
         response: GitCommitChangesResult,
         serialization: RepositoryExclusive,
     },
+    GitCompareChanges => "git/compareChanges" {
+        params: GitCompareChangesParams,
+        response: GitCompareChangesResult,
+        serialization: RepositoryExclusive,
+    },
+    GitCommitMessage => "git/commitMessage" {
+        params: GitCommitChangesParams,
+        response: GitCommitMessageResult,
+        serialization: RepositoryExclusive,
+    },
+    GitCommitDetails => "git/commitDetails" {
+        params: GitCommitChangesParams,
+        response: GitCommitDetailsResult,
+        serialization: RepositoryExclusive,
+    },
     GitCommitFile => "git/commitFile" {
         params: GitCommitFileParams,
         response: GitCommitFileResult,
@@ -5497,6 +5524,12 @@ typescript_bindings! {
     GitGraphParams,
     GitGraphResult,
     GitCommitChangesParams,
+    GitCompareChangesParams,
+    GitCompareChangesResult,
+    GitComparisonModeDto,
+    GitCommitMessageResult,
+    GitCommitDetailsResult,
+    GitCommitStatisticsDto,
     GitCommitChangeDto,
     GitCommitChangesResult,
     GitCommitFileParams,

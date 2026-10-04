@@ -307,6 +307,56 @@ pub struct GitCommitChangesParams {
     pub object_id: String,
 }
 
+/// Compares the selected commit with a user-selected ref or their common ancestor.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCompareChangesParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[schemars(length(min = 40, max = 64))]
+    pub object_id: String,
+    #[schemars(length(min = 1, max = 1024))]
+    pub base_reference: String,
+    pub mode: GitComparisonModeDto,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitComparisonModeDto {
+    Direct,
+    MergeBase,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitMessageResult {
+    pub message: String,
+}
+
+/// Details for a history hover; totals compare a merge with its first parent.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitDetailsResult {
+    pub author_name: String,
+    pub author_email: String,
+    #[ts(type = "number")]
+    pub timestamp_seconds: i64,
+    pub message: String,
+    pub statistics: GitCommitStatisticsDto,
+}
+
+/// Includes binary paths in files, with line counts only for text paths.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitStatisticsDto {
+    pub files: usize,
+    #[ts(type = "number")]
+    pub additions: u64,
+    #[ts(type = "number")]
+    pub deletions: u64,
+}
+
 /// One repository-relative path changed by a commit relative to its first parent.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -326,6 +376,14 @@ pub struct GitCommitChangesResult {
     pub changes: Vec<GitCommitChangeDto>,
 }
 
+/// The exact immutable base of an explicit comparison, including a resolved common ancestor.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCompareChangesResult {
+    pub base_object_id: String,
+    pub changes: Vec<GitCommitChangeDto>,
+}
+
 /// Identifies one changed file to read at a commit and its comparison parent.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -338,6 +396,11 @@ pub struct GitCommitFileParams {
     pub object_id: String,
     #[schemars(length(min = 1, max = 32768))]
     pub path: String,
+    /// Exact base returned by compareChanges; omission compares with the commit's first parent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(min = 40, max = 64))]
+    pub parent_object_id: Option<String>,
 }
 
 /// Bounded editor content for one side of a committed file comparison.
@@ -636,6 +699,19 @@ pub enum GitIntegrationDto {
 )]
 #[ts(tag = "kind", rename_all = "camelCase")]
 pub enum GitCommandDto {
+    CreateBranchAt {
+        name: String,
+        #[ts(rename = "objectId")]
+        object_id: String,
+    },
+    CheckoutDetached {
+        #[ts(rename = "objectId")]
+        object_id: String,
+    },
+    CheckoutRemoteBranch {
+        name: String,
+        reference: String,
+    },
     RenameBranch {
         name: String,
         #[ts(rename = "newName")]
@@ -653,6 +729,11 @@ pub enum GitCommandDto {
     },
     CherryPick {
         reference: String,
+        /// One-based parent defining a merge commit's changes.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        #[schemars(range(min = 1))]
+        mainline: Option<u32>,
     },
     Continue {
         operation: GitIntegrationDto,

@@ -899,3 +899,64 @@ fn repository_intents_publish_conflicts_and_refs_to_every_connection_and_reject_
     ));
     assert_eq!(repository.git_output(&["tag", "--list"]), "review");
 }
+
+#[test]
+fn graph_comparisons_preserve_pagination_and_directory_read_authorization() {
+    use ash_app_server_protocol::protocol::git::GitCommitFileContentDto;
+    let repository = TestRepository::init();
+    repository.write("scope/old.txt", "inside unchanged content\n");
+    repository.write("outside.txt", "outside before\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "Base"]);
+    let base = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.git(&["mv", "scope/old.txt", "scope/new.txt"]);
+    repository.write("outside.txt", "outside after\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "Rename", "-m", "Complete body."]);
+    let selected = repository.git_output(&["rev-parse", "HEAD"]);
+    let runtime = GitRuntime::new(
+        inspection_authorization(&repository.root().join("scope")),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let page = runtime
+        .graph(1, std::num::NonZeroUsize::new(1).unwrap(), None)
+        .unwrap();
+    let comparison = runtime
+        .compare_changes_for(None, &selected, &base, ash_git::GitComparisonMode::Direct)
+        .unwrap();
+    assert_eq!(comparison.base_object_id, base);
+    assert_eq!(comparison.changes.len(), 1);
+    assert_eq!(comparison.changes[0].path, "new.txt");
+    assert_eq!(
+        comparison.changes[0].original_path.as_deref(),
+        Some("old.txt")
+    );
+    let file = runtime
+        .commit_file_for(None, &selected, Path::new("new.txt"), Some(&base))
+        .unwrap();
+    assert_eq!(
+        file.original,
+        GitCommitFileContentDto::Text {
+            text: "inside unchanged content\n".into()
+        }
+    );
+    assert_eq!(file.modified, file.original);
+    assert!(
+        runtime
+            .commit_file_for(None, &selected, Path::new("../outside.txt"), Some(&base))
+            .is_err()
+    );
+    assert_eq!(
+        runtime.commit_message_for(None, &selected).unwrap(),
+        "Rename\n\nComplete body."
+    );
+    let next = runtime
+        .graph(
+            1,
+            std::num::NonZeroUsize::new(1).unwrap(),
+            page.next_cursor.as_deref(),
+        )
+        .unwrap();
+    assert_eq!(next.commits[0].object_id, base);
+}

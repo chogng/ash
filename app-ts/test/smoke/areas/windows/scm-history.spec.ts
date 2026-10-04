@@ -1,3 +1,4 @@
+import type { ElectronApplication } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -126,14 +127,20 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Review all files' })).toHaveCount(1);
 });
 
-test('SCM history reserves title width and reveals metadata on pointer and keyboard focus', async ({ target, testWorkspace, workbench }) => {
+test('SCM history reserves title width and reveals commit details on pointer and keyboard focus', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 	const cwd = testWorkspace.directory;
 	const subject = 'History metadata: a long title that uses the space previously occupied by the commit hash and date';
-	await run('git', ['commit', '--amend', '-m', subject], { cwd });
+	const body = '    The complete explanation remains available without taking space from the history title.';
+	await writeFile(join(cwd, 'details.txt'), 'first line\nsecond line\n');
+	await writeFile(join(cwd, 'binary.dat'), Buffer.from([0, 1, 2]));
+	await run('git', ['add', 'details.txt', 'binary.dat'], { cwd });
+	await run('git', ['-c', 'user.name=History Author', '-c', 'user.email=history@example.invalid', 'commit', '-m', subject, '-m', body], { cwd });
+	await run('git', ['remote', 'add', 'origin', 'https://github.com/ash-test/history.git'], { cwd });
 	const { stdout } = await run('git', ['show', '-s', '--format=%H%n%ct', 'HEAD'], { cwd });
 	const [hash, timestamp] = stdout.trim().split('\n');
 	const page = workbench.page;
+	if (target.kind === 'browser') { await page.context().grantPermissions(['clipboard-read', 'clipboard-write']); }
 	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	const header = history.locator('.ash-pane-view-header');
@@ -163,23 +170,54 @@ test('SCM history reserves title width and reveals metadata on pointer and keybo
 		expect(geometry.right).toBeCloseTo(8, 1);
 	}
 	const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
-	const metadata = `${hash} · ${await page.evaluate(value => new Date(Number(value) * 1000).toLocaleString(), timestamp)}`;
 	await commit.locator('.ash-scm-graph-subject').hover();
 	await expect(hover.locator('.ash-scm-graph-hover-subject')).toHaveText(subject);
-	await expect(hover.locator('.ash-scm-graph-hover-metadata')).toHaveText(metadata);
+	await expect(hover.locator('.ash-scm-graph-hover-author > span')).toHaveText('History Author');
+	await expect(hover.locator('.ash-scm-graph-hover-author > span')).toHaveAttribute('title', 'history@example.invalid');
+	await expect(hover.locator('time')).toHaveAttribute('datetime', new Date(Number(timestamp) * 1000).toISOString());
+	await expect(hover.locator('.ash-scm-graph-hover-message')).toHaveText(body);
+	expect(await hover.locator('.ash-scm-graph-hover-message').textContent()).toBe(body);
+	await expect(hover.locator('.ash-scm-graph-hover-statistics > span')).toHaveText(['2 files changed', '2 insertions(+)', '0 deletions(-)']);
+	await expect(hover.locator('.ash-scm-graph-hover-hash')).toHaveAttribute('title', hash);
+	await expect(hover.getByRole('button', { name: 'Open Commit in Browser', exact: true })).toBeVisible();
+	await hover.locator('.ash-scm-graph-hover-message').hover();
+	await expect(hover).toBeVisible();
 	await page.keyboard.press('Escape');
 	await expect(hover).toHaveCount(0);
 	await header.hover();
 	await header.locator('.ash-pane-view-header-button').focus();
 	await commit.focus();
-	await expect(hover.locator('.ash-scm-graph-hover-metadata')).toHaveText(metadata);
+	await expect(hover.locator('.ash-scm-graph-hover-message')).toHaveText(body);
 	await expect(commit).toHaveAttribute('aria-describedby', (await hover.getAttribute('id'))!);
+	await commit.press('Alt+ArrowDown');
+	const copy = hover.getByRole('button', { name: 'Copy Commit Hash', exact: true });
+	await expect(copy).toBeFocused();
+	await copy.press('Enter');
+	const copied = () => target.kind === 'electron'
+		? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())
+		: page.evaluate(() => navigator.clipboard.readText());
+	await expect.poll(copied).toBe(hash);
 	await page.keyboard.press('Escape');
 	await expect(hover).toHaveCount(0);
 	await expect(commit).toBeFocused();
+	await commit.press('Alt+ArrowDown');
+	await expect(copy).toBeFocused();
+	await page.keyboard.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+	await expect(help.getByRole('textbox')).toHaveValue(/complete message/);
+	await page.keyboard.press('Escape');
+	await expect(commit).toBeFocused();
+	await commit.press('Alt+ArrowDown');
+	await expect(copy).toBeFocused();
+	await expect(hover.locator('.ash-scm-graph-hover-message')).toHaveText(body);
+	await page.keyboard.press('Alt+F2');
+	const accessible = page.getByRole('dialog', { name: 'Accessible View', exact: true });
+	await expect(accessible.getByRole('textbox')).toHaveValue(new RegExp(`${body}[\\s\\S]*${hash}`, 'u'));
+	await page.keyboard.press('Escape');
+	await expect(commit).toBeFocused();
 	await commit.press('Enter');
 	await expect(commit).toHaveAttribute('aria-expanded', 'true');
-	await expect(commit.getByRole('button', { name: /main\.ts/ })).toBeVisible();
+	await expect(commit.getByRole('button', { name: /details\.txt/ })).toBeVisible();
 });
 
 test('SCM history references and actions overlay long titles without changing row widths', async ({ target, testWorkspace, workbench }) => {
@@ -273,6 +311,154 @@ test('SCM history references and actions overlay long titles without changing ro
 	await actions.getByRole('button', { name: 'Open Changes', exact: true }).press('Enter');
 	await expect(workbench.editors.groupAt(0).content.locator('.stanza-multi-diff-editor-section')).toHaveCount(5);
 	await expect(commit).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('SCM graph menus copy complete commit information and compare explicit remote and merge bases', async ({ application, target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+	const cwd = testWorkspace.directory;
+	const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+	await git('remote', 'add', 'origin', 'https://github.com/ash-test/history.git');
+	await writeFile(join(cwd, 'main-only.ts'), 'export const main = true;\n');
+	await git('add', 'main-only.ts');
+	await git('commit', '-m', 'Main side');
+	await git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+	await git('switch', '-c', 'topic', 'HEAD^');
+	await writeFile(join(cwd, 'topic-only.ts'), 'export const topic = true;\n');
+	await git('add', 'topic-only.ts');
+	await git('commit', '-m', 'Graph comparison', '-m', 'The complete body.');
+	await git('branch', '--set-upstream-to=origin/main', 'topic');
+	const selected = await git('rev-parse', 'HEAD');
+	const page = workbench.page;
+	if (target.kind === 'electron' && process.platform === 'darwin') {
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('layout');
+		await workbench.settingsEditor.element.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
+		await page.getByRole('option', { name: 'Custom', exact: true }).click();
+		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+	}
+	if (target.kind === 'browser') { await page.context().grantPermissions(['clipboard-read', 'clipboard-write']); }
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	await history.locator('.ash-pane-view-header').click();
+	const commit = history.getByRole('treeitem', { name: /Graph comparison/u });
+	await expect(commit).toBeVisible();
+	await commit.focus();
+	await commit.press('Shift+F10');
+	await expect(page.getByRole('menuitem').first()).toHaveText('Open Changes');
+	await expect(page.getByRole('menuitem', { name: 'Open Commit in Browser', exact: true })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: 'Compare with Remote…', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(commit).toBeFocused();
+	const copied = () => target.kind === 'electron'
+		? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())
+		: page.evaluate(() => navigator.clipboard.readText());
+	for (const [action, expected] of [['Copy Commit Hash', selected], ['Copy Commit Message', 'Graph comparison\n\nThe complete body.']]) {
+		await commit.press('Shift+F10');
+		await page.getByRole('menuitem', { name: action, exact: true }).click();
+		await expect.poll(copied).toBe(expected);
+	}
+	const comparisons = page.locator('.stanza-multi-diff-editor:visible');
+	for (const [action, paths] of [
+		['Compare with…', ['main-only.ts', 'topic-only.ts']],
+		['Compare with Merge Base…', ['topic-only.ts']],
+		['Compare with Remote…', ['main-only.ts', 'topic-only.ts']],
+	] as const) {
+		await commit.focus();
+		await commit.press('Shift+F10');
+		await page.getByRole('menuitem', { name: action, exact: true }).click();
+		if (action !== 'Compare with Remote…') {
+			const picker = page.locator('.ash-quick-pick');
+			await picker.getByRole('combobox').fill('main');
+			await picker.locator('.ash-quick-pick-row-label', { hasText: /^main$/u }).click();
+		}
+		await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText([...paths]);
+	}
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'origin/main' })).toHaveCount(1);
+	expect(await git('rev-parse', 'HEAD')).toBe(selected);
+	expect(await git('status', '--porcelain')).toBe('');
+});
+
+test('SCM graph menus create at an old commit, switch references, delete branches, checkout and cherry-pick', async ({ application, target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+	const cwd = testWorkspace.directory;
+	const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+	const root = await git('rev-parse', 'HEAD');
+	await writeFile(testWorkspace.file, 'const value = 2;\n');
+	await git('commit', '-am', 'Graph latest');
+	const latestId = await git('rev-parse', 'HEAD');
+	await git('remote', 'add', 'origin', 'https://github.com/ash-test/history.git');
+	await git('update-ref', 'refs/remotes/origin/latest', 'HEAD');
+	await git('switch', '-c', 'pick-topic');
+	await writeFile(join(cwd, 'picked.ts'), 'export const picked = true;\n');
+	await git('add', 'picked.ts');
+	await git('commit', '-m', 'Graph pick');
+	await git('switch', 'main');
+	const page = workbench.page;
+	if (target.kind === 'electron' && process.platform === 'darwin') {
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('layout');
+		await workbench.settingsEditor.element.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
+		await page.getByRole('option', { name: 'Custom', exact: true }).click();
+		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+	}
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	await history.locator('.ash-pane-view-header').click();
+	const initial = history.getByRole('treeitem', { name: /Initial/u });
+	const latest = history.getByRole('treeitem', { name: /Graph latest/u });
+	const enterName = async (name: string) => {
+		const input = page.getByRole('dialog', { name: 'Quick Input', exact: true }).getByRole('textbox');
+		await input.fill(name);
+		await input.press('Enter');
+	};
+	await initial.click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Create Branch…', exact: true }).click();
+	await enterName('graph-review');
+	await expect.poll(() => git('branch', '--list', 'graph-review')).toBe('graph-review');
+	expect(await git('rev-parse', 'refs/heads/graph-review')).toBe(root);
+	expect(await git('branch', '--show-current')).toBe('main');
+	await initial.click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'More…', exact: true }).hover();
+	await page.getByRole('menuitem', { name: 'Create Tag…', exact: true }).click();
+	await enterName('graph-tag');
+	await expect.poll(() => git('tag', '--list', 'graph-tag')).toBe('graph-tag');
+	expect(await git('rev-parse', 'refs/tags/graph-tag')).toBe(root);
+	const branch = initial.getByRole('button', { name: 'graph-review', exact: true });
+	await branch.focus();
+	await branch.press('Enter');
+	await page.getByRole('menuitem', { name: 'Switch to Branch…', exact: true }).click();
+	await expect.poll(() => git('branch', '--show-current')).toBe('graph-review');
+	await branch.press('Enter');
+	await expect(page.getByRole('menuitem', { name: 'Delete Branch…', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await latest.getByRole('button', { name: 'main', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Switch to Branch…', exact: true }).click();
+	await expect.poll(() => git('branch', '--show-current')).toBe('main');
+	await workbench.dialogs.confirm(application, 'Delete Branch…', 'Delete', async () => {
+		await branch.press('Enter');
+		await page.getByRole('menuitem', { name: 'Delete Branch…', exact: true }).click();
+	});
+	await expect.poll(() => git('branch', '--list', 'graph-review')).toBe('');
+	await workbench.dialogs.confirm(application, 'Checkout Commit (Detached)', 'Checkout', async () => {
+		await initial.click({ button: 'right' });
+		await page.getByRole('menuitem', { name: 'Checkout', exact: true }).hover();
+		await page.getByRole('menuitem', { name: 'Checkout Commit (Detached)', exact: true }).click();
+	});
+	await expect.poll(() => git('rev-parse', 'HEAD')).toBe(root);
+	expect(await git('branch', '--show-current')).toBe('');
+	await expect(initial).toHaveAttribute('aria-current', 'true');
+	await latest.getByRole('button', { name: 'origin/latest', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Switch to Branch…', exact: true }).click();
+	await enterName('graph-tracked');
+	await expect.poll(() => git('branch', '--show-current')).toBe('graph-tracked');
+	expect(await git('rev-parse', 'HEAD')).toBe(latestId);
+	expect(await git('rev-parse', '--abbrev-ref', '@{upstream}')).toBe('origin/latest');
+	await history.getByRole('treeitem', { name: /Graph pick/u }).click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Cherry Pick', exact: true }).click();
+	await expect.poll(() => git('log', '-1', '--format=%s')).toBe('Graph pick');
+	expect(await git('show', 'HEAD:picked.ts')).toBe('export const picked = true;');
 });
 
 test('SCM history pane opens without a connected repository', async ({ target, workbench }) => {

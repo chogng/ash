@@ -2,8 +2,8 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { observableFromEvent } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
-import { SCMHistoryUnavailableError, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemChangeContents, type ISCMHistoryItemRef, type ISCMHistoryOptions, type ISCMHistoryProvider } from '../../scm/common/history.js';
-import { GitWorkspaceError, type GitCommitSummary, type GitHead, type GitReference, type GitStatus, type GraphPage, type IGitService } from '../common/gitService.js';
+import { SCMHistoryUnavailableError, type ISCMHistoryItemDetails, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemChangeContents, type ISCMHistoryItemRef, type ISCMHistoryOptions, type ISCMHistoryProvider } from '../../scm/common/history.js';
+import { GitWorkspaceError, type GitBranch, type GitRemote, type GitCommitChanges, type GitCommitSummary, type GitHead, type GitReference, type GitStatus, type GraphPage, type IGitService } from '../common/gitService.js';
 import { gitErrorMessage } from '../common/gitError.js';
 
 const PageSize = 50;
@@ -20,11 +20,12 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	public readonly historyItemRef = observableFromEvent(this, this.historyRefChanged.event, () => this.currentHistoryRef);
 	private readonly commits: GitCommitSummary[] = [];
 	private readonly references = new Map<string, ISCMHistoryItemRef[]>();
+	private branches: readonly GitBranch[] = [];
+	private remotes: readonly GitRemote[] = [];
 	private nextCursor: string | undefined;
 	private hasMore = true;
 	private generation = 0;
 	private loading: Promise<void> | undefined;
-	private readonly parents = new Map<string, string | undefined>();
 
 	constructor(private readonly gitService: IGitService, readonly repositoryId: string) {
 		super();
@@ -61,12 +62,19 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 			displayId: commit.objectId.slice(0, 7),
 			timestamp: commit.timestampSeconds * 1000,
 			references: this.references.get(commit.objectId) ?? [],
+			remoteLinks: this.remoteLinks(commit.objectId),
 		} satisfies ISCMHistoryItem));
 	}
 
-	public async provideHistoryItemChanges(historyItemId: string, _historyItemParentId: string | undefined): Promise<readonly ISCMHistoryItemChange[]> {
-		const result = await this.gitService.commitChanges(historyItemId, this.repositoryId);
-		this.parents.set(historyItemId, result.parentObjectId);
+	public async provideHistoryItemChanges(historyItemId: string, historyItemParentId: string | undefined): Promise<readonly ISCMHistoryItemChange[]> {
+		const firstParent = this.commits.find(commit => commit.objectId === historyItemId)?.parentObjectIds[0];
+		let result: GitCommitChanges;
+		if (historyItemParentId !== undefined && historyItemParentId !== firstParent) {
+			const comparison = await this.gitService.compareChanges(historyItemId, historyItemParentId, 'direct', this.repositoryId);
+			result = { parentObjectId: comparison.baseObjectId, changes: comparison.changes };
+		} else {
+			result = await this.gitService.commitChanges(historyItemId, this.repositoryId);
+		}
 		return result.changes.map(change => ({
 			uri: commitFileUri(this.repositoryId, historyItemId, change.path, 'modified'),
 			originalUri: commitFileUri(this.repositoryId, result.parentObjectId ?? 'root', change.originalPath ?? change.path, 'original'),
@@ -74,12 +82,18 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 			path: change.path,
 			originalPath: change.originalPath,
 			status: change.status,
+			parentId: result.parentObjectId,
 		}));
 	}
 
+	public async resolveHistoryItemDetails(historyItemId: string): Promise<ISCMHistoryItemDetails> {
+		const details = await this.gitService.commitDetails(historyItemId, this.repositoryId);
+		return { authorName: details.authorName, authorEmail: details.authorEmail, timestamp: details.timestampSeconds * 1000, message: details.message, statistics: details.statistics };
+	}
+
 	public async resolveHistoryItemChangeContents(historyItemId: string, change: ISCMHistoryItemChange): Promise<ISCMHistoryItemChangeContents> {
-		const file = await this.gitService.commitFile(historyItemId, change.path, this.repositoryId);
-		return { parentId: this.parents.get(historyItemId), original: file.original, modified: file.modified };
+		const file = await this.gitService.commitFile(historyItemId, change.path, this.repositoryId, change.parentId);
+		return { parentId: change.parentId, original: file.original, modified: file.modified };
 	}
 
 	public async resolveHistoryItemChatContext(historyItemId: string): Promise<string | undefined> {
@@ -129,7 +143,15 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	private async loadPage(generation: number): Promise<void> {
 		let page: GraphPage;
 		try {
-			page = await this.gitService.graph({ limit: PageSize, ...(this.nextCursor ? { cursor: this.nextCursor } : {}) }, this.repositoryId);
+			if (!this.nextCursor) {
+				const [graph, branches] = await Promise.all([this.gitService.graph({ limit: PageSize }, this.repositoryId), this.gitService.branches(this.repositoryId)]);
+				page = graph;
+				if (this.isDisposed || generation !== this.generation) { return; }
+				this.branches = branches;
+				this.remotes = graph.remotes;
+			} else {
+				page = await this.gitService.graph({ limit: PageSize, cursor: this.nextCursor }, this.repositoryId);
+			}
 		} catch (error) {
 			throw historyError(error);
 		}
@@ -142,18 +164,36 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 		}
 		for (const reference of page.references) {
 			const items = this.references.get(reference.objectId) ?? [];
-			if (!items.some(item => item.id === referenceId(reference))) items.push(toHistoryRef(reference));
+			if (!items.some(item => item.id === referenceId(reference))) {
+				const branch = reference.kind === 'localBranch' ? this.branches.find(branch => branch.name === reference.name) : undefined;
+				items.push({
+					...toHistoryRef(reference),
+					upstream: branch?.upstream && page.references.some(remote => remote.kind === 'remoteBranch' && remote.name === branch.upstream) ? branch.upstream : undefined,
+					canDelete: branch !== undefined && !branch.current && !branch.checkedOutElsewhere,
+				});
+			}
 			this.references.set(reference.objectId, items);
 		}
 		this.nextCursor = page.nextCursor;
 		this.hasMore = page.hasMore && page.nextCursor !== undefined && page.commits.length > 0;
 	}
 
+	private remoteLinks(objectId: string): readonly { name: string; uri: URI }[] {
+		return this.remotes.flatMap(remote => {
+			const identity = remote.identity;
+			if (!identity || identity.provider === 'other') { return []; }
+			const repositoryPath = [...identity.owner.split('/'), identity.repository].map(encodeURIComponent).join('/');
+			const commitPath = identity.provider === 'gitlab' ? '-/commit' : identity.provider === 'bitbucket' ? 'commits' : 'commit';
+			return [{ name: remote.name, uri: URI.parse(`https://${identity.host}/${repositoryPath}/${commitPath}/${objectId}`) }];
+		});
+	}
+
 	private reset(notify = true): void {
 		this.generation += 1;
 		this.commits.length = 0;
 		this.references.clear();
-		this.parents.clear();
+		this.branches = [];
+		this.remotes = [];
 		this.nextCursor = undefined;
 		this.hasMore = true;
 		this.setHistoryItemRef(undefined);
@@ -170,7 +210,7 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 function currentRef(head: GitHead): ISCMHistoryItemRef | undefined {
 	if (head.type === 'unborn') return undefined;
 	if (head.type === 'detached') return { id: 'HEAD', name: head.objectId.slice(0, 7), revision: head.objectId };
-	return { id: `localBranch:${head.name}`, name: head.name, revision: head.objectId, category: 'localBranch' };
+	return { id: `localBranch:${head.name}`, name: head.name, revision: head.objectId, category: 'localBranch', upstream: head.upstream?.name };
 }
 
 function referenceId(reference: GitReference): string {

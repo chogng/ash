@@ -27,23 +27,74 @@ pub enum GitStashMode {
 /// Reviewed repository intents, never arbitrary Git arguments.
 #[derive(Clone, Debug)]
 pub enum GitCommand {
-    RenameBranch { name: String, new_name: String },
-    DeleteRemoteBranch { remote: String, name: String },
-    Merge { reference: String },
-    Rebase { reference: String },
-    CherryPick { reference: String },
-    Continue { operation: GitIntegration },
-    Abort { operation: GitIntegration },
-    Stash { message: String, mode: GitStashMode },
-    ApplyStash { object_id: String },
-    PopStash { object_id: String },
-    DropStash { object_id: String },
-    CreateTag { name: String, reference: String },
-    DeleteTag { name: String },
-    AddRemote { name: String, url: String },
-    RemoveRemote { name: String },
-    Amend { message: String },
-    UndoCommit { expected_head: String },
+    CreateBranchAt {
+        name: String,
+        object_id: String,
+    },
+    CheckoutDetached {
+        object_id: String,
+    },
+    CheckoutRemoteBranch {
+        name: String,
+        reference: String,
+    },
+    RenameBranch {
+        name: String,
+        new_name: String,
+    },
+    DeleteRemoteBranch {
+        remote: String,
+        name: String,
+    },
+    Merge {
+        reference: String,
+    },
+    Rebase {
+        reference: String,
+    },
+    CherryPick {
+        reference: String,
+        mainline: Option<u32>,
+    },
+    Continue {
+        operation: GitIntegration,
+    },
+    Abort {
+        operation: GitIntegration,
+    },
+    Stash {
+        message: String,
+        mode: GitStashMode,
+    },
+    ApplyStash {
+        object_id: String,
+    },
+    PopStash {
+        object_id: String,
+    },
+    DropStash {
+        object_id: String,
+    },
+    CreateTag {
+        name: String,
+        reference: String,
+    },
+    DeleteTag {
+        name: String,
+    },
+    AddRemote {
+        name: String,
+        url: String,
+    },
+    RemoveRemote {
+        name: String,
+    },
+    Amend {
+        message: String,
+    },
+    UndoCommit {
+        expected_head: String,
+    },
 }
 
 /// Displayable ref identities omit remote URLs and credentials.
@@ -168,6 +219,27 @@ impl GitClient {
             return Err(invalid("finish or abort the current integration first"));
         }
         let outcome = match command {
+            GitCommand::CreateBranchAt { name, object_id } => {
+                self.validate_ref(repository, &format!("refs/heads/{name}"))
+                    .await?;
+                let commit = self.resolve_commit(repository, object_id).await?;
+                self.run_mutation(root, ["branch", "--", name, &commit])
+                    .await
+            }
+            GitCommand::CheckoutDetached { object_id } => {
+                let commit = self.resolve_commit(repository, object_id).await?;
+                self.run_mutation(root, ["switch", "--detach", "--", &commit])
+                    .await
+            }
+            GitCommand::CheckoutRemoteBranch { name, reference } => {
+                self.validate_ref(repository, &format!("refs/heads/{name}"))
+                    .await?;
+                let remote_ref = format!("refs/remotes/{reference}");
+                self.validate_ref(repository, &remote_ref).await?;
+                self.resolve_commit(repository, &remote_ref).await?;
+                self.run_mutation(root, ["switch", "--track", "-c", name, "--", &remote_ref])
+                    .await
+            }
             GitCommand::RenameBranch { name, new_name } => {
                 self.validate_ref(repository, &format!("refs/heads/{name}"))
                     .await?;
@@ -184,14 +256,18 @@ impl GitClient {
                     .await
             }
             GitCommand::Merge { reference } => {
-                self.start_integration(repository, "merge", reference).await
-            }
-            GitCommand::Rebase { reference } => {
-                self.start_integration(repository, "rebase", reference)
+                self.start_integration(repository, "merge", reference, None)
                     .await
             }
-            GitCommand::CherryPick { reference } => {
-                self.start_integration(repository, "cherry-pick", reference)
+            GitCommand::Rebase { reference } => {
+                self.start_integration(repository, "rebase", reference, None)
+                    .await
+            }
+            GitCommand::CherryPick {
+                reference,
+                mainline,
+            } => {
+                self.start_integration(repository, "cherry-pick", reference, *mainline)
                     .await
             }
             GitCommand::Continue { operation } | GitCommand::Abort { operation } => {
@@ -316,6 +392,7 @@ impl GitClient {
         repository: &GitRepository,
         operation: &str,
         reference: &str,
+        mainline: Option<u32>,
     ) -> GitResult<crate::client::GitCommandOutput> {
         if !self.snapshot(repository).await?.changes().is_empty() {
             return Err(invalid(
@@ -326,6 +403,14 @@ impl GitClient {
         let mut arguments = vec![operation];
         if operation == "merge" {
             arguments.push("--no-edit");
+        }
+        let mainline_number;
+        if let Some(parent) = mainline {
+            if parent == 0 {
+                return Err(invalid("mainline parent must be positive"));
+            }
+            mainline_number = parent.to_string();
+            arguments.extend(["--mainline", &mainline_number]);
         }
         arguments.extend(["--", &commit]);
         self.run_mutation(repository.worktree_root(), arguments)

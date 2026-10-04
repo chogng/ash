@@ -12,6 +12,7 @@ use ash_app_server_protocol::protocol::git::GitCommitChangesResult;
 use ash_app_server_protocol::protocol::git::GitCommitFileContentDto;
 use ash_app_server_protocol::protocol::git::GitCommitFileResult;
 use ash_app_server_protocol::protocol::git::GitCommitSummaryDto;
+use ash_app_server_protocol::protocol::git::GitCompareChangesResult;
 use ash_app_server_protocol::protocol::git::GitConflictFileResult;
 use ash_app_server_protocol::protocol::git::GitConflictResolutionDto;
 use ash_app_server_protocol::protocol::git::GitDiffStatisticsDto;
@@ -493,13 +494,58 @@ impl GitRuntime {
         self.commit_changes_for(None, object_id)
     }
 
+    pub(super) fn compare_changes_for(
+        &self,
+        repository_id: Option<&str>,
+        object_id: &str,
+        base_reference: &str,
+        mode: ash_git::GitComparisonMode,
+    ) -> Result<GitCompareChangesResult, GitRuntimeError> {
+        self.repository(repository_id)?
+            .compare_changes(object_id, base_reference, mode)
+    }
+
+    pub(super) fn commit_message_for(
+        &self,
+        repository_id: Option<&str>,
+        object_id: &str,
+    ) -> Result<String, GitRuntimeError> {
+        let repository = self.repository(repository_id)?;
+        let _operation = repository
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        repository
+            .service
+            .commit_message(object_id)
+            .map_err(GitRuntimeError::Service)
+    }
+
+    pub(super) fn commit_details_for(
+        &self,
+        repository_id: Option<&str>,
+        object_id: &str,
+    ) -> Result<ash_git::GitCommitDetails, GitRuntimeError> {
+        let repository = self.repository(repository_id)?;
+        let _operation = repository
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        repository
+            .service
+            .commit_details(object_id)
+            .map_err(GitRuntimeError::Service)
+    }
+
     pub(super) fn commit_file_for(
         &self,
         repository_id: Option<&str>,
         object_id: &str,
         path: &Path,
+        comparison_base: Option<&str>,
     ) -> Result<GitCommitFileResult, GitRuntimeError> {
-        self.repository(repository_id)?.commit_file(object_id, path)
+        self.repository(repository_id)?
+            .commit_file(object_id, path, comparison_base)
     }
 
     pub(super) fn commit_file(
@@ -507,7 +553,7 @@ impl GitRuntime {
         object_id: &str,
         path: &Path,
     ) -> Result<GitCommitFileResult, GitRuntimeError> {
-        self.commit_file_for(None, object_id, path)
+        self.commit_file_for(None, object_id, path, None)
     }
 
     pub(super) fn change_file_for(
@@ -1027,6 +1073,36 @@ impl GitRepositoryRuntime {
             .service
             .commit_changes(object_id)
             .map_err(GitRuntimeError::Service)?;
+        self.project_commit_changes(projected)
+    }
+
+    fn compare_changes(
+        &self,
+        object_id: &str,
+        base_reference: &str,
+        mode: ash_git::GitComparisonMode,
+    ) -> Result<GitCompareChangesResult, GitRuntimeError> {
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let projected = self
+            .service
+            .compare_changes(object_id, base_reference, mode)
+            .map_err(GitRuntimeError::Service)?;
+        let result = self.project_commit_changes(projected)?;
+        Ok(GitCompareChangesResult {
+            base_object_id: result
+                .parent_object_id
+                .expect("explicit comparisons always resolve a base"),
+            changes: result.changes,
+        })
+    }
+
+    fn project_commit_changes(
+        &self,
+        projected: crate::git_service::GitServiceCommitChanges,
+    ) -> Result<GitCommitChangesResult, GitRuntimeError> {
         let dir_prefix = self
             .service
             .dir_root()
@@ -1047,6 +1123,7 @@ impl GitRepositoryRuntime {
         &self,
         object_id: &str,
         path: &Path,
+        comparison_base: Option<&str>,
     ) -> Result<GitCommitFileResult, GitRuntimeError> {
         let _operation = self
             .operation
@@ -1054,7 +1131,7 @@ impl GitRepositoryRuntime {
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         let file = self
             .service
-            .commit_file(object_id, path)
+            .commit_file(object_id, path, comparison_base)
             .map_err(GitRuntimeError::Service)?;
         Ok(GitCommitFileResult {
             original: commit_file_content(file.original()),

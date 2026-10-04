@@ -508,6 +508,18 @@ fn parse_raw_changes(
     Ok(changes)
 }
 
+pub(crate) fn commit_statistics(
+    output: &[u8],
+    command: &str,
+) -> GitResult<crate::GitCommitStatistics> {
+    let paths = parse_numstat(output, command)?;
+    Ok(crate::GitCommitStatistics {
+        files: paths.len(),
+        additions: paths.values().map(|path| path.additions).sum(),
+        deletions: paths.values().map(|path| path.deletions).sum(),
+    })
+}
+
 fn parse_numstat(output: &[u8], command: &str) -> GitResult<BTreeMap<PathBuf, TreeStatistics>> {
     let fields = output.split(|byte| *byte == 0).collect::<Vec<_>>();
     let mut statistics = BTreeMap::new();

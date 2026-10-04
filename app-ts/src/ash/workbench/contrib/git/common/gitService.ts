@@ -49,6 +49,14 @@ export interface GitCommitSummary {
 	readonly subject: string;
 }
 
+export interface GitCommitDetails {
+	readonly authorName: string;
+	readonly authorEmail: string;
+	readonly timestampSeconds: number;
+	readonly message: string;
+	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number };
+}
+
 export interface GitRepository {
 	readonly id: string;
 	readonly label: string;
@@ -100,6 +108,11 @@ export interface GitCommitChange {
 	readonly path: string;
 	readonly originalPath: string | undefined;
 	readonly status: GitChangeStatus;
+}
+
+export interface GitComparisonChanges {
+	readonly baseObjectId: string;
+	readonly changes: readonly GitCommitChange[];
 }
 
 export interface GitCommitChanges {
@@ -161,9 +174,13 @@ export type GitIntegration = 'merge' | 'rebase' | 'cherryPick';
 
 /** Finite repository intents owned by the frontend Git domain. */
 export type GitCommand =
+	| { readonly kind: 'createBranchAt'; readonly name: string; readonly objectId: string }
+	| { readonly kind: 'checkoutDetached'; readonly objectId: string }
+	| { readonly kind: 'checkoutRemoteBranch'; readonly name: string; readonly reference: string }
 	| { readonly kind: 'renameBranch'; readonly name: string; readonly newName: string }
 	| { readonly kind: 'deleteRemoteBranch'; readonly remote: string; readonly name: string }
-	| { readonly kind: 'merge' | 'rebase' | 'cherryPick'; readonly reference: string }
+	| { readonly kind: 'merge' | 'rebase'; readonly reference: string }
+	| { readonly kind: 'cherryPick'; readonly reference: string; readonly mainline?: number }
 	| { readonly kind: 'continue' | 'abort'; readonly operation: GitIntegration }
 	| { readonly kind: 'stash'; readonly message: string; readonly mode: 'tracked' | 'includeUntracked' }
 	| { readonly kind: 'applyStash' | 'popStash' | 'dropStash'; readonly objectId: string }
@@ -242,8 +259,11 @@ export interface IGitService {
 	deleteWorktree(checkoutRoot: string, repositoryId?: string): Promise<void>;
 	resolveWorktree(checkoutRoot: string, repositoryId?: string): Promise<string>;
 	graph(query: GraphQuery, repositoryId?: string): Promise<GraphPage>;
+	compareChanges(objectId: string, baseReference: string, mode: 'direct' | 'mergeBase', repositoryId?: string): Promise<GitComparisonChanges>;
+	commitMessage(objectId: string, repositoryId?: string): Promise<string>;
+	commitDetails(objectId: string, repositoryId?: string): Promise<GitCommitDetails>;
 	commitChanges(objectId: string, repositoryId?: string): Promise<GitCommitChanges>;
-	commitFile(objectId: string, path: string, repositoryId?: string): Promise<GitCommitFile>;
+	commitFile(objectId: string, path: string, repositoryId?: string, parentObjectId?: string): Promise<GitCommitFile>;
 	changeFile(path: string, comparison: GitChangeFileComparison, repositoryId?: string): Promise<GitChangeFile>;
 	conflictFile(path: string, repositoryId?: string): Promise<GitConflictFile>;
 	completeConflict(path: string, expectedStageIds: readonly (string | null)[], expectedResultObjectId: string | null, resolution: GitConflictResolution, repositoryId?: string): Promise<GitStatus>;

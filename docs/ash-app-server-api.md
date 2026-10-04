@@ -348,6 +348,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `git/status` | repository | 按可选 `repositoryId` 读取 HEAD、upstream 和 index/worktree change snapshot |
 | `git/textDiff` | repository | 读取 status 及有界 UTF-8 HEAD/worktree text diff projection |
 | `git/graph` | repository | 以 `limit`/`cursor` 读取一页 history、local/remote-tracking refs 和 credential-free remote identity，并返回 `hasMore`/`nextCursor` |
+| `git/commitDetails` | repository | 按完整 commit ID 读取作者、时间、完整提交说明及第一父提交的变更统计，供悬停卡片按需使用 |
 | `git/branch/list` | repository | 列出现有本地分支及 current/upstream 信息 |
 | `git/branch/switch` | repository | 切换到 host 重新解析确认存在的本地分支 |
 | `git/branch/create` | repository | 基于 HEAD 新建本地分支，不切换目录 |
@@ -593,11 +594,27 @@ repository snapshot，不是 GitHub API、PR、Checks 或 review 查询。Deskto
 
 `git/commitChanges` 接受 graph 返回的完整 commit object ID，按第一父提交（root commit 使用空树）
 返回 directory-relative changed paths、rename original path、status 和 comparison parent object ID。
-`git/commitFile` 接受同一个 commit object ID 与上述结果中的 path；server 会重新解析该 commit 的
-changed paths 并确认 path 属于该提交和当前 directory，然后按需返回 original/modified 两侧的
-`text`、`binary` 或 `missing` 状态。每侧文本上限为 2 MiB。Desktop SCM 因而只在展开 history item
-时读取路径，并只在用户点击具体文件时读取内容；modified/renamed 文件打开只读 diff，added/deleted
-文件打开存在的一侧。
+`git/compareChanges` 接受完整 `objectId`、左侧 `baseReference` 和 `mode`（`direct` 或 `mergeBase`）；
+server 将引用解析为提交，后者再计算两侧共同祖先，返回确切 `baseObjectId` 和 changed paths。
+两个方法都受当前 directory 的读取授权和路径过滤约束，不修改仓库，也不重启 graph traversal。
+远程比较读取本地已存在的 remote-tracking ref，不执行 fetch。
+
+`git/commitFile` 接受 commit object ID 与 changed paths 中的 path；可传 `parentObjectId` 固定比较左侧，
+省略时使用所选提交的第一父提交。server 重新计算该基准与提交之间的 changed paths，确认 path
+属于当前 directory，然后按需返回 original/modified 两侧的 `text`、`binary` 或 `missing` 状态，
+并按 rename original path 读取左侧。每侧文本上限为 2 MiB。客户端必须将比较返回的确切 base ID
+随 changed path 保存，后续文件读取不能再次解析可移动的分支名称。
+`git/commitMessage` 使用同样的完整 commit object ID，返回完整提交说明（含正文），供复制操作使用。
+`git/commitDetails` 使用同样的参数，返回作者姓名和邮箱、提交时间、完整提交说明及变更统计
+（`files`、`additions`、`deletions`）。统计按第一父提交计算，根提交使用空树；重命名计为一个文件，
+二进制文件计入文件数但不计增删行数。该读取受 directory 授权和仓库排队约束；客户端只在
+悬停卡片显示时请求，不改变 history 分页或读取文件正文。
+
+SCM 只在展开 history item 时读取路径，并只在用户点击具体文件时读取内容；“打开改动”和比较操作
+按需创建只读多文件比较编辑器。`git/command` 的 `createBranchAt` 在所选提交创建分支而不切换；
+`checkoutDetached` 检出完整 commit object ID；`checkoutRemoteBranch` 创建并检出指定远程引用的跟踪分支。
+它们经过已有写授权、仓库排队和状态发布。Git 拒绝冲突的未提交内容，客户端不会丢弃改动。
+`cherryPick` 可带一基 `mainline` 选择 merge commit 的父提交；冲突继续使用既有 Continue/Abort 流程。
 
 `git/branch/list` 返回当前仓库的现有本地分支。`git/branch/switch` 只接受有界非空 branch name；
 server 会重新列出当前仓库分支并按 exact name 解析后才执行 mutation，因此客户端提交的字符串

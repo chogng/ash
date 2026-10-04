@@ -1,3 +1,4 @@
+import type { GitCompareChangesParams, GitCompareChangesResult, GitCommitMessageResult, GitCommitDetailsResult } from '../../app-server/common/generated/index.js';
 import type { GitInitParams, GitCatalogResult, GitCommandParams, GitCommandResult, GitIndexDiffResult, GitIndexEditParams } from '../../app-server/common/generated/index.js';
 import type { ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitChangeFileResult, GitConflictFileParams, GitConflictFileResult, GitCompleteConflictParams, GitCloneParams, GitCloneResult, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult, GitFetchParams, GitGraphParams, GitGraphResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams, GitStatusResult } from "../../app-server/common/generated/index.js";
 import type { GitCheckIgnoreParams, GitCheckIgnoreResult } from '../../app-server/common/generated/index.js';
@@ -25,6 +26,9 @@ export interface IGitApi {
 	deleteWorktree(params: GitWorktreeDeleteParams): Promise<GitWorktreeListResult>;
 	resolveWorktree(params: GitWorktreeResolveParams): Promise<GitWorktreeResolveResult>;
 	graph(params: GitGraphParams): Promise<GitGraphResult>;
+	compareChanges(params: GitCompareChangesParams): Promise<GitCompareChangesResult>;
+	commitMessage(params: GitCommitChangesParams): Promise<GitCommitMessageResult>;
+	commitDetails(params: GitCommitChangesParams): Promise<GitCommitDetailsResult>;
 	commitChanges(params: GitCommitChangesParams): Promise<GitCommitChangesResult>;
 	commitFile(params: GitCommitFileParams): Promise<GitCommitFileResult>;
 	changeFile(params: GitChangeFileParams): Promise<GitChangeFileResult>;
