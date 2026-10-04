@@ -21265,6 +21265,48 @@
       "oneOf": [
         {
           "properties": {
+            "channelId": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "kind": {
+              "const": "dataChannel",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "channelId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "linkPresentationProvider",
+              "type": "string"
+            },
+            "presentationKind": {
+              "maxLength": 32,
+              "minLength": 1,
+              "type": "string"
+            },
+            "uriPattern": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "uriPattern",
+            "presentationKind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "command": {
               "maxLength": 256,
               "minLength": 1,

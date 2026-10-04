@@ -4,6 +4,7 @@ import { CancellationError } from "../../../base/common/errors.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { parseLinkPresentation, type LinkPresentationKind } from '../../dataChannel/common/dataChannel.js';
 
 export type ExtensionHostReconcileMode = "refresh" | "restartFailed";
 export type ExtensionHostRuntimeLifecycle = "stopped" | "starting" | "handshaking" | "ready" | "recovering" | "crashLoop" | "failed";
@@ -63,7 +64,18 @@ export interface ExtensionHostTestProfileProviderRegistration extends ExtensionH
 	readonly label: string;
 }
 
-export type ExtensionHostRegistration = ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration;
+export interface ExtensionHostDataChannelRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'dataChannel';
+	readonly channelId: string;
+}
+
+export interface ExtensionHostLinkPresentationRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'linkPresentationProvider';
+	readonly uriPattern: string;
+	readonly presentationKind: LinkPresentationKind;
+}
+
+export type ExtensionHostRegistration = ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
 
 export interface ExtensionHostRuntime {
 	readonly id: string;
@@ -297,6 +309,17 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 	if (kind === "testProfileProvider") {
 		exactKeys(input, "Extension Host Test Profile provider registration", ["kind", "label", "providerId", "registrationId"]);
 		return Object.freeze({ kind, registrationId, providerId: boundedText(input.providerId, "Extension Host Test Profile provider ID", 256), label: boundedText(input.label, "Extension Host Test Profile provider label", 512) });
+	}
+	if (kind === 'dataChannel') {
+		exactKeys(input, 'Extension Host data channel registration', ['channelId', 'kind', 'registrationId']);
+		return Object.freeze({ kind, registrationId, channelId: outputChannelId(input.channelId) });
+	}
+	if (kind === 'linkPresentationProvider') {
+		exactKeys(input, 'Extension Host link presentation registration', ['kind', 'presentationKind', 'registrationId', 'uriPattern']);
+		const uriPattern = boundedText(input.uriPattern, 'Extension Host link URI pattern', 2048);
+		new RegExp(uriPattern);
+		const presentationKind = parseLinkPresentation({ kind: input.presentationKind }).kind;
+		return Object.freeze({ kind, registrationId, uriPattern, presentationKind });
 	}
 	throw new TypeError("Extension Host registration kind is invalid");
 }

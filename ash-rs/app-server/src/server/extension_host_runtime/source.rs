@@ -175,6 +175,8 @@ fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapab
         EditorExtensionCapability::DebugAdapter => ExtensionCapability::DebugAdapter,
         EditorExtensionCapability::TaskProvider => ExtensionCapability::TaskProvider,
         EditorExtensionCapability::TestProfileProvider => ExtensionCapability::TestProfileProvider,
+        EditorExtensionCapability::DataChannel => ExtensionCapability::DataChannel,
+        EditorExtensionCapability::LinkPresentationProvider => ExtensionCapability::LinkPresentationProvider,
     }
 }
 
@@ -185,6 +187,8 @@ fn capability_name(capability: EditorExtensionCapability) -> &'static str {
         EditorExtensionCapability::DebugAdapter => "debugAdapter",
         EditorExtensionCapability::TaskProvider => "taskProvider",
         EditorExtensionCapability::TestProfileProvider => "testProfileProvider",
+        EditorExtensionCapability::DataChannel => "dataChannel",
+        EditorExtensionCapability::LinkPresentationProvider => "linkPresentationProvider",
     }
 }
 

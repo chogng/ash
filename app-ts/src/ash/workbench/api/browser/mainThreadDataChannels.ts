@@ -1,0 +1,162 @@
+import { RunOnceScheduler } from '../../../base/common/async.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { observableValue } from '../../../base/common/observable.js';
+import type { URI } from '../../../base/common/uri.js';
+import { IDataChannelService, ILinkPresentationService, parseLinkPresentation, type ILinkPresentation, type ILinkPresentationWatcher } from '../../../platform/dataChannel/common/dataChannel.js';
+import { IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostRegistration, type ExtensionHostRuntime, type JsonValue } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import { ILogService } from '../../../platform/log/common/log.js';
+
+interface RegistrationScope extends DisposableStore {
+	readonly identity: string;
+}
+
+/** Binds channel subscriptions and link providers to exact extension process registrations. */
+export class MainThreadDataChannels extends Disposable {
+	private readonly registrations = this._register(new DisposableMap<string, RegistrationScope>());
+
+	constructor(
+		private readonly invocationTimeoutMillis: number,
+		@IExtensionHostApi private readonly api: IExtensionHostApi,
+		@IDataChannelService private readonly channels: IDataChannelService,
+		@ILinkPresentationService private readonly links: ILinkPresentationService,
+		@ILogService private readonly logService: ILogService,
+	) {
+		super();
+	}
+
+	public update(snapshot: ExtensionHostFleetSnapshot): void {
+		this.assertNotDisposed();
+		const active = new Set<string>();
+		for (const runtime of snapshot.extensions) {
+			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) {
+				continue;
+			}
+			for (const registration of runtime.registrations) {
+				if (registration.kind !== 'dataChannel' && registration.kind !== 'linkPresentationProvider') {
+					continue;
+				}
+				const key = `${runtime.id}\0${registration.registrationId}`;
+				active.add(key);
+				const identity = JSON.stringify([runtime.incarnation, runtime.activationGeneration, registration]);
+				if (this.registrations.get(key)?.identity === identity) {
+					continue;
+				}
+				this.registrations.deleteAndDispose(key);
+				const store: RegistrationScope = Object.assign(new DisposableStore(), { identity });
+				this.registrations.set(key, store);
+				const controller = new AbortController();
+				store.add(toDisposable(() => controller.abort('Extension registration was revoked')));
+				const invoke = async (operation: string, payload: JsonValue, signal: AbortSignal): Promise<JsonValue> => {
+					const cancellation = AbortSignal.any([controller.signal, signal]);
+					const result = await this.api.invoke({
+						extensionId: runtime.id,
+						registrationId: registration.registrationId,
+						incarnation: runtime.incarnation!,
+						activationGeneration: runtime.activationGeneration,
+						operation,
+						payload,
+						deadlineUnixMillis: Date.now() + this.invocationTimeoutMillis,
+					}, cancellation);
+					cancellation.throwIfAborted();
+					return result;
+				};
+				if (registration.kind === 'dataChannel') {
+					const queue: JsonValue[] = [];
+					let draining = false;
+					store.add(toDisposable(() => queue.length = 0));
+					const drain = async (): Promise<void> => {
+						draining = true;
+						try {
+							while (queue.length > 0 && !controller.signal.aborted) {
+								const payload = queue.shift()!;
+								try {
+									await invoke('receiveData', payload, controller.signal);
+								} catch (error) {
+									if (!controller.signal.aborted) {
+										this.logService.error('dataChannel', `Extension '${runtime.id}' could not receive channel data`, error);
+									}
+								}
+							}
+						} finally {
+							draining = false;
+						}
+					};
+					store.add(this.channels.onDidSendData(event => {
+						if (event.channelId !== registration.channelId) {
+							return;
+						}
+						if (queue.length >= 32) {
+							this.logService.error('dataChannel', `Extension '${runtime.id}' exceeded its channel delivery queue`);
+							return;
+						}
+						queue.push(normalizeExtensionHostPayload({ data: event.data }));
+						if (!draining) {
+							void drain();
+						}
+					}));
+				} else {
+					store.add(this.links.registerLinkPresentationProvider({
+						id: `extension:${encodeURIComponent(runtime.id)}:${encodeURIComponent(registration.registrationId)}`,
+						uriPattern: new RegExp(registration.uriPattern),
+						kind: registration.presentationKind,
+					}, {
+						createLinkPresentationWatcher: resource => {
+							const watcher = new ExtensionLinkPresentationWatcher(resource, registration.presentationKind, invoke, this.logService);
+							watcher.start();
+							return watcher;
+						},
+					}));
+				}
+			}
+		}
+		for (const key of this.registrations.keys()) {
+			if (!active.has(key)) {
+				this.registrations.deleteAndDispose(key);
+			}
+		}
+	}
+
+	public clear(): void {
+		this.registrations.clearAndDisposeAll();
+	}
+}
+
+class ExtensionLinkPresentationWatcher extends Disposable implements ILinkPresentationWatcher {
+	public readonly presentation = observableValue<ILinkPresentation | undefined>(this, undefined);
+	private readonly controller = new AbortController();
+	private readonly scheduler = this._register(new RunOnceScheduler(() => void this.refresh(), 30_000));
+
+	constructor(
+		private readonly resource: URI,
+		private readonly kind: ILinkPresentation['kind'],
+		private readonly invoke: (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>,
+		private readonly logService: ILogService,
+	) {
+		super();
+		this._register(toDisposable(() => {
+			this.controller.abort('Link watcher was disposed');
+			this.presentation.set(undefined);
+		}));
+	}
+
+	public start(): void {
+		this.scheduler.schedule(0);
+	}
+
+	private async refresh(): Promise<void> {
+		try {
+			const result = await this.invoke('provideLinkPresentation', { resource: this.resource.toString() }, this.controller.signal);
+			const presentation = result === null ? undefined : parseLinkPresentation(result);
+			if (presentation && presentation.kind !== this.kind) {
+				throw new TypeError('Link provider returned a different presentation kind');
+			}
+			this.controller.signal.throwIfAborted();
+			this.presentation.set(presentation);
+			this.scheduler.schedule();
+		} catch (error) {
+			if (!this.controller.signal.aborted) {
+				this.logService.error('linkPresentation', 'Extension link presentation failed', error);
+			}
+		}
+	}
+}

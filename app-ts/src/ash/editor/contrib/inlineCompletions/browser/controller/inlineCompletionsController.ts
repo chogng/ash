@@ -27,6 +27,16 @@ import { IContextKeyService } from '../../../../../platform/contextkey/browser/c
 import { observableValue } from '../../../../../base/common/observable.js';
 import { bindContextKey } from '../../../../../platform/observable/common/platformObservableUtils.js';
 import { InlineCompletionContextKeys } from './inlineCompletionContextKeys.js';
+import { DataChannelForwardingTelemetryService } from '../../../../../platform/dataChannel/browser/forwardingTelemetryService.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+
+type CompletionEndOfLife = { accepted: boolean; durationMs: number };
+type CompletionEndOfLifeClassification = {
+	owner: 'lanxi';
+	comment: 'Inline completion lifecycle without document or suggestion content.';
+	accepted: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Whether the suggestion was accepted.' };
+	durationMs: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'Time the suggestion remained available in milliseconds.'; isMeasurement: true };
+};
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
 export class InlineCompletionsController extends Disposable {
@@ -44,6 +54,9 @@ export class InlineCompletionsController extends Disposable {
 	private readonly scheduler: RunOnceScheduler;
 	private composing = false;
 	private readonly visible = observableValue(this, false);
+	private readonly telemetry: DataChannelForwardingTelemetryService;
+	private completionStarted = 0;
+	private completionAccepted = false;
 
 	constructor(
 		private readonly editor: ICodeEditor,
@@ -56,8 +69,10 @@ export class InlineCompletionsController extends Disposable {
 		@IInlineCompletionsService private readonly inlineCompletionsService: IInlineCompletionsService,
 		@ILanguageFeatureDebounceService debounceService: ILanguageFeatureDebounceService,
 		@ILanguageConfigurationService private readonly languageConfigurationService: ILanguageConfigurationService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
+		this.telemetry = instantiationService.createInstance(DataChannelForwardingTelemetryService);
 		// Clear the state while its context binding is still subscribed during disposal.
 		this._register(toDisposable(() => this.visible.set(false)));
 		this._register(bindContextKey(InlineCompletionContextKeys.inlineSuggestionVisible, contextKeyService, reader => this.visible.read(reader)));
@@ -136,7 +151,11 @@ export class InlineCompletionsController extends Disposable {
 			if (request.signal.aborted) return;
 			this.debounce.update(this.model, duration.elapsed());
 			this.item = items[0];
-			if (this.item) this.inlineCompletionsService.reportNewCompletion(`editor-inline-${++this.completionRequestId}`);
+			if (this.item) {
+				this.completionStarted = Date.now();
+				this.completionAccepted = false;
+				this.inlineCompletionsService.reportNewCompletion(`editor-inline-${++this.completionRequestId}`);
+			}
 			this.render();
 		} catch (error) {
 			if (!request.signal.aborted) this.onError(error);
@@ -173,6 +192,8 @@ export class InlineCompletionsController extends Disposable {
 		const mainEdit = { range: item.range ?? Range.fromPositions(selection.getPosition()), text: item.insertText };
 		const edits = [...(item.additionalTextEdits ?? []), mainEdit].sort((left, right) => Position.compare(Range.lift(left.range).getStartPosition(), Range.lift(right.range).getStartPosition()));
 		const command = new AcceptInlineCompletionCommand(edits, edits.indexOf(mainEdit));
+		// Executing the edit synchronously hides the suggestion through the model event.
+		this.completionAccepted = true;
 		this.editor.pushUndoStop();
 		this.editor.executeCommands('editor.action.inlineSuggest.commit', [command, ...(this.editor.getSelections() ?? []).slice(1).map(() => null)]);
 		this.editor.pushUndoStop();
@@ -180,6 +201,12 @@ export class InlineCompletionsController extends Disposable {
 	}
 
 	public hide(): void {
+		if (this.item) {
+			this.telemetry.publicLog2<CompletionEndOfLife, CompletionEndOfLifeClassification>('inlineCompletion.endOfLife', {
+				accepted: this.completionAccepted,
+				durationMs: Date.now() - this.completionStarted,
+			});
+		}
 		this.visible.set(false);
 		this.scheduler.cancel();
 		this.request?.abort();

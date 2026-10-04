@@ -7,6 +7,9 @@ import { IMarkerDecorationsService } from '../../common/services/markerDecoratio
 import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
 import { StandaloneCodeEditorService } from '../../standalone/browser/standaloneCodeEditorService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
+import { IDataChannelService, NullDataChannelService } from '../../../platform/dataChannel/common/dataChannel.js';
+import { ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../../platform/telemetry/common/telemetryUtils.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { setIconResolver } from '../../../base/browser/ui/lxicons/lxicon.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
@@ -60,6 +63,12 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 
 /** Completes an existing test scope without replacing its explicit service overrides. */
 export function registerCodeEditorServices(services: InstantiationService): void {
+	if (!services.has(IDataChannelService)) {
+		services.registerInstance(IDataChannelService, new NullDataChannelService());
+	}
+	if (!services.has(ITelemetryService)) {
+		services.registerInstance(ITelemetryService, NullTelemetryService);
+	}
 	if (!services.has(ILanguageService)) {
 		services.registerSingleton(ILanguageService, () => new LanguageService());
 	}

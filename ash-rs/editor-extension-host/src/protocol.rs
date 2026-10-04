@@ -110,6 +110,8 @@ pub enum ExtensionCapability {
     DebugAdapter,
     TaskProvider,
     TestProfileProvider,
+    DataChannel,
+    LinkPresentationProvider,
 }
 
 /// Language provider operations understood by the v1 broker seam.
@@ -152,6 +154,13 @@ pub struct RegistrationDescriptor {
     deny_unknown_fields
 )]
 pub enum RegistrationKind {
+    DataChannel {
+        channel_id: String,
+    },
+    LinkPresentationProvider {
+        uri_pattern: String,
+        presentation_kind: String,
+    },
     Command {
         command: String,
         title: String,

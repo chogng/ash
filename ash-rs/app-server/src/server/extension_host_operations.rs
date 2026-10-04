@@ -299,6 +299,12 @@ fn registration_dto(
     ExtensionHostRegistrationDescriptorDto {
         registration_id: registration.registration_id,
         kind: match registration.kind {
+            RegistrationKind::DataChannel { channel_id } => {
+                ExtensionHostRegistrationKindDto::DataChannel { channel_id }
+            }
+            RegistrationKind::LinkPresentationProvider { uri_pattern, presentation_kind } => {
+                ExtensionHostRegistrationKindDto::LinkPresentationProvider { uri_pattern, presentation_kind }
+            }
             RegistrationKind::Command { command, title } => {
                 ExtensionHostRegistrationKindDto::Command { command, title }
             }

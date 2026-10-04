@@ -75,6 +75,24 @@ pub(super) fn validate_registrations(
             return Err(protocol_error("registration IDs must be unique"));
         }
         let required = match &registration.kind {
+            RegistrationKind::DataChannel { channel_id } => {
+                validate_selector(channel_id, "data channel ID")?;
+                ExtensionCapability::DataChannel
+            }
+            RegistrationKind::LinkPresentationProvider {
+                uri_pattern,
+                presentation_kind,
+            } => {
+                validate_short_text(uri_pattern, 2048, "link URI pattern")?;
+                if !matches!(
+                    presentation_kind.as_str(),
+                    "resource" | "issue" | "pullRequest" | "commit" | "file" | "folder"
+                        | "session" | "chat" | "repository" | "branch"
+                ) {
+                    return Err(protocol_error("link presentation kind is invalid"));
+                }
+                ExtensionCapability::LinkPresentationProvider
+            }
             RegistrationKind::Command { command, title } => {
                 validate_selector(command, "command")?;
                 validate_display_text(title, "command title")?;

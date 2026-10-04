@@ -112,4 +112,6 @@ pub enum EditorExtensionCapability {
     DebugAdapter,
     TaskProvider,
     TestProfileProvider,
+    DataChannel,
+    LinkPresentationProvider,
 }

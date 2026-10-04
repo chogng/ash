@@ -442,6 +442,8 @@ enum ManifestCapability {
     DebugAdapter,
     TaskProvider,
     TestProfileProvider,
+    DataChannel,
+    LinkPresentationProvider,
 }
 
 impl ManifestCapability {
@@ -452,6 +454,8 @@ impl ManifestCapability {
             Self::DebugAdapter => ExtensionCapability::DebugAdapter,
             Self::TaskProvider => ExtensionCapability::TaskProvider,
             Self::TestProfileProvider => ExtensionCapability::TestProfileProvider,
+            Self::DataChannel => ExtensionCapability::DataChannel,
+            Self::LinkPresentationProvider => ExtensionCapability::LinkPresentationProvider,
         }
     }
 
@@ -462,6 +466,8 @@ impl ManifestCapability {
             Self::DebugAdapter => "debugAdapter",
             Self::TaskProvider => "taskProvider",
             Self::TestProfileProvider => "testProfileProvider",
+            Self::DataChannel => "dataChannel",
+            Self::LinkPresentationProvider => "linkPresentationProvider",
         }
     }
 }

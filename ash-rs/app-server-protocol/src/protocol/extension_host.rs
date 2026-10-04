@@ -208,6 +208,16 @@ pub struct ExtensionHostRegistrationDescriptorDto {
     deny_unknown_fields
 )]
 pub enum ExtensionHostRegistrationKindDto {
+    DataChannel {
+        #[schemars(length(min = 1, max = 256))]
+        channel_id: String,
+    },
+    LinkPresentationProvider {
+        #[schemars(length(min = 1, max = 2048))]
+        uri_pattern: String,
+        #[schemars(length(min = 1, max = 32))]
+        presentation_kind: String,
+    },
     Command {
         #[schemars(length(min = 1, max = 256))]
         command: String,

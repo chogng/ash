@@ -90,7 +90,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.goalElement = h(ownerDocument, "div");
 		this.goalElement.className = "ash-chat-goal";
 		this.goalElement.hidden = true;
-		this.listWidget = this._register(new ChatListWidget(this.element, {
+		this.listWidget = this._register(instantiationService.createInstance(ChatListWidget, this.element, {
 			imageResourceLoader,
 			onDidRequestLink: target => {
 				void openChatMarkdownLink(target, commandService, openerService, editorService).catch(error => console.error("Could not open Markdown link", error));

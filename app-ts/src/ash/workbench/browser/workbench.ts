@@ -50,6 +50,8 @@ import { ILifecycleService, LifecyclePhase, type ShutdownReason } from "../servi
 import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAdapterProcessService.js";
 import { ITestExecutionService } from '../../platform/testing/common/testExecutionService.js';
 import { IExtensionHostApi } from "../../platform/extensionHost/common/extensionHostApi.js";
+import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
 import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
 import { IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import { ILocalTranscriptionService } from '../../platform/localTranscription/common/localTranscription.js';
@@ -484,6 +486,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(INetworkDiagnosticsService, api.networkDiagnostics);
 		services.registerInstance(IHooksService, api.hooks);
 		services.registerInstance(IExtensionHostApi, api.extensionHost);
+		services.registerInstance(ITelemetryService, NullTelemetryService);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);
 		if (api.debugAdapter) services.registerInstance(IDebugAdapterProcessService, api.debugAdapter);

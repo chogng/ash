@@ -465,6 +465,8 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
         RegistrationKind::DebugAdapter { .. } => false,
         RegistrationKind::TaskProvider { .. } => operation == "provideTasks",
         RegistrationKind::TestProfileProvider { .. } => operation == "provideTestProfiles",
+        RegistrationKind::DataChannel { .. } => operation == "receiveData",
+        RegistrationKind::LinkPresentationProvider { .. } => operation == "provideLinkPresentation",
     }
 }
 

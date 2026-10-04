@@ -3,6 +3,9 @@ import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from 
 import { StandaloneCodeEditorService } from './standaloneCodeEditorService.js';
 import { StandaloneLayoutService } from './standaloneLayoutService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
+import { IDataChannelService, NullDataChannelService } from '../../../platform/dataChannel/common/dataChannel.js';
+import { ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../../platform/telemetry/common/telemetryUtils.js';
 import { MarkerService, IMarkerService } from '../../../platform/markers/common/markers.js';
 import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
 import { IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
@@ -157,6 +160,8 @@ export class StandaloneServiceCollection extends InstantiationService {
 		super();
 		this.registerInstance(ILogService, new NullLoggerService());
 		this.registerSingleton(IInlineCompletionsService, () => this.createInstance(InlineCompletionsService));
+		this.registerInstance(IDataChannelService, new NullDataChannelService());
+		this.registerInstance(ITelemetryService, NullTelemetryService);
 		this.registerSingleton(ILanguageFeatureDebounceService, () => this.createInstance(LanguageFeatureDebounceService));
 		this.registerSingleton(IContextKeyService, () => new ContextKeyService());
 		this.registerSingleton(ICommandService, () => this.createInstance(StandaloneCommandService));

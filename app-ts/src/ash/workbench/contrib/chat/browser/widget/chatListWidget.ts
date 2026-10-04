@@ -5,6 +5,8 @@ import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scro
 import { Disposable, DisposableMap, DisposableStore } from "../../../../../base/common/lifecycle.js";
 import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { ChatMarkdownDecorationsRenderer } from './chatContentParts/chatMarkdownDecorationsRenderer.js';
 
 interface ChatListWidgetOptions {
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
@@ -39,7 +41,7 @@ export class ChatListWidget extends Disposable {
 	private visible = false;
 	private shouldFollow = true;
 
-	constructor(container: HTMLElement, options: ChatListWidgetOptions = {}) {
+	constructor(container: HTMLElement, options: ChatListWidgetOptions, @IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
 		this.onDidRequestErrorAction = options.onDidRequestErrorAction;
 		this.onDidRequestMemoryReference = options.onDidRequestMemoryReference;
@@ -148,6 +150,7 @@ export class ChatListWidget extends Disposable {
 				imageResourceLoader: this.imageResourceLoader,
 			}));
 			body.append(markdown.element);
+			disposables.add(this.instantiationService.createInstance(ChatMarkdownDecorationsRenderer, markdown.element));
 		} else {
 			const content = h(this.element.ownerDocument, "pre");
 			content.textContent = item.text;
