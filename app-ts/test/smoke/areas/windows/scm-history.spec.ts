@@ -49,9 +49,11 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	const geometry = await commit.evaluate(element => {
 		const subject = element.querySelector('.ash-scm-graph-subject')!.getBoundingClientRect();
 		const badges = element.querySelector('.ash-scm-graph-label-container')!.getBoundingClientRect();
-		return { subjectVisible: subject.width > 0, separated: subject.right <= badges.left };
+		const graph = element.querySelector('.ash-scm-graph-graph')!.getBoundingClientRect();
+		const row = element.querySelector('.ash-scm-graph-row')!.getBoundingClientRect();
+		return { subjectVisible: subject.width > 0, badgesWithinRow: badges.left >= graph.right && badges.right <= row.right };
 	});
-	expect(geometry).toEqual({ subjectVisible: true, separated: true });
+	expect(geometry).toEqual({ subjectVisible: true, badgesWithinRow: true });
 	await expect(commit.locator('.ash-scm-graph-label .ash-icon').first()).toHaveAttribute('aria-hidden', 'true');
 	await expect(commit).toHaveAttribute('aria-current', 'true');
 	for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
@@ -92,7 +94,7 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 	const openChanges = commit.getByRole('button', { name: 'Open Changes', exact: true });
 	await openChanges.focus();
-	await expect(commit.locator('.ash-scm-graph-actions')).toHaveCSS('opacity', '1');
+	await expect(commit.locator('.ash-scm-graph-actions')).toBeVisible();
 	await openChanges.press('Enter');
 	await expect(commit).toHaveAttribute('aria-expanded', 'true');
 	const comparisons = page.locator('.stanza-multi-diff-editor:visible');
@@ -118,10 +120,101 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	await expect(latest).toHaveAttribute('aria-expanded', 'false');
 	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['main.ts', 'other.ts']);
 	await expect(comparisons.locator('.stanza-multi-diff-editor-section')).toHaveCount(2);
-	await latest.locator('.ash-scm-graph-subject').click({ button: 'right' });
+	await latest.click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Open Changes', exact: true }).click();
 	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['main.ts', 'other.ts']);
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Review all files' })).toHaveCount(1);
+});
+
+test('SCM history references and actions overlay long titles without changing row widths', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+	const cwd = testWorkspace.directory;
+	await run('git', ['commit', '--amend', '-m', 'History layout: a long commit title that reaches the action buttons at the right edge'], { cwd });
+	await run('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd });
+	await run('git', ['commit', '--allow-empty', '-m', 'Neighbor layout: another long commit title that keeps its width while other rows are hovered'], { cwd });
+	const page = workbench.page;
+	if (target.kind === 'electron' && process.platform === 'darwin') {
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('layout');
+		const settings = workbench.settingsEditor.element;
+		await settings.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
+		await page.getByRole('option', { name: 'Custom', exact: true }).click();
+		await settings.locator('.ash-modal-editor-close').click();
+	}
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	const header = history.locator('.ash-pane-view-header');
+	await header.click();
+	const commit = history.getByRole('treeitem', { name: /History layout:/u });
+	const neighbor = history.getByRole('treeitem', { name: /Neighbor layout:/u });
+	await expect(commit).toBeVisible();
+	await expect(neighbor).toBeVisible();
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
+	const sidebarBounds = (await sidebar.boundingBox())!;
+	const sashBounds = (await sash.boundingBox())!;
+	const x = sashBounds.x + sashBounds.width / 2;
+	const y = sashBounds.y + sashBounds.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	await page.mouse.move(x + 280 - sidebarBounds.width, y);
+	await page.mouse.up();
+	await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeCloseTo(280, 0);
+	const subject = commit.locator('.ash-scm-graph-subject');
+	const neighborSubject = neighbor.locator('.ash-scm-graph-subject');
+	const actions = commit.locator('.ash-scm-graph-actions');
+	const overlay = commit.locator('.ash-scm-graph-overlay');
+	const remoteLabel = overlay.locator('.ash-scm-graph-label.remote');
+	const mainLabel = neighbor.locator('.ash-scm-graph-overlay .ash-scm-graph-label.head');
+	for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		await workbench.quickaccess.select(theme);
+		await header.hover();
+		await expect(actions).toBeHidden();
+		await expect(remoteLabel).toBeVisible();
+		await expect(remoteLabel).toHaveAttribute('aria-label', 'origin/main');
+		await expect(mainLabel).toBeVisible();
+		await expect(mainLabel).toHaveText('main');
+		const beforeHover = (await subject.boundingBox())!;
+		const neighborBounds = await neighborSubject.boundingBox();
+		expect(neighborBounds!.width).toBe(beforeHover.width);
+		const referenceBounds = (await remoteLabel.boundingBox())!;
+		expect(referenceBounds.x).toBeLessThan(beforeHover.x + beforeHover.width);
+		expect(referenceBounds.x + referenceBounds.width).toBeCloseTo(beforeHover.x + beforeHover.width, 1);
+		await expect.poll(() => subject.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+		await commit.hover();
+		await expect(actions).toBeVisible();
+		await expect(remoteLabel).toBeVisible();
+		await expect(mainLabel).toBeVisible();
+		expect(await subject.boundingBox()).toEqual(beforeHover);
+		expect(await neighborSubject.boundingBox()).toEqual(neighborBounds);
+		const actionBounds = (await actions.boundingBox())!;
+		expect(actionBounds.x).toBeGreaterThan(beforeHover.x);
+		expect(actionBounds.x).toBeLessThan(beforeHover.x + beforeHover.width);
+		expect(actionBounds.x + actionBounds.width).toBeCloseTo(beforeHover.x + beforeHover.width, 1);
+		const remoteBounds = (await remoteLabel.boundingBox())!;
+		expect(remoteBounds.x + remoteBounds.width).toBeLessThanOrEqual(actionBounds.x);
+		await expect(overlay).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await actions.locator('.ash-toolbar-more-actions button').click();
+		await expect(page.getByRole('menuitem', { name: 'Add to Chat', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(commit).toHaveAttribute('aria-expanded', 'false');
+		await header.hover();
+		await header.locator('.ash-pane-view-header-button').focus();
+		await expect(actions).toBeHidden();
+		expect(await subject.boundingBox()).toEqual(beforeHover);
+		await commit.focus();
+		await expect(actions).toBeVisible();
+		expect(await subject.boundingBox()).toEqual(beforeHover);
+		await commit.press('Tab');
+		await expect.poll(() => actions.evaluate(element => element.contains(document.activeElement))).toBe(true);
+		await page.keyboard.press('Home');
+		await expect(actions.getByRole('button', { name: 'Open Changes', exact: true })).toBeFocused();
+	}
+	await actions.getByRole('button', { name: 'Open Changes', exact: true }).press('Enter');
+	await expect(workbench.editors.groupAt(0).content.locator('.stanza-multi-diff-editor-section')).toHaveCount(5);
+	await expect(commit).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('SCM history pane opens without a connected repository', async ({ target, workbench }) => {

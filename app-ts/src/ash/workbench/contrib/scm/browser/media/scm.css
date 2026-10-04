@@ -88,7 +88,7 @@
 .ash-scm-graph-row {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 22px;
   align-items: center;
@@ -181,6 +181,7 @@
   flex: 0 0 auto;
   gap: var(--ash-spacing-size40);
   align-items: center;
+  padding-left: var(--ash-spacing-size40);
 }
 
 .ash-scm-graph-label {
@@ -227,16 +228,30 @@
   white-space: nowrap;
 }
 
-.ash-scm-graph-actions {
-  margin-left: var(--ash-spacing-size40);
-  opacity: 0;
-  pointer-events: none;
+.ash-scm-graph-overlay {
+  /* References and actions cover the row without reducing the title's available width. */
+  position: absolute;
+  top: 0;
+  right: var(--ash-spacing-size80);
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  background: var(--scm-graph-row-background);
 }
 
-.ash-scm-graph-row:hover > .ash-scm-graph-actions,
-.ash-scm-graph-commit:focus-within > .ash-scm-graph-row > .ash-scm-graph-actions {
-  opacity: 1;
-  pointer-events: auto;
+.ash-scm-graph-row:hover > .ash-scm-graph-overlay {
+  background: linear-gradient(var(--ash-list-hover-background), var(--ash-list-hover-background)), var(--scm-graph-row-background);
+}
+
+.ash-scm-graph-actions {
+  display: none;
+  align-items: center;
+  padding-left: var(--ash-spacing-size40);
+}
+
+.ash-scm-graph-row:hover > .ash-scm-graph-overlay > .ash-scm-graph-actions,
+.ash-scm-graph-commit:focus-within > .ash-scm-graph-row > .ash-scm-graph-overlay > .ash-scm-graph-actions {
+  display: flex;
 }
 
 .ash-scm-graph-changes {

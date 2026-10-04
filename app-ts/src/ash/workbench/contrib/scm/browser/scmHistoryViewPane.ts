@@ -379,7 +379,9 @@ export class SCMHistoryViewPane extends ViewPane {
 		subject.textContent = historyItem.subject;
 		details.append(subject);
 		const visibleReferences = historyItemReferences(historyItem, this.head);
-		if (visibleReferences.length > 0) details.append(this.renderReferenceLabels(visibleReferences));
+		const overlay = h(document, 'div');
+		overlay.className = 'ash-scm-graph-overlay';
+		if (visibleReferences.length > 0) { overlay.append(this.renderReferenceLabels(visibleReferences)); }
 		const metadata = h(document, "span");
 		metadata.className = "ash-scm-graph-metadata";
 		const date = historyItem.timestamp === undefined ? undefined : new Date(historyItem.timestamp);
@@ -396,8 +398,9 @@ export class SCMHistoryViewPane extends ViewPane {
 				menuOptions: { arg: { repository, historyItemViewModel, type: 'historyItemViewModel' } satisfies SCMHistoryItemViewModelTreeElement },
 				toolbarOptions: { primaryGroup: 'inline' },
 			}));
-			row.append(actions);
+			overlay.append(actions);
 		}
+		row.append(overlay);
 		item.append(row);
 		const expanded = this.expanded.get(historyItem.id);
 		if (expanded) item.append(this.renderCommitChanges(historyItemViewModel, expanded));
@@ -438,7 +441,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		container.className = "ash-scm-graph-label-container";
 		container.setAttribute("aria-label", localize('scm.history.references', 'History references'));
 		const groups = new Map<string, ISCMHistoryItemRef[]>();
-		// Keep HEAD distinct; other refs share a badge so branch names cannot crowd out the subject.
+		// Keep HEAD distinct; other refs share a badge to keep the overlay compact.
 		for (const reference of references) {
 			const key = reference.id === this.head?.id ? 'head' : reference.category ?? 'localBranch';
 			const group = groups.get(key);
