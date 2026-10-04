@@ -4411,7 +4411,7 @@ fn english_punctuation_preserves_chinese_paste_and_drafts_in_both_modes() {
         let mut terminal = TerminalSettings::default();
         terminal.set_screen_mode(mode);
         app.update(ConfigEvent::SettingsReceived(terminal));
-        app.insert_text("已有，");
+        app.insert_text("已有，、");
         app.set_punctuation_settings(crate::config::PunctuationSettings {
             enabled: true,
             ..Default::default()
@@ -4425,14 +4425,57 @@ fn english_punctuation_preserves_chinese_paste_and_drafts_in_both_modes() {
         }
         assert_eq!(
             app.input(),
-            "已有，中文,.;:!?()[]{}\"\"''\"'.Ａ１　 、……——《》"
+            "已有，、中文,.;:!?()[]{}\"\"''\"'.Ａ１　 /……——《》"
         );
-        app.handle_paste("粘贴，。".into());
-        assert!(app.input().ends_with("粘贴，。"));
+        app.handle_paste("粘贴，。、".into());
+        assert!(app.input().ends_with("粘贴，。、"));
         let before = app.input().to_owned();
         app.set_punctuation_settings(crate::config::PunctuationSettings::default());
         app.handle_key(KeyEvent::new(KeyCode::Char('，'), KeyModifiers::NONE));
-        assert_eq!(app.input(), format!("{before}，"));
+        app.handle_key(KeyEvent::new(KeyCode::Char('、'), KeyModifiers::NONE));
+        assert_eq!(app.input(), format!("{before}，、"));
+    }
+}
+
+#[test]
+fn english_punctuation_slash_opens_command_completion_in_both_modes() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut terminal = TerminalSettings::default();
+        terminal.set_screen_mode(mode);
+        terminal.set_language(Language::Chinese);
+        app.update(ConfigEvent::SettingsReceived(terminal));
+        app.set_punctuation_settings(crate::config::PunctuationSettings {
+            enabled: true,
+            ..Default::default()
+        });
+
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('、'), KeyModifiers::NONE)),
+            None
+        );
+        assert_eq!(app.input(), "/");
+        assert!(matches!(app.completion(), Some(CompletionView::Slash(_))));
+        let completion = render_dictation_frame(&app);
+
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.completion().is_none());
+        assert_eq!(app.input(), "/");
+        let dismissed = render_dictation_frame(&app);
+        crate::tui_assert_snapshot!(app = &app; "english_punctuation_slash_completion_chinese", format!("Completion\n{completion}\n\nDismissed\n{dismissed}"));
+
+        app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('、'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+            None
+        );
+        assert_eq!(app.input(), "/quit ");
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(AppCommand::Quit)
+        );
     }
 }
 

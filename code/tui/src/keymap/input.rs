@@ -85,7 +85,7 @@ fn logical_key_name(code: KeyCode) -> Option<String> {
 }
 
 /// Carries the original terminal key through shortcut resolution and a separate text policy.
-/// Only text insertion consumes the converted character, so punctuation cannot become a command.
+/// Only text insertion consumes the converted character; shortcut resolution uses the original key.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct KeyEvent {
     event: TerminalKeyEvent,
@@ -115,6 +115,9 @@ impl KeyEvent {
             return character;
         }
         match character {
+            // Chinese IMEs can commit this character for the slash key; the opt-in text policy
+            // restores slash input without changing shortcuts or pasted punctuation.
+            '、' => '/',
             '，' => ',',
             '。' | '．' => '.',
             '；' => ';',

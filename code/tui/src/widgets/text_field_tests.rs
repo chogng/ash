@@ -131,8 +131,11 @@ fn english_punctuation_applies_only_to_typed_text_in_an_editing_field() {
     assert_eq!(field.query(), "原文，");
     field.handle_key(key(KeyCode::Enter));
     field.handle_key(punctuation);
-    field.handle_paste("粘贴。".into());
-    assert_eq!(field.query(), "原文，;粘贴。");
+    let mut slash = key(KeyCode::Char('、'));
+    slash.set_english_punctuation(true);
+    field.handle_key(slash);
+    field.handle_paste("粘贴。、".into());
+    assert_eq!(field.query(), "原文，;/粘贴。、");
     field.handle_key(key(KeyCode::Esc));
     assert_eq!(field.query(), "原文，");
 }
