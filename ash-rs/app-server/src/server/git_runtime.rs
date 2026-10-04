@@ -773,13 +773,7 @@ impl GitRuntime {
                     }),
             );
         }
-        paths.sort_by(|left, right| {
-            left.path
-                .cmp(&right.path)
-                .then(left.recursive.cmp(&right.recursive))
-        });
-        paths.dedup();
-        paths
+        minimal_watch_paths(paths)
     }
 
     fn discovery_invalidated(&self, event: &FileWatcherEvent) -> bool {
@@ -1560,14 +1554,28 @@ impl GitRepositoryRuntime {
                     recursive: false,
                 }),
         );
-        paths.sort_by(|left, right| {
-            left.path
-                .cmp(&right.path)
-                .then(left.recursive.cmp(&right.recursive))
-        });
-        paths.dedup();
-        paths
+        minimal_watch_paths(paths)
     }
+}
+
+fn minimal_watch_paths(mut paths: Vec<WatchPath>) -> Vec<WatchPath> {
+    paths.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(right.recursive.cmp(&left.recursive))
+    });
+    let mut watches: Vec<WatchPath> = Vec::new();
+    for path in paths {
+        // A recursive root already delivers descendant changes. Opening extra watches inside
+        // a nested checkout keeps its child directories open and prevents Windows renames.
+        if watches.iter().any(|parent| {
+            parent == &path || (parent.recursive && path.path.starts_with(&parent.path))
+        }) {
+            continue;
+        }
+        watches.push(path);
+    }
+    watches
 }
 
 impl GitWatcher {

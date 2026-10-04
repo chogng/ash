@@ -455,11 +455,12 @@ fn discovery_watches_empty_dirs_and_preserves_existing_repository_owners() {
             crate::git_service::GitServiceError::Permission
         ))
     ));
-    std::fs::rename(
-        repository.root().join("nested"),
-        repository.root().join("moved"),
-    )
-    .unwrap();
+    await_directory_change(|| {
+        std::fs::rename(
+            repository.root().join("nested"),
+            repository.root().join("moved"),
+        )
+    });
     let deadline = Instant::now() + Duration::from_secs(10);
     while !runtime
         .repositories()
@@ -473,9 +474,9 @@ fn discovery_watches_empty_dirs_and_preserves_existing_repository_owners() {
         );
         std::thread::sleep(Duration::from_millis(20));
     }
-    std::fs::remove_dir_all(repository.root().join("moved")).unwrap();
+    await_directory_change(|| std::fs::remove_dir_all(repository.root().join("moved")));
     await_repository_count(&runtime, 1);
-    std::fs::remove_dir_all(repository.root().join(".git")).unwrap();
+    await_directory_change(|| std::fs::remove_dir_all(repository.root().join(".git")));
     await_repository_count(&runtime, 0);
     repository.git(&["init", "-b", "recreated"]);
     await_repository_count(&runtime, 1);
@@ -489,6 +490,25 @@ fn await_repository_count(runtime: &GitRuntime, count: usize) {
     let deadline = Instant::now() + Duration::from_secs(10);
     while runtime.repositories().repositories.len() != count {
         assert!(Instant::now() < deadline, "expected {count} repositories");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn await_directory_change(change: impl Fn() -> std::io::Result<()>) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        match change() {
+            Ok(()) => return,
+            // Windows pins a running Git process's working directory. Wait for an in-flight
+            // query to exit; access denied from a persistent descendant watch must still fail.
+            Err(error) if cfg!(windows) && error.raw_os_error() == Some(32) => {
+                assert!(
+                    Instant::now() < deadline,
+                    "Git query kept the directory busy: {error}"
+                );
+            }
+            Err(error) => panic!("unable to change repository directory: {error}"),
+        }
         std::thread::sleep(Duration::from_millis(20));
     }
 }
@@ -827,7 +847,17 @@ fn stopping_watchers_cancels_an_active_automatic_fetch_before_joining_refresh() 
     });
     completed.recv_timeout(Duration::from_secs(3)).unwrap();
     closing.join().unwrap();
-    assert_eq!(remote.read(&mut bytes).unwrap(), 0);
+    // Killing the Git process can close its TCP connection with FIN or RST; both prove that
+    // cancellation released the active fetch. A timeout or additional data still fails.
+    match remote.read(&mut bytes) {
+        Ok(0) => {}
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted
+            ) => {}
+        result => panic!("automatic fetch connection stayed open after cancellation: {result:?}"),
+    }
     assert!(runtime.status().is_ok());
 }
 
