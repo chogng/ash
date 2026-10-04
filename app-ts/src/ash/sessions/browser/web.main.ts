@@ -1,3 +1,5 @@
+import { IndexedDBFileSystemProvider } from '../../platform/files/browser/indexedDBFileSystemProvider.js';
+import { Schemas } from '../../base/common/network.js';
 import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
 import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
@@ -76,6 +78,7 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 			api: host?.api ?? createDisconnectedRendererApi(),
 			workspaceSelection: () => host?.workspace ? selectionFromWorkspace(workspaceFromIdentifier(host.workspace)) : { type: 'current' },
 			workspace: () => host?.workspace ? workspaceFromIdentifier(host.workspace) : { id: 'sessions', folders: [] },
+			createUserDataFileSystemProvider: () => IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData),
 			configurationApi,
 			initialConfigurationSnapshot,
 			browserFileSystemProvider: browserFiles,

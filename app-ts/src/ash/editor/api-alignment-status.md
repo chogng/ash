@@ -165,11 +165,17 @@ Quick Fix 有多个类别时使用 `TabbedActionListWidget` 显示“全部操�
 
 用户已确认保留仅 Ash 的 `workbench/services/language/common/jsonLanguageFeatures.ts` 作为 JSON schema 补全的唯一实现。它现在解析数组项的位置并汇总 `anyOf` / `oneOf` 枚举建议，保留描述、合并重复值；接受建议只替换当前项，保留其他首选项及注释。空数组、未闭合字符串、逗号后的新项、嵌套和根数组均由同一实现处理。
 
-当前边界：快捷键 schema 已注册，快捷键 JSON 编辑器的资源关联尚未接通；不能计为用户可见的快捷键 JSON 补全。设置 JSON 的数组补全使用产品语言声明；UI-only 模式没有加载 JSON 语言，补全行为在连接 App Server 的窗口验证。
+当前边界：默认用户配置的快捷键 JSON 资源已关联共享 schema，`Paste As...` 的 `{ kind }` 与 `{ preferences }` 参数补全已接通。设置和快捷键 JSON 的补全使用产品语言声明；UI-only 模式没有加载 JSON 语言，补全行为在连接 App Server 的窗口验证。这里只提供当前默认用户配置的资源身份，没有将完整的多配置管理标为完成。
 
 本批验证：Editor 全量单测 1544 项、251 个文件通过；随后复跑粘贴、拖放、Workbench 配置、快捷键和动作菜单定向单测 65 项通过。补齐数组补全和复制准备后的纯文本粘贴边界后，按原测试编译选项单独编译本批 6 份测试，75 项通过。Chromium 的 10 个相关场景通过，覆盖显式首选、纯文本命令、原有选择器及启用/禁用行为。生产浏览器和 Electron UI 各 1 个配置入口、保存和重载场景通过；连接 App Server 的浏览器和 Electron 各 2 个配置与补全场景通过。Renderer 与完整桌面构建在前一轮通过，最终生产 Vite 打包通过。
 
 最终默认测试编译和 Renderer 检查受到同期其他改动阻塞：`externalUriOpenerService.test.ts` 的 Picker 泛型赋值错误，以及 `platform/url/common/urlGlob.ts` 使用当前 TS lib 未声明的 `String.toWellFormed`。这些文件不属于本批修改，未调整原检查配置来掩盖失败。Stylelint 无错误，唯一建议来自未修改的 Sessions CSS；测试环境已有的颜色变量警告和 jsdom Canvas 提示未计为本批新增问题。
+
+2026-10-04 后续复核：当前默认 `typecheck:renderer` 和 `test:unit` 的完整测试编译通过；External URI Opener 与 URL Glob 定向单测 47 项，以及粘贴、拖放、快捷键和 JSON 补全回归单测 64 项通过，上述编译阻塞已消除。当时快捷键 JSON 资源接入仍待完成，后续结果见下文。
+
+2026-10-04 快捷键职责修正：原始规则类型归 `platform/keybinding/common/keybinding.ts`，JSONC 解析与整份规则校验归 `workbench/services/keybinding/common/keybindingIO.ts`，共享文本模型上的编辑与保存归 `keybindingEditing.ts`，加载和安装规则归 `WorkbenchKeybindingService`。用户配置服务提供资源 URI；持久化、文件变化与版本冲突由通用文件服务处理，桌面映射到用户数据目录，网页使用 IndexedDB 文件提供器。原快捷键专用资源服务、Main 服务及 IPC 已删除。JSON 编辑器和快捷键界面编辑同一份文件；界面拒绝覆盖未保存的 JSON 和已失效的规则行，保存冲突保留用户文本。
+
+补全按当前命令计算 `allOf` 条件分支，粘贴参数 schema 在启动阶段注册，避免首次打开时缺少建议。最终普通完整构建与测试编译通过；14 份定向单测共 164 项通过，覆盖规则解析、编辑、条件参数、共享模型和文件冲突。Chromium 的 IndexedDB 场景验证跨窗口通知、原子版本检查及重载持久化；连接 App Server 的网页 2 项、Electron 3 项场景通过，覆盖参数补全、保存、重载后执行快捷键、中文标签和外部保存冲突。UI-only 网页 1 项、Electron 2 项场景通过，覆盖保存、重载与桌面文件冲突；这两组按宿主和语言声明条件跳过了其余场景。
 
 `CopyPasteController` 和 `DropIntoEditorController` 现在从语言特性注册表收集 provider edit，按 `yieldTo` 排序，再由 `PostEditWidgetManager` 经 Bulk Edit 应用插入和附加工作区编辑。内置纯文本、绝对路径、相对路径 provider 走同一条链；HTML 只在显式 `Paste As` 时提供。复制准备数据带有 ID：普通粘贴及能从剪贴板读到该 ID 的 `Paste As` 可交给匹配的 provider，同文本的外部剪贴板内容不会误用旧准备结果；`Paste As...` 没有指定 kind 时先让用户选择。普通粘贴和拖放在存在多个可替换编辑时显示编辑器内选择器，支持键盘切换、Escape 和撤销。该目录的八个生产 TS/CSS 文件现与 VS Code 同路径；仅 Ash 的 `textFileTransfer.ts` 及其测试已按用户确认删除。
 

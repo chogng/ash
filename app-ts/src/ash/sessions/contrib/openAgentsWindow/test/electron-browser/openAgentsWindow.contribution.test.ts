@@ -1,10 +1,11 @@
+import { ResolvedKeybindingItem } from '../../../../../platform/keybinding/common/resolvedKeybindingItem.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { suite, test, setup, teardown } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import { IKeybindingsResourceService, type IKeybindingEntry } from '../../../../../platform/keybinding/common/keybindingsResource.js';
+import { IKeybindingService, type IUserFriendlyKeybinding } from '../../../../../platform/keybinding/common/keybinding.js';
 import { KeybindingsRegistry } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -19,16 +20,22 @@ import { NotificationService } from '../../../../../workbench/services/notificat
 import { OpenAgentsWindowSystemWideKeybindingContribution } from '../../electron-browser/openAgentsWindow.contribution.js';
 import { registerOpenAgentsWindowCommand } from '../../electron-browser/openAgentsWindowCommand.js';
 
-class TestKeybindingsResource extends Disposable implements IKeybindingsResourceService {
-	private readonly changed = this._register(new Emitter<readonly IKeybindingEntry[]>());
-	public readonly onDidChangeKeybindings = this.changed.event;
-	public bindings: readonly IKeybindingEntry[] = [];
+class TestKeybindingService extends Disposable implements IKeybindingService {
+	private readonly changed = this._register(new Emitter<void>());
+	public readonly onDidUpdateKeybindings = this.changed.event;
+	public bindings: readonly IUserFriendlyKeybinding[] = [];
 
-	public getKeybindings(): readonly IKeybindingEntry[] { return this.bindings; }
+	public readonly inChordMode = false;
+	public getKeybindings(): readonly ResolvedKeybindingItem[] { return this.bindings.map((entry, index) => new ResolvedKeybindingItem(undefined, entry.command, entry.args, undefined, false, null, false, { entry, index })); }
+	public registerSchemaContribution() { return Disposable.None; }
+	public resolveKeybinding(): never { throw new Error('unused'); }
+	public resolveUserBinding() { return undefined; }
+	public lookupKeybinding() { return undefined; }
+	public lookupKeybindings() { return []; }
 	public async reload(): Promise<void> {}
-	public async updateKeybindings(bindings: readonly IKeybindingEntry[]): Promise<void> {
+	public async updateKeybindings(bindings: readonly IUserFriendlyKeybinding[]): Promise<void> {
 		this.bindings = bindings;
-		this.changed.fire(bindings);
+		this.changed.fire();
 	}
 }
 
@@ -41,7 +48,7 @@ class RecordingLog extends NullLoggerService {
 
 class Fixture extends Disposable {
 	public readonly services = this._register(new InstantiationService());
-	public readonly resource = this._register(new TestKeybindingsResource());
+	public readonly resource = this._register(new TestKeybindingService());
 	public readonly notifications = this._register(new NotificationService());
 	public readonly log = new RecordingLog();
 	public readonly payloads: INativeSystemWideKeybinding[][] = [];
@@ -49,7 +56,7 @@ class Fixture extends Disposable {
 	public result: INativeSystemWideKeybindingResult | Promise<INativeSystemWideKeybindingResult> = { failed: [] };
 	public error: Error | undefined;
 
-	constructor(bindings: readonly IKeybindingEntry[] = []) {
+	constructor(bindings: readonly IUserFriendlyKeybinding[] = []) {
 		super();
 		this.resource.bindings = bindings;
 		const host: INativeHostApi = {
@@ -91,7 +98,7 @@ class Fixture extends Disposable {
 			onDidChangeAccessibilitySupport: () => Disposable.None,
 		};
 		this.services.registerInstance(INativeHostService, host);
-		this.services.registerInstance(IKeybindingsResourceService, this.resource);
+		this.services.registerInstance(IKeybindingService, this.resource);
 		this.services.registerInstance(INotificationService, this.notifications);
 		this.services.registerInstance(ILogService, this.log);
 	}
@@ -102,7 +109,7 @@ class Fixture extends Disposable {
 	}
 }
 
-function binding(key: string, extras: Partial<IKeybindingEntry> = {}): IKeybindingEntry {
+function binding(key: string, extras: Partial<IUserFriendlyKeybinding> = {}): IUserFriendlyKeybinding {
 	return { key, command: OPEN_AGENTS_WINDOW_COMMAND_ID, systemWide: true, ...extras };
 }
 

@@ -32,6 +32,7 @@ test("Electron context menus run the selected action with its delegate context",
 	const keybindingService = {
 		inChordMode: false,
 		registerSchemaContribution: () => Disposable.None,
+		getKeybindings: () => [],
 		onDidUpdateKeybindings: Event.None,
 		resolveKeybinding() { throw new Error("Not used"); },
 		resolveUserBinding() { return undefined; },
@@ -94,6 +95,7 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 	const keybindingService = {
 		inChordMode: false,
 		registerSchemaContribution: () => Disposable.None,
+		getKeybindings: () => [],
 		onDidUpdateKeybindings: Event.None,
 		resolveKeybinding() { throw new Error("Not used"); },
 		resolveUserBinding() { return undefined; },
@@ -171,6 +173,7 @@ test("macOS switches context menu implementation when the menu style changes", a
 	const keybindingService = {
 		inChordMode: false,
 		registerSchemaContribution: () => Disposable.None,
+		getKeybindings: () => [],
 		onDidUpdateKeybindings: Event.None,
 		resolveKeybinding() { throw new Error("Not used"); },
 		resolveUserBinding() { return undefined; },

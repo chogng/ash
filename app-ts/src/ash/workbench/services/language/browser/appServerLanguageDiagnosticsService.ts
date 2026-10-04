@@ -247,7 +247,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 						next.set(key, Object.freeze({ resource, revision: 0, diagnostics: Object.freeze(combined) }));
 					}
 				} catch (error) {
-					if (!isUnsupportedDiagnosticPull(error)) reportLanguageSynchronizationError(error);
+					if (this.alive && generation === this.permissionRefreshGeneration && !isUnsupportedDiagnosticPull(error)) reportLanguageSynchronizationError(error);
 				}
 			}
 		}

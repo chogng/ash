@@ -36,7 +36,7 @@ for (const mode of ['paste', 'drop'] as const) {
 		const opened: IOpenSettingsOptions[] = [];
 		services.registerInstance(IPreferencesService, {
 			openSettings: async () => {},
-			openKeybindings: async () => {},
+			openGlobalKeybindingSettings: async () => {},
 			openUserSettings: async options => { opened.push(options!); },
 		});
 		using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [DropOrPasteIntoCommands.ID]);
@@ -117,7 +117,8 @@ test('schema tracks both provider registries, accepts unknown kinds, and removes
 		return toDisposable(() => { listener?.dispose(); additions = []; });
 	};
 	using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [DropOrPasteSchemaContribution.ID]);
-	host.advance(WorkbenchPhase.Eventually);
+	host.advance(WorkbenchPhase.BlockStartup);
+	assert.equal(additions.length, 1, 'Paste argument schema must be available before editors restore');
 	const features = services.get(ILanguageFeaturesService);
 	const kind = new HierarchicalKind('text.extension');
 	using paste = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, {

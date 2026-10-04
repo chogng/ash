@@ -41,7 +41,6 @@ import type { EditorTabDescriptor, EditorTabsDelegate } from "./editorTabsContro
 import type { EditorHeaderActions } from "./editorHeaderControl.js";
 import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
 import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
-import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
 import type { IContextKeyService, IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { getFlatContextMenuActions } from "../../../../platform/actions/browser/menuEntryActionViewItem.js";
@@ -64,7 +63,6 @@ export interface EditorGroupOptions {
 	readonly configurationService?: IConfigurationService;
 	readonly contextKeyService?: IContextKeyService;
 	readonly keybindingService?: IKeybindingService;
-	readonly keybindingsResourceService?: IKeybindingsResourceService;
 	readonly keyboardLayoutService?: IKeyboardLayoutService;
 	readonly fileService?: IFileService;
 	readonly textFileService?: ITextFileService;
@@ -128,7 +126,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private readonly contextKeyService: IContextKeyService | undefined;
 	private readonly scopedContextKeyService: IScopedContextKeyService | undefined;
 	private readonly keybindingService: IKeybindingService | undefined;
-	private readonly keybindingsResourceService: IKeybindingsResourceService | undefined;
 	private readonly keyboardLayoutService: IKeyboardLayoutService | undefined;
 	private readonly fileService: IFileService | undefined;
 	private readonly textFileService: ITextFileService | undefined;
@@ -179,7 +176,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.configurationService = options.configurationService;
 		this.contextKeyService = options.contextKeyService;
 		this.keybindingService = options.keybindingService;
-		this.keybindingsResourceService = options.keybindingsResourceService;
 		this.keyboardLayoutService = options.keyboardLayoutService;
 		this.fileService = options.fileService;
 		this.textFileService = options.textFileService;
@@ -490,7 +486,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 					},
 				} : {}),
 				keybindingService: this.keybindingService,
-				keybindingsResourceService: this.keybindingsResourceService,
 				keyboardLayoutService: this.keyboardLayoutService,
 				fileService: this.fileService,
 				textFileService: this.textFileService,

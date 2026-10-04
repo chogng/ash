@@ -26,3 +26,10 @@ test('JSON edits update nested properties and preserve JSONC comments', () => {
 	assert.doesNotMatch(removed, /"enabled"/u);
 	assert.deepEqual(parseJsonc(removed, 'edited JSONC'), { editor: { fontSize: 14 } });
 });
+
+for (const source of ['[{"a":1},{"b":2}]', '[\n  {"a":1},\n  {"b":2},\n]']) {
+	test(`removing the last JSON array object preserves a valid closing bracket: ${JSON.stringify(source)}`, () => {
+		const result = applyEdits(source, removeProperty(source, [1], { insertSpaces: true, tabSize: 2 }));
+		assert.deepEqual(parseJsonc(result), [{ a: 1 }]);
+	});
+}

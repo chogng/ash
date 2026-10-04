@@ -1,3 +1,4 @@
+import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
 import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
 import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
@@ -142,7 +143,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 		returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },
 		configurationApi: api.configuration,
 		initialConfigurationSnapshot,
-		keybindingsResourceApi: api.keybindings,
+		createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
 		createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
 		createHostColorSchemeService: services => {
 			const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);

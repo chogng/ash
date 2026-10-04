@@ -307,6 +307,7 @@ class AccessibleViewFixture extends Disposable {
 		inChordMode: false,
 		onDidUpdateKeybindings: this.keybindingChanges.event,
 		registerSchemaContribution: () => Disposable.None,
+		getKeybindings: () => [],
 		resolveKeybinding: binding => this.mapper.resolveKeybinding(binding)[0]!,
 		resolveUserBinding: binding => {
 			const parsed = parseKeybinding(binding);

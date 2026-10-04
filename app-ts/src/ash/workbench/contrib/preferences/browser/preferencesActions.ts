@@ -55,7 +55,7 @@ registerAction2(class OpenKeyboardShortcutsAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IPreferencesService).openKeybindings();
+		return accessor.get(IPreferencesService).openGlobalKeybindingSettings(false);
 	}
 });
 
@@ -76,5 +76,19 @@ registerAction2(class OpenSettingsJsonAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): Promise<void> {
 		return accessor.get(IPreferencesService).openUserSettings();
+	}
+});
+
+registerAction2(class OpenKeybindingsJsonAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.openGlobalKeybindingsFile',
+			title: localize2({ bundle: 'ash', key: 'keybindings.openJson' }, 'Preferences: Open Keyboard Shortcuts (JSON)'),
+			f1: true,
+		});
+	}
+
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IPreferencesService).openGlobalKeybindingSettings(true);
 	}
 });

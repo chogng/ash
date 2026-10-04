@@ -1,3 +1,4 @@
+import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
 import { RelayURLService } from '../services/url/electron-browser/urlService.js';
 import { migrateBrowserStorage } from '../services/storage/browser/storageService.js';
 import { IBackupService } from '../../platform/backup/common/backup.js';
@@ -119,7 +120,7 @@ export class DesktopMain extends Disposable {
 				createWindow: services => desktopWindow = services.createInstance(ElectronWindow, { invoke, subscribe }),
 				configurationApi: api.configuration,
 				initialConfigurationSnapshot,
-				keybindingsResourceApi: api.keybindings,
+				createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
 				keyboardLayoutProvider: api.keyboardLayout,
 				userKeyboardLayoutApi: api.userKeyboardLayout,
 				nativeHostApi: api.nativeHost,

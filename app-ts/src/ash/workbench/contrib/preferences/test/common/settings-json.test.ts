@@ -1,3 +1,6 @@
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { IUserDataProfileService } from '../../../../services/userDataProfile/common/userDataProfile.js';
+import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
 import '../../../codeEditor/common/editorConfiguration.js';
 import { ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
@@ -7,7 +10,7 @@ import { IEditorService as EditorServiceId } from '../../../../services/editor/c
 import { IFileTextModelService, TextModelConflictError } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { Event } from '../../../../../base/common/event.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages.js';
@@ -28,6 +31,9 @@ import { SettingsFileSystemProvider } from '../../../../../workbench/contrib/pre
 import { createJsonCompletionProvider } from '../../../../../workbench/services/language/common/jsonLanguageFeatures.js';
 import { SmartSnippetInserter } from '../../../../../workbench/contrib/preferences/common/smartSnippetInserter.js';
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
+
+const keybindingProfile = new KeybindingTestServices();
+suiteTeardown(() => keybindingProfile.dispose());
 
 test('SettingsFileSystemProvider projects only the editable JSONC settings resource', async () => {
 	const registry = testRegistry();
@@ -145,7 +151,7 @@ test('PreferencesService opens User Settings JSON as a pinned JSON editor input'
 		focusActiveEditor() {},
 	};
 	using models = new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) });
-	using preferences = new PreferencesService(editorService, models);
+	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles);
 
 	await preferences.openUserSettings();
 	assert.equal(opened?.input.resource.toString(), UserSettingsResource.toString());
@@ -200,6 +206,8 @@ test('PreferencesService uses the shared dirty model, inserts an undoable defaul
 	});
 	assert.throws(() => services.createInstance(PreferencesService), /Unknown service: fileTextModelService/u);
 	services.registerInstance(IFileTextModelService, models);
+	services.registerInstance(IFileService, keybindingProfile.files);
+	services.registerInstance(IUserDataProfileService, keybindingProfile.profiles);
 	using preferences = services.createInstance(PreferencesService);
 
 	await preferences.openUserSettings({ target: ConfigurationTarget.USER_LOCAL, revealSetting: { key: 'editor.fontSize', edit: true } });
@@ -233,7 +241,7 @@ test('revealing existing settings preserves edits and real external conflicts re
 		...emptyEditorServiceState,
 		openEditor: async (_input, options) => { selection = options?.selection; },
 		focusActiveEditor() {},
-	}, models);
+	}, models, keybindingProfile.files, keybindingProfile.profiles);
 	await preferences.openUserSettings({ revealSetting: { key: 'editor.fontSize', edit: true } });
 	assert.equal(reference.model.getText(), source);
 	assert.equal(reference.model.getValueInRange(selection!), '18');

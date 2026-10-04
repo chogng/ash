@@ -2,7 +2,7 @@ import { parseKeybinding } from '../../../../base/common/keybindingParser.js';
 import { resolveKeybinding } from '../../../../base/common/keybindings.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { toElectronAccelerator } from '../../../../platform/keybinding/common/electronAccelerator.js';
-import type { IKeybindingEntry } from '../../../../platform/keybinding/common/keybindingsResource.js';
+import type { IUserFriendlyKeybinding } from '../../../../platform/keybinding/common/keybinding.js';
 import type { INativeSystemWideKeybinding } from '../../../../platform/native/common/nativeHost.js';
 
 export interface ISystemWideKeybindingSelection {
@@ -18,7 +18,7 @@ export interface ISystemWideKeybindingRejection {
 }
 
 /** Selects explicit user shortcuts that Electron can register with the operating system. */
-export function selectSystemWideKeybindings(bindings: readonly IKeybindingEntry[], operatingSystem: OperatingSystem): ISystemWideKeybindingSelection {
+export function selectSystemWideKeybindings(bindings: readonly IUserFriendlyKeybinding[], operatingSystem: OperatingSystem): ISystemWideKeybindingSelection {
 	const candidates: INativeSystemWideKeybinding[] = [];
 	const unsupported: ISystemWideKeybindingRejection[] = [];
 	const duplicates: ISystemWideKeybindingRejection[] = [];

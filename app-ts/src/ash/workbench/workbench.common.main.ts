@@ -30,3 +30,4 @@ import './contrib/output/browser/output.contribution.js';
 
 import './contrib/dropOrPasteInto/browser/dropOrPasteInto.contribution.js';
 import './contrib/externalUriOpener/common/externalUriOpener.contribution.js';
+import './contrib/folding/browser/folding.contribution.js';

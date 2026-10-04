@@ -21,7 +21,6 @@ import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platfor
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
-import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { ConfirmResult, DialogSeverity, type IDialogService, type IFileDialogService } from "../../../../platform/dialogs/common/dialogs.js";
@@ -124,7 +123,6 @@ export interface IEditorPartOptions {
 	readonly configurationService?: IConfigurationService;
 	readonly contextKeyService?: IContextKeyService;
 	readonly keybindingService?: IKeybindingService;
-	readonly keybindingsResourceService?: IKeybindingsResourceService;
 	readonly keyboardLayoutService?: IKeyboardLayoutService;
 	readonly fileService?: IFileService;
 	readonly textFileService?: ITextFileService;
@@ -204,7 +202,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 			configurationService: options.configurationService,
 			contextKeyService: options.contextKeyService,
 			keybindingService: options.keybindingService,
-			keybindingsResourceService: options.keybindingsResourceService,
 			keyboardLayoutService: options.keyboardLayoutService,
 			fileService: options.fileService,
 			textFileService: options.textFileService,
@@ -261,7 +258,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 				configurationService: options.configurationService,
 				contextKeyService: options.contextKeyService,
 				keybindingService: options.keybindingService,
-				keybindingsResourceService: options.keybindingsResourceService,
 				keyboardLayoutService: options.keyboardLayoutService,
 				fileService: options.fileService,
 				textFileService: options.textFileService,

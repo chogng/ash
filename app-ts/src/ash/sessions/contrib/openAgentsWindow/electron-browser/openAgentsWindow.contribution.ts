@@ -2,7 +2,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { operatingSystem } from '../../../../base/common/platform.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
-import { IKeybindingsResourceService } from '../../../../platform/keybinding/common/keybindingsResource.js';
+import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { ILogService, type ILogService as LogService } from '../../../../platform/log/common/log.js';
 import { INotificationService, type INotificationService as NotificationService } from '../../../../platform/notification/common/notification.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
@@ -17,7 +17,7 @@ export class OpenAgentsWindowSystemWideKeybindingContribution extends Disposable
 	private lastIgnoredWhen = '';
 
 	constructor(
-		@IKeybindingsResourceService resource: IKeybindingsResourceService,
+		@IKeybindingService resource: IKeybindingService,
 		@INotificationService private readonly notifications: NotificationService,
 		@ILogService private readonly log: LogService,
 		@IInstantiationService instantiationService: IInstantiationService,
@@ -26,7 +26,7 @@ export class OpenAgentsWindowSystemWideKeybindingContribution extends Disposable
 		this._register(instantiationService.createInstance(SystemWideKeybindingsSynchronizer, {
 			getCandidates: () => {
 				const selection = selectSystemWideKeybindings(
-					resource.getKeybindings(),
+					resource.getKeybindings().flatMap(item => item.userBinding ? [item.userBinding.entry] : []),
 					operatingSystem,
 				);
 				for (const rejection of selection.unsupported) {

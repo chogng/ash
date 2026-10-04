@@ -24,7 +24,6 @@ import { sandboxProcess } from "../../../base/parts/sandbox/electron-browser/glo
 import { createBrowserViewApi } from "../../browser/electron-browser/browserViewApi.js";
 import { createConfigurationApi } from "../../configuration/electron-browser/configurationApi.js";
 import { createNativeContextMenuApi } from "../../contextview/electron-browser/contextMenuApi.js";
-import { createKeybindingsResourceApi } from "../../keybinding/electron-browser/keybindingsResourceApi.js";
 import { createNativeKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js";
 import { createUserKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/userKeyboardLayoutApi.js";
 import { createNativeMenubarApi } from "../../menubar/electron-browser/nativeMenubarApi.js";
@@ -163,7 +162,6 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			remoteTunnels: createRemoteTunnelApi(),
 			browserView: createBrowserViewApi(),
 			configuration: createConfigurationApi(),
-			keybindings: createKeybindingsResourceApi(),
 			keyboardLayout: createNativeKeyboardLayoutApi(),
 			userKeyboardLayout: createUserKeyboardLayoutApi(),
 			nativeContextMenu: createNativeContextMenuApi(),

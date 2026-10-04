@@ -191,8 +191,10 @@ The cross-product grammar and the boundary between Ash, App, and Ash Code are de
   `keybinding.inChordMode` and `keybinding.isComposing`; the status bar exposes
   the pending chord without moving that product policy into platform code.
 - Persisted keybindings are an ordered resource independent of ordinary
-  configuration. `IKeybindingsResourceService` projects the active
-  `keybindings.json` into user-weight resolver rules.
+  configuration. `IUserDataProfileService` supplies the active file URI;
+  `WorkbenchKeybindingService` validates and installs its ordered user rules.
+  `KeybindingsEditingService` edits the same JSONC text model and saves through
+  the generic file service, preserving comments and detecting stale revisions.
 - A user entry requires `{ key, command }` and may define `when`, `args`,
   `mac`, `linux`, and `win`. A platform override set to `null` disables that
   rule on the platform.
@@ -303,7 +305,8 @@ into contributed handlers with `allowContributedOpeners: true`; the ID `default`
 explicitly selects the host browser. Resolved URI handles are released after
 opening finishes, including failures.
 
-`workbench/contrib/externalUriOpener` registers the selection service at startup.
+`workbench/contrib/externalUriOpener` registers the selection service during
+restoration, after the editor service and before the Workbench is ready.
 Providers supply handlers for a target URL. Capability checks receive the
 original URI; execution receives the resolved URI and the original URI context.
 An explicit ID takes precedence over `workbench.externalUriOpeners`, whose URL

@@ -9,9 +9,9 @@ import { ExternalUriOpenerService, IExternalUriOpenerService } from './externalU
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration(externalUriOpenersConfigurationNode);
 registerSingleton(IExternalUriOpenerService, ExternalUriOpenerService, InstantiationType.Eager);
 
-// The service container owns disposal. Startup must resolve it before the first link
-// activation because providers need not have registered before a configured URL opens.
-registerWorkbenchContribution('workbench.contrib.externalUriOpener', WorkbenchPhase.BlockStartup, accessor => {
+// Preferences needs the editor service assembled during restoration. The container
+// owns disposal; this registration installs dispatch before the Workbench is ready.
+registerWorkbenchContribution('workbench.contrib.externalUriOpener', WorkbenchPhase.BlockRestore, accessor => {
 	accessor.get(IExternalUriOpenerService);
 	return Disposable.None;
 });

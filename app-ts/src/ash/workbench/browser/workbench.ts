@@ -1,3 +1,9 @@
+import { localize } from '../../nls.js';
+import { Schemas } from '../../base/common/network.js';
+import type { IFileSystemProvider } from '../../platform/files/common/fileSystemProviderService.js';
+import { IUserDataProfileService } from '../services/userDataProfile/common/userDataProfile.js';
+import { UserDataProfileService } from '../services/userDataProfile/browser/userDataProfileService.js';
+import { IKeybindingEditingService, KeybindingsEditingService } from '../services/keybinding/common/keybindingEditing.js';
 import type { PaneCompositePart } from './parts/paneCompositePart.js';
 import { ITextResourcePropertiesService } from '../../editor/common/services/textResourceConfiguration.js';
 import { TextResourcePropertiesService } from '../services/textresourceProperties/common/textResourcePropertiesService.js';
@@ -88,7 +94,6 @@ import { BrowserProgressService } from "../../platform/progress/browser/progress
 import { IProgressService } from "../../platform/progress/common/progress.js";
 import { StatusbarHeight } from './parts/workbenchPartDimensions.js';
 import { MarkerService, IMarkerService } from "../../platform/markers/common/markers.js";
-import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutProvider } from "../../platform/keyboardLayout/common/keyboardLayout.js";
 import {
 	BrowserDialogHandler,
@@ -215,7 +220,6 @@ import { ICodebaseService } from "../../platform/codebase/common/codebaseService
 import { AppServerCodebaseService } from "../services/codebase/browser/appServerCodebaseService.js";
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
 import { IDirPermissionsService } from "../../platform/dirPermissions/common/dirPermissionsService.js";
-import { IKeybindingsResourceService } from "../../platform/keybinding/common/keybindingsResource.js";
 import { IKeyboardLayoutService } from "../../platform/keyboardLayout/common/keyboardLayout.js";
 import { AppServerDirPermissionsService } from "../services/dirPermissions/browser/appServerDirPermissionsService.js";
 import { IWorkspaceTrustManagementService } from '../../platform/workspace/common/workspaceTrust.js';
@@ -296,7 +300,6 @@ import { CommandService } from "../services/commands/common/commandService.js";
 import { BrowserKeyboardLayoutService } from "../services/keybinding/browser/keyboardLayoutService.js";
 import { WorkbenchKeybindingService } from "../services/keybinding/browser/keybindingService.js";
 import { IKeyboardShortcutTroubleshootingService } from "../services/keybinding/common/keyboardShortcutTroubleshooting.js";
-import { WorkbenchKeybindingsResourceService } from "../services/keybinding/browser/keybindingsResourceService.js";
 import { IPreferencesService } from "../services/preferences/common/preferences.js";
 import { PreferencesService } from "../services/preferences/browser/preferencesService.js";
 import { WorkbenchQuickInputService } from "../services/quickinput/browser/quickInputService.js";
@@ -326,7 +329,7 @@ export interface IStartWorkbenchOptions {
 	readonly createLogService: () => LogService;
 	readonly configurationApi?: IConfigurationApi;
 	readonly initialConfigurationSnapshot?: IConfigurationSnapshot;
-	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
+	readonly createUserDataFileSystemProvider: () => Promise<IFileSystemProvider & IDisposable>;
 	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
 	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
 	readonly nativeHostApi?: INativeHostApi;
@@ -356,7 +359,7 @@ export async function startWorkbench({
 	createLogService,
 	configurationApi,
 	initialConfigurationSnapshot,
-	keybindingsResourceApi,
+	createUserDataFileSystemProvider,
 	keyboardLayoutProvider,
 	userKeyboardLayoutApi,
 	nativeHostApi,
@@ -371,11 +374,13 @@ export async function startWorkbench({
 	const themes = new ExtensionColorThemeService(api.extensions, api.events);
 	const logger = createLogService();
 	let storage: Awaited<ReturnType<IStartWorkbenchOptions['createStorageService']>> | undefined;
+	let userDataFiles: IFileSystemProvider & IDisposable | undefined;
 	try {
 		await themes.start();
 		const ownerWindow = container.ownerDocument.defaultView;
 		if (!ownerWindow) { throw new Error('Workbench requires an owner window'); }
 		storage = await createStorageService({ ownerWindow, applicationId: WorkbenchModeRegistry.get(modeId).storageNamespace, workspaceId: workspace.id });
+		userDataFiles = await createUserDataFileSystemProvider();
 		return new Workbench(
 			modeId,
 			defaultLayout,
@@ -385,7 +390,7 @@ export async function startWorkbench({
 			createLifecycleService,
 			configurationApi,
 			initialConfigurationSnapshot,
-			keybindingsResourceApi,
+			userDataFiles,
 			keyboardLayoutProvider,
 			userKeyboardLayoutApi,
 			nativeHostApi,
@@ -407,6 +412,7 @@ export async function startWorkbench({
 			createURLService,
 		);
 	} catch (error) {
+		userDataFiles?.dispose();
 		logger.error('startup', 'Workbench startup failed', error);
 		logger.dispose();
 		storage?.dispose();
@@ -445,7 +451,7 @@ export class Workbench extends Disposable {
 		createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable,
 		configurationApi: IConfigurationApi | undefined,
 		initialConfigurationSnapshot: IConfigurationSnapshot | undefined,
-		keybindingsResourceApi: IKeybindingsResourceApi | undefined,
+		userDataFileSystemProvider: IFileSystemProvider & IDisposable,
 		keyboardLayoutProvider: IKeyboardLayoutProvider | undefined,
 		userKeyboardLayoutApi: IUserKeyboardLayoutApi | undefined,
 		nativeHostApi: INativeHostApi | undefined,
@@ -581,6 +587,9 @@ export class Workbench extends Disposable {
 		});
 		this._register(workspaceFileService);
 		const fileService = this._register(new MultiplexFileService(workspaceFileService));
+		this._register(userDataFileSystemProvider);
+		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
+		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
 		if (browserFileSystemProvider) this._register(fileService.registerProvider('file', browserFileSystemProvider));
 		services.registerInstance(IFileService, fileService);
 		services.registerInstance(ISystemFileTransferService, workspaceFileService);
@@ -628,6 +637,7 @@ export class Workbench extends Disposable {
 		}));
 		services.registerInstance(ITextModelResourceService, textModelService);
 		services.registerInstance(IFileTextModelService, textModelService);
+		services.registerSingleton(IKeybindingEditingService, () => services.createInstance(KeybindingsEditingService));
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 		const bulkEditService = services.get(IBulkEditService);
 		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }
@@ -811,8 +821,6 @@ export class Workbench extends Disposable {
 			userLayoutProvider: userKeyboardLayoutService,
 		}));
 		services.registerInstance(IKeyboardLayoutService, keyboardLayoutService);
-		const keybindingsResourceService = this._register(new WorkbenchKeybindingsResourceService({ api: keybindingsResourceApi }));
-		services.registerInstance(IKeybindingsResourceService, keybindingsResourceService);
 		const keybindings = this._register(services.createInstance(WorkbenchKeybindingService, {
 			ownerDocument: workbenchRoot.ownerDocument,
 			commandService,
@@ -821,6 +829,7 @@ export class Workbench extends Disposable {
 			statusbarService,
 		}));
 		services.registerInstance(IKeybindingService, keybindings);
+		const keybindingsReady = keybindings.initialize().catch(error => { notificationService.warning(localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error))); });
 		services.registerInstance(IKeyboardShortcutTroubleshootingService, keybindings);
 		const menus = new MenuService(commandService, contextKeys);
 		services.registerInstance(IMenuService, menus);
@@ -848,7 +857,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));
 		void configuration.reloadConfiguration().catch((error: unknown) => console.error("Failed to initialize configuration", error));
-		void keybindingsResourceService.reload().catch((error: unknown) => console.error("Failed to initialize keybindings resource", error));
 		const accessibilityService = this._register(nativeHostApi
 			? new NativeAccessibilityService({
 				root: workbenchRoot,
@@ -931,7 +939,6 @@ export class Workbench extends Disposable {
 			configurationService: configuration,
 			contextKeyService: contextKeys,
 			keybindingService: keybindings,
-			keybindingsResourceService: services.get(IKeybindingsResourceService),
 			keyboardLayoutService: services.get(IKeyboardLayoutService),
 			fileService,
 			textFileService,
@@ -1110,7 +1117,7 @@ export class Workbench extends Disposable {
 		lifecycleService.phase = LifecyclePhase.Ready;
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		layoutService.layout();
-		this.whenRestored = this.completeStartupRestoration([extensionReady, paneRestoration, recentWorkspaces.initialize(), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions, saveFontInfo);
+		this.whenRestored = this.completeStartupRestoration([keybindingsReady, extensionReady, paneRestoration, recentWorkspaces.initialize(), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions, saveFontInfo);
 		if (createWindow) {
 			this._register(createWindow(services));
 		}

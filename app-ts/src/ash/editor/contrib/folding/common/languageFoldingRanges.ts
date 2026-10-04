@@ -10,10 +10,10 @@ export class FoldingRangeService extends Disposable {
 		super();
 	}
 
-	async provideFoldingRanges(languageId: string, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageFoldingRange[]> {
+	async provideFoldingRanges(languageId: string, signal: AbortSignal = new AbortController().signal, providers: readonly LanguageFoldingRangeProvider[] = this.providers.ordered(this.model)): Promise<readonly LanguageFoldingRange[]> {
 		const request: LanguageFoldingRangeRequest = Object.freeze({ ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}) });
 		const result: LanguageFoldingRange[] = [];
-		for (const provider of this.providers.ordered(this.model)) {
+		for (const provider of providers) {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			const ranges = await provider.provideFoldingRanges(request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);

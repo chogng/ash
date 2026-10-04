@@ -1,6 +1,8 @@
+import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IKeyboardLayoutService } from '../../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
-import { IKeybindingsResourceService } from '../../../../../platform/keybinding/common/keybindingsResource.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
@@ -42,8 +44,6 @@ const { CommandService } = await import('../../../../../workbench/services/comma
 const { BrowserEditorService } = await import('../../../../../workbench/services/editor/browser/browserEditorService.js');
 const { BrowserKeyboardLayoutService } = await import('../../../../../workbench/services/keybinding/browser/keyboardLayoutService.js');
 const { WorkbenchKeybindingService } = await import('../../../../../workbench/services/keybinding/browser/keybindingService.js');
-const { KeybindingsResourceContribution } = await import('../../../../../workbench/services/keybinding/browser/keybindingsResourceContribution.js');
-const { WorkbenchKeybindingsResourceService } = await import('../../../../../workbench/services/keybinding/browser/keybindingsResourceService.js');
 const { createKeyboardShortcutsEditorInput, isKeyboardShortcutsEditorInput } = await import('../../../../../workbench/services/preferences/browser/keybindingsEditorInput.js');
 const { PreferencesService } = await import('../../../../../workbench/services/preferences/browser/preferencesService.js');
 const { isSettingsEditorInput } = await import('../../../../../workbench/services/preferences/common/settingsEditorInput.js');
@@ -63,14 +63,12 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		keybinding: Keybinding.single(logicalKey('p', { ctrlKey: true, shiftKey: true })),
 	}));
 
-	const resources = disposables.add(new WorkbenchKeybindingsResourceService());
-	await resources.updateKeybindings([
+	const resources = disposables.add(new KeybindingTestServices());
+	await resources.write([
 		{ key: 'ctrl+1', command: 'test.shortcuts.alpha' },
 		{ key: 'ctrl+2', command: 'test.shortcuts.beta' },
 	]);
-	const services = disposables.add(new InstantiationService());
-	services.registerInstance(IKeybindingsResourceService, resources);
-	disposables.add(services.createInstance(KeybindingsResourceContribution, {}));
+	const services = resources.services;
 	const contextKeys = disposables.add(new ContextKeyService());
 	const commands = disposables.add(new CommandService(new InstantiationService()));
 	const keyboardLayout = disposables.add(new BrowserKeyboardLayoutService({
@@ -82,9 +80,12 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		commandService: commands,
 		contextKeyService: contextKeys,
 		keyboardLayoutService: keyboardLayout,
-	}, disposables.add(new NotificationService())));
+	}, disposables.add(new NotificationService()), resources.files, resources.profiles));
 	const configuration = disposables.add(new InMemoryConfigurationService());
 	services.registerInstance(IKeybindingService, keybindings);
+	services.registerInstance(IContextKeyService, contextKeys);
+	services.registerInstance(IKeyboardLayoutService, keyboardLayout);
+	await keybindings.initialize();
 	services.registerInstance(IConfigurationService, configuration);
 	const registry = new EditorPaneRegistry();
 	registry.registerEditorPane({
@@ -97,30 +98,24 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		id: KeyboardShortcutsEditorId,
 		name: 'Keyboard Shortcuts',
 		canOpen: input => isKeyboardShortcutsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
-		create: () => new KeyboardShortcutsEditor({
-			contextKeyService: contextKeys,
-			keybindingService: keybindings,
-			keybindingsResourceService: resources,
-			keyboardLayoutService: keyboardLayout,
-		}),
+		create: () => services.createInstance(KeyboardShortcutsEditor),
 	});
 	const editorServices = disposables.add(createTestEditorServices(undefined, services));
 	const editor = disposables.add(editorServices.createInstance(EditorPart, ownerDocument.body, {
 		registry,
 		contextKeyService: contextKeys,
 		keybindingService: keybindings,
-		keybindingsResourceService: resources,
 		keyboardLayoutService: keyboardLayout,
 	}));
 	const editorService = new BrowserEditorService(editor);
-	const preferences = disposables.add(new PreferencesService(editorService, editorServices.get(IFileTextModelService)));
+	const preferences = disposables.add(new PreferencesService(editorService, editorServices.get(IFileTextModelService), resources.files, resources.profiles));
 	await preferences.openSettings();
 	const modalHost = ownerDocument.querySelector<HTMLElement>('.ash-modal-editor-host');
 	assert.ok(modalHost);
 	assert.equal(modalHost.hidden, false);
 
-	await preferences.openKeybindings();
-	await preferences.openKeybindings();
+	await preferences.openGlobalKeybindingSettings(false);
+	await preferences.openGlobalKeybindingSettings(false);
 	assert.equal(modalHost.hidden, true);
 	assert.equal(editor.activeGroup.inputs.length, 1);
 	assert.equal(editor.activeInput?.resource.toString(), createKeyboardShortcutsEditorInput().resource.toString());
@@ -133,10 +128,11 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	const betaBefore = shortcutRow(ownerDocument, 'test.shortcuts.beta');
 	assert.ok(betaBefore);
 
-	await resources.updateKeybindings([
+	await resources.write([
 		{ key: 'ctrl+3', command: 'test.shortcuts.alpha' },
 		{ key: 'ctrl+2', command: 'test.shortcuts.beta' },
 	]);
+	await keybindings.initialize();
 	assert.equal(shortcutRow(ownerDocument, 'test.shortcuts.beta'), betaBefore);
 
 	const alpha = shortcutRow(ownerDocument, 'test.shortcuts.alpha');
@@ -157,14 +153,15 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	const editorRoot = ownerDocument.querySelector<HTMLElement>('.ash-keybindings-editor');
 	assert.ok(editorRoot);
 	findButton(editorRoot, 'Save').click();
-	await nextTurn();
-	assert.equal(resources.getKeybindings()[0]?.key, 'ctrl+shift+[KeyP]');
+	await waitForStatus(ownerDocument, 'Keybinding saved.');
+	assert.equal((await resources.read())[0]?.key, 'ctrl+shift+[KeyP]');
 
+	await keybindings.initialize();
 	const beta = shortcutRow(ownerDocument, 'test.shortcuts.beta');
 	assert.ok(beta);
 	findButton(beta, 'Remove').click();
-	await nextTurn();
-	assert.deepEqual(resources.getKeybindings().map(binding => binding.command), ['test.shortcuts.alpha']);
+	await waitForStatus(ownerDocument, 'Keybinding removed.');
+	assert.deepEqual((await resources.read()).map(binding => binding.command), ['test.shortcuts.alpha']);
 });
 
 function shortcutRow(ownerDocument: Document, command: string): HTMLElement | undefined {
@@ -179,8 +176,17 @@ function findButton(container: ParentNode, label: string): HTMLButtonElement {
 	return button;
 }
 
-function nextTurn(): Promise<void> {
-	return new Promise(resolve => globalThis.setTimeout(resolve, 0));
+function waitForStatus(document: Document, message: string): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const observer = new browserEnvironment.window.MutationObserver(() => {
+			if (document.querySelector('.ash-keybindings-status')?.textContent !== message) return;
+			observer.disconnect();
+			clearTimeout(timeout);
+			resolve();
+		});
+		const timeout = setTimeout(() => { observer.disconnect(); reject(new Error(`Shortcut editor did not report ${message}: ${document.querySelector('.ash-keybindings-status')?.textContent}`)); }, 5_000);
+		observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+	});
 }
 
 class TestSettingsEditor extends Disposable {

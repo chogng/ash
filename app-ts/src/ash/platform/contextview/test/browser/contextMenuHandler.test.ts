@@ -24,6 +24,7 @@ test("a context menu that cannot be shown releases its execution resources", asy
 	const keybindings = {
 		inChordMode: false,
 		registerSchemaContribution: () => Disposable.None,
+		getKeybindings: () => [],
 		onDidUpdateKeybindings: Event.None,
 		resolveKeybinding() { throw new Error("Not used"); },
 		resolveUserBinding() { return undefined; },

@@ -22,7 +22,6 @@ import type { Range } from "../../../../editor/common/core/range.js";
 import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
 import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
-import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
@@ -96,7 +95,6 @@ export interface EditorPaneCreationOptions {
 		readonly contextKeyService?: IContextKeyService;
 	};
 	readonly keybindingService?: IKeybindingService;
-	readonly keybindingsResourceService?: IKeybindingsResourceService;
 	readonly keyboardLayoutService?: IKeyboardLayoutService;
 	readonly fileService?: IFileService;
 	readonly textFileService?: ITextFileService;

@@ -2219,6 +2219,7 @@ function nextTask(): Promise<void> {
 
 class TestKeybindingService implements IKeybindingService {
 	registerSchemaContribution(): IDisposable { return Disposable.None; }
+	getKeybindings(): [] { return []; }
 	private readonly _onDidUpdateKeybindings = new Emitter<void>();
 	private readonly bindings = new Map<CommandId, ResolvedKeybinding>();
 

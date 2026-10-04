@@ -8,15 +8,7 @@ registerEditorPane({
 	name: 'Keyboard Shortcuts',
 	canOpen: input => isKeyboardShortcutsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
-		if (!options.contextKeyService) throw new Error('Keyboard Shortcuts requires the Workbench context key service');
-		if (!options.keybindingService) throw new Error('Keyboard Shortcuts requires the Workbench keybinding service');
-		if (!options.keybindingsResourceService) throw new Error('Keyboard Shortcuts requires the keybindings resource service');
-		if (!options.keyboardLayoutService) throw new Error('Keyboard Shortcuts requires the keyboard layout service');
-		return new KeyboardShortcutsEditor({
-			contextKeyService: options.contextKeyService,
-			keybindingService: options.keybindingService,
-			keybindingsResourceService: options.keybindingsResourceService,
-			keyboardLayoutService: options.keyboardLayoutService,
-		});
+		if (!options.instantiationService) throw new Error('Keyboard Shortcuts requires the editor service scope');
+		return options.instantiationService.createInstance(KeyboardShortcutsEditor);
 	},
 });

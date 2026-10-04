@@ -87,7 +87,7 @@ export function setProperty(
 		if (lastSegment === parent.children.length - 1) {
 			const previous = parent.children[lastSegment - 1]!;
 			const offset = previous.offset + previous.length;
-			return withFormatting(text, { offset, length: parent.offset + parent.length - 2 - offset, content: '' }, formattingOptions);
+			return withFormatting(text, { offset, length: parent.offset + parent.length - 1 - offset, content: '' }, formattingOptions);
 		}
 		return withFormatting(text, {
 			offset: toRemove.offset,

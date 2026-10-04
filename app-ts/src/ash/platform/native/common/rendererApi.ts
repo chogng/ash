@@ -8,9 +8,6 @@ import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import type {
 	IConfigurationApi,
 } from "../../configuration/common/configurationIpc.js";
-import type {
-	IKeybindingsResourceApi,
-} from "../../keybinding/common/keybindingsResource.js";
 import type { INativeKeyboardLayoutApi } from "../../keyboardLayout/common/nativeKeyboardLayout.js";
 import type { IUserKeyboardLayoutApi } from "../../keyboardLayout/common/userKeyboardLayout.js";
 import type {
@@ -33,7 +30,6 @@ export interface AshElectronRendererApi extends IRendererHost {
 	readonly environment: IRuntimeEnvironment;
 	readonly browserView: IBrowserViewApi;
 	readonly configuration: IConfigurationApi;
-	readonly keybindings: IKeybindingsResourceApi;
 	readonly keyboardLayout: INativeKeyboardLayoutApi;
 	readonly userKeyboardLayout: IUserKeyboardLayoutApi;
 	readonly nativeContextMenu: INativeContextMenuApi;

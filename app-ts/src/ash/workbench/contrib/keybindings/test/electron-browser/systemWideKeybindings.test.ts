@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
-import type { IKeybindingEntry } from '../../../../../platform/keybinding/common/keybindingsResource.js';
+import type { IUserFriendlyKeybinding } from '../../../../../platform/keybinding/common/keybinding.js';
 import { selectSystemWideKeybindings } from '../../electron-browser/systemWideKeybindings.js';
 
-function binding(key: string, extras: Partial<IKeybindingEntry> = {}): IKeybindingEntry {
+function binding(key: string, extras: Partial<IUserFriendlyKeybinding> = {}): IUserFriendlyKeybinding {
 	return { key, command: 'workbench.action.openAgentsWindow', systemWide: true, ...extras };
 }
 

@@ -411,7 +411,6 @@ interface AshElectronRendererApi extends IRendererHost {
   readonly environment: IRuntimeEnvironment;
   readonly browserView: IBrowserViewApi;
   readonly configuration: IConfigurationApi;
-  readonly keybindings: IKeybindingsResourceApi;
   readonly nativeContextMenu: INativeContextMenuApi;
   readonly nativeMenubar: INativeMenubarApi;
   readonly workspace: IWorkspaceContextApi;

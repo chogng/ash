@@ -1,3 +1,5 @@
+import type { JsonValue } from '../../../base/common/jsonValue.js';
+import type { ResolvedKeybindingItem } from './resolvedKeybindingItem.js';
 import type { JsonSchema } from '../../../base/common/jsonSchema.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type {
@@ -18,6 +20,18 @@ import {
 	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
 
+/** One ordered shortcut rule from the active `keybindings.json`. */
+export interface IUserFriendlyKeybinding {
+	readonly key: string;
+	readonly command: CommandId | null;
+	readonly when?: string;
+	readonly args?: JsonValue;
+	readonly mac?: string | null;
+	readonly linux?: string | null;
+	readonly win?: string | null;
+	readonly systemWide?: boolean;
+}
+
 export interface KeybindingsSchemaContribution {
 	readonly onDidChange?: Event<void>;
 	getSchemaAdditions(): JsonSchema[];
@@ -27,6 +41,7 @@ export interface KeybindingsSchemaContribution {
 export interface IKeybindingService {
 	readonly inChordMode: boolean;
 	readonly onDidUpdateKeybindings: Event<void>;
+	getKeybindings(): readonly ResolvedKeybindingItem[];
 
 	registerSchemaContribution(contribution: KeybindingsSchemaContribution): IDisposable;
 

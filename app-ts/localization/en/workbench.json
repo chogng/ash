@@ -162,7 +162,12 @@
 		"output.help.navigation": "Use arrow keys to read output, Shift with arrow keys to select text, and Ctrl+C or Command+C to copy. Ctrl+F or Command+F opens Find.",
 		"output.help.controls": "Use Tab and Shift+Tab to reach the channel selector, filters, Clear Output, Auto Scroll, and More Output Actions. Text filters accept ! or - to exclude terms. Severity and category filters only affect this view.",
 		"output.help.links": "Place the cursor on a file location and run <keybinding:editor.action.openLink>, or click it while holding Ctrl or Command. Workspace file locations open at their reported line and column.",
-		"output.help.scroll": "Scrolling away from the end pauses Auto Scroll. Enable it to follow new output. More Output Actions opens the live channel in an editor or exports its retained text."
+		"output.help.scroll": "Scrolling away from the end pauses Auto Scroll. Enable it to follow new output. More Output Actions opens the live channel in an editor or exports its retained text.",
+		"keybindings.saveFirst": "Save keybindings.json before changing a shortcut in the Keyboard Shortcuts editor.",
+		"keybindings.changed": "This shortcut changed. Select it again before editing.",
+		"keybindings.invalid": "Could not load keybindings.json: {0}",
+		"keybindings.jsonLabel": "Keyboard Shortcuts (JSON)",
+		"keybindings.openJson": "Preferences: Open Keyboard Shortcuts (JSON)"
 	},
 	"ash.views": {
 		"explorer": "Explorer",

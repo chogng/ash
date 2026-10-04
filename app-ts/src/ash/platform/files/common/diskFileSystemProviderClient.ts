@@ -11,9 +11,15 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSer
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
 
-	constructor(private readonly invoke: (request: unknown) => Promise<unknown>, onDidChange: (listener: () => void) => { dispose(): void }) {
+	constructor(private readonly invoke: (request: unknown) => Promise<unknown>, onDidChange: (listener: (resources: unknown) => void) => { dispose(): void }) {
 		super();
-		const subscription = onDidChange(() => this.changes.fire({ resources: undefined }));
+		const subscription = onDidChange(value => {
+			if (value === undefined) { this.changes.fire({ resources: undefined }); return; }
+			if (!Array.isArray(value) || value.some(resource => typeof resource !== 'string')) throw new TypeError('Invalid file-change resources');
+			const resources = value.map(resource => URI.parse(resource));
+			if (resources.some(resource => resource.scheme !== 'file' || resource.query || resource.fragment)) throw new TypeError('Invalid file-change resource');
+			this.changes.fire({ resources });
+		});
 		this._register(toDisposable(() => subscription.dispose()));
 	}
 

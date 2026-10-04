@@ -1,6 +1,6 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
-import { IKeybindingsResourceService } from '../../../../platform/keybinding/common/keybindingsResource.js';
+import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import type { INativeHostApi, INativeSystemWideKeybinding } from '../../../../platform/native/common/nativeHost.js';
 import { INativeHostService } from '../../../common/services.js';
 
@@ -17,12 +17,12 @@ export class SystemWideKeybindingsSynchronizer extends Disposable {
 
 	constructor(
 		private readonly options: ISystemWideKeybindingsSynchronizerOptions,
-		@IKeybindingsResourceService resource: IKeybindingsResourceService,
+		@IKeybindingService resource: IKeybindingService,
 		@INativeHostService private readonly host: INativeHostApi,
 	) {
 		super();
 		const scheduler = this._register(new RunOnceScheduler(() => this.queueSync(), 100));
-		this._register(resource.onDidChangeKeybindings(() => scheduler.schedule()));
+		this._register(resource.onDidUpdateKeybindings(() => scheduler.schedule()));
 		this.queueSync();
 	}
 

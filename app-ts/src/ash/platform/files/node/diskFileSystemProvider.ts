@@ -12,6 +12,8 @@ export class DiskFileSystemProvider extends Disposable implements IFileService {
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
 	private readonly roots: readonly string[];
+	// Windows have separate provider instances; compare-and-write must share one host queue.
+	private static readonly pendingWrites = new Map<string, Promise<unknown>>();
 
 	constructor(roots: readonly URI[]) {
 		super();
@@ -47,15 +49,19 @@ export class DiskFileSystemProvider extends Disposable implements IFileService {
 
 	public async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
 		const path = await this.path(request.resource);
-		await mkdir(dirname(path), { recursive: true });
-		const temporary = `${path}.${randomUUID()}.tmp`;
-		try {
-			await writeFile(temporary, request.content, { encoding: 'utf8', flag: 'wx' });
-			if (request.expectedRevision !== undefined && (await this.readFile(request.resource)).revision !== request.expectedRevision) throw new FileRevisionConflictError(request.resource);
-			await rename(temporary, path);
-		} finally { await rm(temporary, { force: true }); }
-		this.changes.fire({ resources: [request.resource] });
-		return { stat: await this.stat(request.resource), revision: revision(Buffer.from(request.content)) };
+		return this.withWrite(path, async () => {
+			await mkdir(dirname(path), { recursive: true });
+			const temporary = `${path}.${randomUUID()}.tmp`;
+			try {
+				await writeFile(temporary, request.content, { encoding: 'utf8', flag: 'wx' });
+				if (request.expectedRevision !== undefined && (await this.readFile(request.resource)).revision !== request.expectedRevision) {
+					throw new FileRevisionConflictError(request.resource);
+				}
+				await rename(temporary, path);
+			} finally { await rm(temporary, { force: true }); }
+			this.changes.fire({ resources: [request.resource] });
+			return { stat: await this.stat(request.resource), revision: revision(Buffer.from(request.content)) };
+		});
 	}
 
 	public async writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
@@ -134,6 +140,18 @@ export class DiskFileSystemProvider extends Disposable implements IFileService {
 			else await rm(path, { force: missing === 'ignore', recursive: mode === 'recursive' });
 		} catch (error) { if (missing !== 'ignore' || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw fileError(error, resource); }
 		this.changes.fire({ resources: [resource] });
+	}
+
+	private async withWrite<T>(path: string, operation: () => Promise<T>): Promise<T> {
+		const previous = DiskFileSystemProvider.pendingWrites.get(path);
+		const pending = (previous ?? Promise.resolve()).catch(() => undefined).then(operation);
+		DiskFileSystemProvider.pendingWrites.set(path, pending);
+		try { return await pending; }
+		finally {
+			if (DiskFileSystemProvider.pendingWrites.get(path) === pending) {
+				DiskFileSystemProvider.pendingWrites.delete(path);
+			}
+		}
 	}
 
 	private async path(resource: URI): Promise<string> {

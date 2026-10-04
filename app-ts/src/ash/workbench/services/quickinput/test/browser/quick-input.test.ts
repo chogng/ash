@@ -438,6 +438,7 @@ function emptyKeybindingService(): KeybindingService {
 			throw new Error("Not needed by Command Palette test");
 		},
 		registerSchemaContribution: () => Disposable.None,
+		getKeybindings: () => [],
 		resolveUserBinding: () => undefined,
 		lookupKeybindings: () => [],
 		lookupKeybinding: () => undefined,

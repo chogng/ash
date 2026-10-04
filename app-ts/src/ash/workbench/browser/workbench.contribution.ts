@@ -1,16 +1,8 @@
-import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
-import {
-	registerWorkbenchContribution,
-	WorkbenchPhase,
-} from "../common/contributions.js";
 import {
 	ViewContainerLocation,
 	WorkbenchViewContainerId,
 	ViewsRegistry,
 } from "../common/views.js";
-import {
-	KeybindingsResourceContribution,
-} from "../services/keybinding/browser/keybindingsResourceContribution.js";
 import {
 	registerFilesViews,
 } from "../contrib/files/browser/explorerViewlet.js";
@@ -100,9 +92,3 @@ registerAction2(OpenFolderAction);
 registerAction2(OpenFolderViaWorkspaceAction);
 registerAction2(CloseWorkspaceAction);
 registerAction2(ShowAboutDialogAction);
-
-registerWorkbenchContribution(
-	"workbench.contrib.keybindingsResource",
-	WorkbenchPhase.BlockRestore,
-	(accessor) => accessor.get(IInstantiationService).createInstance(KeybindingsResourceContribution, {}),
-);

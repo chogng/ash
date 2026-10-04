@@ -52,7 +52,7 @@ export function createJsonHoverProvider(registry: JsonSchemaRegistry = JsonSchem
 			const document = parseJsonDocument(source, jsonParseOptions(request.languageId));
 			const match = propertyAtOffset(document.root, offset);
 			if (!match) return undefined;
-			const propertySchema = jsonSchemaAtPath(schema, match.path);
+			const propertySchema = jsonSchemaAtPath(schema, match.path, document.root);
 			if (!propertySchema?.description && !propertySchema?.title) return undefined;
 			const contents = [propertySchema.title, propertySchema.description].filter((value): value is string => Boolean(value));
 			if (propertySchema.default !== undefined) contents.push(`Default: ${JSON.stringify(propertySchema.default)}`);
@@ -94,7 +94,7 @@ function emptyDocumentCompletions(schema: JsonSchema, position: Position): Langu
 
 function propertyCompletions(document: JsonDocument, rootSchema: JsonSchema, context: JsonPropertyCompletionContext): LanguageCompletionProviderResult | undefined {
 	const path = getJsonNodePath(document.root, context.object);
-	const schema = path ? jsonSchemaAtPath(rootSchema, path) : undefined;
+	const schema = path ? jsonSchemaAtPath(rootSchema, path, document.root) : undefined;
 	const properties = Object.entries(schema?.properties ?? {});
 	if (properties.length === 0) return undefined;
 	const existing = new Set(context.object.properties.map(property => property.key));
@@ -191,7 +191,7 @@ function valueCompletions(source: string, document: JsonDocument, rootSchema: Js
 			range = rangeFromOffsets(source, offset, offset);
 		}
 	}
-	const schema = jsonSchemaAtPath(rootSchema, path);
+	const schema = jsonSchemaAtPath(rootSchema, path, document.root);
 	if (!schema) return undefined;
 	const values = completionValues(schema);
 	if (values.length === 0) return undefined;

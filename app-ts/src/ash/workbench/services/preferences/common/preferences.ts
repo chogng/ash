@@ -109,7 +109,7 @@ export interface IPreferencesService {
 	/** Opens a settings page or reveals a section in its containing page. */
 	openSettings(target?: string): Promise<void>;
 	openUserSettings(options?: IOpenSettingsOptions): Promise<void>;
-	openKeybindings(): Promise<void>;
+	openGlobalKeybindingSettings(textual: boolean): Promise<void>;
 }
 
 export const IPreferencesService = createServiceIdentifier<IPreferencesService>('preferencesService');

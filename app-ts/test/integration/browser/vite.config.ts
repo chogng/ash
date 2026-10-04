@@ -25,6 +25,7 @@ export default defineConfig({
 				markdown: resolve(import.meta.dirname, 'markdown.html'),
 				themes: resolve(import.meta.dirname, "themes.html"),
 				webTransport: resolve(import.meta.dirname, 'webTransport.html'),
+				files: resolve(import.meta.dirname, 'files.html'),
 				dialog: resolve(import.meta.dirname, "dialog.html"),
 				onboarding: resolve(import.meta.dirname, 'onboarding.html'),
 				link: resolve(import.meta.dirname, 'link.html'),

@@ -12,23 +12,16 @@ import { commandActionLabel } from '../../../../platform/action/common/action.js
 import { isMenuItem, MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import type { CommandId } from '../../../../platform/commands/common/commands.js';
 import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
-import type { IContextKeyService, IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { KeybindingContextKeys, type IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
-import type { IKeybindingsResourceService } from '../../../../platform/keybinding/common/keybindingsResource.js';
-import type { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import { IContextKeyService, type IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { KeybindingContextKeys, IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import type { EditorInput } from '../../../browser/parts/editor/editorInput.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { isKeyboardShortcutsEditorInput } from '../../../services/preferences/browser/keybindingsEditorInput.js';
 import { KeyboardShortcutsEditorModel, type KeyboardShortcutItem } from '../../../services/preferences/browser/keybindingsEditorModel.js';
 
 export const KeyboardShortcutsEditorId = 'workbench.editor.keyboardShortcuts';
-
-interface KeyboardShortcutsEditorOptions {
-	readonly contextKeyService: IContextKeyService;
-	readonly keybindingService: IKeybindingService;
-	readonly keybindingsResourceService: IKeybindingsResourceService;
-	readonly keyboardLayoutService: IKeyboardLayoutService;
-}
 
 /** A tab-hosted editor for searching and updating the active keybindings resource. */
 export class KeyboardShortcutsEditor extends Disposable implements IEditorPane {
@@ -52,11 +45,14 @@ export class KeyboardShortcutsEditor extends Disposable implements IEditorPane {
 	private editingItem: KeyboardShortcutItem | undefined;
 	private saving = false;
 
-	constructor(private readonly options: KeyboardShortcutsEditorOptions) {
+	constructor(
+		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IKeybindingService private readonly keybindingService: IKeybindingService,
+		@IKeyboardLayoutService private readonly keyboardLayoutService: IKeyboardLayoutService,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
 		super();
-		this.model = this._register(new KeyboardShortcutsEditorModel({
-			keybindingService: options.keybindingService,
-			resourceService: options.keybindingsResourceService,
+		this.model = this._register(instantiationService.createInstance(KeyboardShortcutsEditorModel, {
 			commandLabel: commandLabel,
 		}));
 		this._register(this.model.onDidChange(items => this.renderRows(items)));
@@ -76,7 +72,7 @@ export class KeyboardShortcutsEditor extends Disposable implements IEditorPane {
 		this.container = container;
 		this._register(toDisposable(() => container.remove()));
 
-		this.scopedContext = this._register(this.options.contextKeyService.createScoped(container));
+		this.scopedContext = this._register(this.contextKeyService.createScoped(container));
 		this.recordingContext = KeybindingContextKeys.isRecording.bindTo(this.scopedContext);
 
 		const header = h(ownerDocument, 'header');
@@ -132,13 +128,7 @@ export class KeyboardShortcutsEditor extends Disposable implements IEditorPane {
 
 	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
 		if (!isKeyboardShortcutsEditorInput(input)) throw new RangeError(`Keyboard Shortcuts editor cannot open ${input.resource}`);
-		try {
-			await this.options.keybindingsResourceService.reload();
-			throwIfCancelled(signal, 'Keyboard Shortcuts loading was cancelled');
-		} catch (error) {
-			throwIfCancelled(signal, 'Keyboard Shortcuts loading was cancelled');
-			this.setStatus(error instanceof Error ? error.message : 'Unable to load keyboard shortcuts.', true);
-		}
+		throwIfCancelled(signal, 'Keyboard Shortcuts loading was cancelled');
 	}
 
 	public clearInput(): void {
@@ -226,7 +216,7 @@ export class KeyboardShortcutsEditor extends Disposable implements IEditorPane {
 		stopEvent(event);
 		if (isModifierKey(event) || event.isComposing || event.key === 'Process') return;
 		const keyboardEvent = new StandardKeyboardEvent(event);
-		const resolved = this.options.keyboardLayoutService.getKeyboardMapper().resolveKeyboardEvent({
+		const resolved = this.keyboardLayoutService.getKeyboardMapper().resolveKeyboardEvent({
 			key: keyboardEvent.key,
 			code: keyboardEvent.code,
 			keyCode: keyboardEvent.keyCode,

@@ -1,3 +1,5 @@
+import { IFileService } from '../../../../platform/files/common/files.js';
+import { IUserDataProfileService } from '../../userDataProfile/common/userDataProfile.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { editJsonObjectProperty, parseJsonDocument } from '../../../../base/common/json.js';
 import { Range } from '../../../../editor/common/core/range.js';
@@ -9,7 +11,7 @@ import { IEditorService } from '../../editor/common/editorService.js';
 import { IFileTextModelService } from '../../textmodelResolver/common/textModelResourceService.js';
 import type { IOpenSettingsOptions, IPreferencesService } from '../common/preferences.js';
 import { createSettingsEditorInput, createUserSettingsEditorInput } from '../common/settingsEditorInput.js';
-import { createKeyboardShortcutsEditorInput } from './keybindingsEditorInput.js';
+import { createKeybindingsJsonEditorInput, createKeyboardShortcutsEditorInput } from './keybindingsEditorInput.js';
 
 /** Routes Preferences through the editor and its shared, revision-aware file models. */
 export class PreferencesService extends Disposable implements IPreferencesService {
@@ -18,6 +20,8 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 	constructor(
 		@IEditorService private readonly editorService: IEditorService,
 		@IFileTextModelService private readonly models: IFileTextModelService,
+		@IFileService private readonly files: IFileService,
+		@IUserDataProfileService private readonly profiles: IUserDataProfileService,
 	) {
 		super();
 		this._register(toDisposable(() => this.lifetime.abort()));
@@ -64,7 +68,17 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 		await this.editorService.openEditor(input, { pinned: true, selection });
 	}
 
-	public async openKeybindings(): Promise<void> {
-		await this.editorService.openEditor(createKeyboardShortcutsEditorInput(), { pinned: true });
+	public async openGlobalKeybindingSettings(textual: boolean): Promise<void> {
+		if (!textual) {
+			await this.editorService.openEditor(createKeyboardShortcutsEditorInput(), { pinned: true });
+			return;
+		}
+		const resource = this.profiles.currentProfile.keybindingsResource;
+		await this.files.createFile(resource, 'ignore');
+		const current = await this.files.readFile(resource);
+		if (current.content.trim().length === 0 && !this.models.getModel(resource)) {
+			await this.files.writeFile({ resource, content: '[]\n', expectedRevision: current.revision });
+		}
+		await this.editorService.openEditor(createKeybindingsJsonEditorInput(resource), { pinned: true });
 	}
 }

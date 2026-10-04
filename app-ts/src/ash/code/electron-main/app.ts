@@ -45,7 +45,6 @@ import { ConfigurationMainService } from "../../platform/configuration/electron-
 import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
 import { developmentArtifactsPath } from "../../platform/environment/node/developmentArtifacts.js";
 import { ElectronOpenerService } from "../../platform/opener/electron-main/electronOpenerService.js";
-import { KeybindingsResourceMainService } from "../../platform/keybinding/electron-main/keybindingsResourceMainService.js";
 import { NativeKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";
 import { UserKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
@@ -133,7 +132,6 @@ export interface AshApplicationOptions {
 interface PersistentServices {
 	readonly state: StateService;
 	readonly configuration: ConfigurationMainService;
-	readonly keybindings: KeybindingsResourceMainService;
 	readonly userKeyboardLayout: UserKeyboardLayoutMainService;
 }
 
@@ -212,13 +210,13 @@ type WindowSessionEntry =
 
 const AGENTS_WINDOW_KEY = 'agents';
 
-async function watchProfileThemeFiles(profileRoot: string, window: BrowserWindow, resources: DisposableStore): Promise<void> {
-	const directory = join(profileRoot, 'themes');
-	await mkdir(directory, { recursive: true });
-	const watcher = watch(directory, { persistent: false, recursive: true }, () => {
-		window.webContents.send(LOCAL_FILE_SYSTEM_CHANGED_CHANNEL);
+async function watchProfileFiles(profileRoot: string, window: BrowserWindow, resources: DisposableStore): Promise<void> {
+	await mkdir(join(profileRoot, 'themes'), { recursive: true });
+	const watcher = watch(profileRoot, { persistent: false, recursive: true }, (_event, filename) => {
+		const resources = filename === null ? undefined : [URI.file(join(profileRoot, filename.toString())).toString()];
+		window.webContents.send(LOCAL_FILE_SYSTEM_CHANGED_CHANNEL, resources);
 	});
-	watcher.on('error', error => console.error('Failed to watch user themes', error));
+	watcher.on('error', error => console.error('Failed to watch user profile files', error));
 	resources.add(toDisposable(() => watcher.close()));
 }
 
@@ -840,20 +838,12 @@ export class AshApplication extends Disposable {
 
 	private async createPersistentServices(token: CancellationToken): Promise<void> {
 		let configuration: ConfigurationMainService | undefined;
-		let keybindings: KeybindingsResourceMainService | undefined;
 		let userKeyboardLayout: UserKeyboardLayoutMainService | undefined;
 		try {
 			configuration = await ConfigurationMainService.create({
 				filePath: join(this.profileRoot, "settings.json"),
 				onError: (error) => {
 					console.error("Failed to process configuration", error);
-				},
-			});
-			throwIfCancelled(token);
-			keybindings = await KeybindingsResourceMainService.create({
-				filePath: join(this.profileRoot, "keybindings.json"),
-				onError: (error) => {
-					console.error("Failed to process keybindings resource", error);
 				},
 			});
 			throwIfCancelled(token);
@@ -865,11 +855,10 @@ export class AshApplication extends Disposable {
 				},
 			});
 			throwIfCancelled(token);
-			this.persistentServices = { state: this.stateService, configuration, keybindings, userKeyboardLayout };
+			this.persistentServices = { state: this.stateService, configuration, userKeyboardLayout };
 		} catch (error) {
 			await Promise.all([
 				configuration?.close(),
-				keybindings?.close(),
 				userKeyboardLayout?.close(),
 			]);
 			throw error;
@@ -1246,7 +1235,6 @@ export class AshApplication extends Disposable {
 		}));
 		const windowResources = {
 			configuration: this.services.configuration,
-			keybindings: this.services.keybindings,
 			nativeKeyboardLayout: this.nativeKeyboardLayout,
 			userKeyboardLayout: this.services.userKeyboardLayout,
 		};
@@ -1411,7 +1399,7 @@ export class AshApplication extends Disposable {
 			workspaceRecoveryIpcRoute(identifiers => this.windowsMainService.restoreWorkspaces(identifiers, async identifier => (await this.openWorkspace(identifier, workspaces))?.window)),
 			...updateIpcRoutes(this.updateMainService),
 		];
-		await watchProfileThemeFiles(this.profileRoot, window, windowDisposables);
+		await watchProfileFiles(this.profileRoot, window, windowDisposables);
 		const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 		ipcRoutes.push(...nativeContextMenuIpcRoutes(systemContextMenu));
 		if (this.nativeMenubar) {
@@ -1599,7 +1587,6 @@ export class AshApplication extends Disposable {
 					}));
 					const windowResources = {
 						configuration: this.services.configuration,
-						keybindings: this.services.keybindings,
 						nativeKeyboardLayout: this.nativeKeyboardLayout,
 						userKeyboardLayout: this.services.userKeyboardLayout,
 					};
@@ -1654,7 +1641,7 @@ export class AshApplication extends Disposable {
 						},
 						windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 					];
-					await watchProfileThemeFiles(this.profileRoot, window, windowDisposables);
+					await watchProfileFiles(this.profileRoot, window, windowDisposables);
 					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 					ipcRoutes.push(...nativeContextMenuIpcRoutes(systemContextMenu));
 					windowDisposables.add(this.trustedIpcRouter.register(
@@ -1998,7 +1985,6 @@ export class AshApplication extends Disposable {
 			this.stateService.close(),
 			...(services ? [
 				services.configuration.close(),
-				services.keybindings.close(),
 				services.userKeyboardLayout.close(),
 			] : []),
 		]).catch(error => {

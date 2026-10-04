@@ -710,10 +710,18 @@
 		"output.help.links": "将光标放到文件位置上并执行 <keybinding:editor.action.openLink>，或按住 Ctrl 或 Command 点击。工作区文件会打开到所报告的行列位置。",
 		"output.help.scroll": "向上滚动会暂停自动滚动。启用自动滚动可跟随新增输出。更多输出操作可在编辑器中打开实时通道或导出保留的文本。",
 		"externalUriOpener.settingDescription": "将 HTTP 和 HTTPS URL 模式映射到打开方式 ID。使用 default 选择标准浏览器。使用第一个匹配且可用的打开方式。",
+		"folding.defaultProvider.description": "通过标识符选择折叠范围提供者。null 使用所有当前启用的折叠范围提供者。",
+		"folding.defaultProvider.all": "所有当前启用的折叠范围提供者",
+		"folding.defaultProvider.invalid": "默认折叠范围提供者必须是非空标识符或 null。",
 		"externalUriOpener.choose": "选择链接打开方式",
 		"externalUriOpener.prompt": "你想如何打开 {0}？",
 		"externalUriOpener.default": "在默认浏览器中打开",
-		"externalUriOpener.configure": "配置默认打开方式..."
+		"externalUriOpener.configure": "配置默认打开方式...",
+		"keybindings.saveFirst": "请先保存 keybindings.json，再在键盘快捷方式编辑器中修改快捷键。",
+		"keybindings.changed": "此快捷键已更改。请重新选择后再编辑。",
+		"keybindings.invalid": "无法加载 keybindings.json：{0}",
+		"keybindings.jsonLabel": "键盘快捷方式（JSON）",
+		"keybindings.openJson": "首选项：打开键盘快捷方式（JSON）"
 	},
 	"ash.menu": {
 		"file": "文件",

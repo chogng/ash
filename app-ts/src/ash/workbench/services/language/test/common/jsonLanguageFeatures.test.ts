@@ -174,3 +174,31 @@ function associatedRegistry(): JsonSchemaRegistry {
 	registry.registerAssociation(resource, 'test://schema/nested');
 	return registry;
 }
+
+for (const [label, markedSource, expected] of [
+	['conditional arguments', '[{"command":"editor.action.pasteAs","args":{"|":null}}]', ['kind', 'preferences']],
+	['provider kind', '[{"command":"editor.action.pasteAs","args":{"kind":|}}]', ['"text"', '"uri"']],
+	['ordered preferences', '[{"command":"editor.action.pasteAs","args":{"preferences":[|]}}]', ['"text"', '"uri"']],
+	['unrelated command', '[{"command":"other.command","args":{"|":null}}]', []],
+] as const) {
+	test(`JSON completion follows allOf command conditions for ${label}`, async () => {
+		using registry = new JsonSchemaRegistry();
+		using schemaRegistration = registry.registerSchema('test://conditional-keybindings', {
+			type: 'array', items: {
+				type: 'object', properties: { command: { type: 'string' }, args: { type: 'object' } },
+				allOf: [{
+					if: { required: ['command'], properties: { command: { const: 'editor.action.pasteAs' } } },
+					then: { properties: { args: { anyOf: [{ type: 'object', properties: { kind: { enum: ['text', 'uri'] } } }, { type: 'object', properties: { preferences: { type: 'array', items: { enum: ['text', 'uri'] } } } }] } } },
+				}],
+			},
+		});
+		using association = registry.registerAssociation(resource, 'test://conditional-keybindings');
+		const offset = markedSource.indexOf('|');
+		using model = new TextModel(markedSource.replace('|', ''));
+		const result = await createJsonCompletionProvider(registry).provideCompletions({
+			requestId: 1, resource, languageId: 'jsonc', position: model.getPositionAt(offset),
+			context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
+		}, new AbortController().signal);
+		assert.deepEqual(result?.items.map(item => item.label) ?? [], expected);
+	});
+}

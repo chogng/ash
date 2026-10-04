@@ -24,6 +24,7 @@ import { CutAction, PasteAction } from '../../../src/ash/editor/contrib/clipboar
 import { FontStyle, MetadataConsts, TokenMetadata } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
 import { SparseMultilineTokens } from '../../../src/ash/editor/common/tokens/sparseMultilineTokens.js';
 import { formatEditor, FormattingConflicts, FormattingKind, FormattingMode } from '../../../src/ash/editor/contrib/format/browser/format.js';
+import { FoldingController } from '../../../src/ash/editor/contrib/folding/browser/folding.js';
 import { type CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { scheduleAtNextAnimationFrame } from '../../../src/ash/base/browser/scheduler.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
@@ -213,6 +214,9 @@ interface StandaloneHarness {
 	invokeLanguageAction(id: string): void;
 	setFoldingSelections(selections: [number, number, number, number][]): void;
 	setFoldingModelAttached(attached: boolean): void;
+	prepareFoldingProviders(): void;
+	selectFoldingProvider(id: string | null): void;
+	readFoldingProviderRanges(): number[][];
 	prepareFoldingKeybinding(command?: string, args?: unknown): void;
 	readFoldingCommandState(): { supported: boolean; inChordMode: boolean };
 	runFoldingCommand(command: string, args?: unknown): Promise<void>;
@@ -993,6 +997,23 @@ window.ashStandaloneIntegration = {
 	invokeLanguageAction: id => { callerEditor.trigger('test', id, {}); },
 	setFoldingSelections: selections => callerEditor.setSelections(selections.map(selection => new stanza.Selection(...selection))),
 	setFoldingModelAttached: attached => callerEditor.setModel(attached ? callerModel : null),
+	prepareFoldingProviders: () => {
+		contributionProviders.clear();
+		callerModel.setLanguage('plaintext');
+		callerEditor.setValue('one\ntwo\nthree\nfour\nfive');
+		callerEditor.setPosition(new stanza.Position(1, 1));
+		callerEditor.updateOptions({ foldingStrategy: 'auto' });
+		contributionProviders.add(stanza.languages.registerFoldingRangeProvider('plaintext', {
+			id: 'test.first', provideFoldingRanges: () => [{ startLineIndex: 0, endLineIndex: 2 }],
+		}));
+		contributionProviders.add(stanza.languages.registerFoldingRangeProvider('plaintext', {
+			id: 'test.second', provideFoldingRanges: () => [{ startLineIndex: 1, endLineIndex: 3 }],
+		}));
+	},
+	selectFoldingProvider: id => {
+		contributionProviders.add(FoldingController.setFoldingRangeProviderSelector(providers => id === null ? undefined : providers.filter(provider => provider.id === id)));
+	},
+	readFoldingProviderRanges: () => callerModel.getAllDecorations().filter(decoration => decoration.options.description === 'folding-expanded').map(decoration => [decoration.range.startLineNumber, decoration.range.endLineNumber]),
 	prepareFoldingKeybinding: (command = 'editor.foldAll', args) => {
 		contributionProviders.add(KeybindingsRegistry.registerKeybindingRule({
 			command,

@@ -58,3 +58,16 @@ test('desktop file provider rejects directory links outside the granted root', a
 		await assert.rejects(provider.readDirectory(URI.file(join(directory, 'linked'))), /Symbolic links/);
 	} finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test('desktop file events retain exact resources and reject malformed transport data', () => {
+	let notify: ((resources: unknown) => void) | undefined;
+	using client = new DiskFileSystemProviderClient(async () => undefined, listener => { notify = listener; return { dispose() {} }; });
+	const observed: Array<readonly string[] | undefined> = [];
+	using subscription = client.onDidChangeFiles(event => observed.push(event.resources?.map(resource => resource.toString())));
+	const resource = URI.file('/profile/keybindings.json');
+	notify!([resource.toString()]);
+	notify!(undefined);
+	assert.deepEqual(observed, [[resource.toString()], undefined]);
+	assert.throws(() => notify!([42]), /Invalid file-change/u);
+	assert.throws(() => notify!(['https://example.test/file']), /Invalid file-change/u);
+});

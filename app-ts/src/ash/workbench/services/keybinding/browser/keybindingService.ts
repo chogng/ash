@@ -1,3 +1,12 @@
+import { extUri } from '../../../../base/common/resources.js';
+import { environment } from '../../../../base/common/platform.js';
+import { FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
+import { IUserDataProfileService } from '../../userDataProfile/common/userDataProfile.js';
+import { parseUserKeybindings } from '../common/keybindingIO.js';
+import { parseContextKeyExpression } from '../../../../platform/contextkey/common/contextKeyExpressionParser.js';
+import { ResolvedKeybindingItem } from '../../../../platform/keybinding/common/resolvedKeybindingItem.js';
+import type { IUserFriendlyKeybinding } from '../../../../platform/keybinding/common/keybinding.js';
+import { localize } from '../../../../nls.js';
 import { type JsonSchema } from '../../../../base/common/jsonSchema.js';
 import { JsonSchemasRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
 import { type KeybindingsSchemaContribution } from '../../../../platform/keybinding/common/keybinding.js';
@@ -22,6 +31,7 @@ import {
 	ResolvedKeybinding,
 } from "../../../../base/common/keybindings.js";
 import {
+	combinedDisposable,
 	Disposable,
 	DisposableMap,
 	DisposableStore,
@@ -46,6 +56,8 @@ import {
 	type KeybindingResolveResult,
 } from "../../../../platform/keybinding/common/keybindingResolver.js";
 import {
+	KeybindingRuleKind,
+	KeybindingSource,
 	type KeybindingRegistry,
 	KeybindingsRegistry,
 } from "../../../../platform/keybinding/common/keybindingsRegistry.js";
@@ -80,6 +92,10 @@ export interface WorkbenchKeybindingServiceOptions {
 export class WorkbenchKeybindingService
 	extends Disposable
 	implements IKeybindingService, IKeyboardShortcutTroubleshootingService {
+	private userBindings: readonly IUserFriendlyKeybinding[] = [];
+	private readonly userRegistration = this._register(new MutableDisposable<IDisposable>());
+	private readonly registry: KeybindingRegistry;
+	private loadQueue: Promise<void> = Promise.resolve();
 	private readonly schemaContributions = new Map<KeybindingsSchemaContribution, IDisposable | undefined>();
 	private readonly schemaRegistration = this._register(new MutableDisposable<IDisposable>());
 	private readonly ownerWindow: Window;
@@ -109,6 +125,8 @@ export class WorkbenchKeybindingService
 	constructor(
 		options: WorkbenchKeybindingServiceOptions,
 		@INotificationService private readonly notificationService: INotificationService,
+		@IFileService private readonly files: IFileService,
+		@IUserDataProfileService private readonly profiles: IUserDataProfileService,
 	) {
 		super();
 		const ownerWindow = options.ownerDocument.defaultView;
@@ -118,8 +136,9 @@ export class WorkbenchKeybindingService
 		this.contextKeyService = options.contextKeyService;
 		this.keyboardLayoutService = options.keyboardLayoutService;
 		this.statusbarService = options.statusbarService;
+		this.registry = options.registry ?? KeybindingsRegistry;
 		this.resolver = new KeybindingResolver({
-			registry: options.registry ?? KeybindingsRegistry,
+			registry: this.registry,
 			resolveKeybinding: (keybinding) => this.keyboardLayoutService
 				.getKeyboardMapper()
 				.resolveKeybinding(keybinding),
@@ -144,6 +163,12 @@ export class WorkbenchKeybindingService
 			this._onDidUpdateKeybindings.fire();
 		}));
 		this.updateKeybindingsSchema();
+		this._register(JsonSchemasRegistry.registerAssociation(profiles.currentProfile.keybindingsResource, 'ash://schemas/keybindings'));
+		this._register(files.onDidChangeFiles(event => {
+			if (!event.resources || event.resources.some(resource => extUri.isEqual(resource, profiles.currentProfile.keybindingsResource))) {
+				void this.initialize().catch(error => notificationService.warning(localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error))));
+			}
+		}));
 		this._register(toDisposable(() => {
 			for (const listener of this.schemaContributions.values()) listener?.dispose();
 			this.schemaContributions.clear();
@@ -152,6 +177,66 @@ export class WorkbenchKeybindingService
 		for (const { window } of getWindows()) this.attachWindow(window);
 		this._register(onDidRegisterWindow(({ window }) => this.attachWindow(window)));
 		this._register(onWillUnregisterWindow(({ window }) => this.windowListeners.deleteAndDispose(window)));
+	}
+
+	/** Called by the window owner after service registration; file events use the same load queue. */
+	public initialize(): Promise<void> {
+		const result = this.loadQueue.then(async () => {
+			if (this.isDisposed) {
+				return;
+			}
+			let source: string;
+			try { source = (await this.files.readFile(this.profiles.currentProfile.keybindingsResource)).content; }
+			catch (error) {
+				if (!(error instanceof FileNotFoundError)) {
+					throw error;
+				}
+				source = '[]';
+			}
+			const bindings = parseUserKeybindings(source);
+			if (this.isDisposed || JSON.stringify(bindings) === JSON.stringify(this.userBindings)) {
+				return;
+			}
+			const registrations: IDisposable[] = [];
+			for (const binding of bindings) {
+				const key = this.userKey(binding);
+				if (key === null) {
+					continue;
+				}
+				const keybinding = parseKeybinding(key)!;
+				const when = binding.when ? parseContextKeyExpression(binding.when) : undefined;
+				registrations.push(binding.command === null
+					? this.registry.registerKeybindingBlocker({ keybinding, when, source: KeybindingSource.User })
+					: this.registry.registerKeybindingRule({ command: binding.command, keybinding, when, args: binding.args === undefined ? undefined : [binding.args], source: KeybindingSource.User }));
+			}
+			this.userBindings = bindings;
+			this.userRegistration.value = combinedDisposable(...registrations);
+			this._onDidUpdateKeybindings.fire();
+		});
+		this.loadQueue = result.then(() => undefined, () => undefined);
+		return result;
+	}
+
+	public getKeybindings(): readonly ResolvedKeybindingItem[] {
+		const defaults = this.registry.getKeybindings().filter(rule => rule.source !== KeybindingSource.User).map(rule =>
+			new ResolvedKeybindingItem(this.resolveKeybinding(rule.keybinding), rule.kind === KeybindingRuleKind.Command ? rule.command : null,
+				rule.kind === KeybindingRuleKind.Command ? rule.args?.[0] : undefined, rule.when, true, null, true));
+		const users = this.userBindings.map((entry, index) => {
+			const key = this.userKey(entry);
+			return new ResolvedKeybindingItem(key === null ? undefined : this.resolveUserBinding(key), entry.command, entry.args,
+				entry.when ? parseContextKeyExpression(entry.when) : undefined, false, null, false,
+				{ index, entry });
+		});
+		return [...defaults, ...users];
+	}
+
+	private userKey(binding: IUserFriendlyKeybinding): string | null {
+		switch (environment.os) {
+			case 'mac': return binding.mac === undefined ? binding.key : binding.mac;
+			case 'windows': return binding.win === undefined ? binding.key : binding.win;
+			case 'linux': return binding.linux === undefined ? binding.key : binding.linux;
+			case 'unknown': return binding.key;
+		}
 	}
 
 	public registerSchemaContribution(contribution: KeybindingsSchemaContribution): IDisposable {

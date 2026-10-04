@@ -3,14 +3,17 @@ import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js'
 import { serializeKeybinding } from '../../../../base/common/keybindingParser.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { CommandsRegistry, type CommandId, type CommandRegistry } from '../../../../platform/commands/common/commands.js';
-import type { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { KeybindingRuleKind, KeybindingsRegistry, KeybindingSource, type KeybindingRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-import type { IKeybindingEntry, IKeybindingsResourceService } from '../../../../platform/keybinding/common/keybindingsResource.js';
+import { IKeybindingEditingService } from '../../keybinding/common/keybindingEditing.js';
+import type { IUserFriendlyKeybinding } from '../../../../platform/keybinding/common/keybinding.js';
+import { ResolvedKeybindingItem } from '../../../../platform/keybinding/common/resolvedKeybindingItem.js';
 
 export type KeyboardShortcutItemSource = 'builtin' | 'unassigned' | 'user' | 'workbench';
 
 export interface KeyboardShortcutItem {
 	readonly id: string;
+	readonly keybindingItem: ResolvedKeybindingItem;
 	readonly command: CommandId | null;
 	readonly commandLabel: string;
 	readonly key: string;
@@ -21,8 +24,6 @@ export interface KeyboardShortcutItem {
 }
 
 export interface KeyboardShortcutsEditorModelOptions {
-	readonly keybindingService: IKeybindingService;
-	readonly resourceService: IKeybindingsResourceService;
 	readonly commandLabel: (command: CommandId) => string;
 	readonly commandRegistry?: CommandRegistry;
 	readonly keybindingRegistry?: KeybindingRegistry;
@@ -38,14 +39,17 @@ export class KeyboardShortcutsEditorModel extends Disposable {
 
 	public readonly onDidChange = this._onDidChange.event;
 
-	constructor(private readonly options: KeyboardShortcutsEditorModelOptions) {
+	constructor(
+		private readonly options: KeyboardShortcutsEditorModelOptions,
+		@IKeybindingService private readonly keybindings: IKeybindingService,
+		@IKeybindingEditingService private readonly editing: IKeybindingEditingService,
+	) {
 		super();
 		this.commandRegistry = options.commandRegistry ?? CommandsRegistry;
 		this.keybindingRegistry = options.keybindingRegistry ?? KeybindingsRegistry;
 		this.refresh();
-		this._register(options.resourceService.onDidChangeKeybindings(() => this.refresh()));
 		this._register(this.keybindingRegistry.onDidChangeKeybindings(() => this.refresh()));
-		this._register(options.keybindingService.onDidUpdateKeybindings(() => this.refresh()));
+		this._register(this.keybindings.onDidUpdateKeybindings(() => this.refresh()));
 	}
 
 	public get items(): readonly KeyboardShortcutItem[] {
@@ -61,36 +65,13 @@ export class KeyboardShortcutsEditorModel extends Disposable {
 
 	public async save(item: KeyboardShortcutItem, key: string, when: string): Promise<void> {
 		const normalizedKey = key.trim();
-		const normalizedWhen = when.trim();
-		if (!this.options.keybindingService.resolveUserBinding(normalizedKey)) {
-			throw new TypeError(`Invalid keybinding: ${normalizedKey || '(empty)'}`);
-		}
-		const bindings = [...this.options.resourceService.getKeybindings()];
-		const entry: IKeybindingEntry = {
-			key: normalizedKey,
-			command: item.command,
-			...(normalizedWhen ? { when: normalizedWhen } : {}),
-		};
-		if (item.source === 'user') {
-			const index = findUserEntryIndex(bindings, item.id);
-			if (index < 0) throw new Error('This shortcut changed before it could be saved.');
-			bindings[index] = {
-				...bindings[index],
-				...entry,
-			};
-		} else {
-			bindings.push(entry);
-		}
-		await this.options.resourceService.updateKeybindings(bindings);
+		if (!this.keybindings.resolveUserBinding(normalizedKey)) throw new TypeError(`Invalid keybinding: ${normalizedKey || '(empty)'}`);
+		await this.editing.editKeybinding(item.keybindingItem, normalizedKey, when.trim() || undefined);
 	}
 
 	public async remove(item: KeyboardShortcutItem): Promise<void> {
 		if (item.source !== 'user') throw new TypeError('Only user shortcuts can be removed.');
-		const bindings = [...this.options.resourceService.getKeybindings()];
-		const index = findUserEntryIndex(bindings, item.id);
-		if (index < 0) throw new Error('This shortcut was already removed.');
-		bindings.splice(index, 1);
-		await this.options.resourceService.updateKeybindings(bindings);
+		await this.editing.removeKeybinding(item.keybindingItem);
 	}
 
 	private refresh(): void {
@@ -103,10 +84,11 @@ export class KeyboardShortcutsEditorModel extends Disposable {
 			const source = rule.source === KeybindingSource.Builtin ? 'builtin' : 'workbench';
 			items.push({
 				id: `registered:${rule.order}`,
+				keybindingItem: new ResolvedKeybindingItem(this.keybindings.resolveKeybinding(rule.keybinding), command, rule.kind === KeybindingRuleKind.Command ? rule.args?.[0] : undefined, rule.when, true, null, true),
 				command,
 				commandLabel: command ? this.options.commandLabel(command) : 'Blocked shortcut',
 				key: serializeKeybinding(rule.keybinding),
-				keyLabel: getKeybindingLabel(this.options.keybindingService.resolveKeybinding(rule.keybinding)),
+				keyLabel: getKeybindingLabel(this.keybindings.resolveKeybinding(rule.keybinding)),
 				when: rule.when ? [...rule.when.keys()].sort().join(' && ') : '',
 				source,
 				sourceLabel: source === 'builtin' ? 'Default' : 'Workbench',
@@ -114,14 +96,17 @@ export class KeyboardShortcutsEditorModel extends Disposable {
 		}
 
 		const userOccurrences = new Map<string, number>();
-		for (const entry of this.options.resourceService.getKeybindings()) {
+		for (const keybindingItem of this.keybindings.getKeybindings()) {
+			if (!keybindingItem.userBinding) continue;
+			const entry = keybindingItem.userBinding.entry;
 			if (entry.command) assignedCommands.add(entry.command);
 			const fingerprint = userEntryFingerprint(entry);
 			const occurrence = userOccurrences.get(fingerprint) ?? 0;
 			userOccurrences.set(fingerprint, occurrence + 1);
-			const resolved = this.options.keybindingService.resolveUserBinding(entry.key);
+			const resolved = this.keybindings.resolveUserBinding(entry.key);
 			items.push({
 				id: userItemId(entry, occurrence),
+				keybindingItem,
 				command: entry.command,
 				commandLabel: entry.command ? this.options.commandLabel(entry.command) : 'Blocked shortcut',
 				key: entry.key,
@@ -136,6 +121,7 @@ export class KeyboardShortcutsEditorModel extends Disposable {
 			if (assignedCommands.has(command)) continue;
 			items.push({
 				id: `unassigned:${command}`,
+				keybindingItem: new ResolvedKeybindingItem(undefined, command, undefined, undefined, true, null, false),
 				command,
 				commandLabel: this.options.commandLabel(command),
 				key: '',
@@ -164,23 +150,11 @@ function filterItems(items: readonly KeyboardShortcutItem[], query: string): rea
 	});
 }
 
-function findUserEntryIndex(bindings: readonly IKeybindingEntry[], itemId: string): number {
-	const occurrences = new Map<string, number>();
-	for (let index = 0; index < bindings.length; index += 1) {
-		const entry = bindings[index];
-		const fingerprint = userEntryFingerprint(entry);
-		const occurrence = occurrences.get(fingerprint) ?? 0;
-		occurrences.set(fingerprint, occurrence + 1);
-		if (userItemId(entry, occurrence) === itemId) return index;
-	}
-	return -1;
-}
-
-function userItemId(entry: IKeybindingEntry, occurrence: number): string {
+function userItemId(entry: IUserFriendlyKeybinding, occurrence: number): string {
 	return `user:${stableHash(userEntryFingerprint(entry))}:${occurrence}`;
 }
 
-function userEntryFingerprint(entry: IKeybindingEntry): string {
+function userEntryFingerprint(entry: IUserFriendlyKeybinding): string {
 	return JSON.stringify(entry);
 }
 

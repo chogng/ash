@@ -620,6 +620,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		{
 			inChordMode: false,
 		registerSchemaContribution: () => Disposable.None,
+		getKeybindings: () => [],
 			onDidUpdateKeybindings: Event.None,
 			resolveKeybinding() { throw new Error("Not used"); },
 			resolveUserBinding() { return undefined; },

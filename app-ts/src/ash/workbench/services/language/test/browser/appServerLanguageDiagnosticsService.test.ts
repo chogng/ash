@@ -90,6 +90,32 @@ suite('App Server diagnostics shutdown', () => {
 		});
 	}
 
+	for (const disposed of [false, true]) {
+		test(`workspace diagnostic rejection ${disposed ? 'after disposal is released' : 'while live is reported'}`, async () => {
+			const api = new FakeLanguageApi();
+			let rejectReport: ((error: Error) => void) | undefined;
+			api.directoryDiagnostics = async () => {
+				api.workspaceDiagnosticPulls++;
+				if (api.workspaceDiagnosticPulls > 1) return api.workspaceReport;
+				return new Promise((_, reject) => { rejectReport = reject; });
+			};
+			using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+			using service = new AppServerLanguageDiagnosticsService(api, new FakeServerEvents(), workspace);
+			await tick();
+			assert.ok(rejectReport);
+			const error = new Error('test workspace transport stopped');
+			const reported: unknown[][] = [];
+			const original = console.error;
+			console.error = (...arguments_: unknown[]) => reported.push(arguments_);
+			try {
+				if (disposed) service.dispose();
+				rejectReport(error);
+				await tick();
+				assert.deepEqual(reported, disposed ? [] : [['App Server language document synchronization failed', error]]);
+			} finally { console.error = original; }
+		});
+	}
+
 	test('disposal cancels queued document closes before the transport stops', async () => {
 		const api = new FakeLanguageApi();
 		const documents = new FakeCodeIntelligenceDocuments();

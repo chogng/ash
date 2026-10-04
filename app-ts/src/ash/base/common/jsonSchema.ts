@@ -75,14 +75,13 @@ export interface JsonSchemaIssue {
 	readonly length: number;
 }
 
-/** Resolves a nested schema using object-property and array-index path segments. */
-export function jsonSchemaAtPath(schema: JsonSchema | undefined, path: readonly (string | number)[]): JsonSchema | undefined {
+/** Resolves completion metadata, selecting conditional branches from the current document. */
+export function jsonSchemaAtPath(schema: JsonSchema | undefined, path: readonly (string | number)[], root?: JsonValueNode): JsonSchema | undefined {
 	let current = schema;
+	let node = root;
 	for (const segment of path) {
 		if (!current) return undefined;
-		const containerType = typeof segment === 'number' ? 'array' : 'object';
-		const alternative = current.anyOf?.find(schema => schema.type === containerType || Array.isArray(schema.type) && schema.type.includes(containerType));
-		if (alternative) { current = { ...current, ...alternative }; }
+		current = completionSchema(current, node);
 		if (typeof segment === 'number') {
 			if (isSchemaTuple(current.items)) {
 				const itemSchema = current.items[segment] ?? current.additionalItems;
@@ -90,12 +89,47 @@ export function jsonSchemaAtPath(schema: JsonSchema | undefined, path: readonly 
 			} else {
 				current = current.items;
 			}
-			continue;
+			node = node?.type === 'array' ? node.items[segment] : undefined;
+		} else {
+			const pattern = Object.entries(current.patternProperties ?? {}).find(([expression]) => new RegExp(expression, 'u').test(segment));
+			current = current.properties?.[segment] ?? pattern?.[1] ?? (typeof current.additionalProperties === 'object' ? current.additionalProperties : undefined);
+			node = node?.type === 'object' ? node.properties.find(property => property.key === segment)?.valueNode : undefined;
 		}
-		const pattern = Object.entries(current.patternProperties ?? {}).find(([expression]) => new RegExp(expression, 'u').test(segment));
-		current = current.properties?.[segment] ?? pattern?.[1] ?? (typeof current.additionalProperties === 'object' ? current.additionalProperties : undefined);
 	}
-	return current;
+	return current ? completionSchema(current, node) : undefined;
+}
+
+/** Validation keeps the original schema; this view combines metadata reachable while typing. */
+function completionSchema(schema: JsonSchema, node: JsonValueNode | undefined): JsonSchema {
+	let result = schema;
+	for (const addition of schema.allOf ?? []) {
+		result = mergeCompletionSchemas(result, completionSchema(addition, node));
+	}
+	if (schema.if && node) {
+		const branch = matchesSchema(node, schema.if) ? schema.then : schema.else;
+		if (branch) {
+			result = mergeCompletionSchemas(result, completionSchema(branch, node));
+		}
+	}
+	for (const alternative of [...schema.anyOf ?? [], ...schema.oneOf ?? []]) {
+		const view = completionSchema(alternative, node);
+		// Alternative value constraints remain separate so enum suggestions can include every branch.
+		result = mergeCompletionSchemas(result, { properties: view.properties, patternProperties: view.patternProperties, items: view.items });
+	}
+	return result;
+}
+
+function mergeCompletionSchemas(left: JsonSchema, right: JsonSchema): JsonSchema {
+	const properties = { ...left.properties };
+	for (const [key, value] of Object.entries(right.properties ?? {})) {
+		properties[key] = properties[key] ? mergeCompletionSchemas(properties[key], value) : value;
+	}
+	return {
+		...left,
+		...Object.fromEntries(Object.entries(right).filter(([, value]) => value !== undefined)),
+		properties,
+		patternProperties: { ...left.patternProperties, ...right.patternProperties },
+	};
 }
 
 /** Validates a parsed JSON document against the supported structural schema vocabulary. */

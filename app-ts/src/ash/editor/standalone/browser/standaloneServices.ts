@@ -1,3 +1,5 @@
+import { ResolvedKeybindingItem } from '../../../platform/keybinding/common/resolvedKeybindingItem.js';
+import { KeybindingsRegistry, KeybindingRuleKind } from '../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../common/services/languageFeatureDebounce.js';
 import { StandaloneCodeEditorService } from './standaloneCodeEditorService.js';
@@ -284,6 +286,12 @@ export class StandaloneKeybindingService extends Disposable implements IKeybindi
 		this._register(addDisposableListener(document, 'compositionstart', () => this.clearChords()));
 		this._register(addDisposableListener(window, 'blur', () => this.clearChords()));
 		this._register(this.resolver.onDidChangeKeybindings(() => this.clearChords()));
+	}
+
+	public getKeybindings(): readonly ResolvedKeybindingItem[] {
+		return KeybindingsRegistry.getKeybindings().map(rule => new ResolvedKeybindingItem(
+			this.resolveKeybinding(rule.keybinding), rule.kind === KeybindingRuleKind.Command ? rule.command : null,
+			rule.kind === KeybindingRuleKind.Command ? rule.args?.[0] : undefined, rule.when, true, null, true));
 	}
 
 	get inChordMode(): boolean { return this.chords.length > 0; }

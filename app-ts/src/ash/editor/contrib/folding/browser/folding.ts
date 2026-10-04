@@ -6,7 +6,10 @@ import { isNumber, isObject } from '../../../../base/common/types.js';
 import type { ICommandMetadata } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Emitter } from '../../../../base/common/event.js';
+import type { LanguageFoldingRangeProvider } from '../../../common/languages.js';
+import type { ITextModel } from '../../../common/model.js';
 import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../browser/editorBrowser.js';
 import { EditorFoldingModel, type CollapseMemento } from "./foldingModel.js";
 import { EditorFoldingRangeSource, type EditorFoldingRange, type EditorFoldingRegion } from "./foldingRanges.js";
@@ -33,6 +36,12 @@ import { Range } from '../../../common/core/range.js';
 import './folding.css';
 
 const foldingEnabled = new RawContextKey<boolean>('foldingEnabled', false);
+
+export type FoldingRangeProviderSelector = (providers: LanguageFoldingRangeProvider[], document: ITextModel) => LanguageFoldingRangeProvider[] | undefined;
+
+// Registrations live in one JavaScript realm; each editor owns its change subscription.
+const providerSelectors: { readonly select: FoldingRangeProviderSelector }[] = [];
+const providerSelectionChanged = new Emitter<void>();
 
 interface FoldingStateMemento {
 	readonly collapsedRegions?: CollapseMemento;
@@ -90,7 +99,7 @@ class FoldingRangeSource extends Disposable {
 		private readonly service: FoldingRangeService,
 		private readonly options: {
 			readonly configurations: ILanguageConfigurationService;
-			readonly providers: ILanguageFeaturesService['foldingRangeProvider'];
+			readonly languageFeaturesService: ILanguageFeaturesService;
 			readonly tabSize?: number;
 			readonly onError: (error: unknown) => void;
 		},
@@ -100,7 +109,8 @@ class FoldingRangeSource extends Disposable {
 		this._register(folding.model.onDidChangeLanguage(() => this.refresh()));
 		this._register(folding.model.onDidChangeTokens(() => this.refresh()));
 		this._register(options.configurations.onDidChange(() => this.refresh()));
-		this._register(options.providers.onDidChange(() => this.refresh()));
+		this._register(options.languageFeaturesService.foldingRangeProvider.onDidChange(() => this.refresh()));
+		this._register(providerSelectionChanged.event(() => this.refresh()));
 		this._register(editor.onDidChangeConfiguration(event => {
 			if (event.hasChanged(EditorOption.folding) || event.hasChanged(EditorOption.foldingStrategy) || event.hasChanged(EditorOption.foldingMaximumRegions)) this.refresh();
 		}));
@@ -121,9 +131,10 @@ class FoldingRangeSource extends Disposable {
 			indentation,
 		);
 		this.applyRanges(local);
-		if (indentationOnly || !this.options.providers.has(this.folding.model)) return;
+		if (indentationOnly || !this.options.languageFeaturesService.foldingRangeProvider.has(this.folding.model)) return;
 		const request = this.request = new AbortController();
-		void this.service.provideFoldingRanges(this.folding.model.getLanguageId(), request.signal).then(ranges => {
+		const selected = FoldingController.getFoldingRangeProviders(this.options.languageFeaturesService, this.folding.model);
+		void this.service.provideFoldingRanges(this.folding.model.getLanguageId(), request.signal, selected).then(ranges => {
 			if (request.signal.aborted || this.request !== request) return;
 			this.applyRanges(mergeEditorFoldingRanges(local, ranges));
 		}, error => {
@@ -155,6 +166,21 @@ class FoldingRangeSource extends Disposable {
 /** Applies editor actions and gutter controls to the existing folding model. */
 export class FoldingController extends Disposable {
 	public static readonly ID = 'editor.contrib.folding';
+
+	public static getFoldingRangeProviders(languageFeaturesService: ILanguageFeaturesService, model: ITextModel): LanguageFoldingRangeProvider[] {
+		const providers = languageFeaturesService.foldingRangeProvider.ordered(model);
+		return providerSelectors.at(-1)?.select(providers, model) ?? providers;
+	}
+
+	public static setFoldingRangeProviderSelector(selector: FoldingRangeProviderSelector): IDisposable {
+		const registration = { select: selector };
+		providerSelectors.push(registration);
+		providerSelectionChanged.fire();
+		return toDisposable(() => {
+			// Host teardown can follow transport disposal. Removing policy must not start new requests.
+			providerSelectors.splice(providerSelectors.indexOf(registration), 1);
+		});
+	}
 
 	public static get(editor: ICodeEditor): FoldingController | null {
 		return editor.getContribution<FoldingController>(FoldingController.ID);
@@ -319,7 +345,7 @@ registerEditorContribution({
 		const service = context.register(new FoldingRangeService(context.model, context.languageFeaturesService.foldingRangeProvider, context.model.uri));
 		context.register(new FoldingRangeSource(context.editor, folding, service, {
 			configurations: context.configurations,
-			providers: context.languageFeaturesService.foldingRangeProvider,
+			languageFeaturesService: context.languageFeaturesService,
 			tabSize: context.options.indentation?.tabSize,
 			onError: context.onLanguageError,
 		}));

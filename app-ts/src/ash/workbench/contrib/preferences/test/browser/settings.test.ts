@@ -1,3 +1,4 @@
+import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
 import { createTestLocaleService } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import '../../../chat/common/languageModelsConfiguration.js';
 import '../../../chat/browser/chat.shared.contribution.js';
@@ -49,6 +50,9 @@ import { URI } from '../../../../../base/common/uri.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+const keybindingProfile = new KeybindingTestServices();
+suiteTeardown(() => keybindingProfile.dispose());
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
 	pretendToBeVisual: true,
@@ -734,7 +738,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	editorServices.registerInstance(IEditorPart, editor);
 	editorServices.registerInstance(ICommandService, disposables.add(new CommandService(editorServices)));
 	editorServices.registerInstance(IEditorService, disposables.add(new BrowserEditorService(editor)));
-	const preferences = disposables.add(new PreferencesService(editorServices.get(IEditorService), editorServices.get(IFileTextModelService)));
+	const preferences = disposables.add(new PreferencesService(editorServices.get(IEditorService), editorServices.get(IFileTextModelService), keybindingProfile.files, keybindingProfile.profiles));
 	services.registerInstance(IPreferencesService, preferences);
 	const missingHooks = disposables.add(descriptor.create({ instantiationService: editorServices }));
 	assert.throws(() => missingHooks.create(h(ownerDocument, 'div')), /Unknown service: hooksService/);

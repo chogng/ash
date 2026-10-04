@@ -141,7 +141,7 @@ window.ashLinkIntegration = {
 		}
 		services.registerInstance(IQuickInputService, resources.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: services.get(IContextKeyService) })));
 		services.registerInstance(IPreferencesService, {
-			openSettings: async () => {}, openKeybindings: async () => {},
+			openSettings: async () => {}, openGlobalKeybindingSettings: async () => {},
 			openUserSettings: async options => { settingsRevealed.push(options!.revealSetting!.key); },
 		});
 		const external = resources.add(services.createInstance(ExternalUriOpenerService));

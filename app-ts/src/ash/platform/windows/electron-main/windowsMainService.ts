@@ -8,8 +8,6 @@ import { CONFIGURATION_CHANGED_CHANNEL } from '../../configuration/common/config
 import { configurationIpcRoutes, type ConfigurationMainService } from '../../configuration/electron-main/configurationMainService.js';
 import { type IWorkspaceOpenTarget, WorkspaceOpenTargetKind } from '../../environment/common/argv.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
-import { KEYBINDINGS_RESOURCE_CHANGED_CHANNEL } from '../../keybinding/common/keybindingsResource.js';
-import { keybindingsResourceIpcRoutes, type KeybindingsResourceMainService } from '../../keybinding/electron-main/keybindingsResourceMainService.js';
 import { NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../../keyboardLayout/common/nativeKeyboardLayout.js';
 import { USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../../keyboardLayout/common/userKeyboardLayout.js';
 import { nativeKeyboardLayoutIpcRoutes, type NativeKeyboardLayoutMainService } from '../../keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js';
@@ -638,7 +636,6 @@ export function workspaceContextIpcRoutes(service: WorkspaceContextMainService):
 
 export interface IWindowResourceIpcServices {
 	readonly configuration: ConfigurationMainService;
-	readonly keybindings: KeybindingsResourceMainService;
 	readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
 	readonly userKeyboardLayout: UserKeyboardLayoutMainService;
 }
@@ -647,7 +644,6 @@ export interface IWindowResourceIpcServices {
 export function windowResourceIpcRoutes(services: IWindowResourceIpcServices): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		...configurationIpcRoutes(services.configuration),
-		...keybindingsResourceIpcRoutes(services.keybindings),
 		...nativeKeyboardLayoutIpcRoutes(services.nativeKeyboardLayout),
 		...userKeyboardLayoutIpcRoutes(services.userKeyboardLayout),
 	];
@@ -660,9 +656,6 @@ export function trackWindowResourceChanges(
 	const resources = new DisposableStore();
 	resources.add(services.configuration.onDidChange(snapshot => {
 		if (!window.isDestroyed()) window.webContents.send(CONFIGURATION_CHANGED_CHANNEL, snapshot);
-	}));
-	resources.add(services.keybindings.onDidChange(snapshot => {
-		if (!window.isDestroyed()) window.webContents.send(KEYBINDINGS_RESOURCE_CHANGED_CHANNEL, snapshot);
 	}));
 	resources.add(services.nativeKeyboardLayout.onDidChangeKeyboardLayout(layout => {
 		if (!window.isDestroyed()) window.webContents.send(NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL, layout);

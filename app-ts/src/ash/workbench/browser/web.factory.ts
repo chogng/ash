@@ -1,3 +1,5 @@
+import { IndexedDBFileSystemProvider } from '../../platform/files/browser/indexedDBFileSystemProvider.js';
+import { Schemas } from '../../base/common/network.js';
 import { BrowserURLService } from '../services/url/browser/urlService.js';
 import type { IStartWorkbenchOptions } from './workbench.js';
 import { IndexedDbWorkingCopyBackupService } from '../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
@@ -54,6 +56,7 @@ export async function createWebWorkbench(
 		createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
 		createWorkingCopyBackupService: (_services, workspaceId) => new IndexedDbWorkingCopyBackupService(workspaceId),
 		createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
+		createUserDataFileSystemProvider: () => IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData),
 		configurationApi: options.configurationApi,
 		initialConfigurationSnapshot: options.initialConfigurationSnapshot,
 		defaultLayout: options.defaultLayout,

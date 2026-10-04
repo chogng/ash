@@ -5578,6 +5578,39 @@ test.describe('folding command routing', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());
 	});
 
+	test('default folding provider changes refresh ranges and preserve keyboard focus', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareFoldingProviders();
+			window.ashStandaloneIntegration.selectFoldingProvider('test.first');
+		});
+		const input = page.locator('#caller .stanza-editor-input');
+		const lines = page.locator('#caller .view-line');
+		await input.focus();
+		await expect(page.locator('#caller .ash-icon-folding-expanded')).toHaveCount(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold'));
+		await expect(lines).toHaveCount(3);
+		await expect(page.locator('#caller .view-line[data-logical-line-index="1"]')).toHaveCount(0);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfoldAll'));
+		await page.evaluate(() => window.ashStandaloneIntegration.selectFoldingProvider('test.second'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readFoldingProviderRanges())).toEqual([[2, 4]]);
+		await expect(page.locator('#caller .ash-icon-folding-expanded')).toHaveCount(1);
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.setFoldingSelections([[2, 1, 2, 1]]);
+		});
+		await input.press(process.platform === 'darwin' ? 'Meta+Alt+[' : 'Control+Shift+[');
+		await expect(lines).toHaveCount(3);
+		await expect(page.locator('#caller .view-line[data-logical-line-index="2"]')).toHaveCount(0);
+		await expect(input).toBeFocused();
+		await page.evaluate(() => window.ashStandaloneIntegration.selectFoldingProvider('test.unavailable'));
+		await expect(lines).toHaveCount(5);
+		await expect(page.locator('#caller .ash-icon-folding-expanded')).toHaveCount(0);
+		await page.evaluate(() => window.ashStandaloneIntegration.selectFoldingProvider(null));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readFoldingProviderRanges())).toEqual([[1, 3]]);
+		await expect(page.locator('#caller .ash-icon-folding-expanded')).toHaveCount(1);
+		await expect(input).toBeFocused();
+	});
+
 	test('saved editor view state restores collapsed lines', async ({ page }) => {
 		await page.goto('/standalone.html');
 		await page.evaluate(text => {

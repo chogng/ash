@@ -81,10 +81,10 @@ class Fixture extends Disposable {
 			},
 			input: async () => undefined,
 		});
-		this.services.registerInstance(IPreferencesService, { openSettings: async () => {}, openKeybindings: async () => {}, openUserSettings: async options => { this.settings.push(options!); } });
+		this.services.registerInstance(IPreferencesService, { openSettings: async () => {}, openGlobalKeybindingSettings: async () => {}, openUserSettings: async options => { this.settings.push(options!); } });
 		this.services.registerInstance(ILogService, this._register(new LogService({ sinks: [{ log: entry => this.logs.push(entry) }] })));
 		const host = this._register(WorkbenchContributionsRegistry.createHost(this.services, error => { throw error; }, ['workbench.contrib.externalUriOpener']));
-		host.advance(WorkbenchPhase.BlockStartup);
+		host.advance(WorkbenchPhase.BlockRestore);
 		this.external = this.services.get(IExternalUriOpenerService) as ExternalUriOpenerService;
 	}
 

@@ -9,4 +9,4 @@ for (const definition of editorConfiguration) {
 	Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration(definition);
 }
 registerWorkbenchContribution(DropOrPasteIntoCommands.ID, WorkbenchPhase.Eventually, accessor => accessor.get(IInstantiationService).createInstance(DropOrPasteIntoCommands));
-registerWorkbenchContribution(DropOrPasteSchemaContribution.ID, WorkbenchPhase.Eventually, accessor => accessor.get(IInstantiationService).createInstance(DropOrPasteSchemaContribution));
+registerWorkbenchContribution(DropOrPasteSchemaContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(DropOrPasteSchemaContribution));

@@ -535,6 +535,8 @@ export interface LanguageFoldingRangeRequest extends LanguageFeatureRequest {
 }
 
 export interface LanguageFoldingRangeProvider {
+	/** Stable identity for selecting a provider independently of registration order. */
+	readonly id?: string;
 	provideFoldingRanges(request: LanguageFoldingRangeRequest, signal: AbortSignal): readonly LanguageFoldingRange[] | Promise<readonly LanguageFoldingRange[]>;
 }
 
