@@ -4,22 +4,24 @@
 //! bind the GitHub CLI transport to one explicit Ash authorization.
 
 mod auth;
+mod error;
 mod issues;
 mod process;
 mod reporter;
-pub use reporter::GitHubIssueReporter;
-pub use reporter::ReporterError;
-pub use reporter::ReporterIssue;
-pub use reporter::report_repository;
 pub use auth::GITHUB_PROVIDER_ID;
 pub use auth::GitHubAuthorization;
 pub use auth::GitHubCredentialProvider;
 pub use auth::GitHubOAuth;
+pub use error::Error;
 pub use issues::IssueAssignee;
 pub use issues::IssueLabel;
 pub use issues::IssueMetadata;
 pub use issues::IssueRepositoryInfo;
 pub use issues::LinkedIssueBranch;
+pub use reporter::GitHubIssueReporter;
+pub use reporter::ReporterError;
+pub use reporter::ReporterIssue;
+pub use reporter::report_repository;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -27,7 +29,7 @@ use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub type Result<T> = std::result::Result<T, String>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Repository {
@@ -39,7 +41,9 @@ pub struct Repository {
 impl Repository {
     pub fn new(host: String, owner: String, name: String) -> Result<Self> {
         if !valid_component(&host) || !valid_component(&owner) || !valid_component(&name) {
-            return Err("Invalid GitHub repository identity".into());
+            return Err(Error::InvalidInput(
+                "Invalid GitHub repository identity".into(),
+            ));
         }
         Ok(Self { host, owner, name })
     }
@@ -66,18 +70,24 @@ pub fn validate_issue_query(query: &str, page: u32) -> Result<()> {
             .chars()
             .any(|c| c.is_control() || c == '"' || c == '\\')
     {
-        return Err("Search accepts up to 256 bytes of keywords or #number; quotes and control characters are not supported".into());
+        return Err(Error::InvalidInput("Search accepts up to 256 bytes of keywords or #number; quotes and control characters are not supported".into()));
     }
     let maximum = if query.is_empty() { 10_000 } else { 10 };
     if page == 0 || page > maximum {
-        return Err(format!("Issue page must be between 1 and {maximum}"));
+        return Err(Error::InvalidInput(format!(
+            "Issue page must be between 1 and {maximum}"
+        )));
     }
     if !query.is_empty() {
         let number = query.strip_prefix('#').unwrap_or(query);
         if query.starts_with('#') || number.bytes().all(|c| c.is_ascii_digit()) {
-            let number: u64 = number.parse().map_err(|_| "Use a positive issue number")?;
+            let number: u64 = number
+                .parse()
+                .map_err(|_| Error::InvalidInput("Use a positive issue number".into()))?;
             if number == 0 || page != 1 {
-                return Err("Exact issue lookup requires a positive number and page 1".into());
+                return Err(Error::InvalidInput(
+                    "Exact issue lookup requires a positive number and page 1".into(),
+                ));
             }
         }
     }
@@ -241,9 +251,9 @@ impl GitHub {
             )
             .await?;
         if requests.len() > 1 {
-            return Err(
+            return Err(Error::Conflict(
                 "Multiple PRs exist for this task branch; select the intended PR on GitHub".into(),
-            );
+            ));
         }
         Ok(requests.into_iter().next())
     }
@@ -252,7 +262,7 @@ impl GitHub {
         if !(40..=64).contains(&commit.len())
             || !commit.bytes().all(|byte| byte.is_ascii_hexdigit())
         {
-            return Err("Invalid PR commit".into());
+            return Err(Error::InvalidInput("Invalid PR commit".into()));
         }
         let statuses: serde_json::Value = self
             .api(
@@ -316,7 +326,7 @@ impl GitHub {
             .host
             .eq_ignore_ascii_case(&self.authorization.host)
         {
-            return Err("GitHub authorization does not cover this host".into());
+            return Err(Error::AuthenticationRequired);
         }
         let mut arguments = vec![
             "api".to_owned(),
@@ -325,18 +335,19 @@ impl GitHub {
             "--method".into(),
             method.into(),
             endpoint.into(),
+            "--include".into(),
         ];
         let input = body
             .map(|body| serde_json::to_vec(&body))
             .transpose()
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| Error::InvalidInput(error.to_string()))?;
         if input.is_some() {
             arguments.extend(["--input".into(), "-".into()]);
         }
         let token = self
             .credentials
             .token(&self.authorization)
-            .map_err(|error| error.to_string())?;
+            .map_err(Error::from)?;
         let output = process::run(
             &self.executable,
             &arguments,
@@ -345,14 +356,37 @@ impl GitHub {
             &token,
         )
         .await?;
-        self.validate_authorization()
-            .map_err(|error| error.to_string())?;
-        let value: serde_json::Value = serde_json::from_slice(&output)
-            .map_err(|error| format!("Invalid GitHub response: {error}"))?;
+        self.validate_authorization().map_err(Error::from)?;
+        let value: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .map_err(|_| Error::InvalidResponse("Invalid GitHub JSON response".into()))?;
         if let Some(errors) = value.get("errors") {
-            return Err(format!("GitHub rejected the request: {errors}"));
+            let errors = errors
+                .as_array()
+                .ok_or_else(|| Error::InvalidResponse("Invalid GitHub GraphQL errors".into()))?;
+            if let Some(error) = errors.first() {
+                // GraphQL can reject an operation with HTTP 200. Only machine-readable types
+                // determine the category; server messages may contain private request data.
+                return Err(
+                    match error.get("type").and_then(serde_json::Value::as_str) {
+                        Some("UNAUTHENTICATED") => Error::AuthenticationRequired,
+                        Some("FORBIDDEN") => Error::PermissionDenied,
+                        Some("RATE_LIMITED") => Error::RateLimited,
+                        Some("NOT_FOUND") => Error::NotFound,
+                        Some("UNPROCESSABLE" | "GRAPHQL_VALIDATION_FAILED") => {
+                            Error::InvalidInput("GitHub rejected the GraphQL request".into())
+                        }
+                        _ => Error::OperationFailed("GitHub rejected the GraphQL request".into()),
+                    },
+                );
+            }
         }
-        serde_json::from_value(value).map_err(|error| format!("Invalid GitHub response: {error}"))
+        if !output.success {
+            return Err(Error::OperationFailed(
+                "GitHub CLI did not complete the request".into(),
+            ));
+        }
+        serde_json::from_value(value)
+            .map_err(|_| Error::InvalidResponse("Invalid GitHub response fields".into()))
     }
 
     pub async fn issues(
@@ -362,7 +396,9 @@ impl GitHub {
         page: u32,
     ) -> Result<IssuePage> {
         if page == 0 || page > 10_000 {
-            return Err("Issue page must be between 1 and 10000".into());
+            return Err(Error::InvalidInput(
+                "Issue page must be between 1 and 10000".into(),
+            ));
         }
         let rows: Vec<Issue> = self
             .api(
@@ -400,13 +436,19 @@ impl GitHub {
             return self.issues(repository, state, page).await;
         }
         if page == 0 || page > 10 {
-            return Err("Search supports pages 1–10; narrow the query beyond 1000 matches".into());
+            return Err(Error::InvalidInput(
+                "Search supports pages 1–10; narrow the query beyond 1000 matches".into(),
+            ));
         }
         let number = query.strip_prefix('#').unwrap_or(query);
         if query.starts_with('#') || number.bytes().all(|c| c.is_ascii_digit()) {
-            let number: u64 = number.parse().map_err(|_| "Use a positive issue number")?;
+            let number: u64 = number
+                .parse()
+                .map_err(|_| Error::InvalidInput("Use a positive issue number".into()))?;
             if number == 0 || page != 1 {
-                return Err("Exact issue lookup requires a positive number and page 1".into());
+                return Err(Error::InvalidInput(
+                    "Exact issue lookup requires a positive number and page 1".into(),
+                ));
             }
             let issue: Issue = self
                 .api(
@@ -417,7 +459,9 @@ impl GitHub {
                 )
                 .await?;
             if issue.number != number || issue.pull_request.is_some() {
-                return Err("Selected item is not the requested issue".into());
+                return Err(Error::InvalidResponse(
+                    "Selected item is not the requested issue".into(),
+                ));
             }
             return Ok(IssuePage {
                 issues: if issue.state == state.as_str() {
@@ -468,7 +512,9 @@ impl GitHub {
                 || issue.state != state.as_str()
                 || issue.pull_request.is_some()
         }) {
-            return Err("Search returned items outside the requested repository or state".into());
+            return Err(Error::InvalidResponse(
+                "Search returned items outside the requested repository or state".into(),
+            ));
         }
         let notice = match (result.incomplete_results, result.total_count > 1000) {
             (true, _) => "GitHub returned incomplete search results; refine the query or refresh",
@@ -490,12 +536,12 @@ impl GitHub {
             self.read_issue(repository, number),
         )
         .await
-        .map_err(|_| "Reading issue context timed out".to_string())?
+        .map_err(|_| Error::TimedOut)?
     }
 
     async fn read_issue(&self, repository: &Repository, number: u64) -> Result<IssueSnapshot> {
         if number == 0 {
-            return Err("Issue number must be positive".into());
+            return Err(Error::InvalidInput("Issue number must be positive".into()));
         }
         let issue: Issue = self
             .api(
@@ -506,7 +552,9 @@ impl GitHub {
             )
             .await?;
         if issue.number != number || issue.pull_request.is_some() {
-            return Err("Selected item is not the requested issue".into());
+            return Err(Error::InvalidResponse(
+                "Selected item is not the requested issue".into(),
+            ));
         }
         let mut comments = Vec::new();
         let mut context_bytes = issue.body.as_ref().map_or(0, String::len);
@@ -529,19 +577,21 @@ impl GitHub {
                 })
                 .sum::<usize>();
             if context_bytes > 4 * 1024 * 1024 {
-                return Err("Issue context exceeds 4 MiB".into());
+                return Err(Error::OperationFailed("Issue context exceeds 4 MiB".into()));
             }
             comments.extend(rows);
             if complete {
                 return Ok(IssueSnapshot { issue, comments });
             }
         }
-        Err("Issue exceeds the supported comment limit; no partial context was submitted".into())
+        Err(Error::OperationFailed(
+            "Issue exceeds the supported comment limit; no partial context was submitted".into(),
+        ))
     }
 
     pub async fn pull_request(&self, repository: &Repository, number: u64) -> Result<PullRequest> {
         if number == 0 {
-            return Err("PR number must be positive".into());
+            return Err(Error::InvalidInput("PR number must be positive".into()));
         }
         self.api(
             repository,
@@ -558,7 +608,9 @@ impl GitHub {
         request: CreatePullRequest<'_>,
     ) -> Result<PullRequest> {
         if request.title.trim().is_empty() || request.head == request.base {
-            return Err("PR requires a title and distinct head/base branches".into());
+            return Err(Error::InvalidInput(
+                "PR requires a title and distinct head/base branches".into(),
+            ));
         }
         self.api(
             repository,
@@ -579,7 +631,9 @@ impl GitHub {
         method: MergeMethod,
     ) -> Result<()> {
         if pull_request.draft || pull_request.state != "open" {
-            return Err("Automatic merge requires an open, non-draft PR".into());
+            return Err(Error::InvalidInput(
+                "Automatic merge requires an open, non-draft PR".into(),
+            ));
         }
         Repository::new(
             repository.host.clone(),
@@ -590,7 +644,7 @@ impl GitHub {
             .host
             .eq_ignore_ascii_case(&self.authorization.host)
         {
-            return Err("GitHub authorization does not cover this host".into());
+            return Err(Error::AuthenticationRequired);
         }
         let method = match method {
             MergeMethod::Merge => "--merge",
@@ -614,7 +668,7 @@ impl GitHub {
         let token = self
             .credentials
             .token(&self.authorization)
-            .map_err(|error| error.to_string())?;
+            .map_err(Error::from)?;
         process::run(
             &self.executable,
             &arguments,
@@ -623,8 +677,7 @@ impl GitHub {
             &token,
         )
         .await?;
-        self.validate_authorization()
-            .map_err(|error| error.to_string())?;
+        self.validate_authorization().map_err(Error::from)?;
         Ok(())
     }
 }

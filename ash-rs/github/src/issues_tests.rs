@@ -31,6 +31,7 @@ else:
     else: raise SystemExit(10)
     path.write_text(json.dumps(issue))
     result=issue if endpoint.endswith('/assignees') else issue['labels']
+print("HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n", end="")
 print(json.dumps(result))
 "#).unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -104,6 +105,7 @@ async fn stage_sync_preserves_unmanaged_labels_and_retries_a_partial_remote_writ
             )
             .await
             .unwrap_err()
+            .to_string()
             .contains("outside")
     );
 }

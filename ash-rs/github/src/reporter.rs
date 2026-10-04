@@ -235,18 +235,23 @@ fn login_error(error: ash_login::LoginError) -> ReporterError {
 }
 
 fn validate_status(response: &HttpResponse) -> Result<(), ReporterError> {
-    match response.status() {
-        200..=299 => Ok(()),
-        401 => Err(ReporterError::AuthenticationRequired),
-        429 => Err(ReporterError::RateLimited),
-        403 if response.headers().iter().any(|header| {
-            header.name().eq_ignore_ascii_case("x-ratelimit-remaining") && header.value() == "0"
-        }) =>
-        {
-            Err(ReporterError::RateLimited)
-        }
-        403 => Err(ReporterError::PermissionDenied),
-        422 => Err(ReporterError::InvalidInput),
-        _ => Err(ReporterError::OperationFailed),
-    }
+    crate::error::validate_status(
+        response.status(),
+        response
+            .headers()
+            .iter()
+            .map(|header| (header.name(), header.value())),
+    )
+    .map_err(|error| match error {
+        crate::Error::AuthenticationRequired => ReporterError::AuthenticationRequired,
+        crate::Error::PermissionDenied => ReporterError::PermissionDenied,
+        crate::Error::RateLimited => ReporterError::RateLimited,
+        crate::Error::InvalidInput(_) => ReporterError::InvalidInput,
+        crate::Error::NotFound
+        | crate::Error::Conflict(_)
+        | crate::Error::Unavailable(_)
+        | crate::Error::TimedOut
+        | crate::Error::InvalidResponse(_)
+        | crate::Error::OperationFailed(_) => ReporterError::OperationFailed,
+    })
 }

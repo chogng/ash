@@ -16,11 +16,9 @@ impl AppServer {
     pub(super) fn issue_list(&self, params: &Value) -> Result<Value, RpcError> {
         let params: IssueListParams = decode(params)?;
         let runtime = self.issue_runtime()?;
-        let repository = runtime
-            .block_on(github_repository(runtime.root()))
-            .map_err(issue_error)?;
+        let repository = runtime.block_on(github_repository(runtime.root()))?;
         let query = params.query.trim();
-        github::validate_issue_query(query, params.page).map_err(issue_error)?;
+        github::validate_issue_query(query, params.page).map_err(github_error)?;
         let github = self.issue_github()?;
         if !repository
             .host
@@ -92,7 +90,7 @@ impl AppServer {
                     query,
                     params.page,
                 ))
-                .map_err(issue_error)?;
+                .map_err(github_error)?;
             let fetched_at = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_err(|error| issue_error(error.to_string()))?
@@ -125,9 +123,7 @@ impl AppServer {
     pub(super) fn issue_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: IssueReadParams = decode(params)?;
         let runtime = self.issue_runtime()?;
-        let repository = runtime
-            .block_on(github_repository(runtime.root()))
-            .map_err(issue_error)?;
+        let repository = runtime.block_on(github_repository(runtime.root()))?;
         if (
             repository.host.as_str(),
             repository.owner.as_str(),
@@ -144,7 +140,7 @@ impl AppServer {
         let github = self.issue_github()?;
         let snapshot = runtime
             .block_on(github.issue(&repository, params.number))
-            .map_err(issue_error)?;
+            .map_err(github_error)?;
         result(&IssueReadResult {
             body: snapshot.issue.body.clone().unwrap_or_default(),
             issue: summary(snapshot.issue),
@@ -187,36 +183,66 @@ fn github_authentication_error(error: ash_login::LoginError) -> RpcError {
     }
 }
 
-async fn github_repository(root: &std::path::Path) -> Result<github::Repository, String> {
+async fn github_repository(root: &std::path::Path) -> Result<github::Repository, RpcError> {
     let git = ash_git::GitClient::system();
     let repository = git
         .open_repository(root)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| issue_error(error.to_string()))?;
     let remotes = git
         .remotes(&repository)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| issue_error(error.to_string()))?;
     let remote = remotes
         .iter()
         .find(|remote| remote.name() == "origin")
-        .ok_or("Issue management requires an origin remote")?;
+        .ok_or_else(|| issue_error("Issue management requires an origin remote".into()))?;
     if !remote.has_single_identity() {
-        return Err("Origin fetch and push URLs must identify the same repository".into());
+        return Err(issue_error(
+            "Origin fetch and push URLs must identify the same repository".into(),
+        ));
     }
     let identity = remote
         .identity()
-        .ok_or("Origin has no supported repository identity")?;
+        .ok_or_else(|| issue_error("Origin has no supported repository identity".into()))?;
     // Git remote metadata only associates this workspace with a hosted repository. This
     // integration uses the GitHub.com account provider; other Git hosts are not login failures.
     if !identity.host().eq_ignore_ascii_case("github.com") {
-        return Err("GitHub issue management requires a GitHub.com origin remote".into());
+        return Err(issue_error(
+            "GitHub issue management requires a GitHub.com origin remote".into(),
+        ));
     }
     github::Repository::new(
         identity.host().into(),
         identity.owner().into(),
         identity.repository().into(),
     )
+    .map_err(github_error)
+}
+
+fn github_error(error: github::Error) -> RpcError {
+    use github::Error;
+    let name = match &error {
+        Error::InvalidInput(_) => AppServerErrorName::InvalidParams,
+        Error::AuthenticationRequired => AppServerErrorName::AccountAuthenticationRequired,
+        Error::PermissionDenied => AppServerErrorName::GitHubPermissionDenied,
+        Error::RateLimited => AppServerErrorName::GitHubRateLimited,
+        Error::NotFound => AppServerErrorName::GitHubNotFound,
+        Error::Conflict(_) => AppServerErrorName::GitHubConflict,
+        Error::Unavailable(_) => AppServerErrorName::GitHubUnavailable,
+        Error::TimedOut => AppServerErrorName::GitHubTimedOut,
+        Error::InvalidResponse(_) | Error::OperationFailed(_) => {
+            AppServerErrorName::GitHubOperationFailed
+        }
+    };
+    let code = match name {
+        AppServerErrorName::InvalidParams => -32602,
+        AppServerErrorName::AccountAuthenticationRequired => -32030,
+        _ => -32070,
+    };
+    let mut result = RpcError::new(code, name);
+    result.detail = Some(error.to_string());
+    result
 }
 
 pub(super) fn summary(issue: github::Issue) -> IssueSummary {
@@ -241,3 +267,7 @@ pub(super) fn issue_error(detail: String) -> RpcError {
     error.detail = Some(detail);
     error
 }
+
+#[cfg(test)]
+#[path = "issue_operations_tests.rs"]
+mod tests;

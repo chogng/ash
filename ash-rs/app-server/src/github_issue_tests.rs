@@ -147,6 +147,62 @@ fn issue_rpc_without_github_configuration_reports_account_unavailable_before_cac
     assert_eq!(reply["error"]["message"], "AccountUnavailable");
 }
 
+struct ExpiredCredentials;
+
+impl GitHubCredentialProvider for ExpiredCredentials {
+    fn authorization(&self) -> Result<GitHubAuthorization, ash_login::LoginError> {
+        Ok(GitHubAuthorization {
+            host: "github.com".into(),
+            account_id: "42".into(),
+            grant_id: "expired-grant".into(),
+        })
+    }
+
+    fn token(
+        &self,
+        _: &GitHubAuthorization,
+    ) -> Result<ash_secrets::SecretValue, ash_login::LoginError> {
+        Err(ash_login::LoginError::new(
+            ash_login::LoginErrorKind::ExternalLoginRequired,
+            "fixture-only-token",
+        ))
+    }
+}
+
+#[test]
+fn issue_rpc_preserves_authentication_failure_during_repository_io() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = issue_server(directory.path(), "https://github.com/team/repo.git")
+        .with_github_credentials(Arc::new(ExpiredCredentials));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    for (id, method, params) in [
+        (
+            2,
+            "issue/list",
+            serde_json::json!({"state":"open","page":1,"query":"","mode":"refresh"}),
+        ),
+        (
+            3,
+            "issue/read",
+            serde_json::json!({"repository":{"host":"github.com","owner":"team","name":"repo"},"number":7}),
+        ),
+    ] {
+        let response = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
+        );
+        assert_eq!(
+            response["error"]["data"]["kind"],
+            "AccountAuthenticationRequired"
+        );
+        assert_eq!(response["error"]["code"], -32030);
+        assert!(response.get("result").is_none());
+        assert!(!response.to_string().contains("fixture-only-token"));
+    }
+}
+
 struct ReporterHttp {
     requests: Mutex<Vec<ash_http_client::HttpRequest>>,
     status: std::sync::atomic::AtomicU16,

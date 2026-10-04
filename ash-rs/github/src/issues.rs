@@ -1,3 +1,4 @@
+use super::Error;
 use super::GitHub;
 use super::Issue;
 use super::Repository;
@@ -48,7 +49,9 @@ impl GitHub {
         color: &str,
     ) -> Result<IssueLabel> {
         if color.len() != 6 || !color.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return Err("Label color must contain six hexadecimal digits".into());
+            return Err(Error::InvalidInput(
+                "Label color must contain six hexadecimal digits".into(),
+            ));
         }
         let name = url::form_urlencoded::byte_serialize(name.as_bytes())
             .collect::<String>()
@@ -112,7 +115,9 @@ impl GitHub {
                 return Ok(issues);
             }
         }
-        Err("Automatic Issue discovery exceeded its page limit; narrow the label filter".into())
+        Err(Error::OperationFailed(
+            "Automatic Issue discovery exceeded its page limit; narrow the label filter".into(),
+        ))
     }
 
     pub async fn unassign_issue(
@@ -144,7 +149,9 @@ impl GitHub {
             .iter()
             .any(|assignee| assignee.login.eq_ignore_ascii_case(owner))
         {
-            return Err("GitHub did not release the requested assignee".into());
+            return Err(Error::InvalidResponse(
+                "GitHub did not release the requested assignee".into(),
+            ));
         }
         Ok(())
     }
@@ -159,7 +166,9 @@ impl GitHub {
             )
             .await?;
         if closed.issue.state != "closed" {
-            return Err("GitHub did not confirm Issue closure".into());
+            return Err(Error::InvalidResponse(
+                "GitHub did not confirm Issue closure".into(),
+            ));
         }
         Ok(())
     }
@@ -180,7 +189,7 @@ impl GitHub {
         number: u64,
     ) -> Result<IssueMetadata> {
         if number == 0 {
-            return Err("Issue number must be positive".into());
+            return Err(Error::InvalidInput("Issue number must be positive".into()));
         }
         let issue: IssueMetadata = self
             .api(
@@ -194,7 +203,9 @@ impl GitHub {
             || issue.node_id.is_empty()
             || issue.issue.pull_request.is_some()
         {
-            return Err("Expected a GitHub issue with a stable identity".into());
+            return Err(Error::InvalidResponse(
+                "Expected a GitHub issue with a stable identity".into(),
+            ));
         }
         Ok(issue)
     }
@@ -216,7 +227,9 @@ impl GitHub {
                 return Ok(labels);
             }
         }
-        Err("Repository label list exceeds 10000 labels".into())
+        Err(Error::OperationFailed(
+            "Repository label list exceeds 10000 labels".into(),
+        ))
     }
 
     pub async fn issue_assignees(&self, repository: &Repository) -> Result<Vec<IssueAssignee>> {
@@ -236,7 +249,9 @@ impl GitHub {
                 return Ok(assignees);
             }
         }
-        Err("Repository assignee list exceeds 10000 accounts".into())
+        Err(Error::OperationFailed(
+            "Repository assignee list exceeds 10000 accounts".into(),
+        ))
     }
 
     pub async fn create_issue_label(
@@ -251,7 +266,9 @@ impl GitHub {
             || color.len() != 6
             || !color.bytes().all(|c| c.is_ascii_hexdigit())
         {
-            return Err("Label requires a name and a six-digit RGB color".into());
+            return Err(Error::InvalidInput(
+                "Label requires a name and a six-digit RGB color".into(),
+            ));
         }
         self.api(
             repository,
@@ -275,7 +292,9 @@ impl GitHub {
             .iter()
             .any(|assignee| !assignee.login.eq_ignore_ascii_case(login))
         {
-            return Err("Issue is already assigned to another account".into());
+            return Err(Error::Conflict(
+                "Issue is already assigned to another account".into(),
+            ));
         }
         if before
             .issue
@@ -298,7 +317,9 @@ impl GitHub {
                 .login
                 .eq_ignore_ascii_case(login)
         {
-            return Err("GitHub did not assign the requested account exclusively".into());
+            return Err(Error::InvalidResponse(
+                "GitHub did not assign the requested account exclusively".into(),
+            ));
         }
         Ok(())
     }
@@ -331,7 +352,9 @@ impl GitHub {
         }
         // The empty set is the recoverable midpoint after removing the previous managed label.
         if actual != expected && !actual.is_empty() {
-            return Err("Issue stage labels changed outside this assignment".into());
+            return Err(Error::Conflict(
+                "Issue stage labels changed outside this assignment".into(),
+            ));
         }
         for name in &actual {
             if desired == Some(name.as_str()) {
@@ -369,7 +392,9 @@ impl GitHub {
             .collect::<Vec<_>>();
         actual.sort();
         if actual != target {
-            return Err("Issue labels changed during synchronization".into());
+            return Err(Error::Conflict(
+                "Issue labels changed during synchronization".into(),
+            ));
         }
         Ok(actual)
     }
@@ -382,18 +407,20 @@ impl GitHub {
         let response: serde_json::Value = self.api(repository, "POST", "graphql", Some(json!({"query":"query($id:ID!){node(id:$id){... on Issue{linkedBranches(first:100){nodes{id ref{name target{oid}}} pageInfo{hasNextPage}}}}}","variables":{"id":issue_id}}))).await?;
         let branches = response
             .pointer("/data/node/linkedBranches")
-            .ok_or("GitHub did not return issue branches")?;
+            .ok_or_else(|| Error::InvalidResponse("GitHub did not return issue branches".into()))?;
         if branches
             .pointer("/pageInfo/hasNextPage")
             .and_then(serde_json::Value::as_bool)
             != Some(false)
         {
-            return Err("Issue has more than 100 linked branches".into());
+            return Err(Error::OperationFailed(
+                "Issue has more than 100 linked branches".into(),
+            ));
         }
         branches
             .get("nodes")
             .and_then(serde_json::Value::as_array)
-            .ok_or("Missing linked branch list")?
+            .ok_or_else(|| Error::InvalidResponse("Missing linked branch list".into()))?
             .iter()
             .map(|value| {
                 Ok(LinkedIssueBranch {
@@ -413,7 +440,9 @@ impl GitHub {
         commit: &str,
     ) -> Result<LinkedIssueBranch> {
         if !(40..=64).contains(&commit.len()) || !commit.bytes().all(|c| c.is_ascii_hexdigit()) {
-            return Err("Linked branch requires an exact commit".into());
+            return Err(Error::InvalidInput(
+                "Linked branch requires an exact commit".into(),
+            ));
         }
         if let Some(existing) = self
             .linked_issue_branches(repository, issue_id)
@@ -422,23 +451,27 @@ impl GitHub {
             .find(|branch| branch.name == name)
         {
             if existing.commit != commit {
-                return Err(
+                return Err(Error::Conflict(
                     "Existing linked branch moved from the requested starting commit".into(),
-                );
+                ));
             }
             return Ok(existing);
         }
         let response: serde_json::Value = self.api(repository, "POST", "graphql", Some(json!({"query":"mutation($input:CreateLinkedBranchInput!){createLinkedBranch(input:$input){linkedBranch{id ref{name target{oid}}}}}","variables":{"input":{"issueId":issue_id,"name":name,"oid":commit}}}))).await?;
         let value = response
             .pointer("/data/createLinkedBranch/linkedBranch")
-            .ok_or("GitHub did not return the linked branch")?;
+            .ok_or_else(|| {
+                Error::InvalidResponse("GitHub did not return the linked branch".into())
+            })?;
         let branch = LinkedIssueBranch {
             id: string(value, "/id")?,
             name: string(value, "/ref/name")?,
             commit: string(value, "/ref/target/oid")?,
         };
         if branch.name != name || branch.commit != commit {
-            return Err("GitHub created a different branch or commit".into());
+            return Err(Error::InvalidResponse(
+                "GitHub created a different branch or commit".into(),
+            ));
         }
         Ok(branch)
     }
@@ -450,7 +483,7 @@ fn string(value: &serde_json::Value, pointer: &str) -> Result<String> {
         .and_then(serde_json::Value::as_str)
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
-        .ok_or_else(|| format!("Missing GitHub field {pointer}"))
+        .ok_or_else(|| Error::InvalidResponse(format!("Missing GitHub field {pointer}")))
 }
 
 #[cfg(all(test, unix))]

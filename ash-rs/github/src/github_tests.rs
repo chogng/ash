@@ -26,6 +26,168 @@ pub(super) fn github(executable: PathBuf) -> GitHub {
     github
 }
 
+fn response_fixture(response: &str, exit_code: u8) -> (tempfile::TempDir, GitHub) {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(directory.path().join("response"), response).unwrap();
+    #[cfg(windows)]
+    let script = {
+        let script = directory.path().join("gh.cmd");
+        std::fs::write(&script, format!("@echo off\r\ntype \"%~dp0response\"\r\necho ash-test-token HTTP 401 1>&2\r\nexit /b {exit_code}\r\n")).unwrap();
+        script
+    };
+    #[cfg(unix)]
+    let script = {
+        use std::os::unix::fs::PermissionsExt;
+        let script = directory.path().join("gh");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\ncat '{}'\nprintf 'ash-test-token HTTP 401' >&2\nexit {exit_code}\n",
+                directory.path().join("response").display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        script
+    };
+    let github = github(script);
+    (directory, github)
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn successful_api_responses_preserve_json_after_included_http_headers() {
+    let repository = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
+    let (_directory, github) = response_fixture("HTTP/2.0 200 OK\n\r\n[]", 0);
+    let page = github
+        .issues(&repository, IssueState::Open, 1)
+        .await
+        .unwrap();
+    assert!(page.issues.is_empty());
+    assert_eq!(page.next_page, None);
+
+    let (_directory, github) = response_fixture(
+        "HTTP/2.0 200 OK\n\r\n{\"data\":{\"node\":null},\"errors\":[]}",
+        0,
+    );
+    let value: serde_json::Value = github
+        .api(
+            &repository,
+            "POST",
+            "graphql",
+            Some(json!({"query":"test"})),
+        )
+        .await
+        .unwrap();
+    assert_eq!(value, json!({"data":{"node":null},"errors":[]}));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn repository_requests_classify_http_failures_even_when_gh_exits_unsuccessfully() {
+    let repository = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
+    for (status, headers, expected) in [
+        (401, "", Error::AuthenticationRequired),
+        (403, "", Error::PermissionDenied),
+        (403, "X-RateLimit-Remaining: 0\r\n", Error::RateLimited),
+        (403, "Retry-After: 60\r\n", Error::RateLimited),
+        (404, "", Error::NotFound),
+        (429, "", Error::RateLimited),
+    ] {
+        let response =
+            format!("HTTP/2.0 {status} Refused\n{headers}\r\n{{\"message\":\"ash-test-token\"}}");
+        let (_directory, github) = response_fixture(&response, 1);
+        let error = github
+            .issues(&repository, IssueState::Open, 1)
+            .await
+            .unwrap_err();
+        assert_eq!(error, expected);
+        assert!(!error.to_string().contains("ash-test-token"));
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn graphql_refusals_keep_types_with_successful_http_and_nonzero_cli_exit() {
+    let repository = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
+    for (kind, expected) in [
+        ("FORBIDDEN", Error::PermissionDenied),
+        ("RATE_LIMITED", Error::RateLimited),
+        ("NOT_FOUND", Error::NotFound),
+        ("UNAUTHENTICATED", Error::AuthenticationRequired),
+    ] {
+        let response = format!(
+            "HTTP/2.0 200 OK\n\r\n{{\"errors\":[{{\"type\":\"{kind}\",\"message\":\"ash-test-token\"}}]}}"
+        );
+        let (_directory, github) = response_fixture(&response, 1);
+        let error = github
+            .api::<serde_json::Value>(
+                &repository,
+                "POST",
+                "graphql",
+                Some(serde_json::json!({"query":"test"})),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(error, expected);
+        assert!(!error.to_string().contains("ash-test-token"));
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn malformed_response_and_cli_failure_cannot_become_success_or_expose_private_data() {
+    let repository = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
+    for response in [
+        "HTTP/2.0 200 OK\n\r\nnot-json ash-test-token",
+        "HTTP/2.0 200 OK\n\r\n[{\"number\":\"ash-test-token\"}]",
+    ] {
+        let (_directory, github) = response_fixture(response, 0);
+        let error = github
+            .issues(&repository, IssueState::Open, 1)
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::InvalidResponse(_)));
+        assert!(!error.to_string().contains("ash-test-token"));
+    }
+    let (_directory, github) = response_fixture("HTTP/2.0 200 OK\n\r\n[]", 1);
+    assert!(matches!(
+        github.issues(&repository, IssueState::Open, 1).await,
+        Err(Error::OperationFailed(_))
+    ));
+    let (_directory, github) = response_fixture("", 1);
+    let error = github
+        .issues(&repository, IssueState::Open, 1)
+        .await
+        .unwrap_err();
+    assert!(matches!(error, Error::OperationFailed(_)));
+    assert!(!error.to_string().contains("ash-test-token"));
+}
+
+struct RevokedCredentials;
+
+impl GitHubCredentialProvider for RevokedCredentials {
+    fn authorization(&self) -> std::result::Result<GitHubAuthorization, ash_login::LoginError> {
+        Credentials.authorization()
+    }
+
+    fn token(
+        &self,
+        _: &GitHubAuthorization,
+    ) -> std::result::Result<ash_secrets::SecretValue, ash_login::LoginError> {
+        Err(ash_login::LoginError::new(
+            ash_login::LoginErrorKind::ExternalLoginRequired,
+            "private-token",
+        ))
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn authorization_revoked_after_client_creation_remains_an_authentication_error() {
+    let github = GitHub::for_account(Arc::new(RevokedCredentials)).unwrap();
+    let repository = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
+    assert_eq!(
+        github.issues(&repository, IssueState::Open, 1).await,
+        Err(Error::AuthenticationRequired)
+    );
+}
+
 #[test]
 fn repository_identity_rejects_paths_and_option_injection() {
     for value in ["", "../repo", "-repo", "a/b", "repo?x=y", "a\nb", "a b"] {
@@ -67,7 +229,9 @@ async fn draft_pr_cannot_enable_auto_merge() {
         github
             .enable_auto_merge(&repository, &pr, MergeMethod::Squash)
             .await,
-        Err("Automatic merge requires an open, non-draft PR".into())
+        Err(Error::InvalidInput(
+            "Automatic merge requires an open, non-draft PR".into()
+        ))
     );
 }
 
@@ -80,6 +244,7 @@ async fn invalid_issue_page_does_not_start_a_process() {
             .issues(&repository, IssueState::Open, 0)
             .await
             .unwrap_err()
+            .to_string()
             .contains("page")
     );
     assert!(
@@ -87,6 +252,7 @@ async fn invalid_issue_page_does_not_start_a_process() {
             .issue(&repository, 0)
             .await
             .unwrap_err()
+            .to_string()
             .contains("positive")
     );
 }
@@ -102,7 +268,7 @@ async fn repository_operations_reject_a_host_outside_the_selected_grant() {
     let github = github("must-not-execute".into());
     assert_eq!(
         github.issue_metadata(&repository, 7).await.unwrap_err(),
-        "GitHub authorization does not cover this host"
+        Error::AuthenticationRequired
     );
 }
 
@@ -121,7 +287,7 @@ async fn cli_transport_sets_only_the_selected_hosts_token() {
         let output = process::run(&executable, &arguments, None, host, &token)
             .await
             .unwrap();
-        assert_eq!(String::from_utf8(output).unwrap(), expected);
+        assert_eq!(String::from_utf8(output.stdout).unwrap(), expected);
     }
 }
 
@@ -152,7 +318,7 @@ async fn issue_reader_excludes_prs_and_reads_every_comment_page() {
         .unwrap();
     }
     let script = directory.path().join("gh");
-    std::fs::write(&script, format!("#!/bin/sh\ncase \"$6\" in\n*'/comments?'*'page=1') cat '{0}/comments';;\n*'/comments?'*) cat '{0}/empty';;\n*'/issues/3') cat '{0}/issue';;\n*'/issues?state=open&'*'page=1') cat '{0}/list';;\n*'/issues?state=closed&'*'page=2') cat '{0}/closed';;\n*) exit 9;;\nesac\n", directory.path().display())).unwrap();
+    std::fs::write(&script, format!("#!/bin/sh\nprintf 'HTTP/2.0 200 OK\\nContent-Type: application/json\\r\\n\\r\\n'\ncase \"$6\" in\n*'/comments?'*'page=1') cat '{0}/comments';;\n*'/comments?'*) cat '{0}/empty';;\n*'/issues/3') cat '{0}/issue';;\n*'/issues?state=open&'*'page=1') cat '{0}/list';;\n*'/issues?state=closed&'*'page=2') cat '{0}/closed';;\n*) exit 9;;\nesac\n", directory.path().display())).unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
     let github = github(script);
     let repository = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
@@ -188,7 +354,7 @@ async fn graphql_errors_are_failures_even_when_the_process_succeeds() {
     use std::os::unix::fs::PermissionsExt;
     let directory = tempfile::tempdir().unwrap();
     let script = directory.path().join("gh");
-    std::fs::write(&script, "#!/bin/sh\ncat >/dev/null\nprintf '%s' '{\"errors\":[{\"message\":\"Auto-merge disabled\"}]}'\n").unwrap();
+    std::fs::write(&script, "#!/bin/sh\ncat >/dev/null\nprintf 'HTTP/2.0 200 OK\\nContent-Type: application/json\\r\\n\\r\\n'\nprintf '%s' '{\"errors\":[{\"message\":\"Auto-merge disabled\"}]}'\n").unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
     let github = github(script);
     let repository = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
@@ -201,7 +367,10 @@ async fn graphql_errors_are_failures_even_when_the_process_succeeds() {
         )
         .await
         .unwrap_err();
-    assert!(error.contains("Auto-merge disabled"));
+    assert_eq!(
+        error,
+        Error::OperationFailed("GitHub rejected the GraphQL request".into())
+    );
 }
 
 #[cfg(unix)]
@@ -288,7 +457,7 @@ async fn issue_search_encodes_keywords_handles_numbers_and_reports_limits() {
     )
     .unwrap();
     let script = dir.path().join("gh");
-    std::fs::write(&script, format!("#!/bin/sh\nprintf '%s' \"$6\" > '{0}/endpoint'\ncase \"$6\" in\nsearch/issues*) cat '{0}/search';;\nrepos/team/repo/issues/5001) cat '{0}/issue';;\n*) exit 9;;\nesac\n", dir.path().display())).unwrap();
+    std::fs::write(&script, format!("#!/bin/sh\nprintf 'HTTP/2.0 200 OK\\nContent-Type: application/json\\r\\n\\r\\n'\nprintf '%s' \"$6\" > '{0}/endpoint'\ncase \"$6\" in\nsearch/issues*) cat '{0}/search';;\nrepos/team/repo/issues/5001) cat '{0}/issue';;\n*) exit 9;;\nesac\n", dir.path().display())).unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
     let github = github(script);
     let repo = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
@@ -357,6 +526,7 @@ async fn issue_search_encodes_keywords_handles_numbers_and_reports_limits() {
             .search_issues(&repo, IssueState::Open, "memory", 1)
             .await
             .unwrap_err()
+            .to_string()
             .contains("outside")
     );
 }
@@ -375,7 +545,7 @@ async fn issue_pagination_continues_past_a_full_page_of_pull_requests() {
     let script = dir.path().join("gh");
     std::fs::write(
         &script,
-        format!("#!/bin/sh\ncat '{}/rows'\n", dir.path().display()),
+        format!("#!/bin/sh\nprintf 'HTTP/2.0 200 OK\\nContent-Type: application/json\\r\\n\\r\\n'\ncat '{}/rows'\n", dir.path().display()),
     )
     .unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
