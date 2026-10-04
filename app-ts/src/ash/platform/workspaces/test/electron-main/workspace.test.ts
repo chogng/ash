@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
-import { test } from "mocha";
+import { setup, teardown, test } from "mocha";
+import { InstantiationService } from "../../../instantiation/common/instantiationService.js";
+import { IAuxiliaryWindowsMainService } from "../../../auxiliaryWindow/electron-main/auxiliaryWindows.js";
+import { AuxiliaryWindowsMainService } from "../../../auxiliaryWindow/electron-main/auxiliaryWindowsMainService.js";
+import { IWindowsMainService } from "../../../windows/electron-main/windows.js";
 import type { DirGrant } from "../../../dirPermissions/common/dirPermissionsService.js";
 import { URI } from "../../../../base/common/uri.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
@@ -37,8 +41,17 @@ import {
 	WorkspaceContextService,
 } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 
+let windowServices: InstantiationService;
+setup(() => {
+	windowServices = new InstantiationService();
+	windowServices.registerSingleton(IAuxiliaryWindowsMainService, () => new AuxiliaryWindowsMainService(() => null));
+});
+teardown(() => windowServices.dispose());
+
 function windowsForWorkspacePaths(paths: IWorkspacePathService): WindowsMainService<never> {
-	return new WindowsMainService<never>(async () => undefined, process.platform, paths);
+	const services = windowServices.createChild();
+	services.registerSingleton(IWindowsMainService, () => services.createInstance(WindowsMainService<never>, async () => undefined, process.platform, paths));
+	return services.get(IWindowsMainService) as WindowsMainService<never>;
 }
 
 test('empty Remote workspaces retain their authority through persisted and renderer boundaries', () => {

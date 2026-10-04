@@ -39,7 +39,7 @@ test("Output projects channel selection and active-channel clearing into the Pan
 		const overrides = outputResources.add(outputScope.createChild());
 		overrides.registerInstance(IContextMenuService, contextMenus);
 		const services = createCodeEditorServices(outputResources, overrides);
-		services.registerInstance(IAccessibleViewService, { ...toDisposable(() => {}), show: () => false, getOpenAriaHint: () => undefined });
+		services.registerInstance(IAccessibleViewService, { ...toDisposable(() => {}), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {} });
 		using pane = services.createInstance(OutputViewPane, browser.window.document.body, { id: 'ash.output.test', title: 'Output' });
 		const titleActions = pane.partTitleProjection?.actions;
 		assert.ok(titleActions);

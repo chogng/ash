@@ -98,7 +98,7 @@ services.registerInstance(IContextKeyService, disposables.add(new ContextKeyServ
 services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(document.body)));
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, text, parameters) => text.replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match)) });
 services.registerInstance(IRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IRemoteAgentService);
-services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
+services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
 services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ getModel: () => ({ getLanguageId: () => 'typescriptreact' }) }) } as unknown as ICodeEditorService);
 services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None } as IEditorService);
 services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'fixture', folders: [] }) } as unknown as IWorkspaceContextService);

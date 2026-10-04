@@ -1,14 +1,14 @@
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { ContextKeyExpression } from '../../contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../instantiation/common/instantiation.js';
-import type { AccessibleContentProvider, AccessibleViewType } from './accessibleView.js';
+import type { IAccessibleViewContentProvider, AccessibleViewType } from './accessibleView.js';
 
 export interface IAccessibleViewImplementation {
 	readonly type: AccessibleViewType;
 	readonly priority: number;
 	readonly name: string;
 	readonly when?: ContextKeyExpression;
-	getProvider(accessor: ServicesAccessor): AccessibleContentProvider | undefined;
+	getProvider(accessor: ServicesAccessor): IAccessibleViewContentProvider | undefined;
 }
 
 class AccessibleViewImplementationRegistry {

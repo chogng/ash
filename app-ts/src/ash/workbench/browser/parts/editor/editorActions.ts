@@ -11,6 +11,7 @@ import { IEditorPart } from "./editorPart.js";
 import type { ExtensionFileTemplateDefinition } from "../../../services/extensions/common/extensionFileTemplate.js";
 import { IExtensionService } from "../../../services/extensions/common/extensionService.js";
 import { IUntitledTextEditorService } from "../../../services/untitled/common/untitledTextEditorService.js";
+import { UntitledTextEditorInput } from "../../../services/untitled/common/untitledTextEditorInput.js";
 import { EditorsVisibleContext } from "../../../common/contextkeys.js";
 import { IEditorPartsService } from "./editorParts.js";
 import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
@@ -382,8 +383,8 @@ registerAction2(class NewFileFromTemplateAction extends Action2 {
 		}));
 		disposables.add(picker.onDidAccept(item => {
 			picker.hide();
-			const untitled = accessor.get(IUntitledTextEditorService).create({ initialText: item.template.body, languageId: item.template.languageId });
-			void accessor.get(IEditorPart).openEditor(untitled).catch(error => console.error("Could not create file from extension template", error));
+			const untitled = accessor.get(IUntitledTextEditorService).create({ initialValue: item.template.body, languageId: item.template.languageId });
+			void accessor.get(IEditorPart).openEditor(new UntitledTextEditorInput(untitled)).catch(error => console.error("Could not create file from extension template", error));
 		}));
 		disposables.add(picker.onDidHide(() => disposables.dispose()));
 		picker.show();

@@ -162,7 +162,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		using contextKeyService = new ContextKeyService();
 		const accessibleViewService: IAccessibleViewService = {
 			show: () => false,
-			getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.',
+			getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => {}, showAccessibleViewHelp: () => {},
 			dispose() {},
 			[Symbol.dispose]() {},
 		};

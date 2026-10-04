@@ -72,7 +72,7 @@ class SettingsFixture extends DisposableStore {
 		this.services.registerInstance(IRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: this.connection.event } as IRemoteAgentService);
 		this.services.registerInstance(IContextViewService, this.add(new BrowserContextViewService(this.root)));
 		this.services.registerInstance(IContextKeyService, this.add(new ContextKeyService()));
-		this.services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
+		this.services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
 		this.services.registerInstance(IEditorService, { openEditor: async (input: EditorInput) => { this.inputs.push(input); this.content.setInput(input); } } as IEditorService);
 		this.content = this.add(this.services.createInstance(LanguageServerSettingsContent, this.root));
 		this.root.append(this.content.domNode);

@@ -94,7 +94,7 @@ services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event
 	return snapshot;
 }, startLogin: async () => { throw new Error('Use GitHub connection'); }, cancelLogin: async () => {}, logout: async () => { transport.signedIn = false; accounts.fire(accountState()); } });
 services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { transport.signedIn = true; accounts.fire(accountState()); }, cancel: async () => {} });
-services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
+services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
 const opened: string[] = [];
 services.registerInstance(IOpenerService, { open: async target => { opened.push(String(target)); return true; } } as IOpenerService);
 let pane: IEditorPane | undefined;

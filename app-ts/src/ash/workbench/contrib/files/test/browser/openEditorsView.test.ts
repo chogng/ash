@@ -48,7 +48,7 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 	} as unknown as IEditorPart;
 	const accessibility: IAccessibleViewService = {
 		show: () => false,
-		getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.',
+		getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => {}, showAccessibleViewHelp: () => {},
 		dispose() {},
 		[Symbol.dispose]() {},
 	};

@@ -1,7 +1,9 @@
 import { AbstractDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export const enum AccessibleViewProviderId {
+	Editor = 'editor',
 	ColorPicker = 'colorPicker',
 	BulkEditPreview = 'bulkEditPreview',
 	ActionWidget = 'actionWidget',
@@ -47,6 +49,7 @@ export const enum AccessibleViewType {
 }
 
 export const enum AccessibilityVerbositySettingId {
+	Editor = 'accessibility.verbosity.editor',
 	ColorPicker = 'accessibility.verbosity.colorPicker',
 	BulkEditPreview = 'accessibility.verbosity.bulkEditPreview',
 	ActionWidget = 'accessibility.verbosity.actionWidget',
@@ -95,10 +98,13 @@ export interface IAccessibleViewContentProvider extends IDisposable {
 	readonly options: IAccessibleViewOptions;
 	readonly verbositySettingKey: string;
 	provideContent(): string;
+	readonly onDidChangeContent?: Event<void>;
 }
 
 /** One invocation of an accessibility provider, released when its dialog closes. */
 export class AccessibleContentProvider extends AbstractDisposable implements IAccessibleViewContentProvider {
+	public onDidChangeContent?: Event<void>;
+
 	constructor(
 		public readonly id: AccessibleViewProviderId,
 		public readonly options: IAccessibleViewOptions,
@@ -117,6 +123,8 @@ export class AccessibleContentProvider extends AbstractDisposable implements IAc
 export interface IAccessibleViewService extends IDisposable {
 	show(type: AccessibleViewType): boolean;
 	getOpenAriaHint(verbositySettingKey: string): string | undefined;
+	disableHint(): Promise<void>;
+	showAccessibleViewHelp(): void;
 }
 
 export const IAccessibleViewService = createServiceIdentifier<IAccessibleViewService>('accessibleViewService');

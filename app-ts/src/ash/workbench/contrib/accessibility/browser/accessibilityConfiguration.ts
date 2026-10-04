@@ -2,6 +2,73 @@ import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+
+export const accessibilityHelpIsShown = new RawContextKey<boolean>('accessibilityHelpIsShown', false);
+export const accessibleViewIsShown = new RawContextKey<boolean>('accessibleViewIsShown', false);
+export const accessibleViewVerbosityEnabled = new RawContextKey<boolean>('accessibleViewVerbosityEnabled', false);
+export const accessibleViewCurrentProviderId = new RawContextKey<string>('accessibleViewCurrentProviderId', '');
+
+export const enum AccessibilityWorkbenchSettingId {
+	DimUnfocusedEnabled = 'accessibility.dimUnfocused.enabled',
+	DimUnfocusedOpacity = 'accessibility.dimUnfocused.opacity',
+}
+
+export const enum ViewDimUnfocusedOpacityProperties {
+	Default = 0.75,
+	Minimum = 0.2,
+	Maximum = 1,
+}
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityWorkbenchSettingId.DimUnfocusedEnabled,
+	defaultValue: false,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') {
+			throw new TypeError(localize('accessibility.invalidDimmingEnabled', 'Unfocused view dimming must be a boolean.'));
+		}
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('accessibility.dimmingTitle', 'Dim unfocused views'); },
+		get description() { return localize('accessibility.dimmingDescription', 'Keep the focused part prominent by reducing the opacity of other parts.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityWorkbenchSettingId.DimUnfocusedOpacity,
+	defaultValue: ViewDimUnfocusedOpacityProperties.Default,
+	parse(value: unknown): number {
+		if (typeof value !== 'number' || !Number.isFinite(value) || value < ViewDimUnfocusedOpacityProperties.Minimum || value > ViewDimUnfocusedOpacityProperties.Maximum) {
+			throw new TypeError(localize('accessibility.invalidDimmingOpacity', 'Unfocused view opacity must be between {0} and {1}.', ViewDimUnfocusedOpacityProperties.Minimum, ViewDimUnfocusedOpacityProperties.Maximum));
+		}
+		return value;
+	},
+	setting: {
+		valueType: 'number',
+		minimum: ViewDimUnfocusedOpacityProperties.Minimum,
+		maximum: ViewDimUnfocusedOpacityProperties.Maximum,
+		get title() { return localize('accessibility.dimmingOpacityTitle', 'Unfocused view opacity'); },
+		get description() { return localize('accessibility.dimmingOpacityDescription', 'Choose how visible unfocused parts remain when dimming is enabled.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Editor,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') {
+			throw new TypeError(localize('accessibility.invalidEditorVerbosity', 'Editor accessibility verbosity must be a boolean.'));
+		}
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('accessibility.editorVerbosityTitle', 'Editor accessibility help'); },
+		get description() { return localize('accessibility.editorVerbosityDescription', 'Announce how to open accessibility help when the editor receives focus.'); },
+	},
+});
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ScmRepositories,

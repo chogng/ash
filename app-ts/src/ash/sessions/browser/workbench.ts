@@ -103,8 +103,7 @@ import { DecorationsService } from '../../workbench/services/decorations/browser
 import { ITextFileService, TextFileService } from '../../workbench/services/textfile/common/textFileService.js';
 import { IWorkingCopyService } from '../../workbench/services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
-import { IUntitledTextEditorService } from '../../workbench/services/untitled/common/untitledTextEditorService.js';
-import { BrowserUntitledTextEditorService } from '../../workbench/services/untitled/browser/browserUntitledTextEditorService.js';
+import { IUntitledTextEditorService, UntitledTextEditorService } from '../../workbench/services/untitled/common/untitledTextEditorService.js';
 import { TextFileEditorTracker } from '../../workbench/contrib/files/browser/editors/textFileEditorTracker.js';
 import { ITextModelResourceService, IFileTextModelService } from '../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { getBrowserTextModelService } from '../../workbench/services/textmodelResolver/browser/browserTextModelService.js';
@@ -341,7 +340,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, ownerDocument)));
 		services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));
-		services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(BrowserUntitledTextEditorService));
+		services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(UntitledTextEditorService));
 		services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
 		const textFiles = new TextFileService(files);
 		services.registerInstance(ITextFileService, textFiles);

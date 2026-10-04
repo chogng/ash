@@ -87,7 +87,7 @@ const workspace = resources.add(new WorkspaceContextService({ id: 'link-test', u
 services.registerInstance(IWorkspaceContextService, workspace);
 services.registerInstance(IContextMenuService, menus);
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, applicationId: 'link', workspaceId: 'link', backend: window.localStorage, flushInterval: 0 })));
-services.registerInstance(IAccessibleViewService, { ...toDisposable(() => {}), show: () => false, getOpenAriaHint: () => undefined });
+services.registerInstance(IAccessibleViewService, { ...toDisposable(() => {}), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {} });
 const store: ITextResourceStore = {
 	onDidChange: Event.None,
 	resolve: async request => ({ resource: request.resource, text: '', revision: undefined }),

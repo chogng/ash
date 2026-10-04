@@ -62,7 +62,7 @@ test('Changes ignores an old conversation response and opens a shared read-only 
 		services.registerInstance(IConfigurationService, config);
 		services.registerInstance(IContextKeyService, contexts);
 		services.registerInstance(INotificationService, notifications);
-		services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', dispose() {}, [Symbol.dispose]() {} });
+		services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
 		using view = services.createInstance(ChangesViewPane, browser.window.document.body, { id: 'changes', title: 'Changes' });
 		view.setVisible(true);
 		selection = selected('current');

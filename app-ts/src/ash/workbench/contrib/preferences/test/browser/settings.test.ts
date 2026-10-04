@@ -402,7 +402,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
 	const panel = disposables.add(services.createInstance(ModelSettingsContent, root));
 	const modelTree = disposables.add(new SettingsTreeModel<SettingsContentItem>());
 	disposables.add(new SettingsTree(root, {
@@ -464,7 +464,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	services.registerInstance(ILanguageModelsService, models);
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
 	const content = resources.add(services.createInstance(ModelSettingsContent, root));
 	const loaded = new DeferredPromise<void>();
 	resources.add(content.onDidChange(() => {
@@ -723,7 +723,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => {},
 		appendToActiveDraft: text => { prompts.push(text); },
 	});
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
 	const hooksFolder = await mkdtemp(join(tmpdir(), 'ash-settings-hooks-'));
 	await using hooksFolderCleanup = { [Symbol.asyncDispose]: async () => { await rm(hooksFolder, { recursive: true, force: true }); } };
 	services.registerInstance(IFileService, disposables.add(new DiskFileSystemProvider([URI.file(hooksFolder)])));
@@ -1206,7 +1206,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(ConfigurationServiceId, configuration);
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
 	const content = disposables.add(services.createInstance(ModelSettingsContent, root));
 	const modelTree = disposables.add(new SettingsTreeModel<SettingsContentItem>());
 	disposables.add(new SettingsTree(root, { model: modelTree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderItem: item => item.value.domNode }));

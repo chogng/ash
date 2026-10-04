@@ -1,12 +1,13 @@
 # Untitled editor service
 
 This Workbench service owns the identity and bootstrap snapshot of unsaved text
-editors. `BrowserUntitledTextEditorService` creates `untitled:/Untitled-N`
+editors. `UntitledTextEditorService` creates `untitled:/Untitled-N`
 resources, reuses a supplied untitled resource during backup restoration, and
 reserves its number for the next new editor. It releases an identity when its
 last working copy closes and clears remaining identities on workspace switch.
-The input keeps a stable identity when renamed and publishes label changes to
-its open editor tabs.
+`UntitledTextEditorInput` exposes the model's name, initial value, language and
+name changes to the editor. Opening or restoring a draft passes this input to
+the Editor Part; the service retains ownership of the draft model.
 
 The service does not own text transactions, undo history, dirty comparison, or
 editor presentation. The selected editor's model service remains responsible

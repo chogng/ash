@@ -242,8 +242,8 @@ import { AppServerToolSearchService } from "../services/toolSearch/browser/appSe
 import { ICodebaseSymbolsApi } from "../../platform/codebaseSymbols/common/codebaseSymbolsApi.js";
 import { AccessibleViewInformationService, IAccessibleViewInformationService } from "../services/accessibility/common/accessibleViewInformationService.js";
 import { NativeAccessibilityService } from "../services/accessibility/electron-browser/accessibilityService.js";
-import { BrowserUntitledTextEditorService } from "../services/untitled/browser/browserUntitledTextEditorService.js";
-import { IUntitledTextEditorService } from "../services/untitled/common/untitledTextEditorService.js";
+import { IUntitledTextEditorService, UntitledTextEditorService } from "../services/untitled/common/untitledTextEditorService.js";
+import { UntitledTextEditorInput } from "../services/untitled/common/untitledTextEditorInput.js";
 import { BrowserWorkingCopyService } from "../services/workingCopy/browser/browserWorkingCopyService.js";
 import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyService.js";
 import { IActivityService } from '../services/activity/common/activity.js';
@@ -589,7 +589,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkingCopyService, workingCopyService);
 		const documentTextModelService = this._register(services.createInstance(DocumentEditorTextModelService));
 		services.registerInstance(IDocumentEditorTextModelService, documentTextModelService);
-		const untitledTextEditorService = this._register(services.createInstance(BrowserUntitledTextEditorService));
+		const untitledTextEditorService = this._register(services.createInstance(UntitledTextEditorService));
 		this.untitledTextEditorService = untitledTextEditorService;
 		services.registerInstance(IUntitledTextEditorService, untitledTextEditorService);
 		const workingCopyBackups = this._register(createWorkingCopyBackupService(services, workspace.id));
@@ -1163,7 +1163,7 @@ export class Workbench extends Disposable {
 		catch (error) { this.logService.error("workingCopy", "Failed to list working-copy backups", error); return; }
 		for (const backup of pending) {
 			if (backup.kind === "text" && this.untitledTextEditorService.isUntitled(backup.resource)) {
-				this.untitledTextEditorService.create({ untitledResource: backup.resource, initialText: backup.content, languageId: backup.languageId, label: backup.label });
+				this.untitledTextEditorService.create({ untitledResource: backup.resource, initialValue: backup.content, languageId: backup.languageId, label: backup.label });
 			}
 		}
 		for (const backup of pending) {
@@ -1171,7 +1171,7 @@ export class Workbench extends Disposable {
 				let pane;
 				const untitled = backup.kind === "text" ? this.untitledTextEditorService.get(backup.resource) : undefined;
 				if (untitled) {
-					pane = await editor.openEditor(untitled);
+					pane = await editor.openEditor(new UntitledTextEditorInput(untitled));
 				} else {
 					try {
 						pane = await editor.openEditor({ resource: backup.resource, ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });

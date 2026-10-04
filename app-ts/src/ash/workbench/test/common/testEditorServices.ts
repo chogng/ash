@@ -9,8 +9,7 @@ import { IFileTextModelService } from '../../services/textmodelResolver/common/t
 import { BrowserTextModelService } from '../../services/textmodelResolver/browser/browserTextModelService.js';
 import { noFileIconTheme } from '../../../platform/theme/common/themeService.js';
 import { ILabelService, LabelService } from '../../../platform/label/common/labelService.js';
-import { IUntitledTextEditorService } from '../../services/untitled/common/untitledTextEditorService.js';
-import { BrowserUntitledTextEditorService } from '../../services/untitled/browser/browserUntitledTextEditorService.js';
+import { IUntitledTextEditorService, UntitledTextEditorService } from '../../services/untitled/common/untitledTextEditorService.js';
 import { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { IDecorationsService } from '../../services/decorations/common/decorations.js';
@@ -39,7 +38,7 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	if (!services.has(IResourceIconRenderer)) services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() {} });
 	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => new LabelService(services.get(IWorkspaceContextService)));
 	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => new BrowserWorkingCopyService());
-	if (!services.has(IUntitledTextEditorService)) services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(BrowserUntitledTextEditorService));
+	if (!services.has(IUntitledTextEditorService)) services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(UntitledTextEditorService));
 	if (!services.has(ILogService)) services.registerInstance(ILogService, new NullLoggerService());
 	if (!services.has(IDecorationsService)) services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));
 	if (!services.has(ILanguageService)) services.registerSingleton(ILanguageService, () => new LanguageService());

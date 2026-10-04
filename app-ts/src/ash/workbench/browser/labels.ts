@@ -310,7 +310,7 @@ class ResourceLabelWidget extends Disposable {
 			const untitled = this.services.untitledTextEditorService?.get(resource);
 			if (untitled) {
 				if (typeof name === 'string') {
-					const untitledName = untitled.label;
+					const untitledName = untitled.name;
 					if (name === '' || name === basenameOrAuthority(resource)) title = `${untitledName} • ${resource.path}`;
 				}
 				if (typeof name === 'string' && name === basenameOrAuthority(resource)) description = resource.path;
@@ -385,7 +385,7 @@ class ResourceLabelWidget extends Disposable {
 				? this.services.untitledTextEditorService?.get(resource)
 				: undefined;
 			if (untitled && displayName === basenameOrAuthority(resource)) {
-				displayName = untitled.label;
+				displayName = untitled.name;
 				displayDescription = resource.path;
 			}
 		}
