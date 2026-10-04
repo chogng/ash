@@ -577,7 +577,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.domNode);
 
-	const typescript = input("C:\\project\\main.ts");
+	const typescript = input("C:/project/main.ts");
 	const alphaPane = await editor.openEditor(typescript);
 	assert.equal(editor.groups.length, 1);
 	assert.equal(editor.activeGroup, editor.groups[0]);
@@ -637,7 +637,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	editor.focus();
 	assert.equal(panes[0]?.focusCount, 1);
 
-	const markdown = input("C:\\project\\paper.md");
+	const markdown = input("C:/project/paper.md");
 	const codeBlockEditorWidgetPane = await editor.openEditor(markdown);
 	assert.equal(editor.activePane, codeBlockEditorWidgetPane);
 	assert.equal(editor.activeInput, markdown);
@@ -704,9 +704,9 @@ test("EditorPart replaces preview tabs and preserves pinned tabs", async () => {
 	));
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.domNode);
-	const first = input("C:\\project\\first.ts");
-	const second = input("C:\\project\\second.ts");
-	const third = input("C:\\project\\third.ts");
+	const first = input("C:/project/first.ts");
+	const second = input("C:/project/second.ts");
+	const third = input("C:/project/third.ts");
 
 	await editor.openEditor(first, { pinned: false });
 	assert.deepEqual(editor.activeGroup.inputs, [first]);
