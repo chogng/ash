@@ -3998,6 +3998,7 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "运行 /usage 刷新",
         "Relancer /usage pour actualiser",
     ),
+    translation("{0} quota", "{0} の利用上限", "{0} 额度", "Quota {0}"),
     translation(
         "Sign in to a subscription: /config > Providers.",
         "/config > プロバイダーでサブスクリプションにログインしてください。",

@@ -8,14 +8,14 @@ expression: screen
         ┌── Usage ─────────────────────────────────────────────────[✗]─┐
         │                                                              │
         │> Kimi plan  ·  Allegro                                       │
-        │  5-hour limit                                                │
+        │                                                              │
+        │  5-hour limit ────────────────────────────────────────────── │
         │  5h window  ·  87% left (13% used)                           │
         │  Resets  ·  2026-09-28 00:00 UTC                             │
-        │  Monthly limit                                               │
+        │                                                              │
+        │  Monthly limit ───────────────────────────────────────────── │
         │  Window  ·  99% left (1% used)                               │
         │  Resets  ·  Not reported                                     │
-        │                                                              │
-        │                                                              │
         │                                                              │
         │                                                              │
         │                                                              │

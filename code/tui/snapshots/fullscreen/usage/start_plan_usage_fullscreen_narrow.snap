@@ -4,17 +4,17 @@ expression: "render(&app, 48, 28)"
 ---
   .                                [Dashboard]
 
-> /usage
+
   ┌── Usage ─────────────────────────────[✗]─┐
   │                                          │
-  │> ChatGPT plan  ·  pro                    │
+  │> BigModel plan  ·  Start Trial           │
   │                                          │
-  │  Codex quota ─────────────────────────── │
-  │  5h window  ·  65% left (35% used)       │
-  │  Resets  ·  2033-05-18 03:33 UTC         │
-  │  7d window  ·  20% left (80% used)       │
-  │  Resets  ·  2033-05-23 22:26 UTC         │
-  │  Credits  ·  10.25                       │
+  │  GLM-5.3-Flash quota ─────────────────── │
+  │  1d window  ·  75% left (25% used)       │
+  │  Resets  ·  2026-10-02 16:00 UTC         │
+  │                                          │
+  │                                          │
+  │                                          │
   │                                          │
   │                                          │
   │                                          │

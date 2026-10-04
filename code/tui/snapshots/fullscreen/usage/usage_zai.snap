@@ -10,14 +10,14 @@ expression: zai_screen
         │   BigModel    Z.AI                                           │
         │                                                              │
         │> Z.AI plan  ·  Not reported                                  │
-        │  Weekly limit                                                │
+        │                                                              │
+        │  Weekly limit ────────────────────────────────────────────── │
         │  7d window  ·  65% left (35% used)                           │
         │  Resets  ·  Not reported                                     │
-        │  MCP limit                                                   │
+        │                                                              │
+        │  MCP limit ───────────────────────────────────────────────── │
         │  Window  ·  98% left (2% used)                               │
         │  Resets  ·  Not reported                                     │
-        │                                                              │
-        │                                                              │
         │                                                              │
         │                                                              │
         │                                                              │

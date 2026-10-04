@@ -10,10 +10,10 @@ expression: bigmodel_screen
         │   BigModel    Z.AI                                           │
         │                                                              │
         │> BigModel plan  ·  Not reported                              │
-        │  5-hour limit                                                │
+        │                                                              │
+        │  5-hour limit ────────────────────────────────────────────── │
         │  5h window  ·  87% left (13% used)                           │
         │  Resets  ·  2026-09-28 00:00 UTC                             │
-        │                                                              │
         │                                                              │
         │                                                              │
         │                                                              │

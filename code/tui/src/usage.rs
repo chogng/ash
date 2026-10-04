@@ -1,3 +1,4 @@
+use crate::nls::Text;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionModel;
@@ -123,12 +124,18 @@ fn choices(usage: AccountRateLimitsReadResult) -> ListSelectionGroup {
     }
     for limit in usage.limits {
         let name = limit.name.as_deref().unwrap_or(&limit.id);
-        items.push(ListSelectionItem::new(if limit.id == "codex" {
-            "Codex".to_owned()
+        let name = if limit.id == "codex" { "Codex" } else { name };
+        let heading = if limit.id == "codex" || limit.model.is_some() {
+            Text::template("{0} quota", vec![Text::literal(name)])
         } else {
-            name.to_owned()
-        }));
-        if let Some(model) = limit.model {
+            Text::from(name)
+        };
+        items.push(ListSelectionItem::new(heading).as_section_divider());
+        // Display names and model IDs may differ only in casing; retain a model
+        // row when it adds information, such as the model covered by gpt-reserve.
+        if let Some(model) = limit.model
+            && !name.eq_ignore_ascii_case(&model)
+        {
             items.push(detail("Model", model));
         }
         if limit.limit_reached == Some(true) {

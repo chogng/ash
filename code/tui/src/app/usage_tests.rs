@@ -4,6 +4,7 @@ use super::CommandPanel;
 use super::dispatch::execute_product_command;
 use crate::config::Event as ConfigEvent;
 use crate::config::TerminalSettings;
+use crate::nls::Language;
 use crate::terminal::ScreenMode;
 use crate::thread::Command as ThreadCommand;
 use crate::thread::Event as ThreadEvent;
@@ -626,9 +627,27 @@ pub(super) fn render(app: &App, width: u16, height: u16) -> String {
 
 #[test]
 fn usage_displays_start_plan_model_buckets_in_both_screen_modes() {
-    for (mode, snapshot) in [
-        (ScreenMode::Fullscreen, "start_plan_usage_fullscreen"),
-        (ScreenMode::Inline, "start_plan_usage_inline"),
+    for (mode, language, snapshot) in [
+        (
+            ScreenMode::Fullscreen,
+            Language::English,
+            "start_plan_usage_fullscreen",
+        ),
+        (
+            ScreenMode::Inline,
+            Language::English,
+            "start_plan_usage_inline",
+        ),
+        (
+            ScreenMode::Fullscreen,
+            Language::Chinese,
+            "start_plan_usage_chinese_fullscreen",
+        ),
+        (
+            ScreenMode::Inline,
+            Language::Chinese,
+            "start_plan_usage_chinese_inline",
+        ),
     ] {
         let accounts = json!({"revision":"1","accounts":[{"provider":"bigmodel-start-plan","accountId":"start-user","status":"ready","credentialRevision":"1"}]});
         let usage = json!({"provider":"bigmodel-start-plan","accountId":"start-user","plan":"Start Trial","credits":null,"limits":[{
@@ -636,7 +655,10 @@ fn usage_displays_start_plan_model_buckets_in_both_screen_modes() {
             "primary":{"usedPercent":25,"windowSeconds":86400,"resetsAt":1790956800},"secondary":null}]});
         let (mut client, requests) = client(vec![accounts, usage]);
         let mut app = App::new();
-        set_mode(&mut app, mode);
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        settings.set_language(language);
+        app.update(ConfigEvent::SettingsReceived(settings));
         app.update(crate::usage::load(&mut client).unwrap());
         assert_eq!(
             requests.lock().unwrap()[1],
@@ -645,6 +667,141 @@ fn usage_displays_start_plan_model_buckets_in_both_screen_modes() {
         let screen = render(&app, 80, 28);
         assert!(screen.contains("Start Trial"));
         assert!(screen.contains("GLM-5.3-Flash"));
+        let selection = app.list_selection().unwrap();
+        assert!(selection.visible_items()[1].section_heading());
+        assert!(
+            !selection
+                .visible_items()
+                .iter()
+                .any(|item| matches!(item.label(), "Model" | "模型"))
+        );
+        app.handle_key(key(KeyCode::Down));
+        assert!(
+            app.list_selection()
+                .unwrap()
+                .selected_item()
+                .unwrap()
+                .description()
+                .unwrap()
+                .contains("75%")
+        );
+        app.handle_key(key(KeyCode::Up));
         crate::tui_assert_snapshot!(app = &app; snapshot, screen);
+        crate::tui_assert_snapshot!(app = &app; format!("{snapshot}_narrow"), render(&app, 48, 28));
+    }
+}
+
+#[test]
+fn usage_separates_main_and_reserve_quotas_and_skips_headings_during_navigation() {
+    for (mode, language, snapshot) in [
+        (
+            ScreenMode::Fullscreen,
+            Language::English,
+            "usage_reserve_fullscreen",
+        ),
+        (
+            ScreenMode::Inline,
+            Language::English,
+            "usage_reserve_inline",
+        ),
+        (
+            ScreenMode::Fullscreen,
+            Language::Chinese,
+            "usage_reserve_chinese_fullscreen",
+        ),
+        (
+            ScreenMode::Inline,
+            Language::Chinese,
+            "usage_reserve_chinese_inline",
+        ),
+    ] {
+        let mut data = quota();
+        data["limits"].as_array_mut().unwrap().push(json!({
+            "id":"gpt-reserve", "name":"gpt-reserve", "model":"gpt-5.6-luna", "allowed":true,
+            "limitReached":false, "primary":{"usedPercent":0,"windowSeconds":604800,"resetsAt":2000500000},"secondary":null
+        }));
+        let (mut client, _) = client(vec![account("ready"), data]);
+        let mut app = App::new();
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        settings.set_language(language);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        app.update(crate::usage::load(&mut client).unwrap());
+        let selection = app.list_selection().unwrap();
+        let headings: Vec<_> = selection
+            .visible_items()
+            .iter()
+            .filter(|item| item.section_heading())
+            .map(|item| item.label())
+            .collect();
+        assert_eq!(
+            headings,
+            match language {
+                Language::Chinese => vec!["Codex 额度", "gpt-reserve 额度"],
+                Language::English => vec!["Codex quota", "gpt-reserve quota"],
+                Language::Japanese => vec!["Codex の利用上限", "gpt-reserve の利用上限"],
+                Language::French => vec!["Quota Codex", "Quota gpt-reserve"],
+            }
+        );
+        assert!(
+            selection
+                .visible_items()
+                .iter()
+                .any(|item| item.description() == Some("gpt-5.6-luna"))
+        );
+        crate::tui_assert_snapshot!(app = &app; snapshot, render(&app, 80, 28));
+        crate::tui_assert_snapshot!(app = &app; format!("{snapshot}_narrow"), render(&app, 48, 28));
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 28)).unwrap();
+        terminal
+            .draw(|frame| super::frame::draw(frame, &app))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let heading_row = (0..28)
+            .find(|&row| {
+                (0..75).any(|column| {
+                    buffer[(column, row)].symbol() == "C"
+                        && buffer[(column + 1, row)].symbol() == "o"
+                })
+            })
+            .unwrap();
+        let heading_cell = (0..80)
+            .find(|&column| buffer[(column, heading_row)].symbol() == "C")
+            .unwrap();
+        assert!(
+            buffer[(heading_cell, heading_row)]
+                .modifier
+                .contains(ratatui::style::Modifier::BOLD)
+        );
+
+        for _ in 0..5 {
+            app.handle_key(key(KeyCode::Down));
+            assert!(
+                !app.list_selection()
+                    .unwrap()
+                    .selected_item()
+                    .unwrap()
+                    .section_heading()
+            );
+        }
+        assert_eq!(
+            app.list_selection()
+                .unwrap()
+                .selected_item()
+                .unwrap()
+                .description(),
+            Some("gpt-5.6-luna")
+        );
+        app.handle_key(key(KeyCode::Up));
+        assert_eq!(
+            app.list_selection()
+                .unwrap()
+                .selected_item()
+                .unwrap()
+                .description(),
+            Some("2033-05-23 22:26 UTC")
+        );
+        app.handle_key(key(KeyCode::Esc));
+        assert!(app.command_panel().is_none());
     }
 }

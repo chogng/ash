@@ -10,16 +10,16 @@ expression: "render(&app, 80, 28)"
         │> ChatGPT plan  ·  pro                                        │
         │                                                              │
         │  Codex quota ─────────────────────────────────────────────── │
-        │  Windows  ·  Not reported                                    │
-        │                                                              │
-        │  Code review ─────────────────────────────────────────────── │
-        │  Availability  ·  Limit reached                              │
-        │  7d window  ·  0% left (100% used)                           │
+        │  5h window  ·  65% left (35% used)                           │
         │  Resets  ·  2033-05-18 03:33 UTC                             │
-        │  Credits  ·  Not reported                                    │
+        │  7d window  ·  20% left (80% used)                           │
+        │  Resets  ·  2033-05-23 22:26 UTC                             │
         │                                                              │
-        │                                                              │
-        │                                                              │
+        │  gpt-reserve quota ───────────────────────────────────────── │
+        │  Model  ·  gpt-5.6-luna                                      │
+        │  7d window  ·  100% left (0% used)                           │
+        │  Resets  ·  2033-05-23 22:26 UTC                             │
+        │  Credits  ·  10.25                                           │
         │                                                              │
         │                                                              │
         │                                                              │

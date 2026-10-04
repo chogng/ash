@@ -4,9 +4,9 @@ expression: screen
 ---
   ┌── Usage ─────────────────────────────[✗]─┐
   │                                          │
-  │  2 more above                            │
-  │  Windows  ·  Not reported                │
-  │  Code review                             │
+  │  4 more above                            │
+  │                                          │
+  │  Code review ─────────────────────────── │
   │  Availability  ·  Limit reached          │
   │  7d window  ·  0% left (100% used)       │
   │  Resets  ·  2033-05-18 03:33 UTC         │
