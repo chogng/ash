@@ -1,4 +1,5 @@
 import { createDisconnectedNetworkDiagnosticsApi } from '../../networkDiagnostics/browser/networkDiagnosticsApi.js';
+import { createDisconnectedIssueReporterService } from '../../issue/browser/appServerIssueReporterService.js';
 import { createDisconnectedHooksApi } from '../../hooks/browser/hooksApi.js';
 import { Event } from '../../../base/common/event.js';
 import { createDisconnectedLanguageServerService } from "../../language/browser/languageServerService.js";
@@ -77,6 +78,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		toolSearch: createDisconnectedToolSearchApi(unavailableOperation),
 		dirPermissions: createDisconnectedDirPermissionsApi(unavailableOperation),
 		networkDiagnostics: createDisconnectedNetworkDiagnosticsApi(unavailableOperation),
+		issueReporter: createDisconnectedIssueReporterService(unavailableOperation),
 		agentCapabilities: createDisconnectedAgentCapabilitiesApi(unavailableOperation),
 		hooks: createDisconnectedHooksApi(unavailableOperation),
 	};

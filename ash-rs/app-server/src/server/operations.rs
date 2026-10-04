@@ -301,6 +301,12 @@ impl AppServer {
             contracts: Default::default(),
         };
         capabilities.advertise_contracts();
+        if self.issue_reporter.is_some() {
+            capabilities.contracts.insert(
+                "issueReporter".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+        }
         capabilities.contracts.insert(
             "memoryDiagnostics".into(),
             ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },

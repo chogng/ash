@@ -115,6 +115,7 @@ impl RequestLane {
         match method {
             Some(
                 ClientMethod::LanguageCancel
+                | ClientMethod::IssueReporterSearchCancel
                 | ClientMethod::ContentSearchCancel
                 | ClientMethod::ExtensionHostInvokeCancel
                 | ClientMethod::AccountLoginCancel
@@ -136,6 +137,8 @@ impl RequestLane {
                 | ClientMethod::GitWorktreeCreate
                 | ClientMethod::GitWorktreeDelete
                 | ClientMethod::NetworkDiagnosticsRun
+                | ClientMethod::IssueReporterSearch
+                | ClientMethod::IssueReporterSubmit
                 | ClientMethod::ProviderProbe
                 | ClientMethod::ProviderModelsList
                 // Catalog I/O can outlive navigation and must not occupy the workers used by Settings reads.

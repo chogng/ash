@@ -23,12 +23,91 @@ fn page(number: u64) -> IssuePage {
 }
 
 #[test]
+fn private_issue_cache_isolates_accounts_and_grants_and_clears_only_the_selected_grant() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = SqliteIssueCache::open(&directory.path().join("state.db")).unwrap();
+    let repository = repository("repo");
+    let first = github::GitHubAuthorization {
+        host: "github.com".into(),
+        account_id: "42".into(),
+        grant_id: "first".into(),
+    };
+    let second = github::GitHubAuthorization {
+        account_id: "43".into(),
+        ..first.clone()
+    };
+    let renewed = github::GitHubAuthorization {
+        grant_id: "renewed".into(),
+        ..first.clone()
+    };
+    let key = IssueCacheKey {
+        authorization: &first,
+        repository: &repository,
+        state: "open",
+        query: "",
+        page: 1,
+    };
+    let now = RETENTION_SECONDS + 1;
+    store.write(&key, &page(1), now).unwrap();
+    for authorization in [&second, &renewed] {
+        assert!(
+            store
+                .read(
+                    &IssueCacheKey {
+                        authorization,
+                        ..key
+                    },
+                    now
+                )
+                .unwrap()
+                .is_none()
+        );
+        store
+            .write(
+                &IssueCacheKey {
+                    authorization,
+                    ..key
+                },
+                &page(2),
+                now,
+            )
+            .unwrap();
+    }
+    store.clear(&key).unwrap();
+    assert!(store.read(&key, now).unwrap().is_none());
+    for authorization in [&second, &renewed] {
+        assert_eq!(
+            store
+                .read(
+                    &IssueCacheKey {
+                        authorization,
+                        ..key
+                    },
+                    now
+                )
+                .unwrap()
+                .unwrap()
+                .page
+                .issues[0]
+                .number,
+            2
+        );
+    }
+}
+
+#[test]
 fn issue_cache_survives_restart_and_isolates_repository_state_query_and_page() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("state.db");
     let repo = repository("repo");
     let other = repository("other");
+    let authorization = github::GitHubAuthorization {
+        host: "github.com".into(),
+        account_id: "42".into(),
+        grant_id: "grant-one".into(),
+    };
     let key = IssueCacheKey {
+        authorization: &authorization,
         repository: &repo,
         state: "open",
         query: "",
@@ -131,7 +210,13 @@ fn issue_cache_refresh_invalidates_continuation_and_clear_preserves_other_reposi
     let store = SqliteIssueCache::open(&path).unwrap();
     let repo = repository("repo");
     let other = repository("other");
+    let authorization = github::GitHubAuthorization {
+        host: "github.com".into(),
+        account_id: "42".into(),
+        grant_id: "grant-one".into(),
+    };
     let key = IssueCacheKey {
+        authorization: &authorization,
         repository: &repo,
         state: "open",
         query: "",
@@ -168,7 +253,7 @@ fn issue_cache_refresh_invalidates_continuation_and_clear_preserves_other_reposi
             [],
         )
         .unwrap();
-    store.clear(&repo).unwrap();
+    store.clear(&key).unwrap();
     assert!(store.read(&key, now + 1).unwrap().is_none());
     assert!(
         store
@@ -196,7 +281,13 @@ fn issue_cache_bounds_pages_and_rejects_oversized_replacement_atomically() {
     let dir = tempfile::tempdir().unwrap();
     let store = SqliteIssueCache::open(&dir.path().join("state.db")).unwrap();
     let repo = repository("repo");
+    let authorization = github::GitHubAuthorization {
+        host: "github.com".into(),
+        account_id: "42".into(),
+        grant_id: "grant-one".into(),
+    };
     let key = IssueCacheKey {
+        authorization: &authorization,
         repository: &repo,
         state: "open",
         query: "",

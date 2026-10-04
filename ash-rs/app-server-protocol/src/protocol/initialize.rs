@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 12;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 13;
 // Version 12 uses manual/auto permission IDs. Clients must reject older contracts before
 // sending a Turn, rather than silently selecting an unintended permission mode.
 // Version 13 requires separate current observations in Guardian environment responses.

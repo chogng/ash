@@ -128,6 +128,55 @@ fn expired_access_token_refreshes_and_logout_removes_the_credential() {
 }
 
 #[test]
+fn repository_authorization_requires_a_live_ash_grant_and_does_not_survive_relogin() {
+    let (driver, _, _) = driver();
+    assert_eq!(
+        driver.authorization().unwrap_err().kind(),
+        LoginErrorKind::ExternalLoginRequired
+    );
+    let mut credential = Credential {
+        client_id: driver.client_id.clone(),
+        access_token: "first-access".into(),
+        refresh_token: String::new(),
+        expires_at: Some(now() + 3600),
+        refresh_expires_at: None,
+        account_id: "42".into(),
+        login: "octocat".into(),
+        credential_revision: 1,
+    };
+    driver.store_credential(&credential).unwrap();
+    let authorization = driver.authorization().unwrap();
+    assert_eq!(
+        driver.token(&authorization).unwrap().expose(),
+        b"first-access"
+    );
+    assert!(!format!("{authorization:?}").contains("first-access"));
+    let mut foreign = authorization.clone();
+    foreign.host = "github.enterprise.example".into();
+    assert_eq!(
+        driver.token(&foreign).unwrap_err().kind(),
+        LoginErrorKind::ExternalLoginRequired
+    );
+    driver.logout(&credential.snapshot().account).unwrap();
+    assert_eq!(
+        driver.token(&authorization).unwrap_err().kind(),
+        LoginErrorKind::ExternalLoginRequired
+    );
+    credential.access_token = "second-access".into();
+    driver.store_credential(&credential).unwrap();
+    let replacement = driver.authorization().unwrap();
+    assert_ne!(authorization.grant_id, replacement.grant_id);
+    assert_eq!(
+        driver.token(&authorization).unwrap_err().kind(),
+        LoginErrorKind::ExternalLoginRequired
+    );
+    assert_eq!(
+        driver.token(&replacement).unwrap().expose(),
+        b"second-access"
+    );
+}
+
+#[test]
 fn callback_requires_matching_state_and_cancellation_stops_exchange() {
     let (driver, http, _) = driver();
     let grant = driver.authorize().unwrap();

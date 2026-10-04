@@ -1,12 +1,19 @@
 //! GitHub account authorization and repository operations.
 //!
-//! Account credentials belong to Ash's profile secret store. Repository issue and PR
-//! operations currently use the host's authenticated GitHub CLI.
+//! Account credentials belong to Ash's profile secret store. Repository operations
+//! bind the GitHub CLI transport to one explicit Ash authorization.
 
 mod auth;
 mod issues;
 mod process;
+mod reporter;
+pub use reporter::GitHubIssueReporter;
+pub use reporter::ReporterError;
+pub use reporter::ReporterIssue;
+pub use reporter::report_repository;
 pub use auth::GITHUB_PROVIDER_ID;
+pub use auth::GitHubAuthorization;
+pub use auth::GitHubCredentialProvider;
 pub use auth::GitHubOAuth;
 pub use issues::IssueAssignee;
 pub use issues::IssueLabel;
@@ -18,6 +25,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -177,17 +185,31 @@ pub struct CreatePullRequest<'a> {
 /// GitHub-specific IO; callers supply a previously authorized repository identity.
 pub struct GitHub {
     executable: PathBuf,
-}
-
-impl Default for GitHub {
-    fn default() -> Self {
-        Self {
-            executable: PathBuf::from("gh"),
-        }
-    }
+    credentials: Arc<dyn GitHubCredentialProvider>,
+    authorization: GitHubAuthorization,
 }
 
 impl GitHub {
+    pub fn for_account(
+        credentials: Arc<dyn GitHubCredentialProvider>,
+    ) -> std::result::Result<Self, ash_login::LoginError> {
+        let authorization = credentials.authorization()?;
+        Ok(Self {
+            executable: PathBuf::from("gh"),
+            credentials,
+            authorization,
+        })
+    }
+
+    pub fn authorization(&self) -> &GitHubAuthorization {
+        &self.authorization
+    }
+
+    /// Rejects results from a revoked or replaced grant, including cache hits.
+    pub fn validate_authorization(&self) -> std::result::Result<(), ash_login::LoginError> {
+        self.credentials.token(&self.authorization).map(|_| ())
+    }
+
     pub async fn merge_options(&self, repository: &Repository) -> Result<MergeOptions> {
         self.api(
             repository,
@@ -290,6 +312,12 @@ impl GitHub {
             repository.owner.clone(),
             repository.name.clone(),
         )?;
+        if !repository
+            .host
+            .eq_ignore_ascii_case(&self.authorization.host)
+        {
+            return Err("GitHub authorization does not cover this host".into());
+        }
         let mut arguments = vec![
             "api".to_owned(),
             "--hostname".into(),
@@ -305,7 +333,20 @@ impl GitHub {
         if input.is_some() {
             arguments.extend(["--input".into(), "-".into()]);
         }
-        let output = process::run(&self.executable, &arguments, input.as_deref()).await?;
+        let token = self
+            .credentials
+            .token(&self.authorization)
+            .map_err(|error| error.to_string())?;
+        let output = process::run(
+            &self.executable,
+            &arguments,
+            input.as_deref(),
+            &self.authorization.host,
+            &token,
+        )
+        .await?;
+        self.validate_authorization()
+            .map_err(|error| error.to_string())?;
         let value: serde_json::Value = serde_json::from_slice(&output)
             .map_err(|error| format!("Invalid GitHub response: {error}"))?;
         if let Some(errors) = value.get("errors") {
@@ -545,6 +586,12 @@ impl GitHub {
             repository.owner.clone(),
             repository.name.clone(),
         )?;
+        if !repository
+            .host
+            .eq_ignore_ascii_case(&self.authorization.host)
+        {
+            return Err("GitHub authorization does not cover this host".into());
+        }
         let method = match method {
             MergeMethod::Merge => "--merge",
             MergeMethod::Squash => "--squash",
@@ -564,7 +611,20 @@ impl GitHub {
             "--match-head-commit".into(),
             pull_request.head.sha.clone(),
         ];
-        process::run(&self.executable, &arguments, None).await?;
+        let token = self
+            .credentials
+            .token(&self.authorization)
+            .map_err(|error| error.to_string())?;
+        process::run(
+            &self.executable,
+            &arguments,
+            None,
+            &self.authorization.host,
+            &token,
+        )
+        .await?;
+        self.validate_authorization()
+            .map_err(|error| error.to_string())?;
         Ok(())
     }
 }

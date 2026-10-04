@@ -1,5 +1,31 @@
 use super::*;
 
+struct Credentials;
+
+impl GitHubCredentialProvider for Credentials {
+    fn authorization(&self) -> std::result::Result<GitHubAuthorization, ash_login::LoginError> {
+        Ok(GitHubAuthorization {
+            host: "github.com".into(),
+            account_id: "42".into(),
+            grant_id: "test-grant".into(),
+        })
+    }
+
+    fn token(
+        &self,
+        authorization: &GitHubAuthorization,
+    ) -> std::result::Result<ash_secrets::SecretValue, ash_login::LoginError> {
+        assert_eq!(authorization, &self.authorization()?);
+        Ok(ash_secrets::SecretValue::new(b"ash-test-token".to_vec()))
+    }
+}
+
+pub(super) fn github(executable: PathBuf) -> GitHub {
+    let mut github = GitHub::for_account(Arc::new(Credentials)).unwrap();
+    github.executable = executable;
+    github
+}
+
 #[test]
 fn repository_identity_rejects_paths_and_option_injection() {
     for value in ["", "../repo", "-repo", "a/b", "repo?x=y", "a\nb", "a b"] {
@@ -36,9 +62,7 @@ async fn draft_pr_cannot_enable_auto_merge() {
             sha: "def".into(),
         },
     };
-    let github = GitHub {
-        executable: "must-not-execute".into(),
-    };
+    let github = github("must-not-execute".into());
     assert_eq!(
         github
             .enable_auto_merge(&repository, &pr, MergeMethod::Squash)
@@ -50,9 +74,7 @@ async fn draft_pr_cannot_enable_auto_merge() {
 #[tokio::test(flavor = "current_thread")]
 async fn invalid_issue_page_does_not_start_a_process() {
     let repository = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
-    let github = GitHub {
-        executable: "must-not-execute".into(),
-    };
+    let github = github("must-not-execute".into());
     assert!(
         github
             .issues(&repository, IssueState::Open, 0)
@@ -67,6 +89,40 @@ async fn invalid_issue_page_does_not_start_a_process() {
             .unwrap_err()
             .contains("positive")
     );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn repository_operations_reject_a_host_outside_the_selected_grant() {
+    let repository = Repository::new(
+        "github.enterprise.example".into(),
+        "team".into(),
+        "repo".into(),
+    )
+    .unwrap();
+    let github = github("must-not-execute".into());
+    assert_eq!(
+        github.issue_metadata(&repository, 7).await.unwrap_err(),
+        "GitHub authorization does not cover this host"
+    );
+}
+
+#[cfg(windows)]
+#[tokio::test(flavor = "current_thread")]
+async fn cli_transport_sets_only_the_selected_hosts_token() {
+    use ash_secrets::SecretValue;
+    let executable = PathBuf::from("powershell.exe");
+    let arguments = vec!["-NoProfile".into(), "-NonInteractive".into(), "-Command".into(),
+        "[Console]::Write(($env:GH_HOST,$env:GH_TOKEN,$env:GH_ENTERPRISE_TOKEN,$env:GITHUB_TOKEN,$env:GITHUB_ENTERPRISE_TOKEN -join '|'))".into()];
+    let token = SecretValue::new(b"selected-token".to_vec());
+    for (host, expected) in [
+        ("github.com", "github.com|selected-token|||"),
+        ("github.example.com", "github.example.com||selected-token||"),
+    ] {
+        let output = process::run(&executable, &arguments, None, host, &token)
+            .await
+            .unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), expected);
+    }
 }
 
 #[cfg(unix)]
@@ -98,7 +154,7 @@ async fn issue_reader_excludes_prs_and_reads_every_comment_page() {
     let script = directory.path().join("gh");
     std::fs::write(&script, format!("#!/bin/sh\ncase \"$6\" in\n*'/comments?'*'page=1') cat '{0}/comments';;\n*'/comments?'*) cat '{0}/empty';;\n*'/issues/3') cat '{0}/issue';;\n*'/issues?state=open&'*'page=1') cat '{0}/list';;\n*'/issues?state=closed&'*'page=2') cat '{0}/closed';;\n*) exit 9;;\nesac\n", directory.path().display())).unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let github = GitHub { executable: script };
+    let github = github(script);
     let repository = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
     let page = github
         .issues(&repository, IssueState::Open, 1)
@@ -134,7 +190,7 @@ async fn graphql_errors_are_failures_even_when_the_process_succeeds() {
     let script = directory.path().join("gh");
     std::fs::write(&script, "#!/bin/sh\ncat >/dev/null\nprintf '%s' '{\"errors\":[{\"message\":\"Auto-merge disabled\"}]}'\n").unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let github = GitHub { executable: script };
+    let github = github(script);
     let repository = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
     let error = github
         .api::<serde_json::Value>(
@@ -164,7 +220,7 @@ async fn automatic_merge_uses_the_selected_method_and_exact_reviewed_head() {
     )
     .unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let github = GitHub { executable: script };
+    let github = github(script);
     let repository = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
     let pr = PullRequest {
         number: 7,
@@ -234,7 +290,7 @@ async fn issue_search_encodes_keywords_handles_numbers_and_reports_limits() {
     let script = dir.path().join("gh");
     std::fs::write(&script, format!("#!/bin/sh\nprintf '%s' \"$6\" > '{0}/endpoint'\ncase \"$6\" in\nsearch/issues*) cat '{0}/search';;\nrepos/team/repo/issues/5001) cat '{0}/issue';;\n*) exit 9;;\nesac\n", dir.path().display())).unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let github = GitHub { executable: script };
+    let github = github(script);
     let repo = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
     let result = github
         .search_issues(&repo, IssueState::Open, "memory leak &", 1)
@@ -323,7 +379,7 @@ async fn issue_pagination_continues_past_a_full_page_of_pull_requests() {
     )
     .unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let github = GitHub { executable: script };
+    let github = github(script);
     let repo = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
     let result = github.issues(&repo, IssueState::Open, 25).await.unwrap();
     assert!(result.issues.is_empty());

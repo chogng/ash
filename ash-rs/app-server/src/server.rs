@@ -63,6 +63,9 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 mod account_operations;
+#[cfg(test)]
+#[path = "github_issue_tests.rs"]
+mod github_issue_tests;
 mod agent_environment_source;
 #[cfg(test)]
 mod agent_runtime_tests;
@@ -116,6 +119,7 @@ mod instruction_operations;
 mod interaction_runtime;
 mod issue_operations;
 mod issue_runtime;
+mod issue_reporter_operations;
 mod language_document_features;
 mod language_operations;
 mod language_runtime;
@@ -248,6 +252,8 @@ pub struct AppServer {
     testing: testing::TestingService,
     approval_review_model: Option<ash_core::ApprovalReviewerFactory>,
     login: Option<Arc<ash_login::LoginService>>,
+    github: Option<Arc<dyn github::GitHubCredentialProvider>>,
+    issue_reporter: Option<github::GitHubIssueReporter>,
     chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
     kimi: Option<Arc<ash_kimi::KimiOAuth>>,
     supergrok: Option<Arc<supergrok::SuperGrokOAuth>>,
@@ -593,6 +599,8 @@ impl AppServer {
             testing: testing::TestingService::default(),
             approval_review_model: None,
             login: None,
+            github: None,
+            issue_reporter: None,
             chatgpt: None,
             kimi: None,
             supergrok: None,
@@ -1075,6 +1083,19 @@ impl AppServer {
             )))
             .expect("a newly composed login service accepts its App Server event sink");
         self.login = Some(login);
+        self
+    }
+
+    pub fn with_github_credentials(
+        mut self,
+        credentials: Arc<dyn github::GitHubCredentialProvider>,
+    ) -> Self {
+        self.github = Some(credentials);
+        self
+    }
+
+    pub fn with_issue_reporter(mut self, reporter: github::GitHubIssueReporter) -> Self {
+        self.issue_reporter = Some(reporter);
         self
     }
 
@@ -2339,6 +2360,14 @@ impl AppServer {
             }
             Some(ClientMethod::IssueConfigure) => self.issue_configure(&request.params),
             Some(ClientMethod::IssueList) => self.issue_list(&request.params),
+            Some(ClientMethod::IssueReporterRead) => self.issue_reporter_read(),
+            Some(ClientMethod::IssueReporterSearch) => {
+                self.issue_reporter_search(&request.params, cancellation)
+            }
+            Some(ClientMethod::IssueReporterSearchCancel) => {
+                self.issue_reporter_search_cancel(connection, &request.params)
+            }
+            Some(ClientMethod::IssueReporterSubmit) => self.issue_reporter_submit(&request.params),
             Some(ClientMethod::IssueRead) => self.issue_read(&request.params),
             Some(ClientMethod::SessionCreate) => self.session_create(connection, &request.params),
             Some(ClientMethod::SessionRead) => self.session_read(&request.params),

@@ -17,6 +17,7 @@ export default defineConfig({
 				diff: resolve(import.meta.dirname, 'diff.html'),
 				language: resolve(import.meta.dirname, "language.html"),
 				marketplace: resolve(import.meta.dirname, "marketplace.html"),
+				issueReporter: resolve(import.meta.dirname, 'issueReporter.html'),
 				advisor: resolve(import.meta.dirname, "advisor.html"),
 				chatInput: resolve(import.meta.dirname, "chatInput.html"),
 				dataChannel: resolve(import.meta.dirname, 'dataChannel.html'),

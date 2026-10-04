@@ -31,6 +31,7 @@ pub mod goal;
 pub mod initialize;
 pub mod instructions;
 pub mod issues;
+pub mod issue_reporter;
 pub mod language;
 pub mod marketplace;
 pub mod mcp;

@@ -36,6 +36,7 @@ export const enum AccessibleViewProviderId {
 	Calls = 'calls',
 	Memories = 'memories',
 	Trace = 'trace',
+	IssueReporter = 'issueReporter',
 }
 
 export const enum AccessibleViewType {
@@ -78,6 +79,7 @@ export const enum AccessibilityVerbositySettingId {
 	Calls = 'accessibility.verbosity.calls',
 	Memories = 'accessibility.verbosity.memories',
 	Trace = 'accessibility.verbosity.trace',
+	IssueReporter = 'accessibility.verbosity.issueReporter',
 }
 
 export interface IAccessibleViewOptions {

@@ -4,6 +4,25 @@ use super::*;
 use tempfile::TempDir;
 
 #[test]
+fn product_report_target_rejects_arbitrary_hosts_and_non_issue_urls() {
+    let root = TempDir::new().unwrap();
+    let path = root.path().join("product-services.json");
+    for target in [
+        "https://other.example/team/repo/issues",
+        "http://github.com/team/repo/issues",
+        "https://github.com/team/repo",
+        "https://github.com/team/repo/issues?token=private",
+    ] {
+        fs::write(
+            &path,
+            serde_json::json!({"schemaVersion":2,"reportIssueUrl":target}).to_string(),
+        )
+        .unwrap();
+        assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
+    }
+}
+
+#[test]
 fn product_services_loads_public_oauth_and_pins_marketplace_root() {
     let root = TempDir::new().unwrap();
     fs::write(root.path().join("root.json"), br#"{"signed":{}}"#).unwrap();
@@ -67,6 +86,10 @@ fn production_product_services_delegates_to_the_plugins_manager() {
     let profile = TempDir::new().unwrap();
 
     let config = LocalProductServicesConfig::load(product_services, profile.path()).unwrap();
+    assert_eq!(
+        config.report_issue_url.as_deref(),
+        Some("https://github.com/chogng/ash/issues")
+    );
     assert_eq!(
         config
             .github_account

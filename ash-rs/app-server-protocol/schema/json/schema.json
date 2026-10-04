@@ -2214,6 +2214,10 @@
         "FileSystemNotFound",
         "FileSystemRevisionConflict",
         "IssueOperationFailed",
+        "IssueReporterUnavailable",
+        "IssueReporterPermissionDenied",
+        "IssueReporterRateLimited",
+        "IssueReporterSubmissionUncertain",
         "GitUnavailable",
         "GitNotRepository",
         "GitOperationFailed",
@@ -9252,6 +9256,70 @@
         {
           "properties": {
             "method": {
+              "const": "issueReporter/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issueReporter/search",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueReporterSearchParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issueReporter/search/cancel",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueReporterCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issueReporter/submit",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueReporterSubmitParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/init",
               "type": "string"
             },
@@ -14829,6 +14897,70 @@
             },
             "result": {
               "$ref": "#/$defs/IssueReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issueReporter/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueReporterContext"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issueReporter/search",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueReporterSearchResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issueReporter/search/cancel",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueReporterCancelResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issueReporter/submit",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueReporterIssue"
             }
           },
           "required": [
@@ -26252,6 +26384,145 @@
         "issue",
         "body",
         "comments"
+      ],
+      "type": "object"
+    },
+    "IssueReporterCancelParams": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId"
+      ],
+      "type": "object"
+    },
+    "IssueReporterCancelResult": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/IssueReporterCancelStatus"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
+    },
+    "IssueReporterCancelStatus": {
+      "enum": [
+        "requested",
+        "alreadyRequested",
+        "completed"
+      ],
+      "type": "string"
+    },
+    "IssueReporterContext": {
+      "additionalProperties": false,
+      "properties": {
+        "arch": {
+          "type": "string"
+        },
+        "os": {
+          "type": "string"
+        },
+        "reportIssueUrl": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reportIssueUrl",
+        "version",
+        "os",
+        "arch"
+      ],
+      "type": "object"
+    },
+    "IssueReporterIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "number",
+        "url",
+        "title",
+        "state"
+      ],
+      "type": "object"
+    },
+    "IssueReporterSearchParams": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "title"
+      ],
+      "type": "object"
+    },
+    "IssueReporterSearchResult": {
+      "additionalProperties": false,
+      "properties": {
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/IssueReporterIssue"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "issues"
+      ],
+      "type": "object"
+    },
+    "IssueReporterSubmitParams": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 65536,
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "body"
       ],
       "type": "object"
     },

@@ -14,7 +14,7 @@ export interface WebLaunchResult {
 }
 
 /** Owns the authenticated Web backend and profile for one smoke scenario. */
-export async function launchWeb(workspaceDirectory: string): Promise<WebLaunchResult> {
+export async function launchWeb(workspaceDirectory: string, productServices: { readonly reportIssueUrl?: string } = {}): Promise<WebLaunchResult> {
 	const root = resolve(import.meta.dirname, '../../..');
 	const profileDirectory = await mkdtemp(join(tmpdir(), 'ash-w-'));
 	const productServicesPath = join(profileDirectory, 'product-services.json');
@@ -39,7 +39,7 @@ export async function launchWeb(workspaceDirectory: string): Promise<WebLaunchRe
 		}
 	};
 	try {
-		await writeFile(productServicesPath, '{"schemaVersion":2}\n');
+		await writeFile(productServicesPath, JSON.stringify({ schemaVersion: 2, ...productServices }) + '\n');
 		const languageServer = process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER;
 		if (languageServer) {
 			await writeFile(join(profileDirectory, 'config.toml'), `[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServer)}\n`);

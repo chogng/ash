@@ -245,6 +245,13 @@ import type { IssueListParams } from './types/IssueListParams.js';
 import type { IssueListResult } from './types/IssueListResult.js';
 import type { IssueReadParams } from './types/IssueReadParams.js';
 import type { IssueReadResult } from './types/IssueReadResult.js';
+import type { IssueReporterCancelParams } from './types/IssueReporterCancelParams.js';
+import type { IssueReporterCancelResult } from './types/IssueReporterCancelResult.js';
+import type { IssueReporterContext } from './types/IssueReporterContext.js';
+import type { IssueReporterIssue } from './types/IssueReporterIssue.js';
+import type { IssueReporterSearchParams } from './types/IssueReporterSearchParams.js';
+import type { IssueReporterSearchResult } from './types/IssueReporterSearchResult.js';
+import type { IssueReporterSubmitParams } from './types/IssueReporterSubmitParams.js';
 import type { LanguageCancelParams } from './types/LanguageCancelParams.js';
 import type { LanguageCancelResult } from './types/LanguageCancelResult.js';
 import type { LanguageCloseParams } from './types/LanguageCloseParams.js';
@@ -769,6 +776,10 @@ export interface AppServerRequestMap {
   "issue/configure": { params: IssueConfigureParams; response: ConfigCommandResult };
   "issue/list": { params: IssueListParams; response: IssueListResult };
   "issue/read": { params: IssueReadParams; response: IssueReadResult };
+  "issueReporter/read": { params: Record<string, never>; response: IssueReporterContext };
+  "issueReporter/search": { params: IssueReporterSearchParams; response: IssueReporterSearchResult };
+  "issueReporter/search/cancel": { params: IssueReporterCancelParams; response: IssueReporterCancelResult };
+  "issueReporter/submit": { params: IssueReporterSubmitParams; response: IssueReporterIssue };
   "git/init": { params: GitInitParams; response: GitRepositoriesResult };
   "git/catalog": { params: GitRepositoryParams; response: GitCatalogResult };
   "git/command": { params: GitCommandParams; response: GitCommandResult };
@@ -1130,6 +1141,10 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "issue/configure": { method: "issue/configure" },
   "issue/list": { method: "issue/list" },
   "issue/read": { method: "issue/read" },
+  "issueReporter/read": { method: "issueReporter/read" },
+  "issueReporter/search": { method: "issueReporter/search" },
+  "issueReporter/search/cancel": { method: "issueReporter/search/cancel" },
+  "issueReporter/submit": { method: "issueReporter/submit" },
   "git/init": { method: "git/init" },
   "git/catalog": { method: "git/catalog" },
   "git/command": { method: "git/command" },

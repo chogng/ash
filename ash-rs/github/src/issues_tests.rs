@@ -37,7 +37,7 @@ print(json.dumps(result))
     std::fs::write(dir.path().join("issue.json"), serde_json::json!({"number":18,"node_id":"issue18","title":"Implement","body":"requirements","html_url":"https://github.com/team/repo/issues/18","updated_at":"now","state":"open","labels":[{"name":"bug","color":"123456","node_id":"bug"},{"name":"queued","color":"123456","node_id":"queued"}],"assignees":[{"login":"me"}]}).to_string()).unwrap();
     (
         dir,
-        GitHub { executable: script },
+        crate::tests::github(script),
         Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap(),
     )
 }

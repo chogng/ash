@@ -29,6 +29,7 @@ pub struct LocalProductServicesConfig {
     pub(crate) marketplaces: BTreeMap<MarketplaceName, ash_core_plugins::RemoteMarketplaceConfig>,
     pub(crate) connector_oauth: Vec<ProductConnectorOAuthConfig>,
     pub(crate) github_account: Option<GitHubAccountConfig>,
+    pub(crate) report_issue_url: Option<String>,
     pub(crate) image_generation: Option<ProductImageGenerationConfig>,
     pub(crate) git_attribution: Option<ProductGitAttributionConfig>,
     authority_identity: [u8; 32],
@@ -96,6 +97,9 @@ impl LocalProductServicesConfig {
             .github_account
             .map(GitHubAccountConfig::try_from)
             .transpose()?;
+        if let Some(target) = &document.report_issue_url {
+            github::report_repository(target).map_err(product_config_error)?;
+        }
         if let Some(image) = &document.image_generation {
             let endpoint = Url::parse(&image.endpoint).map_err(product_config_error)?;
             if endpoint.scheme() != "https"
@@ -121,6 +125,7 @@ impl LocalProductServicesConfig {
             marketplaces,
             connector_oauth,
             github_account,
+            report_issue_url: document.report_issue_url,
             authority_identity: authority_identity.finalize().into(),
         })
     }
@@ -180,6 +185,8 @@ struct ProductServicesDocument {
     connector_oauth: Vec<ProductConnectorOAuthDocument>,
     #[serde(default)]
     github_account: Option<GitHubAccountDocument>,
+    #[serde(default)]
+    report_issue_url: Option<String>,
     #[serde(default)]
     image_generation: Option<ProductImageGenerationConfig>,
     #[serde(default)]

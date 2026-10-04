@@ -17,10 +17,20 @@ impl AppServer {
         let params: IssueListParams = decode(params)?;
         let runtime = self.issue_runtime()?;
         let repository = runtime
-            .block_on(repository(runtime.root()))
+            .block_on(github_repository(runtime.root()))
             .map_err(issue_error)?;
         let query = params.query.trim();
         github::validate_issue_query(query, params.page).map_err(issue_error)?;
+        let github = self.issue_github()?;
+        if !repository
+            .host
+            .eq_ignore_ascii_case(&github.authorization().host)
+        {
+            return Err(RpcError::new(
+                -32030,
+                AppServerErrorName::AccountAuthenticationRequired,
+            ));
+        }
         let state = match params.state {
             ash_app_server_protocol::protocol::issues::IssueState::Open => "open",
             ash_app_server_protocol::protocol::issues::IssueState::Closed => "closed",
@@ -44,18 +54,19 @@ impl AppServer {
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|error| issue_error(error.to_string()))?
             .as_secs();
+        use ash_app_server_protocol::protocol::issues::IssueListMode;
         let key = ash_state::IssueCacheKey {
+            authorization: github.authorization(),
             repository: &repository,
             state,
             query,
             page: params.page,
         };
-        use ash_app_server_protocol::protocol::issues::IssueListMode;
         if params.mode == IssueListMode::ClearCache {
             if params.page != 1 {
                 return Err(issue_error("Clear cache must start at page 1".into()));
             }
-            cache.clear(&repository).map_err(issue_error)?;
+            cache.clear(&key).map_err(issue_error)?;
         }
         let stored = if matches!(params.mode, IssueListMode::Cached | IssueListMode::Auto) {
             cache.read(&key, now).map_err(issue_error)?
@@ -71,7 +82,7 @@ impl AppServer {
             (entry.page, entry.fetched_at, true)
         } else {
             let page = runtime
-                .block_on(github::GitHub::default().search_issues(
+                .block_on(github.search_issues(
                     &repository,
                     if state == "open" {
                         github::IssueState::Open
@@ -86,9 +97,15 @@ impl AppServer {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_err(|error| issue_error(error.to_string()))?
                 .as_secs();
+            github
+                .validate_authorization()
+                .map_err(github_authentication_error)?;
             cache.write(&key, &page, fetched_at).map_err(issue_error)?;
             (page, fetched_at, false)
         };
+        github
+            .validate_authorization()
+            .map_err(github_authentication_error)?;
         result(&IssueListResult {
             repository: IssueRepository {
                 host: repository.host,
@@ -109,7 +126,7 @@ impl AppServer {
         let params: IssueReadParams = decode(params)?;
         let runtime = self.issue_runtime()?;
         let repository = runtime
-            .block_on(repository(runtime.root()))
+            .block_on(github_repository(runtime.root()))
             .map_err(issue_error)?;
         if (
             repository.host.as_str(),
@@ -124,8 +141,9 @@ impl AppServer {
                 "Repository changed; refresh the issue list".into(),
             ));
         }
+        let github = self.issue_github()?;
         let snapshot = runtime
-            .block_on(github::GitHub::default().issue(&repository, params.number))
+            .block_on(github.issue(&repository, params.number))
             .map_err(issue_error)?;
         result(&IssueReadResult {
             body: snapshot.issue.body.clone().unwrap_or_default(),
@@ -141,9 +159,35 @@ impl AppServer {
                 .collect(),
         })
     }
+
+    fn issue_github(&self) -> Result<github::GitHub, RpcError> {
+        let credentials = self
+            .github
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::AccountUnavailable))?;
+        github::GitHub::for_account(std::sync::Arc::clone(credentials))
+            .map_err(github_authentication_error)
+    }
 }
 
-pub(super) async fn repository(root: &std::path::Path) -> Result<github::Repository, String> {
+fn github_authentication_error(error: ash_login::LoginError) -> RpcError {
+    match error.kind() {
+        ash_login::LoginErrorKind::ExternalLoginRequired => {
+            RpcError::new(-32030, AppServerErrorName::AccountAuthenticationRequired)
+        }
+        ash_login::LoginErrorKind::Unavailable => {
+            RpcError::new(-32030, AppServerErrorName::AccountUnavailable)
+        }
+        ash_login::LoginErrorKind::InvalidInput
+        | ash_login::LoginErrorKind::NotFound
+        | ash_login::LoginErrorKind::Conflict
+        | ash_login::LoginErrorKind::Driver => {
+            RpcError::new(-32030, AppServerErrorName::AccountOperationFailed)
+        }
+    }
+}
+
+async fn github_repository(root: &std::path::Path) -> Result<github::Repository, String> {
     let git = ash_git::GitClient::system();
     let repository = git
         .open_repository(root)
@@ -163,6 +207,11 @@ pub(super) async fn repository(root: &std::path::Path) -> Result<github::Reposit
     let identity = remote
         .identity()
         .ok_or("Origin has no supported repository identity")?;
+    // Git remote metadata only associates this workspace with a hosted repository. This
+    // integration uses the GitHub.com account provider; other Git hosts are not login failures.
+    if !identity.host().eq_ignore_ascii_case("github.com") {
+        return Err("GitHub issue management requires a GitHub.com origin remote".into());
+    }
     github::Repository::new(
         identity.host().into(),
         identity.owner().into(),

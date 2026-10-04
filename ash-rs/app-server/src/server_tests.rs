@@ -449,7 +449,7 @@ fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
     AppServer::new(threads, model).with_ephemeral_env_state()
 }
 
-fn server() -> AppServer {
+pub(crate) fn server() -> AppServer {
     server_with_model(Arc::new(crate::local::ProviderModelService::new(Arc::new(
         EchoModel,
     ))))
@@ -902,7 +902,7 @@ fn custom_provider_rpc_round_trips_protocol_and_stores_a_separate_key() {
     assert!(!config.to_string().contains("test-key"));
 }
 
-fn call(
+pub(crate) fn call(
     server: &AppServer,
     connection: &mut ConnectionState,
     request: serde_json::Value,
@@ -910,7 +910,7 @@ fn call(
     serde_json::from_str(&server.handle_json(connection, &request.to_string())).unwrap()
 }
 
-fn initialize(server: &AppServer, connection: &mut ConnectionState) {
+pub(crate) fn initialize(server: &AppServer, connection: &mut ConnectionState) {
     initialize_with_capabilities(server, connection, serde_json::json!({}));
 }
 

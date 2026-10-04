@@ -17,6 +17,7 @@ pub struct SqliteIssueCache {
 }
 
 pub struct IssueCacheKey<'a> {
+    pub authorization: &'a github::GitHubAuthorization,
     pub repository: &'a Repository,
     pub state: &'a str,
     pub query: &'a str,
@@ -58,7 +59,7 @@ impl SqliteIssueCache {
         prune(&connection, now)?;
         let stored: Option<(i64, String)> = connection.query_row(
             "SELECT fetched_at, value FROM issue_pages WHERE repository=?1 AND state=?2 AND query=?3 AND page=?4",
-            (identity(key.repository), key.state, key.query, key.page),
+            (identity(key), key.state, key.query, key.page),
             |row| Ok((row.get(0)?, row.get(1)?)),
         ).optional().map_err(|error| error.to_string())?;
         stored
@@ -95,19 +96,19 @@ impl SqliteIssueCache {
             transaction
                 .execute(
                     "DELETE FROM issue_pages WHERE repository=?1 AND state=?2 AND query=?3",
-                    (identity(key.repository), key.state, key.query),
+                    (identity(key), key.state, key.query),
                 )
                 .map_err(|error| error.to_string())?;
         }
         transaction.execute("INSERT INTO issue_pages(repository,state,query,page,fetched_at,value) VALUES(?1,?2,?3,?4,?5,?6)
             ON CONFLICT(repository,state,query,page) DO UPDATE SET fetched_at=excluded.fetched_at,value=excluded.value",
-            (identity(key.repository), key.state, key.query, key.page, timestamp(now)?, value)).map_err(|error| error.to_string())?;
+            (identity(key), key.state, key.query, key.page, timestamp(now)?, value)).map_err(|error| error.to_string())?;
         prune(&transaction, now)?;
         transaction.execute("DELETE FROM issue_pages WHERE rowid IN (SELECT rowid FROM issue_pages ORDER BY fetched_at DESC, rowid DESC LIMIT -1 OFFSET ?1)", [MAX_PAGES as u32]).map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())
     }
 
-    pub fn clear(&self, repository: &Repository) -> Result<(), String> {
+    pub fn clear(&self, key: &IssueCacheKey<'_>) -> Result<(), String> {
         let connection = self
             .connection
             .lock()
@@ -115,19 +116,23 @@ impl SqliteIssueCache {
         connection
             .execute(
                 "DELETE FROM issue_pages WHERE repository=?1",
-                [identity(repository)],
+                [identity(key)],
             )
             .map_err(|error| error.to_string())?;
         Ok(())
     }
 }
 
-fn identity(repository: &Repository) -> String {
+fn identity(key: &IssueCacheKey<'_>) -> String {
+    let repository = key.repository;
     format!(
-        "{}/{}/{}",
-        repository.host, repository.owner, repository.name
+        "{}:{}@{}/{}/{}",
+        key.authorization.account_id,
+        key.authorization.grant_id,
+        repository.host.to_lowercase(),
+        repository.owner.to_lowercase(),
+        repository.name.to_lowercase()
     )
-    .to_lowercase()
 }
 
 fn prune(connection: &Connection, now: u64) -> Result<(), String> {

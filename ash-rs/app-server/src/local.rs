@@ -1058,6 +1058,7 @@ pub fn open_app_server_with_codebase_providers(
     let github_account = product_services
         .as_ref()
         .and_then(|services| services.github_account.clone());
+    let report_issue_url = product_services.as_ref().and_then(|services| services.report_issue_url.clone());
     let pty_helper = options.pty_helper.take();
     if options.plugin_package_service.is_none()
         && let Some(sources) = product_services
@@ -1622,6 +1623,12 @@ pub fn open_app_server_with_codebase_providers(
     .with_cloud_codebase_storage_root(cloud_codebase_root)
     .with_cloud_codebase_providers(providers.cloud)
     .with_extension_roots(extension_roots);
+    if let Some(github) = github_oauth {
+        server = server.with_github_credentials(github);
+    }
+    if let Some(target) = report_issue_url {
+        server = server.with_issue_reporter(github::GitHubIssueReporter::new(&target, application_http).map_err(open_error)?);
+    }
     if options.session_state_mode == SessionStateMode::Durable {
         let directory = options
             .dir_root

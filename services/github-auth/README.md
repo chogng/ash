@@ -6,6 +6,8 @@ This Cloudflare Worker is the public callback and token exchange service for Ash
 
 Register a GitHub App with callback URL `https://ash-github-auth.lanxiang0901.workers.dev/v1/oauth/github/callback`. Keep expiring user authorization tokens enabled and device flow and webhooks disabled. Account identity does not require repository or organization permissions. Add permissions only when a feature actually uses them. The public Client ID belongs in `resources/product-services/product-services.json`; never commit the Client Secret. Generate a **Client secret** under the GitHub App's **Client secrets** section. A **Private key** is a different credential and cannot be used for this token exchange.
 
+The product issue reporter creates issues using this GitHub App's user access token. Enable the repository **Issues: Read and write** permission for the App and approve the changed authorization before testing submission. The token must have access to the repository configured by `reportIssueUrl`; public issue search does not require login. A `403` during submission is reported as a permission error and preserves the draft. Changing the Worker configuration alone does not grant repository permissions.
+
 ## Cloudflare Worker
 
 The Worker is named `ash-github-auth` and runs at `https://ash-github-auth.lanxiang0901.workers.dev/`. Deploy from this directory with `wrangler deploy`. Configure three Worker secrets with `wrangler secret put`: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `STATE_SIGNING_SECRET`. The Client ID is public, but storing all three in Worker settings keeps deployment configuration together. Generate `STATE_SIGNING_SECRET` from at least 32 random bytes. Do not place tokens or secrets in Wrangler variables, logs, source control, or chat.

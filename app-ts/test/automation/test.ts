@@ -30,6 +30,7 @@ interface PlaywrightFixtures {
 	readonly gitRepository: boolean;
 	readonly gitMergeConflict: boolean;
 	readonly openWorkspace: boolean;
+	readonly reportIssueUrl: string | undefined;
 	readonly target: PlaywrightTarget;
 	readonly application: PlaywrightApplication;
 	readonly driver: PlaywrightDriver;
@@ -42,14 +43,15 @@ export const test = base.extend<PlaywrightFixtures>({
 	gitRepository: [false, { option: true }],
 	gitMergeConflict: [false, { option: true }],
 	openWorkspace: [true, { option: true }],
+	reportIssueUrl: [undefined, { option: true }],
 	// Workspace options may depend on the platform. Connection addresses belong
 	// to the later launch, otherwise target -> server -> workspace -> target cycles.
 	target: async ({}, use, testInfo) => {
 		await use(playwrightTargetForProject(testInfo.project.name));
 	},
-	webAppServer: [async ({ testWorkspace }, use, testInfo) => {
+	webAppServer: [async ({ testWorkspace, reportIssueUrl }, use, testInfo) => {
 		if (testInfo.project.name !== 'browser-app-server') { await use(undefined); return; }
-		const server = await launchWeb(testWorkspace.directory);
+		const server = await launchWeb(testWorkspace.directory, { reportIssueUrl });
 		try { await use(server); } finally { await server.close(); }
 	}, { timeout: 75_000 }],
 	testWorkspace: async ({ includeLargeTestFile, gitRepository, gitMergeConflict }, use) => {

@@ -1,6 +1,7 @@
 import './contrib/memories/browser/memories.contribution.js';
 import './contrib/memory/browser/memory.contribution.js';
 import './contrib/trace/browser/trace.contribution.js';
+import './contrib/issue/browser/issue.contribution.js';
 import './services/dialogs/common/dialogService.js';
 import './services/dataChannel/browser/dataChannelService.js';
 import './api/browser/mainThreadDataChannels.contribution.js';

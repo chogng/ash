@@ -1029,6 +1029,8 @@ use crate::protocol::issues::IssueReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::issues::IssueReadResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::issue_reporter::{IssueReporterContext, IssueReporterSearchParams, IssueReporterSearchResult, IssueReporterIssue, IssueReporterSubmitParams, IssueReporterCancelParams, IssueReporterCancelResult};
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageCancelParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageCancelResult;
@@ -3855,6 +3857,10 @@ client_methods! {
         response: IssueReadResult,
         serialization: None,
     },
+    IssueReporterRead => "issueReporter/read" { params: EmptyParams, response: IssueReporterContext, serialization: None, },
+    IssueReporterSearch => "issueReporter/search" { params: IssueReporterSearchParams, response: IssueReporterSearchResult, serialization: None, cancellation: "operationId", },
+    IssueReporterSearchCancel => "issueReporter/search/cancel" { params: IssueReporterCancelParams, response: IssueReporterCancelResult, serialization: None, },
+    IssueReporterSubmit => "issueReporter/submit" { params: IssueReporterSubmitParams, response: IssueReporterIssue, serialization: None, },
     GitInit => "git/init" { params: GitInitParams, response: GitRepositoriesResult, serialization: GlobalExclusive, },
     GitCatalog => "git/catalog" { params: GitRepositoryParams, response: GitCatalogResult, serialization: RepositoryExclusive, },
     GitCommand => "git/command" { params: GitCommandParams, response: GitCommandResult, serialization: RepositoryExclusive, },
@@ -4518,6 +4524,14 @@ typescript_bindings! {
     crate::protocol::issues::IssueReadParams,
     crate::protocol::issues::IssueReadResult,
     crate::protocol::issues::IssueComment,
+    crate::protocol::issue_reporter::IssueReporterContext,
+    crate::protocol::issue_reporter::IssueReporterSearchParams,
+    crate::protocol::issue_reporter::IssueReporterSearchResult,
+    crate::protocol::issue_reporter::IssueReporterIssue,
+    crate::protocol::issue_reporter::IssueReporterSubmitParams,
+    crate::protocol::issue_reporter::IssueReporterCancelParams,
+    crate::protocol::issue_reporter::IssueReporterCancelResult,
+    crate::protocol::issue_reporter::IssueReporterCancelStatus,
     AccountDto,
     BackupContentDto,
     BackupDiscardParams,

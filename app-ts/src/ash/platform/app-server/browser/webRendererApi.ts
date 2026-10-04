@@ -1,4 +1,5 @@
 import { AppServerAssetService } from '../../assets/browser/appServerAssetService.js';
+import { AppServerIssueReporterService } from '../../issue/browser/appServerIssueReporterService.js';
 import { createAppServerNetworkDiagnosticsApi } from '../../networkDiagnostics/browser/networkDiagnosticsApi.js';
 import { createAppServerHooksApi } from '../../hooks/browser/hooksApi.js';
 import { AppServerTestExecutionService } from '../../testing/browser/appServerTestExecutionService.js';
@@ -128,6 +129,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		toolSearch: createAppServerToolSearchApi(connection),
 		dirPermissions: createAppServerDirPermissionsApi(connection),
 		networkDiagnostics: createAppServerNetworkDiagnosticsApi(connection),
+		issueReporter: new AppServerIssueReporterService(connection),
 		agentCapabilities: createAppServerAgentCapabilitiesApi(connection),
 		hooks: createAppServerHooksApi(connection),
 	};

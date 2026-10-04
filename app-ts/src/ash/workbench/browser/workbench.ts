@@ -221,6 +221,7 @@ import { IConnectorService } from "../../platform/connectors/common/connectorSer
 import { AppServerConnectorService } from "../services/connectors/browser/appServerConnectorService.js";
 import { IAccountService } from "../../platform/accounts/common/accountService.js";
 import { AppServerAccountService } from "../services/accounts/browser/appServerAccountService.js";
+import { IIssueReporterService } from '../../platform/issue/common/issue.js';
 import { GitHubConnectionService } from "../services/accounts/browser/gitHubConnectionService.js";
 import { IGitHubConnectionService } from "../services/accounts/common/gitHubConnectionService.js";
 import { IPluginService } from "../../platform/plugins/common/pluginService.js";
@@ -656,6 +657,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ICodebaseService, new AppServerCodebaseService(api.codebase));
 		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(api.connectors, api.events)));
 		services.registerInstance(IAccountService, this._register(new AppServerAccountService(api.accounts, api.events)));
+		services.registerInstance(IIssueReporterService, api.issueReporter);
 		services.registerInstance(IPluginService, this._register(new AppServerPluginService(api.plugins, api.events)));
 		const marketplaceService = this._register(new AppServerMarketplaceService(api.marketplace, api.events));
 		services.registerInstance(IMarketplaceService, marketplaceService);

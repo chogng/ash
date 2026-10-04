@@ -53,6 +53,20 @@ const REFRESH_MARGIN: u64 = 300;
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(600);
 
+/// Identifies the exact grant captured by a repository operation, without credential material.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitHubAuthorization {
+    pub host: String,
+    pub account_id: String,
+    pub grant_id: String,
+}
+
+/// Supplies credentials only while the captured authorization remains current.
+pub trait GitHubCredentialProvider: Send + Sync {
+    fn authorization(&self) -> Result<GitHubAuthorization, LoginError>;
+    fn token(&self, authorization: &GitHubAuthorization) -> Result<SecretValue, LoginError>;
+}
+
 /// Owns Ash's GitHub account session and browser authorization through Ash's token broker.
 pub struct GitHubOAuth {
     client_id: String,
@@ -498,6 +512,36 @@ impl InteractiveLoginDriver for GitHubOAuth {
     }
 }
 
+impl GitHubCredentialProvider for GitHubOAuth {
+    fn authorization(&self) -> Result<GitHubAuthorization, LoginError> {
+        self.current_credential()?
+            .filter(Credential::is_ready)
+            .map(|credential| credential.authorization())
+            .ok_or_else(|| {
+                error(
+                    LoginErrorKind::ExternalLoginRequired,
+                    "GitHub authentication is required",
+                )
+            })
+    }
+
+    fn token(&self, authorization: &GitHubAuthorization) -> Result<SecretValue, LoginError> {
+        let credential = self
+            .current_credential()?
+            .filter(Credential::is_ready)
+            .filter(|credential| credential.authorization() == *authorization)
+            .ok_or_else(|| {
+                error(
+                    LoginErrorKind::ExternalLoginRequired,
+                    "GitHub authorization changed or expired",
+                )
+            })?;
+        Ok(SecretValue::new(
+            credential.access_token.as_bytes().to_vec(),
+        ))
+    }
+}
+
 struct BrowserGrant {
     listener: TcpListener,
     redirect_uri: String,
@@ -591,6 +635,16 @@ struct Credential {
 }
 
 impl Credential {
+    fn authorization(&self) -> GitHubAuthorization {
+        // A re-login or token replacement must never inherit private cache entries from an older grant.
+        let grant_id = URL_SAFE_NO_PAD.encode(Sha256::digest(self.access_token.as_bytes()));
+        GitHubAuthorization {
+            host: "github.com".into(),
+            account_id: self.account_id.clone(),
+            grant_id,
+        }
+    }
+
     fn new(token: Token, user: GitHubUser, client_id: String) -> Self {
         Self {
             client_id,
