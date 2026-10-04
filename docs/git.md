@@ -59,6 +59,33 @@ Git 查询和修改使用不同 capability：
 | 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
 | 提交和推送 | 使用系统 Git 的当前仓库配置 | 尚无凭据提示和进度 UI |
 
+## SCM History 行布局
+
+History 提交行的右侧使用浮层，包含分支标签（例如 `main`）、远端引用图标和操作按钮。
+这些组件覆盖标题右端，不参与标题的宽度分配。相同图形列宽度下，有无引用标签、鼠标悬停或
+键盘焦点进入操作区，都不改变标题的布局宽度，也不影响相邻行的宽度。
+
+引用标签仍按原有条件显示，保留 HEAD 标记、引用分组、数量和完整名称提示；操作按钮仅在
+鼠标悬停该行或焦点位于该提交内时显示。按钮出现时，标签在浮层内向左让出按钮位置。
+浮层背景随行的普通或悬停状态变化，遮住下方文字，避免文字与图标叠在一起。
+提交展开、打开比较、更多菜单和键盘操作沿用原有行为。
+
+与当前对照的 VS Code 源码相比：
+
+| 布局行为 | Ash History | VS Code History |
+| --- | --- | --- |
+| 隐藏的操作按钮 | 不占宽度 | 不占宽度 |
+| 显示的操作按钮 | 覆盖标题右端，标题宽度不变 | 参与行内布局，占用可分配宽度 |
+| 分支标签与远端图标 | 与按钮共用右侧浮层 | 参与行内布局 |
+
+浮层由 [`SCMHistoryViewPane`](../app-ts/src/ash/workbench/contrib/scm/browser/scmHistoryViewPane.ts)
+组织，定位、显隐和背景由 [`scm.css`](../app-ts/src/ash/workbench/contrib/scm/browser/media/scm.css)
+负责。这条规则只适用于 History 提交行；Changes 文件行和分组工具栏保留各自的布局规则。
+
+[`History smoke tests`](../app-ts/test/smoke/areas/windows/scm-history.spec.ts) 已在网页与 Electron
+验证 280px 侧栏中的长标题、分支和远端标签、悬停与键盘焦点下的宽度不变、更多菜单及打开比较，
+覆盖 Ash 的深色、浅色和两种高对比主题。
+
 ## SCM 与 Git 的分层决策
 
 VS Code 的 SCM Workbench 不执行 Git，也不定义 Git wire DTO；Git provider 把 repository、resource
