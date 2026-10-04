@@ -284,6 +284,7 @@ impl AppServer {
             attachments: true,
             file_system,
             git,
+            github: self.github_runtime.is_some(),
             content_search,
             codebase,
             cloud_codebase,

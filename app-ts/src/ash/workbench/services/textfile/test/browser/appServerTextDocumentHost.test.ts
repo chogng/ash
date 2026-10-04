@@ -68,6 +68,7 @@ class Transport implements AppServerTransport {
 				attachments: true,
 				fileSystem: true,
 				git: true,
+				github: false,
 				contentSearch: true,
 				codebase: true,
 				cloudCodebase: true,

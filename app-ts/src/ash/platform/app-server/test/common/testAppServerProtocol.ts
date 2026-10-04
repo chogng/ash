@@ -23,6 +23,7 @@ export function createTestInitializeResult(): InitializeResult {
 			attachments: true,
 			fileSystem: true,
 			git: true,
+			github: true,
 			contentSearch: true,
 			codebase: true,
 			cloudCodebase: false,
@@ -38,6 +39,7 @@ export function createTestInitializeResult(): InitializeResult {
 			mcp: true,
 			mcpOAuth: true,
 			contracts: {
+				github: { version: 1 },
 				sessions: { version: APP_SERVER_CAPABILITY_VERSION },
 				threads: { version: APP_SERVER_CAPABILITY_VERSION },
 				turns: { version: APP_SERVER_CAPABILITY_VERSION },

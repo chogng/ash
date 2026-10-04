@@ -13,6 +13,8 @@ pub enum Error {
     Conflict(String),
     Unavailable(String),
     TimedOut,
+    Cancelled,
+    SubmissionUncertain,
     InvalidResponse(String),
     OperationFailed(String),
 }
@@ -32,6 +34,10 @@ impl std::fmt::Display for Error {
             Self::RateLimited => formatter.write_str("GitHub rate limit reached"),
             Self::NotFound => formatter.write_str("GitHub resource was not found"),
             Self::TimedOut => formatter.write_str("GitHub request timed out"),
+            Self::Cancelled => formatter.write_str("GitHub request cancelled"),
+            Self::SubmissionUncertain => formatter.write_str(
+                "GitHub may have applied the change; check the repository before retrying",
+            ),
         }
     }
 }

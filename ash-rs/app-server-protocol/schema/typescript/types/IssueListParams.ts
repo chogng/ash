@@ -2,4 +2,4 @@
 import type { IssueListMode } from './IssueListMode.js';
 import type { IssueState } from './IssueState.js';
 
-export type IssueListParams = { state: IssueState, page: number, query: string, mode: IssueListMode, };
+export type IssueListParams = { operationId: string, state: IssueState, page: number, query: string, mode: IssueListMode, };

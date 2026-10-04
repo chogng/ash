@@ -63,9 +63,6 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 mod account_operations;
-#[cfg(test)]
-#[path = "github_issue_tests.rs"]
-mod github_issue_tests;
 mod agent_environment_source;
 #[cfg(test)]
 mod agent_runtime_tests;
@@ -112,14 +109,18 @@ mod git_turn_changes_message;
 mod git_turn_changes_observer;
 mod git_turn_changes_operations;
 mod git_turn_changes_runtime;
+#[cfg(test)]
+#[path = "github_issue_tests.rs"]
+mod github_issue_tests;
+mod github_operations;
 mod home_context;
 mod hook_events;
 mod instruction_import;
 mod instruction_operations;
 mod interaction_runtime;
 mod issue_operations;
-mod issue_runtime;
 mod issue_reporter_operations;
+mod issue_runtime;
 mod language_document_features;
 mod language_operations;
 mod language_runtime;
@@ -253,6 +254,7 @@ pub struct AppServer {
     approval_review_model: Option<ash_core::ApprovalReviewerFactory>,
     login: Option<Arc<ash_login::LoginService>>,
     github: Option<Arc<dyn github::GitHubCredentialProvider>>,
+    github_runtime: Option<github_operations::GitHubRuntime>,
     issue_reporter: Option<github::GitHubIssueReporter>,
     chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
     kimi: Option<Arc<ash_kimi::KimiOAuth>>,
@@ -600,6 +602,7 @@ impl AppServer {
             approval_review_model: None,
             login: None,
             github: None,
+            github_runtime: None,
             issue_reporter: None,
             chatgpt: None,
             kimi: None,
@@ -1089,9 +1092,11 @@ impl AppServer {
     pub fn with_github_credentials(
         mut self,
         credentials: Arc<dyn github::GitHubCredentialProvider>,
-    ) -> Self {
+        http: Arc<dyn ash_http_client::HttpClient>,
+    ) -> Result<Self, String> {
+        self.github_runtime = Some(github_operations::GitHubRuntime::open(http)?);
         self.github = Some(credentials);
-        self
+        Ok(self)
     }
 
     pub fn with_issue_reporter(mut self, reporter: github::GitHubIssueReporter) -> Self {
@@ -1983,6 +1988,7 @@ impl AppServer {
             use request_serialization::RequestSerializationScope as Resolved;
             Ok(match scope {
                 Declared::Global { access } => Resolved::Global { access },
+                Declared::HostedRepository { host, owner, name, access } => Resolved::HostedRepository { host, owner, name, access },
                 Declared::Session { session_id, access } => Resolved::Session { session_id, access },
                 Declared::ConnectionResource { namespace, resource_id, access } => Resolved::ConnectionResource { namespace, resource_id, access },
                 Declared::Repository { repository_id, access } => Resolved::Repository {
@@ -2070,7 +2076,13 @@ impl AppServer {
         } else {
             Some(self.dispatch(connection, &mut request, &cancellation))
         };
-        let cancelled = cancellation.is_cancelled();
+        // A started remote write owns its outcome. Cancellation cannot erase an
+        // acknowledged effect or turn an uncertain submission into a safe retry.
+        let preserves_outcome = client_method_definition(&request.method).is_some_and(|definition| {
+            matches!(definition.cancellation, ash_app_server_protocol::protocol::registry::CancellationDefinition::OperationIdPreserveOutcome(_))
+        });
+        let cancelled =
+            cancellation.is_cancelled() && (dispatch_result.is_none() || !preserves_outcome);
         let (response, outcome) = if cancelled {
             (
                 serialize_response(error_response(
@@ -2095,7 +2107,11 @@ impl AppServer {
                     (
                         serde_json::to_string(&JsonRpcFailure::new(request.id, failure))
                             .expect("JSON-RPC error response must serialize"),
-                        diagnostics::Outcome::Failed,
+                        if error.message == AppServerErrorName::RequestCancelled {
+                            diagnostics::Outcome::Cancelled
+                        } else {
+                            diagnostics::Outcome::Failed
+                        },
                     )
                 }
             }
@@ -2358,8 +2374,34 @@ impl AppServer {
             Some(ClientMethod::DocumentCollaborationPresenceRead) => {
                 self.document_collaboration_presence_read(&request.params)
             }
+            Some(
+                method @ (ClientMethod::GitHubRepositoryRead
+                | ClientMethod::GitHubIssueList
+                | ClientMethod::GitHubIssueRead
+                | ClientMethod::GitHubIssueCreate
+                | ClientMethod::GitHubIssueUpdate
+                | ClientMethod::GitHubCommentList
+                | ClientMethod::GitHubCommentCreate
+                | ClientMethod::GitHubCommentUpdate
+                | ClientMethod::GitHubCommentDelete
+                | ClientMethod::GitHubPullRequestList
+                | ClientMethod::GitHubPullRequestRead
+                | ClientMethod::GitHubPullRequestCreate
+                | ClientMethod::GitHubPullRequestUpdate
+                | ClientMethod::GitHubPullRequestFiles
+                | ClientMethod::GitHubPullRequestReviews
+                | ClientMethod::GitHubPullRequestReview
+                | ClientMethod::GitHubPullRequestMerge
+                | ClientMethod::GitHubPullRequestAutoMerge
+                | ClientMethod::GitHubChecks
+                | ClientMethod::GitHubLabelsList
+                | ClientMethod::GitHubLabelCreate
+                | ClientMethod::GitHubLabelUpdate
+                | ClientMethod::GitHubAssigneesList),
+            ) => self.github_request(method, &request.params, cancellation),
+            Some(ClientMethod::GitHubCancel) => self.github_cancel(connection, &request.params),
             Some(ClientMethod::IssueConfigure) => self.issue_configure(&request.params),
-            Some(ClientMethod::IssueList) => self.issue_list(&request.params),
+            Some(ClientMethod::IssueList) => self.issue_list(&request.params, cancellation),
             Some(ClientMethod::IssueReporterRead) => self.issue_reporter_read(),
             Some(ClientMethod::IssueReporterSearch) => {
                 self.issue_reporter_search(&request.params, cancellation)
@@ -2368,7 +2410,7 @@ impl AppServer {
                 self.issue_reporter_search_cancel(connection, &request.params)
             }
             Some(ClientMethod::IssueReporterSubmit) => self.issue_reporter_submit(&request.params),
-            Some(ClientMethod::IssueRead) => self.issue_read(&request.params),
+            Some(ClientMethod::IssueRead) => self.issue_read(&request.params, cancellation),
             Some(ClientMethod::SessionCreate) => self.session_create(connection, &request.params),
             Some(ClientMethod::SessionRead) => self.session_read(&request.params),
             Some(ClientMethod::SessionCatalogRead) => self.session_catalog_read(&request.params),
@@ -2861,8 +2903,12 @@ impl AppServer {
                 self.git_clone(connection, &request.params, cancellation)
             }
             Some(ClientMethod::GitStatus) => self.git_status(&request.params),
-            Some(ClientMethod::GitCheckIgnore) => self.git_check_ignore(&request.params, cancellation),
-            Some(ClientMethod::GitCheckIgnoreCancel) => self.git_check_ignore_cancel(connection, &request.params),
+            Some(ClientMethod::GitCheckIgnore) => {
+                self.git_check_ignore(&request.params, cancellation)
+            }
+            Some(ClientMethod::GitCheckIgnoreCancel) => {
+                self.git_check_ignore_cancel(connection, &request.params)
+            }
             Some(ClientMethod::GitTextDiff) => self.git_text_diff(&request.params),
             Some(ClientMethod::GitBranchList) => self.git_branch_list(&request.params),
             Some(ClientMethod::GitHistory) => self.git_history(&request.params),

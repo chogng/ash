@@ -4,6 +4,44 @@ use super::SerializationAccess;
 use schemars::JsonSchema;
 
 #[test]
+fn github_admission_uses_case_insensitive_hosted_repository_identity_and_connection_operations() {
+    let params = serde_json::json!({"operationId":"operation", "repository":{"host":"GitHub.com", "owner":"Team", "name":"Repo"}});
+    let read = super::client_method_definition("github/pullRequest/read").unwrap();
+    let write = super::client_method_definition("github/pullRequest/merge").unwrap();
+    for (method, access) in [
+        (read, SerializationAccess::SharedRead),
+        (write, SerializationAccess::Exclusive),
+    ] {
+        assert_eq!(
+            method.serialization_scope(&params).unwrap(),
+            Some(ClientRequestSerializationScope::HostedRepository {
+                host: "github.com".into(),
+                owner: "team".into(),
+                name: "repo".into(),
+                access,
+            })
+        );
+        assert_eq!(
+            method
+                .cancellation_operation_id(&params)
+                .unwrap()
+                .as_deref(),
+            Some("operation")
+        );
+        assert!(
+            method
+                .cancellation_operation_id(&serde_json::json!({"operationId":""}))
+                .is_err()
+        );
+        assert!(
+            method
+                .serialization_scope(&serde_json::json!({"repository":{}}))
+                .is_err()
+        );
+    }
+}
+
+#[test]
 fn file_transfer_selectors_round_trip_for_workspace_and_session_directories() {
     use super::super::fs::{FsCopyParams, FsPasteSystemFilesParams};
     for value in [

@@ -50,7 +50,7 @@ async fn clone_repository_uses_an_unused_child_folder() {
         .await
         .unwrap();
     assert_eq!(
-        first,
+        first.canonicalize().unwrap(),
         destination
             .path()
             .canonicalize()
@@ -64,7 +64,7 @@ async fn clone_repository_uses_an_unused_child_folder() {
         .await
         .unwrap();
     assert_eq!(
-        second,
+        second.canonicalize().unwrap(),
         destination
             .path()
             .canonicalize()
@@ -72,6 +72,32 @@ async fn clone_repository_uses_an_unused_child_folder() {
             .join(format!("{name}-1"))
     );
     assert!(second.join(".git").exists());
+}
+
+#[cfg(windows)]
+#[tokio::test(flavor = "current_thread")]
+async fn clone_repository_accepts_a_verbatim_parent_with_spaces_and_unicode() {
+    let source = TestRepository::init();
+    let root = tempfile::tempdir().unwrap();
+    let destination = root.path().join("克隆 destination");
+    std::fs::create_dir(&destination).unwrap();
+    let verbatim = destination.canonicalize().unwrap();
+    assert!(verbatim.to_string_lossy().starts_with(r"\\?\"));
+
+    let cloned = GitClient::system()
+        .clone_repository(source.root().to_str().unwrap(), &verbatim)
+        .await
+        .unwrap();
+
+    assert_eq!(cloned.parent().unwrap().canonicalize().unwrap(), verbatim);
+    assert!(cloned.join(".git/HEAD").is_file());
+    let result = std::process::Command::new("git")
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .current_dir(cloned)
+        .output()
+        .unwrap();
+    assert!(result.status.success());
+    assert_eq!(result.stdout, b"true\n");
 }
 
 #[tokio::test(flavor = "current_thread")]

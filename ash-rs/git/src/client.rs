@@ -203,7 +203,12 @@ impl GitClient {
                 requirement: "must end in a repository name",
             });
         }
-        let name = source.rsplit(['/', ':']).next().unwrap_or_default();
+        // A clone source can be a URL, an scp-style location, or a local path.
+        // Local Windows paths use backslashes, including when cloning an existing checkout.
+        let name = source
+            .rsplit(['/', ':', std::path::MAIN_SEPARATOR])
+            .next()
+            .unwrap_or_default();
         let name = name.strip_suffix(".git").unwrap_or(name);
         if name.is_empty() || name == "." || name == ".." || name.contains('\\') {
             return Err(GitError::InvalidConfiguration {
@@ -211,7 +216,9 @@ impl GitClient {
                 requirement: "must end in a repository name",
             });
         }
-        let parent = std::fs::canonicalize(parent)
+        // Git for Windows cannot create a checkout under an ordinary verbatim
+        // (`\\?\`) path. Preserve canonical identity in the path form Git accepts.
+        let parent = dunce::canonicalize(parent)
             .map_err(|source| GitError::io("resolve clone destination", source))?;
         if !parent.is_dir() {
             return Err(GitError::InvalidConfiguration {

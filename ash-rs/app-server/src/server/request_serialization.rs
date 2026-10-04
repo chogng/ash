@@ -23,6 +23,12 @@ pub(super) enum RequestCancelStatus {
 /// Backend admission keys contain resolved domain identities, never caller-selected aliases.
 #[derive(Clone, Debug)]
 pub(crate) enum RequestSerializationScope {
+    HostedRepository {
+        host: String,
+        owner: String,
+        name: String,
+        access: SerializationAccess,
+    },
     Global {
         access: SerializationAccess,
     },
@@ -44,6 +50,7 @@ pub(crate) enum RequestSerializationScope {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 enum RequestSerializationKey {
     Global(u64),
+    HostedRepository(String, String, String),
     Repository(PathBuf),
     Session(u64, String),
     ConnectionResource {
@@ -61,6 +68,15 @@ impl RequestSerializationKey {
         scope: RequestSerializationScope,
     ) -> (Self, Access) {
         match scope {
+            RequestSerializationScope::HostedRepository {
+                host,
+                owner,
+                name,
+                access,
+            } => (
+                Self::HostedRepository(host, owner, name),
+                Access::from(access),
+            ),
             RequestSerializationScope::Global { access } => {
                 (Self::Global(owner_id), Access::from(access))
             }

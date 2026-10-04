@@ -1,6 +1,8 @@
 use super::AppServer;
 use super::RpcError;
 use super::decode;
+use super::github_operations::github_authentication_error;
+use super::github_operations::github_error;
 use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::issues::IssueComment;
@@ -10,16 +12,21 @@ use ash_app_server_protocol::protocol::issues::IssueReadParams;
 use ash_app_server_protocol::protocol::issues::IssueReadResult;
 use ash_app_server_protocol::protocol::issues::IssueRepository;
 use ash_app_server_protocol::protocol::issues::IssueSummary;
+use ash_async_utils::CancellationToken;
 use serde_json::Value;
 
 impl AppServer {
-    pub(super) fn issue_list(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn issue_list(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: IssueListParams = decode(params)?;
         let runtime = self.issue_runtime()?;
         let repository = runtime.block_on(github_repository(runtime.root()))?;
         let query = params.query.trim();
         github::validate_issue_query(query, params.page).map_err(github_error)?;
-        let github = self.issue_github()?;
+        let github = self.github_client(cancellation)?;
         if !repository
             .host
             .eq_ignore_ascii_case(&github.authorization().host)
@@ -76,6 +83,7 @@ impl AppServer {
                 || interval == 0
                 || now.saturating_sub(entry.fetched_at) < u64::from(interval)
         });
+        drop(cache);
         let (page, fetched_at, cached) = if let Some(entry) = fresh {
             (entry.page, entry.fetched_at, true)
         } else {
@@ -98,7 +106,13 @@ impl AppServer {
             github
                 .validate_authorization()
                 .map_err(github_authentication_error)?;
-            cache.write(&key, &page, fetched_at).map_err(issue_error)?;
+            self.issue_cache
+                .as_ref()
+                .expect("cache checked above")
+                .lock()
+                .map_err(|_| issue_error("Issue cache operation lock poisoned".into()))?
+                .write(&key, &page, fetched_at)
+                .map_err(issue_error)?;
             (page, fetched_at, false)
         };
         github
@@ -120,7 +134,11 @@ impl AppServer {
         })
     }
 
-    pub(super) fn issue_read(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn issue_read(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: IssueReadParams = decode(params)?;
         let runtime = self.issue_runtime()?;
         let repository = runtime.block_on(github_repository(runtime.root()))?;
@@ -137,7 +155,7 @@ impl AppServer {
                 "Repository changed; refresh the issue list".into(),
             ));
         }
-        let github = self.issue_github()?;
+        let github = self.github_client(cancellation)?;
         let snapshot = runtime
             .block_on(github.issue(&repository, params.number))
             .map_err(github_error)?;
@@ -148,38 +166,13 @@ impl AppServer {
                 .comments
                 .into_iter()
                 .map(|comment| IssueComment {
+                    id: comment.id,
                     body: comment.body,
                     url: comment.html_url,
                     updated_at: comment.updated_at,
                 })
                 .collect(),
         })
-    }
-
-    fn issue_github(&self) -> Result<github::GitHub, RpcError> {
-        let credentials = self
-            .github
-            .as_ref()
-            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::AccountUnavailable))?;
-        github::GitHub::for_account(std::sync::Arc::clone(credentials))
-            .map_err(github_authentication_error)
-    }
-}
-
-fn github_authentication_error(error: ash_login::LoginError) -> RpcError {
-    match error.kind() {
-        ash_login::LoginErrorKind::ExternalLoginRequired => {
-            RpcError::new(-32030, AppServerErrorName::AccountAuthenticationRequired)
-        }
-        ash_login::LoginErrorKind::Unavailable => {
-            RpcError::new(-32030, AppServerErrorName::AccountUnavailable)
-        }
-        ash_login::LoginErrorKind::InvalidInput
-        | ash_login::LoginErrorKind::NotFound
-        | ash_login::LoginErrorKind::Conflict
-        | ash_login::LoginErrorKind::Driver => {
-            RpcError::new(-32030, AppServerErrorName::AccountOperationFailed)
-        }
     }
 }
 
@@ -220,31 +213,6 @@ async fn github_repository(root: &std::path::Path) -> Result<github::Repository,
     .map_err(github_error)
 }
 
-fn github_error(error: github::Error) -> RpcError {
-    use github::Error;
-    let name = match &error {
-        Error::InvalidInput(_) => AppServerErrorName::InvalidParams,
-        Error::AuthenticationRequired => AppServerErrorName::AccountAuthenticationRequired,
-        Error::PermissionDenied => AppServerErrorName::GitHubPermissionDenied,
-        Error::RateLimited => AppServerErrorName::GitHubRateLimited,
-        Error::NotFound => AppServerErrorName::GitHubNotFound,
-        Error::Conflict(_) => AppServerErrorName::GitHubConflict,
-        Error::Unavailable(_) => AppServerErrorName::GitHubUnavailable,
-        Error::TimedOut => AppServerErrorName::GitHubTimedOut,
-        Error::InvalidResponse(_) | Error::OperationFailed(_) => {
-            AppServerErrorName::GitHubOperationFailed
-        }
-    };
-    let code = match name {
-        AppServerErrorName::InvalidParams => -32602,
-        AppServerErrorName::AccountAuthenticationRequired => -32030,
-        _ => -32070,
-    };
-    let mut result = RpcError::new(code, name);
-    result.detail = Some(error.to_string());
-    result
-}
-
 pub(super) fn summary(issue: github::Issue) -> IssueSummary {
     IssueSummary {
         labels: issue.labels.into_iter().map(|label| label.name).collect(),
@@ -267,7 +235,3 @@ pub(super) fn issue_error(detail: String) -> RpcError {
     error.detail = Some(detail);
     error
 }
-
-#[cfg(test)]
-#[path = "issue_operations_tests.rs"]
-mod tests;

@@ -283,10 +283,12 @@ impl ReqwestHttpClient {
             permit.check()?;
             if let RedirectPolicy::Follow { max_hops } = self.inner.network.config().redirects() {
                 let next_method = match response.status().as_u16() {
-                    301..=303 => match method {
+                    301 | 302 => match method {
                         HttpMethod::Get => Some(method),
                         HttpMethod::Post | HttpMethod::Delete => Some(HttpMethod::Get),
+                        HttpMethod::Patch | HttpMethod::Put => None,
                     },
+                    303 => Some(HttpMethod::Get),
                     307 | 308 if method == HttpMethod::Get => Some(method),
                     _ => None,
                 };
@@ -528,6 +530,8 @@ fn method_name(method: HttpMethod) -> reqwest::Method {
     match method {
         HttpMethod::Get => reqwest::Method::GET,
         HttpMethod::Post => reqwest::Method::POST,
+        HttpMethod::Patch => reqwest::Method::PATCH,
+        HttpMethod::Put => reqwest::Method::PUT,
         HttpMethod::Delete => reqwest::Method::DELETE,
     }
 }

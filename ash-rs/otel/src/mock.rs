@@ -70,6 +70,8 @@ pub enum HttpStatusClassKind {
 pub enum HttpMethodKind {
     Get,
     Post,
+    Patch,
+    Put,
     Delete,
 }
 
@@ -383,6 +385,8 @@ impl ash_http_client::HttpClientTelemetrySpan for &MockOtelProvider {
             method: match event.method {
                 HttpMethod::Get => HttpMethodKind::Get,
                 HttpMethod::Post => HttpMethodKind::Post,
+                HttpMethod::Patch => HttpMethodKind::Patch,
+                HttpMethod::Put => HttpMethodKind::Put,
                 HttpMethod::Delete => HttpMethodKind::Delete,
             },
             result: match event.outcome {
@@ -501,6 +505,8 @@ fn http_method_name(method: HttpMethodKind) -> &'static str {
     match method {
         HttpMethodKind::Get => "get",
         HttpMethodKind::Post => "post",
+        HttpMethodKind::Patch => "patch",
+        HttpMethodKind::Put => "put",
         HttpMethodKind::Delete => "delete",
     }
 }

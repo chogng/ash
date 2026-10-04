@@ -76,6 +76,7 @@ pub enum AppServerErrorName {
     GitHubConflict,
     GitHubUnavailable,
     GitHubTimedOut,
+    GitHubSubmissionUncertain,
     GitHubOperationFailed,
     IssueReporterUnavailable,
     IssueReporterPermissionDenied,

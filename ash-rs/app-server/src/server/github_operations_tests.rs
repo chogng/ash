@@ -34,7 +34,7 @@ fn github_error_categories_are_independent_of_product_reporter_errors() {
             -32070,
         ),
         (
-            github::Error::Unavailable("missing gh".into()),
+            github::Error::Unavailable("network unavailable".into()),
             AppServerErrorName::GitHubUnavailable,
             -32070,
         ),
@@ -51,6 +51,16 @@ fn github_error_categories_are_independent_of_product_reporter_errors() {
         (
             github::Error::OperationFailed("request failed".into()),
             AppServerErrorName::GitHubOperationFailed,
+            -32070,
+        ),
+        (
+            github::Error::Cancelled,
+            AppServerErrorName::RequestCancelled,
+            -32800,
+        ),
+        (
+            github::Error::SubmissionUncertain,
+            AppServerErrorName::GitHubSubmissionUncertain,
             -32070,
         ),
     ] {

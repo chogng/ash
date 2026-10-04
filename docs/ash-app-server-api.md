@@ -1292,6 +1292,8 @@ Issue 浏览接口由 [`issues.rs`](../ash-rs/app-server-protocol/src/protocol/i
 | `issue/read` | 校验仓库身份，读取所选 Issue 正文和评论 |
 | `issue/configure` | 按 commandId/expectedRevision 保存 autoRefreshMinutes，允许 0/5/10/30/60，默认 10 |
 
+`issue/list` 与 `issue/read` 使用连接内唯一的 `operationId`，可通过 `github/cancel` 取消。
+
 `issue/list.mode` 为 cached、auto、refresh 或 clearCache。普通列表分页、编号精确查询、关键词搜索与失败保留缓存的行为不变。
 
 TUI 选择 Issue 后调用通用 `session/create`，指定内置 `issue`；随后以稳定的首 Turn commandId 调用 `session/request.startTurn`，把准确 Issue URL 作为用户输入。一个或多个 Issue 使用同一路径。工作目录、委托、停止与恢复由既有 Session/Thread/Agent 能力拥有，GitHub 状态修改由获准的 Plugin 工具执行。
@@ -1301,6 +1303,26 @@ TUI 选择 Issue 后调用通用 `session/create`，指定内置 `issue`；随�
 Issue Workflow、plan、assignment、task、专属 PR 发布接口及对应存储已退出生产调用链；这些旧 method 返回 MethodNotFound。配置文件 schemaVersion 1 升级到 2 时移除 issues.repositories、recommendMerge 和 analysisModel，保留浏览刷新偏好；SQLite 配置文档版本为 10。已有用户数据库中的旧 Issue 表不会在后台被自动删除。
 
 指令组合和外部参考见 [Agent 指令系统](../ash-rs/docs/agent-instructions.md)，模型和权限选择不能由 Issue 页面另建一套规则。
+
+## GitHub 仓库管理
+
+`initialize.capabilities.github` 与 `contracts.github.version = 1` 表示后端提供内置 GitHub 能力。
+[`github.rs`](../ash-rs/app-server-protocol/src/protocol/github.rs) 定义 `github/*` 请求和结果。
+请求直接携带 host/owner/name，不要求本地工作目录；登录复用已有 GitHub 账号入口，凭据不进入协议。
+
+接口覆盖仓库信息、Issue 读写、Issue/PR 讨论评论、PR 列表/详情/创建/修改/文件/评审/合并/自动合并、提交检查、标签和可分配负责人。
+前端消费者使用 `IGitHubService`，由 Renderer Host 在 Web 与 Electron 中绑定现有 App Server 连接，并注册到 Workbench 服务容器。
+`workbench/api` 继续提供扩展 API；GitHub 管理界面尚未实现。
+
+同一托管仓库的写入独占，读取可并行；仓库身份按 ASCII 大小写无关规则协调。
+每次操作使用新的 `operationId`，`github/cancel` 只取消当前连接所属的操作，原请求仍返回最终结果。
+提交不会自动重试；已开始的写入遇到超时、取消、连接失败或无法解码的成功响应时，返回 `GitHubSubmissionUncertain`。
+确认成功的写入不会因随后取消而改报失败。读取取消返回 `RequestCancelled`。
+权限、限流、缺失资源、冲突与认证错误保持各自分类；产品报告器继续使用独立 `IssueReporter*` 契约。
+
+PR 评审和合并必须提供审阅时的 commit；合并使用 REST `sha`，自动合并使用 GraphQL `expectedHeadOid`，由 GitHub 校验当前 head。
+PR 文件最多 3000 个，达到上限的结果设置 `limitReached`，不能据此声称获得完整差异。
+账号仍只支持当前 GitHub.com 授权；Enterprise、多人账号选择和逐行评审线程尚未实现。
 
 ## 时间上下文配置
 

@@ -4,13 +4,19 @@ Git 与 GitHub 分别拥有独立能力。`ash-git` 负责本地仓库、提交�
 
 GitHub 是 Ash 内置的后端领域能力。Workbench 界面通过领域接口与 App Server 使用它，基础功能不依赖 Extension 的安装或激活。扩展可以调用产品公开的能力；账户授权、GitHub 执行与共享业务状态由后端负责。
 
-- 通过有界 GitHub CLI 请求读写 GitHub 对象，包括 Issue、评论、标签、负责人和 PR。CLI 只作为执行通道；每次操作明确绑定 Ash 账号的授权，不读取 `gh` 自己登录的账号或继承的 GitHub token。
+- 通过 `ash-http-client` 的 REST / GraphQL 请求读写 Issue、评论、标签、负责人和 PR，共用产品的代理、TLS 和取消能力。不打包或依赖 `gh`，也不读取 GitHub CLI 登录配置或环境变量 token。
 - 保留 GitHub 参数与返回值校验，不拥有 Agent、Thread、工作目录或模型调用。
-- 仓库操作返回结构化 `Error`，区分输入、认证、权限、限流、资源缺失、冲突、不可用、超时、响应格式与执行失败。CLI 的 `api --include` 输出提供 HTTP 状态和响应头；GraphQL 拒绝使用机器可读类型分类，不解析英文 stderr 或服务端错误文案。远端错误正文和凭据供应商诊断不进入公开错误。
+- 仓库操作返回结构化 `Error`，区分输入、认证、权限、限流、资源缺失、冲突、不可用、超时、取消、响应格式、执行失败和提交结果不确定。分类依据 HTTP 状态、响应头与 GraphQL 机器可读类型；远端错误正文和凭据供应商诊断不进入公开错误。
 - 不维护 Issue Workflow、assignment、领取租约、执行阶段或交付状态机。
 - Issue 浏览缓存由 `ash-state` 维护；执行通过通用 Session/Agent API，Agent 使用获准的 Plugin 工具处理外部操作。
 
-`GitHub::for_account` 捕获供应商验证过的主机、账号与授权身份。每次请求重新核对该授权，向子进程传入对应主机的 token，并在返回结果前再次核对；登出、重新登录或 token 替换后，旧对象不能继续执行或提交结果。当前账号供应商仅支持 GitHub.com，其他主机不得使用其凭据。
+`GitHub::for_account` 接收共享 HTTP 客户端和请求取消令牌，捕获供应商验证过的主机、账号与授权身份。每次请求重新核对授权，并通过 Authorization 头发送对应主机的 token。登出、重新登录或 token 替换后，旧对象不能发起请求，读取结果也会被丢弃。已经确认的写入结果仍表示已完成的修改。当前账号供应商仅支持 GitHub.com，其他主机不得使用其凭据；登录由 `ash-login` 调用本 crate 的授权实现，密钥复用 `ash-secrets`。
+
+`github/*` RPC 不要求本地 checkout，直接接收明确的仓库身份。App Server 为同一托管仓库协调读写，写入独占，读取共享；每个请求携带连接内唯一的 `operationId`，通过 `github/cancel` 取消。HTTP 尝试最多 30 秒，响应最多 8 MiB；分页接口显式返回下一页，PR 文件返回是否触及 3000 文件上限。写入只发送一次，响应丢失、服务端错误或取消后无法确认结果时返回 `GitHubSubmissionUncertain`，调用方应先查看远端结果。
+
+已接入的接口包括仓库信息、Issue 列表/详情/创建/修改、Issue 与 PR 的讨论评论、PR 列表/详情/创建/修改/文件/评审/合并/自动合并、提交检查状态、标签和可分配负责人。修改 Issue 可以调整状态、标签和负责人。PR 评审与合并携带用户审阅的 commit；合并使用 REST `sha`，自动合并使用 GraphQL `expectedHeadOid` 由 GitHub 原子校验。逐行评审线程、通知、多人账号选择及 Enterprise 登录尚未实现。
+
+前端 `platform/github/common/githubService.ts` 定义 `IGitHubService` 和领域类型，`browser/appServerGitHubService.ts` 封装生成的协议、取消与错误分类。Web 和 Electron 都从现有 Renderer Host 获得该服务，Workbench 注册同一个实例；管理界面独立开发，产品调用不经过 `workbench/api`。
 
 App Server 在 `issue/list` 与 `issue/read` 中用 Git origin 关联 GitHub 仓库，然后使用同一 GitHub 账号供应商操作 Issue。当前只支持 GitHub.com origin；其他托管平台返回目标不支持的操作错误，不提示 GitHub 登录。读取缓存也要求当前授权仍有效；缓存按账号和授权隔离，清理一个授权的页面不影响其他授权。旧的无授权缓存键不会被新查询读取。缺少配置和需要登录分别返回账户不可用与需要认证的结构化错误。
 

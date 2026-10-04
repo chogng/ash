@@ -1,11 +1,29 @@
+use super::Comment;
 use super::Error;
 use super::GitHub;
 use super::Issue;
 use super::Repository;
 use super::Result;
+use crate::api::Operation;
+use ash_http_client::HttpMethod;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
+
+pub struct CreateIssue<'a> {
+    pub title: &'a str,
+    pub body: &'a str,
+    pub labels: &'a [String],
+    pub assignees: &'a [String],
+}
+
+pub struct UpdateIssue<'a> {
+    pub title: Option<&'a str>,
+    pub body: Option<&'a str>,
+    pub state: Option<super::IssueState>,
+    pub labels: Option<&'a [String]>,
+    pub assignees: Option<&'a [String]>,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssueLabel {
@@ -42,15 +60,169 @@ pub struct LinkedIssueBranch {
 }
 
 impl GitHub {
+    pub async fn comments(
+        &self,
+        repository: &Repository,
+        number: u64,
+        page: u32,
+    ) -> Result<crate::Page<Comment>> {
+        if number == 0 || !(1..=10_000).contains(&page) {
+            return Err(Error::InvalidInput(
+                "Comments require a positive issue or PR number and a valid page".into(),
+            ));
+        }
+        let items: Vec<Comment> = self
+            .api(
+                repository,
+                HttpMethod::Get,
+                &repository.endpoint(&format!(
+                    "issues/{number}/comments?per_page=100&page={page}"
+                )),
+                None,
+            )
+            .await?;
+        let next_page = (items.len() == 100).then_some(page + 1);
+        Ok(crate::Page { items, next_page })
+    }
+    pub async fn create_issue(
+        &self,
+        repository: &Repository,
+        request: CreateIssue<'_>,
+    ) -> Result<Issue> {
+        validate_text(request.title, 256, "Issue title")?;
+        validate_body(request.body)?;
+        validate_names(request.labels, request.assignees)?;
+        let issue: Issue = self.api(repository, HttpMethod::Post, &repository.endpoint("issues"),
+            Some(json!({"title":request.title.trim(),"body":request.body,"labels":request.labels,"assignees":request.assignees}))).await?;
+        validate_created_issue(repository, &issue)?;
+        Ok(issue)
+    }
+
+    pub async fn update_issue(
+        &self,
+        repository: &Repository,
+        number: u64,
+        update: UpdateIssue<'_>,
+    ) -> Result<Issue> {
+        let mut body = serde_json::Map::new();
+        if let Some(title) = update.title {
+            validate_text(title, 256, "Issue title")?;
+            body.insert("title".into(), json!(title.trim()));
+        }
+        if let Some(text) = update.body {
+            validate_body(text)?;
+            body.insert("body".into(), json!(text));
+        }
+        if let Some(state) = update.state {
+            body.insert("state".into(), json!(state.as_str()));
+        }
+        if let Some(labels) = update.labels {
+            validate_names(labels, &[])?;
+            body.insert("labels".into(), json!(labels));
+        }
+        if let Some(assignees) = update.assignees {
+            validate_names(&[], assignees)?;
+            body.insert("assignees".into(), json!(assignees));
+        }
+        if body.is_empty() {
+            return Err(Error::InvalidInput("Issue update is empty".into()));
+        }
+        // GitHub shares the Issue mutation endpoint with PRs. This domain operation
+        // explicitly resolves an Issue before sending any change.
+        self.issue_metadata(repository, number).await?;
+        let issue: Issue = self
+            .api(
+                repository,
+                HttpMethod::Patch,
+                &repository.endpoint(&format!("issues/{number}")),
+                Some(body.into()),
+            )
+            .await?;
+        if issue.number != number {
+            return Err(Error::SubmissionUncertain);
+        }
+        validate_created_issue(repository, &issue)?;
+        Ok(issue)
+    }
+
+    /// Discussion comments are shared by Issues and PRs in GitHub's API.
+    pub async fn create_comment(
+        &self,
+        repository: &Repository,
+        number: u64,
+        body: &str,
+    ) -> Result<super::Comment> {
+        if number == 0 {
+            return Err(Error::InvalidInput(
+                "Issue or PR number must be positive".into(),
+            ));
+        }
+        validate_text(body, 65_536, "Comment")?;
+        let comment: super::Comment = self
+            .api(
+                repository,
+                HttpMethod::Post,
+                &repository.endpoint(&format!("issues/{number}/comments")),
+                Some(json!({"body":body})),
+            )
+            .await?;
+        if comment.id == 0 {
+            return Err(Error::SubmissionUncertain);
+        }
+        Ok(comment)
+    }
+
+    pub async fn update_comment(
+        &self,
+        repository: &Repository,
+        comment_id: u64,
+        body: &str,
+    ) -> Result<super::Comment> {
+        if comment_id == 0 {
+            return Err(Error::InvalidInput("Comment ID must be positive".into()));
+        }
+        validate_text(body, 65_536, "Comment")?;
+        let comment: super::Comment = self
+            .api(
+                repository,
+                HttpMethod::Patch,
+                &repository.endpoint(&format!("issues/comments/{comment_id}")),
+                Some(json!({"body":body})),
+            )
+            .await?;
+        if comment.id != comment_id {
+            return Err(Error::SubmissionUncertain);
+        }
+        Ok(comment)
+    }
+
+    pub async fn delete_comment(&self, repository: &Repository, comment_id: u64) -> Result<()> {
+        if comment_id == 0 {
+            return Err(Error::InvalidInput("Comment ID must be positive".into()));
+        }
+        self.api::<serde_json::Value>(
+            repository,
+            HttpMethod::Delete,
+            &repository.endpoint(&format!("issues/comments/{comment_id}")),
+            None,
+        )
+        .await?;
+        Ok(())
+    }
     pub async fn update_issue_label_color(
         &self,
         repository: &Repository,
         name: &str,
         color: &str,
     ) -> Result<IssueLabel> {
-        if color.len() != 6 || !color.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        if name.trim().is_empty()
+            || name.len() > 50
+            || name.chars().any(char::is_control)
+            || color.len() != 6
+            || !color.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
             return Err(Error::InvalidInput(
-                "Label color must contain six hexadecimal digits".into(),
+                "Label requires a name and a six-digit RGB color".into(),
             ));
         }
         let name = url::form_urlencoded::byte_serialize(name.as_bytes())
@@ -58,7 +230,7 @@ impl GitHub {
             .replace('+', "%20");
         self.api(
             repository,
-            "PATCH",
+            HttpMethod::Patch,
             &repository.endpoint(&format!("labels/{name}")),
             Some(json!({"color":color})),
         )
@@ -86,7 +258,7 @@ impl GitHub {
             let rows: Vec<IssueMetadata> = self
                 .api(
                     repository,
-                    "GET",
+                    HttpMethod::Get,
                     &repository.endpoint(&format!("issues?{query}")),
                     None,
                 )
@@ -138,7 +310,7 @@ impl GitHub {
         let after: IssueMetadata = self
             .api(
                 repository,
-                "DELETE",
+                HttpMethod::Delete,
                 &repository.endpoint(&format!("issues/{number}/assignees")),
                 Some(json!({"assignees":[owner]})),
             )
@@ -160,7 +332,7 @@ impl GitHub {
         let closed: IssueMetadata = self
             .api(
                 repository,
-                "PATCH",
+                HttpMethod::Patch,
                 &repository.endpoint(&format!("issues/{number}")),
                 Some(json!({"state":"closed","state_reason":"completed"})),
             )
@@ -176,7 +348,7 @@ impl GitHub {
     pub async fn issue_repository(&self, repository: &Repository) -> Result<IssueRepositoryInfo> {
         self.api(
             repository,
-            "GET",
+            HttpMethod::Get,
             &format!("repos/{}/{}", repository.owner, repository.name),
             None,
         )
@@ -194,7 +366,7 @@ impl GitHub {
         let issue: IssueMetadata = self
             .api(
                 repository,
-                "GET",
+                HttpMethod::Get,
                 &repository.endpoint(&format!("issues/{number}")),
                 None,
             )
@@ -216,7 +388,7 @@ impl GitHub {
             let rows: Vec<IssueLabel> = self
                 .api(
                     repository,
-                    "GET",
+                    HttpMethod::Get,
                     &repository.endpoint(&format!("labels?per_page=100&page={page}")),
                     None,
                 )
@@ -238,7 +410,7 @@ impl GitHub {
             let rows: Vec<IssueAssignee> = self
                 .api(
                     repository,
-                    "GET",
+                    HttpMethod::Get,
                     &repository.endpoint(&format!("assignees?per_page=100&page={page}")),
                     None,
                 )
@@ -272,7 +444,7 @@ impl GitHub {
         }
         self.api(
             repository,
-            "POST",
+            HttpMethod::Post,
             &repository.endpoint("labels"),
             Some(json!({"name":name,"color":color})),
         )
@@ -307,7 +479,7 @@ impl GitHub {
         let response: IssueMetadata = self
             .api(
                 repository,
-                "POST",
+                HttpMethod::Post,
                 &repository.endpoint(&format!("issues/{number}/assignees")),
                 Some(json!({"assignees":[login]})),
             )
@@ -366,7 +538,7 @@ impl GitHub {
             let _: serde_json::Value = self
                 .api(
                     repository,
-                    "DELETE",
+                    HttpMethod::Delete,
                     &repository.endpoint(&format!("issues/{number}/labels/{segment}")),
                     None,
                 )
@@ -376,7 +548,7 @@ impl GitHub {
             let _: serde_json::Value = self
                 .api(
                     repository,
-                    "POST",
+                    HttpMethod::Post,
                     &repository.endpoint(&format!("issues/{number}/labels")),
                     Some(json!({"labels":[label]})),
                 )
@@ -404,7 +576,7 @@ impl GitHub {
         repository: &Repository,
         issue_id: &str,
     ) -> Result<Vec<LinkedIssueBranch>> {
-        let response: serde_json::Value = self.api(repository, "POST", "graphql", Some(json!({"query":"query($id:ID!){node(id:$id){... on Issue{linkedBranches(first:100){nodes{id ref{name target{oid}}} pageInfo{hasNextPage}}}}}","variables":{"id":issue_id}}))).await?;
+        let response: serde_json::Value = self.graphql(repository, "query($id:ID!){node(id:$id){... on Issue{linkedBranches(first:100){nodes{id ref{name target{oid}}} pageInfo{hasNextPage}}}}}", json!({"id":issue_id}), Operation::Read).await?;
         let branches = response
             .pointer("/data/node/linkedBranches")
             .ok_or_else(|| Error::InvalidResponse("GitHub did not return issue branches".into()))?;
@@ -457,7 +629,7 @@ impl GitHub {
             }
             return Ok(existing);
         }
-        let response: serde_json::Value = self.api(repository, "POST", "graphql", Some(json!({"query":"mutation($input:CreateLinkedBranchInput!){createLinkedBranch(input:$input){linkedBranch{id ref{name target{oid}}}}}","variables":{"input":{"issueId":issue_id,"name":name,"oid":commit}}}))).await?;
+        let response: serde_json::Value = self.graphql(repository, "mutation($input:CreateLinkedBranchInput!){createLinkedBranch(input:$input){linkedBranch{id ref{name target{oid}}}}}", json!({"input":{"issueId":issue_id,"name":name,"oid":commit}}), Operation::Write).await?;
         let value = response
             .pointer("/data/createLinkedBranch/linkedBranch")
             .ok_or_else(|| {
@@ -486,6 +658,53 @@ fn string(value: &serde_json::Value, pointer: &str) -> Result<String> {
         .ok_or_else(|| Error::InvalidResponse(format!("Missing GitHub field {pointer}")))
 }
 
-#[cfg(all(test, unix))]
+pub(crate) fn validate_text(value: &str, maximum: usize, name: &str) -> Result<()> {
+    if value.trim().is_empty() || value.chars().count() > maximum || value.contains('\0') {
+        return Err(Error::InvalidInput(format!(
+            "{name} must contain 1–{maximum} characters"
+        )));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_body(value: &str) -> Result<()> {
+    if value.chars().count() > 65_536 || value.contains('\0') {
+        return Err(Error::InvalidInput(
+            "Body exceeds 65536 characters or contains NUL".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_names(labels: &[String], assignees: &[String]) -> Result<()> {
+    if labels.len() > 100 || assignees.len() > 10 {
+        return Err(Error::InvalidInput("Too many labels or assignees".into()));
+    }
+    for label in labels {
+        validate_text(label, 50, "Label")?;
+        if label.chars().any(char::is_control) {
+            return Err(Error::InvalidInput("Invalid label".into()));
+        }
+    }
+    if assignees.iter().any(|name| !super::valid_component(name)) {
+        return Err(Error::InvalidInput("Invalid GitHub assignee".into()));
+    }
+    Ok(())
+}
+
+fn validate_created_issue(repository: &Repository, issue: &Issue) -> Result<()> {
+    if issue.number == 0
+        || issue.pull_request.is_some()
+        || !issue.html_url.eq_ignore_ascii_case(&format!(
+            "https://{}/{}/{}/issues/{}",
+            repository.host, repository.owner, repository.name, issue.number
+        ))
+    {
+        return Err(Error::SubmissionUncertain);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
 #[path = "issues_tests.rs"]
 mod tests;

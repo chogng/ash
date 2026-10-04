@@ -968,7 +968,7 @@ fn issue_list_requires_an_explicit_supported_state() {
     use crate::protocol::issues::IssueState;
     for (name, state) in [("open", IssueState::Open), ("closed", IssueState::Closed)] {
         let params: IssueListParams = serde_json::from_value(
-            serde_json::json!({"page": 2, "state": name, "query": "", "mode": "cached"}),
+            serde_json::json!({"operationId": "issue-list", "page": 2, "state": name, "query": "", "mode": "cached"}),
         )
         .unwrap();
         assert_eq!((params.state, params.page), (state, 2));

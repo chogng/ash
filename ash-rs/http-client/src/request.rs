@@ -9,6 +9,8 @@ use zeroize::Zeroize;
 pub enum HttpMethod {
     Get,
     Post,
+    Patch,
+    Put,
     Delete,
 }
 
@@ -17,6 +19,8 @@ impl HttpMethod {
         match self {
             Self::Get => "GET",
             Self::Post => "POST",
+            Self::Patch => "PATCH",
+            Self::Put => "PUT",
             Self::Delete => "DELETE",
         }
     }

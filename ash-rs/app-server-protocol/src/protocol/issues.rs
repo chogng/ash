@@ -59,6 +59,7 @@ pub enum IssueListMode {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueListParams {
+    pub operation_id: String,
     pub state: IssueState,
     pub page: u32,
     pub query: String,
@@ -81,6 +82,7 @@ pub struct IssueListResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueReadParams {
+    pub operation_id: String,
     pub repository: IssueRepository,
     #[ts(type = "number")]
     pub number: u64,
@@ -97,6 +99,8 @@ pub struct IssueReadResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueComment {
+    #[ts(type = "number")]
+    pub id: u64,
     pub body: String,
     pub url: String,
     pub updated_at: String,

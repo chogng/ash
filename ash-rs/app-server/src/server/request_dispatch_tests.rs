@@ -945,11 +945,14 @@ fn socket_eof_stops_running_git_network_operations_without_waiting_for_remote_re
             "{method}: {stopped:?}"
         );
         served.join().unwrap();
-        assert_eq!(
-            remote.read(&mut bytes).unwrap(),
-            0,
-            "{method} left its network process alive"
-        );
+        // Killing Git's process closes its socket; Windows may reset the TCP
+        // connection instead of delivering an orderly EOF.
+        match remote.read(&mut bytes) {
+            Ok(0) => {}
+            #[cfg(windows)]
+            Err(error) if error.kind() == io::ErrorKind::ConnectionReset => {}
+            other => panic!("{method} left its network process alive: {other:?}"),
+        }
         if method == "git/clone" {
             for entry in directory.path().read_dir().unwrap() {
                 assert!(

@@ -1,32 +1,48 @@
 //! GitHub account authorization and repository operations.
 //!
 //! Account credentials belong to Ash's profile secret store. Repository operations
-//! bind the GitHub CLI transport to one explicit Ash authorization.
+//! bind shared HTTP requests to one explicit Ash authorization.
 
+mod api;
 mod auth;
 mod error;
 mod issues;
-mod process;
+mod pull_requests;
 mod reporter;
 pub use auth::GITHUB_PROVIDER_ID;
 pub use auth::GitHubAuthorization;
 pub use auth::GitHubCredentialProvider;
 pub use auth::GitHubOAuth;
 pub use error::Error;
+pub use issues::CreateIssue;
 pub use issues::IssueAssignee;
 pub use issues::IssueLabel;
 pub use issues::IssueMetadata;
 pub use issues::IssueRepositoryInfo;
 pub use issues::LinkedIssueBranch;
+pub use issues::UpdateIssue;
+pub use pull_requests::CheckRun;
+pub use pull_requests::CheckStatus;
+pub use pull_requests::CommitStatus;
+pub use pull_requests::MergeResult;
+pub use pull_requests::Page;
+pub use pull_requests::PullRequestFile;
+pub use pull_requests::PullRequestFiles;
+pub use pull_requests::PullRequestPage;
+pub use pull_requests::PullRequestReview;
+pub use pull_requests::ReviewEvent;
+pub use pull_requests::UpdatePullRequest;
 pub use reporter::GitHubIssueReporter;
 pub use reporter::ReporterError;
 pub use reporter::ReporterIssue;
 pub use reporter::report_repository;
 
+use ash_async_utils::CancellationToken;
+use ash_http_client::HttpClient;
+use ash_http_client::HttpMethod;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -112,6 +128,7 @@ pub struct Issue {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Comment {
+    pub id: u64,
     pub body: String,
     pub html_url: String,
     pub updated_at: String,
@@ -130,7 +147,7 @@ pub enum IssueState {
 }
 
 impl IssueState {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Open => "open",
             Self::Closed => "closed",
@@ -158,6 +175,8 @@ pub enum MergeMethod {
 pub struct PullRequest {
     pub number: u64,
     pub node_id: String,
+    pub title: String,
+    pub body: Option<String>,
     pub html_url: String,
     pub state: String,
     pub draft: bool,
@@ -178,6 +197,14 @@ pub struct MergeOptions {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RepositoryInfo {
+    #[serde(flatten)]
+    pub metadata: IssueRepositoryInfo,
+    #[serde(flatten)]
+    pub merge_options: MergeOptions,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PullRequestBranch {
     pub sha: String,
     #[serde(rename = "ref")]
@@ -194,7 +221,8 @@ pub struct CreatePullRequest<'a> {
 
 /// GitHub-specific IO; callers supply a previously authorized repository identity.
 pub struct GitHub {
-    executable: PathBuf,
+    http: Arc<dyn HttpClient>,
+    cancellation: CancellationToken,
     credentials: Arc<dyn GitHubCredentialProvider>,
     authorization: GitHubAuthorization,
 }
@@ -202,10 +230,13 @@ pub struct GitHub {
 impl GitHub {
     pub fn for_account(
         credentials: Arc<dyn GitHubCredentialProvider>,
+        http: Arc<dyn HttpClient>,
+        cancellation: CancellationToken,
     ) -> std::result::Result<Self, ash_login::LoginError> {
         let authorization = credentials.authorization()?;
         Ok(Self {
-            executable: PathBuf::from("gh"),
+            http,
+            cancellation,
             credentials,
             authorization,
         })
@@ -218,175 +249,6 @@ impl GitHub {
     /// Rejects results from a revoked or replaced grant, including cache hits.
     pub fn validate_authorization(&self) -> std::result::Result<(), ash_login::LoginError> {
         self.credentials.token(&self.authorization).map(|_| ())
-    }
-
-    pub async fn merge_options(&self, repository: &Repository) -> Result<MergeOptions> {
-        self.api(
-            repository,
-            "GET",
-            &format!("repos/{}/{}", repository.owner, repository.name),
-            None,
-        )
-        .await
-    }
-
-    pub async fn find_pull_request(
-        &self,
-        repository: &Repository,
-        head: &str,
-        base: &str,
-    ) -> Result<Option<PullRequest>> {
-        let query = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair("state", "all")
-            .append_pair("head", &format!("{}:{head}", repository.owner))
-            .append_pair("base", base)
-            .append_pair("per_page", "100")
-            .finish();
-        let requests: Vec<PullRequest> = self
-            .api(
-                repository,
-                "GET",
-                &repository.endpoint(&format!("pulls?{query}")),
-                None,
-            )
-            .await?;
-        if requests.len() > 1 {
-            return Err(Error::Conflict(
-                "Multiple PRs exist for this task branch; select the intended PR on GitHub".into(),
-            ));
-        }
-        Ok(requests.into_iter().next())
-    }
-
-    pub async fn checks(&self, repository: &Repository, commit: &str) -> Result<String> {
-        if !(40..=64).contains(&commit.len())
-            || !commit.bytes().all(|byte| byte.is_ascii_hexdigit())
-        {
-            return Err(Error::InvalidInput("Invalid PR commit".into()));
-        }
-        let statuses: serde_json::Value = self
-            .api(
-                repository,
-                "GET",
-                &repository.endpoint(&format!("commits/{commit}/status")),
-                None,
-            )
-            .await?;
-        let runs: serde_json::Value = self
-            .api(
-                repository,
-                "GET",
-                &repository.endpoint(&format!("commits/{commit}/check-runs?per_page=100")),
-                None,
-            )
-            .await?;
-        let mut lines = vec![format!(
-            "Commit status: {}",
-            statuses
-                .get("state")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("unknown")
-        )];
-        if let Some(checks) = runs.get("check_runs").and_then(serde_json::Value::as_array) {
-            for check in checks {
-                let name = check
-                    .get("name")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or("check");
-                let status = check
-                    .get("conclusion")
-                    .and_then(serde_json::Value::as_str)
-                    .or_else(|| check.get("status").and_then(serde_json::Value::as_str))
-                    .unwrap_or("unknown");
-                lines.push(format!("{name}: {status}"));
-            }
-            if runs
-                .get("total_count")
-                .and_then(serde_json::Value::as_u64)
-                .is_some_and(|total| total > checks.len() as u64)
-            {
-                lines.push("Additional checks are available on GitHub".into());
-            }
-        }
-        Ok(lines.join("\n"))
-    }
-    async fn api<T: serde::de::DeserializeOwned>(
-        &self,
-        repository: &Repository,
-        method: &str,
-        endpoint: &str,
-        body: Option<serde_json::Value>,
-    ) -> Result<T> {
-        Repository::new(
-            repository.host.clone(),
-            repository.owner.clone(),
-            repository.name.clone(),
-        )?;
-        if !repository
-            .host
-            .eq_ignore_ascii_case(&self.authorization.host)
-        {
-            return Err(Error::AuthenticationRequired);
-        }
-        let mut arguments = vec![
-            "api".to_owned(),
-            "--hostname".into(),
-            repository.host.clone(),
-            "--method".into(),
-            method.into(),
-            endpoint.into(),
-            "--include".into(),
-        ];
-        let input = body
-            .map(|body| serde_json::to_vec(&body))
-            .transpose()
-            .map_err(|error| Error::InvalidInput(error.to_string()))?;
-        if input.is_some() {
-            arguments.extend(["--input".into(), "-".into()]);
-        }
-        let token = self
-            .credentials
-            .token(&self.authorization)
-            .map_err(Error::from)?;
-        let output = process::run(
-            &self.executable,
-            &arguments,
-            input.as_deref(),
-            &self.authorization.host,
-            &token,
-        )
-        .await?;
-        self.validate_authorization().map_err(Error::from)?;
-        let value: serde_json::Value = serde_json::from_slice(&output.stdout)
-            .map_err(|_| Error::InvalidResponse("Invalid GitHub JSON response".into()))?;
-        if let Some(errors) = value.get("errors") {
-            let errors = errors
-                .as_array()
-                .ok_or_else(|| Error::InvalidResponse("Invalid GitHub GraphQL errors".into()))?;
-            if let Some(error) = errors.first() {
-                // GraphQL can reject an operation with HTTP 200. Only machine-readable types
-                // determine the category; server messages may contain private request data.
-                return Err(
-                    match error.get("type").and_then(serde_json::Value::as_str) {
-                        Some("UNAUTHENTICATED") => Error::AuthenticationRequired,
-                        Some("FORBIDDEN") => Error::PermissionDenied,
-                        Some("RATE_LIMITED") => Error::RateLimited,
-                        Some("NOT_FOUND") => Error::NotFound,
-                        Some("UNPROCESSABLE" | "GRAPHQL_VALIDATION_FAILED") => {
-                            Error::InvalidInput("GitHub rejected the GraphQL request".into())
-                        }
-                        _ => Error::OperationFailed("GitHub rejected the GraphQL request".into()),
-                    },
-                );
-            }
-        }
-        if !output.success {
-            return Err(Error::OperationFailed(
-                "GitHub CLI did not complete the request".into(),
-            ));
-        }
-        serde_json::from_value(value)
-            .map_err(|_| Error::InvalidResponse("Invalid GitHub response fields".into()))
     }
 
     pub async fn issues(
@@ -403,7 +265,7 @@ impl GitHub {
         let rows: Vec<Issue> = self
             .api(
                 repository,
-                "GET",
+                HttpMethod::Get,
                 &repository.endpoint(&format!(
                     "issues?state={}&sort=updated&direction=desc&per_page=100&page={page}",
                     state.as_str()
@@ -453,7 +315,7 @@ impl GitHub {
             let issue: Issue = self
                 .api(
                     repository,
-                    "GET",
+                    HttpMethod::Get,
                     &repository.endpoint(&format!("issues/{number}")),
                     None,
                 )
@@ -498,7 +360,12 @@ impl GitHub {
             .append_pair("page", &page.to_string())
             .finish();
         let result: SearchResult = self
-            .api(repository, "GET", &format!("search/issues?{query}"), None)
+            .api(
+                repository,
+                HttpMethod::Get,
+                &format!("search/issues?{query}"),
+                None,
+            )
             .await?;
         let prefix = format!(
             "https://{}/{}/{}/issues/",
@@ -531,12 +398,7 @@ impl GitHub {
     }
 
     pub async fn issue(&self, repository: &Repository, number: u64) -> Result<IssueSnapshot> {
-        tokio::time::timeout(
-            std::time::Duration::from_secs(30),
-            self.read_issue(repository, number),
-        )
-        .await
-        .map_err(|_| Error::TimedOut)?
+        self.read_issue(repository, number).await
     }
 
     async fn read_issue(&self, repository: &Repository, number: u64) -> Result<IssueSnapshot> {
@@ -546,7 +408,7 @@ impl GitHub {
         let issue: Issue = self
             .api(
                 repository,
-                "GET",
+                HttpMethod::Get,
                 &repository.endpoint(&format!("issues/{number}")),
                 None,
             )
@@ -562,7 +424,7 @@ impl GitHub {
             let rows: Vec<Comment> = self
                 .api(
                     repository,
-                    "GET",
+                    HttpMethod::Get,
                     &repository.endpoint(&format!(
                         "issues/{number}/comments?per_page=100&page={page}"
                     )),
@@ -587,98 +449,6 @@ impl GitHub {
         Err(Error::OperationFailed(
             "Issue exceeds the supported comment limit; no partial context was submitted".into(),
         ))
-    }
-
-    pub async fn pull_request(&self, repository: &Repository, number: u64) -> Result<PullRequest> {
-        if number == 0 {
-            return Err(Error::InvalidInput("PR number must be positive".into()));
-        }
-        self.api(
-            repository,
-            "GET",
-            &repository.endpoint(&format!("pulls/{number}")),
-            None,
-        )
-        .await
-    }
-
-    pub async fn create_pull_request(
-        &self,
-        repository: &Repository,
-        request: CreatePullRequest<'_>,
-    ) -> Result<PullRequest> {
-        if request.title.trim().is_empty() || request.head == request.base {
-            return Err(Error::InvalidInput(
-                "PR requires a title and distinct head/base branches".into(),
-            ));
-        }
-        self.api(
-            repository,
-            "POST",
-            &repository.endpoint("pulls"),
-            Some(json!({
-                "title": request.title, "body": request.body, "head": request.head,
-                "base": request.base, "draft": request.draft,
-            })),
-        )
-        .await
-    }
-
-    pub async fn enable_auto_merge(
-        &self,
-        repository: &Repository,
-        pull_request: &PullRequest,
-        method: MergeMethod,
-    ) -> Result<()> {
-        if pull_request.draft || pull_request.state != "open" {
-            return Err(Error::InvalidInput(
-                "Automatic merge requires an open, non-draft PR".into(),
-            ));
-        }
-        Repository::new(
-            repository.host.clone(),
-            repository.owner.clone(),
-            repository.name.clone(),
-        )?;
-        if !repository
-            .host
-            .eq_ignore_ascii_case(&self.authorization.host)
-        {
-            return Err(Error::AuthenticationRequired);
-        }
-        let method = match method {
-            MergeMethod::Merge => "--merge",
-            MergeMethod::Squash => "--squash",
-            MergeMethod::Rebase => "--rebase",
-        };
-        let arguments = vec![
-            "pr".into(),
-            "merge".into(),
-            pull_request.number.to_string(),
-            "--repo".into(),
-            format!(
-                "{}/{}/{}",
-                repository.host, repository.owner, repository.name
-            ),
-            "--auto".into(),
-            method.into(),
-            "--match-head-commit".into(),
-            pull_request.head.sha.clone(),
-        ];
-        let token = self
-            .credentials
-            .token(&self.authorization)
-            .map_err(Error::from)?;
-        process::run(
-            &self.executable,
-            &arguments,
-            None,
-            &self.authorization.host,
-            &token,
-        )
-        .await?;
-        self.validate_authorization().map_err(Error::from)?;
-        Ok(())
     }
 }
 

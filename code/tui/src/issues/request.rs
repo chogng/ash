@@ -29,6 +29,7 @@ pub(crate) fn execute(
             page,
             result: client
                 .list_issues(IssueListParams {
+                    operation_id: crate::client::new_command_id("issue-list").to_string(),
                     page,
                     query,
                     mode: match mode {
@@ -96,6 +97,7 @@ pub(crate) fn execute(
             generation,
             result: client
                 .read_issue(IssueReadParams {
+                    operation_id: crate::client::new_command_id("issue-read").to_string(),
                     repository: repository_dto(repository),
                     number,
                 })

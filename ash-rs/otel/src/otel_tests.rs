@@ -124,3 +124,29 @@ fn snapshot_serialization_contains_only_safe_fields() {
         );
     }
 }
+
+#[test]
+fn records_patch_and_put_as_separate_http_attempts() {
+    let telemetry = MockOtelProvider::default();
+    for method in [HttpMethod::Patch, HttpMethod::Put] {
+        HttpClientTelemetry::start(&telemetry).finish(HttpClientTelemetryEvent {
+            method,
+            outcome: HttpTransportOutcome::Response {
+                status_class: HttpStatusClass::Success,
+            },
+            request_body_bytes: 11,
+            response_body_bytes: 23,
+            elapsed: Duration::from_millis(8),
+        });
+    }
+
+    let snapshot = telemetry.snapshot();
+    assert_eq!(snapshot.http_attempt_count, 2);
+    assert_eq!(snapshot.http_attempts[0].method, HttpMethodKind::Patch);
+    assert_eq!(snapshot.http_attempts[1].method, HttpMethodKind::Put);
+    let exported = telemetry
+        .otel_exported_counts()
+        .expect("flush OTel mock exporters");
+    assert!(exported.metric_batches >= 1);
+    assert_eq!(exported.spans, 2);
+}

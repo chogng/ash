@@ -45,6 +45,10 @@ fn github_errors_serialize_and_round_trip_without_product_reporter_names() {
         (AppServerErrorName::GitHubUnavailable, "GitHubUnavailable"),
         (AppServerErrorName::GitHubTimedOut, "GitHubTimedOut"),
         (
+            AppServerErrorName::GitHubSubmissionUncertain,
+            "GitHubSubmissionUncertain",
+        ),
+        (
             AppServerErrorName::GitHubOperationFailed,
             "GitHubOperationFailed",
         ),

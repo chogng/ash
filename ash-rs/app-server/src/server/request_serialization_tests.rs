@@ -26,6 +26,48 @@ fn connection_resource(id: &str) -> RequestSerializationScope {
 }
 
 #[test]
+fn github_mutations_wait_for_readers_across_connections_and_cancel_without_blocking_other_repositories()
+ {
+    let scheduler = RequestScheduler::default();
+    let scope = |name: &str, access| RequestSerializationScope::HostedRepository {
+        host: "github.com".into(),
+        owner: "queue-test-team".into(),
+        name: name.into(),
+        access,
+    };
+    let reader = scheduler
+        .acquire(1, scope("repo", SerializationAccess::SharedRead))
+        .unwrap();
+    let another_reader = scheduler
+        .acquire(2, scope("repo", SerializationAccess::SharedRead))
+        .unwrap();
+    let source = ash_async_utils::CancellationSource::new();
+    let (send, receive) = mpsc::channel();
+    scheduler.schedule(
+        3,
+        scope("repo", SerializationAccess::Exclusive),
+        source.token(),
+        move |permit| {
+            send.send(permit).unwrap();
+        },
+    );
+    assert_eq!(scheduler.waiting_count(), 1);
+    let unrelated = scheduler
+        .acquire(3, scope("another", SerializationAccess::Exclusive))
+        .unwrap();
+    source.cancel();
+    scheduler.cancel_waiting_requests();
+    assert!(
+        receive
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap()
+            .is_err()
+    );
+    drop((reader, another_reader, unrelated));
+    assert_eq!(scheduler.waiting_count(), 0);
+}
+
+#[test]
 fn repository_admission_spans_runtimes_without_merging_connection_lifetimes() {
     let repository = tempfile::tempdir().unwrap();
     let first = RequestScheduler::default();

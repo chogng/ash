@@ -6,9 +6,85 @@ use std::net::TcpListener;
 use std::time::Duration;
 
 struct FailingResolver;
+
+#[test]
+fn patch_and_put_reach_the_peer_with_their_method_and_body() {
+    for (method, expected) in [(HttpMethod::Patch, "PATCH"), (HttpMethod::Put, "PUT")] {
+        let server = http_test_support::Server::reply(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}".to_vec(),
+        );
+        let config = HttpClientConfig::new()
+            .with_proxy_policy(ProxyPolicy::Direct)
+            .with_tls_policy(crate::TlsPolicy::CustomOnly(
+                crate::CertificateBundle::from_der(vec![http_test_support::CA_DER.to_vec()])
+                    .unwrap(),
+            ));
+        let clients: Vec<Box<dyn HttpClient>> = vec![
+            Box::new(
+                ReqwestHttpClient::with_network(
+                    OutboundNetworkSnapshot::new(config.clone()).unwrap(),
+                )
+                .unwrap(),
+            ),
+            Box::new(crate::UreqHttpClient::with_config(config).unwrap()),
+        ];
+        let request = HttpRequest::new(
+            method,
+            format!("{}/resource", server.url()),
+            vec![],
+            b"{\"title\":\"updated\"}".to_vec(),
+        )
+        .unwrap();
+        for client in clients {
+            assert_eq!(client.execute(&request).unwrap().status(), 200);
+            let received = server.request();
+            assert!(received.line.starts_with(expected));
+            assert_eq!(received.body, b"{\"title\":\"updated\"}");
+        }
+    }
+}
 impl Resolve for FailingResolver {
     fn resolve(&self, _: Name) -> Resolving {
         Box::pin(async { Err(Box::new(DnsFailure) as Box<dyn std::error::Error + Send + Sync>) })
+    }
+}
+
+#[test]
+fn patch_and_put_do_not_replay_on_redirects() {
+    for method in [HttpMethod::Patch, HttpMethod::Put] {
+        for status in [301, 302, 307, 308] {
+            let server = http_test_support::Server::reply(format!("HTTP/1.1 {status} Redirect\r\nLocation: /another\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").into_bytes());
+            let config = HttpClientConfig::new()
+                .with_proxy_policy(ProxyPolicy::Direct)
+                .with_redirect_policy(crate::RedirectPolicy::Follow {
+                    max_hops: std::num::NonZeroU8::new(2).unwrap(),
+                })
+                .with_tls_policy(crate::TlsPolicy::CustomOnly(
+                    crate::CertificateBundle::from_der(vec![http_test_support::CA_DER.to_vec()])
+                        .unwrap(),
+                ));
+            let clients: Vec<Box<dyn HttpClient>> = vec![
+                Box::new(
+                    ReqwestHttpClient::with_network(
+                        OutboundNetworkSnapshot::new(config.clone()).unwrap(),
+                    )
+                    .unwrap(),
+                ),
+                Box::new(crate::UreqHttpClient::with_config(config).unwrap()),
+            ];
+            let request = HttpRequest::new(
+                method,
+                format!("{}/resource", server.url()),
+                vec![],
+                b"change".to_vec(),
+            )
+            .unwrap();
+            for client in clients {
+                assert_eq!(client.execute(&request).unwrap().status(), status);
+                assert_eq!(server.request().body, b"change");
+                server.assert_no_more_requests();
+            }
+        }
     }
 }
 

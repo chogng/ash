@@ -114,7 +114,8 @@ impl RequestLane {
     fn for_method(method: Option<ClientMethod>) -> Self {
         match method {
             Some(
-                ClientMethod::LanguageCancel
+                ClientMethod::GitHubCancel
+                | ClientMethod::LanguageCancel
                 | ClientMethod::IssueReporterSearchCancel
                 | ClientMethod::ContentSearchCancel
                 | ClientMethod::ExtensionHostInvokeCancel
@@ -129,7 +130,32 @@ impl RequestLane {
                 | ClientMethod::ConnectorDeviceOAuthCancel,
             ) => Self::Control,
             Some(
-                ClientMethod::GitCommand
+                ClientMethod::GitHubRepositoryRead
+                | ClientMethod::GitHubIssueList
+                | ClientMethod::GitHubIssueRead
+                | ClientMethod::GitHubIssueCreate
+                | ClientMethod::GitHubIssueUpdate
+                | ClientMethod::GitHubCommentList
+                | ClientMethod::GitHubCommentCreate
+                | ClientMethod::GitHubCommentUpdate
+                | ClientMethod::GitHubCommentDelete
+                | ClientMethod::GitHubPullRequestList
+                | ClientMethod::GitHubPullRequestRead
+                | ClientMethod::GitHubPullRequestCreate
+                | ClientMethod::GitHubPullRequestUpdate
+                | ClientMethod::GitHubPullRequestFiles
+                | ClientMethod::GitHubPullRequestReviews
+                | ClientMethod::GitHubPullRequestReview
+                | ClientMethod::GitHubPullRequestMerge
+                | ClientMethod::GitHubPullRequestAutoMerge
+                | ClientMethod::GitHubChecks
+                | ClientMethod::GitHubLabelsList
+                | ClientMethod::GitHubLabelCreate
+                | ClientMethod::GitHubLabelUpdate
+                | ClientMethod::GitHubAssigneesList
+                | ClientMethod::IssueList
+                | ClientMethod::IssueRead
+                | ClientMethod::GitCommand
                 | ClientMethod::GitClone
                 | ClientMethod::GitFetch
                 | ClientMethod::GitPull

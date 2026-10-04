@@ -196,6 +196,7 @@ pub struct ServerCapabilities {
     pub attachments: bool,
     pub file_system: bool,
     pub git: bool,
+    pub github: bool,
     pub content_search: bool,
     pub codebase: bool,
     pub cloud_codebase: bool,
@@ -230,6 +231,7 @@ impl ServerCapabilities {
             "attachments" => Some(self.attachments),
             "fileSystem" => Some(self.file_system),
             "git" => Some(self.git),
+            "github" => Some(self.github),
             "contentSearch" => Some(self.content_search),
             "codebase" => Some(self.codebase),
             "cloudCodebase" => Some(self.cloud_codebase),
@@ -282,6 +284,10 @@ impl ServerCapabilities {
             .filter(|(_, available)| *available)
             .map(|(name, _)| (name.into(), CapabilityContract::current()))
             .collect();
+        if self.github {
+            self.contracts
+                .insert("github".into(), CapabilityContract { version: 1 });
+        }
         if self.marketplace {
             self.contracts.insert(
                 "marketplaceSearch".into(),

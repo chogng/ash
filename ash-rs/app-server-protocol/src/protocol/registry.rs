@@ -1019,17 +1019,90 @@ use crate::protocol::instructions::InstructionLoadDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::instructions::InstructionScopeDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::issues::IssueComment;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::issues::IssueConfigureParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::issues::IssueListParams;
+
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCommentCreateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCommentDeleteParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCommentListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCommentUpdateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubIssue;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubIssueCreateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubIssueListParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubIssueListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubIssueUpdateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubNumberParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPageParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPullRequest;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPullRequestCreateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPullRequestListParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPullRequestListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPullRequestUpdateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryParams;
+
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubChecksParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubMergeResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPullRequestFilesResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPullRequestMergeParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPullRequestReview;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPullRequestReviewParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPullRequestReviewsResult;
+
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubAssigneesResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCancelResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubChecksResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubLabel;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubLabelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubLabelsResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryResult;
+
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::issue_reporter::{
+    IssueReporterCancelParams, IssueReporterCancelResult, IssueReporterContext, IssueReporterIssue,
+    IssueReporterSearchParams, IssueReporterSearchResult, IssueReporterSubmitParams,
+};
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::issues::IssueListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::issues::IssueReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::issues::IssueReadResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::issue_reporter::{IssueReporterContext, IssueReporterSearchParams, IssueReporterSearchResult, IssueReporterIssue, IssueReporterSubmitParams, IssueReporterCancelParams, IssueReporterCancelResult};
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageCancelParams;
 #[cfg(any(test, feature = "export"))]
@@ -2198,6 +2271,12 @@ pub enum ClientRequestSerializationScope {
         repository_id: Option<String>,
         access: SerializationAccess,
     },
+    HostedRepository {
+        host: String,
+        owner: String,
+        name: String,
+        access: SerializationAccess,
+    },
     /// Coordinates one durable Session aggregate across connections.
     Session {
         session_id: String,
@@ -2218,6 +2297,8 @@ pub enum SerializationScopeDefinition {
     GlobalExclusive,
     GlobalSharedRead,
     RepositoryExclusive,
+    HostedRepositoryExclusive,
+    HostedRepositorySharedRead,
     SessionExclusive,
     SessionSharedRead,
     ResourceExclusive(&'static str),
@@ -2229,6 +2310,8 @@ pub enum SerializationScopeDefinition {
 pub enum CancellationDefinition {
     None,
     OperationId(&'static str),
+    /// Once dispatch starts, the domain reports confirmed effects or an uncertain submission.
+    OperationIdPreserveOutcome(&'static str),
 }
 
 #[derive(Clone, Copy)]
@@ -2259,8 +2342,10 @@ impl ClientMethodDefinition {
         &self,
         params: &serde_json::Value,
     ) -> Result<Option<String>, CancellationScopeResolutionError> {
-        let CancellationDefinition::OperationId(parameter) = self.cancellation else {
-            return Ok(None);
+        let parameter = match self.cancellation {
+            CancellationDefinition::None => return Ok(None),
+            CancellationDefinition::OperationId(parameter)
+            | CancellationDefinition::OperationIdPreserveOutcome(parameter) => parameter,
         };
         let operation_id = params
             .as_object()
@@ -2310,6 +2395,34 @@ impl ClientMethodDefinition {
                 })
             }
 
+            SerializationScopeDefinition::HostedRepositoryExclusive
+            | SerializationScopeDefinition::HostedRepositorySharedRead => {
+                let repository: crate::protocol::issues::IssueRepository = serde_json::from_value(
+                    params
+                        .get("repository")
+                        .cloned()
+                        .ok_or(SerializationScopeResolutionError)?,
+                )
+                .map_err(|_| SerializationScopeResolutionError)?;
+                if repository.host.is_empty()
+                    || repository.owner.is_empty()
+                    || repository.name.is_empty()
+                {
+                    return Err(SerializationScopeResolutionError);
+                }
+                Some(ClientRequestSerializationScope::HostedRepository {
+                    host: repository.host.to_ascii_lowercase(),
+                    owner: repository.owner.to_ascii_lowercase(),
+                    name: repository.name.to_ascii_lowercase(),
+                    access: if self.serialization
+                        == SerializationScopeDefinition::HostedRepositoryExclusive
+                    {
+                        SerializationAccess::Exclusive
+                    } else {
+                        SerializationAccess::SharedRead
+                    },
+                })
+            }
             SerializationScopeDefinition::SessionExclusive => {
                 Some(ClientRequestSerializationScope::Session {
                     session_id: serialization_parameter(params, "sessionId")?,
@@ -2505,7 +2618,7 @@ macro_rules! client_methods {
                 params: $params:ty,
                 response: $response:ty,
                 serialization: $serialization:ident $(($serialization_key:literal))?,
-                $(cancellation: $cancellation_parameter:literal,)?
+                $(cancellation: $cancellation_parameter:literal $(=> $cancellation_outcome:ident)?,)?
             }
         ),+ $(,)?
     ) => {
@@ -2535,7 +2648,7 @@ macro_rules! client_methods {
                     kind: ClientMethod::$variant,
                     method: $method,
                     serialization: SerializationScopeDefinition::$serialization$(($serialization_key))?,
-                    cancellation: cancellation_definition!($($cancellation_parameter)?),
+                    cancellation: cancellation_definition!($($cancellation_parameter $(, $cancellation_outcome)?)?),
                     #[cfg(any(test, feature = "export"))]
                     params_type: <$params as TS>::name,
                     #[cfg(any(test, feature = "export"))]
@@ -2550,6 +2663,9 @@ macro_rules! client_methods {
 }
 
 macro_rules! cancellation_definition {
+    ($parameter:literal, PreserveOutcome) => {
+        CancellationDefinition::OperationIdPreserveOutcome($parameter)
+    };
     () => {
         CancellationDefinition::None
     };
@@ -3851,12 +3967,38 @@ client_methods! {
         params: IssueListParams,
         response: IssueListResult,
         serialization: None,
+        cancellation: "operationId",
     },
     IssueRead => "issue/read" {
         params: IssueReadParams,
         response: IssueReadResult,
         serialization: None,
+        cancellation: "operationId",
     },
+    GitHubRepositoryRead => "github/repository/read" { params: GitHubRepositoryParams, response: GitHubRepositoryResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubIssueList => "github/issue/list" { params: GitHubIssueListParams, response: GitHubIssueListResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubIssueRead => "github/issue/read" { params: GitHubNumberParams, response: IssueReadResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubIssueCreate => "github/issue/create" { params: GitHubIssueCreateParams, response: GitHubIssue, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubIssueUpdate => "github/issue/update" { params: GitHubIssueUpdateParams, response: GitHubIssue, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubCommentList => "github/comment/list" { params: GitHubPageParams, response: GitHubCommentListResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubCommentCreate => "github/comment/create" { params: GitHubCommentCreateParams, response: IssueComment, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubCommentUpdate => "github/comment/update" { params: GitHubCommentUpdateParams, response: IssueComment, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubCommentDelete => "github/comment/delete" { params: GitHubCommentDeleteParams, response: (), serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubPullRequestList => "github/pullRequest/list" { params: GitHubPullRequestListParams, response: GitHubPullRequestListResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubPullRequestRead => "github/pullRequest/read" { params: GitHubNumberParams, response: GitHubPullRequest, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubPullRequestCreate => "github/pullRequest/create" { params: GitHubPullRequestCreateParams, response: GitHubPullRequest, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubPullRequestUpdate => "github/pullRequest/update" { params: GitHubPullRequestUpdateParams, response: GitHubPullRequest, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubPullRequestFiles => "github/pullRequest/files" { params: GitHubPageParams, response: GitHubPullRequestFilesResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubPullRequestReviews => "github/pullRequest/reviews" { params: GitHubPageParams, response: GitHubPullRequestReviewsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubPullRequestReview => "github/pullRequest/review" { params: GitHubPullRequestReviewParams, response: GitHubPullRequestReview, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubPullRequestMerge => "github/pullRequest/merge" { params: GitHubPullRequestMergeParams, response: GitHubMergeResult, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubPullRequestAutoMerge => "github/pullRequest/autoMerge" { params: GitHubPullRequestMergeParams, response: (), serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubChecks => "github/checks" { params: GitHubChecksParams, response: GitHubChecksResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubLabelsList => "github/labels/list" { params: GitHubRepositoryParams, response: GitHubLabelsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubLabelCreate => "github/label/create" { params: GitHubLabelParams, response: GitHubLabel, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubLabelUpdate => "github/label/update" { params: GitHubLabelParams, response: GitHubLabel, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubAssigneesList => "github/assignees/list" { params: GitHubRepositoryParams, response: GitHubAssigneesResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubCancel => "github/cancel" { params: GitHubCancelParams, response: GitHubCancelResult, serialization: None, },
     IssueReporterRead => "issueReporter/read" { params: EmptyParams, response: IssueReporterContext, serialization: None, },
     IssueReporterSearch => "issueReporter/search" { params: IssueReporterSearchParams, response: IssueReporterSearchResult, serialization: None, cancellation: "operationId", },
     IssueReporterSearchCancel => "issueReporter/search/cancel" { params: IssueReporterCancelParams, response: IssueReporterCancelResult, serialization: None, },
@@ -4524,6 +4666,45 @@ typescript_bindings! {
     crate::protocol::issues::IssueReadParams,
     crate::protocol::issues::IssueReadResult,
     crate::protocol::issues::IssueComment,
+    crate::protocol::github::GitHubMergeMethod,
+    crate::protocol::github::GitHubReviewEvent,
+    crate::protocol::github::GitHubCancelStatus,
+    crate::protocol::github::GitHubRepositoryParams,
+    crate::protocol::github::GitHubNumberParams,
+    crate::protocol::github::GitHubPageParams,
+    crate::protocol::github::GitHubIssueListParams,
+    crate::protocol::github::GitHubIssueListResult,
+    crate::protocol::github::GitHubIssueCreateParams,
+    crate::protocol::github::GitHubIssueUpdateParams,
+    crate::protocol::github::GitHubIssue,
+    crate::protocol::github::GitHubCommentListResult,
+    crate::protocol::github::GitHubCommentCreateParams,
+    crate::protocol::github::GitHubCommentUpdateParams,
+    crate::protocol::github::GitHubCommentDeleteParams,
+    crate::protocol::github::GitHubPullRequestListParams,
+    crate::protocol::github::GitHubPullRequest,
+    crate::protocol::github::GitHubPullRequestListResult,
+    crate::protocol::github::GitHubPullRequestCreateParams,
+    crate::protocol::github::GitHubPullRequestUpdateParams,
+    crate::protocol::github::GitHubPullRequestFile,
+    crate::protocol::github::GitHubPullRequestFilesResult,
+    crate::protocol::github::GitHubPullRequestReview,
+    crate::protocol::github::GitHubPullRequestReviewsResult,
+    crate::protocol::github::GitHubPullRequestReviewParams,
+    crate::protocol::github::GitHubPullRequestMergeParams,
+    crate::protocol::github::GitHubMergeResult,
+    crate::protocol::github::GitHubChecksParams,
+    crate::protocol::github::GitHubCommitStatus,
+    crate::protocol::github::GitHubCheckRun,
+    crate::protocol::github::GitHubChecksResult,
+    crate::protocol::github::GitHubRepositoryResult,
+    crate::protocol::github::GitHubLabel,
+    crate::protocol::github::GitHubLabelsResult,
+    crate::protocol::github::GitHubLabelParams,
+    crate::protocol::github::GitHubAssigneesResult,
+    crate::protocol::github::GitHubCancelParams,
+    crate::protocol::github::GitHubCancelResult,
+
     crate::protocol::issue_reporter::IssueReporterContext,
     crate::protocol::issue_reporter::IssueReporterSearchParams,
     crate::protocol::issue_reporter::IssueReporterSearchResult,

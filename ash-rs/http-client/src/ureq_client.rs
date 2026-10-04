@@ -310,10 +310,12 @@ impl UreqHttpClient {
                 return Ok(response);
             };
             let next_method = match response.status() {
-                301..=303 => match method {
+                301 | 302 => match method {
                     HttpMethod::Get => method,
                     HttpMethod::Post | HttpMethod::Delete => HttpMethod::Get,
+                    HttpMethod::Patch | HttpMethod::Put => return Ok(response),
                 },
+                303 => HttpMethod::Get,
                 307 | 308 if method == HttpMethod::Get => method,
                 _ => return Ok(response),
             };

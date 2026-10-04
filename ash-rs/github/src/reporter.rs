@@ -251,6 +251,8 @@ fn validate_status(response: &HttpResponse) -> Result<(), ReporterError> {
         | crate::Error::Conflict(_)
         | crate::Error::Unavailable(_)
         | crate::Error::TimedOut
+        | crate::Error::Cancelled
+        | crate::Error::SubmissionUncertain
         | crate::Error::InvalidResponse(_)
         | crate::Error::OperationFailed(_) => ReporterError::OperationFailed,
     })

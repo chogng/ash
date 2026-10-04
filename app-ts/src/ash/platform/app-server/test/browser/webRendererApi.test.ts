@@ -10,6 +10,125 @@ import { connectWebRendererApi } from "../../../../platform/app-server/browser/w
 import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from "../../common/appServerTransport.js";
 import { AppServerProtocolClient } from "../../../../platform/app-server/browser/appServerProtocolClient.js";
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod } from '../../../github/common/githubService.js';
+
+const githubRepository = { host: 'github.com', owner: 'team', name: 'repo' };
+const githubIssue = { number: 7, title: 'Issue', url: 'https://github.com/team/repo/issues/7', updatedAt: '2026-10-04', state: 'open', labels: ['bug'], assignees: ['owner'] };
+
+test('GitHub domain service is assembled on the shared connection and maps issue details', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const pending = connected.api.github.readIssue(githubRepository, 7);
+	const request = transport.requests.at(-1)!;
+	assert.equal(request.method, 'github/issue/read');
+	assert.deepEqual({ ...(request.params as object), operationId: 'generated' }, { repository: githubRepository, number: 7, operationId: 'generated' });
+	const comment = { id: 9, body: 'Discussion', url: 'https://github.com/team/repo/issues/7#issuecomment-9', updatedAt: '2026-10-04' };
+	transport.respondAt(-1, { issue: githubIssue, body: 'Body', comments: [comment] });
+	assert.deepEqual(await pending, { ...githubIssue, body: 'Body', comments: [comment] });
+});
+
+test('GitHub retains error categories independently of product issue reporting', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	for (const [kind, code] of [
+		['AccountAuthenticationRequired', GitHubErrorCode.AuthenticationRequired],
+		['GitHubPermissionDenied', GitHubErrorCode.PermissionDenied],
+		['GitHubRateLimited', GitHubErrorCode.RateLimited],
+		['GitHubNotFound', GitHubErrorCode.NotFound],
+		['GitHubConflict', GitHubErrorCode.Conflict],
+		['GitHubTimedOut', GitHubErrorCode.TimedOut],
+		['GitHubSubmissionUncertain', GitHubErrorCode.SubmissionUncertain],
+		['GitHubUnavailable', GitHubErrorCode.Unavailable],
+		['InvalidParams', GitHubErrorCode.InvalidInput],
+		['GitHubOperationFailed', GitHubErrorCode.OperationFailed],
+	] as const) {
+		const pending = connected.api.github.readIssue(githubRepository, 7);
+		const rejected = assert.rejects(pending, (error: unknown) => error instanceof GitHubError && error.code === code);
+		transport.rejectAt(-1, { code: -32070, message: kind, data: { kind } });
+		await rejected;
+	}
+});
+
+test('GitHub cancels its original operation and releases cancellation listeners', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	using cancellation = new CancellationTokenSource();
+	const pending = connected.api.github.listIssues(githubRepository, GitHubIssueState.Open, '', 1, cancellation.token);
+	const originalIndex = transport.requests.length - 1;
+	const original = transport.requests[originalIndex]!;
+	const rejected = assert.rejects(pending, isCancellationError);
+	cancellation.cancel();
+	assert.equal(transport.requests.at(-1)!.method, 'github/cancel');
+	assert.deepEqual(transport.requests.at(-1)!.params, { operationId: (original.params as { operationId: string }).operationId });
+	transport.respondAt(-1, { status: 'requested' });
+	transport.rejectAt(originalIndex, { code: -32800, message: 'RequestCancelled', data: { kind: 'RequestCancelled' } });
+	await rejected;
+	const count = transport.requests.length;
+	await assert.rejects(connected.api.github.readIssue(githubRepository, 7, cancellation.token), isCancellationError);
+	assert.equal(transport.requests.length, count);
+	using completed = new CancellationTokenSource();
+	const read = connected.api.github.listLabels(githubRepository, completed.token);
+	transport.respondAt(-1, { labels: [] });
+	await read;
+	const afterCompletion = transport.requests.length;
+	completed.cancel();
+	assert.equal(transport.requests.length, afterCompletion);
+});
+
+test('GitHub keeps a confirmed write when cancellation races with its response', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	using cancellation = new CancellationTokenSource();
+	const pending = connected.api.github.createIssue(githubRepository, { title: 'Issue', body: 'Body', labels: ['bug'], assignees: ['owner'] }, cancellation.token);
+	const originalIndex = transport.requests.length - 1;
+	cancellation.cancel();
+	transport.respondAt(-1, { status: 'completed' });
+	transport.respondAt(originalIndex, { issue: githubIssue, body: 'Body' });
+	assert.deepEqual(await pending, { ...githubIssue, body: 'Body' });
+});
+
+test('GitHub reports a lost write response as uncertain and never resubmits it', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const pending = connected.api.github.createComment(githubRepository, 7, 'Discussion');
+	const rejected = assert.rejects(pending, (error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain);
+	transport.close('connection lost');
+	await rejected;
+	assert.equal(transport.requests.filter(request => request.method === 'github/comment/create').length, 1);
+});
+
+test('GitHub merge carries the reviewed head and file limits remain visible', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const commit = 'a'.repeat(40);
+	const merge = connected.api.github.mergePullRequest(githubRepository, 7, { commit, method: GitHubMergeMethod.Squash });
+	const params = transport.requests.at(-1)!.params as { commit: string; method: string };
+	assert.deepEqual({ commit: params.commit, method: params.method }, { commit, method: 'squash' });
+	transport.respondAt(-1, { commit: 'b'.repeat(40), merged: true, message: 'Merged' });
+	assert.equal((await merge).merged, true);
+	const files = connected.api.github.listPullRequestFiles(githubRepository, 7, 30);
+	transport.respondAt(-1, { files: [], nextPage: null, limitReached: true });
+	assert.deepEqual(await files, { items: [], nextPage: null, limitReached: true });
+	const label = { name: 'bug', color: 'ff0000' };
+	const update = connected.api.github.updateLabelColor(githubRepository, label);
+	transport.respondAt(-1, label);
+	assert.deepEqual(await update, label);
+});
+
+test('GitHub rejects an unavailable contract before dispatching a mutation', async () => {
+	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, github: false, contracts: { ...value.capabilities.contracts, github: { version: 2 } } } }));
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const count = transport.requests.length;
+	await assert.rejects(connected.api.github.deleteComment(githubRepository, 9), (error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.Unavailable);
+	assert.equal(transport.requests.length, count);
+});
 
 test('Git ignore cancellation reaches the server and consumes the original terminal response', async () => {
 	const transport = new FakeTransport();

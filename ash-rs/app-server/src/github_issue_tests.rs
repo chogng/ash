@@ -74,7 +74,8 @@ fn issue_rpc_reads_only_the_current_accounts_cache_and_rejects_revoked_credentia
     };
     let credentials = Arc::new(Credentials(Mutex::new(Some(first.clone()))));
     let server = issue_server(directory.path(), "https://github.com/team/repo.git")
-        .with_github_credentials(credentials.clone());
+        .with_github_credentials(credentials.clone(), Arc::new(ReporterHttp::new()))
+        .unwrap();
     let repository =
         github::Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
     let now = SystemTime::now()
@@ -117,16 +118,18 @@ fn issue_rpc_reads_only_the_current_accounts_cache_and_rejects_revoked_credentia
     }
     let mut connection = server.connection();
     initialize(&server, &mut connection);
-    let mut request = serde_json::json!({"jsonrpc":"2.0","id":2,"method":"issue/list","params":{"state":"open","page":1,"query":"","mode":"cached"}});
+    let mut request = serde_json::json!({"jsonrpc":"2.0","id":2,"method":"issue/list","params":{"operationId":"issue-operation","state":"open","page":1,"query":"","mode":"cached"}});
     let initial = call(&server, &mut connection, request.clone());
     assert_eq!(initial["result"]["issues"][0]["number"], 1);
     assert_eq!(initial["result"]["cached"], true);
     *credentials.0.lock().unwrap() = Some(second);
     request["id"] = serde_json::json!(3);
+    request["params"]["operationId"] = serde_json::json!("issue-operation-3");
     let selected = call(&server, &mut connection, request.clone());
     assert_eq!(selected["result"]["issues"][0]["number"], 2);
     *credentials.0.lock().unwrap() = None;
     request["id"] = serde_json::json!(4);
+    request["params"]["operationId"] = serde_json::json!("issue-operation-4");
     let revoked = call(&server, &mut connection, request);
     assert_eq!(revoked["error"]["message"], "AccountAuthenticationRequired");
     assert!(revoked.get("result").is_none());
@@ -142,7 +145,7 @@ fn issue_rpc_without_github_configuration_reports_account_unavailable_before_cac
     let reply = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"issue/list","params":{"state":"open","page":1,"query":"","mode":"cached"}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"issue/list","params":{"operationId":"issue-operation","state":"open","page":1,"query":"","mode":"cached"}}),
     );
     assert_eq!(reply["error"]["message"], "AccountUnavailable");
 }
@@ -173,19 +176,20 @@ impl GitHubCredentialProvider for ExpiredCredentials {
 fn issue_rpc_preserves_authentication_failure_during_repository_io() {
     let directory = tempfile::tempdir().unwrap();
     let server = issue_server(directory.path(), "https://github.com/team/repo.git")
-        .with_github_credentials(Arc::new(ExpiredCredentials));
+        .with_github_credentials(Arc::new(ExpiredCredentials), Arc::new(ReporterHttp::new()))
+        .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     for (id, method, params) in [
         (
             2,
             "issue/list",
-            serde_json::json!({"state":"open","page":1,"query":"","mode":"refresh"}),
+            serde_json::json!({"operationId":"issue-list-operation","state":"open","page":1,"query":"","mode":"refresh"}),
         ),
         (
             3,
             "issue/read",
-            serde_json::json!({"repository":{"host":"github.com","owner":"team","name":"repo"},"number":7}),
+            serde_json::json!({"operationId":"issue-read-operation","repository":{"host":"github.com","owner":"team","name":"repo"},"number":7}),
         ),
     ] {
         let response = call(
@@ -206,6 +210,387 @@ fn issue_rpc_preserves_authentication_failure_during_repository_io() {
 struct ReporterHttp {
     requests: Mutex<Vec<ash_http_client::HttpRequest>>,
     status: std::sync::atomic::AtomicU16,
+}
+
+#[derive(Default)]
+struct RepositoryHttp {
+    requests: Mutex<Vec<ash_http_client::HttpRequest>>,
+    replies: Mutex<
+        std::collections::VecDeque<
+            Result<ash_http_client::HttpResponse, ash_http_client::HttpClientError>,
+        >,
+    >,
+}
+impl RepositoryHttp {
+    fn reply(&self, status: u16, body: serde_json::Value) {
+        self.replies
+            .lock()
+            .unwrap()
+            .push_back(Ok(ash_http_client::HttpResponse::new(
+                status,
+                vec![],
+                serde_json::to_vec(&body).unwrap(),
+            )));
+    }
+}
+impl ash_http_client::HttpClient for RepositoryHttp {
+    fn execute(
+        &self,
+        request: &ash_http_client::HttpRequest,
+    ) -> Result<ash_http_client::HttpResponse, ash_http_client::HttpClientError> {
+        self.requests.lock().unwrap().push(request.clone());
+        self.replies
+            .lock()
+            .unwrap()
+            .pop_front()
+            .expect("unexpected repository request")
+    }
+}
+fn repository_credentials() -> Arc<Credentials> {
+    Arc::new(Credentials(Mutex::new(Some(GitHubAuthorization {
+        host: "github.com".into(),
+        account_id: "42".into(),
+        grant_id: "repository-tests".into(),
+    }))))
+}
+
+struct CancelledRepositoryHttp {
+    entered: std::sync::mpsc::Sender<()>,
+    confirmed: bool,
+}
+impl ash_http_client::HttpClient for CancelledRepositoryHttp {
+    fn execute(
+        &self,
+        _: &ash_http_client::HttpRequest,
+    ) -> Result<ash_http_client::HttpResponse, ash_http_client::HttpClientError> {
+        panic!("repository requests must use cancellable HTTP")
+    }
+    fn execute_with_cancellation(
+        &self,
+        _: &ash_http_client::HttpRequest,
+        token: &ash_async_utils::CancellationToken,
+    ) -> Result<ash_http_client::HttpResponse, ash_http_client::HttpClientError> {
+        self.entered.send(()).unwrap();
+        futures::executor::block_on(token.cancelled());
+        if self.confirmed {
+            Ok(ash_http_client::HttpResponse::new(201, vec![], serde_json::to_vec(&serde_json::json!({"id":9,"body":"Comment","html_url":"https://github.com/team/repo/issues/7#issuecomment-9","updated_at":"now"})).unwrap()))
+        } else {
+            Err(ash_http_client::HttpClientError::Transport(
+                "connection closed".into(),
+            ))
+        }
+    }
+}
+
+#[test]
+fn github_stream_cancellation_keeps_the_domains_final_write_outcome() {
+    use crate::server::request_dispatch::tests::Client;
+    use serde_json::json;
+    for (method, confirmed, expected_error) in [
+        ("github/comment/create", true, None),
+        (
+            "github/comment/create",
+            false,
+            Some("GitHubSubmissionUncertain"),
+        ),
+        ("github/labels/list", false, Some("RequestCancelled")),
+    ] {
+        let (entered, started) = std::sync::mpsc::channel();
+        let backend = Arc::new(
+            server()
+                .with_github_credentials(
+                    repository_credentials(),
+                    Arc::new(CancelledRepositoryHttp { entered, confirmed }),
+                )
+                .unwrap(),
+        );
+        let serving = backend.clone();
+        let (mut client, host) = Client::pair();
+        let served = std::thread::spawn(move || {
+            serving
+                .serve_product_host_stream(std::io::BufReader::new(host.try_clone().unwrap()), host)
+        });
+        client.initialize();
+        client.send(2, method, if method == "github/comment/create" {
+            json!({"operationId":"cancelled","repository":{"host":"github.com","owner":"team","name":"repo"},"number":7,"body":"Comment"})
+        } else {
+            json!({"operationId":"cancelled","repository":{"host":"github.com","owner":"team","name":"repo"}})
+        });
+        started.recv_timeout(Duration::from_secs(3)).unwrap();
+        client.send(3, "github/cancel", json!({"operationId":"cancelled"}));
+        let mut replies = std::collections::BTreeMap::new();
+        while replies.len() < 2 {
+            let reply = client.read();
+            if let Some(id) = reply["id"].as_u64() {
+                replies.insert(id, reply);
+            }
+        }
+        assert_eq!(replies[&3]["result"]["status"], "requested");
+        if let Some(error) = expected_error {
+            assert_eq!(replies[&2]["error"]["data"]["kind"], error);
+        } else {
+            assert_eq!(replies[&2]["result"]["id"], 9);
+        }
+        client.send(4, "model/list", json!({}));
+        assert!(client.read()["result"].is_object());
+        client.close();
+        served.join().unwrap().unwrap();
+    }
+}
+fn repository_request(
+    server: &AppServer,
+    connection: &mut ConnectionState,
+    id: u32,
+    method: &str,
+    mut params: serde_json::Value,
+) -> serde_json::Value {
+    params["operationId"] = serde_json::json!(format!("operation-{id}"));
+    params["repository"] = serde_json::json!({"host":"github.com","owner":"team","name":"repo"});
+    call(
+        server,
+        connection,
+        serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
+    )
+}
+
+#[test]
+fn github_repository_rpc_supports_issue_and_pr_management_without_a_local_checkout() {
+    use serde_json::json;
+    let http = Arc::new(RepositoryHttp::default());
+    let server = server()
+        .with_github_credentials(repository_credentials(), http.clone())
+        .unwrap();
+    assert!(server.issue_runtime.is_none());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let issue = json!({"number":7,"node_id":"issue7","title":"Issue","body":"Body","html_url":"https://github.com/team/repo/issues/7","updated_at":"now","state":"open"});
+    let comment = json!({"id":9,"body":"Comment","html_url":"https://github.com/team/repo/issues/7#issuecomment-9","updated_at":"now"});
+    let commit = "a".repeat(40);
+    let pr = json!({"number":7,"node_id":"pr7","title":"PR","body":"Body","html_url":"https://github.com/team/repo/pull/7","state":"open","draft":false,"merged_at":null,"head":{"ref":"feature","sha":commit},"base":{"ref":"main","sha":"b".repeat(40)}});
+    let review = json!({"id":10,"body":"Reviewed","state":"APPROVED","html_url":"https://github.com/team/repo/pull/7#pullrequestreview-10","commit_id":commit,"submitted_at":"now"});
+    let label = json!({"name":"bug","color":"ff0000","node_id":"label1"});
+    let repository = json!({"node_id":"repo1","default_branch":"main","full_name":"team/repo","allow_merge_commit":true,"allow_squash_merge":true,"allow_rebase_merge":false,"allow_auto_merge":true});
+    let cases = vec![
+        ("github/repository/read", json!({}), vec![repository]),
+        (
+            "github/issue/list",
+            json!({"state":"open","query":"","page":1}),
+            vec![json!([issue.clone()])],
+        ),
+        (
+            "github/issue/read",
+            json!({"number":7}),
+            vec![issue.clone(), json!([comment.clone()])],
+        ),
+        (
+            "github/issue/create",
+            json!({"title":"Issue","body":"Body","labels":[],"assignees":[]}),
+            vec![issue.clone()],
+        ),
+        (
+            "github/issue/update",
+            json!({"number":7,"title":"Edited"}),
+            vec![issue.clone(), issue.clone()],
+        ),
+        (
+            "github/comment/list",
+            json!({"number":7,"page":1}),
+            vec![json!([comment.clone()])],
+        ),
+        (
+            "github/comment/create",
+            json!({"number":7,"body":"Comment"}),
+            vec![comment.clone()],
+        ),
+        (
+            "github/comment/update",
+            json!({"commentId":9,"body":"Edited"}),
+            vec![comment],
+        ),
+        (
+            "github/comment/delete",
+            json!({"commentId":9}),
+            vec![serde_json::Value::Null],
+        ),
+        (
+            "github/pullRequest/list",
+            json!({"state":"open","page":1}),
+            vec![json!([pr.clone()])],
+        ),
+        (
+            "github/pullRequest/read",
+            json!({"number":7}),
+            vec![pr.clone()],
+        ),
+        (
+            "github/pullRequest/create",
+            json!({"title":"PR","body":"Body","head":"feature","base":"main","draft":false}),
+            vec![pr.clone()],
+        ),
+        (
+            "github/pullRequest/update",
+            json!({"number":7,"state":"closed"}),
+            vec![pr.clone()],
+        ),
+        (
+            "github/pullRequest/files",
+            json!({"number":7,"page":1}),
+            vec![
+                json!([{"filename":"main.rs","status":"modified","additions":1,"deletions":0,"changes":1}]),
+            ],
+        ),
+        (
+            "github/pullRequest/reviews",
+            json!({"number":7,"page":1}),
+            vec![json!([review.clone()])],
+        ),
+        (
+            "github/pullRequest/review",
+            json!({"number":7,"commit":commit,"event":"approve","body":"Reviewed"}),
+            vec![review],
+        ),
+        (
+            "github/pullRequest/merge",
+            json!({"number":7,"commit":commit,"method":"squash"}),
+            vec![json!({"sha":"b".repeat(40),"merged":true,"message":"Merged"})],
+        ),
+        (
+            "github/pullRequest/autoMerge",
+            json!({"number":7,"commit":commit,"method":"squash"}),
+            vec![
+                pr,
+                json!({"data":{"enablePullRequestAutoMerge":{"pullRequest":{"id":"pr7","headRefOid":commit,"autoMergeRequest":{"mergeMethod":"SQUASH"}}}}}),
+            ],
+        ),
+        (
+            "github/checks",
+            json!({"commit":commit,"page":1}),
+            vec![
+                json!({"state":"success","statuses":[],"total_count":0}),
+                json!({"check_runs":[],"total_count":0}),
+            ],
+        ),
+        (
+            "github/labels/list",
+            json!({}),
+            vec![json!([label.clone()])],
+        ),
+        (
+            "github/label/create",
+            json!({"name":"bug","color":"ff0000"}),
+            vec![label.clone()],
+        ),
+        (
+            "github/label/update",
+            json!({"name":"bug","color":"ff0000"}),
+            vec![label],
+        ),
+        (
+            "github/assignees/list",
+            json!({}),
+            vec![json!([{"login":"owner"}])],
+        ),
+    ];
+    for (index, (method, params, replies)) in cases.into_iter().enumerate() {
+        for reply in replies {
+            http.reply(200, reply);
+        }
+        let response =
+            repository_request(&server, &mut connection, index as u32 + 2, method, params);
+        assert!(response.get("result").is_some(), "{method}: {response}");
+        assert!(
+            http.replies.lock().unwrap().is_empty(),
+            "{method} left unread responses"
+        );
+        assert!(!response.to_string().contains("fixture-only-token"));
+    }
+    let requests = http.requests.lock().unwrap();
+    let merge = requests
+        .iter()
+        .find(|r| r.url().ends_with("/pulls/7/merge"))
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(merge.body()).unwrap(),
+        json!({"sha":commit,"merge_method":"squash"})
+    );
+}
+
+#[test]
+fn github_rpc_preserves_refusals_and_uncertain_writes_without_retrying() {
+    use serde_json::json;
+    let http = Arc::new(RepositoryHttp::default());
+    let server = server()
+        .with_github_credentials(repository_credentials(), http.clone())
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    for (index, (status, error)) in [
+        (401, "AccountAuthenticationRequired"),
+        (403, "GitHubPermissionDenied"),
+        (404, "GitHubNotFound"),
+        (409, "GitHubConflict"),
+        (429, "GitHubRateLimited"),
+        (500, "GitHubSubmissionUncertain"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        http.reply(status, json!({"message":"fixture-only-token"}));
+        let response = repository_request(
+            &server,
+            &mut connection,
+            index as u32 + 2,
+            "github/comment/create",
+            json!({"number":7,"body":"Comment"}),
+        );
+        assert_eq!(response["error"]["data"]["kind"], error);
+        assert!(!response.to_string().contains("fixture-only-token"));
+        assert_eq!(http.requests.lock().unwrap().len(), index + 1);
+    }
+    http.replies
+        .lock()
+        .unwrap()
+        .push_back(Err(ash_http_client::HttpClientError::Transport(
+            "fixture-only-token".into(),
+        )));
+    let response = repository_request(
+        &server,
+        &mut connection,
+        9,
+        "github/comment/create",
+        json!({"number":7,"body":"Comment"}),
+    );
+    assert_eq!(
+        response["error"]["data"]["kind"],
+        "GitHubSubmissionUncertain"
+    );
+    assert_eq!(http.requests.lock().unwrap().len(), 7);
+}
+
+#[test]
+fn github_rpc_cancel_before_execution_stops_io() {
+    use serde_json::json;
+    let http = Arc::new(RepositoryHttp::default());
+    let server = server()
+        .with_github_credentials(repository_credentials(), http.clone())
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let cancel = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":2,"method":"github/cancel","params":{"operationId":"operation-3"}}),
+    );
+    assert_eq!(cancel["result"]["status"], "requested");
+    let reply = repository_request(
+        &server,
+        &mut connection,
+        3,
+        "github/comment/create",
+        json!({"number":7,"body":"Comment"}),
+    );
+    assert_eq!(reply["error"]["data"]["kind"], "RequestCancelled");
+    assert!(http.requests.lock().unwrap().is_empty());
 }
 
 impl ReporterHttp {
@@ -246,7 +631,8 @@ fn reporter_rpc_searches_anonymously_and_submits_with_ash_authorization_to_the_p
     let http = Arc::new(ReporterHttp::new());
     let credentials = Arc::new(Credentials(Mutex::new(None)));
     let server = server()
-        .with_github_credentials(credentials.clone())
+        .with_github_credentials(credentials.clone(), http.clone())
+        .unwrap()
         .with_issue_reporter(
             github::GitHubIssueReporter::new("https://github.com/chogng/ash/issues", http.clone())
                 .unwrap(),
@@ -343,7 +729,8 @@ fn gitlab_workspace_rejects_github_issue_browsing_but_can_report_product_issues(
     let http = Arc::new(ReporterHttp::new());
     let credentials = Arc::new(Credentials(Mutex::new(None)));
     let server = issue_server(directory.path(), "https://gitlab.com/team/repo.git")
-        .with_github_credentials(credentials.clone())
+        .with_github_credentials(credentials.clone(), http.clone())
+        .unwrap()
         .with_issue_reporter(
             github::GitHubIssueReporter::new("https://github.com/chogng/ash/issues", http.clone())
                 .unwrap(),
@@ -351,8 +738,8 @@ fn gitlab_workspace_rejects_github_issue_browsing_but_can_report_product_issues(
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     for request in [
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"issue/list","params":{"state":"open","page":1,"query":"","mode":"cached"}}),
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"issue/read","params":{"repository":{"host":"gitlab.com","owner":"team","name":"repo"},"number":7}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"issue/list","params":{"operationId":"issue-operation","state":"open","page":1,"query":"","mode":"cached"}}),
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"issue/read","params":{"operationId":"issue-read-operation","repository":{"host":"gitlab.com","owner":"team","name":"repo"},"number":7}}),
     ] {
         let response = call(&server, &mut connection, request);
         assert_eq!(response["error"]["data"]["kind"], "IssueOperationFailed");

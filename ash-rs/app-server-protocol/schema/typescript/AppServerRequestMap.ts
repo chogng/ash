@@ -209,6 +209,38 @@ import type { GitFetchParams } from './types/GitFetchParams.js';
 import type { GitGraphParams } from './types/GitGraphParams.js';
 import type { GitGraphResult } from './types/GitGraphResult.js';
 import type { GitHistoryResult } from './types/GitHistoryResult.js';
+import type { GitHubAssigneesResult } from './types/GitHubAssigneesResult.js';
+import type { GitHubCancelParams } from './types/GitHubCancelParams.js';
+import type { GitHubCancelResult } from './types/GitHubCancelResult.js';
+import type { GitHubChecksParams } from './types/GitHubChecksParams.js';
+import type { GitHubChecksResult } from './types/GitHubChecksResult.js';
+import type { GitHubCommentCreateParams } from './types/GitHubCommentCreateParams.js';
+import type { GitHubCommentDeleteParams } from './types/GitHubCommentDeleteParams.js';
+import type { GitHubCommentListResult } from './types/GitHubCommentListResult.js';
+import type { GitHubCommentUpdateParams } from './types/GitHubCommentUpdateParams.js';
+import type { GitHubIssue } from './types/GitHubIssue.js';
+import type { GitHubIssueCreateParams } from './types/GitHubIssueCreateParams.js';
+import type { GitHubIssueListParams } from './types/GitHubIssueListParams.js';
+import type { GitHubIssueListResult } from './types/GitHubIssueListResult.js';
+import type { GitHubIssueUpdateParams } from './types/GitHubIssueUpdateParams.js';
+import type { GitHubLabel } from './types/GitHubLabel.js';
+import type { GitHubLabelParams } from './types/GitHubLabelParams.js';
+import type { GitHubLabelsResult } from './types/GitHubLabelsResult.js';
+import type { GitHubMergeResult } from './types/GitHubMergeResult.js';
+import type { GitHubNumberParams } from './types/GitHubNumberParams.js';
+import type { GitHubPageParams } from './types/GitHubPageParams.js';
+import type { GitHubPullRequest } from './types/GitHubPullRequest.js';
+import type { GitHubPullRequestCreateParams } from './types/GitHubPullRequestCreateParams.js';
+import type { GitHubPullRequestFilesResult } from './types/GitHubPullRequestFilesResult.js';
+import type { GitHubPullRequestListParams } from './types/GitHubPullRequestListParams.js';
+import type { GitHubPullRequestListResult } from './types/GitHubPullRequestListResult.js';
+import type { GitHubPullRequestMergeParams } from './types/GitHubPullRequestMergeParams.js';
+import type { GitHubPullRequestReview } from './types/GitHubPullRequestReview.js';
+import type { GitHubPullRequestReviewParams } from './types/GitHubPullRequestReviewParams.js';
+import type { GitHubPullRequestReviewsResult } from './types/GitHubPullRequestReviewsResult.js';
+import type { GitHubPullRequestUpdateParams } from './types/GitHubPullRequestUpdateParams.js';
+import type { GitHubRepositoryParams } from './types/GitHubRepositoryParams.js';
+import type { GitHubRepositoryResult } from './types/GitHubRepositoryResult.js';
 import type { GitIndexDiffResult } from './types/GitIndexDiffResult.js';
 import type { GitIndexEditParams } from './types/GitIndexEditParams.js';
 import type { GitInitParams } from './types/GitInitParams.js';
@@ -240,6 +272,7 @@ import type { InstructionImportPreviewResult } from './types/InstructionImportPr
 import type { InstructionImportResult } from './types/InstructionImportResult.js';
 import type { InstructionListParams } from './types/InstructionListParams.js';
 import type { InstructionListResult } from './types/InstructionListResult.js';
+import type { IssueComment } from './types/IssueComment.js';
 import type { IssueConfigureParams } from './types/IssueConfigureParams.js';
 import type { IssueListParams } from './types/IssueListParams.js';
 import type { IssueListResult } from './types/IssueListResult.js';
@@ -776,6 +809,30 @@ export interface AppServerRequestMap {
   "issue/configure": { params: IssueConfigureParams; response: ConfigCommandResult };
   "issue/list": { params: IssueListParams; response: IssueListResult };
   "issue/read": { params: IssueReadParams; response: IssueReadResult };
+  "github/repository/read": { params: GitHubRepositoryParams; response: GitHubRepositoryResult };
+  "github/issue/list": { params: GitHubIssueListParams; response: GitHubIssueListResult };
+  "github/issue/read": { params: GitHubNumberParams; response: IssueReadResult };
+  "github/issue/create": { params: GitHubIssueCreateParams; response: GitHubIssue };
+  "github/issue/update": { params: GitHubIssueUpdateParams; response: GitHubIssue };
+  "github/comment/list": { params: GitHubPageParams; response: GitHubCommentListResult };
+  "github/comment/create": { params: GitHubCommentCreateParams; response: IssueComment };
+  "github/comment/update": { params: GitHubCommentUpdateParams; response: IssueComment };
+  "github/comment/delete": { params: GitHubCommentDeleteParams; response: null };
+  "github/pullRequest/list": { params: GitHubPullRequestListParams; response: GitHubPullRequestListResult };
+  "github/pullRequest/read": { params: GitHubNumberParams; response: GitHubPullRequest };
+  "github/pullRequest/create": { params: GitHubPullRequestCreateParams; response: GitHubPullRequest };
+  "github/pullRequest/update": { params: GitHubPullRequestUpdateParams; response: GitHubPullRequest };
+  "github/pullRequest/files": { params: GitHubPageParams; response: GitHubPullRequestFilesResult };
+  "github/pullRequest/reviews": { params: GitHubPageParams; response: GitHubPullRequestReviewsResult };
+  "github/pullRequest/review": { params: GitHubPullRequestReviewParams; response: GitHubPullRequestReview };
+  "github/pullRequest/merge": { params: GitHubPullRequestMergeParams; response: GitHubMergeResult };
+  "github/pullRequest/autoMerge": { params: GitHubPullRequestMergeParams; response: null };
+  "github/checks": { params: GitHubChecksParams; response: GitHubChecksResult };
+  "github/labels/list": { params: GitHubRepositoryParams; response: GitHubLabelsResult };
+  "github/label/create": { params: GitHubLabelParams; response: GitHubLabel };
+  "github/label/update": { params: GitHubLabelParams; response: GitHubLabel };
+  "github/assignees/list": { params: GitHubRepositoryParams; response: GitHubAssigneesResult };
+  "github/cancel": { params: GitHubCancelParams; response: GitHubCancelResult };
   "issueReporter/read": { params: Record<string, never>; response: IssueReporterContext };
   "issueReporter/search": { params: IssueReporterSearchParams; response: IssueReporterSearchResult };
   "issueReporter/search/cancel": { params: IssueReporterCancelParams; response: IssueReporterCancelResult };
@@ -1141,6 +1198,30 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "issue/configure": { method: "issue/configure" },
   "issue/list": { method: "issue/list" },
   "issue/read": { method: "issue/read" },
+  "github/repository/read": { method: "github/repository/read" },
+  "github/issue/list": { method: "github/issue/list" },
+  "github/issue/read": { method: "github/issue/read" },
+  "github/issue/create": { method: "github/issue/create" },
+  "github/issue/update": { method: "github/issue/update" },
+  "github/comment/list": { method: "github/comment/list" },
+  "github/comment/create": { method: "github/comment/create" },
+  "github/comment/update": { method: "github/comment/update" },
+  "github/comment/delete": { method: "github/comment/delete" },
+  "github/pullRequest/list": { method: "github/pullRequest/list" },
+  "github/pullRequest/read": { method: "github/pullRequest/read" },
+  "github/pullRequest/create": { method: "github/pullRequest/create" },
+  "github/pullRequest/update": { method: "github/pullRequest/update" },
+  "github/pullRequest/files": { method: "github/pullRequest/files" },
+  "github/pullRequest/reviews": { method: "github/pullRequest/reviews" },
+  "github/pullRequest/review": { method: "github/pullRequest/review" },
+  "github/pullRequest/merge": { method: "github/pullRequest/merge" },
+  "github/pullRequest/autoMerge": { method: "github/pullRequest/autoMerge" },
+  "github/checks": { method: "github/checks" },
+  "github/labels/list": { method: "github/labels/list" },
+  "github/label/create": { method: "github/label/create" },
+  "github/label/update": { method: "github/label/update" },
+  "github/assignees/list": { method: "github/assignees/list" },
+  "github/cancel": { method: "github/cancel" },
   "issueReporter/read": { method: "issueReporter/read" },
   "issueReporter/search": { method: "issueReporter/search" },
   "issueReporter/search/cancel": { method: "issueReporter/search/cancel" },

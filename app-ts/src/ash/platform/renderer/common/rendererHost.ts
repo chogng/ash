@@ -1,5 +1,6 @@
 import type { IAssetService } from '../../assets/common/assetService.js';
 import type { IIssueReporterService } from '../../issue/common/issue.js';
+import type { IGitHubService } from '../../github/common/githubService.js';
 import type { IBackupService } from '../../backup/common/backup.js';
 import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common/networkDiagnosticsService.js';
 import type { ICallService } from '../../call/common/callService.js';
@@ -112,6 +113,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly agentCapabilities: IAgentCapabilitiesService;
 	readonly networkDiagnostics: INetworkDiagnosticsService;
 	readonly issueReporter: IIssueReporterService;
+	readonly github: IGitHubService;
 	readonly hooks: IHooksService;
 }
 

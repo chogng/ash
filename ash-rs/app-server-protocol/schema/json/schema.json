@@ -2220,6 +2220,7 @@
         "GitHubConflict",
         "GitHubUnavailable",
         "GitHubTimedOut",
+        "GitHubSubmissionUncertain",
         "GitHubOperationFailed",
         "IssueReporterUnavailable",
         "IssueReporterPermissionDenied",
@@ -9263,6 +9264,390 @@
         {
           "properties": {
             "method": {
+              "const": "github/repository/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubRepositoryParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/issue/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubIssueListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/issue/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubNumberParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/issue/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubIssueCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/issue/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubIssueUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/comment/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubPageParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/comment/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubCommentCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/comment/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubCommentUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/comment/delete",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubCommentDeleteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubPullRequestListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubNumberParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubPullRequestCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubPullRequestUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/files",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubPageParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/reviews",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubPageParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/review",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubPullRequestReviewParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/merge",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubPullRequestMergeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/autoMerge",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubPullRequestMergeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/checks",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubChecksParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/labels/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubRepositoryParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/label/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubLabelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/label/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubLabelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/assignees/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubRepositoryParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/cancel",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "issueReporter/read",
               "type": "string"
             },
@@ -14904,6 +15289,390 @@
             },
             "result": {
               "$ref": "#/$defs/IssueReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/repository/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubRepositoryResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/issue/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubIssueListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/issue/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/issue/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubIssue"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/issue/update",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubIssue"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/comment/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubCommentListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/comment/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueComment"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/comment/update",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueComment"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/comment/delete",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubPullRequestListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubPullRequest"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubPullRequest"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/update",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubPullRequest"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/files",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubPullRequestFilesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/reviews",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubPullRequestReviewsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/review",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubPullRequestReview"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/merge",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubMergeResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/pullRequest/autoMerge",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/checks",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubChecksResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/labels/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubLabelsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/label/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubLabel"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/label/update",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubLabel"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/assignees/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubAssigneesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/cancel",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubCancelResult"
             }
           },
           "required": [
@@ -24184,6 +24953,1021 @@
       ],
       "type": "object"
     },
+    "GitHubAssigneesResult": {
+      "additionalProperties": false,
+      "properties": {
+        "assignees": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "assignees"
+      ],
+      "type": "object"
+    },
+    "GitHubCancelParams": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId"
+      ],
+      "type": "object"
+    },
+    "GitHubCancelResult": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/GitHubCancelStatus"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
+    },
+    "GitHubCancelStatus": {
+      "enum": [
+        "requested",
+        "alreadyRequested",
+        "completed"
+      ],
+      "type": "string"
+    },
+    "GitHubCheckRun": {
+      "additionalProperties": false,
+      "properties": {
+        "conclusion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detailsUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "status"
+      ],
+      "type": "object"
+    },
+    "GitHubChecksParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "page": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "commit",
+        "page"
+      ],
+      "type": "object"
+    },
+    "GitHubChecksResult": {
+      "additionalProperties": false,
+      "properties": {
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/GitHubCheckRun"
+          },
+          "type": "array"
+        },
+        "nextPage": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "state": {
+          "type": "string"
+        },
+        "statuses": {
+          "items": {
+            "$ref": "#/$defs/GitHubCommitStatus"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "state",
+        "statuses",
+        "checks"
+      ],
+      "type": "object"
+    },
+    "GitHubCommentCreateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "number",
+        "body"
+      ],
+      "type": "object"
+    },
+    "GitHubCommentDeleteParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commentId": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "commentId"
+      ],
+      "type": "object"
+    },
+    "GitHubCommentListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "comments": {
+          "items": {
+            "$ref": "#/$defs/IssueComment"
+          },
+          "type": "array"
+        },
+        "nextPage": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "comments"
+      ],
+      "type": "object"
+    },
+    "GitHubCommentUpdateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "commentId": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "commentId",
+        "body"
+      ],
+      "type": "object"
+    },
+    "GitHubCommitStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "type": "string"
+        },
+        "targetUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "context",
+        "state"
+      ],
+      "type": "object"
+    },
+    "GitHubIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "issue": {
+          "$ref": "#/$defs/IssueSummary"
+        }
+      },
+      "required": [
+        "issue",
+        "body"
+      ],
+      "type": "object"
+    },
+    "GitHubIssueCreateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "assignees": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "body": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "title",
+        "body",
+        "labels",
+        "assignees"
+      ],
+      "type": "object"
+    },
+    "GitHubIssueListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "page": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "query": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        },
+        "state": {
+          "$ref": "#/$defs/IssueState"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "state",
+        "query",
+        "page"
+      ],
+      "type": "object"
+    },
+    "GitHubIssueListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/IssueSummary"
+          },
+          "type": "array"
+        },
+        "nextPage": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "notice": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "issues",
+        "notice"
+      ],
+      "type": "object"
+    },
+    "GitHubIssueUpdateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "assignees": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "body": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IssueState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "number"
+      ],
+      "type": "object"
+    },
+    "GitHubLabel": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "color"
+      ],
+      "type": "object"
+    },
+    "GitHubLabelParams": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "name",
+        "color"
+      ],
+      "type": "object"
+    },
+    "GitHubLabelsResult": {
+      "additionalProperties": false,
+      "properties": {
+        "labels": {
+          "items": {
+            "$ref": "#/$defs/GitHubLabel"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "labels"
+      ],
+      "type": "object"
+    },
+    "GitHubMergeMethod": {
+      "enum": [
+        "merge",
+        "squash",
+        "rebase"
+      ],
+      "type": "string"
+    },
+    "GitHubMergeResult": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "type": "string"
+        },
+        "merged": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commit",
+        "merged",
+        "message"
+      ],
+      "type": "object"
+    },
+    "GitHubNumberParams": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "number"
+      ],
+      "type": "object"
+    },
+    "GitHubPageParams": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "page": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "number",
+        "page"
+      ],
+      "type": "object"
+    },
+    "GitHubPullRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "autoMerge": {
+          "type": "boolean"
+        },
+        "baseBranch": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "draft": {
+          "type": "boolean"
+        },
+        "headBranch": {
+          "type": "string"
+        },
+        "headCommit": {
+          "type": "string"
+        },
+        "mergedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "number",
+        "title",
+        "body",
+        "url",
+        "state",
+        "draft",
+        "headCommit",
+        "headBranch",
+        "baseBranch",
+        "autoMerge"
+      ],
+      "type": "object"
+    },
+    "GitHubPullRequestCreateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "draft": {
+          "type": "boolean"
+        },
+        "head": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "title",
+        "body",
+        "head",
+        "base",
+        "draft"
+      ],
+      "type": "object"
+    },
+    "GitHubPullRequestFile": {
+      "additionalProperties": false,
+      "properties": {
+        "additions": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "deletions": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "filename": {
+          "type": "string"
+        },
+        "patch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "previousFilename": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "filename",
+        "status",
+        "additions",
+        "deletions",
+        "changes"
+      ],
+      "type": "object"
+    },
+    "GitHubPullRequestFilesResult": {
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "items": {
+            "$ref": "#/$defs/GitHubPullRequestFile"
+          },
+          "type": "array"
+        },
+        "limitReached": {
+          "type": "boolean"
+        },
+        "nextPage": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "files",
+        "limitReached"
+      ],
+      "type": "object"
+    },
+    "GitHubPullRequestListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "page": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        },
+        "state": {
+          "$ref": "#/$defs/IssueState"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "state",
+        "page"
+      ],
+      "type": "object"
+    },
+    "GitHubPullRequestListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "nextPage": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "pullRequests": {
+          "items": {
+            "$ref": "#/$defs/GitHubPullRequest"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "pullRequests"
+      ],
+      "type": "object"
+    },
+    "GitHubPullRequestMergeParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "type": "string"
+        },
+        "method": {
+          "$ref": "#/$defs/GitHubMergeMethod"
+        },
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "number",
+        "commit",
+        "method"
+      ],
+      "type": "object"
+    },
+    "GitHubPullRequestReview": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "id": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "type": "string"
+        },
+        "submittedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "body",
+        "state",
+        "url",
+        "commit"
+      ],
+      "type": "object"
+    },
+    "GitHubPullRequestReviewParams": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "event": {
+          "$ref": "#/$defs/GitHubReviewEvent"
+        },
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "number",
+        "commit",
+        "event",
+        "body"
+      ],
+      "type": "object"
+    },
+    "GitHubPullRequestReviewsResult": {
+      "additionalProperties": false,
+      "properties": {
+        "nextPage": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "reviews": {
+          "items": {
+            "$ref": "#/$defs/GitHubPullRequestReview"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "reviews"
+      ],
+      "type": "object"
+    },
+    "GitHubPullRequestUpdateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "body": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IssueState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "number"
+      ],
+      "type": "object"
+    },
+    "GitHubRepositoryParams": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository"
+      ],
+      "type": "object"
+    },
+    "GitHubRepositoryResult": {
+      "additionalProperties": false,
+      "properties": {
+        "allowAutoMerge": {
+          "type": "boolean"
+        },
+        "allowMergeCommit": {
+          "type": "boolean"
+        },
+        "allowRebaseMerge": {
+          "type": "boolean"
+        },
+        "allowSquashMerge": {
+          "type": "boolean"
+        },
+        "defaultBranch": {
+          "type": "string"
+        },
+        "fullName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "defaultBranch",
+        "fullName",
+        "allowMergeCommit",
+        "allowSquashMerge",
+        "allowRebaseMerge",
+        "allowAutoMerge"
+      ],
+      "type": "object"
+    },
+    "GitHubReviewEvent": {
+      "enum": [
+        "approve",
+        "requestChanges",
+        "comment"
+      ],
+      "type": "string"
+    },
     "GitIgnoreChanged": {
       "description": "Repository-relative paths whose ignore classification may have changed.\nAn empty path list invalidates the entire repository; directory paths include descendants.",
       "properties": {
@@ -26223,6 +28007,11 @@
         "body": {
           "type": "string"
         },
+        "id": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
         "updatedAt": {
           "type": "string"
         },
@@ -26231,6 +28020,7 @@
         }
       },
       "required": [
+        "id",
         "body",
         "url",
         "updatedAt"
@@ -26287,6 +28077,9 @@
         "mode": {
           "$ref": "#/$defs/IssueListMode"
         },
+        "operationId": {
+          "type": "string"
+        },
         "page": {
           "format": "uint32",
           "minimum": 0,
@@ -26300,6 +28093,7 @@
         }
       },
       "required": [
+        "operationId",
         "state",
         "page",
         "query",
@@ -26362,11 +28156,15 @@
           "minimum": 0,
           "type": "integer"
         },
+        "operationId": {
+          "type": "string"
+        },
         "repository": {
           "$ref": "#/$defs/IssueRepository"
         }
       },
       "required": [
+        "operationId",
         "repository",
         "number"
       ],
@@ -35668,6 +37466,9 @@
         "git": {
           "type": "boolean"
         },
+        "github": {
+          "type": "boolean"
+        },
         "marketplace": {
           "type": "boolean"
         },
@@ -35721,6 +37522,7 @@
         "attachments",
         "fileSystem",
         "git",
+        "github",
         "contentSearch",
         "codebase",
         "cloudCodebase",

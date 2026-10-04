@@ -44,7 +44,7 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 | `HttpClient` | `execute` 或 `execute_streaming` 一次；implementation 不得 retry |
 | `ReqwestHttpClient` | 生产 HTTP 客户端，在异步 I/O runtime 执行并支持取消；同步 trait 的调用者等待结果 |
 | `UreqHttpClient` | reusable synchronous client；没有 panic-based `Default` |
-| `HttpMethod::{Get,Post}` | 当前支持的 method |
+| `HttpMethod::{Get,Post,Patch,Put,Delete}` | 当前支持的 method |
 | `HttpRequest` | validated HTTP(S) URL、headers 与 raw body |
 | `HttpResponse` | status、headers 与 bounded raw body |
 | `HttpHeader` | name/value pair；`Debug` 永远隐藏 value |
