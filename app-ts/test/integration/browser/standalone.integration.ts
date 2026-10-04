@@ -319,7 +319,7 @@ interface StandaloneHarness {
 	runFileDrop(): { value: string; dragOverHandled: boolean; dropHandled: boolean; fileReads: number };
 	runTextDrop(enabled: boolean): Promise<{ value: string; dragOverHandled: boolean; dropHandled: boolean }>;
 	runUriPaste(enabled: boolean): Promise<{ value: string; handled: boolean }>;
-	startPasteAsPicker(): void;
+	startPasteAsPicker(args?: { readonly preferences: readonly string[] }, plainText?: boolean): void;
 	runPasteProviderSelector(): Promise<{ value: string; handled: boolean }>;
 	runPasteSnippetWithAdditionalEdit(): Promise<{ value: string; otherValue: string; handled: boolean }>;
 	runLineAction(id: string, args?: unknown): Promise<void>;
@@ -2231,7 +2231,7 @@ window.ashStandaloneIntegration = {
 			callerEditor.updateOptions({ pasteAs: { enabled: true } });
 		}
 	},
-	startPasteAsPicker: () => {
+	startPasteAsPicker: (args, plainText) => {
 		callerEditor.setValue('alpha');
 		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
 		callerEditor.focus();
@@ -2244,9 +2244,9 @@ window.ashStandaloneIntegration = {
 				getType: async (type: string) => new Blob([type === 'text/html' ? '<b>markup</b>' : 'plain'], { type }),
 			}],
 		});
-		const action = callerEditor.getAction('editor.action.pasteAs');
+		const action = callerEditor.getAction(plainText ? 'editor.action.pasteAsText' : 'editor.action.pasteAs');
 		if (!action) throw new Error('Paste As action is missing');
-		void action.run().finally(() => {
+		void action.run(args).finally(() => {
 			if (priorRead) Object.defineProperty(clipboard, 'read', priorRead);
 			else Reflect.deleteProperty(clipboard, 'read');
 		});

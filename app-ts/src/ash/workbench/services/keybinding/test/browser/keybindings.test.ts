@@ -1,3 +1,6 @@
+import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { parseJsonDocument } from '../../../../../base/common/json.js';
+import { validateJsonSchema, type JsonSchema } from '../../../../../base/common/jsonSchema.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -1020,3 +1023,49 @@ function usLetterLayout(): ReadonlyMap<string, string> {
 	}
 	return layout;
 }
+
+
+test('keybinding schema registration updates conditional command arguments and releases its subscription', () => {
+	const dom = new JSDOM('<body></body>');
+	using close = toDisposable(() => dom.window.close());
+	using contexts = new ContextKeyService();
+	using layouts = new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows });
+	using services = new InstantiationService();
+	using commands = new CommandService(services, new CommandRegistry());
+	using notifications = new NotificationService();
+	using keybindings = new WorkbenchKeybindingService({
+		ownerDocument: dom.window.document,
+		commandService: commands,
+		contextKeyService: contexts,
+		keyboardLayoutService: layouts,
+	}, notifications);
+	using changed = new Emitter<void>();
+	let kind = 'text';
+	let schemaReads = 0;
+	using registration = keybindings.registerSchemaContribution({
+		onDidChange: changed.event,
+		getSchemaAdditions: (): JsonSchema[] => {
+			schemaReads++;
+			return [{
+				if: { required: ['command'], properties: { command: { const: 'test.paste' } } },
+				then: { properties: { args: { type: 'object', properties: { kind: { const: kind } } } } },
+			}];
+		},
+	});
+	const invalid = (): number => validateJsonSchema(
+		parseJsonDocument('[{"command":"test.paste","args":{"kind":"html"}}]'),
+		JsonSchemasRegistry.getSchema('ash://schemas/keybindings'),
+	).length;
+	assert.equal(invalid(), 1);
+	assert.equal(validateJsonSchema(parseJsonDocument('[{"command":"other","args":{"kind":42}}]'), JsonSchemasRegistry.getSchema('ash://schemas/keybindings')).length, 0);
+	kind = 'html';
+	changed.fire();
+	assert.equal(invalid(), 0);
+	registration.dispose();
+	const readsAfterDispose = schemaReads;
+	changed.fire();
+	assert.equal(schemaReads, readsAfterDispose);
+	assert.deepEqual((JsonSchemasRegistry.getSchema('ash://schemas/keybindings')!.items as JsonSchema).allOf, []);
+	keybindings.dispose();
+	assert.equal(JsonSchemasRegistry.getSchema('ash://schemas/keybindings'), undefined);
+});

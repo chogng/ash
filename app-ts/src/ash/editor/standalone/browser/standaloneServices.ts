@@ -54,7 +54,7 @@ import type { Context, IContextKey } from '../../../platform/contextkey/common/c
 import { BrowserContextMenuService } from '../../../platform/contextview/browser/contextMenuService.js';
 import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
 import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
-import { IKeybindingService, KeybindingContextKeys } from '../../../platform/keybinding/common/keybinding.js';
+import { IKeybindingService, KeybindingContextKeys, type KeybindingsSchemaContribution } from '../../../platform/keybinding/common/keybinding.js';
 import { KeybindingResolver, KeybindingResolveKind } from '../../../platform/keybinding/common/keybindingResolver.js';
 import { INotificationService, NotificationSeverity, type NotificationAction, type NotificationHandle, type NotificationItem, type NotificationOptions } from '../../../platform/notification/common/notification.js';
 import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
@@ -256,6 +256,8 @@ export class StandaloneCommandService extends Disposable implements ICommandServ
 
 /** Resolves registered shortcuts in the focused standalone editor or its widgets. */
 export class StandaloneKeybindingService extends Disposable implements IKeybindingService {
+	// Embedded editors have no keybindings JSON resource; its schema is owned by Workbench.
+	public registerSchemaContribution(_contribution: KeybindingsSchemaContribution): IDisposable { return Disposable.None; }
 	private readonly resolver = new KeybindingResolver();
 	private readonly chords: KeybindingEvent[] = [];
 	private readonly chordTimeout = this._register(new RunOnceScheduler(() => this.clearChords(), 5000));

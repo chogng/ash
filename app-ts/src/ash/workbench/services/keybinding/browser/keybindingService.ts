@@ -1,3 +1,6 @@
+import { type JsonSchema } from '../../../../base/common/jsonSchema.js';
+import { JsonSchemasRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { type KeybindingsSchemaContribution } from '../../../../platform/keybinding/common/keybinding.js';
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { getWindows, onDidRegisterWindow, onWillUnregisterWindow } from "../../../../base/browser/window.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
@@ -77,6 +80,8 @@ export interface WorkbenchKeybindingServiceOptions {
 export class WorkbenchKeybindingService
 	extends Disposable
 	implements IKeybindingService, IKeyboardShortcutTroubleshootingService {
+	private readonly schemaContributions = new Map<KeybindingsSchemaContribution, IDisposable | undefined>();
+	private readonly schemaRegistration = this._register(new MutableDisposable<IDisposable>());
 	private readonly ownerWindow: Window;
 	private readonly commandService: ICommandService;
 	private readonly contextKeyService: IContextKeyService;
@@ -138,10 +143,46 @@ export class WorkbenchKeybindingService
 			this.leaveChordMode();
 			this._onDidUpdateKeybindings.fire();
 		}));
+		this.updateKeybindingsSchema();
+		this._register(toDisposable(() => {
+			for (const listener of this.schemaContributions.values()) listener?.dispose();
+			this.schemaContributions.clear();
+		}));
 		this.attachWindow(this.ownerWindow);
 		for (const { window } of getWindows()) this.attachWindow(window);
 		this._register(onDidRegisterWindow(({ window }) => this.attachWindow(window)));
 		this._register(onWillUnregisterWindow(({ window }) => this.windowListeners.deleteAndDispose(window)));
+	}
+
+	public registerSchemaContribution(contribution: KeybindingsSchemaContribution): IDisposable {
+		this.assertNotDisposed();
+		if (this.schemaContributions.has(contribution)) throw new Error('Keybinding schema contribution is already registered');
+		const listener = contribution.onDidChange?.(() => this.updateKeybindingsSchema());
+		this.schemaContributions.set(contribution, listener);
+		this.updateKeybindingsSchema();
+		return toDisposable(() => {
+			if (!this.schemaContributions.delete(contribution)) return;
+			listener?.dispose();
+			this.updateKeybindingsSchema();
+		});
+	}
+
+	private updateKeybindingsSchema(): void {
+		const keybindingsSchema: JsonSchema = {
+			type: 'object',
+			properties: {
+				key: { type: 'string' },
+				command: { type: ['string', 'null'] },
+				when: { type: 'string' },
+				args: {},
+			},
+			allOf: [...this.schemaContributions.keys()].flatMap(contribution => contribution.getSchemaAdditions()),
+		};
+		this.schemaRegistration.clear();
+		this.schemaRegistration.value = JsonSchemasRegistry.registerSchema('ash://schemas/keybindings', {
+			type: 'array',
+			items: keybindingsSchema,
+		});
 	}
 
 	private attachWindow(targetWindow: Window): void {

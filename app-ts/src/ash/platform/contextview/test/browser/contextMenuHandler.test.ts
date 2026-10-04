@@ -1,3 +1,4 @@
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -22,6 +23,7 @@ test("a context menu that cannot be shown releases its execution resources", asy
 	} as IContextViewService;
 	const keybindings = {
 		inChordMode: false,
+		registerSchemaContribution: () => Disposable.None,
 		onDidUpdateKeybindings: Event.None,
 		resolveKeybinding() { throw new Error("Not used"); },
 		resolveUserBinding() { return undefined; },

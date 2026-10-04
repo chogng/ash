@@ -1,3 +1,4 @@
+import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
 import assert from "node:assert/strict";
@@ -436,6 +437,7 @@ function emptyKeybindingService(): KeybindingService {
 		resolveKeybinding() {
 			throw new Error("Not needed by Command Palette test");
 		},
+		registerSchemaContribution: () => Disposable.None,
 		resolveUserBinding: () => undefined,
 		lookupKeybindings: () => [],
 		lookupKeybinding: () => undefined,

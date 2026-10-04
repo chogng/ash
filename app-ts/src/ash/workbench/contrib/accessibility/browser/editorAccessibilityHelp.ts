@@ -50,6 +50,7 @@ export class EditorAccessibilityHelpContribution extends Disposable implements I
 						editor.getOption(EditorOption.tabFocusMode)
 							? localize('accessibility.editorTabFocus', 'Tab moves focus to the next control. <keybinding:editor.action.toggleTabFocusMode> changes this behavior.')
 							: localize('accessibility.editorTabIndent', 'Tab inserts indentation. <keybinding:editor.action.toggleTabFocusMode> lets Tab move focus to the next control.'),
+						localize('dropOrPaste.accessibilityHelp', '<keybinding:editor.action.pasteAs> lets you choose a paste action. <keybinding:editor.action.pasteAsText> pastes plain text. After pasting or dropping content, <keybinding:editor.changePasteType> or <keybinding:editor.changeDropType> opens the available actions and preferred-action settings. Escape returns to the editor.'),
 						localize('accessibility.editorMode', '<keybinding:editor.action.toggleScreenReaderAccessibilityMode> toggles screen reader optimization.'),
 						localize('accessibility.editorCloseHelp', 'Escape closes this help and returns focus to the editor. <keybinding:editor.action.accessibleViewDisableHint> stops announcing the editor help hint.'),
 					].join('\n\n'),

@@ -8,6 +8,39 @@ test.beforeEach(({ page }) => {
 });
 test.afterEach(({ page }) => { expect(pageErrors.get(page)).toEqual([]); });
 
+test('external opener chooser supports keyboard selection, cancellation, browser choice and Chinese settings labels', async ({ page }) => {
+	await page.goto('/link.html');
+	await page.evaluate(() => window.ashLinkIntegration.installExternalOpeners(true));
+	const link = page.getByRole('button', { name: 'Documentation', exact: true });
+	await link.focus();
+	await link.press('Enter');
+	const chooser = page.getByRole('dialog', { name: '选择链接打开方式', exact: true });
+	await expect(chooser).toBeVisible();
+	const input = chooser.getByRole('combobox', { name: '选择链接打开方式', exact: true });
+	await expect(input).toBeFocused();
+	await input.press('ArrowDown');
+	await input.press('Enter');
+	await expect(chooser).toHaveCount(0);
+	await expect(link).toBeFocused();
+	expect(await page.evaluate(() => window.ashLinkIntegration.contributed)).toEqual(['Second viewer:https://example.test/docs']);
+
+	await link.press('Enter');
+	await expect(chooser).toBeVisible();
+	await input.press('Escape');
+	await expect(chooser).toHaveCount(0);
+	await expect(link).toBeFocused();
+	expect(await page.evaluate(() => window.ashLinkIntegration.opened)).toEqual([]);
+
+	await link.press('Enter');
+	await chooser.getByRole('option', { name: '在默认浏览器中打开', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.opened)).toEqual(['https://example.test/docs']);
+	await link.focus();
+	await link.press('Enter');
+	await chooser.getByRole('option', { name: '配置默认打开方式...', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.settingsRevealed)).toEqual(['workbench.externalUriOpeners']);
+	await expect(chooser).toHaveCount(0);
+});
+
 test('ordinary links route pointer and keyboard activation through the opener', async ({ page }) => {
 	await page.goto('/link.html');
 	const link = page.getByRole('button', { name: 'Documentation', exact: true });

@@ -1,4 +1,5 @@
 import './postEditWidget.css';
+import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -39,6 +40,7 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 		edits: EditSet<T>,
 		onSelect: (index: number) => void,
 		onDismiss: () => void,
+		configureAction: IAction | undefined,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
@@ -48,13 +50,13 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 		this.dropdown = this._register(instantiationService.createInstance(ActionWidgetDropdown, this.domNode, {
 			label: edits.allEdits[edits.activeEditIndex]!.title,
 			ariaLabel: label,
-			actions: edits.allEdits.map((edit, index) => ({
+			actions: Separator.join(edits.allEdits.map((edit, index) => ({
 				id: `${id}.${index}`,
 				label: edit.title,
 				tooltip: edit.title,
 				enabled: true,
 				run: () => onSelect(index),
-			})),
+			})), configureAction ? [{ ...configureAction, run: () => configureAction.run(editor) }] : []),
 		}));
 		this.dropdown.element.setAttribute('aria-description', localize('dropOrPaste.selectorHelp', 'Press Down Arrow or Enter to open the options. Escape closes the menu; Escape on this button returns to the editor.'));
 		this._register(addDisposableListener<KeyboardEvent>(this.dropdown.element, 'keydown', event => {
@@ -92,6 +94,7 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 		private readonly id: string,
 		private readonly label: () => string,
 		visibleContext: RawContextKey<boolean>,
+		private readonly configureAction: () => IAction | undefined,
 		@IBulkEditService private readonly bulkEdits: IBulkEditService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IContextKeyService contextKeys: IContextKeyService,
@@ -181,7 +184,7 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 		this.editor.focus();
 		if (snippetController && snippet) snippetController.startSession(model, insertionStarts, snippet);
 		else this.editor.setPosition(anchor.getEndPosition());
-		if (!canShowWidget || edits.allEdits.length < 2) return;
+		if (!canShowWidget || (edits.allEdits.length < 2 && !this.configureAction())) return;
 		// The transient widget uses the current language, which may have changed since controller creation.
 		this.widget.value = this.instantiationService.createInstance(PostEditWidget<T>, this.editor, this.id, anchor, this.label(), edits, (newIndex: number) => {
 			if (newIndex === edits.activeEditIndex) return;
@@ -196,7 +199,7 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 					this.notifications.error(localize('dropOrPaste.switchFailed', 'Could not change edit: {0}', String(error)));
 				}
 			})();
-		}, () => this.clear());
+		}, () => this.clear(), this.configureAction());
 		this.visible.set(true);
 	}
 }

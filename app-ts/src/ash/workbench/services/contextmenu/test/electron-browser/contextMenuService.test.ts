@@ -1,3 +1,4 @@
+import { Disposable } from '../../../../../base/common/lifecycle.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -30,6 +31,7 @@ test("Electron context menus run the selected action with its delegate context",
 	using contextKeyService = new ContextKeyService();
 	const keybindingService = {
 		inChordMode: false,
+		registerSchemaContribution: () => Disposable.None,
 		onDidUpdateKeybindings: Event.None,
 		resolveKeybinding() { throw new Error("Not used"); },
 		resolveUserBinding() { return undefined; },
@@ -91,6 +93,7 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 	using contextKeyService = new ContextKeyService();
 	const keybindingService = {
 		inChordMode: false,
+		registerSchemaContribution: () => Disposable.None,
 		onDidUpdateKeybindings: Event.None,
 		resolveKeybinding() { throw new Error("Not used"); },
 		resolveUserBinding() { return undefined; },
@@ -167,6 +170,7 @@ test("macOS switches context menu implementation when the menu style changes", a
 	using configurationService = new InMemoryConfigurationService(registry);
 	const keybindingService = {
 		inChordMode: false,
+		registerSchemaContribution: () => Disposable.None,
 		onDidUpdateKeybindings: Event.None,
 		resolveKeybinding() { throw new Error("Not used"); },
 		resolveUserBinding() { return undefined; },

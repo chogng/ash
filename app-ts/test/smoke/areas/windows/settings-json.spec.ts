@@ -11,6 +11,59 @@ async function pasteJson(input: Locator, source: string): Promise<void> {
 	}, source);
 }
 
+test('Preferred paste and drop commands reveal editable settings and persist their order', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires the Code settings editor');
+	const group = workbench.editors.groupAt(0);
+	const tab = group.tabs.filter({ hasText: 'User Settings (JSON)' });
+	const preferences = ['uri.path.relative', 'uri.path.absolute'];
+	for (const [command, key] of [
+		['workbench.action.configurePreferredPasteAction', 'editor.pasteAs.preferences'],
+		['workbench.action.configurePreferredDropAction', 'editor.dropIntoEditor.preferences'],
+	] as const) {
+		await workbench.quickaccess.runCommand(command);
+		await expect(tab).toHaveCount(1);
+		await expect(tab.locator('..')).not.toHaveClass(/preview/u);
+		await expect(group.editor.input).toBeFocused();
+		await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('2 characters selected');
+		await pasteJson(group.editor.input, JSON.stringify(preferences));
+		await group.editor.input.press('ControlOrMeta+S');
+		await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		await group.editor.waitForEditorContents(content => content.includes(`"${key}"`) && content.includes('uri.path.relative'));
+	}
+	await workbench.page.reload();
+	await workbench.waitForReady();
+	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	await group.editor.waitForEditorContents(content => {
+		const settings = JSON.parse(content);
+		return ['editor.pasteAs.preferences', 'editor.dropIntoEditor.preferences'].every(key =>
+			JSON.stringify(settings[key]) === JSON.stringify(preferences));
+	});
+});
+
+test('Preferred paste and drop JSON completions use registered provider kinds', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires the product language declarations');
+	const group = workbench.editors.groupAt(0);
+	for (const [command, key] of [
+		['workbench.action.configurePreferredPasteAction', 'editor.pasteAs.preferences'],
+		['workbench.action.configurePreferredDropAction', 'editor.dropIntoEditor.preferences'],
+	] as const) {
+		await workbench.quickaccess.runCommand(command);
+		await expect(group.editor.input).toBeFocused();
+		await pasteJson(group.editor.input, '[""]');
+		await group.editor.input.press('ArrowLeft');
+		await group.editor.input.press('ArrowLeft');
+		await group.editor.input.press('Control+Space');
+		const options = group.content.locator('.stanza-editor-completion-option');
+		const relative = options.filter({ hasText: 'uri.path.relative' });
+		await expect(relative).toBeVisible();
+		await expect(options.filter({ hasText: 'uri.path.absolute' })).toBeVisible();
+		await relative.click();
+		await group.editor.waitForEditorContents(content => JSON.parse(content)[key]?.[0] === 'uri.path.relative');
+		await group.editor.input.press('ControlOrMeta+S');
+		await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	}
+});
+
 test('Settings JSON opens a pinned tab, reveals a value, saves immediately and persists Chinese labels', async ({ target, workbench, restartWorkbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code settings editor');
 	let page = workbench.page;

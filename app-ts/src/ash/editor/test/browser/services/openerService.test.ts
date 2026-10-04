@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { noneDisposable } from '../../../../base/common/lifecycle.js';
+import { noneDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { defaultExternalUriOpenerId } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
 import { OpenerService } from '../../../browser/services/openerService.js';
 import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
@@ -49,6 +50,18 @@ function editorService(): ICodeEditorService {
 test('opener service requires its editor dependency at creation', () => {
 	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(OpenerService), /codeEditorService/);
+});
+
+test('explicit default selection bypasses all contributed handlers and releases a failed resolution', async () => {
+	using services = new InstantiationService();
+	services.registerInstance(ICodeEditorService, editorService());
+	using opener = services.createInstance(OpenerService);
+	const calls: string[] = [];
+	using registered = opener.registerExternalOpener({ openExternal: async () => { assert.fail('Default selection must bypass contributed handlers'); } });
+	using resolver = opener.registerExternalUriResolver({ resolveExternalUri: async () => ({ resolved: URI.parse('https://proxy.test/'), ...toDisposable(() => calls.push('release')) }) });
+	opener.setDefaultExternalOpener({ openExternal: async href => { calls.push(href); throw new Error('host failed'); } });
+	await assert.rejects(opener.open('https://example.test/', { allowContributedOpeners: defaultExternalUriOpenerId }), /host failed/u);
+	assert.deepEqual(calls, ['https://proxy.test/', 'release']);
 });
 
 test('opener passes a file URI and decoded selection to its code editor service', async () => {

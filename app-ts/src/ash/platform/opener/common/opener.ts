@@ -5,6 +5,9 @@ import type { ITextEditorOptions } from '../../editor/common/editor.js';
 import type { ITextEditorSelection } from '../../editor/common/editor.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
+/** Explicitly selects the host's external opener and bypasses contributed handlers. */
+export const defaultExternalUriOpenerId = 'default';
+
 export function withSelection(uri: URI, selection: ITextEditorSelection): URI {
 	const end = selection.endLineNumber === undefined ? '' : `-${selection.endLineNumber},${selection.endColumn ?? 1}`;
 	return uri.with({ fragment: `${selection.startLineNumber},${selection.startColumn}${end}` });

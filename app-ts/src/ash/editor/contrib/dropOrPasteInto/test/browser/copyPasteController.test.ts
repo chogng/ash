@@ -358,7 +358,7 @@ test('Paste As requests the selected HTML kind from the rich clipboard', async (
 	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });
 	editor.setSelection(new Selection(1, 1, 1, 4));
 
-	await CopyPasteController.get(editor)!.pasteAs(new HierarchicalKind('html'));
+	await CopyPasteController.get(editor)!.pasteAs({ only: new HierarchicalKind('html') });
 
 	assert.equal(model.getText(), '<b>markup</b>');
 });
@@ -448,8 +448,44 @@ test('Copy preparation data reaches the matching paste provider', async () => {
 		},
 	});
 	editor.setSelection(new Selection(1, 1, 1, 7));
-	await CopyPasteController.get(editor)!.pasteAs(kind);
+	await CopyPasteController.get(editor)!.pasteAs({ preferences: [kind] });
 	assert.deepEqual({ text: model.getText(), provided }, { text: 'prepared value', provided: 2 });
+});
+
+test('Paste as Text ignores URI metadata added during copy preparation', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using closeWindow = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('source');
+	using features = new LanguageFeaturesService();
+	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, {
+		copyMimeTypes: ['text/uri-list'], pasteMimeTypes: [], providedPasteEditKinds: [],
+		async prepareDocumentPaste() {
+			const transfer = new VSDataTransfer();
+			transfer.append('text/uri-list', createStringDataTransferItem('file:///workspace/source.txt'));
+			return transfer;
+		},
+	});
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features,
+	});
+	editor.setSelection(new Selection(1, 1, 1, 7));
+	const input = editor.controller.editContext.domNode.domNode;
+	input.focus();
+	const data = new TestClipboardData();
+	const copy = new dom.window.Event('copy', { bubbles: true, cancelable: true });
+	Object.defineProperty(copy, 'clipboardData', { value: data });
+	input.dispatchEvent(copy);
+	Object.defineProperty(dom.window.navigator, 'clipboard', {
+		value: { read: async () => [{
+			types: data.types,
+			getType: async (type: string) => new Blob([data.getData(type)], { type }),
+		}] },
+	});
+	model.reset('destination');
+	editor.setSelection(new Selection(1, 1, 1, 12));
+	await editor.getAction('editor.action.pasteAsText')!.run();
+	assert.equal(model.getText(), 'source');
 });
 
 class TestClipboardData {

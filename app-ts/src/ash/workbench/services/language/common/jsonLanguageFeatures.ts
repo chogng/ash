@@ -170,29 +170,73 @@ function appendAfterProperty(document: JsonDocument, offset: number): string {
 }
 
 function valueCompletions(source: string, document: JsonDocument, rootSchema: JsonSchema, offset: number): LanguageCompletionProviderResult | undefined {
-	const match = propertyAwaitingValueAtOffset(document, offset) ?? propertyAtOffset(document.root, offset);
-	if (!match) return undefined;
-	const schema = jsonSchemaAtPath(rootSchema, match.path);
+	const arrayContext = arrayValueAtOffset(document, offset);
+	let path: readonly (string | number)[];
+	let range: Range;
+	let append = '';
+	if (arrayContext) {
+		path = arrayContext.path;
+		range = rangeFromOffsets(source, arrayContext.start, arrayContext.end);
+		append = arrayContext.append;
+	} else {
+		const match = propertyAwaitingValueAtOffset(document, offset) ?? propertyAtOffset(document.root, offset);
+		if (!match) return undefined;
+		path = match.path;
+		if (match.property.valueNode && offset >= match.property.valueNode.offset && offset <= match.property.valueNode.offset + match.property.valueNode.length) {
+			if (match.property.valueNode.type === 'array' || match.property.valueNode.type === 'object') return undefined;
+			range = rangeFromOffsets(source, match.property.valueNode.offset, match.property.valueNode.offset + match.property.valueNode.length);
+		} else {
+			const colon = document.tokens.find(token => token.kind === JsonTokenKind.Colon && token.offset >= match.property.keyNode.offset + match.property.keyNode.length && token.offset <= offset);
+			if (!colon) return undefined;
+			range = rangeFromOffsets(source, offset, offset);
+		}
+	}
+	const schema = jsonSchemaAtPath(rootSchema, path);
 	if (!schema) return undefined;
 	const values = completionValues(schema);
 	if (values.length === 0) return undefined;
-	let range: Range;
-	if (match.property.valueNode && offset >= match.property.valueNode.offset && offset <= match.property.valueNode.offset + match.property.valueNode.length) {
-		range = rangeFromOffsets(source, match.property.valueNode.offset, match.property.valueNode.offset + match.property.valueNode.length);
-	} else {
-		const colon = document.tokens.find(token => token.kind === JsonTokenKind.Colon && token.offset >= match.property.keyNode.offset + match.property.keyNode.length && token.offset <= offset);
-		if (!colon) return undefined;
-		range = rangeFromOffsets(source, offset, offset);
-	}
 	const items = values.map((value, index) => Object.freeze({
 		id: `value-${index}`,
-		label: JSON.stringify(value),
-		kind: schema.enum ? LanguageCompletionItemKind.Enum : LanguageCompletionItemKind.Value,
+		label: JSON.stringify(value.value),
+		kind: value.kind,
 		range,
-		insertText: JSON.stringify(value),
-		detail: schema.enumDescriptions?.[index],
+		insertText: `${JSON.stringify(value.value)}${append}`,
+		detail: value.detail,
 	}));
 	return Object.freeze({ items: Object.freeze(items), isIncomplete: false });
+}
+
+/** Array edits replace only the item under the cursor; surrounding preferences stay intact. */
+function arrayValueAtOffset(document: JsonDocument, offset: number): {
+	readonly path: readonly (string | number)[];
+	readonly start: number;
+	readonly end: number;
+	readonly append: string;
+} | undefined {
+	const visit = (node: JsonValueNode, path: readonly (string | number)[]): ReturnType<typeof arrayValueAtOffset> => {
+		if (offset < node.offset || offset > node.offset + node.length) return undefined;
+		if (node.type === 'object') {
+			for (const property of node.properties) {
+				if (!property.valueNode) continue;
+				const result = visit(property.valueNode, [...path, property.key]);
+				if (result) return result;
+			}
+		}
+		if (node.type !== 'array') return undefined;
+		for (let index = 0; index < node.items.length; index++) {
+			const item = node.items[index]!;
+			if (offset < item.offset || offset > item.offset + item.length) continue;
+			if (item.type === 'array' || item.type === 'object') return visit(item, [...path, index]);
+			return { path: [...path, index], start: item.offset, end: item.offset + item.length, append: '' };
+		}
+		const previous = [...document.tokens].reverse().find(token => token.offset + token.length <= offset
+			&& token.kind !== JsonTokenKind.Trivia && token.kind !== JsonTokenKind.LineComment && token.kind !== JsonTokenKind.BlockComment);
+		if (previous?.kind !== JsonTokenKind.OpenBracket && previous?.kind !== JsonTokenKind.Comma) return undefined;
+		const nextIndex = node.items.findIndex(item => item.offset >= offset);
+		const index = nextIndex < 0 ? node.items.length : nextIndex;
+		return { path: [...path, index], start: offset, end: offset, append: nextIndex < 0 ? '' : ',' };
+	};
+	return document.root ? visit(document.root, []) : undefined;
 }
 
 function propertyAwaitingValueAtOffset(document: JsonDocument, offset: number): { readonly property: JsonPropertyNode; readonly path: readonly (string | number)[] } | undefined {
@@ -212,11 +256,28 @@ function propertyAwaitingValueAtOffset(document: JsonDocument, offset: number): 
 	return undefined;
 }
 
-function completionValues(schema: JsonSchema): readonly unknown[] {
-	if (schema.enum) return schema.enum;
+interface JsonCompletionValue {
+	readonly value: unknown;
+	readonly kind: LanguageCompletionItemKind;
+	readonly detail?: string;
+}
+
+function completionValues(schema: JsonSchema): readonly JsonCompletionValue[] {
+	if (schema.enum) return schema.enum.map((value, index) => ({
+		value,
+		kind: LanguageCompletionItemKind.Enum,
+		detail: schema.enumDescriptions?.[index],
+	}));
+	const values = [...(schema.anyOf ?? []), ...(schema.oneOf ?? [])].flatMap(completionValues);
 	const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : [];
-	if (types.includes('boolean')) return Object.freeze([true, false]);
-	return schema.default === undefined ? Object.freeze([]) : Object.freeze([schema.default]);
+	if (types.includes('boolean')) values.push(...[true, false].map(value => ({ value, kind: LanguageCompletionItemKind.Value })));
+	if (values.length === 0 && schema.default !== undefined) values.push({ value: schema.default, kind: LanguageCompletionItemKind.Value });
+	const unique = new Map<string, JsonCompletionValue>();
+	for (const value of values) {
+		const key = JSON.stringify(value.value);
+		if (!unique.has(key)) unique.set(key, value);
+	}
+	return [...unique.values()];
 }
 
 function defaultValue(schema: JsonSchema): unknown {

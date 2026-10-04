@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { parseJsonc } from '../../../../../base/common/jsonc.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { type JsonSchema } from '../../../../../base/common/jsonSchema.js';
 import { Position } from '../../../../../editor/common/core/position.js';
-import { LanguageCompletionTriggerKind, createLanguageFeatureRequest, type LanguageDiagnostic, type LanguageDiagnosticsPublisher } from '../../../../../editor/common/languages.js';
+import { LanguageCompletionItemKind, LanguageCompletionTriggerKind, createLanguageFeatureRequest, type LanguageDiagnostic, type LanguageDiagnosticsPublisher } from '../../../../../editor/common/languages.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { JsonSchemaRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
 import { acquireJsonLanguageDiagnostics } from '../../common/jsonLanguageDiagnostics.js';
@@ -97,6 +98,74 @@ test('JSON resources publish syntax diagnostics and associated schemas add valid
 		[Symbol.dispose](): void {},
 	}), registry)!;
 	assert.match(strictDiagnostics.map(diagnostic => diagnostic.message).join('\n'), /Comments/u);
+});
+
+for (const [label, source, expected] of [
+	['empty array', '{"preferences":[|]}', '{"preferences":["text"]}'],
+	['existing item', '{"preferences":["html","te|xt"]}', '{"preferences":["html","text"]}'],
+	['unfinished item', '{"preferences":["te|', '{"preferences":["text"'],
+	['comment after comma', '{"preferences":["html", /* keep */ |]}', '{"preferences":["html", /* keep */ "text"]}'],
+	['insertion before another item', '{"preferences":[| "html"]}', '{"preferences":["text", "html"]}'],
+] as const) {
+	test(`JSON array completion preserves surrounding values for ${label}`, async () => {
+		using registry = new JsonSchemaRegistry();
+		const itemSchema: JsonSchema = {
+			type: 'string',
+			anyOf: [
+				{ type: 'string' },
+				{ enum: ['text', 'html'], enumDescriptions: ['Plain content', 'Markup'] },
+				{ enum: ['text'] },
+			],
+		};
+		using schemaRegistration = registry.registerSchema('test://schema/array', {
+			type: 'object', properties: { preferences: { type: 'array', items: itemSchema } },
+		});
+		using association = registry.registerAssociation(resource, 'test://schema/array');
+		using model = new TextModel(source.replace('|', ''));
+		const result = await createJsonCompletionProvider(registry).provideCompletions({
+			requestId: 1, languageId: 'jsonc', resource,
+			position: model.getPositionAt(source.indexOf('|')),
+			context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
+		}, new AbortController().signal);
+		assert.deepEqual(result?.items.map(item => [item.label, item.kind, item.detail]), [
+			['"text"', LanguageCompletionItemKind.Enum, 'Plain content'],
+			['"html"', LanguageCompletionItemKind.Enum, 'Markup'],
+		]);
+		const item = result!.items[0]!;
+		model.applyEdits([{ range: item.range!, text: item.insertText! }]);
+		assert.equal(model.getValue(), expected);
+	});
+}
+
+test('JSON completion resolves nested and root array items through oneOf schemas', async () => {
+	using registry = new JsonSchemaRegistry();
+	using registration = registry.registerSchema('test://schema/root-array', {
+		type: 'array', items: { type: 'array', items: { oneOf: [{ enum: [true] }, { enum: [false] }] } },
+	});
+	using association = registry.registerAssociation(resource, 'test://schema/root-array');
+	using model = new TextModel('[[true],[]]');
+	const result = await createJsonCompletionProvider(registry).provideCompletions({
+		requestId: 1, languageId: 'jsonc', resource, position: model.getPositionAt(9),
+		context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
+	}, new AbortController().signal);
+	assert.deepEqual(result?.items.map(item => item.label), ['true', 'false']);
+	const item = result!.items[1]!;
+	model.applyEdits([{ range: item.range!, text: item.insertText! }]);
+	assert.equal(model.getValue(), '[[true],[false]]');
+});
+
+test('JSON completion does not replace a populated array with its default after the array closes', async () => {
+	using registry = new JsonSchemaRegistry();
+	using registration = registry.registerSchema('test://schema/array-default', {
+		type: 'object', properties: { preferences: { type: 'array', default: [], items: { enum: ['text'] } } },
+	});
+	using association = registry.registerAssociation(resource, 'test://schema/array-default');
+	using model = new TextModel('{"preferences":["text"]}');
+	const result = await createJsonCompletionProvider(registry).provideCompletions({
+		requestId: 1, languageId: 'jsonc', resource, position: model.getPositionAt(model.getValue().indexOf(']') + 1),
+		context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
+	}, new AbortController().signal);
+	assert.equal(result, undefined);
 });
 
 function associatedRegistry(): JsonSchemaRegistry {

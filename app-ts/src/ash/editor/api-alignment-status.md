@@ -159,6 +159,18 @@ Quick Fix 有多个类别时使用 `TabbedActionListWidget` 显示“全部操�
 
 ## Drop / Paste Into Editor（2026-09-24）
 
+2026-10-04 补齐 Workbench 首选方式配置：`editor.pasteAs.preferences` 和 `editor.dropIntoEditor.preferences` 按数组顺序选择第一个可用的类型，支持语言覆盖及父类型匹配，未注册的类型仍可保存。事后选择器和命令面板均可打开对应的用户设置 JSON、选中数组并直接编辑。配置动作在执行时使用调用编辑器所在窗口的服务，贡献释放后移除命令和菜单。
+
+`Paste As...` 支持 `{ kind }` 和 `{ preferences }` 参数；指定首选顺序时直接应用首个匹配项，`editor.action.pasteAsText` 选择纯文本 provider。Provider 注册与释放同步更新粘贴和拖放 schema 的类型建议。`IKeybindingService.registerSchemaContribution` 将命令参数条件写入共享快捷键 schema，并在类型变化及贡献释放时更新；基础 JSON 校验支持 `const`、`if`、`then` 和 `else`。中英文配置入口、纯文本动作和编辑器无障碍帮助已同步。
+
+用户已确认保留仅 Ash 的 `workbench/services/language/common/jsonLanguageFeatures.ts` 作为 JSON schema 补全的唯一实现。它现在解析数组项的位置并汇总 `anyOf` / `oneOf` 枚举建议，保留描述、合并重复值；接受建议只替换当前项，保留其他首选项及注释。空数组、未闭合字符串、逗号后的新项、嵌套和根数组均由同一实现处理。
+
+当前边界：快捷键 schema 已注册，快捷键 JSON 编辑器的资源关联尚未接通；不能计为用户可见的快捷键 JSON 补全。设置 JSON 的数组补全使用产品语言声明；UI-only 模式没有加载 JSON 语言，补全行为在连接 App Server 的窗口验证。
+
+本批验证：Editor 全量单测 1544 项、251 个文件通过；随后复跑粘贴、拖放、Workbench 配置、快捷键和动作菜单定向单测 65 项通过。补齐数组补全和复制准备后的纯文本粘贴边界后，按原测试编译选项单独编译本批 6 份测试，75 项通过。Chromium 的 10 个相关场景通过，覆盖显式首选、纯文本命令、原有选择器及启用/禁用行为。生产浏览器和 Electron UI 各 1 个配置入口、保存和重载场景通过；连接 App Server 的浏览器和 Electron 各 2 个配置与补全场景通过。Renderer 与完整桌面构建在前一轮通过，最终生产 Vite 打包通过。
+
+最终默认测试编译和 Renderer 检查受到同期其他改动阻塞：`externalUriOpenerService.test.ts` 的 Picker 泛型赋值错误，以及 `platform/url/common/urlGlob.ts` 使用当前 TS lib 未声明的 `String.toWellFormed`。这些文件不属于本批修改，未调整原检查配置来掩盖失败。Stylelint 无错误，唯一建议来自未修改的 Sessions CSS；测试环境已有的颜色变量警告和 jsdom Canvas 提示未计为本批新增问题。
+
 `CopyPasteController` 和 `DropIntoEditorController` 现在从语言特性注册表收集 provider edit，按 `yieldTo` 排序，再由 `PostEditWidgetManager` 经 Bulk Edit 应用插入和附加工作区编辑。内置纯文本、绝对路径、相对路径 provider 走同一条链；HTML 只在显式 `Paste As` 时提供。复制准备数据带有 ID：普通粘贴及能从剪贴板读到该 ID 的 `Paste As` 可交给匹配的 provider，同文本的外部剪贴板内容不会误用旧准备结果；`Paste As...` 没有指定 kind 时先让用户选择。普通粘贴和拖放在存在多个可替换编辑时显示编辑器内选择器，支持键盘切换、Escape 和撤销。该目录的八个生产 TS/CSS 文件现与 VS Code 同路径；仅 Ash 的 `textFileTransfer.ts` 及其测试已按用户确认删除。
 
 含附加工作区编辑的候选现在也显示事后选择器。Bulk Edit 返回本次应用的撤销操作：Standalone 对所有受影响的已打开模型逐一撤销；Workbench 工作区编辑先核对受影响资源的最终内容，再按相反顺序撤销文本与文件操作，包含关闭的文件、新建、重命名和删除。任一资源已被其他操作修改时，候选切换停止且不覆盖该资源。`SnippetController2` 成为补全、粘贴和拖放的共同占位符会话 owner；带多个光标的 snippet 同步选择各插入点的占位符，Tab、Shift+Tab、选项切换和 Escape 由该控制器处理。以下较早的逐文件行和历史批次记录只反映当时的实现状态，以本节为当前行为说明。

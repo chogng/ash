@@ -3,7 +3,7 @@ import { AbstractDisposable, type IDisposable, toDisposable } from '../../../bas
 import { URI } from '../../../base/common/uri.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { getWindow, windowOpenNoOpener } from '../../../base/browser/dom.js';
-import { normalizeExternalUrl, extractSelection } from '../../../platform/opener/common/opener.js';
+import { defaultExternalUriOpenerId, normalizeExternalUrl, extractSelection } from '../../../platform/opener/common/opener.js';
 import type {
 	IExternalOpener,
 	IExternalUriResolver,
@@ -104,22 +104,28 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 	private async _doOpenExternal(target: URI | string, options?: OpenOptions): Promise<boolean> {
 		const sourceUri = typeof target === 'string' ? URI.parse(target) : target;
 		let resolved = sourceUri;
+		let resolution: IResolvedExternalUri | undefined;
 		for (const resolver of this._resolvers) {
 			const result = await resolver.resolveExternalUri(sourceUri);
 			if (!result) continue;
 			resolved = result.resolved;
+			resolution = result;
 			this._resolvedUriTargets.set(resolved.toString(), sourceUri);
 			break;
 		}
-		const href = resolved.toString();
-		if (options?.allowContributedOpeners) {
-			const preferredOpenerId = typeof options.allowContributedOpeners === 'string' ? options.allowContributedOpeners : undefined;
-			for (const opener of this._externalOpeners) {
-				if (await opener.openExternal(href, { sourceUri, preferredOpenerId }, CancellationToken.None)) return true;
+		try {
+			const href = resolved.toString();
+			if (options?.allowContributedOpeners && options.allowContributedOpeners !== defaultExternalUriOpenerId) {
+				const preferredOpenerId = typeof options.allowContributedOpeners === 'string' ? options.allowContributedOpeners : undefined;
+				for (const opener of this._externalOpeners) {
+					if (await opener.openExternal(href, { sourceUri, preferredOpenerId }, CancellationToken.None)) return true;
+				}
 			}
+			if (!this._defaultExternalOpener) throw new Error('No default external opener is registered');
+			return await this._defaultExternalOpener.openExternal(href, { sourceUri }, CancellationToken.None);
+		} finally {
+			resolution?.dispose();
 		}
-		if (!this._defaultExternalOpener) throw new Error('No default external opener is registered');
-		return this._defaultExternalOpener.openExternal(href, { sourceUri }, CancellationToken.None);
 	}
 
 	protected override disposeCore(): void {

@@ -21,6 +21,13 @@
 		"diffEditor.revertIcon.description": "Show buttons to revert changes in the modified editor margin.",
 		"diffEditor.indicators.title": "Diff indicators",
 		"diffEditor.indicators.description": "Show plus and minus signs beside added and removed lines.",
-		"diffEditor.revertIcon.title": "Revert change buttons"
+		"diffEditor.revertIcon.title": "Revert change buttons",
+		"dropOrPaste.pasteAsText": "Paste as Text",
+		"dropOrPaste.editKind": "The kind identifier of the edit.",
+		"dropOrPaste.pastePreferences": "Preferred paste edit kinds, in order. The first available matching edit is used.",
+		"dropOrPaste.dropPreferences": "Preferred drop edit kinds, in order. The first available matching edit is used.",
+		"dropOrPaste.configurePaste": "Configure preferred paste action...",
+		"dropOrPaste.configureDrop": "Configure preferred drop action...",
+		"dropOrPaste.accessibilityHelp": "<keybinding:editor.action.pasteAs> lets you choose a paste action. <keybinding:editor.action.pasteAsText> pastes plain text. After pasting or dropping content, <keybinding:editor.changePasteType> or <keybinding:editor.changeDropType> opens the available actions and preferred-action settings. Escape returns to the editor."
 	}
 }

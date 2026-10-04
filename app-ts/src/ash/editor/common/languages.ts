@@ -26,6 +26,13 @@ type Thenable<T> = PromiseLike<T>;
 
 export type ProviderResult<T> = T | undefined | null | Thenable<T | undefined | null>;
 
+export enum ExternalUriOpenerPriority {
+	None = 0,
+	Option = 1,
+	Default = 2,
+	Preferred = 3,
+}
+
 export interface WorkspaceEdit {
 	readonly edits: readonly WorkspaceEditEntry[];
 }

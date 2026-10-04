@@ -31,6 +31,15 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { OutputViewPane } from '../../../src/ash/workbench/contrib/output/browser/outputView.js';
 import { OutputService } from '../../../src/ash/workbench/contrib/output/browser/outputServices.js';
 import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
+import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
+import { ExternalUriOpenerService } from '../../../src/ash/workbench/contrib/externalUriOpener/common/externalUriOpenerService.js';
+import { ExternalUriOpenerPriority } from '../../../src/ash/editor/common/languages.js';
+import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { setNlsMessages } from '../../../src/ash/nls.js';
+import '../../../src/ash/workbench/contrib/externalUriOpener/common/externalUriOpener.contribution.js';
 
 declare global {
 	interface Window {
@@ -38,6 +47,9 @@ declare global {
 			readonly opened: readonly string[];
 			readonly customOpened: readonly string[];
 			readonly files: readonly { resource: string; line: number; column: number }[];
+			readonly contributed: readonly string[];
+			readonly settingsRevealed: readonly string[];
+			installExternalOpeners(chinese?: boolean): void;
 			setEnabled(enabled: boolean): void;
 			update(label: string, title?: string, tabIndex?: number, elementLabel?: boolean): void;
 			setTheme(index: number): void;
@@ -99,6 +111,8 @@ const output = resources.add(services.createInstance(OutputService));
 services.registerInstance(IOutputService, output);
 const channel = resources.add(output.createChannel({ id: 'link-test', label: 'Link test' }));
 const files: { resource: string; line: number; column: number }[] = [];
+const contributed: string[] = [];
+const settingsRevealed: string[] = [];
 const pane = resources.add(services.createInstance(OutputViewPane, document.querySelector<HTMLElement>('#output')!, { id: 'link-test', title: 'Output' }));
 const outputTitle = document.createElement('div');
 document.querySelector('#output')!.before(outputTitle);
@@ -119,7 +133,29 @@ liveEditor.create(liveEditorContainer);
 pane.setVisible(true);
 channel.appendLine({ text: 'src/main.ts:12:7: check this file', severity: 'warning' });
 window.ashLinkIntegration = {
-	opened, customOpened, files,
+	opened, customOpened, files, contributed, settingsRevealed,
+	installExternalOpeners: chinese => {
+		if (chinese) {
+			const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+			setNlsMessages(catalog.locale, catalog.bundles);
+		}
+		services.registerInstance(IQuickInputService, resources.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: services.get(IContextKeyService) })));
+		services.registerInstance(IPreferencesService, {
+			openSettings: async () => {}, openKeybindings: async () => {},
+			openUserSettings: async options => { settingsRevealed.push(options!.revealSetting!.key); },
+		});
+		const external = resources.add(services.createInstance(ExternalUriOpenerService));
+		resources.add(external.registerExternalOpenerProvider({
+			async *getOpeners() {
+				for (const id of ['First viewer', 'Second viewer']) {
+					yield {
+						id, label: id, canOpen: async () => ExternalUriOpenerPriority.Default,
+						openExternalUri: async (uri: URI) => { contributed.push(`${id}:${uri.toString()}`); return true; },
+					};
+				}
+			},
+		}));
+	},
 	setEnabled: enabled => { link.enabled = enabled; },
 	update: (label, title, tabIndex, elementLabel) => {
 		const content = document.createElement('span');

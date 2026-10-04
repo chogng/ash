@@ -1,3 +1,4 @@
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { ContextKeyExpr } from "../../../contextkey/common/contextkey.js";
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -618,6 +619,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		contexts,
 		{
 			inChordMode: false,
+		registerSchemaContribution: () => Disposable.None,
 			onDidUpdateKeybindings: Event.None,
 			resolveKeybinding() { throw new Error("Not used"); },
 			resolveUserBinding() { return undefined; },

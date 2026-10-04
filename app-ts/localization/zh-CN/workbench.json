@@ -708,7 +708,12 @@
 		"output.help.navigation": "使用方向键阅读输出，按住 Shift 和方向键选择文本，使用 Ctrl+C 或 Command+C 复制。Ctrl+F 或 Command+F 打开查找。",
 		"output.help.controls": "使用 Tab 和 Shift+Tab 在通道选择、筛选、清空输出、自动滚动和更多输出操作之间移动。文本筛选使用 ! 或 - 排除词语。级别和类别筛选仅影响此视图。",
 		"output.help.links": "将光标放到文件位置上并执行 <keybinding:editor.action.openLink>，或按住 Ctrl 或 Command 点击。工作区文件会打开到所报告的行列位置。",
-		"output.help.scroll": "向上滚动会暂停自动滚动。启用自动滚动可跟随新增输出。更多输出操作可在编辑器中打开实时通道或导出保留的文本。"
+		"output.help.scroll": "向上滚动会暂停自动滚动。启用自动滚动可跟随新增输出。更多输出操作可在编辑器中打开实时通道或导出保留的文本。",
+		"externalUriOpener.settingDescription": "将 HTTP 和 HTTPS URL 模式映射到打开方式 ID。使用 default 选择标准浏览器。使用第一个匹配且可用的打开方式。",
+		"externalUriOpener.choose": "选择链接打开方式",
+		"externalUriOpener.prompt": "你想如何打开 {0}？",
+		"externalUriOpener.default": "在默认浏览器中打开",
+		"externalUriOpener.configure": "配置默认打开方式..."
 	},
 	"ash.menu": {
 		"file": "文件",

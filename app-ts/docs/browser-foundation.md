@@ -296,6 +296,35 @@ The host capability represents the active keybinding resource rather than a
 fixed path. A future profile service can switch that resource without changing
 the resolver, contribution, or command layers.
 
+## External URI opening
+
+`IOpenerService` owns validation, URI resolution and host execution. Links opt
+into contributed handlers with `allowContributedOpeners: true`; the ID `default`
+explicitly selects the host browser. Resolved URI handles are released after
+opening finishes, including failures.
+
+`workbench/contrib/externalUriOpener` registers the selection service at startup.
+Providers supply handlers for a target URL. Capability checks receive the
+original URI; execution receives the resolved URI and the original URI context.
+An explicit ID takes precedence over `workbench.externalUriOpeners`, whose URL
+rules are evaluated in insertion order. Configured handlers skip capability
+checks. Without a selected ID, a preferred handler opens directly, default
+handlers participate in selection, and optional handlers alone do not intercept
+an ordinary link. Cancelling the chooser consumes the request without opening
+the host browser.
+
+URL patterns use `platform/url/common/urlGlob.ts`. A missing scheme matches
+HTTP and HTTPS, `*.example.test` includes the domain and its subdomains, `:*`
+includes any port, and a path includes its descendants. Queries and fragments
+do not affect matching. Pattern paths are kept literal rather than resolving
+dot segments. Settings retain unavailable provider IDs so provider registration
+does not rewrite user preferences.
+
+The current Extension Host registration protocol does not include URI opener
+registrations. Extension activation, persisted provider suggestions and the
+extension API adapter remain unimplemented; Workbench provider registration and
+selection are available independently of that protocol.
+
 ## Design rules
 
 - Pass or derive the owning `Document` instead of assuming the global

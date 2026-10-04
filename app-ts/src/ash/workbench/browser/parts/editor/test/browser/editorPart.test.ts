@@ -28,7 +28,7 @@ import {
 	type ResolvedKeybinding,
 	resolveKeybinding,
 } from "../../../../../../base/common/keybindings.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../../base/common/uri.js";
 import { Position } from "../../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../../editor/common/core/range.js";
@@ -2218,6 +2218,7 @@ function nextTask(): Promise<void> {
 }
 
 class TestKeybindingService implements IKeybindingService {
+	registerSchemaContribution(): IDisposable { return Disposable.None; }
 	private readonly _onDidUpdateKeybindings = new Emitter<void>();
 	private readonly bindings = new Map<CommandId, ResolvedKeybinding>();
 

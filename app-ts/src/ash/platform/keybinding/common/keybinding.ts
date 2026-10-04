@@ -1,3 +1,5 @@
+import type { JsonSchema } from '../../../base/common/jsonSchema.js';
+import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type {
 	Event,
 } from "../../../base/common/event.js";
@@ -16,10 +18,17 @@ import {
 	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
 
+export interface KeybindingsSchemaContribution {
+	readonly onDidChange?: Event<void>;
+	getSchemaAdditions(): JsonSchema[];
+}
+
 /** Provides resolved shortcuts for command presentation and dispatch. */
 export interface IKeybindingService {
 	readonly inChordMode: boolean;
 	readonly onDidUpdateKeybindings: Event<void>;
+
+	registerSchemaContribution(contribution: KeybindingsSchemaContribution): IDisposable;
 
 	resolveKeybinding(keybinding: Keybinding): ResolvedKeybinding;
 	resolveUserBinding(userBinding: string): ResolvedKeybinding | undefined;

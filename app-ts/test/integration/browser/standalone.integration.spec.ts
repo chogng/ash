@@ -1769,7 +1769,7 @@ test('Paste As chooses an edit before changing the document', async ({ page }) =
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.startPasteAsPicker());
 	const picker = page.getByRole('dialog', { name: 'Paste As...' });
-	await expect(picker).toBeVisible();
+	await expect(picker).toBeVisible().catch(error => { throw new Error(`Paste picker page errors: ${JSON.stringify(errors)}`, { cause: error }); });
 	await expect(picker).toContainText('Insert Plain Text');
 	await expect(picker).toContainText('Insert HTML');
 	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
@@ -1779,6 +1779,21 @@ test('Paste As chooses an edit before changing the document', async ({ page }) =
 	await expect(picker).toBeHidden();
 	expect(errors).toEqual([]);
 });
+
+for (const plainText of [true, false]) {
+	test(`explicit paste ${plainText ? 'as text' : 'preferences'} inserts the requested kind without opening a picker`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/standalone.html');
+		await page.evaluate(plainText => window.ashStandaloneIntegration.startPasteAsPicker(plainText ? undefined : { preferences: ['unavailable', 'html', 'text'] }, plainText), plainText);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe(plainText ? 'plain' : '<b>markup</b>');
+		await expect(page.getByRole('dialog', { name: 'Paste As...' })).toHaveCount(0);
+		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('alpha');
+		expect(errors).toEqual([]);
+	});
+}
 
 test('paste providers show a keyboard accessible selector and switch the applied edit', async ({ page }) => {
 	const errors: string[] = [];

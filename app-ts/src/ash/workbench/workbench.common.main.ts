@@ -27,3 +27,6 @@ import './browser/parts/titlebar/commandCenterOnboarding.contribution.js';
 import './contrib/update/browser/update.contribution.js';
 
 import './contrib/output/browser/output.contribution.js';
+
+import './contrib/dropOrPasteInto/browser/dropOrPasteInto.contribution.js';
+import './contrib/externalUriOpener/common/externalUriOpener.contribution.js';

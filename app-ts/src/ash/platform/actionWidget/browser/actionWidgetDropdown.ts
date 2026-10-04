@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from '../../../base/browser/dom.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
-import type { IAction } from '../../../base/common/actions.js';
+import { Separator, type IAction } from '../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { ActionListItemKind, type IActionListOptions } from './actionList.js';
@@ -55,7 +55,7 @@ export class ActionWidgetDropdown extends Disposable {
 		this.visible = true;
 		this.element.setAttribute('aria-expanded', 'true');
 		this.actionWidgetService.show('actionWidgetDropdown', false, this.options.actions.map(action => ({
-			kind: ActionListItemKind.Action,
+			kind: action instanceof Separator ? ActionListItemKind.Separator : ActionListItemKind.Action,
 			item: action,
 			label: action.label,
 			disabled: !action.enabled,

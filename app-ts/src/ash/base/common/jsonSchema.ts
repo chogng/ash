@@ -10,6 +10,10 @@ export interface JsonSchema {
 	readonly markdownDescription?: string;
 	readonly type?: JsonSchemaType | readonly JsonSchemaType[];
 	readonly default?: JsonValue;
+	readonly const?: JsonValue;
+	readonly if?: JsonSchema;
+	readonly then?: JsonSchema;
+	readonly else?: JsonSchema;
 	readonly enum?: readonly JsonValue[];
 	readonly enumDescriptions?: readonly string[];
 	readonly markdownEnumDescriptions?: readonly string[];
@@ -103,6 +107,13 @@ export function validateJsonSchema(document: JsonDocument, schema: JsonSchema | 
 }
 
 function validateNode(node: JsonValueNode, schema: JsonSchema, issues: JsonSchemaIssue[]): void {
+	if (schema.if) {
+		const branch = matchesSchema(node, schema.if) ? schema.then : schema.else;
+		if (branch) validateNode(node, branch, issues);
+	}
+	if (Object.hasOwn(schema, 'const') && !equalJson(schema.const!, nodeValue(node))) {
+		issues.push(issue('Value does not match the required constant', node));
+	}
 	if (schema.anyOf && !schema.anyOf.some(candidate => matchesSchema(node, candidate))) {
 		issues.push(issue('Value does not match any permitted schema', node));
 		return;
