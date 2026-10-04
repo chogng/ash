@@ -44,8 +44,7 @@
 	color: var(--ash-modern-activity-bar-item-active-foreground);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item > .ash-composite-bar-action,
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item > .ash-composite-bar-badge {
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item > .ash-composite-bar-action {
 	position: relative;
 	z-index: 1;
 }

@@ -33,6 +33,12 @@ export class ActivitybarPart extends WorkbenchPart {
 		this.sideBarLocation = this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation);
 		this.contentDomNode.append(compositeBar.domNode, globalCompositeBar.domNode);
 		this.applyPosition();
+		compositeBar.setBadgesEnabled(this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarBadges));
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarBadges)) {
+				compositeBar.setBadgesEnabled(this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarBadges));
+			}
+		}));
 		this._register(addDisposableListener(this.domNode, 'contextmenu', event => this.showContextMenu(event)));
 		this._register(addDisposableListener(compositeBar.domNode, 'contextmenu', event => {
 			if (!this.domNode.contains(compositeBar.domNode)) compositeBar.showContextMenu(event, this.getContextMenuActions());

@@ -1,7 +1,100 @@
 import type { Locator } from '@playwright/test';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
+
+test('editor label format setting persists and keeps untitled tabs free of directory labels', async ({ workbench, reloadWorkbench }) => {
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const tab = workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' });
+	const tabId = await tab.getAttribute('id');
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectCategory('editor');
+	const settings = page.locator('.ash-settings-editor');
+	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.labelFormat');
+	const setting = settings.locator('[data-configuration-key="workbench.editor.labelFormat"]');
+	await expect(setting.getByRole('combobox')).toContainText('Default');
+	for (const option of ['Parent Directory', 'Relative Path', 'Absolute Path']) {
+		await setting.getByRole('combobox').click();
+		await page.getByRole('option', { name: option, exact: true }).click();
+		await expect(setting.getByRole('combobox')).toContainText(option);
+		await expect(tab).toHaveAttribute('aria-label', 'Untitled-1');
+		await expect(tab.locator('.ash-icon-label-description')).toBeHidden();
+		await expect(tab).toHaveAttribute('id', tabId!);
+	}
+	await page.locator('.ash-modal-editor-close').click();
+	const restored = await reloadWorkbench();
+	await restored.workbench.settingsEditor.openUserSettingsUI();
+	await restored.workbench.settingsEditor.selectCategory('editor');
+	await restored.workbench.page.locator('.ash-settings-editor').getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.labelFormat');
+	await expect(restored.workbench.page.locator('[data-configuration-key="workbench.editor.labelFormat"]').getByRole('combobox')).toContainText('Absolute Path');
+});
+
+test.describe('File tab label format', () => {
+	test.use({ openWorkspace: true });
+
+	test('file tabs only add distinguishing paths and preserve them across pinned rows and settings changes', async ({ target, testWorkspace, workbench }) => {
+		test.skip(target.kind === 'electron' && target.appServerMode === 'disabled', 'Desktop file access requires App Server');
+		const page = workbench.page;
+		if (target.kind === 'browser' && target.appServerMode === 'disabled') {
+			await page.evaluate(async () => {
+				const root = await navigator.storage.getDirectory();
+				const folder = await root.getDirectoryHandle('tab-label-files', { create: true });
+				for (const name of ['client', 'server']) {
+					const child = await folder.getDirectoryHandle(name, { create: true });
+					const file = await child.getFileHandle('index.ts', { create: true });
+					const writer = await file.createWritable();
+					await writer.write(`// ${name}`);
+					await writer.close();
+				}
+				Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+			});
+			await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+		} else {
+			for (const name of ['client', 'server']) {
+				await mkdir(join(testWorkspace.directory, name));
+				await writeFile(join(testWorkspace.directory, name, 'index.ts'), `// ${name}`);
+			}
+		}
+		await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+		if (await showSidebar.isVisible()) { await showSidebar.click(); }
+		const explorer = page.locator('.ash-explorer');
+		await explorer.getByRole('treeitem', { name: 'client', exact: true }).locator('.ash-tree-twistie').click();
+		await explorer.getByRole('treeitem', { name: /client[\\/]index\.ts$/u }).dblclick();
+		const group = workbench.editors.groupAt(0);
+		await expect(group.tabs).toHaveAttribute('aria-label', 'index.ts');
+		await explorer.getByRole('treeitem', { name: 'server', exact: true }).locator('.ash-tree-twistie').click();
+		await explorer.getByRole('treeitem', { name: /server[\\/]index\.ts$/u }).dblclick();
+		await expect(group.tabs.locator('.ash-icon-label-description')).toHaveText(['client', 'server']);
+		const client = group.tabs.filter({ hasText: 'client' });
+		await client.press('Alt+Enter');
+		await expect(group.title.locator('.ash-sticky-editor-tabs-row').getByRole('tab')).toHaveAttribute('aria-label', 'index.ts, client');
+		const server = group.tabs.filter({ hasText: 'server' });
+		const id = await server.getAttribute('id');
+		for (const [option, description] of [['Absolute Path', /server$/u], ['Relative Path', /^server$/u], ['Parent Directory', /^server$/u], ['Default', /^server$/u]] as const) {
+			await workbench.settingsEditor.openUserSettingsUI();
+			await workbench.settingsEditor.selectCategory('editor');
+			const settings = page.locator('.ash-settings-editor');
+			await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.labelFormat');
+			await settings.locator('[data-configuration-key="workbench.editor.labelFormat"]').getByRole('combobox').click();
+			await page.getByRole('option', { name: option, exact: true }).click();
+			await expect(server.locator('.ash-icon-label-description')).toHaveText(description);
+			if (option === 'Absolute Path') {
+				await expect(server.locator('.ash-icon-label-description')).not.toHaveText('server');
+			}
+			await expect(server).toHaveAttribute('id', id!);
+			await page.locator('.ash-modal-editor-close').click();
+		}
+		await server.focus();
+		await expect(server).toBeFocused();
+		await server.press('ControlOrMeta+W');
+		await expect(group.tabs).toHaveCount(1);
+		await expect(group.tabs).toHaveAttribute('aria-label', 'index.ts');
+	});
+});
 
 test('tab command groups close and split the clicked tabs from mouse and keyboard', async ({ target, application, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');

@@ -37,6 +37,27 @@ class ThemeWindow extends Disposable {
 	}
 }
 
+test('Activity Bar badge theme colors respect profile and theme-specific overrides and reset independently', async () => {
+	using window = new ThemeWindow();
+	const { configuration, root } = window;
+	const read = (): string[] => ['background', 'foreground'].map(part => root.style.getPropertyValue(`--ash-activity-bar-badge-${part}`));
+	const defaults = read();
+	await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, {
+		'badge.background': '#111111',
+		'badge.foreground': '#222222',
+		'activityBarBadge.background': '#123456',
+		'activityBarBadge.foreground': '#fedcba',
+		'[Ash Dark]': { 'activityBarBadge.background': '#654321' },
+	});
+	assert.deepEqual(read(), ['#123456', '#fedcba']);
+	await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-dark');
+	assert.deepEqual(read(), ['#654321', '#fedcba']);
+	await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-light');
+	assert.deepEqual(read(), ['#123456', '#fedcba']);
+	await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, { 'badge.background': '#111111', 'badge.foreground': '#222222' });
+	assert.deepEqual(read(), defaults);
+});
+
 test('system theme follows the OS while explicit themes remain stable', async () => {
 	using window = new ThemeWindow();
 	const { configuration, themes, systemTheme, root } = window;

@@ -72,7 +72,7 @@ suiteTeardown(() => {
 const { h } = await import('../../../../../base/browser/dom.js');
 const { Emitter, Event } = await import('../../../../../base/common/event.js');
 const { DisposableStore, toDisposable } = await import('../../../../../base/common/lifecycle.js');
-const { ConfigurationRegistry, Extensions: ConfigurationExtensions } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
+const { ConfigurationRegistry, ConfigurationScope, Extensions: ConfigurationExtensions } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
 const { IClipboardService: ClipboardServiceId } = await import('../../../../../platform/clipboard/common/clipboardService.js');
 const { IConfigurationService: ConfigurationServiceId } = await import('../../../../../platform/configuration/common/configuration.js');
 const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
@@ -173,6 +173,28 @@ test('DefaultSettings projects only Configuration Registry metadata', () => {
 	assert.deepEqual(defaults.all.map(setting => setting.id), ['editor.test.enabled', 'editor.test.patterns']);
 	assert.equal(defaults.get(visible).valueType, 'boolean');
 	assert.equal(defaults.get('editor.test.patterns').valueType, 'stringMap');
+});
+
+test('Activity Bar badges expose a translated profile setting with strict boolean validation', () => {
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		const defaults = new DefaultSettings();
+		const setting = defaults.get(WorkbenchConfiguration.activityBarBadges);
+		assert.equal(setting.title, '活动栏徽章');
+		assert.equal(setting.description, '在活动栏图标上显示徽章。关闭后会保留每个图标的“显示徽章”或“隐藏徽章”选择。');
+		assert.equal(setting.valueType, 'boolean');
+		assert.equal(findSettingCategory(createSettingsLayout(defaults.all), setting.id), 'layout');
+		const definition = configurationRegistry.getConfiguration(setting.id)!;
+		assert.equal(definition.defaultValue, true);
+		assert.equal(definition.scope, ConfigurationScope.APPLICATION);
+		assert.deepEqual(definition.schema, { type: 'boolean' });
+		assert.equal(definition.parse(false), false);
+		assert.equal(definition.serialize(false), false);
+		assert.throws(() => definition.parse('false'), /活动栏徽章必须为 true 或 false/);
+	} finally {
+		resetNlsResolver();
+	}
 });
 
 test('empty-editor tips expose translated settings metadata', () => {

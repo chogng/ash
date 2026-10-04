@@ -19,7 +19,13 @@ import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle
 import { IContextKeyService, type IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorTabsFocusContext } from "../../../common/contextkeys.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { EditorShowIconsConfiguration, EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from "../../../services/editor/common/editorConfiguration.js";
+import { ILabelService } from '../../../../platform/label/common/labelService.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { basename, dirname } from '../../../../base/common/resources.js';
+import { shorten } from '../../../../base/common/labels.js';
+import { Schemas } from '../../../../base/common/network.js';
+import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
+import { EditorLabelFormatConfiguration, EditorShowIconsConfiguration, EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorLabelFormat, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from "../../../services/editor/common/editorConfiguration.js";
 
 const DRAG_OVER_ACTIVATE_DELAY = 1500;
 
@@ -32,6 +38,8 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	private connected = true;
 	private previewedInput: EditorInput | undefined;
 	private editors: readonly EditorTabDescriptor[] = [];
+	private activeInput: EditorInput | undefined;
+	private selectedIds: ReadonlySet<string> | undefined;
 	private readonly tabContext: IScopedContextKeyService;
 	private readonly renderedLabels = new Map<string, { readonly label: IResourceLabel; readonly context: IScopedContextKeyService; signature: string | undefined }>();
 	private readonly unpinActions = new Map<string, IAction>();
@@ -40,9 +48,12 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	constructor(
 		container: HTMLElement,
 		private readonly delegate: EditorTabsDelegate,
+		private readonly model: EditorGroupModel,
 		@IResourceLabelService resourceLabels: IResourceLabelService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
+		@ILabelService private readonly labelService: ILabelService,
+		@IWorkspaceContextService workspaceContextService: IWorkspaceContextService,
 	) {
 		super(container);
 		this.domNode.classList.add("ash-multi-editor-tabs-control");
@@ -52,7 +63,12 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(EditorShowIconsConfiguration)) this.labels.setIconVisibility(configurationService.getValue<boolean>(EditorShowIconsConfiguration));
 			if (event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) || event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)) this.updateScrollbarOptions();
+			if (event.affectsConfiguration(EditorLabelFormatConfiguration)) {
+				this.setEditors(this.editors, this.activeInput, this.selectedIds);
+			}
 		}));
+		this._register(workspaceContextService.onDidChangeWorkspace(() => this.setEditors(this.editors, this.activeInput, this.selectedIds)));
+		this._register(labelService.onDidChangeFormatters(() => this.setEditors(this.editors, this.activeInput, this.selectedIds)));
 		this.tabList = this._register(new TabList(this.domNode, {
 			ariaLabel: "Open editors",
 			presentation: "inset",
@@ -148,9 +164,38 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 
 	setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined, selectedIds?: ReadonlySet<string>): void {
 		this.editors = editors;
+		this.activeInput = activeInput;
+		this.selectedIds = selectedIds;
+		const format = this.configurationService.getValue<EditorLabelFormat>(EditorLabelFormatConfiguration);
+		// Both tab rows use the whole group so pinning never removes disambiguation.
+		const groupLabels = this.model.getEditors().map(input => editorInputLabel(input, this.labelService));
+		const labels = new Map(editors.map(editor => {
+			const label = editorInputLabel(editor.input, this.labelService);
+			if (format === 'short') {
+				label.description = label.description === undefined ? undefined : basename(dirname(editor.input.resource));
+			} else if (format === 'long') {
+				label.description = label.description === undefined ? undefined : this.labelService.getUriLabel(dirname(editor.input.resource));
+			} else if (format === 'default' && label.description !== undefined) {
+				const peers = groupLabels.filter(peer => peer.name === label.name && peer.description !== undefined);
+				if (peers.length <= 1) {
+					label.description = undefined;
+				} else {
+					let descriptions = peers.map(peer => peer.description!);
+					// Relative directories can coincide across workspace roots or remote hosts.
+					if (new Set(descriptions).size !== descriptions.length) {
+						descriptions = peers.map(peer => this.labelService.getUriLabel(dirname(peer.input.resource)));
+					}
+					if (new Set(descriptions).size !== descriptions.length) {
+						descriptions = peers.map((peer, index) => `${peer.input.resource.authority} • ${descriptions[index]}`);
+					}
+					label.description = shorten(descriptions, this.labelService.getSeparator(editor.input.resource))[peers.findIndex(peer => peer.input === editor.input)];
+				}
+			}
+			return [editor.input, label] as const;
+		}));
 		const activeKey = activeInput ? editors.find(editor => editorInputKey(editor.input) === editorInputKey(activeInput))?.instanceId : undefined;
 		this.tabList.setTabs(editors.map((editor) => {
-			const label = editorInputLabel(editor.input);
+			const label = labels.get(editor.input)!;
 			let primaryAction = this.unpinActions.get(editor.instanceId);
 			if (editor.sticky && !primaryAction) {
 				const unpinLabel = localize("workbench.unpinEditor", "Unpin Editor");
@@ -227,14 +272,15 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				rendered.context.setContext(ActiveEditorPinnedContext.key, !editor.preview);
 				rendered.context.setContext(ActiveEditorStickyContext.key, editor.sticky);
 			});
-			const label = editorInputLabel(editor.input);
+			const label = labels.get(editor.input)!;
 			const icon = editor.input.getIcon?.();
 			const resource = EditorResourceAccessor.getOriginalUri(editor.input, { supportSideBySide: SideBySideEditor.BOTH });
 			const signature = JSON.stringify([resource, label.name, label.description, icon]);
 			// Resource labels recreate their text when updated; selection must retain the click target.
 			if (rendered.signature !== signature) {
 				rendered.signature = signature;
-				rendered.label.setResource({ resource, name: label.name, description: label.description }, { ariaLabel: label.name, forceLabel: true, icon, fileDecorations: { colors: true, badges: true } });
+				const ariaLabel = label.description ? `${label.name}, ${label.description}` : label.name;
+				rendered.label.setResource({ resource, name: label.name, description: label.description }, { ariaLabel, forceLabel: true, icon, fileDecorations: { colors: true, badges: true } });
 			}
 			this.updateTabAriaLabel(editor, rendered.label);
 		}
@@ -249,7 +295,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		// A newly created label renders before TabList attaches its tab to the document.
 		if (!tabLabel) return;
 		const state = editor.hasExternalChange ? localize('workbench.editor.externalChange', 'conflict with changes on disk') : editor.isDirty ? localize('workbench.editor.unsavedChanges', 'unsaved changes') : undefined;
-		const name = label.element.getAttribute('aria-label') ?? editorInputLabel(editor.input).name;
+		const name = label.element.getAttribute('aria-label') ?? editorInputLabel(editor.input, this.labelService).name;
 		tabLabel.setAttribute('aria-label', state ? `${name}, ${state}` : name);
 	}
 
@@ -280,16 +326,13 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	}
 }
 
-function editorInputLabel(input: EditorInput): { readonly name: string; readonly description?: string } {
-	const path = input.resource.scheme === "file"
-		? input.resource.fsPath
-		: input.resource.path;
-	const normalizedPath = path.replaceAll("\\", "/").replace(/\/+$/, "");
-	const separator = normalizedPath.lastIndexOf("/");
+function editorInputLabel(input: EditorInput, labelService: ILabelService): { readonly input: EditorInput; readonly name: string; description: string | undefined } {
 	const explicitLabel = input.label?.trim();
-	const name = explicitLabel || normalizedPath.slice(separator + 1) || input.resource.authority || input.resource.toString();
-	const description = separator > 0 && (!explicitLabel || !/[\\/]/u.test(explicitLabel))
-		? normalizedPath.slice(0, separator)
+	const name = explicitLabel || labelService.getUriBasenameLabel(input.resource);
+	const parent = dirname(input.resource);
+	const hasDirectory = input.resource.scheme !== Schemas.untitled || parent.path !== '/';
+	const description = hasDirectory && input.showBreadcrumbs !== false && (!explicitLabel || !/[\\/]/u.test(explicitLabel))
+		? labelService.getUriLabel(parent, { relative: true })
 		: undefined;
-	return { name, description };
+	return { input, name, description };
 }

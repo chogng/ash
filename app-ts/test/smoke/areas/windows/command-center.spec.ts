@@ -3,6 +3,195 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('activity bar badges stay over the icon and can be hidden independently through the menu', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const activitybar = page.locator('[data-part="activitybar"]');
+	const explorer = workbench.element.locator('.ash-composite-bar-destination[data-action-id="ash.sidebar"]');
+	const badge = explorer.locator('.ash-composite-bar-badge');
+	await workbench.openExplorer();
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	await workbench.editors.groupAt(0).editor.element.click({ position: { x: 100, y: 30 } });
+	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
+	await workbench.editors.groupAt(0).editor.waitForTypeInEditor('badge activity');
+	await expect(badge).toHaveText('1');
+	const expectBadgeGeometry = async (): Promise<void> => {
+		await expect(badge).toHaveCSS('position', 'absolute');
+		await expect(explorer.locator('.ash-icon')).toBeVisible();
+		const geometry = await explorer.evaluate(element => {
+			const item = element.getBoundingClientRect();
+			const icon = element.querySelector('.ash-icon')!.getBoundingClientRect();
+			const badge = element.querySelector('.ash-composite-bar-badge')!.getBoundingClientRect();
+			const bar = element.closest('.ash-composite-bar')!.getBoundingClientRect();
+			const tolerance = 0.01; // Fractional window scaling can round touching edges differently.
+			return {
+				bounds: JSON.stringify({ item: item.toJSON(), icon: icon.toJSON(), badge: badge.toJSON() }),
+				inside: badge.left + tolerance >= Math.max(item.left, bar.left) && badge.right - tolerance <= Math.min(item.right, bar.right) && badge.top + tolerance >= item.top && badge.bottom - tolerance <= item.bottom,
+				overIcon: badge.left < icon.right && badge.top < icon.bottom,
+				lowerRight: badge.right > (icon.left + icon.right) / 2 && badge.bottom > (icon.top + icon.bottom) / 2,
+				centered: Math.abs((icon.left + icon.right) / 2 - (item.left + item.right) / 2) <= 1,
+			};
+		});
+		const { bounds, ...placement } = geometry;
+		expect(placement, bounds).toEqual({ inside: true, overIcon: true, lowerRight: true, centered: true });
+	};
+	for (const style of ['Flat', 'Modern']) {
+		await workbench.settingsEditor.openUserSettingsUI();
+		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+		await settings.locator('[data-settings-group-id="workbench"]').click();
+		await settings.locator('[data-settings-category-id="layout"]').click();
+		await settings.locator('[data-configuration-key="workbench.layoutStyle"]').getByRole('combobox').click();
+		await page.getByRole('option', { name: style, exact: true }).click();
+		await settings.locator('.ash-modal-editor-close').click();
+		for (const size of ['Default', 'Compact']) {
+			await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Activity Bar Size', size]);
+			await expectBadgeGeometry();
+		}
+		for (const position of ['Top', 'Bottom', 'Default']) {
+			await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Activity Bar Position', position]);
+			await expectBadgeGeometry();
+		}
+	}
+	await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Move Primary Side Bar Right']);
+	await expectBadgeGeometry();
+	await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Move Primary Side Bar Left']);
+	await expectBadgeGeometry();
+	await explorer.focus();
+	await workbench.menus.select(application, () => explorer.press('Shift+F10'), ['Hide Badge']);
+	await expect(badge).toHaveCount(0);
+	await expect(explorer).toHaveAttribute('aria-label', /1 unsaved file/u);
+	const search = activitybar.getByRole('tab', { name: 'Search', exact: true });
+	expect(await workbench.menus.inspect(application, () => search.click({ button: 'right' }))).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Hide Badge', enabled: true })]));
+	await expect(badge).toHaveCount(0);
+	await expect(explorer).toHaveAttribute('aria-label', /1 unsaved file/u);
+	await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Show Badge']);
+	await expect(badge).toHaveText('1');
+	await expectBadgeGeometry();
+	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		const picker = page.locator('.ash-quick-pick').getByRole('combobox');
+		await picker.fill(theme);
+		await picker.press('Enter');
+		await expectBadgeGeometry();
+		await expect(badge).toHaveCSS('outline-style', 'solid');
+	}
+});
+
+test('activity bar badge colors follow theme customizations and survive reopening', async ({ application, target, workbench, reloadWorkbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const badge = (): Locator => workbench.element.locator('.ash-composite-bar-destination[data-action-id="ash.sidebar"] .ash-composite-bar-badge');
+	await workbench.openExplorer();
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.element.click({ position: { x: 100, y: 30 } });
+	await editor.waitForEditorFocus();
+	await editor.waitForTypeInEditor('badge theme activity');
+	await expect(badge()).toHaveText('1');
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectGroup('workbench');
+	await workbench.settingsEditor.selectCategory('appearance');
+	const colors = workbench.page.locator('[data-configuration-key="workbench.colorCustomizations"]');
+	for (const [id, value] of [['activityBarBadge.background', '#123456'], ['activityBarBadge.foreground', '#fedcba']]) {
+		await colors.getByRole('button', { name: 'Add Color', exact: true }).click();
+		const row = colors.locator('.ash-string-map-row').last();
+		const key = row.getByRole('combobox');
+		await key.fill(id);
+		const suggestion = workbench.page.getByRole('option').filter({ hasText: id });
+		await expect(suggestion).toHaveCount(1);
+		await key.press('ArrowDown');
+		await key.press('Enter');
+		const input = row.locator('[data-pattern-part="value"]');
+		await input.fill(value);
+		await input.press('Tab');
+	}
+	await expect(badge()).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+	await expect(badge()).toHaveCSS('color', 'rgb(254, 220, 186)');
+	await workbench.page.getByRole('dialog', { name: 'Ash Settings' }).locator('.ash-modal-editor-close').click();
+	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content.includes('activityBarBadge.background') && content.includes('#123456') && content.includes('activityBarBadge.foreground') && content.includes('#fedcba'));
+	({ application, workbench } = await reloadWorkbench());
+	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		const picker = workbench.page.locator('.ash-quick-pick').getByRole('combobox');
+		await picker.fill(theme);
+		await picker.press('Enter');
+		await expect(badge()).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+		await expect(badge()).toHaveCSS('color', 'rgb(254, 220, 186)');
+	}
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectGroup('workbench');
+	await workbench.settingsEditor.selectCategory('appearance');
+	const row = workbench.page.locator('[data-settings-item-id="workbench.colorCustomizations"]');
+	await row.hover();
+	await workbench.menus.select(application, () => row.locator('.ash-setting-item-actions-trigger').click(), ['Reset Setting']);
+	await expect(badge()).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+	await expect(badge()).toHaveCSS('color', 'rgb(0, 0, 0)');
+});
+
+test('activity bar badge setting updates immediately and persists in settings.json', async ({ application, target, workbench, reloadWorkbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const explorer = (): Locator => workbench.element.locator('.ash-composite-bar-destination[data-action-id="ash.sidebar"]');
+	const badge = (): Locator => explorer().locator('.ash-composite-bar-badge');
+	const createActivity = async (): Promise<void> => {
+		if (await explorer().getAttribute('aria-selected') !== 'true' || !await workbench.page.locator('[data-part="sidebar"]').isVisible()) {
+			await explorer().click();
+		}
+		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+		const editor = workbench.editors.groupAt(0).editor;
+		await editor.element.click({ position: { x: 100, y: 30 } });
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor('badge settings activity');
+	};
+	const setBadges = async (enabled: boolean): Promise<void> => {
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('layout');
+		const settings = workbench.page.getByRole('dialog', { name: 'Ash Settings' });
+		const toggle = settings.getByRole('switch', { name: 'Activity Bar Badges', exact: true });
+		await toggle.focus();
+		await toggle.press('Space');
+		await expect(toggle).toBeChecked({ checked: enabled });
+		await settings.locator('.ash-modal-editor-close').click();
+	};
+	await createActivity();
+	await expect(badge()).toHaveText('1');
+	await setBadges(false);
+	await expect(badge()).toHaveCount(0);
+	await expect(explorer()).toHaveAttribute('aria-label', /1 unsaved file/u);
+	await workbench.menus.select(application, () => explorer().click({ button: 'right' }), ['Hide Badge']);
+	await setBadges(true);
+	await expect(badge()).toHaveCount(0);
+	await workbench.menus.select(application, () => explorer().click({ button: 'right' }), ['Show Badge']);
+	await expect(badge()).toHaveText('1');
+	await setBadges(false);
+	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(content => /"workbench\.activityBar\.badges"\s*:\s*false/u.test(content));
+	({ application, workbench } = await reloadWorkbench());
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectGroup('workbench');
+	await workbench.settingsEditor.selectCategory('layout');
+	const settings = workbench.page.getByRole('dialog', { name: 'Ash Settings' });
+	await expect(settings.getByRole('switch', { name: 'Activity Bar Badges', exact: true })).not.toBeChecked();
+	await settings.locator('.ash-modal-editor-close').click();
+	await expect(explorer()).toHaveAttribute('aria-label', /unsaved file/u);
+	await expect(badge()).toHaveCount(0);
+	await setBadges(true);
+	await expect(badge()).toHaveCount(1);
+});
+
+test('activity bar badge visibility survives reopening the workbench', async ({ application, target, workbench, reloadWorkbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	let explorer = workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Explorer', exact: true });
+	await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Hide Badge']);
+	({ application, workbench } = await reloadWorkbench());
+	explorer = workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Explorer', exact: true });
+	expect(await workbench.menus.inspect(application, () => explorer.click({ button: 'right' }))).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Show Badge', enabled: true })]));
+	await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Show Badge']);
+	({ application, workbench } = await reloadWorkbench());
+	explorer = workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Explorer', exact: true });
+	expect(await workbench.menus.inspect(application, () => explorer.click({ button: 'right' }))).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Hide Badge', enabled: true })]));
+});
+
 test('maximized Panel keeps its state when the sidebar moves and restores its height', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

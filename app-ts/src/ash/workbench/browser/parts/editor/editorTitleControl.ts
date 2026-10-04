@@ -132,7 +132,7 @@ export class EditorTitleControl extends Disposable {
 		this.tabsAndActionsDomNode.classList.toggle("multiple", mode === "multiple");
 		const firstAction = this.tabsAndActionsDomNode.querySelector(":scope > .ash-editor-title-actions");
 		const control = mode === "single"
-			? this.instantiationService.createInstance(SingleEditorTabsControl, this.tabsAndActionsDomNode, this.delegate)
+			? this.instantiationService.createInstance(SingleEditorTabsControl, this.tabsAndActionsDomNode, this.delegate, this.model)
 			: mode === "none"
 				? new NoEditorTabsControl(this.tabsAndActionsDomNode)
 				: this.instantiationService.createInstance(MultiRowEditorControl, this.tabsAndActionsDomNode, this.delegate, this.model);

@@ -7,10 +7,35 @@ import type { IDocumentDiffProviderOptions } from "../../../../editor/common/dif
 
 export type EditorAutoSaveMode = "off" | "afterDelay" | "onFocusChange" | "onWindowChange";
 export type EditorTabsMode = "multiple" | "single" | "none";
+export type EditorLabelFormat = 'default' | 'short' | 'medium' | 'long';
 export type EditorTitleScrollbarSizing = 'default' | 'large';
 export type EditorTitleScrollbarVisibility = 'auto' | 'visible' | 'hidden';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
+export const EditorLabelFormatConfiguration = configurationRegistry.registerConfiguration<EditorLabelFormat>({
+	key: 'workbench.editor.labelFormat',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['default', 'short', 'medium', 'long'] },
+	defaultValue: 'default',
+	parse: value => {
+		if (value !== 'default' && value !== 'short' && value !== 'medium' && value !== 'long') {
+			throw new TypeError(localize('workbench.editor.labelFormat.invalid', 'Invalid editor label format. Use default, short, medium, or long.'));
+		}
+		return value;
+	},
+	setting: {
+		get title() { return localize('workbench.editor.labelFormat.title', 'Workbench › Editor: Label Format'); },
+		get description() { return localize('workbench.editor.labelFormat.description', 'Controls directory information in editor tabs. Default only adds distinguishing paths when files have the same name in one editor group.'); },
+		valueType: 'select',
+		get options() { return [
+			{ value: 'default' as const, label: localize('workbench.editor.labelFormat.default', 'Default') },
+			{ value: 'short' as const, label: localize('workbench.editor.labelFormat.short', 'Parent Directory') },
+			{ value: 'medium' as const, label: localize('workbench.editor.labelFormat.medium', 'Relative Path') },
+			{ value: 'long' as const, label: localize('workbench.editor.labelFormat.long', 'Absolute Path') },
+		]; },
+	},
+});
 
 export const EditorTitleScrollbarSizingConfiguration = configurationRegistry.registerConfiguration<EditorTitleScrollbarSizing>({
 	key: 'workbench.editor.titleScrollbarSizing',

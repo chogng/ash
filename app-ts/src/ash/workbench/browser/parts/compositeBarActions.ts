@@ -38,6 +38,7 @@ export interface CompositeBarActionOptions {
 	readonly panelId?: string;
 	readonly checked: boolean;
 	readonly badge?: { readonly count: number; readonly description: string };
+	readonly badgeEnabled: boolean;
 	readonly onActivate: (compositeId: string) => void;
 }
 
@@ -106,8 +107,8 @@ export class CompositeActionViewItem extends ActionViewItem {
 			icon: options.icon,
 		}));
 		container.append(action);
-		if (options.badge) {
-			const badge = this._register(new CountBadge(container, { count: options.badge.count, size: 'small', presentation: 'accent' }));
+		if (options.badge && options.badgeEnabled) {
+			const badge = this._register(new CountBadge(container, { count: options.badge.count, size: 'small' }));
 			badge.domNode.classList.add('ash-composite-bar-badge');
 			badge.domNode.setAttribute('aria-hidden', 'true');
 		}

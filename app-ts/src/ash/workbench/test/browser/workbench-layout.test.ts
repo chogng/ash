@@ -360,6 +360,51 @@ test("Workbench layout switches between modern and flat geometry without replaci
 	dom.window.close();
 });
 
+test('Activity Bar badge setting applies on startup and preserves per-icon choices after rehosting', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const harness = createLayoutHarness(dom.window.document);
+		using disposables = harness.disposables;
+		const { ILocalizationService } = await import('../../../workbench/services/localization/common/localizationService.js');
+		harness.services.registerInstance(ILocalizationService, {
+			whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback,
+		});
+		await harness.configuration.updateValue(WorkbenchConfiguration.activityBarBadges, false);
+		const registry = new WorkbenchViewRegistry();
+		for (const id of ['first', 'second']) {
+			disposables.add(registry.registerViewContainer({ id, title: id, location: ViewContainerLocation.Sidebar }));
+		}
+		const contextKeys = disposables.add(new ContextKeyService());
+		const views = disposables.add(new ViewDescriptorService({ registry, contextKeyService: contextKeys }));
+		const bar = disposables.add(new CompositeBar(harness.container, {
+			activityHoverOptions: { position: () => HoverPosition.RIGHT }, viewDescriptorService: views,
+			location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical',
+		}));
+		bar.setBadge('first', 1, '1 unsaved file');
+		bar.setBadge('second', 2);
+		bar.toggleBadgeEnablement('second');
+		const globalBar = { domNode: dom.window.document.createElement('div'), getContextMenuActions: () => [] };
+		disposables.add(harness.services.createInstance(ActivitybarPart, harness.container, bar, globalBar));
+		const first = (): HTMLElement => bar.domNode.querySelector('[data-action-id="first"]')!;
+		assert.equal(bar.domNode.querySelector('.ash-count-badge'), null);
+		bar.setBadge('first', 3, '3 unsaved files');
+		harness.container.append(bar.domNode);
+		bar.setOrientation('horizontal');
+		first().focus();
+		await harness.configuration.updateValue(WorkbenchConfiguration.activityBarBadges, true);
+		assert.deepEqual([...bar.domNode.querySelectorAll('.ash-count-badge')].map(badge => badge.textContent), ['3']);
+		assert.equal(first().getAttribute('aria-label'), 'first, 3 unsaved files');
+		assert.equal(dom.window.document.activeElement, first());
+		await harness.configuration.updateValue(WorkbenchConfiguration.activityBarBadges, false);
+		bar.toggleBadgeEnablement('second');
+		assert.equal(bar.domNode.querySelector('.ash-count-badge'), null);
+		await harness.configuration.updateValue(WorkbenchConfiguration.activityBarBadges, undefined);
+		assert.deepEqual([...bar.domNode.querySelectorAll('.ash-count-badge')].map(badge => badge.textContent), ['3', '2']);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('Activity Bar top and bottom positions keep the full sidebar height', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const harness = createLayoutHarness(dom.window.document, { initialDimension: new Dimension(1_200, 800), layoutStyle: 'modern' });

@@ -36,6 +36,8 @@ registerColor('commandCenter.activeBorder', { dark: '#888888', light: '#888888',
 
 const sideBarBackground = color("sideBar.background", "#252526", "#F8F8F8", "#000000", "#ffffff", "Primary side bar background.");
 alias('activityBar.background', sideBarBackground, 'Activity Bar background.');
+color('activityBarBadge.background', accentBackground, accentBackground, '#000000', '#ffffff', 'Background color of Activity Bar notification badges.');
+color('activityBarBadge.foreground', '#ffffff', '#ffffff', foreground, foreground, 'Text color of Activity Bar notification badges.');
 alias("auxiliaryBar.background", sideBarBackground, "Auxiliary side bar background.");
 alias("panel.background", sideBarBackground, "Panel background.");
 const emptyExplorerOpenFolderBackground = registerColor("files.emptyExplorerOpenFolderBackground", {

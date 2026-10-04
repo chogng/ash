@@ -129,9 +129,19 @@
 }
 
 .ash-composite-bar-icon .ash-composite-bar-badge {
+  color: var(--ash-activity-bar-badge-foreground);
+  background: var(--ash-activity-bar-badge-background);
   position: absolute;
-  right: -6px;
-  bottom: 2px;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Anchor the overlay to the icon while keeping it inside every rail item size. */
+.ash-composite-bar-vertical .ash-composite-bar-badge {
+  right: max(var(--ash-spacing-size20), calc((100% - var(--ash-activity-bar-icon-size)) / 2 - var(--ash-spacing-size40)));
+  bottom: max(var(--ash-spacing-size20), calc((100% - var(--ash-activity-bar-icon-size)) / 2 - var(--ash-spacing-size40)));
 }
 
 .ash-composite-bar-vertical {

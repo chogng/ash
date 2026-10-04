@@ -41,6 +41,7 @@ export type CompositeBarPresentation = "icon" | "label";
 const OVERFLOW_BUTTON_WIDTH = 24;
 
 const HIDDEN_VIEW_CONTAINERS_KEY = 'workbench.activityBar.hiddenViewContainers';
+const DISABLED_BADGES_KEY = 'workbench.activityBar.disabledBadges';
 
 /**
  * Maps registered workbench Composites onto an ActionBar tablist.
@@ -65,6 +66,8 @@ export class CompositeBar extends Disposable {
 	private containers: readonly IViewContainerDescriptor[] = [];
 	private displayedContainers: readonly IViewContainerDescriptor[] = [];
 	private hiddenContainerIds = new Set<string>();
+	private disabledBadgeIds = new Set<string>();
+	private badgesEnabled = true;
 	private readonly tabWidths = new Map<string, number>();
 	private readonly badges = new Map<string, { readonly count: number; readonly description: string }>();
 	private actionBarInsetWidth = 0;
@@ -89,6 +92,7 @@ export class CompositeBar extends Disposable {
 		this.contextMenuProvider = options.contextMenuProvider;
 		this.storageService = this.orientation === 'vertical' ? options.storageService : undefined;
 		this.hiddenContainerIds = this.readHiddenContainerIds();
+		this.disabledBadgeIds = this.readDisabledBadgeIds();
 		this.restoreContainerOrder();
 		this.overflowEnabled = (presentation === 'label' || this.orientation === 'vertical') && this.contextMenuProvider !== undefined;
 		this.containerFilter = options.containerFilter ?? (() => true);
@@ -140,6 +144,11 @@ export class CompositeBar extends Disposable {
 			this.render();
 		}));
 		if (this.storageService) this._register(this.storageService.onDidChangeValue(event => {
+			if (event.key === DISABLED_BADGES_KEY && event.scope === StorageScope.PROFILE && event.external) {
+				this.disabledBadgeIds = this.readDisabledBadgeIds();
+				this.render();
+				return;
+			}
 			if (event.key === this.containerOrderKey && event.scope === StorageScope.PROFILE && event.external) {
 				this.restoreContainerOrder();
 				return;
@@ -164,6 +173,27 @@ export class CompositeBar extends Disposable {
 	setBadge(containerId: string, count: number | undefined, description?: string): void {
 		if (count === undefined) this.badges.delete(containerId);
 		else this.badges.set(containerId, { count, description: description ?? String(count) });
+		this.render();
+	}
+
+	areBadgesEnabled(compositeId: string): boolean {
+		return !this.disabledBadgeIds.has(compositeId);
+	}
+
+	// The host's global preference suppresses rendering without overwriting individual choices.
+	setBadgesEnabled(enabled: boolean): void {
+		if (this.badgesEnabled === enabled) return;
+		this.badgesEnabled = enabled;
+		this.render();
+	}
+
+	toggleBadgeEnablement(compositeId: string): void {
+		if (this.areBadgesEnabled(compositeId)) {
+			this.disabledBadgeIds.add(compositeId);
+		} else {
+			this.disabledBadgeIds.delete(compositeId);
+		}
+		this.storageService?.store(DISABLED_BADGES_KEY, JSON.stringify([...this.disabledBadgeIds]), StorageScope.PROFILE, StorageTarget.USER);
 		this.render();
 	}
 
@@ -294,6 +324,7 @@ export class CompositeBar extends Disposable {
 					panelId: compositePanelId(this.location, container.id),
 					checked: container.id === this._activeCompositeId,
 					badge: this.badges.get(container.id),
+					badgeEnabled: this.badgesEnabled && this.areBadgesEnabled(container.id),
 					onActivate: (compositeId) => this._onDidSelectComposite.fire({ compositeId }),
 				});
 			}),
@@ -398,13 +429,34 @@ export class CompositeBar extends Disposable {
 		const isPinned = !this.hiddenContainerIds.has(selected.id);
 		const name = localize(this.localizationService, selected.localizationKey, selected.title);
 		const label = this.localizationService?.translate('ash', isPinned ? 'workbench.hideActivityBarView' : 'workbench.keepActivityBarView', isPinned ? "Hide '{0}'" : "Keep '{0}'", { '0': name }) ?? (isPinned ? `Hide '${name}'` : `Keep '${name}'`);
+		const badgeLabel = this.areBadgesEnabled(selected.id)
+			? localize(this.localizationService, { bundle: 'ash', key: 'workbench.hideActivityBarBadge' }, 'Hide Badge')
+			: localize(this.localizationService, { bundle: 'ash', key: 'workbench.showActivityBarBadge' }, 'Show Badge');
 		return Separator.join([{
 			id: `ash.activityBar.toggleSelected.${encodeURIComponent(selected.id)}`,
 			label,
 			tooltip: label,
 			enabled: !isPinned || pinnedCount > 1,
 			run: () => this.setPinned(selected.id, !isPinned),
+		}, {
+			id: `ash.activityBar.toggleBadge.${encodeURIComponent(selected.id)}`,
+			label: badgeLabel,
+			tooltip: badgeLabel,
+			enabled: true,
+			run: () => this.toggleBadgeEnablement(selected.id),
 		}], toggleActions);
+	}
+
+	private readDisabledBadgeIds(): Set<string> {
+		const stored = this.storageService?.get(DISABLED_BADGES_KEY, StorageScope.PROFILE);
+		if (stored === undefined) {
+			return new Set();
+		}
+		const ids: unknown = JSON.parse(stored);
+		if (!Array.isArray(ids) || !ids.every(id => typeof id === 'string') || new Set(ids).size !== ids.length) {
+			throw new TypeError(localize(this.localizationService, { bundle: 'ash', key: 'workbench.activityBar.invalidBadgeVisibility' }, 'Saved badge visibility is invalid.'));
+		}
+		return new Set(ids);
 	}
 
 	private setPinned(containerId: string, pinned: boolean): void {

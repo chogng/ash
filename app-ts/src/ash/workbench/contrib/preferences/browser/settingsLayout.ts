@@ -142,7 +142,7 @@ export const SettingsNavigation = [
 					id: 'layout',
 					get label() { return localize('settings.workbench.layout.group.label', 'Workbench layout'); },
 					get description() { return localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'); },
-					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'workbench.tree.*'],
+					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.badges', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'workbench.tree.*'],
 				}],
 			},
 			{

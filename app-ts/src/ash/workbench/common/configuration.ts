@@ -1,6 +1,6 @@
 import { ThemeConfigurationSettings } from '../services/themes/common/themeConfiguration.js';
 import { localize } from '../../nls.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../platform/configuration/common/configurationRegistry.js";
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../platform/configuration/common/configurationRegistry.js";
 import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
 import { Registry } from "../../platform/registry/common/platform.js";
 import { isMacintosh, isWeb } from "../../base/common/platform.js";
@@ -104,6 +104,21 @@ export const WorkbenchConfiguration = Object.freeze({
 					{ value: ActivityBarPosition.HIDDEN, label: localize('workbench.activityBar.location.hidden', 'Hidden') },
 				] as const;
 			},
+		},
+	}),
+	activityBarBadges: configurationRegistry.registerConfiguration<boolean>({
+		key: 'workbench.activityBar.badges',
+		defaultValue: true,
+		scope: ConfigurationScope.APPLICATION,
+		schema: { type: 'boolean' },
+		parse(value: unknown): boolean {
+			if (typeof value === 'boolean') return value;
+			throw new TypeError(localize('workbench.activityBar.badges.invalid', 'Activity Bar badges must be true or false.'));
+		},
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize('workbench.activityBar.badges.title', 'Activity Bar Badges'); },
+			get description() { return localize('workbench.activityBar.badges.description', 'Show badges on Activity Bar icons. Turning this off preserves each icon’s Show Badge or Hide Badge choice.'); },
 		},
 	}),
 	activityBarCompact: configurationRegistry.registerConfiguration<boolean>({

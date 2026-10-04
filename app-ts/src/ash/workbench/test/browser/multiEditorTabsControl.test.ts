@@ -4,7 +4,7 @@ import '../../../editor/test/browser/testEditorDom.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
-import { EditorShowIconsConfiguration } from '../../services/editor/common/editorConfiguration.js';
+import { EditorShowIconsConfiguration, EditorLabelFormatConfiguration } from '../../services/editor/common/editorConfiguration.js';
 import { createTestEditorServices } from '../common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { suite, test } from "mocha";
@@ -128,7 +128,7 @@ test('Pinned editor action preserves its target and keyboard focus across state 
 		using control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, {
 			...inertDelegate,
 			unstickEditor: (input: EditorInput) => { unpinned.push(input); },
-		});
+		}, new EditorGroupModel());
 		const first = input('first');
 		const second = input('second');
 		const pinned = { ...descriptor(first), sticky: true };
@@ -173,7 +173,7 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 		endDrag: () => {
 			dragging = false;
 		},
-	} satisfies EditorTabsDelegate);
+	} satisfies EditorTabsDelegate, new EditorGroupModel());
 	const first = input("first");
 	const second = input("second");
 	control.setEditors([descriptor(first), descriptor(second)], first);
@@ -221,7 +221,7 @@ test("MultiEditorTabsControl forwards external resource drops to the target tab"
 		drop: () => undefined,
 		dropExternal: (_event, target, position) => drops.push({ target, position }),
 		endDrag: () => undefined,
-	} satisfies EditorTabsDelegate);
+	} satisfies EditorTabsDelegate, new EditorGroupModel());
 	const target = input("target");
 	control.setEditors([descriptor(target)], target);
 	const tab = control.domNode.querySelector<HTMLElement>(".ash-tab");
@@ -371,6 +371,116 @@ const inertDelegate: EditorTabsDelegate = {
 	endDrag: () => undefined,
 };
 
+suite('Editor tab label format', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('unique filenames omit paths and duplicate names remain distinct across pinned rows', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using services = createTestEditorServices();
+			const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+			workspace.updateWorkspace({ id: 'labels', uri: URI.file('/work/ash') });
+			const group = new EditorGroupModel();
+			const first = { resource: URI.file('/work/ash/client/src/index.ts') };
+			const second = { resource: URI.file('/work/ash/server/src/index.ts') };
+			const unique = { resource: URI.file('/work/ash/.cursorignore') };
+			const tab = (input: EditorInput) => ({ ...descriptor(input), instanceId: input.resource.path, tabId: `${input.resource.path}-tab`, panelId: `${input.resource.path}-panel` });
+			group.openEditor(first);
+			group.openEditor(unique);
+			using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+			control.setEditors([tab(first), tab(unique)], first);
+			const names = () => [...control.domNode.querySelectorAll('.ash-tab-label')].map(label => label.textContent?.replaceAll('\\', '/'));
+			assert.deepEqual(names(), ['index.ts', '.cursorignore']);
+			group.openEditor(second);
+			control.setEditors([tab(first), tab(unique), tab(second)], second);
+			assert.deepEqual(names(), ['index.tsclient/…', '.cursorignore', 'index.tsserver/…']);
+			assert.deepEqual([...control.domNode.querySelectorAll('.ash-tab-label')].map(label => label.getAttribute('aria-label')?.replaceAll('\\', '/')), ['index.ts, client/…', '.cursorignore', 'index.ts, server/…']);
+			group.stick(first);
+			control.setEditors([{ ...tab(first), sticky: true }, tab(unique), tab(second)], second);
+			assert.deepEqual(names(), ['index.tsclient/…', '.cursorignore', 'index.tsserver/…']);
+			group.closeEditor(second);
+			control.setEditors([{ ...tab(first), sticky: true }, tab(unique)], first);
+			assert.deepEqual(names(), ['index.ts', '.cursorignore']);
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	test('workspace-root files, remote hosts and separate groups retain their file identities', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using services = createTestEditorServices();
+			const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+			workspace.updateWorkspace({ id: 'labels', uri: URI.file('/work/ash') });
+			const group = new EditorGroupModel();
+			const rootFile = { resource: URI.file('/work/ash/index.ts') };
+			const nestedFile = { resource: URI.file('/work/ash/src/index.ts') };
+			const tab = (input: EditorInput) => ({ ...descriptor(input), instanceId: input.resource.toString(), tabId: `${input.resource.toString()}-tab`, panelId: `${input.resource.toString()}-panel` });
+			group.openEditor(rootFile);
+			group.openEditor(nestedFile);
+			using control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, inertDelegate, group);
+			control.setEditors([tab(rootFile), tab(nestedFile)], nestedFile);
+			assert.deepEqual([...control.domNode.querySelectorAll('.ash-tab-label')].map(label => label.textContent?.replaceAll('\\', '/')), ['index.ts./', 'index.tssrc']);
+			const otherGroup = new EditorGroupModel();
+			otherGroup.openEditor(rootFile);
+			using other = services.createInstance(MultiEditorTabsControl, dom.window.document.body, inertDelegate, otherGroup);
+			other.setEditors([{ ...tab(rootFile), tabId: 'other-group-index-tab', panelId: 'other-group-index-panel' }], rootFile);
+			assert.equal(other.domNode.querySelector('.ash-tab-label')?.textContent, 'index.ts');
+			workspace.updateWorkspace({ id: 'empty', folders: [] });
+			const remoteGroup = new EditorGroupModel();
+			const remotes = ['client', 'server'].map(host => ({ resource: URI.parse(`vscode-remote://ssh-remote+${host}/work/index.ts`) }));
+			for (const remote of remotes) { remoteGroup.openEditor(remote); }
+			using remote = services.createInstance(MultiEditorTabsControl, dom.window.document.body, inertDelegate, remoteGroup);
+			remote.setEditors(remotes.map(tab), remotes[1]);
+			const names = [...remote.domNode.querySelectorAll('.ash-tab-label')].map(label => label.getAttribute('aria-label'));
+			assert.match(names[0]!, /ssh-remote\+client/u);
+			assert.match(names[1]!, /ssh-remote\+server/u);
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	test('format changes preserve the tab, focus, selection and dirty state and follow workspace roots', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using configuration = new InMemoryConfigurationService();
+			using services = createTestEditorServices(configuration);
+			const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+			workspace.updateWorkspace({ id: 'labels', uri: URI.file('/work/ash') });
+			const group = new EditorGroupModel();
+			const file = { resource: URI.file('/work/ash/client/src/index.ts') };
+			group.openEditor(file);
+			using control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, inertDelegate, group);
+			control.setEditors([{ ...descriptor(file), isDirty: true }], file, new Set([descriptor(file).instanceId]));
+			const tab = control.domNode.querySelector<HTMLButtonElement>('.ash-tab-label')!;
+			tab.focus();
+			for (const [format, description] of [['short', 'src'], ['medium', 'client/src'], ['long', '/work/ash/client/src'], ['default', '']] as const) {
+				await configuration.updateValue(EditorLabelFormatConfiguration, format);
+				assert.equal(tab.textContent?.replaceAll('\\', '/'), `index.ts${description}`);
+				assert.equal(control.domNode.querySelector('.ash-tab-label'), tab);
+				assert.equal(dom.window.document.activeElement, tab);
+				assert.match(tab.getAttribute('aria-label')!, /unsaved changes$/u);
+				assert.equal(tab.getAttribute('aria-selected'), 'true');
+			}
+			await configuration.updateValue(EditorLabelFormatConfiguration, 'medium');
+			await assert.rejects(configuration.updateValue(EditorLabelFormatConfiguration, 'never'), /Invalid editor label format/u);
+			await assert.rejects(configuration.updateValue(EditorLabelFormatConfiguration, false), /Invalid editor label format/u);
+			assert.equal(configuration.getValue(EditorLabelFormatConfiguration), 'medium');
+			workspace.updateWorkspace({ id: 'new-root', uri: URI.file('/work') });
+			assert.equal(tab.textContent?.replaceAll('\\', '/'), 'index.tsash/client/src');
+			const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+			setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
+			const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(EditorLabelFormatConfiguration)!;
+			assert.equal(setting.setting?.valueType, 'select');
+			assert.throws(() => setting.parse('never'), /无效的编辑器标签格式/u);
+			assert.deepEqual([setting.defaultValue, setting.setting?.title, setting.setting?.valueType === 'select' ? setting.setting.options.map(option => option.label) : undefined], ['default', '工作台 › 编辑器：标签格式', ['默认', '父目录', '相对路径', '绝对路径']]);
+		} finally {
+			resetNlsResolver();
+			dom.window.close();
+		}
+	});
+});
+
 function input(name: string): EditorInput {
 	return { resource: URI.parse(`untitled:/${name}`), label: name };
 }
@@ -400,7 +510,7 @@ test('Editor tabs require the window resource label service before rendering', (
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		using services = new InstantiationService();
-		assert.throws(() => services.createInstance(MultiEditorTabsControl, dom.window.document.body, inertDelegate), /Unknown service: resourceLabelService/u);
+		assert.throws(() => services.createInstance(MultiEditorTabsControl, dom.window.document.body, inertDelegate, new EditorGroupModel()), /Unknown service: resourceLabelService/u);
 		assert.equal(dom.window.document.body.childElementCount, 0);
 	} finally {
 		dom.window.close();
@@ -418,7 +528,7 @@ suite('Editor resource decorations', () => {
 		const file = input('file.ts');
 		let data: IDecorationData | undefined = { letter: 'M', color: 'description.foreground', tooltip: 'Modified' };
 		using provider = services.get(IDecorationsService).registerDecorationsProvider({ label: 'Test', onDidChange: changes.event, provideDecorations: () => data });
-		using control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, inertDelegate);
+		using control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, inertDelegate, new EditorGroupModel());
 		control.setEditors([descriptor(file)], file);
 		const tab = control.domNode.querySelector<HTMLButtonElement>('.ash-tab-label')!;
 		assert.equal(tab.getAttribute('aria-label'), 'file.ts, Modified');

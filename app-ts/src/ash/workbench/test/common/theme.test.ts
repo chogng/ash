@@ -5,7 +5,25 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { ColorScheme } from "../../../platform/theme/common/theme.js";
+import { ColorRegistry, Colors } from '../../../platform/theme/common/colorRegistry.js';
+import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../nls.js';
+import { builtinLanguagePackCatalogs } from '../../services/localization/common/localizationCatalogs.js';
 import { WorkbenchThemeRegistry, WorkbenchThemesRegistry, getWorkbenchColorTheme, resolveWorkbenchColorTheme } from "../../common/theme.js";
+test('Activity Bar badge color descriptions appear in Chinese in the theme color catalog', () => {
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		using registry = new ColorRegistry();
+		for (const id of ['activityBarBadge.background', 'activityBarBadge.foreground']) {
+			const color = Colors.getColors().find(color => color.id === id)!;
+			registry.registerColor(id, color.defaults, color);
+		}
+		assert.deepEqual(registry.getColors().map(color => color.description), ['活动栏通知徽章的背景色。', '活动栏通知徽章的文字颜色。']);
+	} finally {
+		resetNlsResolver();
+	}
+});
+
 test('contributed Ash themes resolve authored window colors and included syntax resources', async () => {
 	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 		const document = JSON.parse(await readFile(resolve(`../extensions/theme-defaults/themes/${id}.json`), 'utf8'));
@@ -26,6 +44,7 @@ test('built-in high contrast themes keep common foreground and background pairs 
 	]);
 	const pairs = [
 		['foreground', 'workbench.background'],
+		['activityBarBadge.foreground', 'activityBarBadge.background'],
 		['editor.foreground', 'editor.background'],
 		['input.foreground', 'input.background'],
 		['button.foreground', 'button.background'],
