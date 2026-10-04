@@ -1,3 +1,4 @@
+import { RelayURLService } from '../services/url/electron-browser/urlService.js';
 import { migrateBrowserStorage } from '../services/storage/browser/storageService.js';
 import { IBackupService } from '../../platform/backup/common/backup.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
@@ -80,6 +81,10 @@ export class DesktopMain extends Disposable {
 			const hostColorScheme = await api.nativeHost.getOSColorScheme();
 			const workbench = this._register(await startWorkbench({
 				modeId: this.modeId,
+				createURLService: services => {
+					services.registerInstance(IMainProcessService, mainProcessService);
+					return services.createInstance(RelayURLService, windowId as number);
+				},
 				createTextDocumentHost: documentClient && this.modeId === WorkbenchModeId.Code ? services => {
 					const editing = services.get(IChatEditingService);
 					return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });

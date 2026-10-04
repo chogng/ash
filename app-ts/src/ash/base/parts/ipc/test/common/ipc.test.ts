@@ -143,4 +143,65 @@ suite('IPC channels', () => {
 			active: ['window:2'], operations: [{ context: 'window:1', cancelled: true }, { context: 'window:2', cancelled: false }],
 		});
 	});
+
+	test('Main selects a renderer by authenticated context and follows document replacement', async () => {
+		using resources = new DisposableStore();
+		const connections = resources.add(new Emitter<ClientConnectionEvent>());
+		const server = resources.add(new IPCServer(connections.event));
+		const open = (context: string, response: string): Emitter<void> => {
+			const [a, b] = pair(resources);
+			const client = resources.add(new IPCClient(a, 'renderer claim'));
+			client.registerChannel('callback', { call: async <T>() => response as T, listen: () => Event.None });
+			const disconnect = resources.add(new Emitter<void>());
+			connections.fire({ protocol: b, ctx: context, onDidClientDisconnect: disconnect.event });
+			resources.add(toDisposable(() => disconnect.fire()));
+			return disconnect;
+		};
+		const first = open('window:1', 'first');
+		open('window:2', 'second');
+		const routed = server.getChannel('callback', client => client.ctx === 'window:1');
+		assert.equal(await routed.call('handle'), 'first');
+		first.fire();
+		await assert.rejects(routed.call('handle'), /found 0/);
+		open('window:1', 'replacement');
+		assert.equal(await routed.call('handle'), 'replacement');
+		assert.equal(await server.getChannel('callback', client => client.ctx === 'window:2').call('handle'), 'second');
+		await assert.rejects(server.getChannel('callback', () => true).call('handle'), /found 2/);
+	});
+
+
+	test('routed event subscriptions attach to current and later selected renderer documents', async () => {
+		using resources = new DisposableStore();
+		const connections = resources.add(new Emitter<ClientConnectionEvent>());
+		const server = resources.add(new IPCServer(connections.event));
+		const open = (context: string): { changes: Emitter<string>; disconnect: Emitter<void> } => {
+			const [a, b] = pair(resources);
+			const client = resources.add(new IPCClient(a, 'renderer claim'));
+			const changes = resources.add(new Emitter<string>());
+			client.registerChannel('events', { call: async <T>() => undefined as T, listen: <T>() => changes.event as Event<T> });
+			const disconnect = resources.add(new Emitter<void>());
+			connections.fire({ protocol: b, ctx: context, onDidClientDisconnect: disconnect.event });
+			resources.add(toDisposable(() => disconnect.fire()));
+			return { changes, disconnect };
+		};
+		const first = open('selected');
+		const excluded = open('excluded');
+		const received: string[] = [];
+		using listener = server.getChannel('events', client => client.ctx === 'selected').listen<string>('changed')(value => received.push(value));
+		await setImmediate();
+		first.changes.fire('first');
+		excluded.changes.fire('excluded');
+		await setImmediate();
+		first.disconnect.fire();
+		const next = open('selected');
+		await setImmediate();
+		next.changes.fire('replacement');
+		await setImmediate();
+		listener.dispose();
+		await setImmediate();
+		next.changes.fire('disposed');
+		await setImmediate();
+		assert.deepEqual(received, ['first', 'replacement']);
+	});
+
 });

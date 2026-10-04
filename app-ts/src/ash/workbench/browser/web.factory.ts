@@ -1,3 +1,4 @@
+import { BrowserURLService } from '../services/url/browser/urlService.js';
 import type { IStartWorkbenchOptions } from './workbench.js';
 import { IndexedDbWorkingCopyBackupService } from '../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
 import { addDisposableListener } from "../../base/browser/dom.js";
@@ -48,6 +49,7 @@ export async function createWebWorkbench(
 	if (conflicts.length > 0) { console.warn('Academic state migration retained conflicting entries', conflicts); }
 	return startWorkbench({
 		modeId,
+		createURLService: services => services.createInstance(BrowserURLService, options.urlCallbackProvider),
 		createTextDocumentHost: options.createTextDocumentHost,
 		createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
 		createWorkingCopyBackupService: (_services, workspaceId) => new IndexedDbWorkingCopyBackupService(workspaceId),
@@ -101,6 +103,7 @@ export async function startWebWorkbench(
 			? new HTMLFileSystemProvider(globalThis.indexedDB)
 			: undefined;
 		const instance = await createWebWorkbench(modeId, {
+			urlCallbackProvider: host?.urlCallbackProvider,
 			api: host?.api ?? createDisconnectedRendererApi(),
 			createTextDocumentHost,
 			configurationApi,

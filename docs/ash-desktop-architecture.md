@@ -803,6 +803,24 @@ unavailable。PTY
 Relaunch，新 PTY 使用原 Profile，但不会重放未确认输入或冒充旧进程。当前尚无 shell
 integration、跨进程 reconnection attach 或跨应用重启的持久 scrollback。
 
+### 6.8 产品链接与 URL 回调
+
+Workbench 在窗口服务容器中提供 `IURLService`。`platform/url/common` 定义 URL 创建、
+处理器注册与 IPC 契约；处理器按注册顺序执行，首个接受链接的处理器结束分发，注册句柄负责注销。
+URL 服务在编辑器服务完成注册后接入 `IOpenerService`，并在窗口报告就绪前完成初始化。
+
+桌面 `RelayURLService` 创建带 `windowId` 的 `ash:` 回调链接。产品内 opener、系统 `open-url`
+和 `--open-url` 启动参数进入 Main 的同一条分发链；Main 按窗口 ID 或最近活动窗口选择接收者，
+`windowId=_blank` 请求新窗口。反向调用使用现有可信 IPC 连接的窗口身份，等待 Renderer 就绪后
+进入该窗口的 `urlHandler`。处理器接受回调后才聚焦窗口；`ash://file` 仍交给 launch 服务打开文件。
+未知窗口和无人接受的回调返回 `false`，不把回调路径当作工作区或文件。
+
+浏览器 `BrowserURLService` 接收宿主提供的 `IURLCallbackProvider`。宿主通过
+`IWebWorkbenchHost.urlCallbackProvider` 提供回调 URL 创建及回调事件；没有提供器时，`create`
+明确报错。产品内 opener 传递 `trusted: true`，系统和宿主回调保留外部来源语义。IPC 保留 URL 的
+编码形式、query、fragment 和 `originalUrl`。URL 服务不执行扩展 JavaScript，也不完成身份认证；
+接收回调的功能仍须注册自己的处理器并校验回调状态。
+
 ## 7. 浏览器能力
 
 Electron Main 是 Browser Target 的唯一权威持有者。

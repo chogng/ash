@@ -1,3 +1,4 @@
+import type { IURLCallbackProvider } from '../services/url/browser/urlService.js';
 import type { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import type { IDisposable } from "../../base/common/lifecycle.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
@@ -18,6 +19,7 @@ import type { IConfigurationApi, IConfigurationSnapshot } from '../../platform/c
  */
 export interface IWebWorkbenchHost {
 	readonly api: IRendererHost;
+	readonly urlCallbackProvider?: IURLCallbackProvider;
 	readonly webWorkspaceClient?: IWebWorkspaceClient;
 	readonly workspace?: IAnyWorkspaceIdentifier;
 	readonly container?: HTMLElement | null;
@@ -28,6 +30,7 @@ export interface IWebWorkbenchHost {
 export interface IWebWorkbenchConstructionOptions {
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly api: IRendererHost;
+	readonly urlCallbackProvider?: IURLCallbackProvider;
 	readonly configurationApi: IConfigurationApi;
 	readonly initialConfigurationSnapshot: IConfigurationSnapshot;
 	readonly webWorkspaceClient?: IWebWorkspaceClient;

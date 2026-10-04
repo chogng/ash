@@ -92,7 +92,7 @@ export function parseWindowLaunch(arguments_: readonly string[], cwd: string, in
 	const switches = separator < 0 ? arguments_ : arguments_.slice(0, separator);
 	const args = parseLaunchArguments(arguments_);
 	const agentsWindow = switches.includes('--agents-window');
-	if (agentsWindow && (args.paths.length > 0 || args.newWindow || args.reuseWindow || args.goto || args.wait)) {
+	if (agentsWindow && (args.paths.length > 0 || args.urls.length > 0 || args.newWindow || args.reuseWindow || args.goto || args.wait)) {
 		throw new Error(invalidAgentsArgumentsMessage);
 	}
 	return { args, cwd, agentsWindow };

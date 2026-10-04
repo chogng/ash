@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 /** Keeps file requests separate from the single project target. */
 export function parseLaunchArguments(args: readonly string[]): IParsedLaunchArguments {
 	const paths: string[] = [];
+	const urls: string[] = [];
 	const workspaceArgs: string[] = [];
 	let newWindow = false;
 	let reuseWindow = false;
@@ -16,6 +17,10 @@ export function parseLaunchArguments(args: readonly string[]): IParsedLaunchArgu
 		if (uri.protocol === 'ash:' && uri.hostname === 'file' && !folder && !uri.search && !uri.hash) {
 			paths.push(fileURLToPath(new URL(`file://${uri.pathname}`)));
 			goto = true;
+			return;
+		}
+		if (uri.protocol === 'ash:' && !folder) {
+			urls.push(value);
 			return;
 		}
 		if (uri.protocol !== 'file:' || uri.search || uri.hash) {
@@ -100,7 +105,7 @@ export function parseLaunchArguments(args: readonly string[]): IParsedLaunchArgu
 		}
 		workspaceArgs.push('--folder', paths.pop()!);
 	}
-	return { paths, workspace: parseWorkspaceLaunchArguments(workspaceArgs), newWindow, reuseWindow, goto, wait, waitMarkerFilePath };
+	return { paths, urls, workspace: parseWorkspaceLaunchArguments(workspaceArgs), newWindow, reuseWindow, goto, wait, waitMarkerFilePath };
 }
 
 /** Parses one project target from desktop launch arguments. */

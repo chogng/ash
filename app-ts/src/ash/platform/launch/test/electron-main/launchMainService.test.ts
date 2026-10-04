@@ -12,14 +12,19 @@ import { LaunchMainService, parseWindowLaunch } from '../../electron-main/launch
 
 test('launch parsing separates files, project options, window policy and literal filenames', () => {
 	assert.deepEqual(parseLaunchArguments(['--folder', 'project', '--reuse-window', '--goto', 'one.ts:2:7', 'two.ts', '--', '-literal']), {
-		paths: ['one.ts:2:7', 'two.ts', '-literal'], workspace: { kind: WorkspaceOpenTargetKind.Folder, path: 'project' }, newWindow: false, reuseWindow: true, goto: true, wait: false, waitMarkerFilePath: undefined,
+		paths: ['one.ts:2:7', 'two.ts', '-literal'], urls: [], workspace: { kind: WorkspaceOpenTargetKind.Folder, path: 'project' }, newWindow: false, reuseWindow: true, goto: true, wait: false, waitMarkerFilePath: undefined,
 	});
 	assert.throws(() => parseLaunchArguments(['-n', '-r']), /cannot be combined/);
 	assert.throws(() => parseLaunchArguments(['--waitMarkerFilePath=x']), /requires --wait/);
 	assert.throws(() => parseLaunchArguments(['--open-url=https://example.com']), /Unsupported launch URL/);
+	const callback = 'ash://publisher.extension/callback?state=a%26b&windowId=7';
+	assert.deepEqual(parseLaunchArguments(['--open-url', '--', callback]).urls, [callback]);
+	assert.deepEqual(parseLaunchArguments([`--open-url=${callback}`]).paths, []);
 	const uri = pathToFileURL(join(tmpdir(), 'space name.ts'));
 	assert.deepEqual(parseLaunchArguments(['--open-url', '--', uri.href]).paths, [join(tmpdir(), 'space name.ts')]);
 	assert.deepEqual(parseLaunchArguments([`--open-url=ash://file${uri.pathname}:2:7`]).paths, [join(tmpdir(), 'space name.ts') + ':2:7']);
+	const routedFile = `ash://file${uri.pathname}:2:7?windowId=7`;
+	assert.deepEqual(parseLaunchArguments([`--open-url=${routedFile}`]).urls, [routedFile]);
 });
 
 test('launch creation requires the window service and resolves folders and file positions through it', async () => {

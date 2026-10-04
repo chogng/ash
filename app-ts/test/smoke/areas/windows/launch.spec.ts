@@ -72,6 +72,9 @@ test('desktop launch opens files, positions the caret and distinguishes new and 
 	await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
 	await expect(workbench.page.getByText('Ln 2, Col 4', { exact: true })).toBeVisible();
 	expect(application.windows()).toHaveLength(1);
+	const firstWindowId = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()!.id);
+	await application.evaluate(({ app }, url) => { app.emit('open-url', { preventDefault() {} }, url); }, `ash://file${pathToFileURL(file).pathname}:3:2?windowId=${firstWindowId}`);
+	await expect(workbench.page.getByText('Ln 3, Col 2', { exact: true })).toBeVisible();
 	const opened = application.waitForEvent('window');
 	await launch(['--new-window', file]);
 	newPage = await opened;
@@ -160,6 +163,33 @@ test('UI-only launches create a requested window and focus it on the next launch
 		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(id);
 		expect(application.windows()).toHaveLength(2);
 		await expect(workbench.element).toBeVisible();
+	} finally {
+		await page.close();
+	}
+});
+
+
+test('product URL callbacks create a requested window and leave unhandled callbacks out of editors', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'This scenario verifies the desktop URL relay without a backend.');
+	if (!('windows' in application)) {
+		return;
+	}
+	const opened = application.waitForEvent('window');
+	await application.evaluate(({ app }) => {
+		app.emit('open-url', { preventDefault() {} }, 'ash://publisher.extension/callback?code=a%26b&windowId=_blank');
+	});
+	const page = await opened;
+	try {
+		await expect(page.locator('.ash-workbench')).toBeVisible();
+		await expect(page.locator('.ash-dialog')).toHaveCount(0);
+		await expect(page.getByRole('tab').filter({ hasText: 'callback' })).toHaveCount(0);
+		expect(application.windows()).toHaveLength(2);
+		await application.evaluate(({ app }) => {
+			app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--open-url', '--', 'ash://publisher.extension/callback?code=second'], process.cwd(), {});
+		});
+		await expect(page.locator('.ash-dialog')).toHaveCount(0);
+		await expect(workbench.element).toBeVisible();
+		expect(application.windows()).toHaveLength(2);
 	} finally {
 		await page.close();
 	}

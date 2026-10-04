@@ -289,6 +289,7 @@ import { IQuickAccessController } from "../../platform/quickinput/common/quickAc
 import { QuickAccessController } from "../../platform/quickinput/browser/quickAccess.js";
 import { IOpenerService } from "../../platform/opener/common/opener.js";
 import { OpenerService } from '../../editor/browser/services/openerService.js';
+import { IURLService } from '../../platform/url/common/url.js';
 import { CommandService } from "../services/commands/common/commandService.js";
 import { BrowserKeyboardLayoutService } from "../services/keybinding/browser/keyboardLayoutService.js";
 import { WorkbenchKeybindingService } from "../services/keybinding/browser/keybindingService.js";
@@ -316,6 +317,7 @@ export interface IStartWorkbenchOptions {
 	readonly workspace: IWorkspace;
 	/** The host selects its implementation; the Workbench supplies initialized window services. */
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
+	readonly createURLService: (services: InstantiationService) => IURLService & IDisposable;
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly createWindow?: (services: IInstantiationService) => IDisposable;
 	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> }>;
@@ -345,6 +347,7 @@ export async function startWorkbench({
 	container,
 	workspace,
 	createLifecycleService,
+	createURLService,
 	createWindow,
 	createTextDocumentHost,
 	createStorageService,
@@ -400,6 +403,7 @@ export async function startWorkbench({
 			createWorkingCopyBackupService,
 			createWindow,
 			createTextDocumentHost,
+			createURLService,
 		);
 	} catch (error) {
 		logger.error('startup', 'Workbench startup failed', error);
@@ -457,8 +461,9 @@ export class Workbench extends Disposable {
 		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> },
 		logger: LogService,
 		createWorkingCopyBackupService: IStartWorkbenchOptions['createWorkingCopyBackupService'],
-		createWindow?: (services: IInstantiationService) => IDisposable,
-		createTextDocumentHost?: (services: IInstantiationService) => IDisposable,
+		createWindow: ((services: IInstantiationService) => IDisposable) | undefined,
+		createTextDocumentHost: ((services: IInstantiationService) => IDisposable) | undefined,
+		createURLService: IStartWorkbenchOptions['createURLService'],
 	) {
 		super();
 		this._register(themes);
@@ -790,6 +795,7 @@ export class Workbench extends Disposable {
 			}
 			return openerService;
 		});
+		services.registerSingleton(IURLService, () => createURLService(services));
 		const userKeyboardLayoutService = userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
 		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
 		const commandService = this._register(new CommandService(services));
@@ -984,6 +990,8 @@ export class Workbench extends Disposable {
 		const editorService = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
+		// The URL opener requires the completed editor service graph before the window announces readiness.
+		services.get(IURLService);
 		// Commands follow focus across windows; each window title follows only that window's EditorPart.
 		const mainWindowServices = this._register(services.createChild());
 		mainWindowServices.registerSingleton(IEditorService, () => new BrowserEditorService(editor));

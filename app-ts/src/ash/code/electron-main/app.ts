@@ -1,3 +1,5 @@
+import { URLHandlerChannel, URLHandlerChannelClient } from '../../platform/url/common/urlIpc.js';
+import type { IOpenURLOptions } from '../../platform/url/common/url.js';
 import { hooksConfigurationIpcRoute, openHooksTextFile } from '../../platform/hooks/electron-main/hooksConfigurationIpc.js';
 import { ThemeMainService } from '../../platform/theme/electron-main/themeMainServiceImpl.js';
 import { Server as MainProcessIPCServer } from '../../base/parts/ipc/electron-main/ipc.electron.js';
@@ -100,7 +102,7 @@ import { LoggerService } from '../../platform/log/node/loggerService.js';
 import { LoggerChannel } from '../../platform/log/electron-main/logIpc.js';
 import { disposableTimeout } from '../../base/common/async.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
-import { parseLaunchArguments, parseWorkspaceLaunchArguments, parseMainProcessArgv, windowsCommandLine } from '../../platform/environment/node/argvHelper.js';
+import { parseLaunchArguments, parseMainProcessArgv, windowsCommandLine } from '../../platform/environment/node/argvHelper.js';
 import { LaunchMainService, parseWindowLaunch, type IStartArguments } from '../../platform/launch/electron-main/launchMainService.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
@@ -445,6 +447,7 @@ export class AshApplication extends Disposable {
 		this.workspaces = workspaces;
 		launchServices.registerInstance(IWindowsMainService, this.windowsMainService);
 		this.launchMainService = this._register(launchServices.createInstance(LaunchMainService));
+		this.mainProcessIpcServer.registerChannel('url', new URLHandlerChannel({ handleURL: (uri, options) => this.handleProtocolUrl(uri, options) }));
 		// Once windows can accept user input, finish their setup before requesting normal, vetoable shutdown.
 		this.startupWindowOpeningStarted = true;
 		{
@@ -481,6 +484,20 @@ export class AshApplication extends Disposable {
 			return;
 		}
 		const args = launchRequest.args;
+		if (args.urls.length > 0) {
+			this.pendingWindowLaunches.push({
+				args: {
+					...args,
+					paths: [],
+					workspace: undefined,
+					newWindow: false,
+					reuseWindow: false,
+					wait: false,
+					waitMarkerFilePath: undefined,
+				},
+				cwd: process.cwd(),
+			});
+		}
 		if (args.paths.length > 0 || args.newWindow || args.reuseWindow || args.wait || args.workspace) {
 			if (app.isPackaged || process.env.ASH_DEV_AGENTS_WINDOW !== '1') {
 				await this.restoreWindowSession(workspaces, true, wasUpdated);
@@ -654,7 +671,13 @@ export class AshApplication extends Disposable {
 
 	private async startWindowLaunch(launch: IStartArguments): Promise<void> {
 		if (!launch.agentsWindow) {
-			await this.launchMainService.start(launch);
+			const args = launch.args;
+			if (args.urls.length === 0 || args.paths.length > 0 || args.workspace || args.newWindow || args.reuseWindow || args.wait) {
+				await this.launchMainService.start(launch);
+			}
+			for (const originalUrl of args.urls) {
+				await this.handleProtocolUrl(URI.parse(originalUrl), { originalUrl });
+			}
 			return;
 		}
 		const workspaces = this.workspaces;
@@ -665,6 +688,44 @@ export class AshApplication extends Disposable {
 			? await this.windowsMainService.resolveWorkspaceOpenTarget(launch.args.workspace, launch.cwd)
 			: active?.workspaceContext.getWorkspace() ?? createEmptyWorkspaceIdentifier();
 		await this.openSessionsWindow(workspace, await workspaces.resolveWorkspace(workspace), active?.modeId ?? this.defaultModeId);
+	}
+
+	private async handleProtocolUrl(uri: URI, options?: IOpenURLOptions): Promise<boolean> {
+		if (uri.scheme !== 'ash') {
+			return false;
+		}
+		const url = new URL(uri.toString());
+		const windowId = url.searchParams.get('windowId');
+		if (uri.authority === 'file') {
+			const arguments_: string[] = [];
+			if (windowId === '_blank') {
+				arguments_.push('--new-window');
+			} else if (windowId) {
+				const window = this.windowsMainService.getWindows().find(window => String(window.id) === windowId);
+				if (!window) {
+					return false;
+				}
+				focusWindow(window);
+				arguments_.push('--reuse-window');
+			}
+			url.searchParams.delete('windowId');
+			arguments_.push(`--open-url=${url.toString()}`);
+			await this.launchMainService.start({ args: parseLaunchArguments(arguments_), cwd: process.cwd() });
+			return true;
+		}
+		if (windowId === '_blank' || (!windowId && !this.windowsMainService.getLastActiveWindow())) {
+			await this.launchMainService.start({ args: parseLaunchArguments(['--new-window']), cwd: process.cwd() });
+		}
+		const window = windowId && windowId !== '_blank'
+			? this.windowsMainService.getWindows().find(window => String(window.id) === windowId)
+			: this.windowsMainService.getLastActiveWindow();
+		if (!window) {
+			return false;
+		}
+		// Renderer readiness guarantees that its URL handler channel has been registered.
+		await this.windowsMainService.whenReady(window);
+		const handler = new URLHandlerChannelClient(this.mainProcessIpcServer.getChannel('urlHandler', client => client.ctx === `window:${window.id}`));
+		return handler.handleURL(uri, options);
 	}
 
 	private configureWindowsTaskbar(): void {
@@ -801,7 +862,7 @@ export class AshApplication extends Disposable {
 
 	private async resolveWorkspace(): Promise<{ readonly workspace: IAnyWorkspaceIdentifier; readonly explicit: boolean }> {
 		try {
-			const target = parseWorkspaceLaunchArguments(this.workspaceLaunchArguments(process.argv));
+			const target = parseLaunchArguments(this.workspaceLaunchArguments(process.argv)).workspace;
 			return {
 				workspace: await this.windowsMainService.resolveWorkspaceOpenTarget(target, process.cwd()),
 				explicit: target !== undefined,

@@ -1,8 +1,8 @@
 import { VSBuffer } from '../../../common/buffer.js';
 import { CancellationToken, CancellationTokenSource } from '../../../common/cancellation.js';
 import { CancellationError, onUnexpectedError } from '../../../common/errors.js';
-import { Event } from '../../../common/event.js';
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../common/lifecycle.js';
+import { Emitter, Event } from '../../../common/event.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../common/lifecycle.js';
 import { isRecord } from '../../../common/types.js';
 
 export interface IChannel {
@@ -219,7 +219,11 @@ export class IPCClient<TContext = string> extends Disposable implements IChannel
 	}
 }
 
-export interface ClientConnectionEvent<TContext = string> {
+export interface Client<TContext> {
+	readonly ctx: TContext;
+}
+
+export interface ClientConnectionEvent<TContext = string> extends Client<TContext> {
 	readonly protocol: IMessagePassingProtocol;
 	/** Assigned by the authenticated transport, never read from a renderer-supplied packet. */
 	readonly ctx: TContext;
@@ -230,6 +234,7 @@ export interface ClientConnectionEvent<TContext = string> {
 export class IPCServer<TContext = string> extends Disposable implements IChannelServer<TContext> {
 	private readonly channels = new Map<string, IServerChannel<TContext>>();
 	private readonly clients = new Map<ClientConnectionEvent<TContext>, { peer: IPCClient<TContext>; resources: DisposableStore }>();
+	private readonly connectionsChanged = this._register(new Emitter<void>());
 
 	constructor(onDidClientConnect: Event<ClientConnectionEvent<TContext>>) {
 		super();
@@ -238,12 +243,47 @@ export class IPCServer<TContext = string> extends Disposable implements IChannel
 			const peer = resources.add(new IPCClient(connection.protocol, connection.ctx));
 			for (const [name, channel] of this.channels) { peer.registerChannel(name, channel); }
 			this.clients.set(connection, { peer, resources });
-			resources.add(connection.onDidClientDisconnect(() => { this.clients.delete(connection); resources.dispose(); }));
+			resources.add(connection.onDidClientDisconnect(() => { this.clients.delete(connection); resources.dispose(); this.connectionsChanged.fire(); }));
+			this.connectionsChanged.fire();
 		}));
 		this._register(toDisposable(() => {
 			for (const { resources } of this.clients.values()) { resources.dispose(); }
 			this.clients.clear(); this.channels.clear();
 		}));
+	}
+
+	/** The authenticated context selects the renderer; each call resolves the current document. */
+	public getChannel<T extends IChannel>(channelName: string, clientFilter: (client: Client<TContext>) => boolean): T {
+		return {
+			call: async <R>(command: string, arg?: unknown, cancellationToken?: CancellationToken): Promise<R> => {
+				this.assertNotDisposed();
+				const matches = [...this.clients].filter(([connection]) => clientFilter(connection));
+				if (matches.length !== 1) {
+					throw new Error(`Expected one IPC client for '${channelName}', found ${matches.length}`);
+				}
+				return matches[0]![1].peer.getChannel(channelName).call<R>(command, arg, cancellationToken);
+			},
+			listen: <R>(event: string, arg?: unknown): Event<R> => (listener, thisArgs, disposables) => {
+				this.assertNotDisposed();
+				const resources = new DisposableStore();
+				const subscriptions = resources.add(new DisposableMap<ClientConnectionEvent<TContext>, IDisposable>());
+				const update = (): void => {
+					for (const connection of subscriptions.keys()) {
+						if (!this.clients.has(connection) || !clientFilter(connection)) { subscriptions.deleteAndDispose(connection); }
+					}
+					for (const [connection, { peer }] of this.clients) {
+						if (clientFilter(connection) && !subscriptions.has(connection)) {
+							subscriptions.set(connection, peer.getChannel(channelName).listen<R>(event, arg)(value => listener.call(thisArgs, value)));
+						}
+					}
+				};
+				resources.add(this.connectionsChanged.event(update));
+				update();
+				if (Array.isArray(disposables)) { disposables.push(resources); }
+				else { disposables?.add(resources); }
+				return resources;
+			},
+		} as T;
 	}
 
 	public registerChannel(name: string, channel: IServerChannel<TContext>): void {
