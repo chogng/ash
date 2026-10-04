@@ -10,6 +10,7 @@ import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keyb
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { EditorsVisibleContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
 import { IUntitledTextEditorService } from '../../../services/untitled/common/untitledTextEditorService.js';
+import { UntitledTextEditorInput } from '../../../services/untitled/common/untitledTextEditorInput.js';
 import { ASH_REMOTE_SCHEME } from '../../../../platform/remote/common/remote.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IsWebContext } from '../../../../platform/contextkey/common/contextkeys.js';
@@ -55,9 +56,9 @@ registerAction2(class NewUntitledTextEditorAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): Promise<void> {
-		const untitled = accessor.get(IUntitledTextEditorService).create();
-		return accessor.get(IEditorPart).openEditor(untitled).then(() => undefined);
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const untitled = await accessor.get(IUntitledTextEditorService).resolve();
+		await accessor.get(IEditorPart).openEditor(new UntitledTextEditorInput(untitled));
 	}
 });
 
