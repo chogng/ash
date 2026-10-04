@@ -933,20 +933,24 @@ pub(crate) fn with_punctuation_settings(
             ..settings
         }),
     );
-    let label = nls::localize(language, "English punctuation").into_owned();
-    let description = nls::localize(
-        language,
-        "Convert typed punctuation; preserve Chinese text and pasted punctuation",
-    )
-    .into_owned();
+    let label =
+        nls::localize(language, "Always use half-width punctuation (Chinese only)").into_owned();
+    let mut description = nls::Text::template(
+        "Convert typed Chinese punctuation to half-width, including Shift input.\nSupports full-width forms of:\n{0}\nAlso converts: {1}\nChinese text, other symbols, pasted content and existing text stay unchanged.",
+        vec![
+            nls::Text::literal(r##"!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"##),
+            nls::Text::literal(r#"、→/  。→.  【】→[]  “”→"  ‘’→'"#),
+        ],
+    );
+    description.localize(language);
     choices.model.append_item(
         0,
         ListSelectionItem::new(label.as_str())
             .with_id(id)
-            .with_details(description.as_str())
+            .with_details(description.clone())
             .with_columns(
                 label.as_str(),
-                description.as_str(),
+                description.to_string(),
                 nls::localize(language, switch_value(settings.enabled)),
             ),
     );

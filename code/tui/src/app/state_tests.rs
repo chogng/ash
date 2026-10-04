@@ -4465,7 +4465,9 @@ fn english_punctuation_slash_opens_command_completion_in_both_modes() {
         crate::tui_assert_snapshot!(app = &app; "english_punctuation_slash_completion_chinese", format!("Completion\n{completion}\n\nDismissed\n{dismissed}"));
 
         app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
-        app.handle_key(KeyEvent::new(KeyCode::Char('、'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('／'), KeyModifiers::NONE));
+        assert_eq!(app.input(), "/");
+        assert!(matches!(app.completion(), Some(CompletionView::Slash(_))));
         app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
         assert_eq!(
             app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
@@ -4506,6 +4508,53 @@ fn english_punctuation_does_not_trigger_shortcuts_or_vim_commands() {
 }
 
 #[test]
+fn english_punctuation_converts_keyboard_symbols_with_and_without_shift_in_both_modes() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        for modifiers in [KeyModifiers::NONE, KeyModifiers::SHIFT] {
+            let mut app = App::new();
+            let mut terminal = TerminalSettings::default();
+            terminal.set_screen_mode(mode);
+            app.update(ConfigEvent::SettingsReceived(terminal));
+            app.set_punctuation_settings(crate::config::PunctuationSettings {
+                enabled: true,
+                ..Default::default()
+            });
+            app.handle_key(KeyEvent::new(KeyCode::Char('？'), modifiers));
+            assert_eq!(app.input(), "?");
+            assert!(app.command_panel().is_none());
+            for character in
+                "！＂＃＄％＆＇（）＊＋，－．／：；＜＝＞？＠［＼］＾＿｀｛｜｝～、。【】“”‘’"
+                    .chars()
+            {
+                app.handle_key(KeyEvent::new(KeyCode::Char(character), modifiers));
+            }
+            let converted = r##"?!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~/.[]""''"##;
+            assert_eq!(app.input(), converted);
+            for character in r##"!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~中文Ａ１　……——《》"##.chars()
+            {
+                app.handle_key(KeyEvent::new(KeyCode::Char(character), modifiers));
+            }
+            assert_eq!(
+                app.input(),
+                format!(r##"{converted}!"#$%&'()*+,-./:;<=>?@[\]^_`{{|}}~中文Ａ１　……——《》"##)
+            );
+            for character in "１＋２－３＊４／５．６".chars() {
+                let mut key = KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE);
+                key.state = crossterm::event::KeyEventState::KEYPAD;
+                app.handle_key(key);
+            }
+            assert!(app.input().ends_with("１+２-３*４/５.６"));
+            app.handle_paste("粘贴＠＃＋／".into());
+            assert!(app.input().ends_with("粘贴＠＃＋／"));
+            app.set_punctuation_settings(crate::config::PunctuationSettings::default());
+            app.handle_key(KeyEvent::new(KeyCode::Char('？'), modifiers));
+            app.handle_key(KeyEvent::new(KeyCode::Char('＠'), modifiers));
+            assert!(app.input().ends_with("粘贴＠＃＋／？＠"));
+        }
+    }
+}
+
+#[test]
 fn english_punctuation_config_toggles_and_resets_in_both_modes_in_chinese() {
     use crate::widgets::list_selection::ListSelectionItemId;
     for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
@@ -4541,7 +4590,7 @@ fn english_punctuation_config_toggles_and_resets_in_both_modes_in_chinese() {
                 .selected_item()
                 .unwrap()
                 .label(),
-            "输入时使用英文标点"
+            "始终使用半角标点（仅中文）"
         );
         let Some(AppCommand::SetPunctuationSettings(settings)) =
             app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
@@ -4553,6 +4602,24 @@ fn english_punctuation_config_toggles_and_resets_in_both_modes_in_chinese() {
         app.update(ConfigEvent::PunctuationSaved(settings, choices()));
         assert!(app.punctuation_settings.enabled);
         crate::tui_assert_snapshot!(app = &app; "config_english_punctuation_chinese", render_dictation_frame(&app));
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        let details = render_dictation_frame(&app);
+        let visible = details.replace(' ', "").replace('\n', "");
+        assert!(visible.contains("支持按住Shift输入"));
+        assert!(visible.contains("支持这些键盘标点的全角形式"));
+        assert!(
+            visible.contains(r##"!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"##),
+            "missing full-width punctuation list:\n{details}"
+        );
+        for mapping in ["、→/", "。→.", "【】→[]", "“”→\"", "‘’→'"] {
+            assert!(
+                visible.contains(mapping),
+                "missing punctuation mapping: {mapping}"
+            );
+        }
+        assert!(visible.contains("已有文本保持原样"));
+        crate::tui_assert_snapshot!(app = &app; "config_english_punctuation_details_chinese", details);
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
         let Some(AppCommand::SetPunctuationSettings(reset)) =
             app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))
         else {

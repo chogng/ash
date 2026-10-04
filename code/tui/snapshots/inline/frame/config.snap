@@ -29,7 +29,7 @@ expression: text(&buffer)
   Git fetch interval                                                                        180s    
   Git branch marker                                                                    Powerline    
   Advisor                                                                                    Off    
-  English punctuation                                                                        off +  
+  Always use half-width punctuation (Chinese only)                                           off +  
   Dictation shortcut                                                                         off    
   Dictation key                                                                           ctrl+g    
                                                                                                     
