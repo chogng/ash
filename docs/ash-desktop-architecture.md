@@ -843,6 +843,21 @@ Electron Main 是 Browser Target 的唯一权威持有者。
 
 `BrowserViewModel` 镜像 Main 状态，`BrowserEditorInput` 懒加载模型，Workbench 服务拥有输入与编辑器组引用。Renderer 重载接回存活的用户页面，不重建网页；最后一个编辑器引用关闭时才销毁页面。后端连接退场时仍关闭 Agent 页面，包括重载导致连接退场的场景。应用重启恢复用户页签的 URL、标题及工作区 Session。Agent 页签只作为用户临时页面恢复，不恢复任务权限或 Agent 登录。`browserViewService.ts` 与 `browserViewIpc.ts` 保留 Ash 可信 IPC 的适配职责；共享进程使用通用 `ProxyChannel`。
 
+桌面内置浏览器注册为 `ash.browser.open`，用户通过 `workbench.externalUriOpeners` 按网站选择打开方式。例如：
+
+```json
+{
+  "workbench.externalUriOpeners": {
+    "localhost:*": "ash.browser.open",
+    "127.0.0.1:*": "ash.browser.open",
+    "https://docs.example.com": "ash.browser.open",
+    "*": "default"
+  }
+}
+```
+
+规则按配置顺序选择第一个匹配且已注册的打开方式；`default` 使用系统浏览器。未配置时内置浏览器不接管链接。编辑器、聊天、终端、Git、问题报告和发布说明中的用户链接均使用同一选择服务。终端的网址支持鼠标打开和命令面板的“终端：打开检测到的链接…”；取消选择返回终端。通过规则打开的页面属于用户，并复用当前工作区的浏览器 Session。Web 不注册桌面浏览器打开方式。
+
 当前 URL policy 允许 HTTPS、loopback HTTP 与精确的 `about:blank`，拒绝 URL credentials、
 `file:`、`javascript:` 和其他特权 scheme。用户 Session 按工作区持久保存，Agent Session 按窗口和 Thread 使用内存 partition，同一 Thread 的多个页面共享登录。所有页面固定：
 

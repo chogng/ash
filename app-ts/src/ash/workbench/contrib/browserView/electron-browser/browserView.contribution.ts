@@ -1,4 +1,6 @@
-import { localize2 } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
+import { ExternalUriOpenerPriority } from '../../../../editor/common/languages.js';
+import { IExternalUriOpenerService, type IExternalUriOpener } from '../../externalUriOpener/common/externalUriOpenerService.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
 
@@ -33,6 +35,20 @@ registerWorkbenchContribution('workbench.contrib.browserView', WorkbenchPhase.Bl
 	const store = new DisposableStore();
 	const instantiation = services.get(IInstantiationService);
 	const views = services.get(IBrowserViewWorkbenchService);
+	store.add(services.get(IExternalUriOpenerService).registerExternalOpenerProvider({
+		async *getOpeners(): AsyncIterable<IExternalUriOpener> {
+			yield {
+				id: 'ash.browser.open',
+				label: localize('browser.urlOpener', 'Open in Ash browser'),
+				// Offer the browser for explicit URL rules without changing ordinary link opening.
+				canOpen: async () => ExternalUriOpenerPriority.Option,
+				openExternalUri: async uri => {
+					await views.createBrowserView({ initialUrl: uri.toString(), owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
+					return true;
+				},
+			};
+		},
+	}));
 	store.add(EditorInputSerializers.register(instantiation.createInstance(BrowserEditorSerializer)));
 	void views.initialize().catch(error => console.error('Failed to read browser pages', error));
 	store.add(EditorPanes.registerEditorPane({

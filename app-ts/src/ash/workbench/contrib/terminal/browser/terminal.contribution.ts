@@ -1,5 +1,6 @@
 import { localize2 } from '../../../../nls.js';
 import '../../terminalContrib/voice/browser/terminal.voice.contribution.js';
+import '../../terminalContrib/links/browser/terminal.links.contribution.js';
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";

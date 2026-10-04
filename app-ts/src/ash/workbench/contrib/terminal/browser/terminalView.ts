@@ -6,7 +6,6 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 import { IMenuService } from "../../../../platform/actions/common/actions.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import { IThemeService } from "../../../../platform/theme/common/themeService.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
@@ -25,7 +24,6 @@ const DEFAULT_DIMENSIONS: ITerminalDimensions = { rows: 24, cols: 80 };
 /** Tabbed xterm panel whose persistent widgets preserve per-instance terminal state. */
 export class TerminalViewPane extends ViewPane {
 	private readonly terminalService: ITerminalService;
-	private readonly themeService: IThemeService;
 	private readonly titleActions: TerminalTitleActions;
 	private readonly statusElement: HTMLDivElement;
 	private readonly tabList: TabList<ITerminalInstance>;
@@ -38,10 +36,9 @@ export class TerminalViewPane extends ViewPane {
 	private initializing = false;
 	private focusSource: Element | null | undefined;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ITerminalService terminalService: ITerminalService, @IThemeService themeService: IThemeService, @IMenuService menuService: IMenuService, @IContextMenuService contextMenuService: IContextMenuService, @IContextKeyService contextKeyService: IContextKeyService, @IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService, @IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService, @IInstantiationService instantiation: IInstantiationService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ITerminalService terminalService: ITerminalService, @IMenuService menuService: IMenuService, @IContextMenuService contextMenuService: IContextMenuService, @IContextKeyService contextKeyService: IContextKeyService, @IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService, @IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super(container, options);
 		this.terminalService = terminalService;
-		this.themeService = themeService;
 		this.element.classList.add("ash-terminal-view");
 		this.headerElement.remove();
 		this.titleActions = this._register(new TerminalTitleActions(this.headerActionsElement, {
@@ -138,6 +135,7 @@ export class TerminalViewPane extends ViewPane {
 
 	public startVoice(): Promise<void> { return this.voice.start(); }
 	public stopVoice(): Promise<void> { return this.voice.stop(); }
+	public async openDetectedLink(): Promise<void> { await this.activeItem()?.widget.openDetectedLink(); }
 
 	override focus(): void {
 		if (!this.isVisible() || this.isDisposed) return;
@@ -234,7 +232,7 @@ export class TerminalViewPane extends ViewPane {
 		if (this.items.has(instance)) return;
 		const item = new TerminalViewItem(
 			instance,
-			new TerminalInstanceWidget(this.widgetsElement, instance, this.themeService),
+			this.instantiation.createInstance(TerminalInstanceWidget, this.widgetsElement, instance),
 			() => this.updateInstances(),
 		);
 		this.items.set(instance, item);

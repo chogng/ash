@@ -558,7 +558,7 @@ async function runGraphAction(accessor: ServicesAccessor, kind: GraphActionKind,
 		case 'openRemote': {
 			const links = commit.remoteLinks ?? [];
 			const selected = links.length === 1 ? links[0] : (await pickGitItem(input, links.map(link => ({ label: link.name, description: link.uri.toString(), link })), localize('git.graph.chooseRemote', 'Choose a hosting remote')))?.link;
-			if (selected) { await accessor.get(IOpenerService).open(selected.uri, { openExternal: true, fromUserGesture: true }); }
+			if (selected) { await accessor.get(IOpenerService).open(selected.uri, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true }); }
 			return;
 		}
 		case 'checkoutBranch': {

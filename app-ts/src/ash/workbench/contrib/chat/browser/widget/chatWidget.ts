@@ -277,7 +277,7 @@ export async function openChatMarkdownLink(
 		if (workspaceResource && editorService) await editorService.openEditor({ resource: workspaceResource });
 		return;
 	}
-	if (openerService) await openerService.open(target, { openExternal: true, fromUserGesture: true });
+	if (openerService) await openerService.open(target, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });
 }
 
 function isEditorResourceScheme(scheme: string): boolean {

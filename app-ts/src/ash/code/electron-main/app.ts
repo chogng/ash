@@ -1205,31 +1205,8 @@ export class AshApplication extends Disposable {
 			sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
 			localEnvironment: process.env,
 		});
-		const browserServices = windowDisposables.add(this.windowServices.createChild(new ServiceCollection(
-			[IBrowserViewNavigationResolver, new RemoteBrowserViewNavigationResolver({
-				getWorkspace: () => workspaceContext.getWorkspace(),
-				tunnels: remoteTunnelService,
-				reportError: (message, error) => console.error(message, error),
-			})],
-		)));
-		const browserViewMainService = windowDisposables.add(browserServices.createInstance(BrowserViewMainService, {
-			window,
-			getWorkspaceId: () => workspaceContext.getWorkspace().id,
-			createSession: (partition: string) => electronSession.fromPartition(partition),
-			createView: (session: Electron.Session) => new WebContentsView({
-				webPreferences: {
-					contextIsolation: true,
-					nodeIntegration: false,
-					sandbox: true,
-					webviewTag: false,
-					session,
-				},
-			}),
-		}));
-		windowDisposables.add(browserViewMainService.onDidEvent(event => {
-			if (!window.isDestroyed()) window.webContents.send(BROWSER_VIEW_EVENT_CHANNEL, event);
-		}));
-		browserServices.registerInstance(IBrowserViewMainService, browserViewMainService);
+		const browserServices = this.createBrowserServices(window, workspaceContext, remoteTunnelService, windowDisposables);
+		const browserViewMainService = browserServices.get(IBrowserViewMainService);
 		const browserGroups = windowDisposables.add(browserServices.createInstance(BrowserViewGroupMainService));
 		const browserPort = this.sharedProcess.connect(`window:${window.id}`);
 		const browserClient = windowDisposables.add(new MessagePortClient({
@@ -1519,6 +1496,35 @@ export class AshApplication extends Disposable {
 		windowDisposables.add(toDisposable(() => webContents.off('did-create-window', onDidCreateWindow)));
 	}
 
+	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remoteTunnelService: SshRemoteTunnelService, windowDisposables: DisposableStore): InstantiationService {
+		const browserServices = windowDisposables.add(this.windowServices.createChild(new ServiceCollection(
+			[IBrowserViewNavigationResolver, new RemoteBrowserViewNavigationResolver({
+				getWorkspace: () => workspaceContext.getWorkspace(),
+				tunnels: remoteTunnelService,
+				reportError: (message, error) => console.error(message, error),
+			})],
+		)));
+		const browserViewMainService = windowDisposables.add(browserServices.createInstance(BrowserViewMainService, {
+			window,
+			getWorkspaceId: () => workspaceContext.getWorkspace().id,
+			createSession: (partition: string) => electronSession.fromPartition(partition),
+			createView: (session: Electron.Session) => new WebContentsView({
+				webPreferences: {
+					contextIsolation: true,
+					nodeIntegration: false,
+					sandbox: true,
+					webviewTag: false,
+					session,
+				},
+			}),
+		}));
+		windowDisposables.add(browserViewMainService.onDidEvent(event => {
+			if (!window.isDestroyed()) window.webContents.send(BROWSER_VIEW_EVENT_CHANNEL, event);
+		}));
+		browserServices.registerInstance(IBrowserViewMainService, browserViewMainService);
+		return browserServices;
+	}
+
 	private openSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, modeId: WorkbenchModeId, handoff?: IOpenAgentsWindowOptions): Promise<void> {
 		const opening = this.sessionsWindowOpenQueue.then(() => this.performOpenSessionsWindow(workspace, resolvedWorkspace, modeId, handoff));
 		this.sessionsWindowOpenQueue = opening.then(() => undefined, () => undefined);
@@ -1600,15 +1606,17 @@ export class AshApplication extends Disposable {
 					}
 					session.supervisor = sessionsRelay;
 					session.runtimeResources.value = runtimeResources;
+					const remoteTunnelService = new SshRemoteTunnelService({
+						getWorkspace: () => session.workspaceContext.getWorkspace(),
+						sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
+						localEnvironment: process.env,
+					});
+					const browserServices = this.createBrowserServices(window, session.workspaceContext, remoteTunnelService, windowDisposables);
 					const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
 						supervisor: sessionsRelay,
 						workspaceContext: session.workspaceContext,
 						connections: session.remoteConnections,
-						tunnels: new SshRemoteTunnelService({
-							getWorkspace: () => session.workspaceContext.getWorkspace(),
-							sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
-							localEnvironment: process.env,
-						}),
+						tunnels: remoteTunnelService,
 						host: electronRemoteWindowMainHost(window, this.dialogs),
 						prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
 					}));
@@ -1622,6 +1630,7 @@ export class AshApplication extends Disposable {
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path)),
 						hooksConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openHooksTextFile),
+						...browserViewIpcRoutes(browserServices.get(IBrowserViewMainService)),
 						...remoteWindowContext.ipcRoutes,
 						...windowResourceIpcRoutes(windowResources),
 						...fileDialogIpcRoutes(this.windowFileDialogs(window)),

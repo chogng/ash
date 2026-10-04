@@ -121,7 +121,8 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 			const editing = services.get(IChatEditingService);
 			return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
 		} : undefined,
-		contributionIds: ['workbench.contrib.nativeWindow', OpenAgentsWindowSystemWideKeybindingContribution.ID, 'chat.edits.editorOverlay', 'workbench.contrib.dataChannels'],
+		contributionIds: ['workbench.contrib.nativeWindow', OpenAgentsWindowSystemWideKeybindingContribution.ID, 'chat.edits.editorOverlay', 'workbench.contrib.dataChannels', 'workbench.contrib.externalUriOpener', 'workbench.contrib.browserView', 'workbench.contrib.browserView.restore'],
+		browserViewService: api.browserView,
 		modeId,
 		createLogService: () => logger.createLogger('agents'),
 		createStorageService: async options => {

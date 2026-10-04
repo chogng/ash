@@ -1,7 +1,12 @@
 import type { FitAddon } from "@xterm/addon-fit";
 import type { Terminal, IDecoration } from "@xterm/xterm";
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { IThemeService } from "../../../../../platform/theme/common/themeService.js";
+import { IOpenerService } from "../../../../../platform/opener/common/opener.js";
+import { IQuickInputService, type IQuickPickItem } from "../../../../../platform/quickinput/common/quickInput.js";
+import { computeLinks } from "../../../../../editor/common/languages/linkComputer.js";
+import { onUnexpectedError } from "../../../../../base/common/errors.js";
+import { localize } from "../../../../../nls.js";
 import type { ITerminalCommandStatusEvent, ITerminalDimensions, ITerminalInstance } from "../../../../services/terminal/common/terminal.js";
 import { terminalTheme } from "./terminalTheme.js";
 import { AlternateScrollMode } from "./alternateScroll.js";
@@ -19,8 +24,9 @@ export class TerminalInstanceWidget extends Disposable {
 	private readonly alternateScroll = new AlternateScrollMode();
 	private readonly commandDecorations = new Map<string, TerminalCommandDecoration>();
 	private visible = false;
+	private readonly linkPicker = this._register(new MutableDisposable<DisposableStore>());
 
-	constructor(container: HTMLElement, readonly instance: ITerminalInstance, private readonly themeService: IThemeService) {
+	constructor(container: HTMLElement, readonly instance: ITerminalInstance, @IThemeService private readonly themeService: IThemeService, @IOpenerService private readonly openerService: IOpenerService, @IQuickInputService private readonly quickInputService: IQuickInputService) {
 		super();
 		this.element = h(container.ownerDocument, "div");
 		this.element.className = "ash-terminal-instance";
@@ -58,9 +64,10 @@ export class TerminalInstanceWidget extends Disposable {
 	}
 
 	private async loadTerminal(): Promise<void> {
-		const [{ Terminal }, { FitAddon }] = await Promise.all([
+		const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
 			import("@xterm/xterm"),
 			import("@xterm/addon-fit"),
+			import("@xterm/addon-web-links"),
 			import("@xterm/xterm/css/xterm.css"),
 		]);
 		if (this.isDisposed) return;
@@ -73,11 +80,13 @@ export class TerminalInstanceWidget extends Disposable {
 			fontSize: 13,
 			scrollback: 5_000,
 			theme: terminalTheme(this.themeService.getColorTheme()),
+			linkHandler: { activate: (_event, url) => { void this.openLink(url).catch(onUnexpectedError); } },
 		});
 		this.terminal = terminal;
 		this._register(toDisposable(() => terminal.dispose()));
 		this.fitAddon = new FitAddon();
 		terminal.loadAddon(this.fitAddon);
+		terminal.loadAddon(new WebLinksAddon((_event, url) => { void this.openLink(url).catch(onUnexpectedError); }));
 		terminal.open(this.element);
 		this.registerAlternateScrollMode(terminal);
 		this._register(this.themeService.onDidColorThemeChange(theme => {
@@ -117,6 +126,48 @@ export class TerminalInstanceWidget extends Disposable {
 
 	clear(): void {
 		this.writeWhenReady(terminal => terminal.clear());
+	}
+
+	public async openDetectedLink(): Promise<void> {
+		await this.initialize();
+		this.assertNotDisposed();
+		const buffer = this.terminal!.buffer.active;
+		const lines: string[] = [];
+		for (let index = 0; index < buffer.length; index++) {
+			const line = buffer.getLine(index)!;
+			// A wrapped screen row continues the same URL; physical newlines separate links.
+			if (line.isWrapped && lines.length > 0) {
+				lines[lines.length - 1] += line.translateToString(true);
+			} else {
+				lines.push(line.translateToString(true));
+			}
+		}
+		const urls = new Set(computeLinks({ getLineCount: () => lines.length, getLineContent: number => lines[number - 1]! }).map(link => String(link.url)).filter(url => /^https?:\/\//iu.test(url)));
+		const session = new DisposableStore();
+		this.linkPicker.value = session;
+		try {
+			const url = await new Promise<string | undefined>(resolve => {
+				session.add(toDisposable(() => resolve(undefined)));
+				const picker = session.add(this.quickInputService.createQuickPick<IQuickPickItem>());
+				picker.ariaLabel = localize('terminal.links.choose', 'Open a terminal link');
+				picker.placeholder = localize('terminal.links.select', 'Select a terminal URL to open');
+				picker.items = Array.from(urls, label => ({ label }));
+				session.add(picker.onDidAccept(item => resolve(item.label)));
+				session.add(picker.onDidHide(() => resolve(undefined)));
+				session.add(picker.onDidBlur(() => resolve(undefined)));
+				picker.show();
+			});
+			// Close Quick Input before opening an editor so its focus restoration cannot steal focus.
+			session.dispose();
+			if (url) { await this.openLink(url); }
+			else { this.focus(); }
+		} finally {
+			session.dispose();
+		}
+	}
+
+	private async openLink(url: string): Promise<void> {
+		await this.openerService.open(url, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });
 	}
 
 	fit(): void {

@@ -67,6 +67,6 @@ export class ReleaseNotesEditor extends Disposable implements IEditorPane {
 			await this.tryouts.run(id);
 			return;
 		}
-		if (/^https?:\/\//.test(href)) await this.opener.open(href, { openExternal: true, fromUserGesture: true });
+		if (/^https?:\/\//.test(href)) await this.opener.open(href, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });
 	}
 }

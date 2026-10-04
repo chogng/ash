@@ -98,6 +98,7 @@ import { IDialogService, IFileDialogService } from '../../platform/dialogs/commo
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { MultiplexFileService } from '../../platform/files/browser/multiplexFileService.js';
 import type { DialogService } from '../../workbench/services/dialogs/common/dialogService.js';
+import { IDialogsModel } from '../../workbench/common/dialogs.js';
 import { BrowserDialogHandler } from '../../workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { ILabelService, LabelService } from '../../platform/label/common/labelService.js';
@@ -145,6 +146,8 @@ import { IQuickInputService } from "../../platform/quickinput/common/quickInput.
 import { IQuickAccessController } from "../../platform/quickinput/common/quickAccess.js";
 import { QuickAccessController } from "../../platform/quickinput/browser/quickAccess.js";
 import { IOpenerService } from "../../platform/opener/common/opener.js";
+import { IBrowserViewService } from '../../platform/browserView/common/browserView.js';
+import '../../workbench/contrib/externalUriOpener/common/externalUriOpener.contribution.js';
 import { OpenerService } from '../../editor/browser/services/openerService.js';
 import { CommandService } from "../../workbench/services/commands/common/commandService.js";
 import { BrowserKeyboardLayoutService } from "../../workbench/services/keybinding/browser/keyboardLayoutService.js";
@@ -208,6 +211,7 @@ export interface IWorkbenchOptions {
 	readonly workspaceSelection: () => SessionWorkspaceSelection;
 	readonly workspace: () => IWorkspace;
 	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
+	readonly browserViewService?: IBrowserViewService;
 	readonly createFileDialogService: (services: IInstantiationService) => IFileDialogService;
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
 	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable>;
@@ -280,6 +284,7 @@ export class Workbench extends Disposable {
 			serviceCollection.set(id, descriptor);
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
+		if (options.browserViewService) { services.registerInstance(IBrowserViewService, options.browserViewService); }
 		services.registerInstance(IAssetService, options.api.assets);
 		services.registerInstance(IExtensionHostApi, options.api.extensionHost);
 		services.registerInstance(ITelemetryService, NullTelemetryService);
@@ -396,6 +401,7 @@ export class Workbench extends Disposable {
 		options.container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		const dialogs = services.get(IDialogService) as DialogService;
+		services.registerInstance(IDialogsModel, dialogs.model);
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
 		this._register(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(this.domNode)));
 

@@ -1,5 +1,6 @@
 import { localize2 } from '../nls.js';
 import '../workbench/electron-browser/desktop.contribution.js';
+import '../workbench/contrib/browserView/electron-browser/browserView.contribution.js';
 import './sessions.common.main.js';
 import './browser/parts/menubar.contribution.js';
 import './contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';

@@ -173,6 +173,7 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"binaryEditor.label": "Binary editor",
 				"binaryEditor.resourceLabel": "Binary editor: {0}",
 				"breadcrumbs.editorLabel": "Editor breadcrumbs",
+				"browser.urlOpener": "Open in Ash browser",
 				"bulkEdit.anotherPreview": "Another refactoring is being previewed.",
 				"bulkEdit.applySelected": "Apply selected",
 				"bulkEdit.autoSaveDescription": "Controls whether files changed by a refactoring are saved automatically.",
@@ -2168,6 +2169,9 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"taskbar.invalidAgentsArguments": "Open the Agents window with --agents-window and an optional --folder or --workspace target. File, window, and wait options cannot be combined with it.",
 				"taskbar.newWindow": "New Window",
 				"taskbar.newWindowDescription": "Open a new Ash window",
+				"terminal.links.choose": "Open a terminal link",
+				"terminal.links.open": "Terminal: Open Detected Link…",
+				"terminal.links.select": "Select a terminal URL to open",
 				"terminal.title.actions": "Terminal actions",
 				"terminal.title.active": "Active terminal: {0}",
 				"terminal.title.activeProfile": "Active terminal: {0} ({1})",
@@ -2906,7 +2910,7 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"testing": "Testing"
 			},
 			"ash.workbench": {
-				"browser.accessibilityHelp": "Use Tab to move through browser controls. Enter in the address field navigates. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Webpages use the browser’s accessibility tree. Downloads and website permissions are unavailable in this isolated session.",
+				"browser.accessibilityHelp": "Use Tab to move through browser controls. Enter in the address field navigates. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. Downloads and website permissions are unavailable in this isolated session.",
 				"browser.title": "Browser",
 				"call.accessibilityHelp": "Create a call on this computer or a server, or join with an invitation. Your microphone starts off. Use Tab and Shift+Tab to move between controls and Enter or Space to activate a button. Muting stops sending audio; Stop listening stops playback. Share screen opens a display or window selector. Use arrow keys to choose a source, then Start sharing. Escape cancels selection. Stop sharing ends screen capture without leaving the call. Shared screen images are labeled by participant; their visual contents are not transcribed. Sharing stops when its window closes, the call reconnects, or you leave. Leave disconnects only you. End for everyone closes the room. Invitation keys grant access: share them only with people you want in the call. Escape closes this help.",
 				"command.ChangeKeyboardLayoutAction": "Preferences: Change Keyboard Layout",
@@ -3141,6 +3145,7 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"binaryEditor.label": "二进制编辑器",
 				"binaryEditor.resourceLabel": "二进制编辑器：{0}",
 				"breadcrumbs.editorLabel": "编辑器面包屑",
+				"browser.urlOpener": "在 Ash 浏览器中打开",
 				"bulkEdit.anotherPreview": "另一项重构正在预览中。",
 				"bulkEdit.applySelected": "应用所选修改",
 				"bulkEdit.autoSaveDescription": "控制是否自动保存重构修改的文件。",
@@ -5136,6 +5141,9 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"taskbar.invalidAgentsArguments": "使用 --agents-window 打开 Agents 窗口，可通过 --folder 或 --workspace 指定项目。不能同时使用文件、窗口或等待选项。",
 				"taskbar.newWindow": "新建窗口",
 				"taskbar.newWindowDescription": "打开新的 Ash 窗口",
+				"terminal.links.choose": "打开终端链接",
+				"terminal.links.open": "终端：打开检测到的链接…",
+				"terminal.links.select": "选择要打开的终端网址",
 				"terminal.title.actions": "终端操作",
 				"terminal.title.active": "当前终端：{0}",
 				"terminal.title.activeProfile": "当前终端：{0}（{1}）",
@@ -5874,7 +5882,7 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"testing": "测试"
 			},
 			"ash.workbench": {
-				"browser.accessibilityHelp": "用 Tab 切换浏览器控件，在地址栏按 Enter 导航。在网页中按 Ctrl+L（macOS 为 Command+L）或 F6 返回地址栏。后退和前进按钮浏览网页历史。关闭编辑器标签页会关闭对应网页。网页使用浏览器的无障碍树。此隔离会话不提供下载和网站权限。",
+				"browser.accessibilityHelp": "用 Tab 切换浏览器控件，在地址栏按 Enter 导航。在网页中按 Ctrl+L（macOS 为 Command+L）或 F6 返回地址栏。后退和前进按钮浏览网页历史。关闭编辑器标签页会关闭对应网页。将 workbench.externalUriOpeners 中指定网站的打开方式设为 ash.browser.open，即可在此打开。网页使用浏览器的无障碍树。此隔离会话不提供下载和网站权限。",
 				"browser.title": "浏览器",
 				"call.accessibilityHelp": "在本机或服务器创建通话，或通过邀请加入。麦克风默认关闭。按 Tab 和 Shift+Tab 在控件间移动，按回车或空格激活按钮。静音会停止发送声音；停止收听会停止播放。共享屏幕会打开显示器和窗口选择器，用方向键选择来源，再选择开始共享。Escape 取消选择。停止共享不会退出通话。共享画面按参与者标记，画面内容不会转写。窗口关闭、通话重新连接或退出通话时会停止共享。离开只断开你自己的连接；为所有人结束会关闭通话。邀请密钥授予访问权限，只应分享给你希望加入的人。Escape 关闭帮助。",
 				"command.ChangeKeyboardLayoutAction": "首选项：更改键盘布局",

@@ -179,7 +179,7 @@ export class IssueReporterEditorPane extends Disposable implements IEditorPane {
 		listeners.add(addDisposableListener(link, 'click', event => {
 			event.preventDefault();
 			if (!link.hasAttribute('href')) { return; }
-			void this.opener.open(link.href, { openExternal: true, fromUserGesture: true }).catch(() => { if (!this.isDisposed) { this.status.textContent = localize('issue.openFailed', 'Could not open the GitHub page.'); } });
+			void this.opener.open(link.href, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true }).catch(() => { if (!this.isDisposed) { this.status.textContent = localize('issue.openFailed', 'Could not open the GitHub page.'); } });
 		}));
 	}
 }
