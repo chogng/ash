@@ -451,53 +451,20 @@ fn permission_menu_uses_shared_copy_and_the_same_ids_in_both_screens() {
 #[test]
 fn collaboration_effort_selector_applies_a_supported_value_and_restores_focus() {
     use ash_protocol::ReasoningEffort;
-    let mut config = crate::test_support::empty_config_snapshot();
-    config.model = Some(ash_app_server_protocol::protocol::config::ModelRefDto {
-        provider: "openai".into(),
-        model: "test-model".into(),
-    });
-    config.model_reasoning_effort = Some(ReasoningEffort::High);
-    let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
-        models: vec![
-            ash_app_server_protocol::protocol::model::ModelCatalogEntry {
-                discovered: None,
-                model: ash_protocol::ModelRef::new(
-                    ash_protocol::ProviderId::new("openai").unwrap(),
-                    ash_protocol::ModelId::new("test-model").unwrap(),
-                ),
-                display_name: "Test Model".into(),
-                context_window: None,
-                maximum_context_window: None,
-                default_context_window: None,
-                context_window_options: Vec::new(),
-                fast_enabled: false,
-                auto_compact_token_limit: None,
-                available_context_window: None,
-                capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
-                supported_reasoning_efforts: vec![
-                    ReasoningEffort::Low,
-                    ReasoningEffort::High,
-                    ReasoningEffort::Max,
-                ],
-                model_reasoning_effort: Some(ReasoningEffort::Low),
-                default_personality: None,
-            },
-        ],
-    };
-    let data = crate::models::ModelPickerData::new(catalog, config);
+    let data = effort_data();
     let mut app = App::new();
     assert_eq!(
         command(&mut app, "/effort"),
         Some(AppCommand::Models(crate::models::Command::OpenEffortPicker))
     );
-    app.open_command_panel(super::command_panel::CommandPanel::composer_options(
-        data.effort_choices().unwrap(),
+    app.open_command_panel(super::command_panel::CommandPanel::Effort(
+        data.effort_selector(app.collaboration_mode()).unwrap(),
     ));
-    assert_eq!(
-        app.list_selection().unwrap().selected_visible_index(),
-        Some(1)
-    );
-    crate::tui_assert_snapshot!(app = &app; "collaboration_effort_selector", render(&app));
+    assert!(matches!(
+        app.command_panel(),
+        Some(super::command_panel::CommandPanel::Effort(_))
+    ));
+    crate::tui_assert_snapshot!(app = &app; "collaboration_effort_selector", render_effort(&app));
     key(&mut app, KeyCode::Down, KeyModifiers::NONE);
     assert_eq!(
         key(&mut app, KeyCode::Enter, KeyModifiers::NONE),
@@ -612,4 +579,140 @@ fn collaboration_changed_during_a_turn_is_queued_instead_of_steered() {
     assert_eq!(submission.mode, CollaborationMode::Plan);
     assert_eq!(app.messages().len(), previous_rows);
     assert_eq!(app.queue_view().items[0].text, "plan the next task");
+}
+
+fn effort_data() -> crate::models::ModelPickerData {
+    use ash_protocol::ReasoningEffort;
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.model = Some(ash_app_server_protocol::protocol::config::ModelRefDto {
+        provider: "openai".into(),
+        model: "test-model".into(),
+    });
+    config.model_reasoning_effort = Some(ReasoningEffort::High);
+    let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        models: vec![
+            ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                discovered: None,
+                model: ash_protocol::ModelRef::new(
+                    ash_protocol::ProviderId::new("openai").unwrap(),
+                    ash_protocol::ModelId::new("test-model").unwrap(),
+                ),
+                display_name: "Test Model".into(),
+                context_window: None,
+                maximum_context_window: None,
+                default_context_window: None,
+                context_window_options: Vec::new(),
+                fast_enabled: false,
+                auto_compact_token_limit: None,
+                available_context_window: None,
+                capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
+                supported_reasoning_efforts: vec![
+                    ReasoningEffort::Low,
+                    ReasoningEffort::High,
+                    ReasoningEffort::Max,
+                ],
+                model_reasoning_effort: Some(ReasoningEffort::Low),
+                default_personality: None,
+            },
+        ],
+    };
+    crate::models::ModelPickerData::new(catalog, config)
+}
+
+#[test]
+fn fullscreen_effort_cancel_preserves_draft_and_mode_across_screen_switches() {
+    let data = effort_data();
+    let mut app = App::new();
+    app.set_collaboration_mode(CollaborationMode::Plan);
+    app.update(ThreadEvent::ProductNotice(
+        "Conversation remains visible".into(),
+    ));
+    app.insert_text("keep this draft\nand this line");
+    app.open_command_panel(super::command_panel::CommandPanel::Effort(
+        data.effort_selector(app.collaboration_mode()).unwrap(),
+    ));
+    key(&mut app, KeyCode::Right, KeyModifiers::NONE);
+    key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
+    assert_eq!(app.collaboration_mode(), CollaborationMode::Plan);
+    crate::tui_assert_snapshot!(app = &app; "effort_selector_staged", render_effort(&app));
+    switch(&mut app, ScreenMode::Inline);
+    crate::tui_assert_snapshot!(app = &app; "effort_selector_transferred", render_effort(&app));
+    switch(&mut app, ScreenMode::Fullscreen);
+    assert_eq!(key(&mut app, KeyCode::Esc, KeyModifiers::NONE), None);
+    assert_eq!(app.collaboration_mode(), CollaborationMode::Plan);
+    assert_eq!(app.input(), "keep this draft\nand this line");
+    assert!(app.chat_input_focused());
+    assert!(app.command_panel().is_none());
+    crate::tui_assert_snapshot!(app = &app; "effort_selector_cancel_restores_draft", render_effort(&app));
+}
+
+#[test]
+fn fullscreen_effort_confirm_applies_multitask_and_only_supported_levels() {
+    let data = effort_data();
+    let mut app = App::new();
+    app.open_command_panel(super::command_panel::CommandPanel::Effort(
+        data.effort_selector(app.collaboration_mode()).unwrap(),
+    ));
+    key(&mut app, KeyCode::Right, KeyModifiers::NONE);
+    key(&mut app, KeyCode::Right, KeyModifiers::NONE);
+    key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
+    assert_eq!(app.collaboration_mode(), CollaborationMode::Agent);
+    assert_eq!(
+        key(&mut app, KeyCode::Enter, KeyModifiers::NONE),
+        Some(AppCommand::Models(crate::models::Command::SetEffort {
+            effort: ash_protocol::ReasoningEffort::Max
+        }))
+    );
+    assert_eq!(app.collaboration_mode(), CollaborationMode::Multitask);
+    assert!(app.command_panel().is_none());
+    assert!(app.chat_input_focused());
+    crate::tui_assert_snapshot!(app = &app; "effort_selector_confirm_restores_composer", render_effort(&app));
+}
+
+#[test]
+fn fullscreen_effort_narrow_chinese_keeps_controls_and_draft_isolated() {
+    let data = effort_data();
+    let mut app = App::new();
+    let mut settings = TerminalSettings::default();
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(ConfigEvent::SettingsReceived(settings));
+    app.insert_text("原来的草稿");
+    app.open_command_panel(super::command_panel::CommandPanel::Effort(
+        data.effort_selector(app.collaboration_mode()).unwrap(),
+    ));
+    let area = ratatui::layout::Rect::new(0, 0, 40, 24);
+    app.handle_key_in_area(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE), area);
+    app.handle_paste("must not reach the draft".into());
+    app.handle_key_in_area(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE), area);
+    assert_eq!(app.input(), "原来的草稿");
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(40, 24)).unwrap();
+    terminal
+        .draw(|frame| super::frame::draw(frame, &app))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let content = crate::terminal::text::text_in_range(
+        buffer,
+        crate::terminal::text::ScreenSelectionRange::new(
+            ratatui::layout::Position::new(0, 0),
+            ratatui::layout::Position::new(39, 23),
+        ),
+    )
+    .unwrap();
+    assert!(content.contains("推理强度"));
+    assert!(content.contains("当前：high"));
+    assert!(content.contains("Enter 应用"));
+    assert!(content.contains("Esc 取消"));
+    assert!(!content.contains("原来的草稿"));
+    crate::tui_assert_snapshot!(app = &app; "effort_selector_narrow_chinese", content);
+    app.handle_key_in_area(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), area);
+    assert_eq!(app.input(), "原来的草稿");
+    assert!(app.chat_input_focused());
+}
+
+fn render_effort(app: &App) -> String {
+    render(app)
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
 }

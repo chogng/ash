@@ -5,12 +5,16 @@ use crossterm::event::KeyEvent;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 
-pub(super) fn desired_height(panel: &CommandPanel, width: u16) -> u16 {
+pub(super) fn desired_height(
+    panel: &CommandPanel,
+    width: u16,
+    context: crate::render::RenderContext<'_>,
+) -> u16 {
     let body = panel.body();
     let content_width = PanelLayout::content_width(width);
     crate::widgets::panel::HEADER_ROWS
         .saturating_add(body.tab_rows(content_width))
-        .saturating_add(body.body_rows(content_width))
+        .saturating_add(body.body_rows(content_width, context))
 }
 
 pub(super) fn draw(

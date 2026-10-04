@@ -339,10 +339,17 @@ impl AppDriver {
                 command,
                 AppCommand::Models(crate::models::Command::OpenEffortPicker)
             ) {
-                match self.model_picker.effort_choices() {
-                    Ok(choices) => self.app.open_command_panel(
-                        super::command_panel::CommandPanel::composer_options(choices),
-                    ),
+                let panel = if self.app.screen_mode() == crate::terminal::ScreenMode::Fullscreen {
+                    self.model_picker
+                        .effort_selector(self.app.collaboration_mode())
+                        .map(super::command_panel::CommandPanel::Effort)
+                } else {
+                    self.model_picker
+                        .effort_choices()
+                        .map(super::command_panel::CommandPanel::composer_options)
+                };
+                match panel {
+                    Ok(panel) => self.app.open_command_panel(panel),
                     Err(error) => self.app.report_composer_option_error(error),
                 }
                 return None;

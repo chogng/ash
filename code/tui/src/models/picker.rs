@@ -215,6 +215,16 @@ impl ModelPickerData {
         super::reasoning_effort::choices(&self.config, &self.catalog)
     }
 
+    pub(crate) fn effort_selector(
+        &self,
+        mode: ash_protocol::CollaborationMode,
+    ) -> Result<super::EffortSelector, String> {
+        let (levels, current) =
+            super::reasoning_effort::selected_efforts(&self.config, &self.catalog)
+                .map_err(|error| error.to_string())?;
+        Ok(super::EffortSelector::new(levels, current, mode))
+    }
+
     pub(crate) fn choices(&self) -> Result<ModelChoices, String> {
         model_choices(&self.catalog, &self.config)
     }

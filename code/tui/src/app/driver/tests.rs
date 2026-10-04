@@ -146,6 +146,78 @@ fn repeated_model_command_opens_the_fixed_catalog_without_loading() {
 }
 
 #[test]
+#[cfg(feature = "in-process-tests")]
+fn effort_command_opens_the_supported_selector_without_loading() {
+    let _guard = crate::test_support::in_process_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let session = AppServerSession::start_embedded(InProcessClientOptions::new(
+        root.path(),
+        ClientInfo {
+            name: "ash-tui-effort-selector-test".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+    let mut client = session.client();
+    let model_picker = crate::models::ModelPickerData::new(
+        client.list_models().unwrap(),
+        client.read_config().unwrap(),
+    );
+    let runtime = state::StateRuntime::open(root.path()).unwrap();
+    let dictation_settings = Arc::new(
+        crate::config::LocalDictationSettings::open(root.path(), runtime.database_path()).unwrap(),
+    );
+    let mut driver = AppDriver::new(
+        App::new(),
+        client,
+        None,
+        AppDriverResources {
+            file_search: None,
+            host_dir_root: root.path().to_path_buf(),
+            theme_resource: crate::theme::ThemeResource::in_product_root(
+                root.path().to_path_buf(),
+                None,
+            ),
+            server_slash_commands: Vec::new(),
+            plugins_enabled: false,
+            dictation_settings,
+            model_picker,
+        },
+    );
+    driver.queued_commands.clear();
+
+    let mut config = driver.client.read_config().unwrap();
+    let entry = driver
+        .model_picker
+        .catalog()
+        .models
+        .iter()
+        .find(|entry| !entry.supported_reasoning_efforts.is_empty())
+        .unwrap();
+    config.model = Some(ash_app_server_protocol::protocol::config::ModelRefDto {
+        provider: entry.model.provider.to_string(),
+        model: entry.model.model.to_string(),
+    });
+    config.model_reasoning_effort = entry.supported_reasoning_efforts.last().copied();
+    driver.model_picker.update_config(config);
+    driver.app_mut().insert_text("/effort");
+    let command = driver.app_mut().handle_key(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Enter,
+        crossterm::event::KeyModifiers::NONE,
+    ));
+    assert_eq!(
+        command,
+        Some(crate::models::Command::OpenEffortPicker.into())
+    );
+    assert!(driver.next_command(command, false).is_none());
+    assert!(matches!(
+        driver.app().command_panel(),
+        Some(crate::app::command_panel::CommandPanel::Effort(_))
+    ));
+    assert!(driver.requests.is_idle(Some(RequestKey::Config)));
+}
+
+#[test]
 fn unrelated_actions_bypass_a_busy_request_without_losing_same_domain_order() {
     let mut app = App::new();
     let mut requests = RequestTasks::default();

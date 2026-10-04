@@ -1,3 +1,4 @@
+mod effort_selector;
 mod picker;
 mod reasoning_effort;
 mod request;
@@ -37,6 +38,9 @@ use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_protocol::ReasoningEffort;
 use std::fmt;
 
+pub(crate) use effort_selector::EffortSelector;
+pub(crate) use effort_selector::Outcome as EffortSelectorOutcome;
+pub(crate) use effort_selector::Target as EffortSelectorTarget;
 pub(crate) use picker::ModelChoices;
 pub(crate) use picker::ModelOption;
 pub(crate) use picker::ModelPickerData;

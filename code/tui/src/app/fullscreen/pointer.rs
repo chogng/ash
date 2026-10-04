@@ -334,7 +334,10 @@ pub(in crate::app) fn handle_mouse(
             == Some(&PointerTarget::Modal(super::modal::Target::Text));
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                if super::modal::layout(area).surface.contains(position) {
+                if super::modal::layout_for(app, area)
+                    .surface
+                    .contains(position)
+                {
                     app.fullscreen.modal_alert = false;
                 }
                 if target == Some(PointerTarget::Modal(super::modal::Target::Text)) {
@@ -381,10 +384,12 @@ pub(in crate::app) fn handle_mouse(
             }
             MouseEventKind::Moved => app.fullscreen.pointer.update_hover(target),
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
-                if super::modal::layout(area).surface.contains(position) =>
+                if super::modal::layout_for(app, area)
+                    .surface
+                    .contains(position) =>
             {
                 let body = app.command_panel().map(|panel| {
-                    super::modal::body_area(panel, super::modal::layout(area).content)
+                    super::modal::body_area(panel, super::modal::layout_for(app, area).content)
                 });
                 if let Some(super::super::command_panel::CommandPanel::Memories(panel)) =
                     app.fullscreen.panels.command_mut()

@@ -21,6 +21,23 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
         terminal_area.width,
         terminal_area.height.saturating_sub(header_rows),
     );
+    if matches!(
+        app.command_panel(),
+        Some(crate::app::command_panel::CommandPanel::Effort(_))
+    ) {
+        let dock = super::modal::layout_for(app, terminal_area);
+        return Layout {
+            top_statusline: header,
+            input: Rect::default(),
+            session: SessionAreas {
+                transcript: Rect {
+                    height: dock.surface.y.saturating_sub(terminal_area.y),
+                    ..terminal_area
+                },
+                ..SessionAreas::default()
+            },
+        };
+    }
     if app.issue_manager().is_some() {
         let footer_rows = terminal_area.height.min(1);
         return Layout {

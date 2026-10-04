@@ -16,7 +16,7 @@ use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_protocol::Patch;
 use ash_protocol::ReasoningEffort;
 
-fn selected_efforts<'a>(
+pub(super) fn selected_efforts<'a>(
     config: &ash_app_server_protocol::protocol::config::ConfigReadResult,
     catalog: &'a ModelListResult,
 ) -> Result<(&'a [ReasoningEffort], Option<ReasoningEffort>), ModelCommandError> {

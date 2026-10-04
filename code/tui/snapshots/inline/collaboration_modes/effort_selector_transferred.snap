@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/collaboration_modes_tests.rs
+expression: render_effort(&app)
+---
+
+    ▄  ▄     Ash Code v0.1.0
+  ▗█▛██▜█▖   Automatic model
+  ▝▜████▛▘   .
+    ▝  ▘
+
+● Conversation remains visible
+
+
+
+
+
+
+─ Thinking effort ──────────────────────────────────────────────────────────────
+
+  Less reasoning → More reasoning
+  ───────────────────────────────────────────▲──────    Multitask  on
+  low                  high                 max
+  Current: high
+
+  Maximum reasoning. May use more tokens and take longer; use for the hardest
+  tasks.
+
+  ←/→ choose  ·  Tab toggle multitask  ·  Enter apply  ·  Esc cancel

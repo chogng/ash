@@ -12,6 +12,7 @@
 | 顶部信息 | 固定工作区栏，分支、目录、上下文与 Dashboard | 欢迎信息先写入历史；活动视口没有固定工作区栏 |
 | 输入区 | 上下分隔线，模型与非默认任务模式嵌入下线 | 上下分隔线；状态与任务模式可由底部 StatusLine 显示 |
 | 命令面板 | 当前页面上方的居中模态框 | 临时备用屏幕中的面板，替换输入区 |
+| 推理强度选择 | 底部横向档位与 Multitask 开关，正文保留在上方 | 从 inline 打开时使用选项列表；从 fullscreen 转交时保留横向编辑器 |
 | 补全 | 输入框上方的浮层 | 临时备用屏幕中的候选列表 |
 | 鼠标 | 应用处理点击、滚动、选文与复制 | 鼠标交给终端，应用使用键盘交互 |
 | 退出 | 恢复 shell 画面 | 写出剩余正文，终端保留输出历史 |
@@ -253,6 +254,8 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
 [completion/view.rs](tui/src/thread/composer/input/completion/view.rs) 同时绘制候选与整行背景，背景包括左右留白，避免露出被覆盖页面的旧文字。前缀含义与提交规则见 [README](README.md#命令与补全)。
 
 ### 居中弹窗
+
+`/effort` 的 fullscreen 编辑器位于底部，不使用居中外框；[fullscreen/modal.rs](tui/src/app/fullscreen/modal.rs) 分配标题、内容和提示区域，[effort_selector.rs](tui/src/models/effort_selector.rs) 负责档位、Multitask 暂选、说明和 `max` 彩虹动画。背景草稿保留但不接收输入；确认或取消后恢复原页面焦点。正文区域止于选择器上沿，不被选择器遮挡。具体按键和提交约定见 [命令与补全](README.md#命令与补全)。
 
 模型、设置和帮助等命令面板覆盖当前页面。外框由 [widgets/modal.rs](tui/src/widgets/modal.rs) 的 `ModalLayout` 计算，内容由 [fullscreen/modal.rs](tui/src/app/fullscreen/modal.rs) 组合：
 

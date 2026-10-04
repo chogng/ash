@@ -56,6 +56,7 @@ use std::collections::BTreeMap;
 #[derive(Clone, Copy, Debug)]
 pub(super) enum CommandPanelBody<'a> {
     Selection(&'a ListSelectionState),
+    Effort(&'a crate::models::EffortSelector),
     Details {
         detail: &'a crate::widgets::detail_list::DetailList,
         scroll: u16,
@@ -72,6 +73,7 @@ pub(super) enum CommandPanelBody<'a> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum CommandPanelPointerTarget {
     Provider(crate::config::provider::Target),
+    Effort(crate::models::EffortSelectorTarget),
     Memories(crate::memories::Target),
     Tab(usize),
     List(list_selection::ListSelectionPointerTarget),
@@ -80,7 +82,7 @@ pub(super) enum CommandPanelPointerTarget {
 impl CommandPanelBody<'_> {
     pub(super) fn allows_backdrop_dismiss(&self) -> bool {
         match self {
-            Self::Selection(_) | Self::Status(_) | Self::Details { .. } => true,
+            Self::Selection(_) | Self::Effort(_) | Self::Status(_) | Self::Details { .. } => true,
             Self::Memories(panel) => panel.allows_backdrop_dismiss(),
             Self::Prompt(_) | Self::Provider(_) | Self::KeyCapture(_) | Self::Dialog(_) => false,
         }
@@ -104,6 +106,7 @@ pub(crate) enum CommandPanel {
     Memories(crate::memories::Panel),
     Guardian(crate::guardian::Panel),
     Model(ListSelection<ModelSelectionAction>),
+    Effort(crate::models::EffortSelector),
     ComposerOptions(ListSelection<crate::thread::composer::options::ComposerOption>),
     ProjectRoots(ListSelection<RootSelectionAction>),
     Rewind(ListSelection<RewindSelectionAction>),
@@ -131,6 +134,7 @@ pub(crate) enum CommandPanelOutcome {
     Memories(crate::memories::Command),
     Guardian(crate::guardian::Command),
     Model(ModelSelectionAction),
+    Effort(crate::models::EffortSelectorOutcome),
     ComposerOption(crate::thread::composer::options::ComposerOption),
     ProjectRoot(RootSelectionAction),
     Rewind(RewindSelectionAction),
@@ -200,8 +204,12 @@ impl CommandPanel {
         tabs: Rect,
         body: Rect,
         position: Position,
+        context: crate::render::RenderContext<'_>,
     ) -> Option<CommandPanelPointerTarget> {
         match self.body() {
+            CommandPanelBody::Effort(selector) => selector
+                .target_at(body, position, context)
+                .map(CommandPanelPointerTarget::Effort),
             CommandPanelBody::Provider(provider) => provider
                 .target_at(body, position)
                 .map(CommandPanelPointerTarget::Provider),
@@ -238,6 +246,10 @@ impl CommandPanel {
         click: list_selection::ListSelectionClick,
     ) -> CommandPanelOutcome {
         match target {
+            CommandPanelPointerTarget::Effort(target) => match self {
+                Self::Effort(selector) => CommandPanelOutcome::Effort(selector.activate(target)),
+                _ => CommandPanelOutcome::Consumed,
+            },
             CommandPanelPointerTarget::Provider(target) => match self {
                 Self::Config(editor) => editor
                     .provider_mut()
@@ -409,6 +421,7 @@ impl CommandPanel {
             Self::ComposerOptions(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::ComposerOption)
             }
+            Self::Effort(content) => CommandPanelOutcome::Effort(content.handle_key(key)),
             Self::Model(content) => {
                 map_selection(content.handle_model_key(key), CommandPanelOutcome::Model)
             }
@@ -465,7 +478,7 @@ impl CommandPanel {
             Self::Rewind(content) => content.handle_paste(pasted),
             Self::Sessions(content) => content.handle_paste(pasted),
             Self::Skills(content) => content.handle_paste(pasted),
-            Self::Status(_) => {}
+            Self::Status(_) | Self::Effort(_) => {}
             Self::StatusLine(content) => content.handle_paste(pasted),
             Self::Theme(content) => content.handle_paste(pasted),
         }
@@ -505,6 +518,7 @@ impl CommandPanel {
             Self::Memories(content) => {
                 content.localize(language);
             }
+            Self::Effort(_) => {}
             Self::Status(content) => content.localize(language),
             Self::Theme(content) => content.selection_mut().localize(language),
         }
@@ -533,7 +547,7 @@ impl CommandPanel {
             Self::Rewind(selection) => Some(selection.state()),
             Self::Sessions(selection) => Some(selection.state()),
             Self::Skills(selection) => Some(selection.state()),
-            Self::Status(_) => None,
+            Self::Status(_) | Self::Effort(_) => None,
             Self::StatusLine(selection) => Some(selection.state()),
             Self::Theme(picker) => Some(picker.selection()),
         }
@@ -564,7 +578,7 @@ impl CommandPanel {
             Self::Skills(selection) => Some(selection.state_mut()),
             Self::StatusLine(selection) => Some(selection.state_mut()),
             Self::Theme(picker) => Some(picker.selection_mut()),
-            Self::Status(_) => None,
+            Self::Status(_) | Self::Effort(_) => None,
         }
     }
 
@@ -653,6 +667,7 @@ impl CommandPanel {
                 None => CommandPanelBody::Selection(panel.page()),
             },
             Self::ComposerOptions(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Effort(selector) => CommandPanelBody::Effort(selector),
             Self::Model(selection) => CommandPanelBody::Selection(selection.state()),
             Self::ProjectRoots(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Rewind(selection) => CommandPanelBody::Selection(selection.state()),
@@ -706,6 +721,7 @@ impl CommandPanel {
             Self::Mcp(content) => content.key_hints(),
             Self::Hooks(content) => content.key_hints(),
             Self::ComposerOptions(content) => content.key_hints(),
+            Self::Effort(content) => content.key_hints(),
             Self::Model(content) => content.model_key_hints(),
             Self::ProjectRoots(content) => content.key_hints(),
             Self::Rewind(content) => content.key_hints(),
@@ -915,6 +931,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Memories(panel) => panel.title(),
             Self::Prompt(prompt) => prompt.title(),
             Self::Dialog(dialog) => dialog.title(),
+            Self::Effort(_) => "Thinking effort",
             Self::Provider(_) => "Custom provider",
             Self::KeyCapture(capture) => capture.title(),
             Self::Status(panel) => panel.title(),
@@ -928,11 +945,15 @@ impl<'a> CommandPanelBody<'a> {
             Self::Selection(selection) => selection.tab_rows(width),
             Self::Status(panel) => panel.tab_rows(width),
             Self::Memories(panel) => panel.tab_rows(width),
-            Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) | Self::Dialog(_) => 0,
+            Self::Effort(_)
+            | Self::Provider(_)
+            | Self::Prompt(_)
+            | Self::KeyCapture(_)
+            | Self::Dialog(_) => 0,
         }
     }
 
-    pub(super) fn body_rows(self, width: u16) -> u16 {
+    pub(super) fn body_rows(self, width: u16, context: crate::render::RenderContext<'_>) -> u16 {
         match self {
             Self::Details {
                 detail, actions, ..
@@ -940,6 +961,7 @@ impl<'a> CommandPanelBody<'a> {
                 .saturating_add(1)
                 .saturating_add(actions.body_rows(width)),
             Self::Selection(selection) => selection.body_rows(width),
+            Self::Effort(selector) => selector.body_rows(width, context),
             Self::Memories(panel) => panel.body_rows(width),
             Self::Prompt(prompt) => prompt.desired_height(),
             Self::Dialog(dialog) => dialog.body_rows(width),
@@ -953,6 +975,7 @@ impl<'a> CommandPanelBody<'a> {
         match self {
             Self::Selection(selection) => selection.presentation_focus(),
             Self::Details { .. }
+            | Self::Effort(_)
             | Self::Memories(_)
             | Self::Prompt(_)
             | Self::Dialog(_)
@@ -979,6 +1002,7 @@ impl<'a> CommandPanelBody<'a> {
                 panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context)
             }
             Self::Details { .. }
+            | Self::Effort(_)
             | Self::Provider(_)
             | Self::Prompt(_)
             | Self::KeyCapture(_)
@@ -1041,6 +1065,13 @@ impl<'a> CommandPanelBody<'a> {
                     list(pressed),
                     context,
                 );
+            }
+            Self::Effort(selector) => {
+                let target = |target: Option<&CommandPanelPointerTarget>| match target {
+                    Some(CommandPanelPointerTarget::Effort(target)) => Some(*target),
+                    _ => None,
+                };
+                selector.draw(frame, area, target(hovered), target(pressed), context);
             }
             Self::Selection(selection) => list_selection::draw_body_with_pointer(
                 frame,

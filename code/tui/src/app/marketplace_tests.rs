@@ -1188,7 +1188,8 @@ fn hooks_detail_pointer_targets_use_the_rendered_action_area() {
             panel.pointer_target_at(
                 Default::default(),
                 body,
-                ratatui::layout::Position::new(x, actions.y)
+                ratatui::layout::Position::new(x, actions.y),
+                crate::render::test_context()
             ),
             Some(target.clone())
         );
@@ -1197,7 +1198,8 @@ fn hooks_detail_pointer_targets_use_the_rendered_action_area() {
         panel.pointer_target_at(
             Default::default(),
             body,
-            ratatui::layout::Position::new(body.x + 2, body.y)
+            ratatui::layout::Position::new(body.x + 2, body.y),
+            crate::render::test_context()
         ),
         None
     );

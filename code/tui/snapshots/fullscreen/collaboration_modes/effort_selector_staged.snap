@@ -4,8 +4,7 @@ expression: render_effort(&app)
 ---
   .                                                                [Dashboard]
 
-
-
+● Conversation remains visible
 
 
 
@@ -19,10 +18,11 @@ expression: render_effort(&app)
 ────────────────────────────────────────────────────────────────────────────────
   Thinking effort
   Less reasoning → More reasoning
-  ───────────────────────▲──────────────────────────    Multitask  off
+  ───────────────────────────────────────────▲──────    Multitask  on
   low                  high                 max
   Current: high
 
-  More reasoning for complex tasks and careful verification.
+  Maximum reasoning. May use more tokens and take longer; use for the hardest
+  tasks.
 
   ←/→ choose  ·  Tab toggle multitask  ·  Enter apply  ·  Esc cancel

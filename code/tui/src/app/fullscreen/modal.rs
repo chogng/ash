@@ -34,7 +34,56 @@ pub(super) fn layout(available: Rect) -> ModalLayout {
     )
 }
 
-fn layout_for(app: &App, available: Rect) -> ModalLayout {
+pub(super) fn layout_for(app: &App, available: Rect) -> ModalLayout {
+    if app.overlay().is_none()
+        && let Some(CommandPanel::Effort(selector)) = app.command_panel()
+    {
+        let inset = 2.min(available.width);
+        let width = available.width.saturating_sub(inset * 2);
+        let body_rows = selector.body_rows(width, app.render_context());
+        let hint_rows = crate::render::wrap_lines(
+            vec![crate::widgets::key_hint::line(
+                selector.key_hints(),
+                usize::MAX,
+                app.key_hint_style(),
+                app.render_context(),
+            )],
+            width.into(),
+        )
+        .len() as u16;
+        let height = body_rows
+            .saturating_add(3 + hint_rows)
+            .min(available.height);
+        let surface = Rect::new(
+            available.x,
+            available.bottom() - height,
+            available.width,
+            height,
+        );
+        let content = Rect::new(
+            surface.x + inset,
+            surface.y + 2.min(height),
+            width,
+            body_rows.min(height.saturating_sub(3 + hint_rows)),
+        );
+        return ModalLayout {
+            surface,
+            title: Rect::new(
+                content.x,
+                surface.y + 1.min(height),
+                width,
+                u16::from(height > 1),
+            ),
+            close: Rect::default(),
+            content,
+            footer: Rect::new(
+                content.x,
+                surface.bottom().saturating_sub(hint_rows),
+                width,
+                hint_rows.min(height),
+            ),
+        };
+    }
     if app.overlay().is_none()
         && let Some(panel) = app.command_panel()
         && let crate::app::command_panel::CommandPanelBody::Dialog(dialog) = panel.body()
@@ -136,7 +185,7 @@ pub(super) fn target_at(
         ..layout.content
     };
     let target = panel
-        .pointer_target_at(tabs, body, position)
+        .pointer_target_at(tabs, body, position, app.render_context())
         .map(Target::Panel);
     target.or_else(|| {
         text_area
@@ -255,16 +304,49 @@ pub(super) fn draw_panel(
     } else {
         panel.key_hints()
     };
-    crate::widgets::modal::draw(
-        frame,
-        layout,
-        &title,
-        hints,
-        close,
-        blocked_alert,
-        hint_style,
-        context,
-    );
+    if matches!(panel, CommandPanel::Effort(_)) {
+        frame.render_widget(ratatui::widgets::Clear, layout.surface);
+        frame.render_widget(
+            ratatui::widgets::Block::default()
+                .borders(ratatui::widgets::Borders::TOP)
+                .border_style(ratatui::style::Style::default().fg(context.focus()))
+                .style(
+                    ratatui::style::Style::default()
+                        .fg(context.foreground())
+                        .bg(context.background()),
+                ),
+            layout.surface,
+        );
+        frame.render_widget(
+            ratatui::widgets::Paragraph::new(title).style(
+                ratatui::style::Style::default()
+                    .fg(context.foreground())
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            ),
+            layout.title,
+        );
+        let lines = crate::render::wrap_lines(
+            vec![crate::widgets::key_hint::line(
+                hints,
+                usize::MAX,
+                hint_style,
+                context,
+            )],
+            layout.footer.width.into(),
+        );
+        frame.render_widget(ratatui::widgets::Paragraph::new(lines), layout.footer);
+    } else {
+        crate::widgets::modal::draw(
+            frame,
+            layout,
+            &title,
+            hints,
+            close,
+            blocked_alert,
+            hint_style,
+            context,
+        );
+    }
     if let Some(parent) = panel.parent_title() {
         let localized_parent = context.localize(parent);
         let style = ratatui::style::Style::default()

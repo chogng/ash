@@ -675,6 +675,18 @@ impl App {
                 self.close_command_panel();
                 None
             }
+            CommandPanelOutcome::Effort(outcome) => match outcome {
+                crate::models::EffortSelectorOutcome::Apply { effort, mode } => {
+                    self.close_command_panel();
+                    self.set_collaboration_mode(mode);
+                    Some(ModelCommand::SetEffort { effort }.into())
+                }
+                crate::models::EffortSelectorOutcome::Dismiss => {
+                    self.close_command_panel();
+                    None
+                }
+                crate::models::EffortSelectorOutcome::Consumed => None,
+            },
             CommandPanelOutcome::ComposerOption(option) => {
                 self.close_command_panel();
                 match option {
@@ -3461,6 +3473,10 @@ impl App {
     }
 
     pub(crate) fn handle_tick(&mut self, now: Instant) -> bool {
+        let effort_changed = match self.panels_mut().command_mut() {
+            Some(CommandPanel::Effort(selector)) => selector.tick(now),
+            _ => false,
+        };
         let context = self.app_keymap_context(true);
         let chord_expired = self.app_keymap.expire(context, now);
         let status_changed = self
@@ -3484,6 +3500,7 @@ impl App {
                 .refresh_manager_time(&self.sessions, now),
         };
         chord_expired
+            || effort_changed
             || status_changed
             || top_tip_changed
             || elapsed_changed

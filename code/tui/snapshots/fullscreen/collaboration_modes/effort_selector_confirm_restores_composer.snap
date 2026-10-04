@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/collaboration_modes_tests.rs
+expression: render_effort(&app)
+---
+  .                                                                [Dashboard]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ────────────────────────────────────────────────────────────────────────────
+  >
+  ─────────────────────────────────────────────────────────── Automatic model
+  ⏸ Manual
+  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

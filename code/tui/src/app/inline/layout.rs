@@ -38,7 +38,7 @@ fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16)
         return Layout {
             session: command_panel_areas(
                 terminal_area,
-                super::panel::desired_height(panel, terminal_area.width),
+                super::panel::desired_height(panel, terminal_area.width, app.render_context()),
                 PANEL_FOOTER_ROWS,
             ),
             input: Rect::default(),
