@@ -19,4 +19,4 @@ expression: text(&buffer)
 >                                                                               
 ────────────────────────────────────────────────────────────────────────────────
   Shared model (high) · branch-layout · context unknown · Plan                  
-  ⏸ Manual                                                         ← Dashboard
+  ⏸ Manual · ← Dashboard

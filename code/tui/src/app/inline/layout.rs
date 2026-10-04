@@ -84,13 +84,8 @@ fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16)
             min_transcript_rows,
         },
     );
-    let mut session = chat.session;
-    if matches!(content, Content::Conversation) {
-        // Inline context hints replace the second status row rather than reserving another row.
-        session.statusline.height += session.hintline.height;
-    }
     Layout {
-        session,
+        session: chat.session,
         input: chat.input,
     }
 }
@@ -117,6 +112,7 @@ impl Layout {
             width: self.session.transcript.width,
             height: self
                 .session
+                .footer
                 .hintline
                 .y
                 .saturating_sub(self.session.transcript.y),
@@ -138,12 +134,12 @@ pub(in crate::app) fn command_panel_areas(
     SessionAreas {
         transcript: Rect::new(area.x, area.y, area.width, panel_y.saturating_sub(area.y)),
         composer: Rect::new(area.x, panel_y, area.width, panel_rows),
-        hintline: Rect::new(
+        footer: crate::app::footer::Layout::hints(Rect::new(
             area.x,
             area.bottom().saturating_sub(hint_rows),
             area.width,
             hint_rows,
-        ),
+        )),
         ..SessionAreas::default()
     }
 }

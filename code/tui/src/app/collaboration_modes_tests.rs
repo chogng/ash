@@ -677,9 +677,9 @@ fn fullscreen_effort_drag_copy_keeps_tip_above_panel_and_hints_below() {
         let areas = super::fullscreen::layout(&app, area).session;
         assert_eq!(areas.tipline.height, 1);
         assert_eq!(areas.transcript.bottom(), areas.tipline.y);
-        assert_eq!(areas.hintline.bottom(), area.bottom());
+        assert_eq!(areas.footer.hintline.bottom(), area.bottom());
         assert!(areas.composer.is_empty());
-        assert!(areas.statusline.is_empty());
+        assert!(areas.footer.statusline.is_empty());
         assert!(areas.agent_thread_switcher.is_empty());
 
         let mut terminal =
@@ -747,9 +747,9 @@ fn fullscreen_effort_drag_copy_keeps_tip_above_panel_and_hints_below() {
             .unwrap()
         };
         assert!(row_text(areas.tipline.y).trim_end().ends_with(&notice));
-        assert!(!row_text(areas.hintline.y).contains(&notice));
-        assert!(row_text(areas.hintline.y).contains("Enter"));
-        assert!(row_text(areas.hintline.y).contains("Esc"));
+        assert!(!row_text(areas.footer.hintline.y).contains(&notice));
+        assert!(row_text(areas.footer.hintline.y).contains("Enter"));
+        assert!(row_text(areas.footer.hintline.y).contains("Esc"));
         assert_eq!(
             buffer[start].bg,
             app.render_context().screen_selection_background()

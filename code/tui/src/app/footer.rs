@@ -1,4 +1,4 @@
-//! Shared hintline and tipline content for both screen modes.
+//! Bottom-row allocation, status and hint composition shared by both screen modes.
 
 use crate::app::App;
 use crate::keymap::bindings;
@@ -7,11 +7,12 @@ use crate::render::horizontal_margin;
 use crate::terminal::ScreenMode;
 use crate::widgets::key_hint;
 use crate::widgets::key_hint::KeyHints;
+use ash_memory_diagnostics::ProcessResourceDemand;
 use ratatui::Frame;
-use ratatui::layout::Alignment;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Line;
+use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 
 pub(super) fn chat_visible(app: &App) -> bool {
@@ -22,6 +23,37 @@ pub(super) fn chat_visible(app: &App) -> bool {
         && app.issue_manager().is_none()
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(super) struct Layout {
+    pub(super) statusline: Rect,
+    pub(super) hintline: Rect,
+}
+
+impl Layout {
+    /// Pages supply the bottom space; the final row belongs to permissions and actions.
+    pub(super) fn new(area: Rect) -> Self {
+        Self {
+            statusline: Rect {
+                height: area.height.saturating_sub(1),
+                ..area
+            },
+            hintline: Rect {
+                y: area.bottom().saturating_sub(area.height.min(1)),
+                height: area.height.min(1),
+                ..area
+            },
+        }
+    }
+
+    /// Panels and modal containers reserve their own space for action hints only.
+    pub(super) fn hints(area: Rect) -> Self {
+        Self {
+            hintline: area,
+            ..Self::default()
+        }
+    }
+}
+
 enum BottomContent<'a> {
     Keys(&'a KeyHints),
     Warning(String),
@@ -29,11 +61,28 @@ enum BottomContent<'a> {
     InputHints,
 }
 
-pub(super) fn context_hintline_active(app: &App) -> bool {
-    !matches!(bottom_content(app), BottomContent::InputHints)
-}
-
-pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: RenderContext<'_>) {
+pub(super) fn draw(frame: &mut Frame<'_>, areas: Layout, app: &App, context: RenderContext<'_>) {
+    if chat_visible(app) {
+        let statusline = horizontal_margin(areas.statusline, 2);
+        match app.screen_mode() {
+            ScreenMode::Fullscreen => crate::status::draw_fullscreen_info(
+                frame,
+                statusline,
+                app.status_line(),
+                app.approval_mode_status(),
+                app.status_line_runtime(),
+                context,
+            ),
+            ScreenMode::Inline => crate::status::draw_info(
+                frame,
+                statusline,
+                app.status_line(),
+                app.status_line_runtime(),
+                context,
+            ),
+        }
+    }
+    let area = areas.hintline;
     let content = horizontal_margin(
         Rect {
             y: area.bottom().saturating_sub(1),
@@ -43,13 +92,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: Render
         2,
     );
     frame.render_widget(
-        Paragraph::new(line(app, content.width.into(), context)).alignment(
-            if app.screen_mode() == ScreenMode::Inline && chat_visible(app) {
-                Alignment::Right
-            } else {
-                Alignment::Left
-            },
-        ),
+        Paragraph::new(line(app, content.width.into(), context)),
         content,
     );
 }
@@ -58,13 +101,101 @@ pub(super) fn line(app: &App, width: usize, context: RenderContext<'_>) -> Line<
     match bottom_content(app) {
         BottomContent::Keys(hints) => key_hint::line(hints, width, app.key_hint_style(), context),
         BottomContent::InputHints => {
-            key_hint::line(&input_hints(app), width, app.key_hint_style(), context)
+            if app.screen_mode() == ScreenMode::Inline && chat_visible(app) {
+                inline_input_line(app, width, context)
+            } else {
+                key_hint::line(&input_hints(app), width, app.key_hint_style(), context)
+            }
         }
         BottomContent::Warning(text) => Line::styled(text, Style::default().fg(context.warning())),
         BottomContent::Muted(text) => Line::styled(
             context.localize(text).into_owned(),
             Style::default().fg(context.muted()),
         ),
+    }
+}
+
+fn inline_input_line(app: &App, width: usize, context: RenderContext<'_>) -> Line<'static> {
+    let hint = key_hint::line(
+        &with_dashboard_hint(app, KeyHints::new()),
+        width,
+        app.key_hint_style(),
+        context,
+    );
+    // Reserve the available action before shortening permission text on narrow terminals.
+    let mut line = crate::status::policy_line(
+        app.status_line(),
+        width.saturating_sub(hint.width() + usize::from(hint.width() > 0) * 3),
+        app.approval_mode_status(),
+        context,
+    );
+    if line.width() > 0 && hint.width() > 0 {
+        line.spans
+            .push(Span::styled(" · ", Style::default().fg(context.muted())));
+    }
+    line.spans.extend(hint.spans);
+    line
+}
+
+/// Sampling follows the same row and width budget as the statistics drawn above.
+pub(super) fn process_resource_demand(app: &App, areas: Layout) -> ProcessResourceDemand {
+    let statusline = horizontal_margin(areas.statusline, 2);
+    if !chat_visible(app) || statusline.is_empty() {
+        return ProcessResourceDemand::Disabled;
+    }
+    let runtime = app.status_line_runtime();
+    let resources = match app.screen_mode() {
+        ScreenMode::Fullscreen => app.status_line().fullscreen_footer_process_resources(
+            crate::status::fullscreen_info_width(
+                app.status_line(),
+                statusline.width.into(),
+                app.approval_mode_status(),
+                app.render_context(),
+            ),
+            runtime,
+        ),
+        ScreenMode::Inline => app
+            .status_line()
+            .visible_process_resources(statusline.width.into(), runtime),
+    };
+    resources.map_or(
+        ProcessResourceDemand::Disabled,
+        ProcessResourceDemand::Summary,
+    )
+}
+
+pub(super) fn draw_modal(frame: &mut Frame<'_>, area: Rect, app: &App, context: RenderContext<'_>) {
+    context.clear_hyperlinks(area);
+    frame.render_widget(ratatui::widgets::Clear, area);
+    frame.render_widget(
+        ratatui::widgets::Block::default().style(
+            Style::default()
+                .fg(context.foreground())
+                .bg(context.background()),
+        ),
+        area,
+    );
+    frame.render_widget(
+        Paragraph::new(modal_hint_lines(app, area)),
+        horizontal_margin(area, 2),
+    );
+}
+
+pub(super) fn modal_hint_lines(app: &App, available: Rect) -> Vec<ratatui::text::Line<'static>> {
+    if available.is_empty() {
+        return Vec::new();
+    }
+    let content = horizontal_margin(available, 2);
+    let lines = crate::render::wrap_lines(
+        vec![line(app, usize::MAX, app.render_context())],
+        content.width.into(),
+    );
+    // When wrapping would consume the modal's remaining space, keep the exit action
+    // through the same action prioritization used by the single-row page hintline.
+    if lines.len() > usize::from(available.height) {
+        vec![line(app, content.width.into(), app.render_context())]
+    } else {
+        lines
     }
 }
 
@@ -252,3 +383,7 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
     }
     BottomContent::InputHints
 }
+
+#[cfg(test)]
+#[path = "footer_tests.rs"]
+mod tests;

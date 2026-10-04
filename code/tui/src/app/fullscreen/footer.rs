@@ -12,59 +12,9 @@ pub(super) fn draw(
     context: crate::render::RenderContext<'_>,
 ) {
     if super::modal::is_open(app) {
-        let area = areas.session.hintline;
-        context.clear_hyperlinks(area);
-        frame.render_widget(ratatui::widgets::Clear, area);
-        frame.render_widget(
-            ratatui::widgets::Block::default().style(
-                Style::default()
-                    .fg(context.foreground())
-                    .bg(context.background()),
-            ),
-            area,
-        );
-        frame.render_widget(
-            Paragraph::new(modal_hint_lines(app, area)),
-            crate::render::horizontal_margin(area, 2),
-        );
+        crate::app::footer::draw_modal(frame, areas.session.footer.hintline, app, context);
     } else {
-        if crate::app::footer::chat_visible(app) {
-            crate::status::draw_fullscreen_info(
-                frame,
-                crate::render::horizontal_margin(areas.session.statusline, 2),
-                app.status_line(),
-                app.approval_mode_status(),
-                app.status_line_runtime(),
-                context,
-            );
-        }
-        crate::app::footer::draw(frame, areas.session.hintline, app, context);
-    }
-}
-
-pub(super) fn modal_hint_lines(app: &App, available: Rect) -> Vec<ratatui::text::Line<'static>> {
-    if available.is_empty() {
-        return Vec::new();
-    }
-    let content = crate::render::horizontal_margin(available, 2);
-    let lines = crate::render::wrap_lines(
-        vec![crate::app::footer::line(
-            app,
-            usize::MAX,
-            app.render_context(),
-        )],
-        content.width.into(),
-    );
-    // When wrapping would consume the modal's remaining space, keep the exit action
-    // through the same action prioritization used by the single-row page hintline.
-    if lines.len() > usize::from(available.height) {
-        vec![crate::app::footer::line(
-            app,
-            content.width.into(),
-            app.render_context(),
-        )]
-    } else {
-        lines
+        crate::app::footer::draw(frame, areas.session.footer, app, context);
     }
 }
 

@@ -829,8 +829,6 @@ fn app_keys(action: AppKeymapAction) -> &'static str {
 
 pub(crate) static POLICY_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| KeyHints::compact().with_action("/permission", "change permissions"));
-pub(crate) static DASHBOARD_HINTS: LazyLock<KeyHints> =
-    LazyLock::new(|| KeyHints::new().with_compact_action(DASHBOARD_OPEN.keys(), "Dashboard"));
 pub(crate) static CLIPBOARD_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     KeyHints::compact()
         .with_note("image in clipboard")

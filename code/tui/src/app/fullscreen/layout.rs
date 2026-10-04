@@ -10,7 +10,7 @@ use ratatui::layout::Rect;
 pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
     let mut areas = page_layout(app, terminal_area);
     if super::modal::is_open(app) {
-        areas.session.hintline = modal_hintline(app, terminal_area);
+        areas.session.footer.hintline = modal_hintline(app, terminal_area);
     }
     areas
 }
@@ -21,7 +21,7 @@ pub(super) fn modal_hintline(app: &App, area: Rect) -> Rect {
         height: area.height.saturating_sub(header_rows(area) + 1),
         ..area
     };
-    let height = super::footer::modal_hint_lines(app, available).len() as u16;
+    let height = crate::app::footer::modal_hint_lines(app, available).len() as u16;
     Rect::new(area.x, area.bottom() - height, area.width, height)
 }
 
@@ -77,12 +77,12 @@ fn page_layout(app: &App, terminal_area: Rect) -> Layout {
                     height: terminal_area.height.saturating_sub(footer_rows),
                     ..terminal_area
                 },
-                hintline: Rect::new(
+                footer: crate::app::footer::Layout::hints(Rect::new(
                     terminal_area.x,
                     terminal_area.bottom().saturating_sub(footer_rows),
                     terminal_area.width,
                     footer_rows,
-                ),
+                )),
                 ..SessionAreas::default()
             },
         };

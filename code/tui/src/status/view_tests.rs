@@ -68,12 +68,14 @@ fn expressive_status_line_renders_emoji_bars_and_permission_text() {
                 runtime,
                 context,
             );
-            super::draw_policy(
-                frame,
+            frame.render_widget(
+                ratatui::widgets::Paragraph::new(super::policy_line(
+                    &model,
+                    48,
+                    ash_protocol::ApprovalMode::Manual.into(),
+                    context,
+                )),
                 ratatui::layout::Rect::new(0, 1, 48, 1),
-                &model,
-                ash_protocol::ApprovalMode::Manual.into(),
-                context,
             );
         })
         .unwrap();

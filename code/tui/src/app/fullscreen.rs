@@ -234,25 +234,5 @@ pub(super) fn process_resource_demand(
             ash_memory_diagnostics::ProcessResourceDemand::Disabled
         };
     }
-    if !crate::app::footer::chat_visible(app) {
-        return ash_memory_diagnostics::ProcessResourceDemand::Disabled;
-    }
-    let statusline = crate::render::horizontal_margin(layout(app, area).session.statusline, 2);
-    if statusline.is_empty() {
-        return ash_memory_diagnostics::ProcessResourceDemand::Disabled;
-    }
-    app.status_line()
-        .fullscreen_footer_process_resources(
-            crate::status::fullscreen_info_width(
-                app.status_line(),
-                statusline.width.into(),
-                app.approval_mode_status(),
-                app.render_context(),
-            ),
-            app.status_line_runtime(),
-        )
-        .map_or(
-            ash_memory_diagnostics::ProcessResourceDemand::Disabled,
-            ash_memory_diagnostics::ProcessResourceDemand::Summary,
-        )
+    crate::app::footer::process_resource_demand(app, layout(app, area).session.footer)
 }

@@ -714,22 +714,25 @@ fn context_hints_replace_the_second_statusline_and_restore_permission() {
         .apply_model_label("Fixture model");
     let normal = render(&app, 80, 20);
     let regions = super::layout(&app, normal.area).session;
-    assert_eq!(regions.statusline.height, 2);
-    assert_eq!(regions.hintline.y, regions.statusline.y + 1);
-    assert_eq!(regions.hintline.bottom(), regions.statusline.bottom());
-    assert_eq!(regions.composer.bottom(), regions.statusline.y);
+    assert_eq!(regions.footer.statusline.height, 1);
+    assert_eq!(regions.footer.hintline.y, regions.footer.statusline.y + 1);
+    assert_eq!(
+        regions.footer.hintline.y,
+        regions.footer.statusline.bottom()
+    );
+    assert_eq!(regions.composer.bottom(), regions.footer.statusline.y);
     let normal_text = text(&normal);
     assert!(
         normal_text
             .lines()
-            .nth(usize::from(regions.statusline.y))
+            .nth(usize::from(regions.footer.statusline.y))
             .unwrap()
             .contains("Fixture model")
     );
     assert!(normal_text.lines().last().unwrap().contains("⏸ Manual"));
     assert!(!normal_text.contains("Enter send"));
     assert_eq!(
-        normal[(2, regions.hintline.y)].fg,
+        normal[(2, regions.footer.hintline.y)].fg,
         app.render_context().warning()
     );
 
@@ -799,7 +802,7 @@ fn policy_stays_below_input_and_inline_tips_do_not_fade() {
     assert!(
         text(&before)
             .lines()
-            .nth(usize::from(areas.statusline.bottom() - 1))
+            .nth(usize::from(areas.footer.hintline.y))
             .unwrap()
             .contains("⏸ Manual")
     );
@@ -818,7 +821,7 @@ fn policy_stays_below_input_and_inline_tips_do_not_fade() {
     assert!(
         text(&after)
             .lines()
-            .nth(usize::from(areas.statusline.bottom() - 1))
+            .nth(usize::from(areas.footer.hintline.y))
             .unwrap()
             .contains("⏸ Manual")
     );

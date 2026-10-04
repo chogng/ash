@@ -224,8 +224,7 @@ pub(in crate::app) struct SessionAreas {
     pub(in crate::app) progress: Rect,
     pub(in crate::app) tipline: Rect,
     pub(in crate::app) composer: Rect,
-    pub(in crate::app) statusline: Rect,
-    pub(in crate::app) hintline: Rect,
+    pub(in crate::app) footer: super::footer::Layout,
     pub(in crate::app) agent_thread_switcher: Rect,
 }
 
@@ -347,16 +346,11 @@ pub(in crate::app) fn session_areas(
             height: composer_rows,
             ..area
         },
-        statusline: Rect {
+        footer: super::footer::Layout::new(Rect {
             y: bottom_y,
-            height: bottom_rows.saturating_sub(1),
+            height: bottom_rows,
             ..area
-        },
-        hintline: Rect {
-            y: bottom.saturating_sub(switcher_rows + switcher_gap_rows + bottom_rows.min(1)),
-            height: bottom_rows.min(1),
-            ..area
-        },
+        }),
         agent_thread_switcher: Rect {
             y: switcher_y,
             height: switcher_rows,

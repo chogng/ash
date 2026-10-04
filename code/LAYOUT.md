@@ -40,7 +40,7 @@ screenMode = "fullscreen" # 或 "inline"
 | --- | --- | --- | --- |
 | 模型与推理档位 | `model` | 输入框下方的 statusline | 输入框下分隔线 |
 | 非默认任务模式 | `mode` | 输入框下方的 statusline | 输入框下分隔线，跟在模型后面 |
-| 权限模式 | `permissions` | statusline 第二行；hintline 显示时暂时隐藏 | 底部 statusline 左侧 |
+| 权限模式 | `permissions` | footer 第二行；其他操作提示显示时暂时隐藏 | 底部 statusline 左侧 |
 | Git 分支与变更 | `git-branch`、`git-changes` | 底部 statusline | 顶部 statusline |
 | 上下文用量 | `context` | 底部 statusline | 顶部 statusline |
 | 缓存命中率与参考费用 | `cache-hit-rate`、`reference-cost` | 底部 statusline | 底部 statusline |
@@ -56,23 +56,23 @@ screenMode = "fullscreen" # 或 "inline"
 
 | 名称 | 内容 | fullscreen | inline |
 | --- | --- | --- | --- |
-| statusline | 模型、权限、环境与统计等状态信息 | 顶部 `top_statusline` 显示环境信息；底部一行显示权限与统计；模型靠近输入框 | 底部第一行显示模型等信息，第二行平时显示权限 |
-| hintline | 当前操作快捷键、等待结果或待完成快捷键提示 | 输入框下方独立一行，位于底部 statusline 之后 | 空输入时在第二行右侧显示 Dashboard 入口；其他交互按需覆盖第二行的权限，不增加第三行 |
+| statusline | 模型、权限、环境与统计等状态信息 | 顶部 `top_statusline` 显示环境信息；底部一行显示权限与统计；模型靠近输入框 | 底部第一行显示模型等信息，权限在第二行的 hintline 中组合显示 |
+| hintline | 当前操作快捷键、等待结果或待完成快捷键提示 | 输入框下方独立一行，位于底部 statusline 之后 | 空输入时在第二行左侧将 Dashboard 入口接在权限之后；其他交互按需覆盖权限，不增加第三行 |
 | progress | 本轮运行状态、耗时、中断键与长任务技巧 | 输入控制区，位于 tipline 上方；运行时占一至两行 | 活动视口的输入控制区，位于 tipline 上方；运行时占一至两行 |
 | tipline | 听写、临时反馈与首页引导 | 输入框上方一行 | 输入框上方一行 |
 
-fullscreen 的权限和 hintline 可以同时显示。inline 空输入时在第二行左侧显示权限，右侧显示 Dashboard 入口；其他交互在权限与 hintline 之间切换，第一行的模型、统计等聊天状态信息保持原位。命令面板、正文详情和管理页使用自己的容器，背景聊天 statusline 隐藏，操作提示由页面 hintline 统一显示，功能容器提供当前可用动作。
+fullscreen 的权限和 hintline 可以同时显示。inline 空输入时在第二行左侧依次显示权限与 Dashboard 入口；其他交互在权限与 hintline 之间切换，第一行的模型、统计等聊天状态信息保持原位。命令面板、正文详情和管理页使用自己的容器，背景聊天 statusline 隐藏，操作提示由页面 hintline 统一显示，功能容器提供当前可用动作。
 
-fullscreen 的 hintline 从内容区左侧开始，与底部 statusline 对齐；inline 的聊天 hintline 保持右对齐。
+两种模式的 hintline 都从内容区左侧开始，与底部 statusline 对齐。inline 将权限与适用的 Dashboard 提示组成同一行；权限关闭时，Dashboard 从该行起点显示。窄窗口先为 Dashboard 留出宽度，再缩短权限文字。
 
 ### Inline 第二行的覆盖与恢复
 
-**普通聊天时显示两行 statusline；空输入的 Dashboard 入口与权限共用第二行，需要处理其他交互时，hintline 替换第二行的整行内容。** 覆盖只改变显示内容，不改变当前权限策略或 StatusLine 配置。
+**普通聊天时 footer 占两行；空输入的 Dashboard 入口与权限共用第二行，需要处理其他交互时，该行显示对应操作提示。** 覆盖只改变显示内容，不改变当前权限策略或 StatusLine 配置。
 
 | 当前状态 | inline 第二行显示什么 |
 | --- | --- |
 | 普通输入、聊天运行、听写，或显示 tipline 临时反馈 | 权限模式；`permissions` 关闭时留空 |
-| 输入框聚焦且没有文字、附件，也未进入输入历史搜索 | 左侧显示权限，右侧显示 `← Dashboard`；`permissions` 关闭时仍显示入口 |
+| 输入框聚焦且没有文字、附件，也未进入输入历史搜索 | 左侧显示 `权限 · ← Dashboard`；`permissions` 关闭时仍显示入口 |
 | 仅显示 `/`、`@`、`$` 补全候选 | 保持权限显示；候选列表放在自己的补全区域 |
 | 待回答问题或待审批请求 | 对应 hintline，例如 `Enter to answer`、`Enter to confirm` |
 | 答案或审批结果正在提交 | hintline 显示 `Waiting for the request result` |
@@ -87,19 +87,19 @@ fullscreen 的 hintline 从内容区左侧开始，与底部 statusline 对齐�
 ```text
 普通聊天
   statusline 第一行：模型 · 分支 · 统计
-  statusline 第二行：⏸ Manual
+  hintline 第二行：⏸ Manual
 
 等待回答
   statusline 第一行：模型 · 分支 · 统计
-  hintline 覆盖第二行：Enter to answer
+  hintline 第二行：Enter to answer
 
 提交答案
   statusline 第一行：模型 · 分支 · 统计
-  hintline 覆盖第二行：Waiting for the request result
+  hintline 第二行：Waiting for the request result
 
 请求处理完毕，回到普通聊天
   statusline 第一行：模型 · 分支 · 统计
-  statusline 第二行：⏸ Manual
+  hintline 第二行：⏸ Manual
 ```
 
 fullscreen 窄窗口优先保留底部权限，再裁剪同一行的统计信息；inline 第二行的权限或操作提示不挤占第一行的模型与统计。
@@ -145,20 +145,20 @@ inline：
 │ > 输入正文                                                  │
 │ ──────────────────────────────────────────────────────────  │
 │ statusline 第一行：模型 · 推理档位 · Plan · 分支 · 统计     │
-│ statusline 第二行：权限；操作时由 hintline 覆盖             │
+│ hintline 第二行：权限与适用的 Dashboard，或当前操作提示   │
 │ Agent 切换栏                                       [可选]   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任务模式、环境与统计信息，第二行平时显示权限，交互时由 hintline 覆盖。fullscreen 将环境项移到顶部 statusline、模型与模式放到输入框下分隔线，底部 statusline 显示权限，并保留缓存命中率、参考费用和资源统计。两种模式的底部 statusline 也显示已有的计划与子任务运行摘要。两种模式的听写状态和停止快捷键统一放在 `tipline`，普通聊天页中，fullscreen 为 statusline 和 hintline 各预留一行；inline 仅为 statusline 预留两行，hintline 与第二行共用位置。没有启用的信息时对应状态行留空。
+inline 的 footer 第一行按配置顺序与可用宽度绘制模型、任务模式、环境与统计信息，第二行组合权限与适用的 Dashboard 提示，其他交互显示对应操作提示。fullscreen 将环境项移到顶部 statusline、模型与模式放到输入框下分隔线，底部 statusline 显示权限，并保留缓存命中率、参考费用和资源统计。两种模式的底部 statusline 也显示已有的计划与子任务运行摘要。两种模式的听写状态和停止快捷键统一放在 `tipline`；普通聊天页的共享 footer 为 statusline 和 hintline 各分配一行。没有启用的信息时对应状态行留空。
 
 终端历史、鼠标捕获、正文滚动和模态框 / 临时面板的容器仍由各模式负责。两种模式不调用对方的绘制或导航；共享组件不拥有页面焦点或终端生命周期。
 
 ### 组合规则与验证
 
-[chat_view.rs](tui/src/app/chat_view.rs) 统一分配消息、目标、计划、队列、提问、progress、tipline、输入、statusline、hintline 和 Agent 切换栏；[footer.rs](tui/src/app/footer.rs) 统一选择快捷键与听写提示，包括弹窗编辑警告、顶部焦点和首页输入提示。hintline 的内容只在共享 footer 中选择，模式 footer 负责绘制，fullscreen 另处理弹窗提示换行；两种模式各自提供空间预算、输入外观和页面容器。
+[chat_view.rs](tui/src/app/chat_view.rs) 统一分配消息、目标、计划、队列、提问、progress、tipline、输入、底部 footer 和 Agent 切换栏；[footer.rs](tui/src/app/footer.rs) 在底部空间内分配 statusline 与 hintline，统一组合和绘制状态、权限与快捷键，并处理弹窗提示换行、对齐和宽度预算。统计采样需求使用同一份行与宽度预算。模式布局提供可用空间和页面容器，功能模块提供状态内容与动作；导航行为仍由各功能和模式维护。
 
-正常高度的普通聊天页中，inline 的 `session.statusline` 是两行矩形，`session.hintline` 是其中第二行的一行矩形；两个字段描述重叠区域。fullscreen 的底部 `session.statusline` 与 `session.hintline` 则是相邻的两个一行矩形。维护布局时按实际占行计算高度，不能将 inline 的两个矩形高度相加。
+正常高度的普通聊天页中，两种模式的 `session.footer.statusline` 与 `session.footer.hintline` 都是相邻的两个一行矩形，由共享 footer 分配。inline 的权限在 hintline 中显示，需要处理其他交互时，该行显示对应操作提示；无需再用重叠的区域表示权限与提示。命令面板和模态容器给 footer 提供仅用于提示的空间。
 
 测试分别验证两种模式的完整文本与区域位置：状态项开关、状态项不重复、听写与权限同时可见、当前任务与下一条任务权限文案、窄宽度裁剪，inline 第二行被 hintline 覆盖及恢复，以及模式切换后配置与草稿保持不变。页面焦点、历史输出与终端恢复仍由各模式的测试覆盖。
 
@@ -171,7 +171,7 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
 | 本轮状态、耗时、中断键和长任务技巧 | 固定的 `progress` 区域，位于 tipline 上方，不参与正文滚动 | 活动视口中固定的 `progress` 区域，位于 tipline 上方，不写入终端历史 |
 | 听写阶段与下载字节数 | 输入框上方的 `tipline` | 输入框上方的 `tipline` |
 | 停止听写快捷键 | 与听写状态一起显示在 `tipline` | 与听写状态一起显示在 `tipline` |
-| 输入框下方的固定区域 | statusline 一行，hintline 一行 | statusline 两行，hintline 按需覆盖第二行 |
+| 输入框下方的固定区域 | statusline 一行，hintline 一行 | statusline 一行，第二行组合权限与操作提示 |
 
 [progress.rs](tui/src/thread/progress.rs) 拥有状态行的内容，[chat_view.rs](tui/src/app/chat_view.rs) 分配区域并绘制；[transcript/view.rs](tui/src/thread/transcript/view.rs) 只负责正文及其滚动。两种模式的听写阶段与停止快捷键由共享 tipline 绘制，不替换统计、权限或操作提示。
 
@@ -228,12 +228,12 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
 | 计划区 | `plan` | 当前计划及步骤 | [plan.rs](tui/src/thread/plan.rs) |
 | 待发送队列 | `queue` | 排队等待发送的输入 | [queue.rs](tui/src/thread/queue.rs) |
 | 提问区 | `request` | Agent 向用户提出的问题和答案选项 | [interaction/query.rs](tui/src/thread/interaction/query.rs) |
-| 底部 statusline | `statusline` | 输入框下方、hintline 上方的一行；显示权限、缓存命中率、费用、资源和运行摘要 | [footer.rs](tui/src/app/fullscreen/footer.rs) |
+| 底部 statusline | `footer.statusline` | 输入框下方、hintline 上方的一行；显示权限、缓存命中率、费用、资源和运行摘要 | [footer.rs](tui/src/app/footer.rs) |
 | 本轮运行状态行 | `progress` | 固定在 tipline 上方；显示阶段、耗时、中断键和可选技巧 | [chat_view.rs](tui/src/app/chat_view.rs)、[progress.rs](tui/src/thread/progress.rs) |
 | 输入框上方提示行 | `tipline` | 听写、临时提示和首页引导；正常布局预留一行 | [footer.rs](tui/src/app/fullscreen/footer.rs) 的 `draw_tip()`、[top_tip.rs](tui/src/app/top_tip.rs) |
 | 输入区域 | `composer` | 容纳输入框；需要审批时改为显示审批选项 | [fullscreen/composer.rs](tui/src/app/fullscreen/composer.rs) |
 | 实际输入框 | `input` | 普通情况下位于 `composer` 内；审批时高度为零 | [composer/surface.rs](tui/src/thread/composer/surface.rs) |
-| hintline | `hintline` | `Enter send` 等当前操作提示；普通布局预留一行 | [footer.rs](tui/src/app/footer.rs) |
+| hintline | `footer.hintline` | `Enter send` 等当前操作提示；普通布局预留一行 | [footer.rs](tui/src/app/footer.rs) |
 | Agent 切换栏 | `agent_thread_switcher` | Main / Subagent 会话切换，位于快捷键区下方 | [thread.rs](tui/src/thread.rs) 的 `draw_agent_thread_switcher` 入口 |
 
 顶部右侧显示工作区/会话状态摘要；聊天进度与听写状态的位置见[聊天进度与听写状态](#聊天进度与听写状态)。`tipline` 优先显示听写，其余时间显示临时提示或首页引导；Dashboard 入口提示在底部 hintline，权限在 statusline 持续显示。输入区下分隔线上的模型与任务模式标签由 [fullscreen/composer.rs](tui/src/app/fullscreen/composer.rs) 绘制。
@@ -265,7 +265,7 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
 | 整体、标题与关闭入口 | `surface` / `title` / `close` | 右上角 `[✗]` 关闭；悬停只改变样式，关闭也可用 Esc |
 | 内容与页签 | `content` / `tabs` | 内容区包含可选页签与正文 |
 | 正文 | `body_area()` / `draw_body()` | 页签及间隔行以下，具体内容由功能模块负责 |
-| 页面操作提示 | `session.hintline` | 固定在页面底部，按当前焦点与编辑状态显示；窄窗口换行，弹窗不占用此区域 |
+| 页面操作提示 | `session.footer.hintline` | 固定在页面底部，按当前焦点与编辑状态显示；窄窗口换行，弹窗不占用此区域 |
 
 弹窗外框和正文不预留快捷键提示行。fullscreen 页面根据当前弹窗提示的本地化宽度预留底部 hintline，再分配弹窗区域；高度不足以显示完整换行提示时，按提示优先级保留退出操作。提示不被弹窗覆盖，点击提示区不关闭弹窗。按键仍由当前功能和模态容器处理，关闭后恢复页面对应的提示。
 
@@ -302,20 +302,20 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
 │ > 输入正文                                                │
 │ ──────────────────────────────────────────────────────    │
 │ statusline 第一行：模型、任务模式、环境与统计信息         │
-│ statusline 第二行：权限；操作时由 hintline 覆盖           │
+│ hintline 第二行：权限与适用的 Dashboard，或当前操作提示 │
 │ Agent 切换栏 agent_thread_switcher               [可选]   │
 └───────────────────────────────────────────────────────────┘
 ```
 
 [inline/layout.rs](tui/src/app/inline/layout.rs) 的 `height()` 按控制区所需高度加上 8 行活动正文计算视口高度，最多占终端当前高度；这是高度预算，正文实际可用空间由 `session_areas()` 分配。它不会随着已完成消息数量持续长高。历史浏览时正文最小预算为 4 行；窗口太矮时，提问与输入会挤压该预算，再让出 tipline 的空间，保留待回答的问题、输入框和 statusline。
 
-inline 与 fullscreen 共用 `SessionAreas` 和控制区位置计算，由 inline 的页面入口提供活动视口范围。差异集中在三个入口：
+inline 与 fullscreen 共用 `SessionAreas`、控制区位置计算和底部 footer，由 inline 的页面入口提供活动视口范围。相关入口如下：
 
 | 职责 | 实现入口 |
 | --- | --- |
 | 定稿历史与活动尾部分开输出，记录已写出的单元身份 | [output.rs](tui/src/app/inline/output.rs)、[scrollback.rs](tui/src/terminal/scrollback.rs) |
 | 欢迎信息在普通主屏输出时写入一次 | [header.rs](tui/src/app/inline/header.rs) |
-| 底部 statusline 第一行显示模型等配置信息，第二行平时显示权限，操作提示由 hintline 覆盖该行；听写使用输入框上方的 tipline，本轮运行状态固定在 tipline 上方，由 chat_view 绘制 | [footer.rs](tui/src/app/inline/footer.rs) |
+| 底部第一行显示模型等配置信息，第二行组合权限与适用的 Dashboard 提示，其他操作提示覆盖该行；听写使用输入框上方的 tipline，本轮运行状态固定在 tipline 上方，由 chat_view 绘制 | [footer.rs](tui/src/app/footer.rs) |
 
 `Output` 在当前 Thread 内按稳定单元身份去重，普通重绘和重复快照不会再次写出已定稿块；旧分页内容留在正文浏览器中，避免插入较早消息打乱主屏输出顺序。切换 Thread 会重置输出记录，并绘制目标 Thread。
 
@@ -327,7 +327,7 @@ inline 与 fullscreen 共用 `SessionAreas` 和控制区位置计算，由 inlin
 
 [output::expanded()](tui/src/app/inline/output.rs) 统一判断是否需要临时备用屏幕：命令面板、正文详情浮层、补全、会话或 Issue 管理、预览和正文浏览都走这个终端入口。终端切换由 `TerminalSession::set_inline_overlay()` 完成，功能页不直接写屏幕控制序列。
 
-命令面板区域由 `command_panel_areas()` 分配：正文占上方剩余区域，面板占 `session.composer`，提示留在 `session.hintline`，实际输入框隐藏。外框与正文边界由 [widgets/panel.rs](tui/src/widgets/panel.rs) 的 `PanelLayout` 计算：标题一行、标题后空一行，再放页签和正文；内容左右各留两列。[inline/panel.rs](tui/src/app/inline/panel.rs) 只承载同一个 `CommandPanel` 功能编辑器。
+命令面板区域由 `command_panel_areas()` 分配：正文占上方剩余区域，面板占 `session.composer`，提示留在 `session.footer.hintline`，实际输入框隐藏。外框与正文边界由 [widgets/panel.rs](tui/src/widgets/panel.rs) 的 `PanelLayout` 计算：标题一行、标题后空一行，再放页签和正文；内容左右各留两列。[inline/panel.rs](tui/src/app/inline/panel.rs) 只承载同一个 `CommandPanel` 功能编辑器。
 
 面板打开时，按键、粘贴和底部提示归面板；后台到达的审批和提问保留到关闭后处理。关闭不把面板内容写入对话历史。补全使用 `Layout::completion_area()` 和共享候选组件，在临时屏幕里绘制；不会成为新的正文单元。
 

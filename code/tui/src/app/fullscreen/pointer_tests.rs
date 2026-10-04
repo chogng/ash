@@ -716,7 +716,7 @@ fn detail_overlay_captures_only_its_surface_and_releases_mouse_on_close() {
                     .then_some(PointerTarget::Modal(super::super::modal::Target::Text));
                 assert_eq!(super::target_at(&app, area, column, row), expected);
             } else {
-                let hintline = super::super::layout(&app, area).session.hintline;
+                let hintline = super::super::layout(&app, area).session.footer.hintline;
                 assert_eq!(
                     super::target_at(&app, area, column, row),
                     (!hintline.contains(position))

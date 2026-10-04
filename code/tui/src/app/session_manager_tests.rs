@@ -810,9 +810,15 @@ fn dashboard_hintline(app: &App) -> String {
     let area = ratatui::layout::Rect::new(0, 0, WIDTH, HEIGHT);
     let row = match app.screen_mode() {
         crate::terminal::ScreenMode::Fullscreen => {
-            super::fullscreen::layout(app, area).session.hintline.y
+            super::fullscreen::layout(app, area)
+                .session
+                .footer
+                .hintline
+                .y
         }
-        crate::terminal::ScreenMode::Inline => super::inline::layout(app, area).session.hintline.y,
+        crate::terminal::ScreenMode::Inline => {
+            super::inline::layout(app, area).session.footer.hintline.y
+        }
     };
     render(app)
         .lines()
@@ -1026,7 +1032,7 @@ fn dashboard_uses_the_page_and_updates_the_right_column_with_selection() {
         assert!(input.is_empty());
         assert!(session.composer.is_empty());
         assert!(session.transcript.height >= HEIGHT - 4);
-        assert_eq!(session.hintline.bottom(), area.bottom());
+        assert_eq!(session.footer.hintline.bottom(), area.bottom());
         let output = render(&app);
         assert!(output.contains("Parser review is complete."));
         assert!(output.contains("root-model"));

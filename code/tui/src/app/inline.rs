@@ -1,6 +1,5 @@
 //! Inline page composition over the terminal's main screen.
 
-mod footer;
 mod header;
 mod layout;
 pub(super) mod navigation;
@@ -127,7 +126,7 @@ fn draw_content(
                 areas.session.tipline,
             );
         }
-        footer::draw(frame, &areas, app, context);
+        crate::app::footer::draw(frame, areas.session.footer, app, context);
         if let Some(overlay) = app.overlay() {
             context.clear_hyperlinks(overlay.surface(areas.transient_area()));
             crate::widgets::overlay::draw(frame, areas.transient_area(), overlay, context);
@@ -175,7 +174,7 @@ fn draw_content(
     }
     if let Some(panel) = app.command_panel() {
         panel::draw(panel, frame, areas.session.composer, context);
-        footer::draw(frame, &areas, app, context);
+        crate::app::footer::draw(frame, areas.session.footer, app, context);
         if let Some(overlay) = app.overlay() {
             context.clear_hyperlinks(overlay.surface(areas.transient_area()));
             crate::widgets::overlay::draw(frame, areas.transient_area(), overlay, context);
@@ -194,8 +193,8 @@ fn draw_content(
             context,
         );
     }
-    footer::draw(frame, &areas, app, context);
-    footer::draw_tip(frame, areas.session.tipline, app, context);
+    crate::app::footer::draw(frame, areas.session.footer, app, context);
+    crate::app::footer::draw_tip(frame, areas.session.tipline, app, None, context);
     if let Some(overlay) = app.overlay() {
         context.clear_hyperlinks(overlay.surface(areas.transient_area()));
         crate::widgets::overlay::draw(frame, areas.transient_area(), overlay, context);
@@ -220,5 +219,12 @@ pub(super) fn process_resource_demand(
     app: &App,
     area: Rect,
 ) -> ash_memory_diagnostics::ProcessResourceDemand {
-    footer::process_resource_demand(app, &layout(app, area))
+    let areas = layout(app, area);
+    if app
+        .command_panel()
+        .is_some_and(|editor| panel::process_resources_visible(editor, areas.session.composer))
+    {
+        return ash_memory_diagnostics::ProcessResourceDemand::Detailed;
+    }
+    crate::app::footer::process_resource_demand(app, areas.session.footer)
 }

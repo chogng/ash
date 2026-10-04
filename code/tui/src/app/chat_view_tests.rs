@@ -22,8 +22,8 @@ fn session_layout_bounds_queue_and_preserves_transcript() {
     assert_eq!(areas.queue.height, 5);
     assert_eq!(areas.tipline.height, 1);
     assert_eq!(areas.composer.height, 3);
-    assert_eq!(areas.statusline.height, 1);
-    assert_eq!(areas.hintline.height, 1);
+    assert_eq!(areas.footer.statusline.height, 1);
+    assert_eq!(areas.footer.hintline.height, 1);
     assert_eq!(areas.agent_thread_switcher.height, 4);
 }
 
@@ -67,10 +67,13 @@ fn session_layout_places_goal_plan_and_queue_above_input() {
     assert_eq!(areas.queue.y, areas.plan.y + areas.plan.height);
     assert_eq!(areas.tipline.y, areas.queue.y + areas.queue.height);
     assert_eq!(areas.composer.y, areas.tipline.y + areas.tipline.height);
-    assert_eq!(areas.hintline.y, areas.composer.y + areas.composer.height);
+    assert_eq!(
+        areas.footer.hintline.y,
+        areas.composer.y + areas.composer.height
+    );
     assert_eq!(
         areas.agent_thread_switcher.y,
-        areas.hintline.y + areas.hintline.height + 1
+        areas.footer.hintline.y + areas.footer.hintline.height + 1
     );
 }
 
@@ -103,11 +106,11 @@ fn session_layout_does_not_reserve_an_agent_thread_gap_without_both_surfaces() {
 
     assert_eq!(
         without_switcher.agent_thread_switcher.y,
-        without_switcher.hintline.y + without_switcher.hintline.height
+        without_switcher.footer.hintline.y + without_switcher.footer.hintline.height
     );
     assert_eq!(
         without_bottom.agent_thread_switcher.y,
-        without_bottom.hintline.y + without_bottom.hintline.height
+        without_bottom.footer.hintline.y + without_bottom.footer.hintline.height
     );
 }
 
@@ -145,11 +148,11 @@ fn fixed_footer_and_tip_stay_bounded_on_short_terminals() {
     for height in 0..40 {
         let area = Rect::new(3, 5, 40, height);
         let areas = session_areas(area, 0, 0, 0, 0, 0, 3, 2, 0, super::MIN_TRANSCRIPT_ROWS);
-        assert!(areas.hintline.bottom() <= area.bottom());
+        assert!(areas.footer.hintline.bottom() <= area.bottom());
         assert!(areas.tipline.y >= area.y);
         assert_eq!(areas.tipline.bottom(), areas.composer.y);
-        assert_eq!(areas.composer.bottom(), areas.statusline.y);
-        assert_eq!(areas.statusline.bottom(), areas.hintline.y);
+        assert_eq!(areas.composer.bottom(), areas.footer.statusline.y);
+        assert_eq!(areas.footer.statusline.bottom(), areas.footer.hintline.y);
     }
 }
 
@@ -222,6 +225,13 @@ fn areas(app: &App, area: Rect) -> super::SessionAreas {
     }
 }
 
+fn permission_row(mode: ScreenMode, footer: crate::app::footer::Layout) -> u16 {
+    match mode {
+        ScreenMode::Fullscreen => footer.statusline.y,
+        ScreenMode::Inline => footer.hintline.y,
+    }
+}
+
 #[test]
 fn statusline_items_keep_their_configured_locations_and_switches_in_both_modes() {
     let area = Rect::new(0, 0, 100, 20);
@@ -229,34 +239,35 @@ fn statusline_items_keep_their_configured_locations_and_switches_in_both_modes()
         let mut app = configured_app(mode);
         let before = render(&app, area);
         let regions = areas(&app, area);
+        assert_eq!(regions.footer.statusline.height, 1);
         assert_eq!(
-            regions.statusline.height,
-            match mode {
-                ScreenMode::Fullscreen => 1,
-                ScreenMode::Inline => 2,
-            }
+            regions.footer.statusline.bottom(),
+            regions.footer.hintline.y
         );
-        assert!(row(&before, regions.statusline.bottom() - 1).starts_with("  ⏸ Manual"));
+        assert!(row(&before, permission_row(mode, regions.footer)).starts_with("  ⏸ Manual"));
         match mode {
             ScreenMode::Fullscreen => {
-                assert!(!row(&before, regions.hintline.y).contains("Manual"));
-                assert!(row(&before, regions.hintline.y).starts_with("  Enter send"));
-                assert_eq!(before[(2, regions.hintline.y)].symbol(), "E");
+                assert!(!row(&before, regions.footer.hintline.y).contains("Manual"));
+                assert!(row(&before, regions.footer.hintline.y).starts_with("  Enter send"));
+                assert_eq!(before[(2, regions.footer.hintline.y)].symbol(), "E");
             }
             ScreenMode::Inline => {
-                assert_eq!(regions.hintline.y, regions.statusline.bottom() - 1);
+                assert_eq!(
+                    regions.footer.hintline.y,
+                    regions.footer.statusline.bottom()
+                );
                 assert!(!text(&before).contains("Enter send"));
             }
         }
         let model_row = match mode {
             ScreenMode::Fullscreen => crate::app::fullscreen::layout(&app, area).input.bottom() - 1,
-            ScreenMode::Inline => regions.statusline.y,
+            ScreenMode::Inline => regions.footer.statusline.y,
         };
         assert!(row(&before, model_row).contains("Shared model (high)"));
         assert!(row(&before, model_row).contains("Plan"));
         let environment_row = match mode {
             ScreenMode::Fullscreen => crate::app::fullscreen::layout(&app, area).top_statusline.y,
-            ScreenMode::Inline => regions.statusline.y,
+            ScreenMode::Inline => regions.footer.statusline.y,
         };
         assert!(row(&before, environment_row).contains("branch-layout"));
         assert_eq!(text(&before).matches("Shared model (high)").count(), 1);
@@ -349,13 +360,15 @@ fn accounting_stays_in_the_bottom_statusline_in_both_modes() {
         let area = Rect::new(0, 0, 80, 18);
         let buffer = render(&app, area);
         let regions = areas(&app, area);
-        assert!(row(&buffer, regions.statusline.y).contains("cache hit 75.0% · cost $0.01008"));
-        assert!(!row(&buffer, regions.hintline.y).contains("cost"));
-        assert!(row(&buffer, regions.statusline.bottom() - 1).contains("Manual"));
+        assert!(
+            row(&buffer, regions.footer.statusline.y).contains("cache hit 75.0% · cost $0.01008")
+        );
+        assert!(!row(&buffer, regions.footer.hintline.y).contains("cost"));
+        assert!(row(&buffer, permission_row(mode, regions.footer)).contains("Manual"));
         assert_eq!(text(&buffer).matches("cost $0.01008").count(), 1);
         if mode == ScreenMode::Fullscreen {
-            assert!(row(&buffer, regions.hintline.y).starts_with("  Enter send"));
-            assert_eq!(buffer[(2, regions.hintline.y)].symbol(), "E");
+            assert!(row(&buffer, regions.footer.hintline.y).starts_with("  Enter send"));
+            assert_eq!(buffer[(2, regions.footer.hintline.y)].symbol(), "E");
         }
         match mode {
             ScreenMode::Fullscreen => crate::tui_assert_snapshot!(
@@ -414,12 +427,12 @@ fn permission_survives_tips_dictation_and_narrow_widths_in_both_modes() {
             let regions = areas(&app, area);
             let buffer = render(&app, area);
             assert!(row(&buffer, regions.tipline.y).contains("Copied"));
-            assert!(row(&buffer, regions.statusline.bottom() - 1).contains("Manual"));
+            assert!(row(&buffer, permission_row(mode, regions.footer)).contains("Manual"));
             if mode == ScreenMode::Fullscreen {
-                assert!(row(&buffer, regions.hintline.y).starts_with("  Enter send"));
+                assert!(row(&buffer, regions.footer.hintline.y).starts_with("  Enter send"));
             }
             assert_eq!(
-                buffer[(2, regions.statusline.bottom() - 1)].fg,
+                buffer[(2, permission_row(mode, regions.footer))].fg,
                 app.render_context().warning()
             );
         }
@@ -445,8 +458,8 @@ fn permission_survives_tips_dictation_and_narrow_widths_in_both_modes() {
         let buffer = render(&app, area);
         assert!(row(&buffer, regions.tipline.y).contains("Dictation · loading model"));
         assert!(row(&buffer, regions.tipline.y).contains("ctrl+c to stop dictation"));
-        assert!(row(&buffer, regions.statusline.bottom() - 1).contains("Manual"));
-        assert!(!row(&buffer, regions.hintline.y).contains("stop dictation"));
+        assert!(row(&buffer, permission_row(mode, regions.footer)).contains("Manual"));
+        assert!(!row(&buffer, regions.footer.hintline.y).contains("stop dictation"));
         match mode {
             ScreenMode::Fullscreen => {
                 crate::tui_assert_snapshot!(app = &app; "dictation_and_permission_fullscreen", text(&buffer))
@@ -460,7 +473,7 @@ fn permission_survives_tips_dictation_and_narrow_widths_in_both_modes() {
             Some(AppCommand::DictationStop { resource_id })
         );
         assert!(!text(&render(&app, area)).contains("ctrl+c to stop dictation"));
-        assert!(row(&render(&app, area), regions.statusline.bottom() - 1).contains("Manual"));
+        assert!(row(&render(&app, area), permission_row(mode, regions.footer)).contains("Manual"));
     }
 }
 
@@ -550,8 +563,8 @@ fn chat_progress_yields_to_question_and_input_on_short_terminals() {
             regions.progress,
             regions.tipline,
             regions.composer,
-            regions.statusline,
-            regions.hintline,
+            regions.footer.statusline,
+            regions.footer.hintline,
         ] {
             assert!(region.y >= area.y && region.bottom() <= area.bottom());
         }

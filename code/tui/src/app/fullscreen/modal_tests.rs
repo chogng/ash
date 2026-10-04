@@ -269,7 +269,10 @@ fn short_page_hintline_keeps_exit_visible_without_covering_the_modal() {
     let mut app = crate::app::App::new();
     app.update(crate::config::Event::EditorOpened(config_choices()));
     let area = Rect::new(0, 0, 20, 4);
-    let hintline = crate::app::fullscreen::layout(&app, area).session.hintline;
+    let hintline = crate::app::fullscreen::layout(&app, area)
+        .session
+        .footer
+        .hintline;
     let modal = super::layout_for(&app, area);
     assert_eq!(hintline.height, 1);
     assert_eq!(hintline.bottom(), area.bottom());
@@ -314,7 +317,10 @@ fn page_hintline_follows_modal_focus_wraps_and_restores_input() {
             };
             let original_hints = hint_text(
                 &frame_buffer(&app, area),
-                crate::app::fullscreen::layout(&app, area).session.hintline,
+                crate::app::fullscreen::layout(&app, area)
+                    .session
+                    .footer
+                    .hintline,
             );
             app.update(crate::config::Event::EditorOpened(
                 crate::config::config_choices(
@@ -335,7 +341,10 @@ fn page_hintline_follows_modal_focus_wraps_and_restores_input() {
                     );
                     assert_ne!(app.command_panel().unwrap().key_hints(), &list_hints);
                 }
-                let hintline = crate::app::fullscreen::layout(&app, area).session.hintline;
+                let hintline = crate::app::fullscreen::layout(&app, area)
+                    .session
+                    .footer
+                    .hintline;
                 let modal = super::layout_for(&app, area);
                 assert_eq!(hintline.bottom(), area.bottom());
                 assert!(modal.surface.bottom() <= hintline.y);
@@ -406,7 +415,10 @@ fn page_hintline_follows_modal_focus_wraps_and_restores_input() {
             assert_eq!(
                 hint_text(
                     &frame_buffer(&app, area),
-                    crate::app::fullscreen::layout(&app, area).session.hintline
+                    crate::app::fullscreen::layout(&app, area)
+                        .session
+                        .footer
+                        .hintline
                 ),
                 original_hints
             );
@@ -1458,7 +1470,10 @@ fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
         modifiers: KeyModifiers::NONE,
     };
 
-    let hintline = crate::app::fullscreen::layout(&app, area).session.hintline;
+    let hintline = crate::app::fullscreen::layout(&app, area)
+        .session
+        .footer
+        .hintline;
     for kind in [
         MouseEventKind::Down(MouseButton::Left),
         MouseEventKind::Up(MouseButton::Left),

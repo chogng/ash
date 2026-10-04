@@ -30,24 +30,6 @@ pub(crate) fn draw_info(
     );
 }
 
-pub(crate) fn draw_policy(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    status_line: &StatusLineModel,
-    approval: TurnApprovalModes,
-    context: RenderContext<'_>,
-) {
-    frame.render_widget(
-        Paragraph::new(policy_line(
-            status_line,
-            area.width.into(),
-            approval,
-            context,
-        )),
-        area,
-    );
-}
-
 pub(crate) fn draw_fullscreen_info(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -142,7 +124,7 @@ pub(crate) fn header_line(
     )
 }
 
-fn policy_line(
+pub(crate) fn policy_line(
     status_line: &StatusLineModel,
     width: usize,
     approval: TurnApprovalModes,
