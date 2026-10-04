@@ -698,6 +698,8 @@ impl ThreadStore for SqliteThreadStore {
     }
 }
 
+// Catalog version 2 includes the selected model. Older Thread and Session rows must
+// be rebuilt from authoritative history before their list metadata can be trusted.
 fn query_catalog(
     connection: &Connection,
     filter: &str,

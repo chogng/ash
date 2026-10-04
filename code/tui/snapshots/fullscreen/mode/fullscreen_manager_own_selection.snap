@@ -4,17 +4,17 @@ expression: render(&app)
 ---
   .                                  [Dashboard]  
                                                   
-  Idle (2)                                        
+─ Dashboard ─────────────────── Group: Status  g ─
+                                                  
+  Idle (2) -                                      
   ○ first session                                 
 > ○ second session                                
+                                                  
   Archived (0)                                    
                                                   
                                                   
                                                   
                                                   
                                                   
-  ──────────────────────────────────────────────  
-  > Build anything                                
-  ───────────────────────────── Automatic model   
                                                   
   Enter to open · Esc to return

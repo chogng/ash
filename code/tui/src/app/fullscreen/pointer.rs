@@ -445,6 +445,49 @@ pub(in crate::app) fn handle_mouse(
     }
     let input_area = super::layout(app, area).input;
     let input_pointer_active = app.input_state().pointer_active();
+    let target = target_at(app, area, mouse.column, mouse.row);
+    if app.session_manager_view().is_some()
+        && (matches!(target, Some(PointerTarget::SessionManager(_)))
+            || matches!(
+                app.fullscreen.pointer.pressed(),
+                Some(PointerTarget::SessionManager(_))
+            ))
+    {
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                app.fullscreen.selection.clear();
+                app.fullscreen.pointer.update_pressed(target);
+            }
+            MouseEventKind::Drag(MouseButton::Left) => app.fullscreen.pointer.cancel_click(),
+            MouseEventKind::Up(MouseButton::Left) => {
+                let click = app
+                    .fullscreen
+                    .pointer
+                    .finish_click(target.clone(), Instant::now());
+                if let (Some(click), Some(PointerTarget::SessionManager(target))) = (click, target)
+                {
+                    return MouseAction::Command(activate_session_manager(app, target, click));
+                }
+            }
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+                app.fullscreen.focus_page();
+                app.fullscreen.sessions.handle_manager_key(
+                    &app.sessions,
+                    crossterm::event::KeyEvent::new(
+                        if mouse.kind == MouseEventKind::ScrollUp {
+                            crossterm::event::KeyCode::Up
+                        } else {
+                            crossterm::event::KeyCode::Down
+                        },
+                        crossterm::event::KeyModifiers::NONE,
+                    ),
+                );
+            }
+            MouseEventKind::Moved => app.fullscreen.pointer.update_hover(target),
+            _ => {}
+        }
+        return MouseAction::Selection(None);
+    }
     let input_down = mouse.kind == MouseEventKind::Down(MouseButton::Left)
         && app.accepts_input()
         && target_at(app, area, mouse.column, mouse.row)
@@ -558,6 +601,40 @@ fn clamp_to_rect(position: ratatui::layout::Position, area: Rect) -> ratatui::la
     )
 }
 
+fn activate_session_manager(
+    app: &mut App,
+    target: crate::sessions::SessionManagerPointerTarget,
+    click: crate::widgets::list_selection::ListSelectionClick,
+) -> Option<AppCommand> {
+    app.fullscreen.focus_page();
+    match app
+        .fullscreen
+        .sessions
+        .activate_manager_pointer(&app.sessions, &target, click)
+    {
+        crate::sessions::SessionManagerInputOutcome::Command(command) => Some(command.into()),
+        crate::sessions::SessionManagerInputOutcome::DetailsRequested => {
+            app.fullscreen.panels.overlay = None;
+            app.fullscreen.sessions.open_details(&app.sessions);
+            app.fullscreen.pointer.clear();
+            None
+        }
+        crate::sessions::SessionManagerInputOutcome::ExitRequested => {
+            if let Some(session_id) = app.sessions.active_session_id().cloned() {
+                super::navigation::show_conversation(app, session_id);
+            } else {
+                app.open_home();
+            }
+            None
+        }
+        crate::sessions::SessionManagerInputOutcome::GroupingChanged(grouping) => {
+            Some(app.cycle_session_grouping(grouping))
+        }
+        crate::sessions::SessionManagerInputOutcome::Consumed
+        | crate::sessions::SessionManagerInputOutcome::Unhandled => None,
+    }
+}
+
 pub(super) fn activate_pointer_item(
     app: &mut App,
     area: ratatui::layout::Rect,
@@ -573,34 +650,11 @@ pub(super) fn activate_pointer_item(
             .issues
             .activate_pointer(&target)
             .map(Into::into),
-        PointerTarget::SessionManager(target) => {
-            match app
-                .fullscreen
-                .sessions
-                .activate_manager_pointer(&app.sessions, &target)
-            {
-                crate::sessions::SessionManagerInputOutcome::Command(command) => {
-                    Some(command.into())
-                }
-                crate::sessions::SessionManagerInputOutcome::DetailsRequested => {
-                    app.fullscreen.panels.overlay = None;
-                    app.fullscreen.sessions.open_details(&app.sessions);
-                    app.fullscreen.pointer.clear();
-                    None
-                }
-                crate::sessions::SessionManagerInputOutcome::ExitRequested => {
-                    if let Some(session_id) = app.sessions.active_session_id().cloned() {
-                        super::navigation::show_conversation(app, session_id);
-                    } else {
-                        app.open_home();
-                    }
-                    None
-                }
-                crate::sessions::SessionManagerInputOutcome::GroupingChanged(grouping) => Some(app.cycle_session_grouping(grouping)),
-                crate::sessions::SessionManagerInputOutcome::Consumed
-                | crate::sessions::SessionManagerInputOutcome::Unhandled => None,
-            }
-        }
+        PointerTarget::SessionManager(target) => activate_session_manager(
+            app,
+            target,
+            crate::widgets::list_selection::ListSelectionClick::Single,
+        ),
         PointerTarget::Approval(index) => app.activate_approval(index),
         PointerTarget::Query(index) => app.activate_query_choice(index),
         PointerTarget::Queue(queue_id) => {

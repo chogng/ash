@@ -1572,7 +1572,7 @@ impl App {
             || self.sessions.active_session_id().is_none()
             || matches!(
                 self.session_navigation().screen(),
-                Some(SessionScreen::Manager)
+                Some(SessionScreen::Home)
             )
     }
 
@@ -2225,16 +2225,12 @@ impl App {
         })
     }
 
-    fn session_manager_focused_internal(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn session_manager_focused(&self) -> bool {
         matches!(
             self.session_navigation().screen(),
             Some(SessionScreen::Manager)
         ) && self.session_navigation().manager().focused()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn session_manager_focused(&self) -> bool {
-        self.session_manager_focused_internal()
     }
 
     pub(crate) fn session_manager_hint(&self) -> &'static crate::widgets::key_hint::KeyHints {
@@ -2370,7 +2366,7 @@ impl App {
         let plan = self.plan_view().map(|view| (view.completed, view.total));
         let visible_session = match self.session_navigation().screen() {
             Some(SessionScreen::Session(session_id)) => Some(session_id),
-            Some(SessionScreen::Manager) | None => None,
+            Some(SessionScreen::Home | SessionScreen::Manager) | None => None,
         };
         let viewed_thread =
             visible_session.and_then(|session_id| self.sessions.remembered_thread(session_id));
@@ -2414,7 +2410,7 @@ impl App {
             && (self.fullscreen_home_visible()
                 || (!self.issues().is_open()
                     && self.session_navigation().preview.is_none()
-                    && !self.session_manager_focused_internal()
+                    && self.session_manager_view().is_none()
                     && self.approval_view().is_none()
                     && self.query_view().is_none()
                     && self.viewed_thread_accepts_input()
@@ -3374,9 +3370,8 @@ impl App {
                     vec![crate::nls::Text::literal(error)],
                 );
                 text.localize(self.language());
-                self.update(crate::host::Event::OperationCompleted(
-                    Err(text.to_string()),
-                ));
+                self.chat_panel
+                    .show_notice(text.to_string(), Instant::now());
             }
             SessionEvent::DetailsReceived { generation, result } => self
                 .session_navigation_mut()

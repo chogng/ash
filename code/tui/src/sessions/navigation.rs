@@ -17,6 +17,7 @@ use std::time::Instant;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SessionScreen {
+    Home,
     Manager,
     Session(SessionId),
 }
@@ -48,11 +49,25 @@ impl SessionNavigation {
         &mut self,
         model: &SessionsState,
         target: &SessionManagerPointerTarget,
+        click: crate::widgets::list_selection::ListSelectionClick,
     ) -> SessionManagerInputOutcome {
         if !matches!(self.screen(), Some(SessionScreen::Manager))
             || !self.manager.focus_pointer(model.catalog(), target)
         {
             return SessionManagerInputOutcome::Unhandled;
+        }
+        // A Session click selects its summary; activation is Enter or a double click.
+        if matches!(
+            (target, click),
+            (
+                SessionManagerPointerTarget::Session(_),
+                crate::widgets::list_selection::ListSelectionClick::Single
+            ) | (
+                SessionManagerPointerTarget::Group(_),
+                crate::widgets::list_selection::ListSelectionClick::Double
+            )
+        ) {
+            return SessionManagerInputOutcome::Consumed;
         }
         self.handle_manager_key(
             model,
@@ -250,10 +265,17 @@ impl SessionNavigation {
         self.screen.as_ref()
     }
 
+    pub(crate) fn show_home(&mut self) {
+        self.preview = None;
+        self.manager.blur();
+        self.screen = Some(SessionScreen::Home);
+    }
+
     pub(crate) fn show_manager(&mut self, model: &SessionsState) {
         self.preview = None;
         self.screen = Some(SessionScreen::Manager);
         self.manager.reconcile(model.catalog());
+        self.manager.focus();
     }
 
     pub(crate) fn show_session(&mut self, session_id: SessionId) {
@@ -277,7 +299,7 @@ impl SessionNavigation {
     pub(crate) fn previous_screen(&self) -> Option<SessionScreen> {
         match self.screen()? {
             SessionScreen::Manager => None,
-            SessionScreen::Session(_) => Some(SessionScreen::Manager),
+            SessionScreen::Home | SessionScreen::Session(_) => Some(SessionScreen::Manager),
         }
     }
 
@@ -287,7 +309,7 @@ impl SessionNavigation {
                 .active_session_id()
                 .cloned()
                 .map(SessionScreen::Session),
-            SessionScreen::Session(_) => None,
+            SessionScreen::Home | SessionScreen::Session(_) => None,
         }
     }
 
@@ -319,6 +341,7 @@ impl SessionNavigation {
                 .any(|session| &session.session_id == session_id)
         {
             self.screen = Some(SessionScreen::Manager);
+            self.manager.focus();
         }
     }
 

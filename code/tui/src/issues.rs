@@ -601,7 +601,13 @@ impl Manager {
         pressed: Option<&PointerTarget>,
         context: RenderContext<'_>,
     ) {
-        panel::draw_header(frame, area, &context.localize("Issues"), context.focus());
+        panel::draw_header(
+            frame,
+            area,
+            Line::from(context.localize("Issues")),
+            Line::default(),
+            context.focus(),
+        );
         let body = PanelLayout::new(area, 0).body;
         let style = Style::default()
             .fg(context.foreground())

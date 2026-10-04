@@ -4,16 +4,16 @@ expression: loading
 ---
   .                                                                                    [Dashboard]
 
-  Idle (1)
-> ○ Snapshot┌── Session details ──────────────────────────────────────────────────[✗]─┐
-  Archived (│                                                                         │
-            │  Session:     Snapshot session                                          │
-            │  Session ID:  current                                                   │
+─ Dashboard ───────────────────────────────────────────────────────────────────── Group: Status  g ─
+            ┌── Session details ──────────────────────────────────────────────────[✗]─┐
+    Sessions│                                                                         │
+  Idle (1) -│  Session:     Snapshot session                                          │
+> ○ Snapshot│  Session ID:  current                                                   │
             │  Lifecycle:   active                                                    │
-            │  Status:      idle                                                      │
+  Archived (│  Status:      idle                                                      │
             │  Threads:     1                                                         │
             │  Total usage: 0 tokens                                                  │
-            │  Model calls: 0                                                         │
+            │  Model calls: 0                                                         │ected
             │  Threads:     Loading…                                                  │
             │                                                                         │
             │                                                                         │
@@ -29,8 +29,8 @@ expression: loading
             │                                                                         │
             │                                                                         │
             └─────────────────────────────────────────────────────────────────────────┘
-  ────────────────────────────────────────────────────────────────────────────────────────────────
-  > Build anything
-  ─────────────────────────────────────────────────────────────────────────────── Automatic model
+                                                                  │
+                                                                  │
+                                                                  │
 
   ↑/↓ scroll  ·  Esc to close

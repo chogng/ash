@@ -137,12 +137,19 @@ fn draw_content(
     if let Some(manager) = app.issue_manager() {
         manager.draw(frame, areas.session.transcript, None, None, context);
     } else if let Some(manager) = app.session_manager_view() {
-        let manager_areas = layout::manager_areas(
+        sessions::draw_manager(
+            frame,
             areas.session.transcript,
-            header::desired_height(areas.session.transcript.width),
+            manager,
+            None,
+            None,
+            context,
         );
-        header::draw(frame, manager_areas.welcome, app.welcome(), context);
-        sessions::draw_manager(frame, manager_areas.sessions, manager, None, None, context);
+    } else if matches!(
+        app.inline.sessions.screen(),
+        Some(crate::sessions::SessionScreen::Home)
+    ) {
+        header::draw(frame, areas.session.transcript, app.welcome(), context);
     } else {
         let (messages, header) = match transcript {
             Transcript::Full => (
@@ -175,16 +182,18 @@ fn draw_content(
         }
         return;
     }
-    crate::app::chat_view::draw(
-        frame,
-        app,
-        &areas.session,
-        areas.input,
-        chat_input::ChatInputChrome::Standard,
-        None,
-        crate::app::chat_view::Pointer::default(),
-        context,
-    );
+    if app.session_manager_view().is_none() {
+        crate::app::chat_view::draw(
+            frame,
+            app,
+            &areas.session,
+            areas.input,
+            chat_input::ChatInputChrome::Standard,
+            None,
+            crate::app::chat_view::Pointer::default(),
+            context,
+        );
+    }
     footer::draw(frame, &areas, app, context);
     footer::draw_tip(frame, areas.session.tipline, app, context);
     if let Some(overlay) = app.overlay() {

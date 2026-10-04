@@ -103,7 +103,14 @@ fn input_hints(app: &App) -> KeyHints {
         let mut hints = KeyHints::new()
             .with_compact_action("←→", "select")
             .with_compact_action("Enter", "open")
-            .with_compact_action("Esc", "input");
+            .with_compact_action(
+                "Esc",
+                if app.session_manager_view().is_some() {
+                    "return"
+                } else {
+                    "input"
+                },
+            );
         if let Some(target) = app.fullscreen.header.selected() {
             hints = hints.with_note(target.label());
         }
@@ -188,6 +195,9 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
     }
     if app.session_preview().is_some() {
         return BottomContent::Keys(&bindings::CLOSE_HINTS);
+    }
+    if app.screen_mode() == ScreenMode::Fullscreen && app.fullscreen.header_focused() {
+        return BottomContent::InputHints;
     }
     if app.session_manager_view().is_some() {
         return BottomContent::Keys(app.session_manager_hint());

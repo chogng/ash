@@ -567,7 +567,7 @@ fn dashboard_grouping_saves_and_restores_at_driver_startup_independently_of_serv
     );
     assert_eq!(client.read_config().unwrap().tui, remote_config.tui);
     drop(driver);
-    let restarted = AppDriver::new(
+    let mut restarted = AppDriver::new(
         App::new(),
         client,
         None,
@@ -593,9 +593,72 @@ fn dashboard_grouping_saves_and_restores_at_driver_startup_independently_of_serv
         restarted.app().inline.sessions.manager().grouping(),
         crate::sessions::SessionGrouping::Project
     );
-    assert!(
-        std::fs::read_to_string(local_path)
-            .unwrap()
-            .contains("showTips = false")
+    let saved_document = std::fs::read_to_string(&local_path).unwrap();
+    assert!(saved_document.contains("showTips = false"));
+    restarted.poll_request_completions();
+    restarted.app_mut().show_session_manager();
+    std::fs::remove_file(&local_path).unwrap();
+    std::fs::create_dir(&local_path).unwrap();
+    let command = restarted
+        .app_mut()
+        .handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('g'),
+            crossterm::event::KeyModifiers::NONE,
+        ))
+        .unwrap();
+    restarted.execute(scheduled(command));
+    assert_eq!(
+        restarted.app().fullscreen.sessions.manager().grouping(),
+        crate::sessions::SessionGrouping::Status
     );
+    assert!(
+        restarted
+            .app()
+            .top_tip()
+            .text(None)
+            .unwrap()
+            .contains("Could not save dashboard grouping")
+    );
+    std::fs::remove_dir(&local_path).unwrap();
+    std::fs::write(
+        &local_path,
+        saved_document.replace("showTips = false", "showTips = true"),
+    )
+    .unwrap();
+    local_settings.read_grouping().unwrap();
+    restarted.poll_request_completions();
+    assert_eq!(
+        restarted.app().fullscreen.sessions.manager().grouping(),
+        crate::sessions::SessionGrouping::Status
+    );
+    let external_document = std::fs::read_to_string(&local_path).unwrap().replace(
+        "sessionGrouping = \"project\"",
+        "sessionGrouping = \"model\"",
+    );
+    std::fs::write(&local_path, external_document).unwrap();
+    assert_eq!(
+        local_settings.read_grouping().unwrap(),
+        crate::sessions::SessionGrouping::Model
+    );
+    restarted.poll_request_completions();
+    assert_eq!(
+        restarted.app().fullscreen.sessions.manager().grouping(),
+        crate::sessions::SessionGrouping::Model
+    );
+    assert_eq!(
+        restarted.app().inline.sessions.manager().grouping(),
+        crate::sessions::SessionGrouping::Model
+    );
+    let invalid_document = std::fs::read_to_string(&local_path).unwrap().replace(
+        "sessionGrouping = \"model\"",
+        "sessionGrouping = \"invalid\"",
+    );
+    std::fs::write(&local_path, invalid_document).unwrap();
+    assert!(local_settings.read_grouping().is_err());
+    restarted.poll_request_completions();
+    assert_eq!(
+        restarted.app().fullscreen.sessions.manager().grouping(),
+        crate::sessions::SessionGrouping::Model
+    );
+    assert_eq!(restarted.app().status(), &crate::app::Status::Ready);
 }

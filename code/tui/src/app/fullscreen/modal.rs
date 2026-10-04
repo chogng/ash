@@ -14,6 +14,7 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::text::Line;
 
 pub(super) fn is_open(app: &App) -> bool {
     app.overlay().is_some() || app.command_panel().is_some()
@@ -286,7 +287,13 @@ pub(super) fn draw_panel(
             ),
             layout.surface,
         );
-        crate::widgets::panel::draw_header(frame, layout.surface, &title, context.focus());
+        crate::widgets::panel::draw_header(
+            frame,
+            layout.surface,
+            Line::from(title.as_str()),
+            Line::default(),
+            context.focus(),
+        );
     } else {
         crate::widgets::modal::draw(frame, layout, &title, close, blocked_alert, context);
     }

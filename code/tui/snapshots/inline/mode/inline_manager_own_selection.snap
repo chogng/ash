@@ -2,19 +2,19 @@
 source: code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
-    ▄  ▄     Ash Code v0.1.0                      
-  ▗█▛██▜█▖   Automatic model                      
-  ▝▜████▛▘   .                                    
-    ▝  ▘                                          
+─ Dashboard ─────────────────── Group: Status  g ─
                                                   
-                                                  
-  Idle (2)                                        
+  Idle (2) -                                      
 > ○ first session                                 
   ○ second session                                
+                                                  
   Archived (0)                                    
                                                   
-──────────────────────────────────────────────────
->                                                 
-──────────────────────────────────────────────────
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
                                                   
   Enter to open · →/Esc to return

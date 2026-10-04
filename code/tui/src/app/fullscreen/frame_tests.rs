@@ -744,38 +744,27 @@ fn manager_uses_the_page_body_for_grouped_three_column_status_rows() {
         ),
         manager_session("done", SessionManagerStatus::Completed, None),
     ]));
-    app.insert_text("/dashboard");
-    assert!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-            .is_none()
-    );
-
-    let rendered = render(&app, 100, 28);
+    app.show_session_manager();
+    assert!(app.session_manager_focused());
+    let rendered = render(&app, 120, 28);
     let needs_input = rendered
         .lines()
         .find(|line| line.contains("needs-input"))
         .unwrap();
     let working = rendered
         .lines()
-        .find(|line| line.contains("Running targeted tests"))
+        .find(|line| line.contains("working"))
         .unwrap();
     assert!(!rendered.lines().any(|line| line.contains("done")));
-
     assert!(rendered.lines().next().unwrap().contains("."));
     assert!(rendered.contains("Needs input"));
     assert!(rendered.contains("Working"));
-    assert!(
-        rendered
-            .lines()
-            .any(|line| line.trim_end() == "  Archived (1)")
-    );
-    assert!(needs_input.starts_with("  ? needs-input"));
-    assert!(needs_input.contains("Which API should I use?"));
+    assert!(rendered.contains("Archived (1)"));
+    assert!(needs_input.starts_with("> ? needs-input"));
+    assert!(rendered.contains("Which API should I use?"));
     assert!(working.starts_with("  ⠋ working"));
-    assert_eq!(
-        rendered.lines().last().unwrap().trim_end(),
-        "  Esc to return"
-    );
+    assert!(rendered.lines().last().unwrap().contains("Esc"));
+    assert!(layout(&app, Rect::new(0, 0, 120, 28)).input.is_empty());
 }
 
 #[test]

@@ -184,7 +184,7 @@ pub(super) fn draw(
     } else if !app.fullscreen.home_visible() {
         conversation::draw(frame, &areas, app, context);
     }
-    if app.session_preview().is_none() {
+    if app.session_preview().is_none() && app.session_manager_view().is_none() {
         composer::draw(frame, app, &areas, context);
     }
     if modal::is_open(app) {

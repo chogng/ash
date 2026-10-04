@@ -971,10 +971,10 @@ fn session_manager_items_hover_and_activate_without_changing_the_draft() {
         session_id,
         thread_id,
     });
-    app.insert_text("/dashboard");
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     let area = Rect::new(0, 0, 80, 24);
+    app.show_conversation();
     app.insert_text("keep this draft");
+    app.show_session_manager();
     let target = (0..area.height)
         .flat_map(|row| (0..area.width).map(move |column| (column, row)))
         .find(|(column, row)| {
@@ -993,15 +993,49 @@ fn session_manager_items_hover_and_activate_without_changing_the_draft() {
             crate::sessions::SessionManagerPointerTarget::Session(id)
         )) if id.as_str() == "pointer-session"
     ));
-    assert!(!app.session_manager_focused());
+    assert!(app.session_manager_focused());
     assert!(app.session_preview().is_none());
     assert!(app.session_manager_view().is_some());
     assert_eq!(app.input(), "keep this draft");
-    assert!(matches!(
+    assert_eq!(
         activate_pointer_item(&mut app, area, target.0, target.1),
-        Some(AppCommand::Sessions(SessionCommand::Resume { session_id, .. }))
-            if session_id == "pointer-session"
+        None
+    );
+    assert_eq!(
+        app.session_navigation()
+            .manager()
+            .selected_session()
+            .unwrap()
+            .as_str(),
+        "pointer-session"
+    );
+    assert!(
+        matches!(app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Sessions(SessionCommand::Resume { session_id, .. })) if session_id == "pointer-session")
+    );
+    let mouse = |kind| MouseEvent {
+        kind,
+        column: target.0,
+        row: target.1,
+        modifiers: KeyModifiers::NONE,
+    };
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left)),
+    );
+    assert!(matches!(
+        handle_mouse(&mut app, area, mouse(MouseEventKind::Up(MouseButton::Left))),
+        super::MouseAction::Command(None)
     ));
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left)),
+    );
+    assert!(
+        matches!(handle_mouse(&mut app, area, mouse(MouseEventKind::Up(MouseButton::Left))), super::MouseAction::Command(Some(AppCommand::Sessions(SessionCommand::Resume { session_id, .. }))) if session_id == "pointer-session")
+    );
     assert!(app.session_manager_focused());
     assert_eq!(app.input(), "keep this draft");
 }

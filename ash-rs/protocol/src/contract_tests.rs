@@ -586,8 +586,8 @@ fn exec_policy_authority_serializes_exact_rule_and_revision() {
 }
 
 #[test]
-fn canonical_session_contains_thread_identity_presentation_and_lineage_without_history() {
-    let session = Session {
+fn canonical_session_contains_root_model_and_thread_lineage_without_history() {
+    let mut session = Session {
         model: None,
         session_id: SessionId::new("session_1").expect("test ID is non-empty"),
         title: "task".into(),
@@ -627,6 +627,24 @@ fn canonical_session_contains_thread_identity_presentation_and_lineage_without_h
         session.threads[1].forked_from_id.as_ref(),
         Some(&session.threads[0].thread_id)
     );
+    let without_model = serde_json::to_value(&session).unwrap();
+    assert!(without_model.get("model").is_none());
+    assert_eq!(
+        serde_json::from_value::<Session>(without_model)
+            .unwrap()
+            .model,
+        None
+    );
+    session.model = Some(ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("root-model").unwrap(),
+    ));
+    let json = serde_json::to_value(&session).unwrap();
+    assert_eq!(
+        json["model"],
+        serde_json::json!({"provider": "openai", "model": "root-model"})
+    );
+    assert_eq!(serde_json::from_value::<Session>(json).unwrap(), session);
 }
 
 #[test]

@@ -22,6 +22,9 @@ pub(in crate::app) fn layout(app: &App, area: Rect) -> Layout {
 }
 
 pub(super) fn height(app: &App, screen: Rect) -> u16 {
+    if app.session_manager_view().is_some() {
+        return screen.height.max(1);
+    }
     let areas = layout(app, screen);
     let controls = screen
         .height
@@ -51,7 +54,17 @@ fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16)
             session,
         };
     }
-    let content = if app.session_manager_view().is_some() || app.issue_manager().is_some() {
+    if app.session_manager_view().is_some() {
+        return Layout {
+            input: Rect::default(),
+            session: session_areas(terminal_area, 0, 0, 0, 0, 0, 0, 1, 0, 0),
+        };
+    }
+    let content = if app.issue_manager().is_some()
+        || matches!(
+            app.inline.sessions.screen(),
+            Some(crate::sessions::SessionScreen::Home)
+        ) {
         Content::Navigation
     } else {
         Content::Conversation
@@ -108,36 +121,6 @@ impl Layout {
                 .y
                 .saturating_sub(self.session.transcript.y),
         }
-    }
-}
-
-const MIN_MANAGER_ROWS: u16 = 4;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) struct ManagerAreas {
-    pub(in crate::app) welcome: Rect,
-    pub(in crate::app) sessions: Rect,
-}
-
-pub(in crate::app) fn manager_areas(area: Rect, welcome_desired_rows: u16) -> ManagerAreas {
-    let sessions_rows = MIN_MANAGER_ROWS.min(area.height);
-    let available_above_sessions = area.height.saturating_sub(sessions_rows);
-    let gap_rows = u16::from(available_above_sessions > 0);
-    let welcome_rows = welcome_desired_rows.min(available_above_sessions.saturating_sub(gap_rows));
-    let sessions_y = area.y.saturating_add(welcome_rows).saturating_add(gap_rows);
-    ManagerAreas {
-        welcome: Rect {
-            height: welcome_rows,
-            ..area
-        },
-        sessions: Rect {
-            y: sessions_y,
-            height: area
-                .y
-                .saturating_add(area.height)
-                .saturating_sub(sessions_y),
-            ..area
-        },
     }
 }
 

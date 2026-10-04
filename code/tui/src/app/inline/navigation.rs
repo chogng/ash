@@ -95,6 +95,16 @@ pub(in crate::app) fn handle_key(
             None => None,
         };
     }
+    if matches!(app.inline.sessions.screen(), Some(SessionScreen::Home))
+        && key.kind == KeyEventKind::Press
+        && bindings::ESC_RETURN.matches(key)
+        && app.completion().is_none()
+    {
+        if let Some(session_id) = app.sessions.active_session_id().cloned() {
+            show_conversation(app, session_id);
+        }
+        return None;
+    }
     if matches!(app.inline.sessions.screen(), Some(SessionScreen::Manager))
         && app.inline.sessions.manager().focused()
     {
@@ -318,6 +328,10 @@ pub(in crate::app) fn handle_screen_navigation_key(
         }
     };
     match target {
+        SessionScreen::Home => {
+            open_home(app);
+            Some(None)
+        }
         SessionScreen::Manager => {
             close_transient_surfaces(app);
             app.inline.sessions.show_manager(&app.sessions);
@@ -593,7 +607,7 @@ pub(in crate::app) fn screen_navigation_tip(app: &App) -> Option<&'static str> {
     }
     match app.inline.sessions.previous_screen()? {
         SessionScreen::Manager => Some("← Dashboard"),
-        SessionScreen::Session(_) => None,
+        SessionScreen::Home | SessionScreen::Session(_) => None,
     }
 }
 
@@ -661,7 +675,7 @@ pub(in crate::app) fn open_home(app: &mut App) {
     close_transient_surfaces(app);
     app.inline.issues.close();
     app.inline.agent_thread_switcher.blur();
-    app.inline.sessions.show_manager(&app.sessions);
+    app.inline.sessions.show_home();
 }
 
 pub(in crate::app) fn show_conversation(app: &mut App, session_id: ash_protocol::SessionId) {

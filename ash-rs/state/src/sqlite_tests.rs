@@ -1012,6 +1012,14 @@ fn sqlite_thread_catalog_migrates_old_rows_and_marks_invalid_rows_for_rebuild() 
     drop(connection);
 
     let reopened = SqliteThreadStore::open(&path).unwrap();
+    // Migrated rows predate the authoritative model field, even when their JSON is valid.
+    assert_eq!(
+        reopened.missing_catalog_thread_ids().unwrap(),
+        vec![healthy.clone(), invalid.clone()]
+    );
+    reopened
+        .backfill_catalog(&catalog(&session_id, &healthy, 1))
+        .unwrap();
     assert_eq!(
         reopened.missing_catalog_thread_ids().unwrap(),
         vec![invalid.clone()]

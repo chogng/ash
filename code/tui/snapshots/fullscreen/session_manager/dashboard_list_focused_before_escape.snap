@@ -4,33 +4,33 @@ expression: render(&app)
 ---
   .                                                                                    [Dashboard]
 
-  Idle (1)
-> ○ Snapshot session
-  Archived (0)
+─ Dashboard ───────────────────────────────────────────────────────────────────── Group: Status  g ─
 
+    Sessions                           Status           Updated   │ Session details
+  Idle (1) -                                                      │
+> ○ Snapshot session                   idle                       │ Snapshot session
+                                                                  │ idle
+  Archived (0)                                                    │
+                                                                  │ Project
+                                                                  │ No project
+                                                                  │ Model: No model selected
+                                                                  │
+                                                                  │ Threads: 1
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  ────────────────────────────────────────────────────────────────────────────────────────────────
-  > Build anything
-  ─────────────────────────────────────────────────────────────────────────────── Automatic model
-
-  Enter to open · Space to preview · Ctrl+X to archive · i to details · Esc to return
+  Enter to open · Space to preview · Ctrl+X to archive · i to details · g to group · Esc to return

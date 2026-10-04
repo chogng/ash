@@ -58,20 +58,31 @@ impl PanelLayout {
 pub(crate) fn draw_header(
     frame: &mut Frame<'_>,
     area: Rect,
-    title: &str,
+    mut title: Line<'_>,
+    mut trailing: Line<'_>,
     presentation_focus: Color,
 ) {
+    let border_style = Style::default().fg(presentation_focus);
     let title_style = Style::default()
         .fg(presentation_focus)
         .add_modifier(Modifier::BOLD);
-    frame.render_widget(
-        Block::default()
-            .borders(Borders::TOP)
-            .border_style(Style::default().fg(presentation_focus))
-            .title(Line::from(vec![
-                Span::styled("─", Style::default().fg(presentation_focus)),
-                Span::styled(format!(" {} ", title), title_style),
-            ])),
-        area,
+    // The title keeps priority when a narrow panel cannot also fit its trailing information.
+    let show_trailing =
+        trailing.width() > 0 && title.width() + trailing.width() + 7 <= usize::from(area.width);
+    title.style = title_style.patch(title.style);
+    title.spans.insert(
+        0,
+        Span::styled("─ ", border_style.remove_modifier(Modifier::BOLD)),
     );
+    title.spans.push(Span::styled(" ", border_style));
+    let mut header = Block::default()
+        .borders(Borders::TOP)
+        .border_style(border_style)
+        .title(title);
+    if show_trailing {
+        trailing.spans.insert(0, Span::styled(" ", border_style));
+        trailing.spans.push(Span::styled(" ─", border_style));
+        header = header.title(trailing.right_aligned());
+    }
+    frame.render_widget(header, area);
 }

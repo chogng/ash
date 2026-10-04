@@ -22,15 +22,13 @@ const WIDTH: u16 = 100;
 const HEIGHT: u16 = 32;
 
 #[test]
-fn agents_manager_simulates_navigation_and_transient_details() {
+fn dashboard_simulates_navigation_and_transient_details() {
     let mut app = active_session_app();
 
     assert_eq!(app.handle_key(key(KeyCode::Left)), None);
     assert!(app.session_manager_view().is_some());
-    assert!(!app.session_manager_focused());
-    crate::tui_assert_snapshot!(app = &app; "agents_manager_open_unfocused", render(&app));
-
-    assert_eq!(app.handle_key(key(KeyCode::Up)), None);
+    assert!(app.session_manager_focused());
+    crate::tui_assert_snapshot!(app = &app; "dashboard_open_focused", render(&app));
     assert!(app.session_manager_focused());
     assert_eq!(
         app.session_manager_hint().text(),
@@ -85,7 +83,6 @@ fn agents_manager_simulates_navigation_and_transient_details() {
 fn resuming_selected_session_restores_manager_navigation() {
     let mut app = active_session_app();
     assert_eq!(app.handle_key(key(KeyCode::Left)), None);
-    assert_eq!(app.handle_key(key(KeyCode::Up)), None);
 
     assert_eq!(
         app.handle_key(key(KeyCode::Enter)),
@@ -134,13 +131,18 @@ fn dashboard_escape_exits_from_focused_list_and_right_does_not_exit() {
     let mut app = active_session_app();
     assert_eq!(app.handle_key(key(KeyCode::Left)), None);
     assert!(app.session_manager_view().is_some());
-    assert_eq!(app.session_manager_hint().text(), "Esc to return");
+    assert!(app.session_manager_hint().text().ends_with("Esc to return"));
     assert_eq!(app.handle_key(key(KeyCode::Right)), None);
     assert!(app.session_manager_view().is_some());
 
-    assert_eq!(app.handle_key(key(KeyCode::Up)), None);
     assert!(app.session_manager_focused());
-    app.fullscreen.focus_page();
+    app.handle_key(key(KeyCode::F(6)));
+    assert!(app.fullscreen.header_focused());
+    let footer = render(&app).lines().last().unwrap().to_owned();
+    assert!(footer.contains("←→ select"));
+    assert!(!footer.contains("g to group"));
+    app.handle_key(key(KeyCode::Tab));
+    assert!(app.session_manager_focused());
     assert!(!app.fullscreen.input_focused());
     assert!(app.session_manager_hint().text().ends_with("Esc to return"));
     assert_eq!(app.handle_key(key(KeyCode::Right)), None);
@@ -155,54 +157,39 @@ fn dashboard_escape_exits_from_focused_list_and_right_does_not_exit() {
 }
 
 #[test]
-fn inline_dashboard_right_returns_from_input_and_session_list() {
-    let mut frames = Vec::new();
-    for focused in [false, true] {
-        let mut app = active_session_app();
-        let mut settings = crate::config::TerminalSettings::default();
-        settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
-        settings.set_language(crate::nls::Language::Chinese);
-        app.update(crate::config::Event::SettingsReceived(settings));
-
-        assert_eq!(app.handle_key(key(KeyCode::Left)), None);
-        assert!(app.session_manager_view().is_some());
-        if focused {
-            assert_eq!(app.handle_key(key(KeyCode::Up)), None);
-            assert!(app.session_manager_focused());
-        }
-        assert!(
-            app.session_manager_hint()
-                .text()
-                .ends_with("→/Esc to return")
-        );
-        assert!(render(&app).replace(' ', "").contains("→/Esc返回"));
-        frames.push(format!(
-            "Dashboard (list focused: {focused})\n{}",
-            render(&app)
-        ));
-
-        assert_eq!(app.handle_key(key(KeyCode::Right)), None);
-        assert!(app.session_manager_view().is_none());
-        assert!(!app.session_manager_focused());
-        assert!(app.chat_input_focused());
-        assert_eq!(
-            app.sessions.active_session_id().unwrap().as_str(),
-            "current"
-        );
-        assert_eq!(app.screen_thread_id().as_str(), "current");
-        assert!(app.input().is_empty());
-        assert_eq!(app.screen_navigation_tip(), Some("← Dashboard"));
-        if !focused {
-            frames.push(format!("Conversation after →\n{}", render(&app)));
-        }
-
-        assert_eq!(app.handle_key(key(KeyCode::Left)), None);
-        assert!(app.session_manager_view().is_some());
-        assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
-        assert!(app.session_manager_view().is_none());
-        assert!(app.chat_input_focused());
-    }
-    crate::tui_assert_snapshot!(mode = crate::terminal::ScreenMode::Inline; "inline_dashboard_arrow_navigation", frames.join("\n\n"));
+fn inline_dashboard_arrows_return_from_the_session_list() {
+    let mut app = active_session_app();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    assert_eq!(app.handle_key(key(KeyCode::Left)), None);
+    assert!(app.session_manager_focused());
+    assert!(
+        app.session_manager_hint()
+            .text()
+            .ends_with("→/Esc to return")
+    );
+    assert!(render(&app).replace(' ', "").contains("→/Esc返回"));
+    let mut frames = vec![format!("Dashboard\n{}", render(&app))];
+    assert_eq!(app.handle_key(key(KeyCode::Right)), None);
+    assert!(app.session_manager_view().is_none());
+    assert!(!app.session_manager_focused());
+    assert!(app.chat_input_focused());
+    assert_eq!(
+        app.sessions.active_session_id().unwrap().as_str(),
+        "current"
+    );
+    assert_eq!(app.screen_thread_id().as_str(), "current");
+    assert!(app.input().is_empty());
+    assert_eq!(app.screen_navigation_tip(), Some("← Dashboard"));
+    frames.push(format!("Conversation after →\n{}", render(&app)));
+    assert_eq!(app.handle_key(key(KeyCode::Left)), None);
+    assert!(app.session_manager_focused());
+    assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
+    assert!(app.session_manager_view().is_none());
+    assert!(app.chat_input_focused());
+    crate::tui_assert_snapshot!(app = &app; "inline_dashboard_arrow_navigation", frames.join("\n\n"));
 }
 
 #[test]
@@ -212,7 +199,6 @@ fn inline_dashboard_arrows_keep_group_preview_and_detail_interactions() {
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(crate::config::Event::SettingsReceived(settings));
     app.handle_key(key(KeyCode::Left));
-    app.handle_key(key(KeyCode::Up));
     app.handle_key(key(KeyCode::Up));
     assert!(
         app.session_manager_hint()
@@ -248,20 +234,31 @@ fn inline_dashboard_arrows_keep_group_preview_and_detail_interactions() {
 }
 
 #[test]
-fn inline_dashboard_right_in_a_draft_edits_the_input() {
-    let mut app = active_session_app();
-    let mut settings = crate::config::TerminalSettings::default();
-    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
-    app.update(crate::config::Event::SettingsReceived(settings));
-    app.handle_key(key(KeyCode::Left));
-    app.insert_text("draft");
-    assert_eq!(app.session_manager_hint().text(), "Esc to return");
-    app.handle_key(key(KeyCode::Home));
-    assert_eq!(app.handle_key(key(KeyCode::Right)), None);
-    assert!(app.session_manager_view().is_some());
-    app.insert_text("X");
-    assert_eq!(app.input(), "dXraft");
-    crate::tui_assert_snapshot!(app = &app; "inline_dashboard_right_edits_draft", render(&app));
+fn dashboard_preserves_the_conversation_draft_and_blocks_background_input() {
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = active_session_app();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.insert_text("draft");
+        app.show_session_manager();
+        assert!(app.session_manager_focused());
+        assert!(!app.accepts_input());
+        app.handle_key(key(KeyCode::Char('X')));
+        app.handle_paste("paste".into());
+        assert_eq!(app.input(), "draft");
+        assert!(!render(&app).contains("draft"));
+        crate::tui_assert_snapshot!(app = &app; "dashboard_preserves_hidden_draft", render(&app));
+        app.handle_key(key(KeyCode::Esc));
+        assert!(app.chat_input_focused());
+        app.handle_key(key(KeyCode::Home));
+        app.handle_key(key(KeyCode::Right));
+        app.insert_text("X");
+        assert_eq!(app.input(), "dXraft");
+    }
 }
 
 #[test]
@@ -285,7 +282,6 @@ fn inline_dashboard_return_is_discoverable_in_localized_help() {
 fn session_manager_preview_reads_conversation_and_restores_focus_without_editing() {
     let mut app = active_session_app();
     app.handle_key(key(KeyCode::Left));
-    app.handle_key(key(KeyCode::Up));
     let draft = app.input().to_owned();
     let Some(AppCommand::Sessions(SessionCommand::Preview { generation, params })) =
         app.handle_key(key(KeyCode::Char(' ')))
@@ -369,7 +365,6 @@ fn session_manager_preview_reads_conversation_and_restores_focus_without_editing
 fn session_manager_preview_loads_older_history_without_switching_the_active_thread() {
     let mut app = active_session_app();
     app.handle_key(key(KeyCode::Left));
-    app.handle_key(key(KeyCode::Up));
     let Some(AppCommand::Sessions(SessionCommand::Preview { generation, .. })) =
         app.handle_key(key(KeyCode::Char(' ')))
     else {
@@ -413,7 +408,6 @@ fn session_manager_archived_group_restores_deletes_and_previews() {
     ]));
     app.handle_key(key(KeyCode::Left));
     assert!(!render(&app).contains("Archived chat"));
-    app.handle_key(key(KeyCode::Up));
     app.handle_key(key(KeyCode::Down));
     assert!(
         app.session_manager_hint()
@@ -460,7 +454,6 @@ fn session_manager_archived_group_restores_deletes_and_previews() {
 fn session_manager_group_keys_collapse_expand_and_skip_hidden_sessions() {
     let mut app = active_session_app();
     app.handle_key(key(KeyCode::Left));
-    app.handle_key(key(KeyCode::Up));
     app.handle_key(key(KeyCode::Up));
     assert!(
         app.session_manager_hint()
@@ -646,13 +639,17 @@ fn key(code: KeyCode) -> KeyEvent {
 }
 
 fn render(app: &App) -> String {
-    let backend = TestBackend::new(WIDTH, HEIGHT);
+    render_at(app, WIDTH, HEIGHT)
+}
+
+fn render_at(app: &App, width: u16, height: u16) -> String {
+    let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal.draw(|frame| draw(frame, app)).unwrap();
     let buffer = terminal.backend().buffer();
-    (0..HEIGHT)
+    (0..height)
         .map(|row| {
-            (0..WIDTH)
+            (0..width)
                 .map(|column| buffer[(column, row)].symbol())
                 .collect::<String>()
                 .trim_end()
@@ -666,7 +663,6 @@ fn render(app: &App) -> String {
 fn manager_navigation_stays_focused_and_repeated_keys_cannot_open_or_modify_sessions() {
     let mut app = active_session_app();
     app.handle_key(key(KeyCode::Left));
-    app.handle_key(key(KeyCode::Up));
     app.handle_key(key(KeyCode::Char('j')));
     assert!(app.session_manager_hint().text().contains("expand"));
     for _ in 0..3 {
@@ -768,6 +764,7 @@ fn dashboard_grouping_cycles_in_both_modes_preserves_selection_and_localizes_chi
         app.update(SessionEvent::CatalogReceived(vec![session]));
         app.show_session_manager();
         app.session_navigation_mut().manager_mut().focus();
+        let mut screens = Vec::new();
         for grouping in [
             SessionGrouping::Model,
             SessionGrouping::Project,
@@ -784,9 +781,8 @@ fn dashboard_grouping_cycles_in_both_modes_preserves_selection_and_localizes_chi
                 Some(&SessionId::new("current").unwrap())
             );
             let output = render(&app);
-            assert!(output.contains("分组"));
-            let name = format!("dashboard_grouping_{grouping:?}_chinese");
-            crate::tui_assert_snapshot!(app = &app; name, output);
+            assert!(output.replace(' ', "").contains("分组"));
+            screens.push(output);
         }
         app.update(SessionEvent::GroupingSaveFailed("read-only profile".into()));
         assert_eq!(
@@ -794,7 +790,83 @@ fn dashboard_grouping_cycles_in_both_modes_preserves_selection_and_localizes_chi
             SessionGrouping::Status
         );
         let output = render(&app);
-        assert!(output.contains("无法保存仪表盘分组方式"));
-        crate::tui_assert_snapshot!(app = &app; "dashboard_grouping_save_failure_chinese", output);
+        assert!(output.replace(' ', "").contains("无法保存仪表盘分组方式"));
+        screens.push(output);
+        crate::tui_assert_snapshot!(app = &app; "dashboard_grouping_modes_chinese", screens.join("\n\n"));
+    }
+}
+
+#[test]
+fn dashboard_uses_the_page_and_updates_the_right_column_with_selection() {
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = active_session_app();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        settings.set_language(crate::nls::Language::Chinese);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        let mut first = session();
+        first.title = "Review parser".into();
+        first.manager.summary = Some("Parser review is complete.".into());
+        first.execution_target = Some(ash_protocol::SessionExecutionTarget::Local {
+            root: "/projects/parser".into(),
+        });
+        first.model = Some(ash_protocol::ModelRef::new(
+            ash_protocol::ProviderId::new("openai").unwrap(),
+            ash_protocol::ModelId::new("root-model").unwrap(),
+        ));
+        let mut second = first.clone();
+        second.session_id = SessionId::new("second").unwrap();
+        second.title = "Fix compiler".into();
+        second.manager.summary = Some("Compiler tests are running.".into());
+        second.execution_target = Some(ash_protocol::SessionExecutionTarget::Ssh {
+            host: "build-host".into(),
+            root: "/projects/compiler".into(),
+        });
+        app.update(SessionEvent::CatalogReceived(vec![first, second]));
+        app.show_session_manager();
+        assert!(app.session_manager_focused());
+        assert!(!app.accepts_input());
+        let area = ratatui::layout::Rect::new(0, 0, WIDTH, HEIGHT);
+        let (input, session) = match mode {
+            crate::terminal::ScreenMode::Fullscreen => {
+                let layout = super::fullscreen::layout(&app, area);
+                (layout.input, layout.session)
+            }
+            crate::terminal::ScreenMode::Inline => {
+                let layout = super::inline::layout(&app, area);
+                (layout.input, layout.session)
+            }
+        };
+        assert!(input.is_empty());
+        assert!(session.composer.is_empty());
+        assert!(session.transcript.height >= HEIGHT - 4);
+        assert_eq!(session.hintline.bottom(), area.bottom());
+        let output = render(&app);
+        assert!(output.contains("Parser review is complete."));
+        assert!(output.contains("root-model"));
+        assert!(!output.contains("Compiler tests are running."));
+        crate::tui_assert_snapshot!(app = &app; "dashboard_two_columns_chinese", output);
+        app.handle_key(key(KeyCode::Down));
+        assert_eq!(
+            app.session_navigation()
+                .manager()
+                .selected_session()
+                .unwrap()
+                .as_str(),
+            "second"
+        );
+        let output = render(&app);
+        assert!(output.contains("Compiler tests are running."));
+        assert!(output.contains("build-host:/projects/compiler"));
+        assert!(!output.contains("Parser review is complete."));
+        crate::tui_assert_snapshot!(app = &app; "dashboard_two_columns_second_selection", output);
+        let narrow = render_at(&app, 60, 12);
+        assert!(narrow.contains("Fix compiler"));
+        assert!(!narrow.contains('│'));
+        assert!(!narrow.contains("Build anything"));
+        crate::tui_assert_snapshot!(app = &app; "dashboard_narrow_single_column", narrow);
     }
 }

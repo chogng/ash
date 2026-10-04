@@ -36,8 +36,9 @@ impl AppDriver {
         let request_key = request_key(&command);
         match command {
             AppCommand::SaveSessionGrouping(grouping) => {
-                if let Err(error) = self.local_settings.write_grouping(grouping) {
-                    self.app.update(sessions::Event::GroupingSaveFailed(error));
+                match self.local_settings.write_grouping(grouping) {
+                    Ok(()) => self.persisted_session_grouping = grouping,
+                    Err(error) => self.app.update(sessions::Event::GroupingSaveFailed(error)),
                 }
             }
 

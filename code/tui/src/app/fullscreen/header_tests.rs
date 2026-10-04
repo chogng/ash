@@ -197,7 +197,8 @@ fn clicking_dashboard_twice_returns_to_the_active_session() {
         None
     );
     assert!(app.session_manager_view().is_some());
-    assert_eq!(app.session_manager_hint().text(), "Esc to return");
+    assert!(app.session_manager_focused());
+    assert!(app.session_manager_hint().text().ends_with("Esc to return"));
 
     app.fullscreen.focus_header(super::Target::Dashboard);
     assert_eq!(

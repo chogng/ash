@@ -212,7 +212,7 @@ sessionGrouping = "status"
 
 `screenMode` 的配置、即时切换和终端行为见 [LAYOUT.md](LAYOUT.md#屏幕模式配置)。除听写快捷键与仪表盘分组外，TUI 设置沿用 App Server 的 Config 读写通路。
 
-`/dashboard` 打开会话总览。聚焦列表后按 `g`，依次切换状态、模型、项目分组；列表顶部显示当前方式。`sessionGrouping` 只接受 `project`、`status`、`model`，缺省为 `status`，保存到运行 TUI 的本机 profile，重启后在首次显示前恢复；连接远端 App Server 不改变保存位置。项目分组使用 Session 执行目录，远端目录同时区分主机；模型分组使用 Session 主线程的当前模型，子线程或 fork 的模型不改变所在分组。未指定目录或模型的 Session 明确显示在对应未指定组。置顶任务排在前面，已归档任务独立收起；切换方式保留选中的 Session。保存失败保留当前分组并提示错误，外部有效配置修改会更新两种终端模式，无效修改保留当前分组。焦点、展开状态和滚动位置不写入此配置。
+`/dashboard` 打开会话总览。页面打开即聚焦列表，按 `g`，依次切换状态、模型、项目分组；列表顶部显示当前方式。`sessionGrouping` 只接受 `project`、`status`、`model`，缺省为 `status`，保存到运行 TUI 的本机 profile，重启后在首次显示前恢复；连接远端 App Server 不改变保存位置。项目分组使用 Session 执行目录，远端目录同时区分主机；模型分组使用 Session 主线程的当前模型，子线程或 fork 的模型不改变所在分组。未指定目录或模型的 Session 明确显示在对应未指定组。置顶任务排在前面，已归档任务独立收起；切换方式保留选中的 Session。保存失败保留当前分组并提示错误，外部有效配置修改会更新两种终端模式，无效修改保留当前分组。焦点、展开状态和滚动位置不写入此配置。
 
 `dictationShortcutEnabled` 缺省为 `false`。开启后，在 TUI 任意页面按 `dictationShortcut` 开始或停止听写，结果写入当前草稿；输入框聚焦时按 Enter 会结束听写，等最终文字返回后发送。`/voice` 不受开关影响。默认键为 `ctrl+g`，可在 Config 修改为一个带修饰键的组合键。两个值读写运行 TUI 的本机 profile，连接远端 App Server 不改变它们。macOS 的媒体键不作为默认听写键。
 

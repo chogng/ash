@@ -322,7 +322,6 @@ fn manager_navigation_in_one_mode_preserves_the_other_transcript_focus() {
         assert!(app.transcript_selection_active());
         switch(&mut app, other);
         app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
-        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
         assert!(app.session_manager_focused());
         switch(&mut app, target);
         assert!(app.session_manager_view().is_none());
@@ -375,7 +374,6 @@ fn inline_navigation_does_not_replace_the_fullscreen_home() {
     switch(&mut app, ScreenMode::Inline);
     app.insert_text("/dashboard");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert!(app.session_manager_focused());
     app.update(ThreadEvent::ContextChanged {
         session_id: ash_protocol::SessionId::new("second").unwrap(),
@@ -396,7 +394,6 @@ fn inline_navigation_does_not_replace_the_fullscreen_home() {
 fn managers_share_the_catalogue_but_keep_separate_selections_and_focus() {
     let mut app = navigation_app();
     app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let selected = app
         .session_navigation()
@@ -408,7 +405,6 @@ fn managers_share_the_catalogue_but_keep_separate_selections_and_focus() {
     assert!(app.session_manager_view().is_none());
     assert!(app.chat_input_focused());
     app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert_eq!(
         app.session_navigation()
             .manager()
@@ -433,7 +429,6 @@ fn transferred_panel_takes_input_above_the_inline_preview() {
     let mut app = navigation_app();
     switch(&mut app, ScreenMode::Inline);
     app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
         Some(super::AppCommand::Sessions(
@@ -472,7 +467,6 @@ fn preview_replies_with_equal_generations_stay_with_the_requesting_mode() {
     let mut app = navigation_app();
     let preview = |app: &mut App| {
         app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
-        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
         let Some(super::AppCommand::Sessions(crate::sessions::Command::Preview {
             generation, ..
         })) = app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE))
@@ -530,7 +524,10 @@ fn new_task_and_current_conversation_keep_distinct_shared_drafts() {
     app.open_home();
     assert!(app.starts_new_session());
     assert_eq!(app.input(), "new task draft");
-    app.show_conversation();
+    assert!(app.session_manager_view().is_none());
+    assert!(app.accepts_input());
+    crate::tui_assert_snapshot!(app = &app; "inline_home_draft_is_separate_from_dashboard", render(&app));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert_eq!(app.input(), "current conversation draft edited inline");
 }
 

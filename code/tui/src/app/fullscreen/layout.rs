@@ -60,6 +60,13 @@ fn page_layout(app: &App, terminal_area: Rect) -> Layout {
             },
         };
     }
+    if app.session_manager_view().is_some() && app.session_preview().is_none() {
+        return Layout {
+            top_statusline: header,
+            input: Rect::default(),
+            session: session_areas(terminal_area, 0, 0, 0, 0, 0, 0, 1, 0, 0),
+        };
+    }
     if app.issue_manager().is_some() {
         let footer_rows = terminal_area.height.min(1);
         return Layout {

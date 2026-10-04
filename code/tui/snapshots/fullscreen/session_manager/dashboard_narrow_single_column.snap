@@ -1,0 +1,16 @@
+---
+source: code/tui/src/app/session_manager_tests.rs
+expression: narrow
+---
+  .                                               [仪 表 盘 ]
+
+─ 仪 表 盘  ─────────────────────────────────── 分 组 : 状 态   g ─
+
+  空 闲  (2) -
+  ○ Review parser      Parser review is complete.
+> ○ Fix compiler       Compiler tests are running.
+
+  已 归 档  (0)
+
+
+  Enter 打 开  · Space 预 览  · Ctrl+X 归 档  · Esc 返 回

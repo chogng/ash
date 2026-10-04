@@ -4,7 +4,9 @@ expression: "text(&render(&app, 80, 24))"
 ---
   .                                                                [Dashboard]  
                                                                                 
-  Archived (0)                                                                  
+─ Dashboard ───────────────────────────────────────────────── Group: Status  g ─
+                                                                                
+> Archived (0)                                                                  
                                                                                 
                                                                                 
                                                                                 
@@ -21,8 +23,6 @@ expression: "text(&render(&app, 80, 24))"
                                                                                 
                                                                                 
                                                                                 
-  ────────────────────────────────────────────────────────────────────────────  
-  >                                                                             
-  ─────────────────────────────────────────────────────────── Automatic model   
                                                                                 
-  Esc to return
+                                                                                
+  Enter to expand · g to group · Esc to return

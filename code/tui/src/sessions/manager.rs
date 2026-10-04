@@ -11,6 +11,8 @@ use crate::widgets::grouped_list::Viewport as ManagerViewport;
 use crate::widgets::grouped_list::more_line;
 use crate::widgets::grouped_list::pad_to_width;
 use crate::widgets::grouped_list::viewport as manager_viewport;
+use crate::widgets::panel;
+use crate::widgets::panel::PanelLayout;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
 use ash_protocol::SessionManagerActivity;
@@ -74,8 +76,11 @@ impl SessionManagerState {
             return;
         }
         self.grouping = grouping;
-        // Group identities belong to one grouping; Session identity survives regrouping.
+        // Group identities belong to one grouping; keep an archived selection visible too.
         self.collapsed = BTreeSet::from([SessionGroup::Archived]);
+        if self.selected_archived {
+            self.collapsed.remove(&SessionGroup::Archived);
+        }
         self.reconcile(sessions);
     }
 
@@ -86,11 +91,10 @@ impl SessionManagerState {
                 .any(|session| &session.session_id == session_id)
         });
         let rows = manager_rows(sessions, &self.pinned, &self.collapsed, self.grouping);
-        if self
-            .selected
-            .as_ref()
-            .is_some_and(|selected| rows.iter().any(|row| &row.target() == selected))
-        {
+        if self.selected.as_ref().is_some_and(|selected| {
+            rows.iter()
+                .any(|row| row.target().as_ref() == Some(selected))
+        }) {
             self.update_selected_status(sessions);
             return;
         }
@@ -100,7 +104,7 @@ impl SessionManagerState {
             rows.iter()
                 .find(|row| matches!(row, ManagerRow::Session(_)))
                 .or_else(|| rows.first())
-                .map(ManagerRow::target)
+                .and_then(ManagerRow::target)
         };
         self.update_selected_status(sessions);
     }
@@ -153,7 +157,7 @@ impl SessionManagerState {
     ) -> bool {
         if !manager_rows(sessions, &self.pinned, &self.collapsed, self.grouping)
             .iter()
-            .any(|row| &row.target() == target)
+            .any(|row| row.target().as_ref() == Some(target))
         {
             return false;
         }
@@ -321,7 +325,7 @@ impl SessionManagerState {
     fn select_offset(&mut self, sessions: &[Session], delta: isize) -> bool {
         let selectable = manager_rows(sessions, &self.pinned, &self.collapsed, self.grouping)
             .into_iter()
-            .map(|row| row.target())
+            .filter_map(|row| row.target())
             .collect::<Vec<_>>();
         let index = self
             .selected
@@ -381,26 +385,52 @@ pub(crate) fn draw_manager(
     if area.is_empty() {
         return;
     }
-    let header = format!(
-        "{}: {}",
-        context.localize("Group"),
-        context.localize(view.grouping.label())
-    );
-    frame.render_widget(
-        Paragraph::new(Line::styled(header, Style::default().fg(context.muted()))),
-        Rect::new(
-            area.x + 2.min(area.width),
-            area.y,
-            area.width.saturating_sub(2),
-            1,
+    let layout = manager_layout(area);
+    let grouping = Line::from(vec![
+        Span::styled(
+            format!(
+                "{}: {}  ",
+                context.localize("Group"),
+                context.localize(view.grouping.label())
+            ),
+            Style::default().fg(context.muted()),
         ),
+        Span::styled("g", crate::render::action_style(context)),
+    ]);
+    panel::draw_header(
+        frame,
+        layout.header,
+        Line::styled(
+            context.localize("Dashboard"),
+            Style::default().fg(context.foreground()),
+        ),
+        grouping,
+        context.muted(),
     );
-    let area = Rect::new(
-        area.x,
-        area.y + 1,
-        area.width,
-        area.height.saturating_sub(1),
-    );
+    if !layout.details.is_empty() {
+        frame.render_widget(
+            Paragraph::new(vec![Line::from("│"); usize::from(layout.divider.height)])
+                .style(Style::default().fg(context.muted())),
+            layout.divider,
+        );
+        draw_summary(frame, layout.details, &view, context);
+        frame.render_widget(
+            Paragraph::new(table_line(
+                "    ",
+                Span::raw(context.localize("Sessions").into_owned()),
+                &context.localize("Status"),
+                &context.localize("Updated"),
+                layout.list.width,
+                context,
+            )),
+            Rect {
+                y: layout.list.y - 1,
+                height: 1,
+                ..layout.list
+            },
+        );
+    }
+    let area = layout.list;
     let rows = manager_rows(view.sessions, view.pinned, view.collapsed, view.grouping);
     if rows.is_empty() {
         frame.render_widget(
@@ -413,12 +443,14 @@ pub(crate) fn draw_manager(
         return;
     }
     let visible_rows = usize::from(area.height);
-    let selected_row = rows
-        .iter()
-        .position(|row| Some(&row.target()) == view.selected);
+    let selected_row = rows.iter().position(|row| {
+        row.target()
+            .as_ref()
+            .is_some_and(|target| Some(target) == view.selected)
+    });
     let viewport = manager_viewport(rows.len(), selected_row, visible_rows);
     let mut lines = Vec::with_capacity(visible_rows);
-    if viewport.start > 0 {
+    if viewport.start > 0 && visible_rows > 1 {
         lines.push(more_line(
             '↑',
             viewport.start,
@@ -433,6 +465,13 @@ pub(crate) fn draw_manager(
                 ManagerRow::Heading { group, count } => group_line(
                     group,
                     *count,
+                    if *count == 0 {
+                        GroupDisclosure::None
+                    } else if view.collapsed.contains(group) {
+                        GroupDisclosure::Collapsed
+                    } else {
+                        GroupDisclosure::Expanded
+                    },
                     manager_state(
                         &SessionManagerPointerTarget::Group(group.clone()),
                         view.selected,
@@ -443,7 +482,7 @@ pub(crate) fn draw_manager(
                     usize::from(area.width),
                     context,
                 ),
-                ManagerRow::Session(session) => session_line(
+                ManagerRow::Session(session) if layout.details.is_empty() => session_line(
                     session,
                     manager_state(
                         &SessionManagerPointerTarget::Session(session.session_id.clone()),
@@ -457,9 +496,24 @@ pub(crate) fn draw_manager(
                     usize::from(area.width),
                     context,
                 ),
+                ManagerRow::Session(session) => table_session_line(
+                    session,
+                    manager_state(
+                        &SessionManagerPointerTarget::Session(session.session_id.clone()),
+                        view.selected,
+                        view.focused,
+                        hovered,
+                        pressed,
+                    ),
+                    view.animation_frame,
+                    view.now_unix_ms,
+                    area.width,
+                    context,
+                ),
+                ManagerRow::Gap => Line::default(),
             }),
     );
-    if viewport.end < rows.len() {
+    if viewport.end < rows.len() && visible_rows > 1 {
         lines.push(more_line(
             '↓',
             rows.len() - viewport.end,
@@ -475,44 +529,249 @@ pub(crate) fn pointer_target_at(
     view: SessionManagerView<'_>,
     position: ratatui::layout::Position,
 ) -> Option<SessionManagerPointerTarget> {
+    let area = manager_layout(area).list;
     if !area.contains(position) {
         return None;
     }
-    if position.y == area.y {
-        return None;
-    }
-    let area = Rect::new(
-        area.x,
-        area.y + 1,
-        area.width,
-        area.height.saturating_sub(1),
-    );
     let rows = manager_rows(view.sessions, view.pinned, view.collapsed, view.grouping);
-    let selected_row = rows
-        .iter()
-        .position(|row| Some(&row.target()) == view.selected);
-    let viewport = manager_viewport(rows.len(), selected_row, usize::from(area.height));
+    let selected_row = rows.iter().position(|row| {
+        row.target()
+            .as_ref()
+            .is_some_and(|target| Some(target) == view.selected)
+    });
+    let visible_rows = usize::from(area.height);
+    let viewport = manager_viewport(rows.len(), selected_row, visible_rows);
     let mut row = usize::from(position.y - area.y);
-    if viewport.start > 0 {
+    if viewport.start > 0 && visible_rows > 1 {
         row = row.checked_sub(1)?;
     }
     let index = viewport.start.saturating_add(row);
-    (index < viewport.end).then(|| rows[index].target())
+    (index < viewport.end)
+        .then(|| rows[index].target())
+        .flatten()
+}
+
+/// Rendering and hit testing use the same split. Narrow terminals keep the list readable;
+/// the existing details and preview actions still expose the selected Session in full.
+struct ManagerLayout {
+    header: Rect,
+    list: Rect,
+    divider: Rect,
+    details: Rect,
+}
+
+fn manager_layout(area: Rect) -> ManagerLayout {
+    let panel = PanelLayout::new(area, 0);
+    let header = Rect::new(area.x, panel.title.y, area.width, panel.title.height);
+    let body = Rect {
+        // The manager owns the full-width status-marker column; the panel owns vertical spacing.
+        x: area.x,
+        width: area.width,
+        ..panel.body
+    };
+    if area.width < 96 || body.height < 3 {
+        return ManagerLayout {
+            header,
+            list: body,
+            divider: Rect::default(),
+            details: Rect::default(),
+        };
+    }
+    let list_width = area.width / 3 * 2;
+    ManagerLayout {
+        header,
+        list: Rect::new(body.x, body.y + 1, list_width, body.height - 1),
+        divider: Rect::new(body.x + list_width, body.y, 1, body.height),
+        details: Rect::new(
+            body.x + list_width + 2,
+            body.y,
+            area.width - list_width - 3,
+            body.height,
+        ),
+    }
+}
+
+fn table_line(
+    prefix: &str,
+    title: Span<'_>,
+    status: &str,
+    updated: &str,
+    width: u16,
+    context: RenderContext<'_>,
+) -> Line<'static> {
+    let width = usize::from(width);
+    let status_width = 16;
+    let updated_width = 10;
+    let title_width = width.saturating_sub(status_width + updated_width + prefix.width() + 2);
+    Line::from(vec![
+        Span::raw(prefix.to_owned()),
+        Span::styled(
+            pad_to_width(&truncate_to_width(&title.content, title_width), title_width),
+            title.style,
+        ),
+        Span::raw(format!(
+            " {} {}",
+            pad_to_width(&truncate_to_width(status, status_width), status_width),
+            pad_to_width(&truncate_to_width(updated, updated_width), updated_width),
+        )),
+    ])
+    .style(Style::default().fg(context.muted()))
+}
+
+fn table_session_line<'a>(
+    session: &'a Session,
+    state: InteractionState,
+    animation_frame: usize,
+    now_unix_ms: u64,
+    width: u16,
+    context: RenderContext<'_>,
+) -> Line<'a> {
+    let prefix = format!(
+        "{}{} ",
+        selection_marker(state.selected),
+        status_icon(session.manager.status, animation_frame)
+    );
+    table_line(
+        &prefix,
+        Span::styled(
+            &session.title,
+            session_title_style(&session.session_id, state, context),
+        ),
+        &context.localize(manager_status_label(session.manager.status)),
+        &elapsed_label(session, now_unix_ms, context),
+        width,
+        context,
+    )
+    .style(
+        Style::default()
+            .fg(context.muted())
+            .patch(interaction_style(context, state)),
+    )
+}
+
+fn draw_summary(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view: &SessionManagerView<'_>,
+    context: RenderContext<'_>,
+) {
+    let muted = Style::default().fg(context.muted());
+    let heading = Style::default()
+        .fg(context.foreground())
+        .add_modifier(Modifier::BOLD);
+    let mut lines = vec![
+        Line::styled(context.localize("Session details").into_owned(), heading),
+        Line::default(),
+    ];
+    match view.selected {
+        Some(SessionManagerPointerTarget::Session(id)) => {
+            if let Some(session) = view
+                .sessions
+                .iter()
+                .find(|session| &session.session_id == id)
+            {
+                lines.push(Line::styled(
+                    session.title.clone(),
+                    heading.patch(session_title_style(
+                        id,
+                        InteractionState::default(),
+                        context,
+                    )),
+                ));
+                lines.push(Line::styled(
+                    context
+                        .localize(manager_status_label(session.manager.status))
+                        .into_owned(),
+                    muted,
+                ));
+                if !activity_text(session).is_empty() {
+                    lines.push(Line::default());
+                    lines.push(Line::styled(
+                        context.localize("Activity").into_owned(),
+                        heading,
+                    ));
+                    crate::render::push_owned_lines(
+                        &crate::render::styled_text_lines(activity_text(session), muted),
+                        &mut lines,
+                    );
+                }
+                lines.push(Line::default());
+                lines.push(Line::styled(
+                    context.localize("Project").into_owned(),
+                    heading,
+                ));
+                let project = match &session.execution_target {
+                    Some(ash_protocol::SessionExecutionTarget::Local { root }) => {
+                        root.to_string_lossy().into_owned()
+                    }
+                    Some(ash_protocol::SessionExecutionTarget::Ssh { host, root }) => {
+                        format!("{host}:{root}")
+                    }
+                    None => context.localize("No project").into_owned(),
+                };
+                lines.push(Line::styled(project, muted));
+                let model = session
+                    .model
+                    .as_ref()
+                    .map(|model| format!("{}/{}", model.provider, model.model))
+                    .unwrap_or_else(|| context.localize("No model selected").into_owned());
+                lines.push(Line::styled(
+                    format!("{}: {model}", context.localize("Model")),
+                    muted,
+                ));
+                lines.push(Line::default());
+                lines.push(Line::styled(
+                    format!("{}: {}", context.localize("Threads"), session.threads.len()),
+                    muted,
+                ));
+            }
+        }
+        Some(SessionManagerPointerTarget::Group(group)) => {
+            let members = manager_rows(view.sessions, view.pinned, &BTreeSet::new(), view.grouping)
+                .into_iter()
+                .find_map(|row| match row {
+                    ManagerRow::Heading {
+                        group: candidate,
+                        count,
+                    } if &candidate == group => Some(count),
+                    _ => None,
+                })
+                .unwrap_or_default();
+            lines.push(group_line(
+                group,
+                members,
+                GroupDisclosure::None,
+                InteractionState::default(),
+                usize::from(area.width),
+                context,
+            ));
+        }
+        None => lines.push(Line::styled(
+            context.localize("No sessions yet").into_owned(),
+            muted,
+        )),
+    }
+    frame.render_widget(
+        Paragraph::new(crate::render::wrap_lines(lines, usize::from(area.width))),
+        area,
+    );
 }
 
 #[derive(Clone)]
 enum ManagerRow<'a> {
     Heading { group: SessionGroup, count: usize },
     Session(&'a Session),
+    Gap,
 }
 
 impl ManagerRow<'_> {
-    fn target(&self) -> SessionManagerPointerTarget {
+    fn target(&self) -> Option<SessionManagerPointerTarget> {
         match self {
-            Self::Heading { group, .. } => SessionManagerPointerTarget::Group(group.clone()),
-            Self::Session(session) => {
-                SessionManagerPointerTarget::Session(session.session_id.clone())
-            }
+            Self::Heading { group, .. } => Some(SessionManagerPointerTarget::Group(group.clone())),
+            Self::Session(session) => Some(SessionManagerPointerTarget::Session(
+                session.session_id.clone(),
+            )),
+            Self::Gap => None,
         }
     }
 }
@@ -663,6 +922,11 @@ fn manager_rows<'a>(
         if group_sessions.is_empty() && group != SessionGroup::Archived {
             continue;
         }
+        // Spacing belongs to the row map so drawing, scrolling and pointer hits agree.
+        // Keyboard navigation only visits rows with a target.
+        if !rows.is_empty() {
+            rows.push(ManagerRow::Gap);
+        }
         rows.push(ManagerRow::Heading {
             group: group.clone(),
             count: group_sessions.len(),
@@ -704,7 +968,10 @@ fn session_line<'a>(
         Span::styled(selection_marker(state.selected), row_style),
         Span::styled(icon.to_string(), row_style),
         Span::raw(" "),
-        Span::styled(name, row_style),
+        Span::styled(
+            name,
+            session_title_style(&session.session_id, state, context),
+        ),
         Span::raw(" ".repeat(middle_gap)),
         Span::styled(middle, row_style),
         Span::raw(" ".repeat(time_gap)),
@@ -713,28 +980,86 @@ fn session_line<'a>(
     .style(row_style)
 }
 
+enum GroupDisclosure {
+    None,
+    Collapsed,
+    Expanded,
+}
+
 fn group_line(
     group: &SessionGroup,
     count: usize,
+    disclosure: GroupDisclosure,
     state: InteractionState,
     width: usize,
     context: RenderContext<'_>,
 ) -> Line<'static> {
-    let text = format!(
-        "{}{} ({count})",
-        selection_marker(state.selected),
-        match group {
-            SessionGroup::LocalProject(_)
-            | SessionGroup::RemoteProject { .. }
-            | SessionGroup::Model(_) => group.label().into_owned(),
-            _ => context.localize(&group.label()).into_owned(),
-        }
+    let label = match group {
+        SessionGroup::LocalProject(_)
+        | SessionGroup::RemoteProject { .. }
+        | SessionGroup::Model(_) => group.label().into_owned(),
+        _ => context.localize(&group.label()).into_owned(),
+    };
+    let prefix = selection_marker(state.selected);
+    let available = width.saturating_sub(prefix.width());
+    let marker = match disclosure {
+        GroupDisclosure::None => "",
+        GroupDisclosure::Collapsed => "+",
+        GroupDisclosure::Expanded => "-",
+    };
+    let marker = match available {
+        0 => String::new(),
+        1 => marker.to_owned(),
+        _ if !marker.is_empty() => format!(" {marker}"),
+        _ => String::new(),
+    };
+    let count = truncate_to_width(
+        &format!(" ({count})"),
+        available.saturating_sub(marker.width()),
     );
+    let suffix = format!("{count}{marker}");
+    let label_width = width.saturating_sub(prefix.width() + suffix.width());
+    let label = truncate_to_width(&label, label_width);
     let style = Style::default()
         .fg(context.muted())
+        .patch(interaction_style(context, state));
+    let heading = Style::default()
+        .fg(context.foreground())
         .add_modifier(Modifier::BOLD)
         .patch(interaction_style(context, state));
-    Line::styled(pad_to_width(&truncate_to_width(&text, width), width), style)
+    let padding = width.saturating_sub(prefix.width() + label.width() + suffix.width());
+    Line::from(vec![
+        Span::styled(prefix, style),
+        Span::styled(label, heading),
+        Span::styled(suffix, style.remove_modifier(Modifier::BOLD)),
+        Span::raw(" ".repeat(padding)),
+    ])
+    .style(style)
+}
+
+fn session_title_style(
+    id: &SessionId,
+    state: InteractionState,
+    context: RenderContext<'_>,
+) -> Style {
+    // A fixed hash and fixed theme-token order keep identity colors stable across
+    // renames, grouping, restarts and terminal color depths. Different IDs may share a color.
+    let hash = id
+        .as_str()
+        .bytes()
+        .fold(0xcbf29ce484222325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+        });
+    let colors = [
+        context.accent(),
+        context.keyword(),
+        context.string(),
+        context.function(),
+        context.variable(),
+    ];
+    Style::default()
+        .fg(colors[(hash % colors.len() as u64) as usize])
+        .patch(interaction_style(context, state))
 }
 
 fn manager_state(

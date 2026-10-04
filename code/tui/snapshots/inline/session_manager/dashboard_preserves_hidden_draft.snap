@@ -2,18 +2,18 @@
 source: code/tui/src/app/session_manager_tests.rs
 expression: render(&app)
 ---
-  .                                                                                    [Dashboard]
-
 ─ Dashboard ───────────────────────────────────────────────────────────────────── Group: Status  g ─
 
     Sessions                           Status           Updated   │ Session details
-> Idle (1) -                                                      │
-  ○ Snapshot session                   idle                       │   Idle (1)
-                                                                  │
+  Idle (1) -                                                      │
+> ○ Snapshot session                   idle                       │ Snapshot session
+                                                                  │ idle
   Archived (0)                                                    │
+                                                                  │ Project
+                                                                  │ No project
+                                                                  │ Model: No model selected
                                                                   │
-                                                                  │
-                                                                  │
+                                                                  │ Threads: 1
                                                                   │
                                                                   │
                                                                   │
@@ -33,4 +33,4 @@ expression: render(&app)
                                                                   │
                                                                   │
 
-  Enter to collapse · g to group · Esc to return
+  Enter to open · Space to preview · Ctrl+X to archive · i to details · →/Esc to return

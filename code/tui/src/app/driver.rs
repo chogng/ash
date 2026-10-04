@@ -102,6 +102,7 @@ pub(super) struct AppDriver {
     memory: crate::memory::Controller,
     local_settings: std::sync::Arc<crate::config::LocalTuiSettings>,
     local_settings_changes: std::sync::mpsc::Receiver<ash_config::ConfigChange>,
+    persisted_session_grouping: crate::sessions::SessionGrouping,
 }
 
 pub(super) struct AppDriverResources {
@@ -121,7 +122,8 @@ impl AppDriver {
         conversation: Option<Conversation>,
         resources: AppDriverResources,
     ) -> Result<Self, String> {
-        app.set_session_grouping(resources.local_settings.read_grouping()?);
+        let persisted_session_grouping = resources.local_settings.read_grouping()?;
+        app.set_session_grouping(persisted_session_grouping);
         let local_settings_changes = resources.local_settings.subscribe_changes();
         let initial =
             ScheduledCommand::new(HostCommand::RefreshClipboardImageAvailability.into(), &app);
@@ -142,6 +144,7 @@ impl AppDriver {
             memory: crate::memory::Controller::default(),
             local_settings: resources.local_settings,
             local_settings_changes,
+            persisted_session_grouping,
         };
         driver.reconcile_memory_diagnostics();
         Ok(driver)
@@ -202,7 +205,9 @@ impl AppDriver {
         if local_settings_changed {
             match self.local_settings.read() {
                 Ok(settings) => self.app.set_dictation_shortcut_settings(settings),
-                Err(error) => self.app.update(ThreadEvent::FailureReported(error)),
+                Err(error) => self
+                    .app
+                    .update(crate::host::Event::TopTipNoticeShown(error)),
             }
             // The live choice may be ahead of a queued save; a store notification must not
             // replace it with an earlier write from that same queue.
@@ -212,8 +217,16 @@ impl AppDriver {
                 .any(|scheduled| matches!(scheduled.command, AppCommand::SaveSessionGrouping(_)))
             {
                 match self.local_settings.read_grouping() {
-                    Ok(grouping) => self.app.set_session_grouping(grouping),
-                    Err(error) => self.app.update(sessions::Event::GroupingSaveFailed(error)),
+                    Ok(grouping) => {
+                        // Unrelated local edits do not replace an unsaved live choice.
+                        if grouping != self.persisted_session_grouping {
+                            self.persisted_session_grouping = grouping;
+                            self.app.set_session_grouping(grouping);
+                        }
+                    }
+                    Err(error) => self
+                        .app
+                        .update(crate::host::Event::TopTipNoticeShown(error)),
                 }
             }
         }

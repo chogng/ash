@@ -96,6 +96,7 @@ fn keymap_choices_lists_keys_before_responsibilities() {
             "Home/End · PageUp/PageDown",
             "/",
             "Tab/Shift+Tab",
+            "g",
             "Esc",
             "→/Esc",
         ]

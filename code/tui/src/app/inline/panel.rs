@@ -4,6 +4,7 @@ use crate::widgets::panel::PanelLayout;
 use crossterm::event::KeyEvent;
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::text::Line;
 
 pub(super) fn desired_height(
     panel: &CommandPanel,
@@ -30,7 +31,8 @@ pub(super) fn draw(
     crate::widgets::panel::draw_header(
         frame,
         area,
-        &panel.navigation_title(context.language()),
+        Line::from(panel.navigation_title(context.language())),
+        Line::default(),
         presentation_focus,
     );
     panel.draw_content(frame, layout.tabs, layout.body, None, None, context);

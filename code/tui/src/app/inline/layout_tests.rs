@@ -1,4 +1,3 @@
-use super::manager_areas;
 use super::session_areas;
 use ratatui::layout::Rect;
 
@@ -35,20 +34,4 @@ fn command_panels_use_available_height_and_keep_hints_visible() {
     let layout = super::command_panel_areas(Rect::new(0, 0, 80, 40), 8, 2);
     assert_eq!(layout.composer.height, 8);
     assert_eq!(layout.transcript.height, 30);
-}
-
-#[test]
-fn manager_layout_keeps_welcome_above_a_useful_session_list() {
-    let areas = manager_areas(Rect::new(0, 2, 80, 20), 11);
-
-    assert_eq!(areas.welcome, Rect::new(0, 2, 80, 11));
-    assert_eq!(areas.sessions, Rect::new(0, 14, 80, 8));
-}
-
-#[test]
-fn manager_layout_shrinks_welcome_before_the_session_list() {
-    let areas = manager_areas(Rect::new(0, 0, 40, 8), 12);
-
-    assert_eq!(areas.welcome.height, 3);
-    assert_eq!(areas.sessions, Rect::new(0, 4, 40, 4));
 }

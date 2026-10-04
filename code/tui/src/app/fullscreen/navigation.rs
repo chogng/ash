@@ -56,7 +56,7 @@ pub(in crate::app) fn handle_key(
     }
     if key.kind == KeyEventKind::Press
         && key.code == KeyCode::F(6)
-        && app.fullscreen.input_focused()
+        && (app.fullscreen.input_focused() || app.session_manager_view().is_some())
         && app.approval_view().is_none()
         && app.query_view().is_none()
         && app.command_panel().is_none()
@@ -447,6 +447,10 @@ pub(in crate::app) fn handle_screen_navigation_key(
         }
     };
     match target {
+        SessionScreen::Home => {
+            open_home(app);
+            Some(None)
+        }
         SessionScreen::Manager => {
             close_transient_surfaces(app);
             app.fullscreen.sessions.show_manager(&app.sessions);
@@ -726,7 +730,7 @@ pub(in crate::app) fn screen_navigation_tip(app: &App) -> Option<&'static str> {
     }
     match app.fullscreen.sessions.previous_screen()? {
         SessionScreen::Manager => Some("← Dashboard"),
-        SessionScreen::Session(_) => None,
+        SessionScreen::Home | SessionScreen::Session(_) => None,
     }
 }
 
@@ -796,6 +800,11 @@ pub(in crate::app) fn close_transient_surfaces(app: &mut App) {
 }
 
 pub(super) fn focus_input(app: &mut App) {
+    if app.session_manager_view().is_some() {
+        app.fullscreen.focus_page();
+        app.fullscreen.sessions.manager_mut().focus();
+        return;
+    }
     clear_page_focus(app);
     app.fullscreen.focus_input();
 }
@@ -840,7 +849,7 @@ pub(in crate::app) fn show_manager(app: &mut App) {
     app.fullscreen.agent_thread_switcher.blur();
     app.fullscreen.page = super::Page::Conversation;
     app.fullscreen.sessions.show_manager(&app.sessions);
-    app.fullscreen.focus_input();
+    app.fullscreen.focus_page();
 }
 
 pub(in crate::app) fn open_issues(app: &mut App) -> Option<AppCommand> {
