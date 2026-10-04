@@ -51,6 +51,8 @@
     "src/ash/workbench/common/**/*.ts",
     "src/ash/workbench/contrib/academic/**/*.ts",
     "src/ash/workbench/contrib/codeEditor/**/*.ts",
+    "src/ash/workbench/contrib/browserView/common/**/*.ts",
+    "src/ash/workbench/contrib/browserView/test/common/**/*.ts",
     "src/ash/workbench/contrib/multiDiffEditor/**/*.ts",
     "src/ash/workbench/contrib/documentEditor/**/*.ts",
     "src/ash/workbench/contrib/chat/**/*.ts",
@@ -71,8 +73,8 @@
     "src/ash/platform/terminal/electron-main/**/*.ts",
     "src/ash/platform/typst/electron-main/**/*.ts",
     "src/ash/platform/app-server/browser/**/*.ts",
-    "src/ash/platform/browser/common/**/*.ts",
-    "src/ash/platform/browser/electron-main/browserViewIpc.ts",
+    "src/ash/platform/browserView/common/**/*.ts",
+    "src/ash/platform/browserView/electron-main/browserViewIpc.ts",
     "test/architecture/**/*.ts"
   ]
 }

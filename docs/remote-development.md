@@ -566,12 +566,12 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - Desktop Main Tunnel listener readiness/recovery 测试：
   `app-ts/src/ash/platform/remote/test/electron-main/sshRemoteTunnelService.test.ts`
 - Desktop Remote Browser URL/Tunnel adapter 与生命周期：
-  `app-ts/src/ash/platform/browser/common/browserViewNavigation.ts`、
-  `app-ts/src/ash/platform/browser/electron-main/browserViewMainService.ts`、
+  `app-ts/src/ash/platform/browserView/common/browserViewNavigation.ts`、
+  `app-ts/src/ash/platform/browserView/electron-main/browserViewMainService.ts`、
   `app-ts/src/ash/platform/remote/electron-main/remoteBrowserViewNavigationResolver.ts`
 - Desktop Remote Browser mapping、失败、取消、Workspace fencing 与异步 host retirement 测试：
   `app-ts/src/ash/platform/remote/test/electron-main/remoteBrowserViewNavigationResolver.test.ts`、
-  `app-ts/src/ash/platform/browser/test/electron-main/browserAutomationMainService.test.ts`
+  `app-ts/src/ash/platform/browserView/test/electron-main/browserView.test.ts`
 - Desktop Ports 面板与 Tunnel event projection：
   `app-ts/src/ash/workbench/contrib/remote/browser/remotePortsViewPane.ts`、
   `app-ts/src/ash/workbench/contrib/remote/test/browser/remotePortsViewPane.test.ts`

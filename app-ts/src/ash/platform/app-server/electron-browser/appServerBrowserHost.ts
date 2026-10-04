@@ -1,9 +1,9 @@
 import { generateUuid } from '../../../base/common/uuid.js';
-import { APP_SERVER_SERVER_REQUESTS } from '../../app-server/common/generated/index.js';
-import { decodeAppServerServerRequestResult } from '../../app-server/common/generated/AppServerProtocolDecoder.js';
+import { APP_SERVER_SERVER_REQUESTS } from '../common/generated/index.js';
+import { decodeAppServerServerRequestResult } from '../common/generated/AppServerProtocolDecoder.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../browser/appServerProtocolClient.js';
 import { invoke } from '../../ipc/electron-browser/rendererIpc.js';
 
 export function registerAppServerBrowserHost(client: AppServerProtocolClient): IDisposable {

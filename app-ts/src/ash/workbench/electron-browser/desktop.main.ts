@@ -109,7 +109,7 @@ export class DesktopMain extends Disposable {
 					catch (error) { storage.dispose(); throw error; }
 				},
 				api,
-				browserViewApi: api.browserView,
+				browserViewService: api.browserView,
 				container,
 				workspace,
 				createLifecycleService: services => {

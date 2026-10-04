@@ -670,7 +670,7 @@ fn rpc_turn_executes_browser_tool_only_on_its_originating_window() {
         call(
             connection,
             "initialize",
-            json!({"clientInfo":{"name":"desktop-test","version":"1"},"capabilities":{"browser":{"version":1,"observe":true,"input":true}}}),
+            json!({"clientInfo":{"name":"desktop-test","version":"1"},"capabilities":{"browser":{"version":2,"observe":true,"input":true}}}),
         );
     }
     call(

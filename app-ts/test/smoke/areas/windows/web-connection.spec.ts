@@ -20,8 +20,8 @@ test('two desktops isolate browser targets and closing one preserves the other',
 	const environment = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: appServerExecutablePath(packageLocation) };
 	const desktops: Awaited<ReturnType<typeof launchElectron>>[] = [];
 	const closed = new Set<Awaited<ReturnType<typeof launchElectron>>>();
-	const hostCall = (page: Page, method: string, params: unknown) => page.evaluate(({ method, params }) => {
-		return (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params });
+	const hostCall = (page: Page, method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
+		return (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'browser-window-thread', ...params } });
 	}, { method, params });
 	try {
 		await promisify(execFile)(daemon, ['start'], { env: environment, windowsHide: true, timeout: 30_000 });

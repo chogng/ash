@@ -8,6 +8,9 @@ use serde::Serialize;
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserCreateParams {
+    /// The durable Thread owning this request; a transport connection is not an agent identity.
+    #[schemars(length(min = 1))]
+    pub thread_id: String,
     #[schemars(length(min = 1, max = 8192))]
     pub url: String,
 }
@@ -22,6 +25,8 @@ pub struct BrowserCreateResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserObserveParams {
+    #[schemars(length(min = 1))]
+    pub thread_id: String,
     #[schemars(length(min = 1))]
     pub target_id: String,
     pub include_accessibility_tree: bool,
@@ -121,6 +126,8 @@ impl BrowserPerformActionDto {
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserPerformParams {
+    #[schemars(length(min = 1))]
+    pub thread_id: String,
     pub action: BrowserPerformActionDto,
 }
 
@@ -134,6 +141,8 @@ pub struct BrowserPerformResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserCloseParams {
+    #[schemars(length(min = 1))]
+    pub thread_id: String,
     #[schemars(length(min = 1))]
     pub target_id: String,
 }

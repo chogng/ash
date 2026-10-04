@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { isAdmin } from '../../platform/native/electron-main/nativeHostMainService.js';
 import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
 import { URLHandlerChannel, URLHandlerChannelClient } from '../../platform/url/common/urlIpc.js';
@@ -9,7 +10,7 @@ import { isRecord } from '../../base/common/types.js';
 import { isUuid } from '../../base/common/uuid.js';
 import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauthCallbackHost.js";
 import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
-import { BrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationHostRoutes.js";
+import { AppServerBrowserHost } from "../../platform/app-server/electron-main/appServerBrowserHost.js";
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { nativeImage, nativeTheme, shell } from "electron";
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
@@ -20,7 +21,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { access, chmod, lstat, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { constants, readFileSync, watch } from "node:fs";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import { throwIfCancelled, type CancellationToken } from "../../base/common/cancellation.js";
 import { isCancellationError } from "../../base/common/errors.js";
 import { createUuid } from '../../base/common/uuid.js';
@@ -34,11 +35,16 @@ import { DevelopmentAppServerReloader } from "../../platform/app-server-daemon/e
 import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from "../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
 import { remoteExecutablePath } from "../../platform/remote/node/remotePackage.js";
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
-import { BROWSER_VIEW_EVENT_CHANNEL } from "../../platform/browser/common/browserView.js";
-import { browserViewIpcRoutes } from "../../platform/browser/electron-main/browserViewIpc.js";
-import { BrowserViewMainService } from "../../platform/browser/electron-main/browserViewMainService.js";
-import { BrowserAutomationMainService } from "../../platform/browser/electron-main/browserAutomationMainService.js";
-import { BrowserTargetRegistry } from "../../platform/browser/electron-main/browserTargetRegistry.js";
+import { BROWSER_VIEW_EVENT_CHANNEL } from "../../platform/browserView/common/browserView.js";
+import { browserViewIpcRoutes } from "../../platform/browserView/electron-main/browserViewIpc.js";
+import { BrowserViewMainService, IBrowserViewMainService } from "../../platform/browserView/electron-main/browserViewMainService.js";
+import { IBrowserViewNavigationResolver } from '../../platform/browserView/common/browserViewNavigation.js';
+import { Client as MessagePortClient } from '../../base/parts/ipc/common/ipc.mp.js';
+import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
+import { UtilityProcess } from '../../platform/utilityProcess/electron-main/utilityProcess.js';
+import { BrowserViewGroupMainService } from '../../platform/browserView/electron-main/browserViewGroupMainService.js';
+import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
+import { WebContentsView, session as electronSession } from 'electron/main';
 import { configurationValues } from '../../platform/configuration/common/configurationIpc.js';
 import { formatNlsMessage } from '../../nls.js';
 import { ConfigurationMainService } from "../../platform/configuration/electron-main/configurationMainService.js";
@@ -229,6 +235,10 @@ export class AshApplication extends Disposable {
 	private readonly tracking: globalThis.Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
 	private readonly mainProcessIpcServer = this._register(new MainProcessIPCServer());
+	private readonly sharedProcess = this._register(new UtilityProcess({
+		name: 'Ash Browser Automation',
+		entryPoint: fileURLToPath(new URL('../electron-utility/sharedProcess/sharedProcessMain.js', import.meta.url)),
+	}));
 	private readonly updateMainService: UpdateMainService;
 	private readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
 	private readonly globalKeybindings: GlobalKeybindingsMainService;
@@ -917,15 +927,12 @@ export class AshApplication extends Disposable {
 			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
 			const workspaceContext = resources.add(new WorkspaceContextMainService(workspace, resolvedWorkspace));
 			const supervisor = resources.add(this.createAppServerConnectionRelay(workspace, resources));
-			const browserAutomation = new BrowserAutomationMainService();
-			resources.add(supervisor.onStateChange(state => {
-				if (state === "crashed" || state === "restarting" || state === "stopping" || state === "stopped") browserAutomation.reset();
-			}));
+
 			if (this.appServerStartupMode === "required" && !await this.startAppServerWithRecovery(supervisor)) {
 				resources.dispose();
 				return undefined;
 			}
-			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, browserAutomation, resources);
+			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, resources);
 		} catch (error) {
 			resources.dispose();
 			throw error;
@@ -1141,7 +1148,6 @@ export class AshApplication extends Disposable {
 		workspaceContext: WorkspaceContextMainService,
 		workspaces: WorkspacesManagementMainService,
 		supervisor: AppServerConnectionRelay,
-		browserAutomationMainService: BrowserAutomationMainService,
 		resources: DisposableStore,
 	): Promise<WorkbenchWindowRecord> {
 		const windowsStateHandler = this.createWindowsStateHandler(workspaceContext.getWorkspace());
@@ -1199,24 +1205,45 @@ export class AshApplication extends Disposable {
 			sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
 			localEnvironment: process.env,
 		});
-		const browserTargetRegistry = new BrowserTargetRegistry();
-		const browserViewMainService = windowDisposables.add(
-			new BrowserViewMainService({
-				window,
-				registry: browserTargetRegistry,
-				emitEvent: (event) => {
-					if (!window.isDestroyed()) {
-						window.webContents.send(BROWSER_VIEW_EVENT_CHANNEL, event);
-					}
+		const browserServices = windowDisposables.add(this.windowServices.createChild(new ServiceCollection(
+			[IBrowserViewNavigationResolver, new RemoteBrowserViewNavigationResolver({
+				getWorkspace: () => workspaceContext.getWorkspace(),
+				tunnels: remoteTunnelService,
+				reportError: (message, error) => console.error(message, error),
+			})],
+		)));
+		const browserViewMainService = windowDisposables.add(browserServices.createInstance(BrowserViewMainService, {
+			window,
+			getWorkspaceId: () => workspaceContext.getWorkspace().id,
+			createSession: (partition: string) => electronSession.fromPartition(partition),
+			createView: (session: Electron.Session) => new WebContentsView({
+				webPreferences: {
+					contextIsolation: true,
+					nodeIntegration: false,
+					sandbox: true,
+					webviewTag: false,
+					session,
 				},
-				navigationResolver: new RemoteBrowserViewNavigationResolver({
-					getWorkspace: () => workspaceContext.getWorkspace(),
-					tunnels: remoteTunnelService,
-					reportError: (message, error) => console.error(message, error),
-				}),
 			}),
-		);
-		windowDisposables.add(browserAutomationMainService.bind(browserViewMainService, browserTargetRegistry));
+		}));
+		windowDisposables.add(browserViewMainService.onDidEvent(event => {
+			if (!window.isDestroyed()) window.webContents.send(BROWSER_VIEW_EVENT_CHANNEL, event);
+		}));
+		browserServices.registerInstance(IBrowserViewMainService, browserViewMainService);
+		const browserGroups = windowDisposables.add(browserServices.createInstance(BrowserViewGroupMainService));
+		const browserPort = this.sharedProcess.connect(`window:${window.id}`);
+		const browserClient = windowDisposables.add(new MessagePortClient({
+			postMessage: data => browserPort.postMessage(data), start: () => browserPort.start(), close: () => browserPort.close(),
+			addEventListener: (type, listener) => type === 'message' ? browserPort.on('message', listener) : browserPort.on('close', listener as () => void), removeEventListener: (type, listener) => type === 'message' ? browserPort.off('message', listener) : browserPort.off('close', listener as () => void),
+		}, `window:${window.id}`));
+		browserClient.registerChannel('browserViewGroup', ProxyChannel.fromService(browserGroups, windowDisposables));
+		browserServices.registerInstance(IPlaywrightService, ProxyChannel.toService<IPlaywrightService>(browserClient.getChannel('playwright')));
+		// A worker crash retires its debugger leases, while the user's live pages remain in Main.
+		browserPort.once('close', () => browserGroups.dispose());
+		const appServerBrowserHost = windowDisposables.add(browserServices.createInstance(AppServerBrowserHost));
+		windowDisposables.add(supervisor.onStateChange(state => {
+			if (state === 'crashed' || state === 'restarting' || state === 'stopping' || state === 'stopped') appServerBrowserHost.reset();
+		}));
 		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace, resolvedWorkspace }) => {
 			if (window.isDestroyed()) return;
 			record.windowStateTracking.dispose();
@@ -1344,7 +1371,7 @@ export class AshApplication extends Disposable {
 			...this.mainProcessIpcRoutes(window),
 			...workspaceHost.routes(),
 			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
-			...windowDisposables.add(new BrowserAutomationHost(browserAutomationMainService)).routes(),
+			...appServerBrowserHost.routes(),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
 			...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path)),
 			hooksConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openHooksTextFile),

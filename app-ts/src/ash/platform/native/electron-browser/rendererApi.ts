@@ -12,7 +12,7 @@ import { createRendererHost, type RendererCapabilityContribution } from '../../a
 import { ElectronRendererClipboardService } from '../../clipboard/electron-browser/electronRendererClipboardService.js';
 import { createDisconnectedRendererApi } from '../../app-server/browser/rendererApi.js';
 import { AppServerAutomationService } from '../../automation/browser/appServerAutomationService.js';
-import { registerAppServerBrowserHost } from '../../browser/electron-browser/appServerBrowserHost.js';
+import { registerAppServerBrowserHost } from '../../app-server/electron-browser/appServerBrowserHost.js';
 import { registerAppServerWorkspaceHost, initializeWorkspace } from '../../workspaces/electron-browser/appServerWorkspaceHost.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { IRendererHost } from '../../renderer/common/rendererHost.js';
@@ -21,7 +21,7 @@ import { subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import { ReconnectableTerminalProcessService } from '../../terminal/browser/reconnectableTerminalProcessService.js';
 import { operatingSystemFromNodePlatform } from "../../../base/common/environment.js";
 import { sandboxProcess } from "../../../base/parts/sandbox/electron-browser/globals.js";
-import { createBrowserViewApi } from "../../browser/electron-browser/browserViewApi.js";
+import { createBrowserViewService } from "../../browserView/electron-browser/browserViewService.js";
 import { createConfigurationApi } from "../../configuration/electron-browser/configurationApi.js";
 import { createNativeContextMenuApi } from "../../contextview/electron-browser/contextMenuApi.js";
 import { createNativeKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js";
@@ -54,7 +54,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		void connecting.catch(error => console.error('App Server reconnect failed', error));
 	}));
 	// Initialization includes the local daemon's cold start, which can take 15 seconds.
-	const client = new AppServerProtocolClient(transport, { clientName: 'ash-desktop', initializeTimeoutMs: 30_000, capabilities: { ...(hostCapabilities.browser ? { browser: { version: 1, observe: true, input: true } } : {}), ...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}), dirPermissionsHost: { version: 1 } } });
+	const client = new AppServerProtocolClient(transport, { clientName: 'ash-desktop', initializeTimeoutMs: 30_000, capabilities: { ...(hostCapabilities.browser ? { browser: { version: 2, observe: true, input: true } } : {}), ...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}), dirPermissionsHost: { version: 1 } } });
 	resources.add(toDisposable(() => client.dispose()));
 	if (hostCapabilities.browser) { resources.add(registerAppServerBrowserHost(client)); }
 	resources.add(registerAppServerWorkspaceHost(client, () => connecting, workspaceTrust));
@@ -160,7 +160,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			remote: createRemoteAgentApi(),
 			remoteConnections: createRemoteConnectionApi(),
 			remoteTunnels: createRemoteTunnelApi(),
-			browserView: createBrowserViewApi(),
+			browserView: createBrowserViewService(),
 			configuration: createConfigurationApi(),
 			keyboardLayout: createNativeKeyboardLayoutApi(),
 			userKeyboardLayout: createUserKeyboardLayoutApi(),

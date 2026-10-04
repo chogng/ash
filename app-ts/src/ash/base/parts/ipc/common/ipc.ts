@@ -30,6 +30,43 @@ export interface IChannelServer<TContext = string> {
 	registerChannel(channelName: string, channel: IServerChannel<TContext>): void;
 }
 
+/** Service proxies transport JSON data; implementations keep process-local objects and lifetimes. */
+export namespace ProxyChannel {
+	export function fromService<TContext>(service: object, _disposables: DisposableStore): IServerChannel<TContext> {
+		const member = (name: string): Function => {
+			if (name in Object.prototype) { throw new Error('Unknown service member: ' + name); }
+			const value: unknown = Reflect.get(service, name);
+			if (typeof value !== 'function') { throw new Error('Unknown service member: ' + name); }
+			return value;
+		};
+		return {
+			call: async <T>(_context: TContext, command: string, arg: unknown): Promise<T> => {
+				if (command.startsWith('on') || !Array.isArray(arg)) { throw new TypeError('Invalid service call'); }
+				return await member(command).apply(service, arg) as T;
+			},
+			listen: <T>(_context: TContext, event: string, arg: unknown): Event<T> => {
+				if (event.startsWith('onDynamic')) {
+					if (!Array.isArray(arg)) { throw new TypeError('Invalid dynamic event arguments'); }
+					return member(event).apply(service, arg) as Event<T>;
+				}
+				if (!event.startsWith('on')) { throw new TypeError('Invalid service event'); }
+				return member(event).bind(service) as Event<T>;
+			},
+		};
+	}
+
+	export function toService<T extends object>(channel: IChannel): T {
+		return new Proxy({}, {
+			get: (_target, name) => {
+				if (typeof name !== 'string' || name === 'then') { return undefined; }
+				if (name.startsWith('onDynamic')) { return (...args: unknown[]) => channel.listen(name, args); }
+				if (name.startsWith('on')) { return channel.listen(name); }
+				return (...args: unknown[]) => channel.call(name, args);
+			},
+		}) as T;
+	}
+}
+
 interface PendingCall {
 	readonly resources: DisposableStore;
 	readonly resolve: (value: unknown) => void;

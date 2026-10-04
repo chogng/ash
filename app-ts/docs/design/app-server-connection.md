@@ -33,11 +33,11 @@ TS 前端以浏览器环境为运行边界，业务与系统执行通过协议�
 | 远程连接与隧道 | [remoteCommand.ts](../../src/ash/platform/remote/electron-main/remoteCommand.ts)、[remoteAppServerProcessLauncher.ts](../../src/ash/platform/remote/electron-main/remoteAppServerProcessLauncher.ts)、[sshRemoteTunnelService.ts](../../src/ash/platform/remote/electron-main/sshRemoteTunnelService.ts) | Desktop 数据连接通过本地共享 Rust 后端持有 SSH 子进程；Main 装配本地 daemon carrier，仍协调 runtime 探测、准备与 TCP 隧道。Rust [remote-connections](../../../ash-rs/remote-connections/README.md) 持有安装与连接管理能力；Agent 本地执行与历史迁移尚未完成 |
 | 远程包校验与安装协调 | [packagedRemoteRuntimeCatalog.ts](../../src/ash/platform/remote/electron-main/packagedRemoteRuntimeCatalog.ts)、[remoteRuntimeInstaller.ts](../../src/ash/platform/remote/electron-main/remoteRuntimeInstaller.ts) | 仍有 Node 文件、哈希和环境依赖；区分已有 Rust 安装能力、构建产物选择与窗口进度展示，避免重复实现 |
 | OAuth 回调监听 | [oauthCallbackHost.ts](../../src/ash/platform/connectors/electron-main/oauthCallbackHost.ts)、[loopbackOAuthCallback.ts](../../src/ash/platform/connectors/electron-main/loopbackOAuthCallback.ts) | Main 创建 HTTP 监听；核对本机与远端后端部署位置、回调地址、取消和超时后确定 Rust 接口，打开授权网页仍归宿主 |
-| 配置、快捷键和主题文件 | [revisionedJsonFile.ts](../../src/ash/platform/storage/node/revisionedJsonFile.ts)、[userThemeFileService.ts](../../src/ash/platform/theme/node/userThemeFileService.ts) | Node 持有读写、监听和冲突检查；迁移存储前核对配置规范及领域协议，保留 TS 的配置含义、主题应用与快捷键解析 |
+| 配置、快捷键和主题文件 | [revisionedJsonFile.ts](../../src/ash/platform/storage/node/revisionedJsonFile.ts)、`platform/theme/node/userThemeFileService.ts`（初查时的路径） | Node 持有读写、监听和冲突检查；迁移存储前核对配置规范及领域协议，保留 TS 的配置含义、主题应用与快捷键解析 |
 | 工作区路径解析 | [workspaces.ts](../../src/ash/platform/workspaces/node/workspaces.ts) | Node 执行 realpath、stat 和文件读取；区分启动目标解析与连接后的工作区能力，保持授权边界和工作区身份 |
 | profile 与宿主状态 | [localProfile.ts](../../src/ash/platform/profile/node/localProfile.ts)、[stateService.ts](../../src/ash/platform/state/node/stateService.ts) | 包含文件复制与窗口状态落盘；按启动所需状态和产品数据分别核对，不整包迁入业务后端 |
 | 连接启动与开发工具 | [childProcessJsonlTransport.ts](../../src/ash/platform/app-server/node/childProcessJsonlTransport.ts)、[appServerDaemonLauncher.ts](../../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.ts)、[developmentArtifacts.ts](../../src/ash/platform/environment/node/developmentArtifacts.ts) | 分别属于当前宿主连接、daemon 连接程序与开发产物定位；本地启动配置和开发重启由 `platform/app-server-daemon` 承接，Rust daemon 保持进程管理的唯一所有权 |
-| Electron 平台能力 | [app.ts](../../src/ash/code/electron-main/app.ts)、[preload.cts](../../src/ash/base/parts/sandbox/electron-browser/preload.cts)、[browserViewMainService.ts](../../src/ash/platform/browser/electron-main/browserViewMainService.ts) | 保留明确宿主能力；继续压缩装配文件中的业务执行，不能把整个 Main 当作可删除的 Node 后端 |
+| Electron 平台能力 | [app.ts](../../src/ash/code/electron-main/app.ts)、[preload.cts](../../src/ash/base/parts/sandbox/electron-browser/preload.cts)、[browserViewMainService.ts](../../src/ash/platform/browserView/electron-main/browserViewMainService.ts) | 保留明确宿主能力；继续压缩装配文件中的业务执行，不能把整个 Main 当作可删除的 Node 后端 |
 
 当前主窗口配置为 `nodeIntegration: false`、`contextIsolation: true`、`sandbox: true`；Renderer 编译配置没有主动加入 Node 全局类型。这些是已有隔离措施，不是传递依赖审计完成的证据。`VSBuffer` 当前基于 `Uint8Array`，不能因为名称包含 Buffer 就作为 Node 实现删除。
 
@@ -55,7 +55,7 @@ TS 前端以浏览器环境为运行边界，业务与系统执行通过协议�
 - 用 Playwright 验证受影响的 Web、Electron UI 与真实 Electron 后端链路，以行为断言调试；覆盖多窗口隔离、关闭释放、取消、后端断线恢复，以及相关文件写入冲突。
 - 扩展执行与打包的 JavaScript 运行时单独核对。不得把“前端无需 Node”报告为“整个产品已经移除 Node”。
 
-本次仅更新职责和盘点，未运行产品测试或构建；下文已有实施验证是此前连接工作的记录，不是本次 Node 退场验收结果。
+Node 退场盘点尚未完成整体验收；下文按日期记录连接与浏览器基座的实施验证，不能据此宣称整个产品已移除 Node。
 
 ## 连接与职责
 
@@ -65,6 +65,9 @@ flowchart LR
   E[Electron Renderer] <--> M[Electron Main 中转]
   M <--> B
   E <-->|浏览器操作 IPC| V[Main WebContentsView]
+  B -->|Thread 浏览器反向请求| E
+  M <-->|窗口独立 MessagePort| P[独立 Playwright 进程]
+  P <-->|Thread Group CDP| V
   V <--> S[目标网站]
 ```
 
@@ -78,7 +81,9 @@ flowchart LR
 | [build/app_ts/launch/web.ts](../../../build/app_ts/launch/web.ts) | 用编译产物启动本地 Web，显示链接并保持租约 |
 | [Vite plugin](../../../build/app_ts/vite/webAppServerPlugin.ts) | 开发资源入口与开发 Origin 配置 |
 | [BrowserEditor](../../src/ash/workbench/contrib/browserView/electron-browser/browserEditor.ts) | 地址栏、历史导航、页面容器、布局、焦点和无障碍帮助 |
-| [Main 页面服务](../../src/ash/platform/browser/electron-main/browserViewMainService.ts) | 网页实例、会话隔离、导航和窗口内显示 |
+| [Main 页面服务](../../src/ash/platform/browserView/electron-main/browserViewMainService.ts) | 网页实例、会话隔离、导航和窗口内显示 |
+| [Group 服务](../../src/ash/platform/browserView/electron-main/browserViewGroupMainService.ts) | 按窗口与 Thread 选择页面，提供逻辑 CDP 浏览器，管理调试器引用 |
+| [Playwright 服务](../../src/ash/platform/browserView/node/playwrightService.ts) | 在独立进程中观察页面、执行元素操作；不创建另一套 Chromium 页面 |
 
 原 Node WebSocket 业务消息中转及对应编译目标已移除。启动脚本仍使用 Node，但不再代转业务帧；普通网页流量也不经过 App Server。
 
@@ -106,11 +111,17 @@ flowchart LR
 - `Ctrl+L`（macOS 为 `Command+L`）或网页中的 `F6` 返回地址栏；`Alt+F1` 打开无障碍帮助。
 - Main 的页面创建事件让 Agent 新建页面也进入 Workbench 页签；Agent 关闭页面会同步关闭编辑器。
 - [BrowserHost](../../../ash-rs/app-server/src/browser_host.rs) 在提交任务时记录 `(thread, turn) → connection`。重放已有提交不能更换宿主；浏览器工具通过任务执行上下文取得该连接。
-- 创建、观察、输入和关闭只能到达该任务连接及其所属目标。不会选择“第一个有浏览器能力的窗口”。断线清理等待请求与目标归属，取消和超时沿既有反向协议传递。
+- 创建、观察、输入和关闭的协议请求必须携带 `threadId`，浏览器宿主声明 `browser.version = 2`。Rust 同时核对连接和 Thread，Main 再核对页面 owner 和 Agent Session 的 Thread；同一窗口的其他 Thread 也不能观察、操作或关闭该页面。断线清理等待请求与目标归属，取消和超时沿既有反向协议传递。
 - Web 发起的任务没有桌面浏览器宿主，不能借用另一个桌面窗口。工具目录的整体可用状态仍由在线宿主决定，但实际执行还会检查任务宿主。
 - 自动化、队列和未绑定桌面连接的任务不会隐式继承浏览器权限；子任务的宿主继承尚未提供。
 
-Rust 负责批准和任务归属，Renderer 处理反向请求，Main 通过 CDP 操作已登记页面。Main 不接收任意 CDP 命令作为产品协议。取消会阻止后续步骤，但已经发送给 Chromium 的单条命令无法强制抢占。
+Rust 负责批准和任务归属，Renderer 处理反向请求，Main 保持页面、导航、Session 和显示的所有权。观察及元素操作经过窗口独立 MessagePort 交给应用共享的 Playwright 进程，再由 Thread Group 的 CDP 操作同一可见页面。产品协议只暴露浏览器领域操作。
+
+Group 同时检查页面 owner 和 Agent Session，显式页面 ID 不能扩大授权范围。Group 保留 Chromium 的 target ID，并用 `browserViewId` 关联 Ash 页面；主 frame 与 target 的对应关系不能被页面 ID 替换。多个 Group 借用同一页面调试器，释放 Group 只解绑自动化，不关闭页面。固定页面集合的 Group 不接受新建目标。
+
+取消会阻止后续步骤，但已经发送给 Chromium 的单条命令无法强制抢占。Main 保持页面操作顺序，等待执行中的 Chromium 命令结束后才允许下一次操作。Playwright 进程退出会拒绝在途 IPC 并释放 Group；Main 页面仍可手动导航和关闭。
+
+用户页面使用工作区持久 Session；Agent 页面按窗口和 Thread 使用内存 Session，同一 Thread 共享登录，其他 Thread 不共享。Renderer 重载重新接入 Main 的现存用户页面，不重建网页；后端连接退场时关闭 Agent 页面，包括重载导致连接退场的场景。应用重启恢复用户页签及工作区登录；保存的 Agent 页签只作为用户临时页面恢复，不恢复任务权限或 Agent 登录。
 
 ### 能力边界
 
@@ -119,28 +130,46 @@ Rust 负责批准和任务归属，Renderer 处理反向请求，Main 通过 CDP
 | Chrome、Edge 正常访问其他网页 | 不受本方案影响 |
 | 浏览器中打开 Ash Web | 已通过 Rust 认证入口接入 |
 | Ash 桌面内显示和操作网页 | 已有可见页签、导航和布局 |
-| 桌面 Agent 观察及输入网页 | 按任务连接路由，共用同一可见页面 |
+| 桌面 Agent 观察及输入网页 | 按连接和 Thread 路由，独立 Playwright 进程操作同一可见页面 |
 | 纯 Web 控制任意网站 | 未提供浏览器宿主，不能跨站控制其他网页 |
-| 登录持久化、下载、页面权限提示 | 未实现；当前页面使用独立临时会话，拒绝下载和权限请求 |
-| 浏览器页签跨应用重启恢复 | 未实现 |
-| 同一页面在多个编辑器组中同时显示 | 未验证，不作为当前支持能力 |
+| 登录与存储隔离 | 用户工作区登录持久化；Agent 登录只在对应窗口和 Thread 的内存 Session 内共享 |
+| 下载、页面权限提示 | 下载和权限请求统一拒绝；尚未提供用户授权交互 |
+| 浏览器页签跨应用重启恢复 | 用户页签、URL、标题和工作区 Session 可恢复；Agent 页签不会恢复任务权限 |
+| 同一页面在多个编辑器组中引用 | 分组引用和关闭行为已有验证；同一 WebContentsView 只在当前宿主编辑器显示 |
+| 页面分享、授权受众、远程 Session 网络策略 | 尚未完成；用户页面保持私有 |
+| 任意脚本工具、延迟执行、网页对话框和文件选择器 | 尚未接入 Agent 产品协议 |
 
 浏览器能力与业务连接方式相互独立。保留或移除 Node 消息中转，都不会自动给普通 Web 页面增加跨站控制能力。
 
 ## 对照 VS Code
 
-已核对本地 `D:/vscode`。采用其职责边界和命名习惯，不要求照搬其后端技术：
+已核对本地 `../vscode`。采用其公开职责和命名，内部实现由 Ash 编写：
 
 | VS Code 源码 | Ash 对应边界 |
 | --- | --- |
 | `src/vs/server/node/remoteExtensionHostAgentServer.ts` | 运行时处理连接与认证，build 负责构建 |
 | `src/vs/platform/browserView/electron-main/browserView.ts` | Main 管理真正的网页视图 |
+| `src/vs/platform/browserView/electron-main/browserViewGroup.ts`、`browserViewDebugger.ts` | Group 选择页面并借用页面调试器，不另建页面 owner |
+| `src/vs/platform/browserView/node/playwrightService.ts` | 独立进程拥有 Playwright 连接和元素操作 |
 | `src/vs/workbench/contrib/browserView/electron-browser/browserView.contribution.ts` | Workbench 注册可见浏览器功能 |
 | `src/vs/code/electron-utility/sharedProcess/sharedProcessMain.ts` | 自动化执行与界面职责分开 |
+| `src/vs/base/parts/ipc/common/ipc.mp.ts`、`src/vs/platform/utilityProcess/electron-main/utilityProcess.ts` | MessagePort 双向 IPC 与应用拥有的独立进程 |
 
-Ash 当前使用 Main CDP 服务，没有照搬 VS Code 的共享进程 Playwright 服务。
+Ash 已接通 MessagePort、应用共享进程、Playwright、Group/CDP、Main 页面和 Workbench 模型这条链路。Rust App Server 仍拥有任务权限与反向协议，不能用 TypeScript 浏览器宿主替代它。
 
 ## 验证与尚未完成的验收
+
+2026-10-05 浏览器基座验证：
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| Rust | `ash-app-server` 的 11 项 browser 测试、`ash-app-server-protocol` 的 85 项库测试及 1 项生成器测试通过；两个 owner 的 check 与 warnings 检查通过 |
+| TypeScript 与构建 | IPC、Main 页面及 Group、编辑器模型和序列化共 39 项定向单测通过；生产构建、Main/Preload 构建、协议检查及本次两个自动化测试文件的类型检查通过 |
+| Electron UI 与真实 App Server | 各 4 项通过，覆盖独立进程及崩溃、页面操作与输入、Thread 隔离、Renderer 重载保留用户页面、应用重启恢复工作区登录、分组引用、弹窗、取消和关闭释放 |
+| Web | 双桌面窗口的目标隔离与关闭、Web 授权边界通过；Web 读取并重载场景因退出时语言服务报告 `App Server client disposed` 而失败，不能记为通过 |
+| 完整自动化类型检查 | 未通过：未改动的 `external-uri-openers.spec.ts` 使用了恢复结果中不存在的 `quickaccess` 和 `editors`；本次两个测试文件已使用相同编译选项独立检查通过 |
+
+上述 Electron 场景使用真实页面、IPC、Group/CDP 和 Playwright 进程；Rust 任务路由另由测试验证。尚未运行外部模型驱动的完整 Agent 浏览流程。样式检查没有错误，保留 Sessions CSS 的已有字号建议。
 
 2026-09-16 实施验证：
 

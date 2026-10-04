@@ -34,7 +34,7 @@
     "src/ash/platform/native/common/**/*.ts",
     "src/ash/platform/native/electron-browser/**/*.ts",
     "src/ash/platform/search/**/*.ts",
-    "src/ash/platform/browser/common/**/*.ts",
+    "src/ash/platform/browserView/common/**/*.ts",
     "src/ash/platform/theme/browser/**/*.ts",
     "src/ash/platform/theme/common/**/*.ts",
     "src/ash/platform/workspace/common/**/*.ts",

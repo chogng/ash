@@ -184,6 +184,9 @@ importers:
       pdfjs-dist:
         specifier: 6.1.200
         version: 6.1.200
+      playwright-core:
+        specifier: 1.61.1
+        version: 1.61.1
       vscode-oniguruma:
         specifier: 1.7.0
         version: 1.7.0

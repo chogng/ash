@@ -5,7 +5,7 @@ import { VSBuffer } from '../../../../common/buffer.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../common/cancellation.js';
 import { Emitter, Event } from '../../../../common/event.js';
 import { Disposable, DisposableStore, DisposableTracker, installDisposableTracker, toDisposable } from '../../../../common/lifecycle.js';
-import { IPCClient, IPCServer, type ClientConnectionEvent, type IMessagePassingProtocol, type IServerChannel } from '../../common/ipc.js';
+import { IPCClient, IPCServer, ProxyChannel, type ClientConnectionEvent, type IMessagePassingProtocol, type IServerChannel } from '../../common/ipc.js';
 
 class MemoryProtocol extends Disposable implements IMessagePassingProtocol {
 	private readonly messages = this._register(new Emitter<VSBuffer>());
@@ -29,6 +29,24 @@ suite('IPC channels', () => {
 	let tracking: ReturnType<typeof installDisposableTracker>;
 	setup(() => { tracker = new DisposableTracker(); tracking = installDisposableTracker(tracker); });
 	teardown(() => { try { tracker.assertNoLeaks(); } finally { tracking[Symbol.dispose](); } });
+
+	test('service proxies preserve method receivers and route keyed events across the connection', async () => {
+		using resources = new DisposableStore();
+		const [a, b] = pair(resources);
+		const client = resources.add(new IPCClient(a, 'first'));
+		const server = resources.add(new IPCClient(b, 'second'));
+		const changed = resources.add(new Emitter<string>());
+		const service = { prefix: 'group:', async read(id: string) { return this.prefix + id; }, onDynamicChanged: (_id: string) => changed.event };
+		server.registerChannel('service', ProxyChannel.fromService(service, resources));
+		const proxy = ProxyChannel.toService<typeof service>(client.getChannel('service'));
+		const received: string[] = [];
+		resources.add(proxy.onDynamicChanged('one')(value => received.push(value)));
+		assert.equal(await proxy.read('one'), 'group:one');
+		changed.fire('updated');
+		await setImmediate();
+		assert.deepEqual(received, ['updated']);
+		await assert.rejects(client.getChannel('service').call('constructor', []), /Unknown service member/);
+	});
 
 	test('calls carry JSON data and errors in both directions without ending the connection', async () => {
 		using resources = new DisposableStore();

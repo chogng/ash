@@ -861,7 +861,7 @@ fn browser_tools_follow_capable_connection_lifecycle_with_explicit_permissions()
                 "params": {
                     "clientInfo": { "name": "desktop-test", "version": "1" },
                     "capabilities": {
-                        "browser": { "version": 1, "observe": true, "input": false }
+                        "browser": { "version": 2, "observe": true, "input": false }
                     }
                 }
             })
@@ -888,7 +888,7 @@ fn browser_tools_follow_capable_connection_lifecycle_with_explicit_permissions()
                 "params": {
                     "clientInfo": { "name": "desktop-test-2", "version": "1" },
                     "capabilities": {
-                        "browser": { "version": 1, "observe": true, "input": true }
+                        "browser": { "version": 2, "observe": true, "input": true }
                     }
                 }
             })

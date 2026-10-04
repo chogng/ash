@@ -87,11 +87,11 @@ Renderer 通过 `createElectronRendererApi()` 适配桥接，由组合入口注�
 
 ## 嵌入式浏览器边界
 
-`platform/browser` 提供窗口内的 `WebContentsView` 能力。Workbench 通过 `IBrowserViewApi` 管理布局和导航，Main 持有真实页面并校验命令。第三方页面使用临时 partition，不加载 Ash preload；权限和下载默认拒绝，弹窗由 Workbench 打开为新页签。
+`platform/browserView` 提供窗口内的 `WebContentsView` 能力。Workbench 通过 `IBrowserViewService` 管理布局和导航，Main 管理页面、Session 和关闭释放。用户 Session 按工作区持久保存，Agent Session 按窗口和 Thread 隔离。第三方页面不加载 Ash preload；权限和下载默认拒绝，弹窗由 Workbench 打开为新页签。
 
-Agent 浏览器操作复用同一组目标：Rust 管理工具、批准、超时和资源权限，Main 执行限定的 CDP 动作。实现不开放调试端口或任意 CDP 调用。连接退出只回收通过该连接创建的目标。
+Agent 浏览器操作复用同一组目标：Rust 管理工具、批准、超时和资源权限，独立 Playwright 进程通过窗口 MessagePort 与 Thread Group CDP 操作 Main 的可见页面。产品协议不开放任意 CDP 调用，也不开放调试端口。关闭 Group 只解绑自动化，页面仍由 Main 持有。
 
-界面命令为 `Browser: Open Browser`，网页中用 F6 或 Ctrl+L 返回地址栏。Agent 创建的目标也显示为页签；Playwright 进程内代理、登录持久化和权限交互尚未提供。详细边界见 [浏览器能力](../docs/ash-desktop-architecture.md#7-浏览器能力)。
+界面命令为 `Browser: Open Browser`，网页中用 F6 或 Ctrl+L 返回地址栏。Agent 创建的目标也显示为页签；Renderer 重载接回现存页面，应用重启恢复用户页签与工作区登录。页面分享、权限交互和远程 Session 网络策略尚未完成。详细边界见 [浏览器能力](../docs/ash-desktop-architecture.md#7-浏览器能力)。
 
 ## iframe Webview
 

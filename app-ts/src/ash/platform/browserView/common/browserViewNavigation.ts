@@ -1,3 +1,4 @@
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import { normalizeBrowserViewUrl } from "./browserView.js";
 
 /** One host-owned mapping between the URL shown to callers and the URL loaded by Electron. */
@@ -11,6 +12,8 @@ export interface BrowserViewNavigation {
 	isReusable(): boolean;
 	release(): void;
 }
+
+export const IBrowserViewNavigationResolver = createServiceIdentifier<IBrowserViewNavigationResolver>('browserViewNavigationResolver');
 
 /** Resolves one validated Browser URL and owns any host resource needed to load it. */
 export interface IBrowserViewNavigationResolver {

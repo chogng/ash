@@ -1,8 +1,8 @@
 import { throwIfCancelled } from "../../../base/common/cancellation.js";
-import type { BrowserViewNavigation } from "../../browser/common/browserViewNavigation.js";
-import { directBrowserViewNavigation } from "../../browser/common/browserViewNavigation.js";
-import type { IBrowserViewNavigationResolver } from "../../browser/common/browserViewNavigation.js";
-import { normalizeBrowserViewUrl } from "../../browser/common/browserView.js";
+import type { BrowserViewNavigation } from "../../browserView/common/browserViewNavigation.js";
+import { directBrowserViewNavigation } from "../../browserView/common/browserViewNavigation.js";
+import type { IBrowserViewNavigationResolver } from "../../browserView/common/browserViewNavigation.js";
+import { normalizeBrowserViewUrl } from "../../browserView/common/browserView.js";
 import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import { getWorkspaceRemoteAuthority } from "../../workspace/common/workspace.js";
 import type { IRemoteTunnelService } from "../common/remoteTunnelService.js";

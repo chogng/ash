@@ -208,7 +208,7 @@ impl AppServer {
             .browser
             .as_ref()
             .is_some_and(|capability| {
-                capability.version != 1 || (!capability.observe && !capability.input)
+                capability.version != 2 || (!capability.observe && !capability.input)
             })
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));

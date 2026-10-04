@@ -18,7 +18,6 @@ import {
 	type IBrowserViewNavigateRequest,
 	type IBrowserViewTargetRequest,
 	type IBrowserViewVisibilityRequest,
-	type IBrowserViewState,
 	validateBrowserViewCreateRequest,
 	validateBrowserViewLayoutRequest,
 	validateBrowserViewNavigateRequest,
@@ -26,55 +25,51 @@ import {
 	validateBrowserViewVisibilityRequest,
 } from "../common/browserView.js";
 
-/** Main-process operations exposed through trusted browser-view IPC routes. */
-export interface IBrowserViewMainService {
-	createTarget(request: IBrowserViewCreateRequest, signal?: AbortSignal): Promise<IBrowserViewState>;
-	observe(targetId: string): IBrowserViewState;
-	layout(request: IBrowserViewLayoutRequest): void;
-	setVisibility(request: IBrowserViewVisibilityRequest): void;
-	navigate(request: IBrowserViewNavigateRequest, signal?: AbortSignal): Promise<void>;
-	goBack(targetId: string): void;
-	goForward(targetId: string): void;
-	reload(targetId: string): void;
-	stop(targetId: string): void;
-	focus(targetId: string): void;
-	close(targetId: string): void;
-}
+import type { IBrowserViewService } from '../common/browserView.js';
+import { BROWSER_VIEW_LIST_CHANNEL } from '../common/browserView.js';
 
 /** Binds the main-owned browser-view service to trusted workbench IPC. */
 export function browserViewIpcRoutes(
-	service: IBrowserViewMainService,
+	service: Omit<IBrowserViewService, 'onDidEvent'>,
 ): readonly IpcRoute<unknown, unknown>[] {
 	return [
+		{
+			channel: BROWSER_VIEW_LIST_CHANNEL,
+			validate: value => {
+				if (value !== undefined) { throw new TypeError('Browser list does not accept parameters'); }
+				return undefined;
+			},
+			invoke: () => service.getBrowserViews(),
+		},
 		{
 			channel: BROWSER_VIEW_CREATE_CHANNEL,
 			validate: validateBrowserViewCreateRequest,
 			invoke: (request) =>
-				service.createTarget(request as IBrowserViewCreateRequest),
+				service.getOrCreateBrowserView((request as IBrowserViewCreateRequest).targetId, (request as IBrowserViewCreateRequest).options),
 		},
 		{
 			channel: BROWSER_VIEW_STATE_CHANNEL,
 			validate: validateBrowserViewTargetRequest,
 			invoke: (request) =>
-				service.observe((request as IBrowserViewTargetRequest).targetId),
+				service.getState((request as IBrowserViewTargetRequest).targetId),
 		},
 		{
 			channel: BROWSER_VIEW_LAYOUT_CHANNEL,
 			validate: validateBrowserViewLayoutRequest,
 			invoke: (request) =>
-				service.layout(request as IBrowserViewLayoutRequest),
+				service.layout((request as IBrowserViewLayoutRequest).targetId, (request as IBrowserViewLayoutRequest).bounds),
 		},
 		{
 			channel: BROWSER_VIEW_VISIBILITY_CHANNEL,
 			validate: validateBrowserViewVisibilityRequest,
 			invoke: (request) =>
-				service.setVisibility(request as IBrowserViewVisibilityRequest),
+				service.setVisible((request as IBrowserViewVisibilityRequest).targetId, (request as IBrowserViewVisibilityRequest).visible),
 		},
 		{
 			channel: BROWSER_VIEW_NAVIGATE_CHANNEL,
 			validate: validateBrowserViewNavigateRequest,
 			invoke: (request) =>
-				service.navigate(request as IBrowserViewNavigateRequest),
+				service.loadURL((request as IBrowserViewNavigateRequest).targetId, (request as IBrowserViewNavigateRequest).url),
 		},
 		targetRoute(BROWSER_VIEW_GO_BACK_CHANNEL, (targetId) =>
 			service.goBack(targetId)),
@@ -86,13 +81,13 @@ export function browserViewIpcRoutes(
 			service.stop(targetId)),
 		targetRoute(BROWSER_VIEW_FOCUS_CHANNEL, targetId => service.focus(targetId)),
 		targetRoute(BROWSER_VIEW_CLOSE_CHANNEL, (targetId) =>
-			service.close(targetId)),
+			service.destroyBrowserView(targetId)),
 	];
 }
 
 function targetRoute(
 	channel: string,
-	invoke: (targetId: string) => void,
+	invoke: (targetId: string) => Promise<void>,
 ): IpcRoute<unknown, unknown> {
 	return {
 		channel,

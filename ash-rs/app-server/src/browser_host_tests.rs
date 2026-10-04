@@ -24,7 +24,7 @@ fn terminal_errors_release_registration_without_sending_cancellation() {
         host.register(
             7,
             ClientBrowserCapability {
-                version: 1,
+                version: 2,
                 observe: true,
                 input: true,
             },
@@ -59,7 +59,7 @@ fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
     host.register(
         7,
         ClientBrowserCapability {
-            version: 1,
+            version: 2,
             observe: true,
             input: true,
         },
@@ -77,6 +77,7 @@ fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
     });
     let request = next_request(&outbound);
     assert_eq!(request["method"], "browser/create");
+    assert_eq!(request["params"]["threadId"], "browser-thread");
     assert_eq!(request["params"]["url"], "https://example.test/");
     let request_id = request["id"].as_str().unwrap();
     assert!(
@@ -116,6 +117,25 @@ fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
             .is_err()
     );
     let target = create.join().unwrap().unwrap().target_id;
+    assert!(outbound.listener().drain().is_empty());
+
+    let mut other_thread = browser_host(Arc::clone(&resources));
+    other_thread.state = Arc::clone(&host.state);
+    other_thread.clients = Arc::clone(&host.clients);
+    other_thread.owner = Some(7);
+    other_thread.thread_id = Some(ash_protocol::ThreadId::new("other-thread").unwrap());
+    assert!(matches!(
+        other_thread.observe(
+            BrowserObserveRequest {
+                target_id: target.clone(),
+                include_accessibility_tree: true,
+                include_dom_snapshot: false,
+                include_screenshot: false,
+            },
+            &CancellationSource::new().token(),
+        ),
+        Err(BrowserError::CapabilityUnavailable)
+    ));
     assert!(outbound.listener().drain().is_empty());
 
     let observe_host = Arc::clone(&host);
@@ -185,7 +205,7 @@ fn disconnect_fails_pending_requests_and_forgets_target_ownership() {
     host.register(
         3,
         ClientBrowserCapability {
-            version: 1,
+            version: 2,
             observe: true,
             input: true,
         },
@@ -219,7 +239,7 @@ fn cancellation_retires_the_request_and_accepts_its_late_terminal_response() {
     host.register(
         11,
         ClientBrowserCapability {
-            version: 1,
+            version: 2,
             observe: true,
             input: true,
         },
@@ -274,7 +294,7 @@ fn task_binding_never_borrows_another_window_or_a_replayed_command() {
         host.register(
             owner,
             ClientBrowserCapability {
-                version: 1,
+                version: 2,
                 observe: true,
                 input: true,
             },
@@ -333,7 +353,10 @@ fn task_binding_never_borrows_another_window_or_a_replayed_command() {
         .lock()
         .unwrap()
         .target_owners
-        .insert("other-window".into(), 1);
+        .insert("other-window".into(), BrowserTargetOwner {
+            connection_id: 1,
+            thread_id: thread.clone(),
+        });
     assert_eq!(
         host.for_turn(&thread, &turn).unwrap().target_owner(
             &BrowserTargetId("other-window".into()),
@@ -349,8 +372,10 @@ fn task_binding_never_borrows_another_window_or_a_replayed_command() {
 }
 
 fn browser_host(resources: Arc<Mutex<ResourceStore>>) -> BrowserHost {
-    BrowserHost::new(
+    let mut host = BrowserHost::new(
         resources,
         Arc::new(crate::client_host::ClientHost::default()),
-    )
+    );
+    host.thread_id = Some(ash_protocol::ThreadId::new("browser-thread").unwrap());
+    host
 }

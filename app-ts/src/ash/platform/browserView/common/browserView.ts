@@ -1,6 +1,7 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import type { IDisposable } from '../../../base/common/lifecycle.js';
 
-export const IBrowserViewApi = createServiceIdentifier<IBrowserViewApi>('browserViewApi');
+export const IBrowserViewService = createServiceIdentifier<IBrowserViewService>('browserViewService');
 export const BROWSER_VIEW_CREATE_CHANNEL = "ash:browser-view:create";
 export const BROWSER_VIEW_STATE_CHANNEL = "ash:browser-view:state";
 export const BROWSER_VIEW_LAYOUT_CHANNEL = "ash:browser-view:layout";
@@ -17,10 +18,11 @@ export const BROWSER_VIEW_STOP_CHANNEL = "ash:browser-view:stop";
 export const BROWSER_VIEW_FOCUS_CHANNEL = "ash:browser-view:focus";
 export const BROWSER_VIEW_CLOSE_CHANNEL = "ash:browser-view:close";
 export const BROWSER_VIEW_EVENT_CHANNEL = "ash:browser-view:event";
+export const BROWSER_VIEW_LIST_CHANNEL = 'ash:browser-view:list';
 
 export type BrowserViewTargetId = string;
 
-/** Window-content coordinates used to place a native browser view. */
+/** Window-content coordinates used to place an embedded browser page. */
 export interface IBrowserViewBounds {
 	readonly x: number;
 	readonly y: number;
@@ -29,7 +31,8 @@ export interface IBrowserViewBounds {
 }
 
 export interface IBrowserViewCreateRequest {
-	readonly url: string;
+	readonly targetId: string;
+	readonly options: IBrowserViewCreateOptions;
 }
 
 export interface IBrowserViewTargetRequest {
@@ -62,7 +65,7 @@ export interface IBrowserViewState {
 }
 
 export type BrowserViewEvent =
-	| { readonly type: "created"; readonly state: IBrowserViewState }
+	| { readonly type: 'created'; readonly info: IBrowserViewInfo }
 	| { readonly type: "focusAddress"; readonly targetId: BrowserViewTargetId }
 	| {
 		readonly type: "stateChanged";
@@ -90,8 +93,31 @@ export type BrowserViewEvent =
 		readonly targetId: BrowserViewTargetId;
 	};
 
-export interface IBrowserViewSubscription {
-	dispose(): void;
+export interface IBrowserViewCreateOptions {
+	readonly initialUrl: string;
+	readonly owner: IBrowserViewOwner;
+	readonly session: IBrowserViewSessionOptions;
+}
+
+export type IBrowserViewOwner = { readonly type: 'user' } | { readonly type: 'agent'; readonly sessionId: string };
+
+export enum BrowserViewStorageScope {
+	Global = 'global',
+	Workspace = 'workspace',
+	Ephemeral = 'ephemeral',
+	Agent = 'agent',
+}
+
+export type IBrowserViewSessionOptions =
+	| { readonly scope: BrowserViewStorageScope.Global | BrowserViewStorageScope.Workspace | BrowserViewStorageScope.Ephemeral }
+	| { readonly scope: BrowserViewStorageScope.Agent; readonly affinity: string };
+
+export interface IBrowserViewInfo {
+	readonly id: string;
+	readonly host: { readonly windowId: number };
+	readonly owner: IBrowserViewOwner;
+	readonly session: IBrowserViewSessionOptions;
+	readonly state: IBrowserViewState;
 }
 
 /**
@@ -100,24 +126,43 @@ export interface IBrowserViewSubscription {
  * Electron objects never cross this boundary; callers exchange validated,
  * serializable commands and state only.
  */
-export interface IBrowserViewApi {
-	create(request: IBrowserViewCreateRequest): Promise<IBrowserViewState>;
-	getState(
-		request: IBrowserViewTargetRequest,
-	): Promise<IBrowserViewState>;
-	layout(request: IBrowserViewLayoutRequest): Promise<void>;
-	setVisibility(request: IBrowserViewVisibilityRequest): Promise<void>;
-	navigate(request: IBrowserViewNavigateRequest): Promise<void>;
-	goBack(request: IBrowserViewTargetRequest): Promise<void>;
-	goForward(request: IBrowserViewTargetRequest): Promise<void>;
-	reload(request: IBrowserViewTargetRequest): Promise<void>;
-	stop(request: IBrowserViewTargetRequest): Promise<void>;
-	focus(request: IBrowserViewTargetRequest): Promise<void>;
-	close(request: IBrowserViewTargetRequest): Promise<void>;
-	onDidEvent(
-		listener: (event: BrowserViewEvent) => void,
-	): IBrowserViewSubscription;
+export interface IBrowserViewService {
+	getBrowserViews(): Promise<readonly IBrowserViewInfo[]>;
+	getOrCreateBrowserView(id: string, options: IBrowserViewCreateOptions): Promise<IBrowserViewInfo>;
+	getState(id: string): Promise<IBrowserViewState>;
+	layout(id: string, bounds: IBrowserViewBounds): Promise<void>;
+	setVisible(id: string, visible: boolean): Promise<void>;
+	loadURL(id: string, url: string): Promise<void>;
+	goBack(id: string): Promise<void>;
+	goForward(id: string): Promise<void>;
+	reload(id: string): Promise<void>;
+	stop(id: string): Promise<void>;
+	focus(id: string): Promise<void>;
+	destroyBrowserView(id: string): Promise<void>;
+	onDidEvent(listener: (event: BrowserViewEvent) => void): IDisposable;
 }
+
+/** Parameters for observations of the page currently owned by this view. */
+export interface IBrowserViewObservationOptions {
+	readonly includeAccessibilityTree: boolean;
+	readonly includeDomSnapshot: boolean;
+	readonly includeScreenshot: boolean;
+}
+export interface IBrowserViewObservation {
+	readonly targetId: string;
+	readonly url: string;
+	readonly title: string;
+	readonly loading: boolean;
+	readonly accessibilityTree?: string;
+	readonly domSnapshot?: string;
+	readonly screenshot?: { readonly mimeType: 'image/png'; readonly dataBase64: string; readonly decodedLength: number };
+}
+export type BrowserViewAction =
+	| { readonly type: 'navigate'; readonly url: string }
+	| { readonly type: 'click'; readonly target: { readonly nodeId: string } }
+	| { readonly type: 'typeText'; readonly text: string; readonly target: { readonly type: 'focusedElement' } | { readonly type: 'element'; readonly target: { readonly nodeId: string } } }
+	| { readonly type: 'scroll'; readonly deltaX: number; readonly deltaY: number }
+	| { readonly type: 'goBack' | 'reload' };
 
 const MAX_URL_LENGTH = 8192;
 const MAX_BOUND_MAGNITUDE = 100_000;
@@ -127,8 +172,43 @@ const TARGET_ID_PATTERN =
 export function validateBrowserViewCreateRequest(
 	value: unknown,
 ): IBrowserViewCreateRequest {
-	const request = exactRecord(value, ["url"], "browser view create request");
-	return { url: normalizeBrowserViewUrl(request.url) };
+	const request = exactRecord(value, ['targetId', 'options'], 'browser view create request');
+	const options = exactRecord(request.options, ['initialUrl', 'owner', 'session'], 'browser view options');
+	const owner = validateBrowserViewOwner(options.owner);
+	const session = validateBrowserViewSessionOptions(options.session);
+	if (owner.type === 'agent' && (session.scope !== BrowserViewStorageScope.Agent || session.affinity !== owner.sessionId)) {
+		throw new Error('Agent browser storage must belong to its session');
+	}
+	return { targetId: validateTargetId(request.targetId), options: { initialUrl: normalizeBrowserViewUrl(options.initialUrl), owner, session } };
+}
+
+function validateBrowserViewOwner(value: unknown): IBrowserViewOwner {
+	const owner = value as Record<string, unknown> | null;
+	if (owner?.type === 'user') {
+		exactRecord(value, ['type'], 'browser view owner');
+		return { type: 'user' };
+	}
+	exactRecord(value, ['type', 'sessionId'], 'browser view owner');
+	if (owner?.type !== 'agent' || typeof owner.sessionId !== 'string' || !owner.sessionId.trim()) {
+		throw new Error('Invalid browser view owner');
+	}
+	return { type: 'agent', sessionId: owner.sessionId };
+}
+
+function validateBrowserViewSessionOptions(value: unknown): IBrowserViewSessionOptions {
+	const session = value as Record<string, unknown> | null;
+	if (session?.scope === BrowserViewStorageScope.Agent) {
+		exactRecord(value, ['scope', 'affinity'], 'browser session');
+		if (typeof session.affinity !== 'string' || !session.affinity.trim()) {
+			throw new Error('Invalid browser storage affinity');
+		}
+		return { scope: BrowserViewStorageScope.Agent, affinity: session.affinity };
+	}
+	exactRecord(value, ['scope'], 'browser session');
+	if (session?.scope !== BrowserViewStorageScope.Global && session?.scope !== BrowserViewStorageScope.Workspace && session?.scope !== BrowserViewStorageScope.Ephemeral) {
+		throw new Error('Invalid browser storage scope');
+	}
+	return { scope: session.scope };
 }
 
 export function validateBrowserViewTargetRequest(

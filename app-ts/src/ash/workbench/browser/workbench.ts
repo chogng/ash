@@ -68,7 +68,7 @@ import { IRendererHostService, type IRendererHost } from "../../platform/rendere
 import { ILocalTranscriptionService } from '../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../services/localTranscription/browser/localTranscriptionService.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
-import { IBrowserViewApi } from '../../platform/browser/common/browserView.js';
+import { IBrowserViewService } from '../../platform/browserView/common/browserView.js';
 import { IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import { UnavailableRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import { IRemoteTunnelService } from "../../platform/remote/common/remoteTunnelService.js";
@@ -316,7 +316,7 @@ export interface IStartWorkbenchOptions {
 	readonly api: IRendererHost;
 	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
 	readonly webWorkspaceClient?: IWebWorkspaceClient;
-	readonly browserViewApi?: IBrowserViewApi;
+	readonly browserViewService?: IBrowserViewService;
 	readonly container: HTMLElement;
 	readonly workspace: IWorkspace;
 	/** The host selects its implementation; the Workbench supplies initialized window services. */
@@ -369,7 +369,7 @@ export async function startWorkbench({
 	userThemeService,
 	createContextMenuService,
 	createTitlebarPart,
-	browserViewApi,
+	browserViewService,
 }: IStartWorkbenchOptions): Promise<Workbench> {
 	const themes = new ExtensionColorThemeService(api.extensions, api.events);
 	const logger = createLogService();
@@ -400,7 +400,7 @@ export async function startWorkbench({
 			userThemeService,
 			createContextMenuService,
 			createTitlebarPart,
-			browserViewApi,
+			browserViewService,
 			browserFileSystemProvider,
 			webWorkspaceClient,
 			themes,
@@ -461,7 +461,7 @@ export class Workbench extends Disposable {
 		userThemeService: IUserThemeServiceContract | undefined,
 		createContextMenuService: ContextMenuServiceFactory,
 		createTitlebarPart: TitlebarPartFactory,
-		browserViewApi: IBrowserViewApi | undefined,
+		browserViewService: IBrowserViewService | undefined,
 		browserFileSystemProvider: HTMLFileSystemProvider | undefined,
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
 		themes: ExtensionColorThemeService,
@@ -485,7 +485,7 @@ export class Workbench extends Disposable {
 		// Editor contributions can resolve data-channel enablement while Parts are being constructed.
 		const contextKeys = this._register(new ContextKeyService());
 		services.registerInstance(IContextKeyService, contextKeys);
-		if (browserViewApi) { services.registerInstance(IBrowserViewApi, browserViewApi); }
+		if (browserViewService) { services.registerInstance(IBrowserViewService, browserViewService); }
 		const instantiationService = services;
 		const logService = this._register(logger);
 		this.logService = logService;

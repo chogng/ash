@@ -40,7 +40,13 @@ const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
 struct BrowserHostState {
     owners: BTreeMap<u64, BrowserHostOwner>,
     owner_revision: u64,
-    target_owners: BTreeMap<String, u64>,
+    target_owners: BTreeMap<String, BrowserTargetOwner>,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+struct BrowserTargetOwner {
+    connection_id: u64,
+    thread_id: ash_protocol::ThreadId,
 }
 
 struct BrowserHostOwner {
@@ -53,6 +59,7 @@ pub(crate) struct BrowserHost {
     resources: Arc<Mutex<ResourceStore>>,
     pub(crate) clients: Arc<crate::client_host::ClientHost>,
     owner: Option<u64>,
+    thread_id: Option<ash_protocol::ThreadId>,
 }
 
 impl BrowserHost {
@@ -65,6 +72,7 @@ impl BrowserHost {
             resources,
             clients,
             owner: None,
+            thread_id: None,
         }
     }
 
@@ -84,6 +92,7 @@ impl BrowserHost {
             resources: Arc::clone(&self.resources),
             clients: Arc::clone(&self.clients),
             owner: Some(owner),
+            thread_id: Some(thread.clone()),
         };
         scoped.create_owner()?;
         Ok(scoped)
@@ -119,7 +128,7 @@ impl BrowserHost {
         }
         state
             .target_owners
-            .retain(|_, owner| *owner != connection_id);
+            .retain(|_, owner| owner.connection_id != connection_id);
     }
 
     pub(crate) fn owner_availability(&self) -> (u64, bool) {
@@ -149,6 +158,7 @@ impl BrowserHost {
     }
 
     fn create_owner(&self) -> Result<u64, BrowserError> {
+        self.thread_id()?;
         let selected = self.owner.ok_or(BrowserError::CapabilityUnavailable)?;
         self.state
             .lock()
@@ -156,7 +166,7 @@ impl BrowserHost {
             .owners
             .get(&selected)
             .filter(|owner| {
-                owner.capability.version == 1 && owner.capability.observe && owner.capability.input
+                owner.capability.version == 2 && owner.capability.observe && owner.capability.input
             })
             .map(|_| selected)
             .ok_or(BrowserError::CapabilityUnavailable)
@@ -171,16 +181,16 @@ impl BrowserHost {
             .state
             .lock()
             .map_err(|_| BrowserError::Failed("browser host state lock poisoned".into()))?;
-        let owner_id = state
+        let target_owner = state
             .target_owners
             .get(&target_id.0)
-            .copied()
             .ok_or_else(|| BrowserError::TargetUnavailable(target_id.clone()))?;
+        let owner_id = target_owner.connection_id;
         let owner = state
             .owners
             .get(&owner_id)
             .ok_or(BrowserError::CapabilityUnavailable)?;
-        if self.owner != Some(owner_id) {
+        if self.owner != Some(owner_id) || self.thread_id()? != &target_owner.thread_id {
             return Err(BrowserError::CapabilityUnavailable);
         }
         let supported = match required {
@@ -193,6 +203,10 @@ impl BrowserHost {
         } else {
             Err(BrowserError::CapabilityUnavailable)
         }
+    }
+
+    fn thread_id(&self) -> Result<&ash_protocol::ThreadId, BrowserError> {
+        self.thread_id.as_ref().ok_or(BrowserError::CapabilityUnavailable)
     }
 
     fn register_screenshot(
@@ -281,7 +295,10 @@ impl BrowserCapability for BrowserHost {
         let result: BrowserCreateResult = self.request(
             owner,
             HostMethod::BrowserCreate,
-            &BrowserCreateParams { url: request.url },
+            &BrowserCreateParams {
+                thread_id: self.thread_id()?.to_string(),
+                url: request.url,
+            },
             cancellation,
         )?;
         if result.target_id.trim().is_empty() || result.target_id.len() > 256 {
@@ -302,7 +319,10 @@ impl BrowserCapability for BrowserHost {
                 "browser host reused a live target ID".into(),
             ));
         };
-        target_owner.insert(owner);
+        target_owner.insert(BrowserTargetOwner {
+            connection_id: owner,
+            thread_id: self.thread_id()?.clone(),
+        });
         Ok(CreateBrowserTargetResult {
             target_id: BrowserTargetId(result.target_id),
         })
@@ -319,6 +339,7 @@ impl BrowserCapability for BrowserHost {
             owner,
             HostMethod::BrowserObserve,
             &BrowserObserveParams {
+                thread_id: self.thread_id()?.to_string(),
                 target_id: request.target_id.0,
                 include_accessibility_tree: request.include_accessibility_tree,
                 include_dom_snapshot: request.include_dom_snapshot,
@@ -345,6 +366,7 @@ impl BrowserCapability for BrowserHost {
             owner,
             HostMethod::BrowserPerform,
             &BrowserPerformParams {
+                thread_id: self.thread_id()?.to_string(),
                 action: browser_action_dto(action),
             },
             cancellation,
@@ -367,6 +389,7 @@ impl BrowserCapability for BrowserHost {
             owner,
             HostMethod::BrowserClose,
             &BrowserCloseParams {
+                thread_id: self.thread_id()?.to_string(),
                 target_id: target_id.0.clone(),
             },
             cancellation,

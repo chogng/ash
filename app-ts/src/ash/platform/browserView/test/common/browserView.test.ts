@@ -3,21 +3,22 @@ import { test } from "mocha";
 import {
 	BROWSER_VIEW_CREATE_CHANNEL,
 	BROWSER_VIEW_LAYOUT_CHANNEL,
+	BROWSER_VIEW_LIST_CHANNEL,
 	BROWSER_VIEW_NAVIGATE_CHANNEL,
 	BROWSER_VIEW_VISIBILITY_CHANNEL,
-	normalizeBrowserViewUrl,
+	normalizeBrowserViewUrl, BrowserViewStorageScope,
 	validateBrowserViewCreateRequest,
 	validateBrowserViewLayoutRequest,
 	validateBrowserViewNavigateRequest,
 	validateBrowserViewVisibilityRequest,
 	type IBrowserViewState,
-} from "../../../../platform/browser/common/browserView.js";
+} from "../../../../platform/browserView/common/browserView.js";
 import {
-	browserViewIpcRoutes,
-	type IBrowserViewMainService,
-} from "../../../../platform/browser/electron-main/browserViewIpc.js";
-import { directBrowserViewNavigation } from "../../../../platform/browser/common/browserViewNavigation.js";
+	browserViewIpcRoutes
+} from "../../../../platform/browserView/electron-main/browserViewIpc.js";
+import { directBrowserViewNavigation } from "../../../../platform/browserView/common/browserViewNavigation.js";
 
+const options = { initialUrl: 'https://example.com/', owner: { type: 'user' as const }, session: { scope: BrowserViewStorageScope.Workspace as const } };
 const targetId = "browser_target_123e4567-e89b-12d3-a456-426614174000";
 
 test("browser view validators admit secure and loopback navigation", () => {
@@ -30,6 +31,7 @@ test("browser view validators admit secure and loopback navigation", () => {
 		"http://localhost:3000/path",
 	);
 	assert.equal(normalizeBrowserViewUrl("about:blank"), "about:blank");
+	assert.deepEqual(validateBrowserViewCreateRequest({ targetId, options }), { targetId, options });
 	assert.deepEqual(
 		validateBrowserViewNavigateRequest({
 			targetId,
@@ -55,6 +57,7 @@ test("browser view validators reject privileged URLs and malformed geometry", ()
 	}
 	assert.throws(() =>
 		validateBrowserViewCreateRequest({
+			targetId,
 			url: "https://example.com",
 			preload: "unsafe.js",
 		})
@@ -98,23 +101,24 @@ test("browser view IPC routes delegate only validated commands", async () => {
 		canGoForward: false,
 		visible: false,
 	};
-	const service: IBrowserViewMainService = {
-		createTarget: async () => {
+	const service: Parameters<typeof browserViewIpcRoutes>[0] = {
+		getBrowserViews: async () => [],
+		getOrCreateBrowserView: async () => {
 			calls.push("create");
-			return state;
+			return { id: targetId, host: { windowId: 1 }, owner: options.owner, session: options.session, state };
 		},
-		observe: () => state,
-		layout: () => calls.push("layout"),
-		setVisibility: () => calls.push("visibility"),
-		navigate: async () => {
+		getState: async () => state,
+		layout: async () => { calls.push("layout"); },
+		setVisible: async () => { calls.push("visibility"); },
+		loadURL: async () => {
 			calls.push("navigate");
 		},
-		goBack: () => calls.push("back"),
-		goForward: () => calls.push("forward"),
-		reload: () => calls.push("reload"),
-		stop: () => calls.push("stop"),
-		focus: () => calls.push("focus"),
-		close: () => calls.push("close"),
+		goBack: async () => { calls.push("back"); },
+		goForward: async () => { calls.push("forward"); },
+		reload: async () => { calls.push("reload"); },
+		stop: async () => { calls.push("stop"); },
+		focus: async () => { calls.push("focus"); },
+		destroyBrowserView: async () => { calls.push("close"); },
 	};
 	const routes = browserViewIpcRoutes(service);
 	const route = (channel: string) => {
@@ -124,8 +128,11 @@ test("browser view IPC routes delegate only validated commands", async () => {
 	};
 
 	const create = route(BROWSER_VIEW_CREATE_CHANNEL);
-	const createRequest = create.validate({ url: "https://example.com" });
-	assert.deepEqual(await create.invoke(createRequest), state);
+	const list = route(BROWSER_VIEW_LIST_CHANNEL);
+	assert.deepEqual(await list.invoke(list.validate(undefined)), []);
+	assert.throws(() => list.validate({ targetId }), /does not accept parameters/);
+	const createRequest = create.validate({ targetId, options });
+	assert.deepEqual(await create.invoke(createRequest), { id: targetId, host: { windowId: 1 }, owner: options.owner, session: options.session, state });
 
 	const layout = route(BROWSER_VIEW_LAYOUT_CHANNEL);
 	await layout.invoke(layout.validate({

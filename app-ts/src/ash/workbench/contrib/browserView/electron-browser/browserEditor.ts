@@ -3,15 +3,17 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { localize } from '../../../../nls.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { IBrowserViewApi, type IBrowserViewState } from '../../../../platform/browser/common/browserView.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
+import { BrowserEditorInput } from '../common/browserEditorInput.js';
+import type { IBrowserViewModel } from '../common/browserView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService, DialogSeverity } from '../../../../platform/dialogs/common/dialogs.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { IDialogsModel } from '../../../common/dialogs.js';
-import './media/browserEditor.css';
+import './media/browser.css';
 
 /** Workbench controls and geometry for one Main-owned web page. */
 export class BrowserEditor extends Disposable implements IEditorPane {
@@ -24,7 +26,8 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 	private backDomNode!: HTMLButtonElement;
 	private forwardDomNode!: HTMLButtonElement;
 	private reloadDomNode!: HTMLButtonElement;
-	private state: IBrowserViewState | undefined;
+	private model: IBrowserViewModel | undefined;
+	private readonly modelListeners = this._register(new DisposableStore());
 	private targetId: string | undefined;
 	private visible = false;
 	private menuVisible = false;
@@ -32,7 +35,6 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 	private update: Promise<void> = Promise.resolve();
 
 	constructor(
-		@IBrowserViewApi private readonly api: IBrowserViewApi,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IDialogService private readonly dialogService: IDialogService,
 		@IDialogsModel private readonly dialogs: IDialogsModel,
@@ -43,20 +45,6 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		this._register(dialogs.onDidCloseDialog(() => this.refreshLayout()));
 		this._register(menus.onDidShowContextMenu(() => { this.menuVisible = true; this.refreshLayout(); }));
 		this._register(menus.onDidHideContextMenu(() => { this.menuVisible = false; this.refreshLayout(); }));
-		const subscription = api.onDidEvent(event => {
-			if (event.type === 'stateChanged' && event.state.targetId === this.targetId) { this.render(event.state); }
-			if ('targetId' in event && event.targetId === this.targetId) {
-				if (event.type === 'focusAddress') { this.focus(); }
-				if (event.type === 'closed') {
-					if (visiblePanes.get(event.targetId) === this) { visiblePanes.delete(event.targetId); }
-					this.targetId = undefined; this.statusDomNode.textContent = 'Page closed';
-				}
-				if (event.type === 'loadFailed') { this.statusDomNode.textContent = `Unable to load page: ${event.errorDescription}`; }
-				if (event.type === 'renderProcessGone') { this.statusDomNode.textContent = `Page stopped: ${event.reason}`; }
-				if (event.type === 'openRequested') { void api.create({ url: event.url }).catch(error => this.report(error)); }
-			}
-		});
-		this._register(toDisposable(() => subscription.dispose()));
 		this._register(toDisposable(() => {
 			if (this.targetId && visiblePanes.get(this.targetId) === this) { visiblePanes.delete(this.targetId); }
 		}));
@@ -75,9 +63,9 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 			this._register(addDisposableListener(element, 'click', () => { void action().catch(error => this.report(error)); }));
 			toolbar.append(element); return element;
 		};
-		this.backDomNode = button('Back', () => this.api.goBack(this.target()));
-		this.forwardDomNode = button('Forward', () => this.api.goForward(this.target()));
-		this.reloadDomNode = button('Reload', () => this.state?.loading ? this.api.stop(this.target()) : this.api.reload(this.target()));
+		this.backDomNode = button('Back', () => this.target().goBack());
+		this.forwardDomNode = button('Forward', () => this.target().goForward());
+		this.reloadDomNode = button('Reload', () => this.model?.state.loading ? this.target().stop() : this.target().reload());
 		this.addressDomNode = h(document, 'input');
 		this.addressDomNode.type = 'url'; this.addressDomNode.setAttribute('aria-label', 'Browser address');
 		this.addressDomNode.spellcheck = false;
@@ -89,7 +77,7 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		this.viewportDomNode = h(document, 'div'); this.viewportDomNode.className = 'ash-browser-viewport';
 		this.viewportDomNode.tabIndex = 0;
 		this.viewportDomNode.setAttribute('aria-label', 'Webpage. Press F6 to return to the address field.');
-		this._register(addDisposableListener(this.viewportDomNode, 'focus', () => { this.focusOutside = false; this.refreshLayout(); void this.update.then(() => this.api.focus(this.target())).catch(error => this.report(error)); }));
+		this._register(addDisposableListener(this.viewportDomNode, 'focus', () => { this.focusOutside = false; this.refreshLayout(); void this.update.then(() => this.target().focus()).catch(error => this.report(error)); }));
 		this.domNode.append(toolbar, this.statusDomNode, this.viewportDomNode); container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener<KeyboardEvent>(this.domNode, 'keydown', event => {
@@ -97,7 +85,8 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') { event.preventDefault(); this.focus(); }
 		}));
 		this._register(AccessibleViewRegistry.register({
-			type: AccessibleViewType.Help, priority: 100, name: 'browserHelp',
+			// Each split owns a provider; focus selects the relevant pane at invocation time.
+			type: AccessibleViewType.Help, priority: 100, name: 'browserHelp:' + crypto.randomUUID(),
 			when: ActiveEditorContext.isEqualTo(BrowserEditor.ID),
 			getProvider: () => {
 				const focused = document.activeElement;
@@ -117,12 +106,22 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 
 	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
 		signal.throwIfAborted();
-		const targetId = input.resource.path.slice(1);
-		const state = await this.api.getState({ targetId });
+		if (!(input instanceof BrowserEditorInput)) { throw new TypeError('Expected browser editor input'); }
+		const model = await input.resolve();
 		signal.throwIfAborted();
-		this.targetId = targetId; this.render(state); this.refreshLayout();
+		this.modelListeners.clear();
+		this.model = model;
+		this.targetId = model.id;
+		this.modelListeners.add(model.onDidChangeState(state => this.render(state)));
+		this.modelListeners.add(model.onDidEvent(event => {
+			if (event.type === 'focusAddress') { this.focus(); }
+			if (event.type === 'loadFailed') { this.statusDomNode.textContent = `Unable to load page: ${event.errorDescription}`; }
+			if (event.type === 'renderProcessGone') { this.statusDomNode.textContent = `Page stopped: ${event.reason}`; }
+		}));
+		this.render(model.state);
+		this.refreshLayout();
 	}
-	clearInput(): void { this.visible = false; this.refreshLayout(); }
+	clearInput(): void { this.visible = false; this.refreshLayout(); this.modelListeners.clear(); }
 	layout(_dimension: IDimension): void { this.refreshLayout(); }
 	setVisible(visibility: EditorPaneVisibility): void { this.visible = visibility === EditorPaneVisibility.Visible; this.refreshLayout(); }
 	focus(): void {
@@ -131,13 +130,12 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 			this.statusDomNode.textContent = 'Enter a URL and press Enter. Press Alt+F1 for browser help.';
 		}
 	}
-	private target(): { targetId: string } {
-		if (!this.targetId) { throw new Error('Browser page is closed'); }
-		return { targetId: this.targetId };
+	private target(): IBrowserViewModel {
+		if (!this.model) { throw new Error('Browser page is closed'); }
+		return this.model;
 	}
-	private navigate(): Promise<void> { return this.api.navigate({ ...this.target(), url: this.addressDomNode.value.trim() }); }
+	private navigate(): Promise<void> { return this.target().loadURL(this.addressDomNode.value.trim()); }
 	private render(state: IBrowserViewState): void {
-		this.state = state;
 		if (this.addressDomNode.ownerDocument.activeElement !== this.addressDomNode) { this.addressDomNode.value = state.url; }
 		this.backDomNode.disabled = !state.canGoBack; this.forwardDomNode.disabled = !state.canGoForward;
 		this.reloadDomNode.textContent = state.loading ? 'Stop' : 'Reload';
@@ -146,6 +144,7 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 	private refreshLayout(): void {
 		if (!this.targetId || !this.viewportDomNode || this.isDisposed) { return; }
 		const targetId = this.targetId;
+		const model = this.target();
 		if (this.visible) { visiblePanes.set(targetId, this); }
 		else if (visiblePanes.get(targetId) === this) { visiblePanes.delete(targetId); }
 		this.update = this.update.then(async () => {
@@ -154,9 +153,9 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 			const bounds = this.viewportDomNode.getBoundingClientRect();
 			const visible = this.visible && !this.menuVisible && !this.focusOutside && this.dialogs.dialogs.length === 0 && bounds.width > 0 && bounds.height > 0;
 			if (visible) {
-				await this.api.layout({ targetId, bounds: { x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.round(bounds.width), height: Math.round(bounds.height) } });
+				await model.layout({ x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.round(bounds.width), height: Math.round(bounds.height) });
 			}
-			await this.api.setVisibility({ targetId, visible });
+			await model.setVisible(visible);
 		}).catch(error => this.report(error));
 	}
 	private report(error: unknown): void { if (!this.isDisposed) { this.statusDomNode.textContent = error instanceof Error ? error.message : String(error); } }

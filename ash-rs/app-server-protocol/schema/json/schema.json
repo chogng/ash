@@ -3823,15 +3823,25 @@
         "targetId": {
           "minLength": 1,
           "type": "string"
+        },
+        "threadId": {
+          "minLength": 1,
+          "type": "string"
         }
       },
       "required": [
+        "threadId",
         "targetId"
       ],
       "type": "object"
     },
     "BrowserCreateParams": {
       "properties": {
+        "threadId": {
+          "description": "The durable Thread owning this request; a transport connection is not an agent identity.",
+          "minLength": 1,
+          "type": "string"
+        },
         "url": {
           "maxLength": 8192,
           "minLength": 1,
@@ -3839,6 +3849,7 @@
         }
       },
       "required": [
+        "threadId",
         "url"
       ],
       "type": "object"
@@ -3881,9 +3892,14 @@
         "targetId": {
           "minLength": 1,
           "type": "string"
+        },
+        "threadId": {
+          "minLength": 1,
+          "type": "string"
         }
       },
       "required": [
+        "threadId",
         "targetId",
         "includeAccessibilityTree",
         "includeDomSnapshot",
@@ -4067,9 +4083,14 @@
       "properties": {
         "action": {
           "$ref": "#/$defs/BrowserPerformActionDto"
+        },
+        "threadId": {
+          "minLength": 1,
+          "type": "string"
         }
       },
       "required": [
+        "threadId",
         "action"
       ],
       "type": "object"
