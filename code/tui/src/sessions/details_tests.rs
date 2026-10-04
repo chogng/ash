@@ -33,6 +33,7 @@ fn response() -> SessionResult {
     threads[2].status = ash_protocol::ThreadStatus::Archived;
     SessionResult {
         session: Session {
+            model: None,
             session_id: SessionId::new("thread:session-1").unwrap(),
             title: "Coordinator".into(),
             status: ash_protocol::SessionStatus::Active,

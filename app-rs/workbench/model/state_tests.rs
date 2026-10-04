@@ -11,6 +11,7 @@ use ash_protocol::{Session, SessionId, SessionStatus, ThreadId};
 
 fn session(id: &str, title: &str) -> Session {
     Session {
+        model: None,
         session_id: SessionId::new(id).expect("test session ID is non-empty"),
         title: title.to_owned(),
         status: SessionStatus::Active,

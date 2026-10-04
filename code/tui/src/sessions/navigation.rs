@@ -24,6 +24,7 @@ pub(crate) enum SessionScreen {
 /// The manager handles local interaction and returns work for the application to coordinate.
 #[derive(Debug)]
 pub(crate) enum SessionManagerInputOutcome {
+    GroupingChanged(super::SessionGrouping),
     Unhandled,
     Consumed,
     Command(Command),
@@ -75,6 +76,9 @@ impl SessionNavigation {
             || (key.kind == KeyEventKind::Repeat && Navigation::from_key(key).is_none())
         {
             return Outcome::Unhandled;
+        }
+        if bindings::SESSION_GROUPING.matches(key) {
+            return Outcome::GroupingChanged(self.manager.grouping().next());
         }
         if let Some(navigation) = Navigation::from_key(key) {
             self.manager.navigate(model.catalog(), navigation);

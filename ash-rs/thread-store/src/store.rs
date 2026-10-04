@@ -21,6 +21,8 @@ pub struct ThreadCatalogRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[serde(alias = "workspace")]
     pub execution_target: Option<ash_protocol::SessionExecutionTarget>,
+    /// Retained in the catalog so listing Sessions never replays histories to find a model.
+    pub model: Option<ash_protocol::ModelRef>,
     pub sequence: u64,
     pub manager: SessionManagerInfo,
     pub archived_at_unix_ms: Option<u64>,
@@ -57,6 +59,7 @@ pub fn session_from_catalog(
         title,
         status,
         execution_target: root.execution_target.clone(),
+        model: root.model.clone(),
         manager,
         threads: records.into_iter().map(|record| record.thread).collect(),
     })

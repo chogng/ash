@@ -59,6 +59,7 @@ fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
 
 fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> ThreadCatalogRecord {
     ThreadCatalogRecord {
+        model: None,
         execution_target: None,
         binding: agent_graph_store::ThreadBinding {
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
@@ -1190,5 +1191,43 @@ fn sqlite_authority_database_is_private_to_the_host_user() {
     assert_eq!(mode, 0o600);
 
     drop(store);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_catalog_model_upgrade_requires_history_rebuild_and_preserves_root_model() {
+    let path = database_path("catalog-model-upgrade");
+    let session_id = SessionId::new("model-root").unwrap();
+    let thread_id = ThreadId::new(session_id.as_str()).unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &session_id, &thread_id, 1);
+    let mut record = catalog(&session_id, &thread_id, 1);
+    record.model = Some(ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("test").unwrap(),
+        ash_protocol::ModelId::new("root-model").unwrap(),
+    ));
+    store.backfill_catalog(&record).unwrap();
+    assert_eq!(store.list_sessions().unwrap()[0].model, record.model);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute("UPDATE thread_catalog SET record_version = 1", [])
+        .unwrap();
+    connection
+        .execute("UPDATE session_catalog SET record_version = 1", [])
+        .unwrap();
+    assert!(matches!(
+        store.list_sessions(),
+        Err(ThreadStoreError::SessionCatalogDamaged(_))
+    ));
+    assert!(matches!(
+        store.session_catalog(&session_id),
+        Err(ThreadStoreError::CatalogDamaged(_))
+    ));
+    store.backfill_catalog(&record).unwrap();
+    drop(store);
+    let reopened = SqliteThreadStore::open(&path).unwrap();
+    assert_eq!(reopened.list_sessions().unwrap()[0].model, record.model);
+    drop(reopened);
+    drop(connection);
     fs::remove_file(path).unwrap();
 }

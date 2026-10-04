@@ -1354,6 +1354,7 @@ fn agent_thread_switcher_starts_at_the_empty_input_cursor_column() {
         title: "Session".into(),
         status: SessionStatus::Active,
         execution_target: None,
+        model: None,
         manager: Default::default(),
         threads: vec![
             SessionThread {
@@ -2184,6 +2185,7 @@ fn manager_session(
 ) -> Session {
     let session_id = SessionId::new(id).unwrap();
     Session {
+        model: None,
         session_id: session_id.clone(),
         title: id.into(),
         status: if status == SessionManagerStatus::Completed {

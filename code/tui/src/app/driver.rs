@@ -100,8 +100,8 @@ pub(super) struct AppDriver {
     server_slash_commands: Vec<SlashCommandDefinition>,
     plugins_enabled: bool,
     memory: crate::memory::Controller,
-    dictation_settings: std::sync::Arc<crate::config::LocalDictationSettings>,
-    dictation_settings_changes: std::sync::mpsc::Receiver<ash_config::ConfigChange>,
+    local_settings: std::sync::Arc<crate::config::LocalTuiSettings>,
+    local_settings_changes: std::sync::mpsc::Receiver<ash_config::ConfigChange>,
 }
 
 pub(super) struct AppDriverResources {
@@ -110,18 +110,19 @@ pub(super) struct AppDriverResources {
     pub(super) theme_resource: ThemeResource,
     pub(super) server_slash_commands: Vec<SlashCommandDefinition>,
     pub(super) plugins_enabled: bool,
-    pub(super) dictation_settings: std::sync::Arc<crate::config::LocalDictationSettings>,
+    pub(super) local_settings: std::sync::Arc<crate::config::LocalTuiSettings>,
     pub(super) model_picker: crate::models::ModelPickerData,
 }
 
 impl AppDriver {
     pub(super) fn new(
-        app: App,
+        mut app: App,
         client: AppServerRequestHandle,
         conversation: Option<Conversation>,
         resources: AppDriverResources,
-    ) -> Self {
-        let dictation_settings_changes = resources.dictation_settings.subscribe_changes();
+    ) -> Result<Self, String> {
+        app.set_session_grouping(resources.local_settings.read_grouping()?);
+        let local_settings_changes = resources.local_settings.subscribe_changes();
         let initial =
             ScheduledCommand::new(HostCommand::RefreshClipboardImageAvailability.into(), &app);
         let mut driver = Self {
@@ -139,11 +140,11 @@ impl AppDriver {
             server_slash_commands: resources.server_slash_commands,
             plugins_enabled: resources.plugins_enabled,
             memory: crate::memory::Controller::default(),
-            dictation_settings: resources.dictation_settings,
-            dictation_settings_changes,
+            local_settings: resources.local_settings,
+            local_settings_changes,
         };
         driver.reconcile_memory_diagnostics();
-        driver
+        Ok(driver)
     }
 
     pub(super) fn app(&self) -> &App {
@@ -197,11 +198,23 @@ impl AppDriver {
     }
 
     pub(super) fn poll_request_completions(&mut self) -> bool {
-        let local_settings_changed = self.dictation_settings_changes.try_iter().last().is_some();
+        let local_settings_changed = self.local_settings_changes.try_iter().last().is_some();
         if local_settings_changed {
-            match self.dictation_settings.read() {
+            match self.local_settings.read() {
                 Ok(settings) => self.app.set_dictation_shortcut_settings(settings),
                 Err(error) => self.app.update(ThreadEvent::FailureReported(error)),
+            }
+            // The live choice may be ahead of a queued save; a store notification must not
+            // replace it with an earlier write from that same queue.
+            if !self
+                .queued_commands
+                .iter()
+                .any(|scheduled| matches!(scheduled.command, AppCommand::SaveSessionGrouping(_)))
+            {
+                match self.local_settings.read_grouping() {
+                    Ok(grouping) => self.app.set_session_grouping(grouping),
+                    Err(error) => self.app.update(sessions::Event::GroupingSaveFailed(error)),
+                }
             }
         }
         self.memory.observe_objects(self.app.memory_object_count());

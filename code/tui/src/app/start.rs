@@ -59,11 +59,11 @@ pub(super) fn start(
         None => ash_utils_home_dir::find_ash_home()?,
     };
     let local_state = state::StateRuntime::open(&profile_root).map_err(std::io::Error::other)?;
-    let dictation_settings = std::sync::Arc::new(
-        crate::config::LocalDictationSettings::open(&profile_root, local_state.database_path())
+    let local_settings = std::sync::Arc::new(
+        crate::config::LocalTuiSettings::open(&profile_root, local_state.database_path())
             .map_err(std::io::Error::other)?,
     );
-    let dictation_preference = dictation_settings.read().map_err(std::io::Error::other)?;
+    let dictation_preference = local_settings.read().map_err(std::io::Error::other)?;
     let initialization = client.initialization()?;
     let server_slash_commands = initialization.slash_commands.clone();
     let plugins_enabled = initialization.capabilities.plugins;
@@ -208,10 +208,11 @@ pub(super) fn start(
             theme_resource,
             server_slash_commands,
             plugins_enabled,
-            dictation_settings,
+            local_settings,
             model_picker,
         },
-    );
+    )
+    .map_err(std::io::Error::other)?;
     let pump = EventPump::start(events, resource_targets, notices)?;
     Ok(StartedSession {
         driver,

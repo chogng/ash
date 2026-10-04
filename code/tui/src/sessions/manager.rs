@@ -1,3 +1,4 @@
+use super::SessionGrouping;
 use crate::keymap::bindings;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
@@ -22,6 +23,7 @@ use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::time::Duration;
 use std::time::Instant;
@@ -35,6 +37,7 @@ const WORKING_FRAMES: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '�
 
 #[derive(Debug)]
 pub(crate) struct SessionManagerState {
+    grouping: SessionGrouping,
     selected: Option<SessionManagerPointerTarget>,
     collapsed: BTreeSet<SessionGroup>,
     selected_archived: bool,
@@ -48,6 +51,7 @@ pub(crate) struct SessionManagerState {
 impl Default for SessionManagerState {
     fn default() -> Self {
         Self {
+            grouping: SessionGrouping::default(),
             selected: None,
             collapsed: BTreeSet::from([SessionGroup::Archived]),
             selected_archived: false,
@@ -61,13 +65,27 @@ impl Default for SessionManagerState {
 }
 
 impl SessionManagerState {
+    pub(crate) const fn grouping(&self) -> SessionGrouping {
+        self.grouping
+    }
+
+    pub(crate) fn set_grouping(&mut self, grouping: SessionGrouping, sessions: &[Session]) {
+        if self.grouping == grouping {
+            return;
+        }
+        self.grouping = grouping;
+        // Group identities belong to one grouping; Session identity survives regrouping.
+        self.collapsed = BTreeSet::from([SessionGroup::Archived]);
+        self.reconcile(sessions);
+    }
+
     pub(crate) fn reconcile(&mut self, sessions: &[Session]) {
         self.pinned.retain(|session_id| {
             sessions
                 .iter()
                 .any(|session| &session.session_id == session_id)
         });
-        let rows = manager_rows(sessions, &self.pinned, &self.collapsed);
+        let rows = manager_rows(sessions, &self.pinned, &self.collapsed, self.grouping);
         if self
             .selected
             .as_ref()
@@ -133,7 +151,7 @@ impl SessionManagerState {
         sessions: &[Session],
         target: &SessionManagerPointerTarget,
     ) -> bool {
-        if !manager_rows(sessions, &self.pinned, &self.collapsed)
+        if !manager_rows(sessions, &self.pinned, &self.collapsed, self.grouping)
             .iter()
             .any(|row| &row.target() == target)
         {
@@ -146,15 +164,15 @@ impl SessionManagerState {
     }
 
     pub(super) fn selected_group(&self) -> Option<SessionGroup> {
-        match self.selected {
-            Some(SessionManagerPointerTarget::Group(group)) => Some(group),
+        match self.selected.as_ref() {
+            Some(SessionManagerPointerTarget::Group(group)) => Some(group.clone()),
             _ => None,
         }
     }
 
     pub(crate) fn toggle_group(&mut self, group: SessionGroup) {
         if !self.collapsed.remove(&group) {
-            self.collapsed.insert(group);
+            self.collapsed.insert(group.clone());
         }
         self.selected = Some(SessionManagerPointerTarget::Group(group));
         self.selected_archived = false;
@@ -289,6 +307,7 @@ impl SessionManagerState {
 
     pub(crate) fn view<'a>(&'a self, sessions: &'a [Session]) -> SessionManagerView<'a> {
         SessionManagerView {
+            grouping: self.grouping,
             sessions,
             selected: self.selected.as_ref(),
             collapsed: &self.collapsed,
@@ -300,7 +319,7 @@ impl SessionManagerState {
     }
 
     fn select_offset(&mut self, sessions: &[Session], delta: isize) -> bool {
-        let selectable = manager_rows(sessions, &self.pinned, &self.collapsed)
+        let selectable = manager_rows(sessions, &self.pinned, &self.collapsed, self.grouping)
             .into_iter()
             .map(|row| row.target())
             .collect::<Vec<_>>();
@@ -335,6 +354,7 @@ pub(super) fn manager_status_label(status: SessionManagerStatus) -> &'static str
 }
 
 pub(crate) struct SessionManagerView<'a> {
+    grouping: SessionGrouping,
     sessions: &'a [Session],
     selected: Option<&'a SessionManagerPointerTarget>,
     collapsed: &'a BTreeSet<SessionGroup>,
@@ -361,7 +381,27 @@ pub(crate) fn draw_manager(
     if area.is_empty() {
         return;
     }
-    let rows = manager_rows(view.sessions, view.pinned, view.collapsed);
+    let header = format!(
+        "{}: {}",
+        context.localize("Group"),
+        context.localize(view.grouping.label())
+    );
+    frame.render_widget(
+        Paragraph::new(Line::styled(header, Style::default().fg(context.muted()))),
+        Rect::new(
+            area.x + 2.min(area.width),
+            area.y,
+            area.width.saturating_sub(2),
+            1,
+        ),
+    );
+    let area = Rect::new(
+        area.x,
+        area.y + 1,
+        area.width,
+        area.height.saturating_sub(1),
+    );
+    let rows = manager_rows(view.sessions, view.pinned, view.collapsed, view.grouping);
     if rows.is_empty() {
         frame.render_widget(
             Paragraph::new(Line::styled(
@@ -389,13 +429,12 @@ pub(crate) fn draw_manager(
     lines.extend(
         rows[viewport.start..viewport.end]
             .iter()
-            .copied()
             .map(|row| match row {
                 ManagerRow::Heading { group, count } => group_line(
                     group,
-                    count,
+                    *count,
                     manager_state(
-                        &SessionManagerPointerTarget::Group(group),
+                        &SessionManagerPointerTarget::Group(group.clone()),
                         view.selected,
                         view.focused,
                         hovered,
@@ -439,7 +478,16 @@ pub(crate) fn pointer_target_at(
     if !area.contains(position) {
         return None;
     }
-    let rows = manager_rows(view.sessions, view.pinned, view.collapsed);
+    if position.y == area.y {
+        return None;
+    }
+    let area = Rect::new(
+        area.x,
+        area.y + 1,
+        area.width,
+        area.height.saturating_sub(1),
+    );
+    let rows = manager_rows(view.sessions, view.pinned, view.collapsed, view.grouping);
     let selected_row = rows
         .iter()
         .position(|row| Some(&row.target()) == view.selected);
@@ -452,7 +500,7 @@ pub(crate) fn pointer_target_at(
     (index < viewport.end).then(|| rows[index].target())
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum ManagerRow<'a> {
     Heading { group: SessionGroup, count: usize },
     Session(&'a Session),
@@ -461,7 +509,7 @@ enum ManagerRow<'a> {
 impl ManagerRow<'_> {
     fn target(&self) -> SessionManagerPointerTarget {
         match self {
-            Self::Heading { group, .. } => SessionManagerPointerTarget::Group(*group),
+            Self::Heading { group, .. } => SessionManagerPointerTarget::Group(group.clone()),
             Self::Session(session) => {
                 SessionManagerPointerTarget::Session(session.session_id.clone())
             }
@@ -469,8 +517,13 @@ impl ManagerRow<'_> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(crate) enum SessionGroup {
+    LocalProject(std::path::PathBuf),
+    RemoteProject { host: String, root: String },
+    NoProject,
+    Model(String),
+    NoModel,
     Archived,
     Pinned,
     NeedsInput,
@@ -495,8 +548,13 @@ impl SessionGroup {
         Self::Archived,
     ];
 
-    const fn label(self) -> &'static str {
+    fn label(&self) -> std::borrow::Cow<'_, str> {
         match self {
+            Self::LocalProject(root) => return root.to_string_lossy(),
+            Self::RemoteProject { host, root } => return format!("{host}:{root}").into(),
+            Self::Model(model) => return model.as_str().into(),
+            Self::NoProject => "No project",
+            Self::NoModel => "No model selected",
             Self::Archived => "Archived",
             Self::Pinned => "Pinned",
             Self::NeedsInput => "Needs input",
@@ -507,14 +565,20 @@ impl SessionGroup {
             Self::Completed => "Completed",
             Self::Idle => "Idle",
         }
+        .into()
     }
 
-    fn includes(self, session: &Session, pinned: &BTreeSet<SessionId>) -> bool {
+    fn includes(&self, session: &Session, pinned: &BTreeSet<SessionId>) -> bool {
         if session.status == SessionStatus::Archived {
-            return self == Self::Archived;
+            return self == &Self::Archived;
         }
         let is_pinned = pinned.contains(&session.session_id);
         match self {
+            Self::LocalProject(_)
+            | Self::RemoteProject { .. }
+            | Self::NoProject
+            | Self::Model(_)
+            | Self::NoModel => false,
             Self::Archived => false,
             Self::Pinned => is_pinned,
             Self::NeedsInput => {
@@ -538,18 +602,69 @@ fn manager_rows<'a>(
     sessions: &'a [Session],
     pinned: &BTreeSet<SessionId>,
     collapsed: &BTreeSet<SessionGroup>,
+    grouping: SessionGrouping,
 ) -> Vec<ManagerRow<'a>> {
     let mut rows = Vec::new();
-    for group in SessionGroup::ALL {
-        let group_sessions = sessions
-            .iter()
-            .filter(|session| group.includes(session, pinned))
-            .collect::<Vec<_>>();
+    let groups = match grouping {
+        SessionGrouping::Status => SessionGroup::ALL
+            .into_iter()
+            .map(|group| {
+                let members = sessions
+                    .iter()
+                    .filter(|session| group.includes(session, pinned))
+                    .collect::<Vec<_>>();
+                (group, members)
+            })
+            .collect::<Vec<_>>(),
+        SessionGrouping::Project | SessionGrouping::Model => {
+            let mut groups = BTreeMap::<SessionGroup, Vec<&Session>>::new();
+            for session in sessions {
+                let group = if session.status == SessionStatus::Archived {
+                    SessionGroup::Archived
+                } else if pinned.contains(&session.session_id) {
+                    SessionGroup::Pinned
+                } else {
+                    match grouping {
+                        SessionGrouping::Project => match &session.execution_target {
+                            Some(ash_protocol::SessionExecutionTarget::Local { root }) => {
+                                SessionGroup::LocalProject(root.clone())
+                            }
+                            Some(ash_protocol::SessionExecutionTarget::Ssh { host, root }) => {
+                                SessionGroup::RemoteProject {
+                                    host: host.clone(),
+                                    root: root.clone(),
+                                }
+                            }
+                            None => SessionGroup::NoProject,
+                        },
+                        SessionGrouping::Model => match &session.model {
+                            Some(model) => {
+                                SessionGroup::Model(format!("{}/{}", model.provider, model.model))
+                            }
+                            None => SessionGroup::NoModel,
+                        },
+                        SessionGrouping::Status => unreachable!("status groups have a fixed order"),
+                    }
+                };
+                groups.entry(group).or_default().push(session);
+            }
+            let pinned = groups.remove(&SessionGroup::Pinned);
+            let archived = groups.remove(&SessionGroup::Archived).unwrap_or_default();
+            let mut ordered = Vec::new();
+            if let Some(pinned) = pinned {
+                ordered.push((SessionGroup::Pinned, pinned));
+            }
+            ordered.extend(groups);
+            ordered.push((SessionGroup::Archived, archived));
+            ordered
+        }
+    };
+    for (group, group_sessions) in groups {
         if group_sessions.is_empty() && group != SessionGroup::Archived {
             continue;
         }
         rows.push(ManagerRow::Heading {
-            group,
+            group: group.clone(),
             count: group_sessions.len(),
         });
         if !collapsed.contains(&group) {
@@ -599,7 +714,7 @@ fn session_line<'a>(
 }
 
 fn group_line(
-    group: SessionGroup,
+    group: &SessionGroup,
     count: usize,
     state: InteractionState,
     width: usize,
@@ -608,7 +723,12 @@ fn group_line(
     let text = format!(
         "{}{} ({count})",
         selection_marker(state.selected),
-        context.localize(group.label())
+        match group {
+            SessionGroup::LocalProject(_)
+            | SessionGroup::RemoteProject { .. }
+            | SessionGroup::Model(_) => group.label().into_owned(),
+            _ => context.localize(&group.label()).into_owned(),
+        }
     );
     let style = Style::default()
         .fg(context.muted())

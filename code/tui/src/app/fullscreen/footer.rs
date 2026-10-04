@@ -1,6 +1,5 @@
 use crate::app::App;
 use crate::thread::composer as chat_input;
-use crate::widgets::key_hint::KeyHints;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -39,13 +38,7 @@ pub(super) fn draw(
                 context,
             );
         }
-        crate::app::footer::draw(
-            frame,
-            areas.session.hintline,
-            app,
-            &input_hints(app),
-            context,
-        );
+        crate::app::footer::draw(frame, areas.session.hintline, app, context);
     }
 }
 
@@ -53,26 +46,11 @@ pub(super) fn modal_hint_lines(app: &App, available: Rect) -> Vec<ratatui::text:
     if available.is_empty() {
         return Vec::new();
     }
-    let hints = if app.overlay().is_some() {
-        KeyHints::new()
-            .with_compact_action("↑/↓", "scroll")
-            .with_action("Esc", "close")
-    } else if super::modal::blocked_alert(app) {
-        KeyHints::new()
-            .with_note("editing in progress")
-            .with_action("Esc", "cancel")
-    } else {
-        app.command_panel()
-            .expect("open modal has a panel")
-            .key_hints()
-            .clone()
-    };
     let content = crate::render::horizontal_margin(available, 2);
     let lines = crate::render::wrap_lines(
-        vec![crate::widgets::key_hint::line(
-            &hints,
+        vec![crate::app::footer::line(
+            app,
             usize::MAX,
-            app.key_hint_style(),
             app.render_context(),
         )],
         content.width.into(),
@@ -80,46 +58,14 @@ pub(super) fn modal_hint_lines(app: &App, available: Rect) -> Vec<ratatui::text:
     // When wrapping would consume the modal's remaining space, keep the exit action
     // through the same action prioritization used by the single-row page hintline.
     if lines.len() > usize::from(available.height) {
-        vec![crate::widgets::key_hint::line(
-            &hints,
+        vec![crate::app::footer::line(
+            app,
             content.width.into(),
-            app.key_hint_style(),
             app.render_context(),
         )]
     } else {
         lines
     }
-}
-
-fn input_hints(app: &App) -> KeyHints {
-    if app.fullscreen.header_focused() {
-        let hints = KeyHints::new()
-            .with_compact_action("←→", "select")
-            .with_compact_action("Enter", "open")
-            .with_compact_action("Esc", "input");
-        return app
-            .fullscreen
-            .header
-            .selected()
-            .map_or(hints.clone(), |target| hints.with_note(target.label()));
-    }
-    if app.fullscreen_home_visible() {
-        if app.fullscreen_welcome_visible() && !app.fullscreen.input_focused() {
-            return KeyHints::new()
-                .with_compact_action("Enter", "select")
-                .with_compact_action("↑↓", "actions")
-                .with_compact_action("Esc", "input");
-        }
-        let hints = KeyHints::new().with_compact_action("Enter", "send");
-        return if app.fullscreen_welcome_visible() {
-            hints
-                .with_compact_action("Tab", "actions")
-                .with_compact_action("/", "commands")
-        } else {
-            hints.with_compact_action("/", "commands")
-        };
-    }
-    crate::app::footer::input_hints(app)
 }
 
 pub(super) fn draw_tip(

@@ -45,7 +45,7 @@ impl SqliteThreadStore {
             "SELECT streams.thread_id FROM thread_streams AS streams
              WHERE streams.current_sequence > 0 AND NOT EXISTS (
                  SELECT 1 FROM thread_catalog AS catalog
-                 WHERE catalog.thread_id = streams.thread_id AND catalog.record_version = 1
+                 WHERE catalog.thread_id = streams.thread_id AND catalog.record_version = 2
              ) ORDER BY streams.thread_id",
         )
     }
@@ -737,7 +737,7 @@ fn query_catalog(
                 current_sequence,
             ) = row.map_err(storage_error)?;
             let catalog_thread_id = ThreadId::new(thread_id.clone()).map_err(storage_error)?;
-            if record_version != 1
+            if record_version != 2
                 || ContentDigest::sha256(record_json.as_bytes()).as_str() != record_digest
             {
                 return Err(ThreadStoreError::CatalogDamaged(catalog_thread_id));
@@ -771,7 +771,7 @@ fn write_catalog(
         .execute(
             "INSERT INTO thread_catalog
              (thread_id, session_id, requires_startup_recovery, record_json, record_version, record_digest)
-             VALUES (?1, ?2, ?3, ?4, 1, ?5)
+             VALUES (?1, ?2, ?3, ?4, 2, ?5)
              ON CONFLICT(thread_id) DO UPDATE SET
                  session_id = excluded.session_id,
                  requires_startup_recovery = excluded.requires_startup_recovery,
@@ -812,7 +812,7 @@ fn session_list_changed(
     let Some((json, version, digest)) = previous else {
         return Ok(true);
     };
-    if version != 1 || ContentDigest::sha256(json.as_bytes()).as_str() != digest {
+    if version != 2 || ContentDigest::sha256(json.as_bytes()).as_str() != digest {
         return Ok(true);
     }
     let Ok(previous) = serde_json::from_str::<ThreadCatalogRecord>(&json) else {
@@ -832,7 +832,7 @@ fn decode_session_catalog(
     version: i64,
     digest: &str,
 ) -> Result<Session, ThreadStoreError> {
-    if version != 1 || ContentDigest::sha256(json.as_bytes()).as_str() != digest {
+    if version != 2 || ContentDigest::sha256(json.as_bytes()).as_str() != digest {
         return Err(ThreadStoreError::SessionCatalogDamaged(session_id.clone()));
     }
     let mut session = serde_json::from_str::<Session>(json)
@@ -876,7 +876,7 @@ pub(super) fn write_session_catalog(
     connection
         .execute(
             "INSERT INTO session_catalog (session_id, record_json, record_version, record_digest)
-             VALUES (?1, ?2, 1, ?3)
+             VALUES (?1, ?2, 2, ?3)
              ON CONFLICT(session_id) DO UPDATE SET
                  record_json = excluded.record_json,
                  record_version = excluded.record_version,

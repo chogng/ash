@@ -1,0 +1,37 @@
+---
+source: code/tui/src/app/session_manager_tests.rs
+assertion_line: 425
+expression: render(&app)
+---
+  .                                                                                    [Dashboard]
+
+  Group: Status
+  Idle (1)
+  ○ Snapshot session
+  Archived (1)
+> ○ Archived chat
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  > Build anything
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model
+
+  Enter to restore · Space to preview · Ctrl+X to delete · i to details · Esc to return

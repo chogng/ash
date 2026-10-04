@@ -721,6 +721,8 @@ pub(crate) const SESSION_DELETE: Keybinding =
     Keybinding::new(&[(CTRL, KeyCode::Char('x'))], "delete");
 pub(crate) const SESSION_DETAILS: Keybinding =
     Keybinding::new(&[(NONE, KeyCode::Char('i'))], "details");
+pub(crate) const SESSION_GROUPING: Keybinding =
+    Keybinding::new(&[(NONE, KeyCode::Char('g'))], "group");
 pub(crate) const SESSION_PIN: Keybinding = Keybinding::new(&[(NONE, KeyCode::Char('p'))], "pin");
 pub(crate) const GROUP_EXPAND: Keybinding = Keybinding::new(ENTER, "expand");
 pub(crate) const GROUP_COLLAPSE: Keybinding = Keybinding::new(ENTER, "collapse");
@@ -743,6 +745,16 @@ fn hints(actions: &[Keybinding]) -> KeyHints {
 
 // HitBar composition lives here; callers only select the recipe for their state.
 pub(crate) static CLOSE_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[CLOSE]));
+pub(crate) static FULLSCREEN_DETAIL_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
+    KeyHints::new()
+        .with_compact_action("↑/↓", "scroll")
+        .with_binding(CLOSE)
+});
+pub(crate) static MODAL_EDITING_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
+    KeyHints::new()
+        .with_note("editing in progress")
+        .with_binding(CANCEL)
+});
 pub(crate) static STATUS_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[TAB_NEXT, CLOSE]));
 pub(crate) static TAB_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[TABS, ENTER_LIST, CLOSE]));
@@ -760,15 +772,16 @@ pub(crate) static INLINE_DASHBOARD_RETURN_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[INLINE_DASHBOARD_RETURN]));
 pub(crate) static INPUT_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[ESC_RETURN]));
 pub(crate) static EXPAND_HINTS: LazyLock<KeyHints> =
-    LazyLock::new(|| hints(&[GROUP_EXPAND, ESC_RETURN]));
+    LazyLock::new(|| hints(&[GROUP_EXPAND, SESSION_GROUPING, ESC_RETURN]));
 pub(crate) static COLLAPSE_HINTS: LazyLock<KeyHints> =
-    LazyLock::new(|| hints(&[GROUP_COLLAPSE, ESC_RETURN]));
+    LazyLock::new(|| hints(&[GROUP_COLLAPSE, SESSION_GROUPING, ESC_RETURN]));
 fn session_hints(return_binding: Keybinding) -> KeyHints {
     hints(&[
         SESSION_OPEN,
         SESSION_PREVIEW,
         SESSION_ARCHIVE,
         SESSION_DETAILS,
+        SESSION_GROUPING,
         return_binding,
     ])
 }
@@ -781,6 +794,7 @@ fn archived_hints(return_binding: Keybinding) -> KeyHints {
         SESSION_PREVIEW,
         SESSION_DELETE,
         SESSION_DETAILS,
+        SESSION_GROUPING,
         return_binding,
     ])
 }
@@ -849,6 +863,10 @@ pub(crate) fn fixed_bindings() -> impl Iterator<Item = (&'static str, &'static s
                 "focus search in a searchable panel; Enter or Esc returns to its list",
             ),
             (TABS.keys(), "switch panel tabs from tabs, lists or search"),
+            (
+                SESSION_GROUPING.keys(),
+                "change dashboard grouping by project, status, or root model; remember across launches",
+            ),
             (
                 CLOSE.keys(),
                 "return one interaction level; pending approval/query requires an explicit answer",

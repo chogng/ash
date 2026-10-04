@@ -1814,6 +1814,7 @@ impl AppServer {
         let session = Session {
             session_id: session_id.clone(),
             title: root.title.clone(),
+            model: root.model.clone(),
             status,
             execution_target,
             manager,

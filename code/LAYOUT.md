@@ -155,7 +155,7 @@ inline 的 statusline 第一行按配置顺序与可用宽度绘制模型、任�
 
 ### 组合规则与验证
 
-[chat_view.rs](tui/src/app/chat_view.rs) 统一分配消息、目标、计划、队列、提问、progress、tipline、输入、statusline、hintline 和 Agent 切换栏；[footer.rs](tui/src/app/footer.rs) 统一选择快捷键与听写提示。fullscreen 和 inline 各自提供空间预算、输入外观和页面容器。
+[chat_view.rs](tui/src/app/chat_view.rs) 统一分配消息、目标、计划、队列、提问、progress、tipline、输入、statusline、hintline 和 Agent 切换栏；[footer.rs](tui/src/app/footer.rs) 统一选择快捷键与听写提示，包括弹窗编辑警告、顶部焦点和首页输入提示。hintline 的内容只在共享 footer 中选择，模式 footer 负责绘制，fullscreen 另处理弹窗提示换行；两种模式各自提供空间预算、输入外观和页面容器。
 
 正常高度的普通聊天页中，inline 的 `session.statusline` 是两行矩形，`session.hintline` 是其中第二行的一行矩形；两个字段描述重叠区域。fullscreen 的底部 `session.statusline` 与 `session.hintline` 则是相邻的两个一行矩形。维护布局时按实际占行计算高度，不能将 inline 的两个矩形高度相加。
 

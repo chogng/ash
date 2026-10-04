@@ -381,6 +381,9 @@ pub(in crate::app) fn handle_screen_navigation_key(
             .handle_manager_key(&app.sessions, key)
         {
             SessionManagerInputOutcome::Unhandled => None,
+            SessionManagerInputOutcome::GroupingChanged(grouping) => {
+                Some(Some(app.cycle_session_grouping(grouping)))
+            }
             SessionManagerInputOutcome::Consumed => Some(None),
             SessionManagerInputOutcome::Command(command) => Some(Some(command.into())),
             SessionManagerInputOutcome::ExitRequested => exit_manager(app),

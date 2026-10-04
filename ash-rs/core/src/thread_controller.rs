@@ -3121,6 +3121,7 @@ fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
             status: snapshot.status,
         },
         execution_target: snapshot.execution_target.clone(),
+        model: snapshot.model.clone(),
         sequence: snapshot.sequence,
         manager: thread_manager_info(snapshot),
         archived_at_unix_ms: snapshot.archived_at_unix_ms,

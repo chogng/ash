@@ -34,6 +34,7 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
             },
         }],
         catalog: ThreadCatalogRecord {
+            model: None,
             binding: agent_graph_store::ThreadBinding {
                 agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
                 session_id: SessionId::new("session_1").unwrap(),

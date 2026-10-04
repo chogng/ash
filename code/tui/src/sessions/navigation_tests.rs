@@ -173,6 +173,7 @@ fn manager_repeats_only_navigation_and_keeps_mutations_for_key_presses() {
 
 fn session(value: &str) -> Session {
     Session {
+        model: None,
         session_id: session_id(value),
         title: value.into(),
         status: SessionStatus::Active,

@@ -596,6 +596,7 @@ pub(super) fn activate_pointer_item(
                     }
                     None
                 }
+                crate::sessions::SessionManagerInputOutcome::GroupingChanged(grouping) => Some(app.cycle_session_grouping(grouping)),
                 crate::sessions::SessionManagerInputOutcome::Consumed
                 | crate::sessions::SessionManagerInputOutcome::Unhandled => None,
             }

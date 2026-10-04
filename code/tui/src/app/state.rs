@@ -2186,6 +2186,31 @@ impl App {
             .finish_start(generation, result.err());
     }
 
+    pub(super) fn set_session_grouping(&mut self, grouping: crate::sessions::SessionGrouping) {
+        if self.fullscreen.sessions.manager().grouping() == grouping
+            && self.inline.sessions.manager().grouping() == grouping
+        {
+            return;
+        }
+        self.fullscreen
+            .sessions
+            .manager_mut()
+            .set_grouping(grouping, self.sessions.catalog());
+        self.inline
+            .sessions
+            .manager_mut()
+            .set_grouping(grouping, self.sessions.catalog());
+        self.fullscreen.pointer.clear();
+    }
+
+    pub(super) fn cycle_session_grouping(
+        &mut self,
+        grouping: crate::sessions::SessionGrouping,
+    ) -> AppCommand {
+        self.set_session_grouping(grouping);
+        AppCommand::SaveSessionGrouping(grouping)
+    }
+
     pub(crate) fn session_manager_view(&self) -> Option<SessionManagerView<'_>> {
         (!self.fullscreen_home_visible()
             && self.session_navigation().preview.is_none()
@@ -3343,6 +3368,16 @@ impl App {
 
     fn apply_session_event(&mut self, event: SessionEvent) {
         match event {
+            SessionEvent::GroupingSaveFailed(error) => {
+                let mut text = crate::nls::Text::template(
+                    "Could not save dashboard grouping: {0}",
+                    vec![crate::nls::Text::literal(error)],
+                );
+                text.localize(self.language());
+                self.update(crate::host::Event::OperationCompleted(
+                    Err(text.to_string()),
+                ));
+            }
             SessionEvent::DetailsReceived { generation, result } => self
                 .session_navigation_mut()
                 .finish_details(generation, result),

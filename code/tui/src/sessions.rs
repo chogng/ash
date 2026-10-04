@@ -3,6 +3,7 @@ use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
 mod active;
 mod completion;
 mod details;
+mod grouping;
 mod manager;
 mod navigation;
 mod picker;
@@ -19,6 +20,8 @@ pub(crate) use completion::SessionCompletion;
 pub(crate) use completion::finish_conversation_request;
 pub(crate) use completion::prepare_command;
 pub(crate) use details::load_details;
+pub(crate) use grouping::GROUPING_KEY;
+pub(crate) use grouping::SessionGrouping;
 pub(crate) use manager::SessionManagerPointerTarget;
 pub(crate) use manager::SessionManagerView;
 pub(crate) use manager::draw_manager;
@@ -41,6 +44,7 @@ use ash_protocol::SessionId;
 
 /// A completed session operation delivered to the TUI state owner.
 pub(crate) enum Event {
+    GroupingSaveFailed(String),
     DetailsReceived {
         generation: u64,
         result: Result<ash_app_server_protocol::protocol::session::SessionResult, String>,

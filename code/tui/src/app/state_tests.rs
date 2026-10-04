@@ -3713,6 +3713,7 @@ fn temporary_dir(label: &str) -> std::path::PathBuf {
 
 fn manager_state_session(id: &str) -> Session {
     Session {
+        model: None,
         session_id: SessionId::new(id).unwrap(),
         title: id.into(),
         status: SessionStatus::Active,

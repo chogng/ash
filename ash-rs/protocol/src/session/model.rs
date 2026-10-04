@@ -23,6 +23,10 @@ pub struct Session {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub execution_target: Option<SessionExecutionTarget>,
+    /// Current model selected on the Session root Thread; child and fork models are excluded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub model: Option<crate::ModelRef>,
     #[serde(default)]
     pub manager: SessionManagerInfo,
     pub threads: Vec<SessionThread>,

@@ -29,9 +29,9 @@ fn archived_is_a_peer_heading_and_owns_archived_sessions_even_when_pinned() {
         assert_eq!(
             state.selection_hint().text(),
             if expanded {
-                "Enter to collapse · Esc to return"
+                "Enter to collapse · g to group · Esc to return"
             } else {
-                "Enter to expand · Esc to return"
+                "Enter to expand · g to group · Esc to return"
             }
         );
         terminal
@@ -47,15 +47,15 @@ fn archived_is_a_peer_heading_and_owns_archived_sessions_even_when_pinned() {
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
-        assert_eq!(buffer[(2, 0)].symbol(), "I");
-        assert_eq!(buffer[(2, 2)].symbol(), "A");
+        assert_eq!(buffer[(2, 1)].symbol(), "I");
+        assert_eq!(buffer[(2, 3)].symbol(), "A");
         let heading = (0..40)
-            .map(|column| buffer[(column, 2)].symbol())
+            .map(|column| buffer[(column, 3)].symbol())
             .collect::<String>();
         assert_eq!(heading.trim_end(), "  Archived (1)");
-        assert_eq!(buffer[(0, 0)].fg, buffer[(0, 2)].fg);
-        assert_eq!(buffer[(0, 0)].modifier, buffer[(0, 2)].modifier);
-        let rows = manager_rows(&sessions, &state.pinned, &state.collapsed);
+        assert_eq!(buffer[(0, 1)].fg, buffer[(0, 3)].fg);
+        assert_eq!(buffer[(0, 1)].modifier, buffer[(0, 3)].modifier);
+        let rows = manager_rows(&sessions, &state.pinned, &state.collapsed, state.grouping);
         assert_eq!(rows.len(), if expanded { 4 } else { 3 });
     }
     state.select_next(&sessions);
@@ -91,10 +91,10 @@ fn groups_sessions_by_management_status_and_keeps_pinned_first() {
     ));
     assert!(state.toggle_selected_pin());
 
-    let labels = manager_rows(&sessions, &state.pinned, &state.collapsed)
+    let labels = manager_rows(&sessions, &state.pinned, &state.collapsed, state.grouping)
         .into_iter()
         .map(|row| match row {
-            ManagerRow::Heading { group, .. } => group.label().to_owned(),
+            ManagerRow::Heading { group, .. } => group.label().into_owned(),
             ManagerRow::Session(session) => session.session_id.to_string(),
         })
         .collect::<Vec<_>>();
@@ -129,7 +129,7 @@ fn navigation_follows_the_visible_group_order() {
         (SessionGroup::Completed, "completed"),
     ] {
         assert!(state.select_next(&sessions));
-        assert_eq!(state.selected_group(), Some(group));
+        assert_eq!(state.selected_group(), Some(group.clone()));
         assert!(state.select_next(&sessions));
         assert_eq!(state.selected_session().unwrap().as_str(), id);
     }
@@ -212,6 +212,7 @@ fn every_group_heading_is_selectable_and_collapses_only_its_own_sessions() {
         session("idle", SessionManagerStatus::Idle, None),
         session("pinned", SessionManagerStatus::Idle, None),
         Session {
+            model: None,
             status: SessionStatus::Archived,
             ..session("archived", SessionManagerStatus::Idle, None)
         },
@@ -221,7 +222,7 @@ fn every_group_heading_is_selectable_and_collapses_only_its_own_sessions() {
         state.pinned.insert(SessionId::new("pinned").unwrap());
         state.reconcile(&sessions);
         state.navigate(&sessions, crate::widgets::navigation::Navigation::First);
-        while state.selected_group() != Some(group) {
+        while state.selected_group() != Some(group.clone()) {
             assert!(
                 state.select_next(&sessions),
                 "heading must be reachable: {group:?}"
@@ -231,18 +232,18 @@ fn every_group_heading_is_selectable_and_collapses_only_its_own_sessions() {
         assert!(state.selected_archive_ids(&sessions).is_empty());
         assert!(!state.toggle_selected_pin());
         state.expand_selected_group();
-        let expanded = manager_rows(&sessions, &state.pinned, &state.collapsed)
+        let expanded = manager_rows(&sessions, &state.pinned, &state.collapsed, state.grouping)
             .iter()
             .map(ManagerRow::target)
             .collect::<Vec<_>>();
         state.toggle_selected_group();
         state.reconcile(&sessions);
-        assert_eq!(state.selected_group(), Some(group));
+        assert_eq!(state.selected_group(), Some(group.clone()));
         assert_eq!(
             state.selection_hint().text(),
-            "Enter to expand · Esc to return"
+            "Enter to expand · g to group · Esc to return"
         );
-        let collapsed = manager_rows(&sessions, &state.pinned, &state.collapsed)
+        let collapsed = manager_rows(&sessions, &state.pinned, &state.collapsed, state.grouping)
             .iter()
             .map(ManagerRow::target)
             .collect::<Vec<_>>();
@@ -261,10 +262,10 @@ fn every_group_heading_is_selectable_and_collapses_only_its_own_sessions() {
         state.toggle_selected_group();
         assert_eq!(
             state.selection_hint().text(),
-            "Enter to collapse · Esc to return"
+            "Enter to collapse · g to group · Esc to return"
         );
         assert_eq!(
-            manager_rows(&sessions, &state.pinned, &state.collapsed)
+            manager_rows(&sessions, &state.pinned, &state.collapsed, state.grouping)
                 .iter()
                 .map(ManagerRow::target)
                 .collect::<Vec<_>>(),
@@ -281,13 +282,13 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
     state.focus();
-    let backend = TestBackend::new(32, 5);
+    let backend = TestBackend::new(32, 6);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| {
             draw_manager(
                 frame,
-                Rect::new(0, 0, 32, 5),
+                Rect::new(0, 0, 32, 6),
                 state.view(&sessions),
                 None,
                 None,
@@ -296,7 +297,7 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
-    let rendered = (0..5)
+    let rendered = (0..6)
         .map(|row| {
             (0..32)
                 .map(|column| buffer[(column, row)].symbol())
@@ -308,10 +309,10 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
     assert!(rendered.contains("Idle (8)"));
     assert!(rendered.contains("more below"));
     let context = crate::render::test_context();
-    assert_eq!(buffer[(0, 0)].fg, context.muted());
-    assert_eq!(buffer[(0, 1)].symbol(), ">");
-    assert_eq!(buffer[(0, 1)].fg, context.selection_foreground());
-    assert_eq!(buffer[(0, 1)].bg, context.selection_background());
+    assert_eq!(buffer[(0, 1)].fg, context.muted());
+    assert_eq!(buffer[(0, 2)].symbol(), ">");
+    assert_eq!(buffer[(0, 2)].fg, context.selection_foreground());
+    assert_eq!(buffer[(0, 2)].bg, context.selection_background());
 
     for _ in 0..5 {
         state.select_next(&sessions);
@@ -320,7 +321,7 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
         .draw(|frame| {
             draw_manager(
                 frame,
-                Rect::new(0, 0, 32, 5),
+                Rect::new(0, 0, 32, 6),
                 state.view(&sessions),
                 None,
                 None,
@@ -329,7 +330,7 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
-    let rendered = (0..5)
+    let rendered = (0..6)
         .map(|row| {
             (0..32)
                 .map(|column| buffer[(column, row)].symbol())
@@ -346,7 +347,7 @@ fn blurred_manager_keeps_its_cursor_without_rendering_keyboard_selection() {
     let sessions = vec![session("idle", SessionManagerStatus::Idle, None)];
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
-    let mut terminal = Terminal::new(TestBackend::new(32, 3)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(32, 4)).unwrap();
 
     terminal
         .draw(|frame| {
@@ -361,7 +362,7 @@ fn blurred_manager_keeps_its_cursor_without_rendering_keyboard_selection() {
         })
         .unwrap();
     assert_eq!(
-        terminal.backend().buffer()[(0, 0)].fg,
+        terminal.backend().buffer()[(0, 1)].fg,
         crate::render::test_context().muted()
     );
 
@@ -379,7 +380,7 @@ fn blurred_manager_keeps_its_cursor_without_rendering_keyboard_selection() {
         })
         .unwrap();
     assert_eq!(
-        terminal.backend().buffer()[(0, 1)].bg,
+        terminal.backend().buffer()[(0, 2)].bg,
         crate::render::test_context().selection_background()
     );
 }
@@ -389,11 +390,11 @@ fn pointer_targets_and_hover_cover_the_complete_visible_session_row() {
     let sessions = vec![session("idle", SessionManagerStatus::Idle, None)];
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
-    let area = Rect::new(0, 0, 32, 3);
+    let area = Rect::new(0, 0, 32, 4);
     let target = pointer_target_at(
         area,
         state.view(&sessions),
-        ratatui::layout::Position::new(area.right() - 1, 1),
+        ratatui::layout::Position::new(area.right() - 1, 2),
     )
     .unwrap();
     assert_eq!(
@@ -415,7 +416,7 @@ fn pointer_targets_and_hover_cover_the_complete_visible_session_row() {
         .unwrap();
     for column in area.x..area.right() {
         assert_eq!(
-            terminal.backend().buffer()[(column, 1)].bg,
+            terminal.backend().buffer()[(column, 2)].bg,
             crate::render::test_context().hover_background()
         );
     }
@@ -430,6 +431,7 @@ fn session(
     activity: Option<SessionManagerActivity>,
 ) -> Session {
     Session {
+        model: None,
         session_id: SessionId::new(id).unwrap(),
         title: id.into(),
         status: SessionStatus::Active,
@@ -449,4 +451,39 @@ fn line_text(line: &Line<'_>) -> String {
         .iter()
         .map(|span| span.content.to_string())
         .collect()
+}
+
+#[test]
+fn dashboard_project_and_model_groups_preserve_session_identity_and_pointer_rows() {
+    let mut local = session("local", SessionManagerStatus::Working, None);
+    local.execution_target = Some(ash_protocol::SessionExecutionTarget::Local { root: "/workspace/shared".into() });
+    local.model = Some(ash_protocol::ModelRef::new(ash_protocol::ProviderId::new("one").unwrap(), ash_protocol::ModelId::new("model").unwrap()));
+    let mut remote = session("remote", SessionManagerStatus::Idle, None);
+    remote.execution_target = Some(ash_protocol::SessionExecutionTarget::Ssh { host: "server".into(), root: "/workspace/shared".into() });
+    remote.model = Some(ash_protocol::ModelRef::new(ash_protocol::ProviderId::new("two").unwrap(), ash_protocol::ModelId::new("model").unwrap()));
+    let mut pinned = session("pinned", SessionManagerStatus::Completed, None);
+    pinned.model = local.model.clone();
+    let mut archived = session("archived", SessionManagerStatus::Idle, None);
+    archived.status = SessionStatus::Archived;
+    let sessions = vec![local, remote, pinned, archived];
+    let mut state = SessionManagerState::default();
+    state.pinned.insert(SessionId::new("pinned").unwrap());
+    state.reconcile(&sessions);
+    state.focus_pointer(&sessions, &SessionManagerPointerTarget::Session(SessionId::new("remote").unwrap()));
+    for grouping in [SessionGrouping::Project, SessionGrouping::Model] {
+        state.set_grouping(grouping, &sessions);
+        assert_eq!(state.selected_session(), Some(&SessionId::new("remote").unwrap()));
+        let rows = manager_rows(&sessions, &state.pinned, &state.collapsed, grouping);
+        let labels = rows.iter().filter_map(|row| match row { ManagerRow::Heading { group, .. } => Some(group.label().into_owned()), _ => None }).collect::<Vec<_>>();
+        assert_eq!(labels, match grouping {
+            SessionGrouping::Project => vec!["Pinned", "/workspace/shared", "server:/workspace/shared", "Archived"],
+            SessionGrouping::Model => vec!["Pinned", "one/model", "two/model", "Archived"],
+            SessionGrouping::Status => unreachable!(),
+        });
+        let area = Rect::new(0, 0, 70, 12);
+        assert_eq!(pointer_target_at(area, state.view(&sessions), ratatui::layout::Position::new(5, 0)), None);
+        for (index, row) in rows.iter().enumerate() {
+            assert_eq!(pointer_target_at(area, state.view(&sessions), ratatui::layout::Position::new(5, index as u16 + 1)), Some(row.target()));
+        }
+    }
 }

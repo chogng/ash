@@ -26,6 +26,7 @@ fn subscription_publishes_the_authoritative_thread_snapshot() {
     let thread_id = ThreadId::new("thread-1").unwrap();
     let subscription = SessionSubscribeResult {
         session: Session {
+            model: None,
             session_id: session_id.clone(),
             title: "Project".to_owned(),
             status: SessionStatus::Active,
@@ -105,6 +106,7 @@ fn root_thread_wins_over_a_later_conversation_thread() {
     let root_id = ThreadId::new("thread-root").unwrap();
     let rewound_id = ThreadId::new("thread-rewound").unwrap();
     let session = Session {
+        model: None,
         session_id: SessionId::new("session-1").unwrap(),
         title: "Project".to_owned(),
         status: SessionStatus::Active,

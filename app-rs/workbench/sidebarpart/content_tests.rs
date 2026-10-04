@@ -44,6 +44,7 @@ use zui::ui::UiIntent;
 
 fn session(id: &str, title: &str) -> Session {
     Session {
+        model: None,
         session_id: SessionId::new(id).unwrap(),
         title: title.to_owned(),
         status: SessionStatus::Active,

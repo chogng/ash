@@ -129,6 +129,11 @@ impl Fullscreen {
     pub(super) fn header_focused(&self) -> bool {
         self.focus == Focus::Header
     }
+
+    pub(super) fn modal_alert_active(&self) -> bool {
+        self.modal_alert
+            || self.pointer.pressed() == Some(&PointerTarget::Modal(modal::Target::Blocked))
+    }
 }
 
 pub(super) fn reconcile_status_line_focus(app: &mut App) {

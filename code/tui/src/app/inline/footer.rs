@@ -56,13 +56,7 @@ pub(super) fn draw(
         }
     }
     if context_hints {
-        crate::app::footer::draw(
-            frame,
-            areas.session.hintline,
-            app,
-            &crate::app::footer::input_hints(app),
-            context,
-        );
+        crate::app::footer::draw(frame, areas.session.hintline, app, context);
     }
 }
 

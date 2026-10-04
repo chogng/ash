@@ -4,6 +4,7 @@ use crate::app::App;
 use crate::keymap::bindings;
 use crate::render::RenderContext;
 use crate::render::horizontal_margin;
+use crate::terminal::ScreenMode;
 use crate::widgets::key_hint;
 use crate::widgets::key_hint::KeyHints;
 use ratatui::Frame;
@@ -32,13 +33,7 @@ pub(super) fn context_hintline_active(app: &App) -> bool {
     !matches!(bottom_content(app), BottomContent::InputHints)
 }
 
-pub(super) fn draw(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    app: &App,
-    input_hints: &KeyHints,
-    context: RenderContext<'_>,
-) {
+pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: RenderContext<'_>) {
     let content = horizontal_margin(
         Rect {
             y: area.bottom().saturating_sub(1),
@@ -47,25 +42,9 @@ pub(super) fn draw(
         },
         2,
     );
-    let line = match bottom_content(app) {
-        BottomContent::Keys(hints) => {
-            key_hint::line(hints, content.width.into(), app.key_hint_style(), context)
-        }
-        BottomContent::InputHints => key_hint::line(
-            input_hints,
-            content.width.into(),
-            app.key_hint_style(),
-            context,
-        ),
-        BottomContent::Warning(text) => Line::styled(text, Style::default().fg(context.warning())),
-        BottomContent::Muted(text) => Line::styled(
-            context.localize(text).into_owned(),
-            Style::default().fg(context.muted()),
-        ),
-    };
     frame.render_widget(
-        Paragraph::new(line).alignment(
-            if app.screen_mode() == crate::terminal::ScreenMode::Inline && chat_visible(app) {
+        Paragraph::new(line(app, content.width.into(), context)).alignment(
+            if app.screen_mode() == ScreenMode::Inline && chat_visible(app) {
                 Alignment::Right
             } else {
                 Alignment::Left
@@ -73,6 +52,20 @@ pub(super) fn draw(
         ),
         content,
     );
+}
+
+pub(super) fn line(app: &App, width: usize, context: RenderContext<'_>) -> Line<'static> {
+    match bottom_content(app) {
+        BottomContent::Keys(hints) => key_hint::line(hints, width, app.key_hint_style(), context),
+        BottomContent::InputHints => {
+            key_hint::line(&input_hints(app), width, app.key_hint_style(), context)
+        }
+        BottomContent::Warning(text) => Line::styled(text, Style::default().fg(context.warning())),
+        BottomContent::Muted(text) => Line::styled(
+            context.localize(text).into_owned(),
+            Style::default().fg(context.muted()),
+        ),
+    }
 }
 
 pub(super) fn draw_tip(
@@ -105,7 +98,33 @@ pub(super) fn draw_tip(
     }
 }
 
-pub(super) fn input_hints(app: &App) -> KeyHints {
+fn input_hints(app: &App) -> KeyHints {
+    if app.screen_mode() == ScreenMode::Fullscreen && app.fullscreen.header_focused() {
+        let mut hints = KeyHints::new()
+            .with_compact_action("←→", "select")
+            .with_compact_action("Enter", "open")
+            .with_compact_action("Esc", "input");
+        if let Some(target) = app.fullscreen.header.selected() {
+            hints = hints.with_note(target.label());
+        }
+        return hints;
+    }
+    if app.fullscreen_home_visible() {
+        if app.fullscreen_welcome_visible() && !app.fullscreen.input_focused() {
+            return KeyHints::new()
+                .with_compact_action("Enter", "select")
+                .with_compact_action("↑↓", "actions")
+                .with_compact_action("Esc", "input");
+        }
+        let hints = KeyHints::new().with_compact_action("Enter", "send");
+        return if app.fullscreen_welcome_visible() {
+            hints
+                .with_compact_action("Tab", "actions")
+                .with_compact_action("/", "commands")
+        } else {
+            hints.with_compact_action("/", "commands")
+        };
+    }
     let mut hints = KeyHints::new().with_compact_action(
         "Enter",
         if app.active_turn().is_some() {
@@ -149,10 +168,20 @@ pub(super) fn input_hints(app: &App) -> KeyHints {
 
 fn bottom_content(app: &App) -> BottomContent<'_> {
     if app.overlay().is_some() {
-        return BottomContent::Keys(&bindings::CLOSE_HINTS);
+        return BottomContent::Keys(if app.screen_mode() == ScreenMode::Fullscreen {
+            &bindings::FULLSCREEN_DETAIL_HINTS
+        } else {
+            &bindings::CLOSE_HINTS
+        });
     }
     if let Some(hints) = app.command_panel_key_hints() {
-        return BottomContent::Keys(hints);
+        return BottomContent::Keys(
+            if app.screen_mode() == ScreenMode::Fullscreen && app.fullscreen.modal_alert_active() {
+                &bindings::MODAL_EDITING_HINTS
+            } else {
+                hints
+            },
+        );
     }
     if let Some(manager) = app.issue_manager() {
         return BottomContent::Keys(manager.key_hints());

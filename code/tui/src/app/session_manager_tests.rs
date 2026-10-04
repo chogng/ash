@@ -34,7 +34,7 @@ fn agents_manager_simulates_navigation_and_transient_details() {
     assert!(app.session_manager_focused());
     assert_eq!(
         app.session_manager_hint().text(),
-        "Enter to open · Space to preview · Ctrl+X to archive · i to details · Esc to return"
+        "Enter to open · Space to preview · Ctrl+X to archive · i to details · g to group · Esc to return"
     );
 
     assert_eq!(app.handle_key(key(KeyCode::Char('i'))), None);
@@ -616,6 +616,7 @@ fn active_session_app() -> App {
 
 fn session() -> Session {
     Session {
+        model: None,
         session_id: SessionId::new("current").unwrap(),
         title: "Snapshot session".into(),
         status: SessionStatus::Active,
@@ -742,4 +743,58 @@ fn empty_input_opens_agents_on_the_left_and_issues_on_the_right() {
     app.handle_key(key(KeyCode::Char('x')));
     app.handle_key(key(KeyCode::Right));
     assert!(app.issue_manager().is_none());
+}
+
+#[test]
+fn dashboard_grouping_cycles_in_both_modes_preserves_selection_and_localizes_chinese() {
+    use crate::sessions::SessionGrouping;
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = active_session_app();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        settings.set_language(crate::nls::Language::Chinese);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        let mut session = session();
+        session.execution_target = Some(ash_protocol::SessionExecutionTarget::Local {
+            root: "/workspace/project".into(),
+        });
+        session.model = Some(ash_protocol::ModelRef::new(
+            ash_protocol::ProviderId::new("openai").unwrap(),
+            ash_protocol::ModelId::new("test-model").unwrap(),
+        ));
+        app.update(SessionEvent::CatalogReceived(vec![session]));
+        app.show_session_manager();
+        app.session_navigation_mut().manager_mut().focus();
+        for grouping in [
+            SessionGrouping::Model,
+            SessionGrouping::Project,
+            SessionGrouping::Status,
+        ] {
+            assert_eq!(
+                app.handle_key(key(KeyCode::Char('g'))),
+                Some(AppCommand::SaveSessionGrouping(grouping))
+            );
+            assert_eq!(app.fullscreen.sessions.manager().grouping(), grouping);
+            assert_eq!(app.inline.sessions.manager().grouping(), grouping);
+            assert_eq!(
+                app.session_navigation().manager().selected_session(),
+                Some(&SessionId::new("current").unwrap())
+            );
+            let output = render(&app);
+            assert!(output.contains("分组"));
+            let name = format!("dashboard_grouping_{grouping:?}_chinese");
+            crate::tui_assert_snapshot!(app = &app; name, output);
+        }
+        app.update(SessionEvent::GroupingSaveFailed("read-only profile".into()));
+        assert_eq!(
+            app.session_navigation().manager().grouping(),
+            SessionGrouping::Status
+        );
+        let output = render(&app);
+        assert!(output.contains("无法保存仪表盘分组方式"));
+        crate::tui_assert_snapshot!(app = &app; "dashboard_grouping_save_failure_chinese", output);
+    }
 }

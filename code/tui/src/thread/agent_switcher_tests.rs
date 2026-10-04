@@ -231,6 +231,7 @@ fn pointer_hover_uses_the_complete_thread_row_without_moving_keyboard_focus() {
 
 fn session() -> Session {
     Session {
+        model: None,
         session_id: session_id("root"),
         title: "Session".into(),
         status: SessionStatus::Active,

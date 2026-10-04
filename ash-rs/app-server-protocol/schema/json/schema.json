@@ -36124,6 +36124,17 @@
             "statusChangedAtUnixMs": 0
           }
         },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Current model selected on the Session root Thread; child and fork models are excluded."
+        },
         "sessionId": {
           "$ref": "#/$defs/SessionId"
         },

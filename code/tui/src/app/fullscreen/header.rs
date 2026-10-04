@@ -22,7 +22,7 @@ pub(in crate::app) enum Target {
 }
 
 impl Target {
-    pub(super) const fn label(self) -> &'static str {
+    pub(in crate::app) const fn label(self) -> &'static str {
         match self {
             Self::Branch => "Project branches",
             Self::Workspace => "Switch project folder",
@@ -38,7 +38,7 @@ pub(in crate::app) struct State {
 }
 
 impl State {
-    pub(super) fn selected(&self) -> Option<Target> {
+    pub(in crate::app) fn selected(&self) -> Option<Target> {
         self.selected
     }
 

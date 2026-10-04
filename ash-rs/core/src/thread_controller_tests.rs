@@ -2734,3 +2734,54 @@ fn model_identity_migration_replays_once_and_preserves_completed_turns() {
         after.sequence
     );
 }
+
+#[test]
+fn session_catalog_uses_root_model_even_when_a_child_uses_a_different_model() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let session_id = SessionId::new("model-session").unwrap();
+    let root = ThreadId::new(session_id.as_str()).unwrap();
+    let child = ThreadId::new("child-model").unwrap();
+    for thread_id in [&root, &child] {
+        threads
+            .create_thread(CreateThreadRequest {
+                execution_target: None,
+                agent_id: ash_protocol::AgentId::new(format!("agent-{thread_id}")).unwrap(),
+                origin: Default::default(),
+                agent: None,
+                session_id: session_id.clone(),
+                thread_id: thread_id.clone(),
+                title: thread_id.to_string(),
+            })
+            .unwrap();
+    }
+    let model = ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("root-model").unwrap(),
+    );
+    for (thread_id, name) in [(&root, "root-model"), (&child, "child-model")] {
+        let mut request = start_request(&format!("turn-{name}"));
+        request.model = Some(ash_protocol::ModelRef::new(
+            ash_protocol::ProviderId::new("openai").unwrap(),
+            ash_protocol::ModelId::new(name).unwrap(),
+        ));
+        let turn = threads.start_turn(thread_id, request).unwrap();
+        threads
+            .complete_turn(thread_id, &turn.turn_id, "done".into())
+            .unwrap();
+    }
+    assert_eq!(
+        threads.list_sessions().unwrap()[0].model,
+        Some(model.clone())
+    );
+    drop(threads);
+    let reopened = ThreadController::with_store(store);
+    assert_eq!(
+        reopened
+            .read_session_catalog(&session_id)
+            .unwrap()
+            .unwrap()
+            .model,
+        Some(model)
+    );
+}

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 /// A typed side-effect intent emitted by the single-writer application state.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum AppCommand {
+    SaveSessionGrouping(crate::sessions::SessionGrouping),
     SetDictationShortcutSettings(crate::config::DictationShortcutSettings),
     DictationStart { resource_id: String },
     DictationStop { resource_id: String },

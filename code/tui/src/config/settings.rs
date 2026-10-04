@@ -8,6 +8,7 @@ use serde::Serialize;
 /// Persistence remains opaque, so editing one field still preserves unrelated stored values.
 pub(crate) struct TuiSettings {
     pub(crate) terminal: TerminalSettings,
+    pub(crate) session_grouping: crate::sessions::SessionGrouping,
     pub(crate) status_line: crate::status::StatusLineSettings,
     pub(crate) keymap: crate::keymap_setup::KeymapSettings,
     pub(crate) dictation: super::DictationShortcutSettings,
@@ -21,6 +22,7 @@ impl TuiSettings {
                 && !matches!(
                     key.as_str(),
                     "theme"
+                        | "sessionGrouping"
                         | "pinnedModels"
                         | "keybindings"
                         | "statusLine"
@@ -44,7 +46,10 @@ impl TuiSettings {
         crate::models::pinned_models(section)?;
         crate::theme::preference_from_tui(section)
             .map_err(|message| crate::nls::localize(terminal.language(), &message).into_owned())?;
+        let session_grouping = crate::sessions::SessionGrouping::from_tui(section)
+            .map_err(|message| crate::nls::localize(terminal.language(), &message).into_owned())?;
         Ok(Self {
+            session_grouping,
             terminal,
             status_line,
             keymap,

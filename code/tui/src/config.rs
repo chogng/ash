@@ -1,5 +1,6 @@
 mod dictation;
 mod editor;
+mod local;
 pub(crate) mod network;
 pub(crate) mod provider;
 pub(crate) mod request;
@@ -13,7 +14,6 @@ pub(crate) use subscription::SubscriptionEvent;
 pub(crate) use subscription::SubscriptionProvider;
 
 pub(crate) use dictation::DictationShortcutSettings;
-pub(crate) use dictation::LocalDictationSettings;
 pub(crate) use editor::AdvisorChoices;
 pub(crate) use editor::ConfigChoices;
 pub(crate) use editor::ConfigEdit;
@@ -25,6 +25,7 @@ pub(crate) use editor::ProviderApiKeyEdit;
 pub(crate) use editor::advisor_choices;
 pub(crate) use editor::config_choices;
 pub(crate) use editor::with_dictation_shortcut;
+pub(crate) use local::LocalTuiSettings;
 pub(crate) use request::execute;
 #[cfg(test)]
 #[cfg(all(test, feature = "in-process-tests"))]

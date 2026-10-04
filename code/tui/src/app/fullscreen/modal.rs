@@ -258,16 +258,10 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
             hovered,
             pressed,
             close,
-            blocked_alert(app),
+            app.fullscreen.modal_alert_active(),
             context,
         );
     }
-}
-
-pub(super) fn blocked_alert(app: &App) -> bool {
-    app.fullscreen.modal_alert
-        || app.fullscreen.pointer.pressed()
-            == Some(&super::pointer::PointerTarget::Modal(Target::Blocked))
 }
 
 pub(super) fn draw_panel(

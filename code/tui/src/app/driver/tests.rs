@@ -79,8 +79,8 @@ fn repeated_model_command_opens_the_fixed_catalog_without_loading() {
         client.read_config().unwrap(),
     );
     let runtime = state::StateRuntime::open(root.path()).unwrap();
-    let dictation_settings = Arc::new(
-        crate::config::LocalDictationSettings::open(root.path(), runtime.database_path()).unwrap(),
+    let local_settings = Arc::new(
+        crate::config::LocalTuiSettings::open(root.path(), runtime.database_path()).unwrap(),
     );
     let mut driver = AppDriver::new(
         App::new(),
@@ -95,10 +95,11 @@ fn repeated_model_command_opens_the_fixed_catalog_without_loading() {
             ),
             server_slash_commands: Vec::new(),
             plugins_enabled: false,
-            dictation_settings,
+            local_settings,
             model_picker,
         },
-    );
+    )
+    .unwrap();
     driver.queued_commands.clear();
 
     for _ in 0..2 {
@@ -164,8 +165,8 @@ fn effort_command_opens_the_supported_selector_without_loading() {
         client.read_config().unwrap(),
     );
     let runtime = state::StateRuntime::open(root.path()).unwrap();
-    let dictation_settings = Arc::new(
-        crate::config::LocalDictationSettings::open(root.path(), runtime.database_path()).unwrap(),
+    let local_settings = Arc::new(
+        crate::config::LocalTuiSettings::open(root.path(), runtime.database_path()).unwrap(),
     );
     let mut driver = AppDriver::new(
         App::new(),
@@ -180,10 +181,11 @@ fn effort_command_opens_the_supported_selector_without_loading() {
             ),
             server_slash_commands: Vec::new(),
             plugins_enabled: false,
-            dictation_settings,
+            local_settings,
             model_picker,
         },
-    );
+    )
+    .unwrap();
     driver.queued_commands.clear();
 
     let mut config = driver.client.read_config().unwrap();
@@ -491,4 +493,109 @@ fn switch_mode_updates_the_composer_without_overwriting_the_next_message_choice(
             }
         );
     }
+}
+
+#[test]
+#[cfg(feature = "in-process-tests")]
+fn dashboard_grouping_saves_and_restores_at_driver_startup_independently_of_server_profile() {
+    let _guard = crate::test_support::in_process_test_guard();
+    let server_root = tempfile::tempdir().unwrap();
+    let local_root = tempfile::tempdir().unwrap();
+    let local_path = local_root.path().join("config.toml");
+    std::fs::write(
+        &local_path,
+        "[tui]\nsessionGrouping = \"model\"\nshowTips = false\n",
+    )
+    .unwrap();
+    let session = AppServerSession::start_embedded(InProcessClientOptions::new(
+        server_root.path(),
+        ClientInfo {
+            name: "ash-tui-grouping-test".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+    let mut client = session.client();
+    let catalog = client.list_models().unwrap();
+    let remote_config = client.read_config().unwrap();
+    let runtime = state::StateRuntime::open(local_root.path()).unwrap();
+    let local_settings = Arc::new(
+        crate::config::LocalTuiSettings::open(local_root.path(), runtime.database_path()).unwrap(),
+    );
+    let mut driver = AppDriver::new(
+        App::new(),
+        client.clone(),
+        None,
+        AppDriverResources {
+            file_search: None,
+            host_dir_root: local_root.path().into(),
+            theme_resource: crate::theme::ThemeResource::in_product_root(
+                local_root.path().into(),
+                None,
+            ),
+            server_slash_commands: Vec::new(),
+            plugins_enabled: false,
+            local_settings: Arc::clone(&local_settings),
+            model_picker: crate::models::ModelPickerData::new(
+                catalog.clone(),
+                remote_config.clone(),
+            ),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        driver.app().fullscreen.sessions.manager().grouping(),
+        crate::sessions::SessionGrouping::Model
+    );
+    driver.app_mut().show_session_manager();
+    driver
+        .app_mut()
+        .session_navigation_mut()
+        .manager_mut()
+        .focus();
+    let command = driver
+        .app_mut()
+        .handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('g'),
+            crossterm::event::KeyModifiers::NONE,
+        ))
+        .unwrap();
+    driver.execute(scheduled(command));
+    assert_eq!(
+        local_settings.read_grouping().unwrap(),
+        crate::sessions::SessionGrouping::Project
+    );
+    assert_eq!(client.read_config().unwrap().tui, remote_config.tui);
+    drop(driver);
+    let restarted = AppDriver::new(
+        App::new(),
+        client,
+        None,
+        AppDriverResources {
+            file_search: None,
+            host_dir_root: local_root.path().into(),
+            theme_resource: crate::theme::ThemeResource::in_product_root(
+                local_root.path().into(),
+                None,
+            ),
+            server_slash_commands: Vec::new(),
+            plugins_enabled: false,
+            local_settings: Arc::clone(&local_settings),
+            model_picker: crate::models::ModelPickerData::new(catalog, remote_config),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        restarted.app().fullscreen.sessions.manager().grouping(),
+        crate::sessions::SessionGrouping::Project
+    );
+    assert_eq!(
+        restarted.app().inline.sessions.manager().grouping(),
+        crate::sessions::SessionGrouping::Project
+    );
+    assert!(
+        std::fs::read_to_string(local_path)
+            .unwrap()
+            .contains("showTips = false")
+    );
 }

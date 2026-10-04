@@ -588,6 +588,7 @@ fn exec_policy_authority_serializes_exact_rule_and_revision() {
 #[test]
 fn canonical_session_contains_thread_identity_presentation_and_lineage_without_history() {
     let session = Session {
+        model: None,
         session_id: SessionId::new("session_1").expect("test ID is non-empty"),
         title: "task".into(),
         status: SessionStatus::Active,
