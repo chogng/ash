@@ -1,6 +1,6 @@
 import { WebContentsView, type BrowserWindow, type Event as ElectronEvent, type WebContents } from "electron/main";
 import { randomUUID } from "node:crypto";
-import type { EventEmitter } from "node:events";
+import { addAbortListener, type EventEmitter } from "node:events";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type BrowserViewEvent, type BrowserViewTargetId, type IBrowserViewCreateRequest, type IBrowserViewLayoutRequest, type IBrowserViewNavigateRequest, type IBrowserViewState, type IBrowserViewVisibilityRequest, normalizeBrowserViewUrl } from "../common/browserView.js";
 import { type BrowserViewNavigation, directBrowserViewNavigation, type IBrowserViewNavigationResolver } from "../common/browserViewNavigation.js";
@@ -61,12 +61,14 @@ export class BrowserViewMainService extends Disposable
 		}));
 	}
 
-	async createTarget(request: IBrowserViewCreateRequest): Promise<IBrowserViewState> {
+	async createTarget(request: IBrowserViewCreateRequest, signal: AbortSignal = this.cancellation.signal): Promise<IBrowserViewState> {
+		signal = AbortSignal.any([signal, this.cancellation.signal]);
+		signal.throwIfAborted();
 		const initialUrl = normalizeBrowserViewUrl(request.url);
-		const navigation = await this.navigationResolver.resolve(initialUrl, this.cancellation.signal);
-		if (this.disposing || this.cancellation.signal.aborted) {
+		const navigation = await this.navigationResolver.resolve(initialUrl, signal);
+		if (signal.aborted) {
 			navigation.release();
-			throw new Error("BrowserViewServiceDisposed");
+			signal.throwIfAborted();
 		}
 		const targetId = `browser_target_${randomUUID()}`;
 		let view: WebContentsView;
@@ -139,9 +141,9 @@ export class BrowserViewMainService extends Disposable
 		this.emitState(target);
 	}
 
-	async navigate(request: IBrowserViewNavigateRequest): Promise<void> {
+	async navigate(request: IBrowserViewNavigateRequest, signal?: AbortSignal): Promise<void> {
 		const target = this.target(request.targetId);
-		await this.queueNavigation(target, normalizeBrowserViewUrl(request.url));
+		await this.queueNavigation(target, normalizeBrowserViewUrl(request.url), signal);
 	}
 
 	goBack(targetId: string): void {
@@ -309,25 +311,32 @@ export class BrowserViewMainService extends Disposable
 		});
 	}
 
-	private queueNavigation(target: BrowserTarget, requestedUrl: string): Promise<void> {
-		const operation = target.navigationTurn.then(() => this.navigateTarget(target, requestedUrl));
+	private queueNavigation(target: BrowserTarget, requestedUrl: string, signal: AbortSignal = target.cancellation.signal): Promise<void> {
+		signal = AbortSignal.any([signal, target.cancellation.signal]);
+		const operation = target.navigationTurn.then(() => this.navigateTarget(target, requestedUrl, signal));
 		target.navigationTurn = operation.catch(() => {});
 		return operation;
 	}
 
-	private async navigateTarget(target: BrowserTarget, requestedUrl: string): Promise<void> {
+	private async navigateTarget(target: BrowserTarget, requestedUrl: string, signal: AbortSignal): Promise<void> {
+		signal.throwIfAborted();
 		if (!this.targets.has(target.id) || target.cancellation.signal.aborted) throw new Error("BrowserTargetUnavailable");
 		let navigation = this.reusableNavigationForRequestedUrl(target, requestedUrl);
 		const created = navigation === undefined;
-		if (!navigation) navigation = await this.navigationResolver.resolve(requestedUrl, target.cancellation.signal);
-		if (!this.targets.has(target.id) || target.cancellation.signal.aborted) {
+		if (!navigation) navigation = await this.navigationResolver.resolve(requestedUrl, signal);
+		if (signal.aborted) {
 			if (created) navigation.release();
-			throw new Error("BrowserTargetUnavailable");
+			signal.throwIfAborted();
 		}
 		if (created) target.navigations.add(navigation);
 		target.pendingNavigation = navigation;
 		try {
+			// Stop only this in-flight load; queued cancellation must not stop another navigation.
+			using cancellation = addAbortListener(signal, () => {
+				if (!target.view.webContents.isDestroyed()) target.view.webContents.stop();
+			});
 			await target.view.webContents.loadURL(navigation.loadUrlFor(requestedUrl));
+			signal.throwIfAborted();
 			if (!this.targets.has(target.id) || target.cancellation.signal.aborted) throw new Error("BrowserTargetUnavailable");
 			target.navigation = navigation;
 			const loadedUrl = target.view.webContents.getURL() || navigation.loadUrlFor(requestedUrl);

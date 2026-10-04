@@ -28,11 +28,11 @@ import {
 
 /** Main-process operations exposed through trusted browser-view IPC routes. */
 export interface IBrowserViewMainService {
-	createTarget(request: IBrowserViewCreateRequest): Promise<IBrowserViewState>;
+	createTarget(request: IBrowserViewCreateRequest, signal?: AbortSignal): Promise<IBrowserViewState>;
 	observe(targetId: string): IBrowserViewState;
 	layout(request: IBrowserViewLayoutRequest): void;
 	setVisibility(request: IBrowserViewVisibilityRequest): void;
-	navigate(request: IBrowserViewNavigateRequest): Promise<void>;
+	navigate(request: IBrowserViewNavigateRequest, signal?: AbortSignal): Promise<void>;
 	goBack(targetId: string): void;
 	goForward(targetId: string): void;
 	reload(targetId: string): void;

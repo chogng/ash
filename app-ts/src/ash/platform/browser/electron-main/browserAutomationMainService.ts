@@ -1,5 +1,6 @@
 import { type BrowserCloseParams, type BrowserCreateParams, type BrowserCreateResult, type BrowserObserveParams, type BrowserObserveResult, type BrowserPerformParams, type BrowserPerformResult } from "../../app-server/common/generated/index.js";
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { promiseWithResolvers, raceCancellationError } from '../../../base/common/async.js';
 import type { IBrowserViewMainService } from "./browserViewIpc.js";
 import { BrowserTargetRegistry, type BrowserDebuggerClient, type BrowserTargetHandle } from "./browserTargetRegistry.js";
 
@@ -9,6 +10,7 @@ const MAX_SCREENSHOT_BYTES = 16 * 1024 * 1024;
 interface BrowserAutomationRuntime {
 	readonly browserViews: IBrowserViewMainService;
 	readonly targets: BrowserTargetRegistry;
+	cancellation: AbortController;
 }
 
 interface BrowserHostRequestContext { readonly signal: AbortSignal; }
@@ -16,12 +18,12 @@ interface BrowserHostRequestContext { readonly signal: AbortSignal; }
 /** Electron Main implementation of App Server's semantic browser host contract. */
 export class BrowserAutomationMainService {
 	private runtime: BrowserAutomationRuntime | undefined;
-	private readonly debuggerTurns = new Map<string, Promise<void>>();
+	private readonly targetTurns = new Map<string, Promise<void>>();
 	private readonly hostedTargets = new Set<string>();
 
 	bind(browserViews: IBrowserViewMainService, targets: BrowserTargetRegistry): IDisposable {
 		if (this.runtime) throw new Error("BrowserAutomationRuntimeAlreadyBound");
-		const runtime = { browserViews, targets };
+		const runtime = { browserViews, targets, cancellation: new AbortController() };
 		this.runtime = runtime;
 		return toDisposable(() => {
 			if (this.runtime !== runtime) return;
@@ -32,15 +34,16 @@ export class BrowserAutomationMainService {
 
 	async create(params: BrowserCreateParams, context: BrowserHostRequestContext): Promise<BrowserCreateResult> {
 		const runtime = this.requireRuntime();
-		throwIfAborted(context.signal);
-		const state = await runtime.browserViews.createTarget({ url: params.url });
-		if (this.runtime !== runtime || context.signal.aborted) {
+		const signal = AbortSignal.any([context.signal, runtime.cancellation.signal]);
+		throwIfAborted(signal);
+		const state = await runtime.browserViews.createTarget({ url: params.url }, signal);
+		if (this.runtime !== runtime || signal.aborted) {
 			try {
 				runtime.browserViews.close(state.targetId);
 			} catch {
 				// Runtime retirement may already have closed the newly created target.
 			}
-			throwIfAborted(context.signal);
+			throwIfAborted(signal);
 			throw new Error("BrowserCapabilityUnavailable");
 		}
 		this.hostedTargets.add(state.targetId);
@@ -48,76 +51,82 @@ export class BrowserAutomationMainService {
 	}
 
 	async observe(params: BrowserObserveParams, context: BrowserHostRequestContext): Promise<BrowserObserveResult> {
-		const runtime = this.requireRuntime();
-		const target = runtime.targets.target(params.targetId);
-		const state = runtime.browserViews.observe(params.targetId);
-		const snapshots = params.includeAccessibilityTree || params.includeDomSnapshot
-			? await this.withDebugger(target, context.signal, async (debuggerClient) => {
-					const accessibilityTree = params.includeAccessibilityTree
-						? boundedJson(await debuggerClient.sendCommand("Accessibility.getFullAXTree"), "accessibility tree")
-						: undefined;
-					const domSnapshot = params.includeDomSnapshot
-						? boundedJson(await debuggerClient.sendCommand("DOMSnapshot.captureSnapshot", { computedStyles: [] }), "DOM snapshot")
-						: undefined;
-					return {
-						...(accessibilityTree === undefined ? {} : { accessibilityTree }),
-						...(domSnapshot === undefined ? {} : { domSnapshot }),
-					};
-				})
-			: {};
-		throwIfAborted(context.signal);
-		const screenshot = params.includeScreenshot ? await captureScreenshot(target, context.signal) : undefined;
-		return {
-			targetId: state.targetId,
-			url: state.url,
-			title: state.title,
-			loading: state.loading,
-			...snapshots,
-			...(screenshot === undefined ? {} : { screenshot }),
-		};
+		return this.withTarget(params.targetId, context.signal, async (runtime, target, signal) => {
+			await waitForLoad(target, signal);
+			const snapshots = params.includeAccessibilityTree || params.includeDomSnapshot
+				? await this.withDebugger(target, signal, async (debuggerClient) => {
+						const accessibilityTree = params.includeAccessibilityTree
+							? boundedJson(await debuggerClient.sendCommand("Accessibility.getFullAXTree"), "accessibility tree")
+							: undefined;
+						throwIfAborted(signal);
+						const domSnapshot = params.includeDomSnapshot
+							? boundedJson(await debuggerClient.sendCommand("DOMSnapshot.captureSnapshot", { computedStyles: [] }), "DOM snapshot")
+							: undefined;
+						return {
+							...(accessibilityTree === undefined ? {} : { accessibilityTree }),
+							...(domSnapshot === undefined ? {} : { domSnapshot }),
+						};
+					})
+				: {};
+			throwIfAborted(signal);
+			const screenshot = params.includeScreenshot ? await captureScreenshot(target, signal) : undefined;
+			throwIfAborted(signal);
+			const state = runtime.browserViews.observe(params.targetId);
+			return {
+				targetId: state.targetId,
+				url: state.url,
+				title: state.title,
+				loading: state.loading,
+				...snapshots,
+				...(screenshot === undefined ? {} : { screenshot }),
+			};
+		});
 	}
 
 	async perform(params: BrowserPerformParams, context: BrowserHostRequestContext): Promise<BrowserPerformResult> {
-		const runtime = this.requireRuntime();
 		const action = params.action;
 		const targetId = action.targetId;
-		runtime.targets.target(targetId);
-		throwIfAborted(context.signal);
-		switch (action.type) {
-			case "navigate":
-				await runtime.browserViews.navigate({ targetId, url: action.url });
-				break;
-			case "click":
-				await this.withDebugger(runtime.targets.target(targetId), context.signal, debuggerClient => clickNode(debuggerClient, action.target.nodeId, context.signal));
-				break;
-			case "typeText":
-				await this.withDebugger(runtime.targets.target(targetId), context.signal, async (debuggerClient) => {
-					if (action.target.type === "element") await focusNode(debuggerClient, action.target.target.nodeId, context.signal);
-					throwIfAborted(context.signal);
-					await debuggerClient.sendCommand("Input.insertText", { text: action.text });
-				});
-				break;
-			case "scroll":
-				await this.withDebugger(runtime.targets.target(targetId), context.signal, async (debuggerClient) => {
-					const bounds = runtime.targets.target(targetId).view.getBounds();
-					await debuggerClient.sendCommand("Input.dispatchMouseEvent", {
-						type: "mouseWheel",
-						x: Math.max(0, Math.floor(bounds.width / 2)),
-						y: Math.max(0, Math.floor(bounds.height / 2)),
-						deltaX: action.deltaX,
-						deltaY: action.deltaY,
+		return this.withTarget(targetId, context.signal, async (runtime, target, signal) => {
+			if (action.type === 'click' || action.type === 'typeText' || action.type === 'scroll') {
+				await waitForLoad(target, signal);
+			}
+			switch (action.type) {
+				case "navigate":
+					await runtime.browserViews.navigate({ targetId, url: action.url }, signal);
+					break;
+				case "click":
+					await this.withDebugger(target, signal, debuggerClient => clickNode(debuggerClient, action.target.nodeId, signal));
+					break;
+				case "typeText":
+					await this.withDebugger(target, signal, async (debuggerClient) => {
+						if (action.target.type === "element") await focusNode(debuggerClient, action.target.target.nodeId, signal);
+						throwIfAborted(signal);
+						await debuggerClient.sendCommand("Input.insertText", { text: action.text });
 					});
-				});
-				break;
-			case "goBack":
-				runtime.browserViews.goBack(targetId);
-				break;
-			case "reload":
-				runtime.browserViews.reload(targetId);
-				break;
-		}
-		throwIfAborted(context.signal);
-		return { targetId };
+					break;
+				case "scroll":
+					await this.withDebugger(target, signal, async (debuggerClient) => {
+						const bounds = target.view.getBounds();
+						await debuggerClient.sendCommand("Input.dispatchMouseEvent", {
+							type: "mouseWheel",
+							x: Math.max(0, Math.floor(bounds.width / 2)),
+							y: Math.max(0, Math.floor(bounds.height / 2)),
+							deltaX: action.deltaX,
+							deltaY: action.deltaY,
+						});
+					});
+					break;
+				case "goBack":
+					runtime.browserViews.goBack(targetId);
+					break;
+				case "reload":
+					runtime.browserViews.reload(targetId);
+					break;
+			}
+			await waitForLoad(target, signal);
+			throwIfAborted(signal);
+			return { targetId };
+		});
 	}
 
 	close(params: BrowserCloseParams): null {
@@ -132,6 +141,10 @@ export class BrowserAutomationMainService {
 	/** Closes targets owned by the retiring App Server host connection. */
 	reset(): void {
 		const runtime = this.runtime;
+		if (runtime) {
+			runtime.cancellation.abort(new Error('BrowserCapabilityUnavailable'));
+			runtime.cancellation = new AbortController();
+		}
 		const targetIds = [...this.hostedTargets];
 		this.hostedTargets.clear();
 		if (!runtime) return;
@@ -149,18 +162,29 @@ export class BrowserAutomationMainService {
 		return this.runtime;
 	}
 
-	private async withDebugger<R>(target: BrowserTargetHandle, signal: AbortSignal, operation: (debuggerClient: BrowserDebuggerClient) => Promise<R>): Promise<R> {
-		const previous = this.debuggerTurns.get(target.targetId) ?? Promise.resolve();
-		let releaseTurn: () => void = () => {};
-		const turn = new Promise<void>(resolve => {
-			releaseTurn = resolve;
+	private withTarget<R>(targetId: string, requestSignal: AbortSignal, execute: (runtime: BrowserAutomationRuntime, target: BrowserTargetHandle, signal: AbortSignal) => Promise<R>): Promise<R> {
+		const runtime = this.requireRuntime();
+		const target = runtime.targets.target(targetId);
+		const signal = AbortSignal.any([requestSignal, runtime.cancellation.signal, target.signal]);
+		const previous = this.targetTurns.get(targetId) ?? Promise.resolve();
+		const operation = previous.then(async () => {
+			throwIfAborted(signal);
+			return execute(runtime, target, signal);
 		});
-		const queued = previous.then(() => turn);
-		this.debuggerTurns.set(target.targetId, queued);
+		// A cancelled caller returns immediately, but its Chromium work must finish
+		// before the next operation can use this target or its debugger connection.
+		const turn = operation.then(() => {}, () => {});
+		this.targetTurns.set(targetId, turn);
+		void turn.then(() => {
+			if (this.targetTurns.get(targetId) === turn) this.targetTurns.delete(targetId);
+		});
+		return raceCancellationError(operation, signal, 'BrowserRequestCancelled');
+	}
+
+	private async withDebugger<R>(target: BrowserTargetHandle, signal: AbortSignal, operation: (debuggerClient: BrowserDebuggerClient) => Promise<R>): Promise<R> {
 		let debuggerClient: BrowserDebuggerClient | undefined;
 		let attachedHere = false;
 		try {
-			await previous;
 			throwIfAborted(signal);
 			if (target.webContents.isDestroyed()) throw new Error("BrowserTargetUnavailable");
 			debuggerClient = target.webContents.debugger;
@@ -173,11 +197,21 @@ export class BrowserAutomationMainService {
 			} catch {
 				// Target teardown owns a debugger session destroyed during the operation.
 			}
-			releaseTurn();
-			void queued.finally(() => {
-				if (this.debuggerTurns.get(target.targetId) === queued) this.debuggerTurns.delete(target.targetId);
-			});
 		}
+	}
+}
+
+async function waitForLoad(target: BrowserTargetHandle, signal: AbortSignal): Promise<void> {
+	throwIfAborted(signal);
+	const contents = target.webContents;
+	if (!contents.isLoading()) return;
+	const loading = promiseWithResolvers<void>();
+	const loaded = (): void => loading.resolve();
+	contents.on('did-stop-loading', loaded);
+	try {
+		await raceCancellationError(loading.promise, signal, 'BrowserRequestCancelled');
+	} finally {
+		contents.removeListener('did-stop-loading', loaded);
 	}
 }
 
@@ -212,7 +246,12 @@ async function focusNode(debuggerClient: BrowserDebuggerClient, nodeId: string, 
 	const objectId = await resolveNode(debuggerClient, nodeId);
 	try {
 		throwIfAborted(signal);
-		await debuggerClient.sendCommand("Runtime.callFunctionOn", { objectId, functionDeclaration: "function () { this.focus(); }" });
+		const focused = await debuggerClient.sendCommand("Runtime.callFunctionOn", {
+			objectId,
+			functionDeclaration: "function () { if (!this.isConnected || this.disabled || this.readOnly) return false; this.focus(); return this.getRootNode().activeElement === this; }",
+			returnByValue: true,
+		}) as { result?: { value?: unknown }; exceptionDetails?: unknown };
+		if (focused.exceptionDetails || focused.result?.value !== true) throw new Error('BrowserNodeNotEditable');
 	} finally {
 		await debuggerClient.sendCommand("Runtime.releaseObject", { objectId }).catch(() => {});
 	}

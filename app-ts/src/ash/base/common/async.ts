@@ -51,9 +51,18 @@ export function raceCancellation<T>(promise: Promise<T>, token: CancellationToke
 export function raceCancellationError<T>(promise: PromiseLike<T>, cancellation: AbortSignal | CancellationToken, message = 'Operation cancelled'): Promise<T> {
 	if (isCancellationRequested(cancellation)) return Promise.reject(new CancellationError(message, cancellationReason(cancellation)));
 	return new Promise<T>((resolve, reject) => {
-		const cancel = (): void => reject(new CancellationError(message, cancellationReason(cancellation)));
+		const cancel = (): void => {
+			disposable.dispose();
+			reject(new CancellationError(message, cancellationReason(cancellation)));
+		};
 		const disposable = subscribeCancellation(cancellation, cancel);
-		Promise.resolve(promise).then(resolve, reject).finally(() => disposable.dispose());
+		Promise.resolve(promise).then(value => {
+			disposable.dispose();
+			resolve(value);
+		}, error => {
+			disposable.dispose();
+			reject(error);
+		});
 	});
 }
 

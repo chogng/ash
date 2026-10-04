@@ -4,6 +4,63 @@ import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/ele
 import { decodeAppServerServerRequestResult } from '../../../../src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.js';
 import { expect, test } from '../../../automation/test.js';
 
+test('desktop browser agent observes loaded pages, edits fields and follows navigation', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron', 'The integrated browser is a desktop capability');
+	const server = createServer((request, response) => {
+		response.setHeader('Content-Type', 'text/html');
+		if (request.url === '/next') {
+			response.end('<title>Agent destination</title><h1>Navigation completed</h1>');
+			return;
+		}
+		response.end('<title>Agent fixture</title><input aria-label="Editable field"><input aria-label="Read-only field" readonly value="Original value"><a href="/next">Continue</a>');
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	const address = server.address();
+	if (!address || typeof address === 'string') { throw new Error('Missing fixture endpoint'); }
+	const url = `http://127.0.0.1:${address.port}/`;
+	const page = workbench.page;
+	const electron = application as ElectronApplication;
+	const hostCall = (method: string, params: unknown) => page.evaluate(({ method, params }) => {
+		return (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params });
+	}, { method, params });
+	try {
+		const created = decodeAppServerServerRequestResult('browser/create', await hostCall('create', { url }));
+		const observe = async (includeScreenshot = false) => decodeAppServerServerRequestResult('browser/observe', await hostCall('observe', { targetId: created.targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot }));
+		const initial = await observe(true);
+		expect({ url: initial.url, title: initial.title, loading: initial.loading }).toEqual({ url, title: 'Agent fixture', loading: false });
+		expect(Buffer.from(initial.screenshot!.dataBase64, 'base64').subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+		const tree = JSON.parse(initial.accessibilityTree!) as { nodes: { role?: { value: string }; name?: { value: string }; backendDOMNodeId?: number }[] };
+		const nodeId = (role: string, name: string): string => {
+			const node = tree.nodes.find(node => node.role?.value === role && node.name?.value === name);
+			if (!node?.backendDOMNodeId) { throw new Error(`Missing observed element: ${name}`); }
+			return String(node.backendDOMNodeId);
+		};
+		await hostCall('perform', { action: { type: 'typeText', targetId: created.targetId, target: { type: 'element', target: { nodeId: nodeId('textbox', 'Editable field') } }, text: 'Agent input' } });
+		await expect(hostCall('perform', { action: { type: 'typeText', targetId: created.targetId, target: { type: 'element', target: { nodeId: nodeId('textbox', 'Read-only field') } }, text: 'Wrong field' } })).rejects.toThrow(/BrowserNodeNotEditable/);
+		const edited = await observe();
+		expect(edited.accessibilityTree).toContain('Agent input');
+		expect(edited.accessibilityTree).toContain('Original value');
+		expect(edited.accessibilityTree).not.toContain('Wrong field');
+		await hostCall('perform', { action: { type: 'click', targetId: created.targetId, target: { nodeId: nodeId('link', 'Continue') } } });
+		const destination = await observe();
+		expect({ url: destination.url, title: destination.title, loading: destination.loading }).toEqual({ url: `${url}next`, title: 'Agent destination', loading: false });
+		await hostCall('perform', { action: { type: 'goBack', targetId: created.targetId } });
+		expect((await observe()).title).toBe('Agent fixture');
+		await hostCall('perform', { action: { type: 'reload', targetId: created.targetId } });
+		expect((await observe()).title).toBe('Agent fixture');
+		const navigation = hostCall('perform', { action: { type: 'navigate', targetId: created.targetId, url: `${url}next` } });
+		const queuedObservation = observe();
+		await navigation;
+		expect((await queuedObservation).title).toBe('Agent destination');
+		await hostCall('close', { targetId: created.targetId });
+		await expect(page.getByRole('tab', { name: 'Agent destination', exact: true })).toHaveCount(0);
+		await expect.poll(() => electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(view => 'webContents' in view).length)).toBe(0);
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
+});
+
 test('desktop browser opens visible pages, navigates history, resizes and releases closed tabs', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron', 'The integrated browser is a desktop capability');
 	let finishSlowLoad: (() => void) | undefined;
@@ -124,8 +181,8 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		}, { id: requestId, url: `${url}slow`, targetId: slow.targetId });
 		await expect.poll(() => finishSlowLoad !== undefined).toBe(true);
 		await page.evaluate(id => (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke('ash:browser-host:cancel', { id }), requestId);
-		finishSlowLoad!();
 		expect(await pending).toBe('cancelled');
+		finishSlowLoad!();
 		await hostCall('close', { targetId: slow.targetId });
 		await expect(page.getByRole('tab', { name: 'Browser', exact: true })).toHaveCount(0);
 		await expect.poll(async () => (await views()).filter(view => view.url.startsWith(url)).length).toBe(0);

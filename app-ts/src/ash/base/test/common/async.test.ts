@@ -1,7 +1,43 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
-import { createCancelablePromise, DeferredPromise, Delayer, disposableTimeout, first, promiseWithResolvers, RunOnceScheduler, TaskQueue, TimeoutTimer, timeout } from '../../common/async.js';
+import { suite, test } from 'mocha';
+import { getEventListeners } from 'node:events';
+import { createCancelablePromise, DeferredPromise, Delayer, disposableTimeout, first, promiseWithResolvers, raceCancellationError, RunOnceScheduler, TaskQueue, TimeoutTimer, timeout } from '../../common/async.js';
 import { isCancellationError } from '../../common/errors.js';
+import { CancellationTokenSource } from '../../common/cancellation.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from './utils.js';
+
+suite('Cancellation races', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('aborting releases the listener while the underlying work is still pending', async () => {
+		const work = promiseWithResolvers<void>();
+		const cancellation = new AbortController();
+		const reason = new Error('caller stopped');
+		const pending = raceCancellationError(work.promise, cancellation.signal);
+		assert.equal(getEventListeners(cancellation.signal, 'abort').length, 1);
+		cancellation.abort(reason);
+		await assert.rejects(pending, error => isCancellationError(error) && error.reason === reason);
+		assert.equal(getEventListeners(cancellation.signal, 'abort').length, 0);
+		work.reject(new Error('late failure'));
+	});
+
+	test('token cancellation releases its subscription before the work ends', async () => {
+		using source = new CancellationTokenSource();
+		const work = promiseWithResolvers<void>();
+		const pending = raceCancellationError(work.promise, source.token);
+		source.cancel();
+		await assert.rejects(pending, isCancellationError);
+		work.resolve();
+	});
+
+	test('success and failure both release cancellation listeners', async () => {
+		const cancellation = new AbortController();
+		assert.equal(await raceCancellationError(Promise.resolve(42), cancellation.signal), 42);
+		const failure = new Error('work failed');
+		await assert.rejects(raceCancellationError(Promise.reject(failure), cancellation.signal), error => error === failure);
+		assert.equal(getEventListeners(cancellation.signal, 'abort').length, 0);
+	});
+});
 
 test('timeout settles asynchronously', async () => {
 	let settled = false;

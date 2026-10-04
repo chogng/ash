@@ -1,5 +1,6 @@
 import { decodeAppServerServerRequestParams } from '../../app-server/common/generated/AppServerProtocolDecoder.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { raceCancellationError } from '../../../base/common/async.js';
 import { isRecord } from '../../../base/common/types.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { BrowserAutomationMainService } from './browserAutomationMainService.js';
@@ -24,7 +25,7 @@ export class BrowserAutomationHost extends Disposable {
 			const controller = new AbortController();
 			this.operations.set(request.id, controller);
 			const timer = setTimeout(() => controller.abort(), 30_000);
-			try { return await execute(request.params, { signal: controller.signal }); }
+			try { return await raceCancellationError(Promise.resolve(execute(request.params, { signal: controller.signal })), controller.signal, 'BrowserRequestCancelled'); }
 			finally { clearTimeout(timer); this.operations.delete(request.id); }
 		};
 		return [
