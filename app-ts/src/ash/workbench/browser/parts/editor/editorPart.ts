@@ -45,6 +45,7 @@ import type { Range } from "../../../../editor/common/core/range.js";
 import { EditorDropTarget } from "./editorDropTarget.js";
 import { EditorsObserver } from "./editorsObserver.js";
 import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
+import type { IEditorGroup, IEditorGroupsContainer } from '../../../services/editor/common/editorGroupsService.js';
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
@@ -153,9 +154,15 @@ export interface IEditorPartOptions {
 }
 
 /** Owns EditorGroupView layout and delegates editor behavior to the active group. */
-export class EditorPart extends WorkbenchPart implements IEditorPart {
+export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGroupsContainer {
 	private readonly editorChangeEmitter = this._register(new Emitter<EditorPartChangeEvent>());
 	readonly onDidChangeEditors: Event<EditorPartChangeEvent> = this.editorChangeEmitter.event;
+	public readonly onDidChangeActiveGroup: Event<IEditorGroup> = (listener, thisArgs, disposables) =>
+		this.onDidChangeEditors(event => {
+			if (event.kind === 'activeGroupChanged') {
+				listener.call(thisArgs, this.activeGroup);
+			}
+		}, undefined, disposables);
 	readonly onDidChangeModalVisibility: Event<boolean>;
 	private readonly gridSlot = this._register(new MutableDisposable<SerializableGrid<EditorGroupGridView>>());
 	private readonly groupHosts = this._register(new DisposableMap<EditorGroupId, EditorGroupHost>());

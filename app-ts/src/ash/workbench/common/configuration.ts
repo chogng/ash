@@ -21,6 +21,42 @@ const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationE
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
 	...AccessibilityConfiguration,
+	windowTitle: configurationRegistry.registerConfiguration<string>({
+		key: 'window.title',
+		defaultValue: '${dirty}${activeEditorShort}${separator}${rootName}${separator}${appName}',
+		scope: ConfigurationScope.WINDOW,
+		schema: { type: 'string' },
+		parse(value: unknown): string {
+			if (typeof value === 'string') {
+				return value;
+			}
+			throw new TypeError(localize('window.title.invalid', 'Window title must be text.'));
+		},
+		setting: {
+			valueType: 'text',
+			get title() { return localize('window.title.title', 'Window Title'); },
+			get description() { return localize('window.title.description', 'Build the title with ${activeEditorShort}, ${activeEditorMedium}, ${activeEditorLong}, ${activeFolderShort}, ${activeFolderMedium}, ${activeFolderLong}, ${folderName}, ${folderPath}, ${rootName}, ${rootPath}, ${appName}, ${dirty}, and ${separator}. Registered context variables are also supported.'); },
+			get placeholder() { return localize('window.title.placeholder', 'Title template'); },
+		},
+	}),
+	windowTitleSeparator: configurationRegistry.registerConfiguration<string>({
+		key: 'window.titleSeparator',
+		defaultValue: ' — ',
+		scope: ConfigurationScope.WINDOW,
+		schema: { type: 'string' },
+		parse(value: unknown): string {
+			if (typeof value === 'string') {
+				return value;
+			}
+			throw new TypeError(localize('window.titleSeparator.invalid', 'Window title separator must be text.'));
+		},
+		setting: {
+			valueType: 'text',
+			get title() { return localize('window.titleSeparator.title', 'Window Title Separator'); },
+			get description() { return localize('window.titleSeparator.description', 'Text inserted by ${separator} between non-empty title values.'); },
+			get placeholder() { return localize('window.titleSeparator.placeholder', 'Title separator'); },
+		},
+	}),
 	...(!isWeb ? {
 		menuStyle: configurationRegistry.registerConfiguration<MenuStyleConfiguration>({
 			key: MenuSettings.MenuStyle,

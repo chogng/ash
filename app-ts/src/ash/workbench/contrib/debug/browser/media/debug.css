@@ -170,6 +170,18 @@
   white-space: nowrap;
 }
 
+.ash-debug-variable-edit {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
+}
+
+.ash-debug-variable-edit > .ash-input-box {
+  flex: 1;
+  min-width: 0;
+}
+
 .ash-debug-empty {
   padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
   color: var(--ash-description-foreground);

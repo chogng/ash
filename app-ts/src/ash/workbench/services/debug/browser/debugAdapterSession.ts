@@ -3,6 +3,7 @@ import { getErrorMessage } from "../../../../base/common/errors.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
+import { localize } from "../../../../nls.js";
 import { type IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import { type DebugEvaluateContext, type DebugSessionState, type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugExceptionBreakpointFilter, type IDebugScope, type IDebugSession, type IDebugSessionCapabilities, type IDebugSource, type IDebugSourceContent, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../common/debugService.js";
@@ -42,7 +43,7 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 	private readonly initializedPromise = new Promise<void>((resolve, reject) => { this.initializedResolver = resolve; this.initializedRejecter = reject; });
 	private readonly syncedBreakpointSources = new Set<string>();
 	private supportsConfigurationDone = false;
-	private _capabilities: IDebugSessionCapabilities = Object.freeze({ supportsRestart: false, supportsTerminate: false, exceptionBreakpointFilters: Object.freeze([]) });
+	private _capabilities: IDebugSessionCapabilities = Object.freeze({ supportsRestart: false, supportsTerminate: false, supportsSetVariable: false, exceptionBreakpointFilters: Object.freeze([]) });
 
 	readonly onDidChangeState: Event<DebugSessionState> = this.stateEmitter.event;
 	readonly onDidOutput: Event<string> = this.outputEmitter.event;
@@ -120,6 +121,21 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 		return array(body.variables, "variables").map((value, index) => variable(value, index));
 	}
 
+	async setVariable(variablesReference: number, name: string, value: string): Promise<IDebugVariable> {
+		if (!this._capabilities.supportsSetVariable) {
+			throw new Error(localize("debug.setVariableUnsupported", "The debug adapter does not support changing variables."));
+		}
+		if (this._state !== "stopped") {
+			throw new Error(localize("debug.setVariableNotStopped", "Pause execution before changing a variable."));
+		}
+		if (value.length > 32_768 || value.includes("\0")) {
+			throw new TypeError(localize("debug.invalidVariableValue", "The variable value must contain at most 32768 characters and no null characters."));
+		}
+		const body = record((await this.request("setVariable", { variablesReference: positiveInteger(variablesReference, "variablesReference"), name, value })).body, "setVariable body");
+		// In a setVariable response an omitted child reference denotes a scalar.
+		return variable({ ...body, name, variablesReference: body.variablesReference === undefined ? 0 : body.variablesReference }, 0);
+	}
+
 	async evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult> {
 		const normalized = expression.trim();
 		if (!normalized || normalized.length > 32_768 || normalized.includes("\0")) throw new TypeError("Debug expression must contain 1 to 32768 characters");
@@ -172,7 +188,7 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 		const initialized = await this.request("initialize", { clientID: "ash", clientName: "Ash Code", adapterID: this.configuration.type, pathFormat: "path", linesStartAt1: true, columnsStartAt1: true, supportsVariableType: true, supportsVariablePaging: true, supportsRunInTerminalRequest: Boolean(this.runInTerminal), supportsArgsCanBeInterpretedByShell: Boolean(this.runInTerminal) });
 		const capabilities = initialized.body && typeof initialized.body === "object" ? initialized.body as Record<string, unknown> : {};
 		this.supportsConfigurationDone = capabilities.supportsConfigurationDoneRequest === true;
-		this._capabilities = Object.freeze({ supportsRestart: capabilities.supportsRestartRequest === true, supportsTerminate: capabilities.supportsTerminateRequest === true || capabilities.supportTerminateDebuggee === true, exceptionBreakpointFilters: exceptionBreakpointFilters(capabilities.exceptionBreakpointFilters) });
+		this._capabilities = Object.freeze({ supportsRestart: capabilities.supportsRestartRequest === true, supportsTerminate: capabilities.supportsTerminateRequest === true || capabilities.supportTerminateDebuggee === true, supportsSetVariable: capabilities.supportsSetVariable === true, exceptionBreakpointFilters: exceptionBreakpointFilters(capabilities.exceptionBreakpointFilters) });
 		const launch = this.request(this.configuration.request, expandWorkspaceVariables(this.configuration.arguments, workspaceFolder));
 		void launch.catch(error => { this.initializedRejecter?.(error instanceof Error ? error : new Error(getErrorMessage(error))); });
 		await withTimeout(this.initializedPromise, REQUEST_TIMEOUT_MS, "Debug Adapter did not emit the initialized event");
@@ -350,7 +366,17 @@ function scope(value: unknown, index: number): IDebugScope {
 
 function variable(value: unknown, index: number): IDebugVariable {
 	const input = record(value, `variables[${index}]`);
-	return { name: string(input.name, `variables[${index}].name`), value: string(input.value, `variables[${index}].value`), variablesReference: positiveInteger(input.variablesReference, `variables[${index}].variablesReference`, true), ...(typeof input.type === "string" ? { type: input.type } : {}) };
+	const hint = input.presentationHint === undefined ? undefined : record(input.presentationHint, `variables[${index}].presentationHint`);
+	return {
+		name: string(input.name, `variables[${index}].name`),
+		value: string(input.value, `variables[${index}].value`),
+		variablesReference: positiveInteger(input.variablesReference, `variables[${index}].variablesReference`, true),
+		...(typeof input.type === "string" ? { type: input.type } : {}),
+		...(hint ? { presentationHint: {
+			...(hint.attributes === undefined ? {} : { attributes: array(hint.attributes, "presentationHint.attributes").map(attribute => string(attribute, "presentationHint attribute")) }),
+			...(hint.lazy === undefined ? {} : { lazy: boolean(hint.lazy, "presentationHint.lazy") }),
+		} } : {}),
+	};
 }
 
 function exceptionBreakpointFilters(value: unknown): readonly IDebugExceptionBreakpointFilter[] {

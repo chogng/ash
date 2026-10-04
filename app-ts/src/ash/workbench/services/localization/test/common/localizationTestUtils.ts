@@ -1,3 +1,4 @@
+import { Event } from '../../../../../base/common/event.js';
 import { IMarketplaceService } from '../../../../../platform/marketplace/common/marketplaceService.js';
 import { MarketplaceLanguagePackService } from '../../../../../platform/languagePacks/browser/marketplaceLanguagePackService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -23,7 +24,7 @@ export function createTestLocaleService(configuration: IConfigurationService, la
 	services.registerInstance(ILanguagePackService, languagePacks);
 	services.registerInstance(ILanguagePackStore, store ?? { read: async locale => catalogs.get(locale), write: async catalog => { catalogs.set(catalog.locale, catalog); } });
 	services.registerInstance(IDialogService, { confirm: onConfirm } as unknown as IDialogService);
-	services.registerInstance(IHostService, { restart: onRestart, openWindow: async () => {} });
+	services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: onRestart, openWindow: async () => {} });
 	return services.createInstance(WorkbenchLocaleService);
 }
 

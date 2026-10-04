@@ -5,6 +5,8 @@ import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import type { DialogRequest, FileFilter, IDialogOutcome } from '../../dialogs/common/dialogs.js';
 import type { IWorkbenchWindowInfo, IOpenEmptyWindowOptions } from '../../window/common/window.js';
 
+export const NATIVE_HOST_IS_ADMIN_CHANNEL = 'ash:native-host:is-admin';
+
 export const NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL =
 	"ash:native-host:toggle-developer-tools";
 export const NATIVE_HOST_PICK_FOLDER_CHANNEL =
@@ -152,6 +154,7 @@ export interface IOpenAgentsWindowOptions {
 
 /** Window-scoped native capabilities exposed to an Electron renderer. */
 export interface INativeHostApi {
+	isAdmin(): Promise<boolean>;
 	getOSColorScheme(): Promise<IColorScheme>;
 	onDidChangeColorScheme(listener: (scheme: IColorScheme) => void): DisposableHandle;
 	showNativeDialog(request: DialogRequest, signal: AbortSignal): Promise<IDialogOutcome>;

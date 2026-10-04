@@ -1,5 +1,18 @@
 {
 	"ash": {
+		"integrity.failed": "Ash 无法验证桌面运行环境，请查看日志了解详情。",
+		"integrity.modified": "Ash 的安装文件已被修改或缺失，请重新安装 Ash 以恢复发布时的文件。",
+		"window.title.title": "窗口标题",
+		"window.title.description": "使用 ${activeEditorShort}、${activeEditorMedium}、${activeEditorLong}、${activeFolderShort}、${activeFolderMedium}、${activeFolderLong}、${folderName}、${folderPath}、${rootName}、${rootPath}、${appName}、${dirty} 和 ${separator} 设置标题，也支持已注册的上下文变量。",
+		"window.title.placeholder": "标题模板",
+		"window.title.invalid": "窗口标题必须为文本。",
+		"window.titleSeparator.title": "窗口标题分隔符",
+		"window.titleSeparator.description": "${separator} 在非空标题值之间插入的文本。",
+		"window.titleSeparator.placeholder": "标题分隔符",
+		"window.titleSeparator.invalid": "窗口标题分隔符必须为文本。",
+		"window.title.superuser": "[超级用户]",
+		"window.title.admin": "[管理员]",
+		"window.title.invalidVariable": "窗口标题变量需要名称和上下文键。",
 		"color.activityBarBadge.background": "活动栏通知徽章的背景色。",
 		"color.activityBarBadge.foreground": "活动栏通知徽章的文字颜色。",
 		"taskbar.newWindow": "新建窗口",

@@ -68,6 +68,10 @@ export interface IDebugVariable {
 	readonly value: string;
 	readonly type?: string;
 	readonly variablesReference: number;
+	readonly presentationHint?: {
+		readonly attributes?: readonly string[];
+		readonly lazy?: boolean;
+	};
 }
 
 export type DebugEvaluateContext = "watch" | "repl" | "hover";
@@ -93,6 +97,7 @@ export interface IDebugExceptionBreakpointFilter {
 export interface IDebugSessionCapabilities {
 	readonly supportsRestart: boolean;
 	readonly supportsTerminate: boolean;
+	readonly supportsSetVariable: boolean;
 	readonly exceptionBreakpointFilters: readonly IDebugExceptionBreakpointFilter[];
 }
 
@@ -119,6 +124,7 @@ export interface IDebugSession extends IDisposable {
 	stackTrace(threadId?: number): Promise<readonly IDebugStackFrame[]>;
 	scopes(frameId: number): Promise<readonly IDebugScope[]>;
 	variables(reference: number): Promise<readonly IDebugVariable[]>;
+	setVariable(variablesReference: number, name: string, value: string): Promise<IDebugVariable>;
 	evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult>;
 	source(source: IDebugSource): Promise<IDebugSourceContent>;
 	setExceptionBreakpoints(filters: readonly string[]): Promise<void>;

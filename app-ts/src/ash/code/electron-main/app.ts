@@ -1,3 +1,5 @@
+import { isAdmin } from '../../platform/native/electron-main/nativeHostMainService.js';
+import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
 import { URLHandlerChannel, URLHandlerChannelClient } from '../../platform/url/common/urlIpc.js';
 import type { IOpenURLOptions } from '../../platform/url/common/url.js';
 import { hooksConfigurationIpcRoute, openHooksTextFile } from '../../platform/hooks/electron-main/hooksConfigurationIpc.js';
@@ -455,6 +457,7 @@ export class AshApplication extends Disposable {
 		}
 		this.themeMainService = this._register(new ThemeMainService(nativeTheme, this.services.state));
 		this.mainProcessIpcServer.registerChannel('colorScheme', colorSchemeChannel(this.themeMainService));
+		this.mainProcessIpcServer.registerChannel('checksum', checksumChannel(app.getAppPath(), app.isPackaged, new ChecksumService()));
 		const wasUpdated = this.lifecycleMainService.wasRestarted;
 		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;
@@ -1364,6 +1367,7 @@ export class AshApplication extends Disposable {
 			windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 			this.windowsMainService.fileOpenResponseIpcRoute(window),
 			...nativeHostIpcRoutes({
+				isAdmin,
 				openWindow: async options => {
 					const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
 					if (!options.forceReuseWindow) {

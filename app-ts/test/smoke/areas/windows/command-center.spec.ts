@@ -3,6 +3,71 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('desktop privileges reach the window title through the Main process', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'This scenario requires the desktop Code product');
+	const page = workbench.page;
+	const isAdmin = await page.evaluate(async () => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+		return ipc.invoke('ash:native-host:is-admin');
+	});
+	expect(typeof isAdmin).toBe('boolean');
+	if (process.platform !== 'win32') {
+		expect(isAdmin).toBe(await (application as ElectronApplication).evaluate(() => process.geteuid!() === 0));
+	}
+	const privilegeLabel = process.platform === 'win32' ? '[Administrator]' : '[Superuser]';
+	const suffix = isAdmin ? ` ${privilegeLabel}` : '';
+	await expect(page).toHaveTitle(`Welcome — Ash Code${suffix}`);
+	await expect(page.locator('.ash-titlebar-command-center-button')).toHaveAttribute('aria-description', `Welcome — Ash Code${suffix}`);
+	await expect(page.locator('.ash-notification', { hasText: 'Ash could not verify its desktop environment.' })).toHaveCount(0);
+});
+
+test('window title and command center follow the active editor and its dirty state', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const center = page.locator('.ash-titlebar-command-center-button');
+	await expect(page).toHaveTitle('Welcome — Ash Code');
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	await expect(page).toHaveTitle('Untitled-1 — Ash Code');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.element.click({ position: { x: 100, y: 30 } });
+	await editor.waitForEditorFocus();
+	await editor.waitForTypeInEditor('title service');
+	const title = '● Untitled-1 — Ash Code';
+	await expect(page).toHaveTitle(title);
+	await expect(center).toHaveAttribute('aria-description', title);
+	await page.mouse.move(0, 100);
+	await center.hover();
+	await expect(page.getByRole('tooltip')).toHaveText(title);
+	await page.mouse.move(0, 100);
+	if (target.kind === 'electron') {
+		await expect.poll(() => (application as ElectronApplication).evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(window => window.getTitle() === '● Untitled-1 — Ash Code'))).toBe(true);
+	}
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	await expect(page).toHaveTitle('Untitled-2 — Ash Code');
+	await expect(center).toHaveAttribute('aria-description', 'Untitled-2 — Ash Code');
+});
+
+test('window title template and separator settings update the title and command center live', async ({ workbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectGroup('workbench');
+	await workbench.settingsEditor.selectCategory('layout');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	const template = settings.locator('[data-configuration-key="window.title"]');
+	await template.fill('${appName}${separator}${activeEditorShort}');
+	await template.press('Tab');
+	await expect(page).toHaveTitle('Ash Code — Untitled-1');
+	const separator = settings.locator('[data-configuration-key="window.titleSeparator"]');
+	await separator.fill(' | ');
+	await separator.press('Tab');
+	await expect(page).toHaveTitle('Ash Code | Untitled-1');
+	await expect(page.locator('.ash-titlebar-command-center-button')).toHaveAttribute('aria-description', 'Ash Code | Untitled-1');
+	await settings.locator('.ash-modal-editor-close').click();
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	await expect(page).toHaveTitle('Ash Code | Untitled-2');
+});
+
 test('activity bar badges stay over the icon and can be hidden independently through the menu', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

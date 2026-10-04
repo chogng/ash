@@ -13,6 +13,7 @@ import { CommandService } from '../../../services/commands/common/commandService
 test('desktop dialog and shell routes reject malformed requests', async () => {
 	const operations: unknown[] = [];
 	const routes = nativeHostIpcRoutes({
+		isAdmin: async () => false,
 		performDialogOperation: operation => { operations.push(operation); },
 		performShellCommand: async operation => operation,
 		pickFolder: async () => undefined, pickFile: async () => undefined, openWorkspace: async () => {},
@@ -65,6 +66,7 @@ test('desktop window commands reach the window host', async () => {
 	let zoom = 0;
 	let alwaysOnTop = false;
 	services.registerInstance(INativeHostService, {
+		isAdmin: async () => false,
 		openExternal: async () => { throw new Error('unused'); },
 		showNativeDialog: async () => { throw new Error('unused'); },
 		installShellCommand: async () => '',
@@ -113,6 +115,7 @@ test('desktop window commands reach the window host', async () => {
 test('quick window switching focuses the next registered window', async () => {
 	using services = new InstantiationService();
 	services.registerInstance(INativeHostService, {
+		isAdmin: async () => false,
 		listWindows: async () => [{ id: 1, title: 'Workbench', focused: true }, { id: 2, title: 'Agents', focused: false }],
 		focusWindowById: async (id: number) => { assert.equal(id, 2); },
 	} as unknown as INativeHostApi);

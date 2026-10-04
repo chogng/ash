@@ -27,7 +27,8 @@ suiteTeardown(() => {
 	}
 });
 
-const { createElectronTitlebarPartFactory } = await import('../../titlebarPart.js');
+const { ILocalizationService } = await import('../../../../../services/localization/common/localizationService.js');
+const { createElectronTitlebarPartFactory } = await import('../../../../../services/title/electron-browser/titleService.js');
 const { MenuService } = await import('../../../../../../platform/actions/common/menuService.js');
 const { IMenuService } = await import('../../../../../../platform/actions/common/actions.js');
 const { IContextMenuService } = await import('../../../../../../platform/contextview/browser/contextView.js');
@@ -49,6 +50,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		const applied: INativeWindowTheme[] = [];
 		services.registerInstance(IThemeService, themes);
 		services.registerInstance(INativeHostService, {
+			isAdmin: async () => false,
 			openExternal: async () => { throw new Error('unused'); },
 		showNativeDialog: async () => { throw new Error('unused'); },
 			installShellCommand: async () => '',
@@ -83,15 +85,16 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		});
 		const factory = createElectronTitlebarPartFactory({ update: async () => {}, onDidSelect: () => ({ dispose() {} }) });
 		const options = {
-			windowTitle: { value: 'Ash Code', onDidChange: Event.None },
+			windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() {}, registerVariables() {} },
 			menuService: menus,
 			contextMenuService: { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() {}, hideContextMenu() {} },
 			localizationService: { whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
 		};
 		services.registerInstance(IContextMenuService, options.contextMenuService);
+		services.registerInstance(ILocalizationService, options.localizationService);
 		using missingServices = new InstantiationService();
-		assert.throws(() => factory(environment.window.document.body, options, missingServices), /service/i);
-		using titlebar = factory(environment.window.document.body, options, services);
+		assert.throws(() => factory(environment.window.document.body, { windowTitle: options.windowTitle }, missingServices), /service/i);
+		using titlebar = factory(environment.window.document.body, { windowTitle: options.windowTitle }, services);
 		const leftActions = titlebar.domNode.querySelector('.ash-titlebar-left-actions');
 		assert.ok(leftActions);
 		assert.equal(leftActions?.getAttribute('role'), 'toolbar');

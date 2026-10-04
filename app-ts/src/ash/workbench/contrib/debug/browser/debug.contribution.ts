@@ -1,3 +1,6 @@
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
+import { DebugTitleContribution } from './debugTitle.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
@@ -25,3 +28,6 @@ registerEditorContribution({
 		return context.instantiationService.createInstance(BreakpointEditorContribution, context.editor, context.model);
 	},
 });
+
+registerWorkbenchContribution('workbench.contrib.debugTitle', WorkbenchPhase.AfterRestored, accessor =>
+	accessor.get(IInstantiationService).createInstance(DebugTitleContribution));

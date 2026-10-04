@@ -43,6 +43,7 @@ test("native host routes validate folder picking and developer tools", async () 
 	const windowThemes: unknown[] = [];
 	const windowDimmed: boolean[] = [];
 	const routes = nativeHostIpcRoutes({
+		isAdmin: async () => false,
 		performDialogOperation: () => undefined,
 		performShellCommand: async () => '',
 		pickFolder: async () => {
@@ -167,6 +168,7 @@ test("desktop commands are available from the command palette", async () => {
 	const services = new InstantiationService();
 	let toggles = 0;
 	services.registerInstance(INativeHostService, {
+		isAdmin: async () => false,
 		openExternal: async () => { throw new Error('unused'); },
 		showNativeDialog: async () => { throw new Error('unused'); },
 		installShellCommand: async () => '',

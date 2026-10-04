@@ -1,6 +1,7 @@
 import { invoke, subscribe } from "../../ipc/electron-browser/rendererIpc.js";
 import type { IMainProcessService } from '../../ipc/common/mainProcessService.js';
 import {
+	NATIVE_HOST_IS_ADMIN_CHANNEL,
 	NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL,
 	validateColorScheme,
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
@@ -30,6 +31,11 @@ import { showNativeDialog } from '../../dialogs/electron-browser/dialog.js';
 export function createNativeHostApi(mainProcessService: IMainProcessService): INativeHostApi {
 	const colors = mainProcessService.getChannel('colorScheme');
 	return {
+		async isAdmin(): Promise<boolean> {
+			const value = await invoke<unknown>(NATIVE_HOST_IS_ADMIN_CHANNEL);
+			if (typeof value !== 'boolean') { throw new TypeError('Invalid desktop privilege result'); }
+			return value;
+		},
 		getOSColorScheme: async () => validateColorScheme(await colors.call<unknown>('getOSColorScheme')),
 		onDidChangeColorScheme: listener => colors.listen<unknown>('onDidChangeColorScheme')(value => listener(validateColorScheme(value))),
 		showNativeDialog,

@@ -1,4 +1,5 @@
 import { packager } from '@electron/packager';
+import { writeApplicationChecksums } from './host.ts';
 import { rebuild } from '@electron/rebuild';
 import { spawn } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
@@ -38,6 +39,7 @@ try {
 	await cp(join(repositoryRoot, 'resources', 'tray'), join(appStage, 'resources', 'tray'), { recursive: true });
 	const electronMetadata = JSON.parse(await readFile(join(appRoot, 'node_modules', 'electron', 'package.json'), 'utf8'));
 	await rebuild({ buildPath: appStage, electronVersion: electronMetadata.version, platform: 'darwin', arch, onlyModules: ['native-keymap'], force: true });
+	await writeApplicationChecksums(appStage);
 
 	const backend = options.backendPackage ?? join(stage, 'backend');
 	if (!options.backendPackage) {

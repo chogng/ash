@@ -1,3 +1,6 @@
+import { isWindows } from '../../../../../../base/common/platform.js';
+import { Registry } from '../../../../../../platform/registry/common/platform.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../../../platform/configuration/common/configurationRegistry.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -7,10 +10,19 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { ILabelService, LabelService } from '../../../../../../platform/label/common/labelService.js';
 import { IWorkspaceContextService, type IWorkspace } from '../../../../../../platform/workspace/common/workspace.js';
-import { IEditorService, type EditorInput } from '../../../../../services/editor/common/editorService.js';
+import type { EditorInput } from '../../../../../services/editor/common/editorService.js';
 import { BrowserWorkingCopyService } from '../../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../../services/workingCopy/common/workingCopyService.js';
 import { WorkspaceContextService } from '../../../../../services/workspaces/browser/workspaceContextService.js';
+import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
+import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
+import { WorkbenchLocalizationService } from '../../../../../services/localization/browser/workbenchLocalizationService.js';
+import { initializeTestLocalization } from '../../../../../services/localization/test/common/localizationTestUtils.js';
+import type { IEditorGroup, IEditorGroupsContainer } from '../../../../../services/editor/common/editorGroupsService.js';
+import type { EditorGroupChangeEvent } from '../../../../../services/editor/common/editorState.js';
 import { WindowTitle } from '../../windowTitle.js';
 
 interface TestContext {
@@ -20,6 +32,8 @@ interface TestContext {
 	readonly workingCopies: BrowserWorkingCopyService;
 	readonly labels: LabelService;
 	readonly editors: TestEditorService;
+	readonly configuration: InMemoryConfigurationService;
+	readonly contextKeys: ContextKeyService;
 }
 
 function createContext(resources: DisposableStore): TestContext {
@@ -33,15 +47,19 @@ function createContext(resources: DisposableStore): TestContext {
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	services.registerInstance(ILabelService, labels);
-	services.registerInstance(IEditorService, editors);
-	return { dom, services, workspace, workingCopies, labels, editors };
+	const configuration = resources.add(new InMemoryConfigurationService());
+	const contextKeys = resources.add(new ContextKeyService());
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IContextKeyService, contextKeys);
+	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
+	return { dom, services, workspace, workingCopies, labels, editors, configuration, contextKeys };
 }
 
 test('WindowTitle replaces the startup title and follows workspace changes in each product', () => {
 	for (const product of ['Ash Code', 'Embedded Ash']) {
 		using resources = new DisposableStore();
 		const context = createContext(resources);
-		resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, product));
+		resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, product, context.editors));
 		assert.equal(context.dom.window.document.title, product);
 		context.workspace.updateWorkspace({ id: 'project', folders: [{ id: 'root', index: 0, name: '研究项目', uri: URI.file('/project') }] });
 		assert.equal(context.dom.window.document.title, `研究项目 — ${product}`);
@@ -55,7 +73,7 @@ test('WindowTitle replaces the startup title and follows workspace changes in ea
 test('WindowTitle follows active resources, labels, dirty registrations, save and unregister', async () => {
 	using resources = new DisposableStore();
 	const context = createContext(resources);
-	resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code'));
+	resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
 	const input = { resource: URI.file('/project/draft.ts'), label: '草稿.ts', onDidChangeLabel: resources.add(new Emitter<void>()).event };
 	await context.editors.openEditor(input);
 	assert.equal(context.dom.window.document.title, '草稿.ts — Ash Code');
@@ -82,7 +100,7 @@ test('WindowTitle releases the previous editor label and all subscriptions on di
 	const labelChanged = resources.add(new Emitter<void>());
 	const input = { resource: URI.file('/draft.ts'), label: 'Draft', onDidChangeLabel: labelChanged.event };
 	await context.editors.openEditor(input);
-	const title = resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code'));
+	const title = resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
 	input.label = 'Renamed';
 	labelChanged.fire();
 	assert.equal(context.dom.window.document.title, 'Renamed — Ash Code');
@@ -103,9 +121,8 @@ test('WindowTitle keeps main and auxiliary editor scopes independent', async () 
 	resources.add(toDisposable(() => popup.window.close()));
 	const scope = resources.add(context.services.createChild());
 	const popupEditors = resources.add(new TestEditorService());
-	scope.registerInstance(IEditorService, popupEditors);
-	resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code'));
-	const popupTitle = resources.add(scope.createInstance(WindowTitle, popup.window as unknown as Window, 'Ash Code'));
+	resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
+	const popupTitle = resources.add(scope.createInstance(WindowTitle, popup.window as unknown as Window, 'Ash Code', popupEditors));
 	await context.editors.openEditor({ resource: URI.file('/main.ts') });
 	await popupEditors.openEditor({ resource: URI.file('/detached.ts') });
 	assert.deepEqual([context.dom.window.document.title, popup.window.document.title], ['main.ts — Ash Code', 'detached.ts — Ash Code']);
@@ -119,18 +136,73 @@ test('WindowTitle keeps main and auxiliary editor scopes independent', async () 
 
 test('WindowTitle rejects creation without its required services', () => {
 	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(WindowTitle, {} as Window, 'Ash Code'), /Unknown service: editorService/);
+	assert.throws(() => services.createInstance(WindowTitle, {} as Window, 'Ash Code', {} as IEditorGroupsContainer), /Unknown service: workspaceContextService/);
 });
 
-class TestEditorService extends Disposable implements IEditorService {
-	private readonly activeChanged = this._register(new Emitter<void>());
-	public readonly onDidActiveEditorChange = this.activeChanged.event;
+test('WindowTitle renders path variables and updates templates, separators and context values live', async () => {
+	using resources = new DisposableStore();
+	const context = createContext(resources);
+	context.workspace.updateWorkspace({ id: 'project', folders: [{ id: 'root', index: 0, name: 'Project', uri: URI.file('/project') }] });
+	await context.editors.openEditor({ resource: URI.file('/project/src/main.ts') });
+	const title = resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
+	await context.configuration.updateValue('window.title', '${activeEditorMedium}${separator}${activeFolderShort}${separator}${folderName}${separator}${folderPath}${separator}${rootPath}');
+	assert.equal(title.value, 'src/main.ts — src — Project — /project — /project');
+	await context.configuration.updateValue('window.title', '${branch}${separator}${activeEditorShort}${separator}${appName}');
+	await context.configuration.updateValue('window.titleSeparator', ' | ');
+	context.contextKeys.setContext('git.branch', 'feature/title');
+	title.registerVariables([{ name: 'branch', contextKey: 'git.branch' }]);
+	assert.equal(title.value, 'feature/title | main.ts | Ash Code');
+	context.contextKeys.setContext('git.branch', 'main');
+	assert.equal(title.value, 'main | main.ts | Ash Code');
+	context.contextKeys.removeContext('git.branch');
+	assert.equal(title.value, 'main.ts | Ash Code');
+	title.updateProperties({ prefix: '🔴', isAdmin: true });
+	assert.equal(title.value, `🔴 main.ts | Ash Code ${isWindows ? '[Administrator]' : '[Superuser]'}`);
+	title.updateProperties({ prefix: '' });
+	assert.equal(title.value, `main.ts | Ash Code ${isWindows ? '[Administrator]' : '[Superuser]'}`);
+	title.dispose();
+	context.dom.window.document.title = 'Next owner';
+	await context.configuration.updateValue('window.title', '${appName}');
+	context.contextKeys.setContext('git.branch', 'next');
+	assert.equal(context.dom.window.document.title, 'Next owner');
+});
+
+test('WindowTitle uses the selected Chinese language for administrator decoration', () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		using resources = new DisposableStore();
+		const context = createContext(resources);
+		const translatedServices = resources.add(context.services.createChild());
+		translatedServices.registerInstance(ILocalizationService, resources.add(new WorkbenchLocalizationService()));
+		const title = resources.add(translatedServices.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
+		title.updateProperties({ isAdmin: true });
+		assert.equal(title.value, `Ash Code ${isWindows ? '[管理员]' : '[超级用户]'}`);
+		const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
+		assert.equal(registry.getConfiguration('window.title')?.setting?.title, '窗口标题');
+		assert.equal(registry.getConfiguration('window.titleSeparator')?.setting?.title, '窗口标题分隔符');
+	} finally {
+		initializeTestLocalization('en');
+	}
+});
+
+class TestEditorService extends Disposable implements IEditorGroupsContainer {
+	private readonly activeChanged = this._register(new Emitter<EditorGroupChangeEvent>());
+	public readonly onDidChangeActiveGroup = Event.None;
+	public readonly activeGroup: IEditorGroup;
+	constructor() {
+		super();
+		const owner = this;
+		this.activeGroup = {
+			get activeInput() { return owner.activeEditor; },
+			onDidChangeEditors: this.activeChanged.event,
+		} as IEditorGroup;
+	}
 	public readonly onDidVisibleEditorsChange = Event.None;
 	public activeEditor: EditorInput | undefined;
 	public get visibleEditors(): readonly EditorInput[] { return this.activeEditor ? [this.activeEditor] : []; }
 	public get hasListeners(): boolean { return this.activeChanged.hasListeners(); }
-	public async openEditor(input: EditorInput): Promise<void> { this.activeEditor = input; this.activeChanged.fire(); }
-	public close(): void { this.activeEditor = undefined; this.activeChanged.fire(); }
+	public async openEditor(input: EditorInput): Promise<void> { this.activeEditor = input; this.activeChanged.fire({ kind: 'activeEditorChanged', editor: undefined }); }
+	public close(): void { this.activeEditor = undefined; this.activeChanged.fire({ kind: 'activeEditorChanged', editor: undefined }); }
 	public focusActiveEditor(): void {}
 }
 

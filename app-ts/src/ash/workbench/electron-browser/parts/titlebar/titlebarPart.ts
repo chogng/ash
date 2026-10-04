@@ -1,3 +1,6 @@
+import { IMenuService } from '../../../../platform/actions/common/actions.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { isMacintosh } from "../../../../base/common/platform.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import type {
@@ -10,7 +13,6 @@ import {
 import {
 	BrowserTitlebarPart,
 	type ITitlebarPartFactoryOptions,
-	type TitlebarPartFactory,
 } from "../../../browser/parts/titlebar/titlebarPart.js";
 import { NativeMenubarControl } from "./menubarControl.js";
 import { IThemeService } from "../../../../platform/theme/common/themeService.js";
@@ -32,14 +34,20 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 		options: ITitlebarPartFactoryOptions,
 		nativeMenubar: INativeMenubarApi,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@IMenuService menuService: IMenuService,
+		@IContextMenuService contextMenuService: IContextMenuService,
+		@ILocalizationService localizationService: ILocalizationService,
 		@IThemeService themeService: IThemeService,
 		@INativeHostService hostService: INativeHostApi,
 	) {
 		super(
 			container,
 			options,
-			new ElectronMenubarControl(container, options, nativeMenubar),
+			(menus, contextMenus, localization) => new ElectronMenubarControl(container, nativeMenubar, menus, contextMenus, localization),
 			instantiationService,
+			menuService,
+			contextMenuService,
+			localizationService,
 		);
 		this.domNode.classList.add("ash-electron-titlebar");
 		this._register(bindWindowControlTheme(themeService, hostService));
@@ -75,30 +83,25 @@ class ElectronMenubarControl extends Disposable
 
 	constructor(
 		container: HTMLElement,
-		options: ITitlebarPartFactoryOptions,
 		nativeMenubar: INativeMenubarApi,
+		menuService: IMenuService,
+		contextMenuService: IContextMenuService,
+		localizationService: ILocalizationService,
 	) {
 		super();
 		const browserMenubar = this._register(new BrowserMenubarControl(
 			container,
-			options.menuService,
-			options.contextMenuService,
-			options.localizationService,
+			menuService,
+			contextMenuService,
+			localizationService,
 			{ presentation: isMacintosh ? 'actions-only' : 'application-menu' },
 		));
 		this.domNode = browserMenubar.domNode;
 		if (isMacintosh) {
 			this._register(new NativeMenubarControl(
-				options.menuService,
+				menuService,
 				nativeMenubar,
 			));
 		}
 	}
-}
-
-/** Creates the titlebar used by the Electron workbench. */
-export function createElectronTitlebarPartFactory(
-	nativeMenubar: INativeMenubarApi,
-): TitlebarPartFactory {
-	return (container, options, instantiationService) => instantiationService.createInstance(NativeTitlebarPart, container, options, nativeMenubar);
 }

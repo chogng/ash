@@ -12,6 +12,7 @@ test('a system event wins over an older startup read and disposed windows ignore
 	const pending: ((value: IColorScheme) => void)[] = [];
 	const unexpected = (): never => { throw new Error('Unexpected window capability in appearance test'); };
 	const host: INativeHostApi = {
+		isAdmin: unexpected,
 		getOSColorScheme: () => new Promise(resolve => pending.push(resolve)),
 		onDidChangeColorScheme: listener => events.event(listener),
 		openExternal: unexpected, showNativeDialog: unexpected, installShellCommand: unexpected, uninstallShellCommand: unexpected,

@@ -56,7 +56,7 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	private readonly outputEmitter = this._register(new Emitter<string>());
 	readonly id = "debug-1";
 	readonly configuration: IDebugConfiguration = Object.freeze({ id: "one", name: "One", type: "demo", request: "launch", adapter: Object.freeze({ program: "adapter", arguments: Object.freeze([]) }), arguments: Object.freeze({}) });
-	readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, exceptionBreakpointFilters: Object.freeze([]) });
+	readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, supportsSetVariable: false, exceptionBreakpointFilters: Object.freeze([]) });
 	state: DebugSessionState = "running";
 	readonly onDidChangeState = this.stateEmitter.event;
 	readonly onDidOutput = this.outputEmitter.event;
@@ -75,6 +75,7 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	async stackTrace() { return []; }
 	async scopes() { return []; }
 	async variables() { return []; }
+	async setVariable(): Promise<never> { throw new Error("Variables are read-only in this fixture"); }
 	async source() { return { content: "" }; }
 	async setExceptionBreakpoints() {}
 	async disconnect() {}

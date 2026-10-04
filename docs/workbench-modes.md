@@ -35,7 +35,11 @@ Browser 与 Electron 各保留一个 Workbench 启动入口，只加载 Code。�
 
 ## 窗口与状态
 
-Workbench、独立编辑器窗口和 Code Sessions 使用共享应用身份及用户数据根。启动装配把产品名称传给主窗口与辅助窗口的 `WindowTitle`。各自的标题根据当前文件、未保存状态和工作区更新，监听随窗口释放。
+Workbench、独立编辑器窗口和 Code Sessions 使用共享应用身份及用户数据根。主窗口注册 `workbench/services/title/browser/titleService.ts` 的 `ITitleService`；`BrowserTitleService` 拥有共享 `WindowTitle` 和标题栏，通过 `getPart(container)` 返回同一窗口的标题栏。Electron 的标题栏创建入口位于 `services/title/electron-browser/titleService.ts`，继续使用现有窗口控件和系统菜单实现。
+
+主窗口与辅助窗口的标题分别读取自己的 EditorPart 活动组，根据文件标签、未保存状态、工作区、配置和 ContextKey 更新。`window.title` 定义模板，`window.titleSeparator` 定义条件分隔符，配置由既有 profile/workspace `settings.json` 保存。`registerWindowTitleVariable` 注册变量名与 ContextKey 的映射；值变化即时更新所有窗口标题。
+
+标题服务通过 `createAuxiliaryTitlebarPart` 创建并登记辅助标题栏，窗口关闭时释放标题监听并移除登记。辅助窗口布局预留标题栏和状态栏高度。环境属性通过 `updateProperties` 传播；调试会话暂停且应用失焦时，调试贡献设置红点前缀。Electron Main 读取桌面进程权限，并校验打包清单中的安装文件；构建流程在打包目录写入 `package.json.checksums`，覆盖 `dist/` 与 `resources/`。完整性结果由 `IIntegrityService` 返回，实际不一致时进入现有通知中心。开发运行没有发布校验清单，`isPure` 保持未定义。此检查用于发现安装文件变化，不代替操作系统签名；Rust App Server 的权限和安装状态独立于桌面应用。
 
 Code Sessions 保持独立页面。Workbench 通过 Titlebar action 请求打开 Agents 窗口；Main 持有窗口创建、复用与关闭，Sessions 使用自己的会话状态。`sessions` 可以复用 `workbench` 能力，`workbench` 不反向导入 `sessions`。详情见 [Sessions 说明](../app-ts/src/ash/sessions/README.md)。
 

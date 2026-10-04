@@ -435,7 +435,7 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 			this.input.value = state.value;
 			this.input.disabled = state.isPending;
 		});
-		this._register(addDisposableListener(this.input, 'change', () => void this.updateSetting(this.input.value.trim())));
+		this._register(addDisposableListener(this.input, 'change', () => void this.updateSetting(this.input.value)));
 	}
 
 	protected updateControl(descriptor: ITextSetting): void {

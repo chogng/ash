@@ -131,6 +131,7 @@
     "vscode-textmate": "9.3.2"
   },
   "optionalDependencies": {
+    "native-is-elevated": "0.9.0",
     "native-keymap": "3.3.9"
   }
 }

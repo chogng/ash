@@ -6,11 +6,13 @@ import type { IAuxiliaryWindow } from "../../../services/auxiliaryWindow/browser
 import { StatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { StatusbarHeight } from "../workbenchPartDimensions.js";
 import { StatusbarPart } from "../statusbar/statusbarPart.js";
+import type { IAuxiliaryTitlebarPart } from "../titlebar/titlebarPart.js";
 import type { IEditorPart } from "./editorPart.js";
 import { EditorStatusContribution } from "./editorStatus.js";
 
 export interface AuxiliaryEditorPartCreation {
 	readonly part: IEditorPart;
+	readonly titlebar: IAuxiliaryTitlebarPart;
 	readonly resources?: readonly IDisposable[];
 }
 
@@ -25,6 +27,10 @@ export class AuxiliaryEditorPart extends Disposable {
 		const resources = this._register(new DisposableStore());
 		for (const resource of creation.resources ?? []) resources.add(resource);
 		this._register(creation.part);
+		// The title service owns the part; closing this window releases its registration.
+		this._register(toDisposable(() => creation.titlebar.dispose()));
+		creation.titlebar.updateOptions({ compact: false });
+		this._register(creation.titlebar.onDidChange!(() => window.layout()));
 		const statusbarService = this._register(new StatusbarService());
 		const statusbarPart = this._register(new StatusbarPart(window.container, statusbarService));
 		this._register(new EditorStatusContribution(creation.part, statusbarService, accessibility));
@@ -36,7 +42,7 @@ export class AuxiliaryEditorPart extends Disposable {
 		this._register(window.onDidLayout(dimension => {
 			creation.part.layout(new Dimension(
 				dimension.width,
-				Math.max(0, dimension.height - StatusbarHeight),
+				Math.max(0, dimension.height - StatusbarHeight - creation.titlebar.height),
 			));
 			statusbarPart.layout(new Dimension(dimension.width, StatusbarHeight));
 		}));

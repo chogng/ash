@@ -53,6 +53,7 @@ class Fixture extends Disposable {
 		super();
 		this.resource.bindings = bindings;
 		const host: INativeHostApi = {
+			isAdmin: async () => false,
 			getOSColorScheme: async () => ({ dark: false, highContrast: false }),
 			onDidChangeColorScheme: () => Disposable.None,
 			openExternal: async () => { throw new Error('unused'); },

@@ -7,6 +7,7 @@ allowBuilds:
   electron: true
   esbuild: true
   native-keymap: true
+  native-is-elevated: false
   sharp: true
   unrs-resolver: true
   workerd: true

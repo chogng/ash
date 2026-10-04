@@ -9,6 +9,12 @@ import { Range } from '../../editor/common/core/range.js';
 import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesRequest, type IWindowFilesRequest } from '../../platform/window/common/window.js';
 import { IEditorService } from '../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
+import { INativeHostService } from '../common/services.js';
+import { IIntegrityService } from '../services/integrity/common/integrity.js';
+import { ITitleService } from '../services/title/browser/titleService.js';
+import { INotificationService } from '../../platform/notification/common/notification.js';
+import { ILogService } from '../../platform/log/common/log.js';
+import { localize } from '../../nls.js';
 
 /** The renderer owns file completion because it owns every editor group, including moved tabs. */
 export class ElectronWindow extends Disposable {
@@ -19,6 +25,11 @@ export class ElectronWindow extends Disposable {
 		private readonly ipc: Pick<typeof import('../../platform/ipc/electron-browser/rendererIpc.js'), 'invoke' | 'subscribe'>,
 		@IEditorService private readonly editors: IEditorService,
 		@IEditorGroupsService private readonly groups: IEditorGroupsService,
+		@INativeHostService private readonly host: INativeHostApi,
+		@IIntegrityService private readonly integrity: IIntegrityService,
+		@ITitleService private readonly title: ITitleService,
+		@INotificationService private readonly notifications: INotificationService,
+		@ILogService private readonly log: ILogService,
 	) {
 		super();
 	}
@@ -33,6 +44,24 @@ export class ElectronWindow extends Disposable {
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(this.groups.onDidChangeGroups(() => this.completeClosedFiles()));
 		await this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'ready' });
+		// The shell and launch-file handshake remain available while installation files are scanned.
+		void this.updateTitleProperties().catch(error => {
+			if (this.isDisposed) { return; }
+			this.log.error('integrity', 'Desktop environment detection failed', error);
+			this.notifications.warning(localize('integrity.failed', 'Ash could not verify its desktop environment. See the logs for details.'));
+		});
+	}
+
+	private async updateTitleProperties(): Promise<void> {
+		const isAdmin = await this.host.isAdmin();
+		if (this.isDisposed) { return; }
+		this.title.updateProperties({ isAdmin });
+		const result = await this.integrity.isPure();
+		if (this.isDisposed) { return; }
+		this.title.updateProperties({ isPure: result.isPure });
+		if (result.isPure === false) {
+			this.notifications.warning(localize('integrity.modified', 'Ash installation files have changed or are missing. Reinstall Ash to restore the published files.'));
+		}
 	}
 
 	private async openFiles(request: IWindowFilesRequest): Promise<void> {

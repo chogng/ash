@@ -1,8 +1,9 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { getHoverDelegate } from "../../../../base/browser/ui/hover/hoverDelegate.js";
+import { getHoverDelegate, type IManagedHover } from "../../../../base/browser/ui/hover/hoverDelegate.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
-import { DisposableStore } from "../../../../base/common/lifecycle.js";
+import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
+import { AbstractDisposable, DisposableMap, DisposableStore, MutableDisposable } from "../../../../base/common/lifecycle.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { localize } from "../../../../nls.js";
@@ -22,6 +23,9 @@ interface DebugVariableRow {
 	readonly value?: string;
 	readonly type?: string;
 	readonly variablesReference: number;
+	// DAP setVariable addresses the parent container, not the variable's children.
+	readonly parentVariablesReference?: number;
+	readonly readOnly?: boolean;
 	readonly depth: number;
 	readonly expanded: boolean;
 }
@@ -30,6 +34,15 @@ interface DebugWatchResult {
 	readonly expression: string;
 	readonly result?: IDebugEvaluateResult;
 	readonly error?: string;
+}
+
+interface VariableEdit {
+	readonly row: DebugVariableRow;
+	readonly session: IDebugSession;
+	readonly generation: number;
+	readonly input: InputBox;
+	readonly form: HTMLFormElement;
+	pending: boolean;
 }
 
 type DebugOperation = "start" | "continue" | "pause" | "restart" | "stepOver" | "stepInto" | "stepOut" | "stop" | "stopAll";
@@ -48,6 +61,9 @@ export class DebugViewPane extends ViewPane {
 	private readonly sections: readonly DebugSection[];
 	private readonly exceptionSection: DebugSection;
 	private readonly rowControls = this._register(new DisposableStore());
+	private readonly variableItems = this._register(new DisposableMap<number, DebugVariableItem>());
+	private readonly variableEditControls = this._register(new MutableDisposable<DisposableStore>());
+	private variableEdit: VariableEdit | undefined;
 	private readonly addWatchButton: Button;
 	private readonly configurationsElement: HTMLSelectElement;
 	private readonly sessionsElement: HTMLSelectElement;
@@ -127,14 +143,22 @@ export class DebugViewPane extends ViewPane {
 		this._register(addDisposableListener(this.sessionsElement, "change", () => this.selectSession()));
 		this._register(addDisposableListener(this.threadsElement, "change", () => { void this.selectThread(); }));
 		this._register(addDisposableListener(this.stackElement, "click", event => this.activateFrame(event)));
-		this._register(addDisposableListener(this.variablesElement, "click", event => this.expandVariable(event)));
+		this._register(addDisposableListener(this.variablesElement, "click", event => {
+			if (event.detail !== 2) {
+				this.expandVariable(event);
+			}
+		}));
+		this._register(addDisposableListener(this.variablesElement, "dblclick", event => this.editVariable(event)));
+		this._register(addDisposableListener(this.variablesElement, "keydown", event => {
+			if (event.key === "F2") this.editVariable(event);
+		}));
 		this._register(addDisposableListener(this.watchElement, "click", event => this.removeWatch(event)));
 		this._register(addDisposableListener(this.watchForm, "submit", event => this.addWatch(event)));
 		this._register(addDisposableListener(this.exceptionsElement, "change", () => { void this.changeExceptionBreakpoints(); }));
 		this._register(addDisposableListener(this.breakpointsElement, "click", event => this.activateBreakpoint(event)));
 		this._register(debug.onDidChangeConfigurations(() => this.render()));
 		this._register(debug.onDidChangeBreakpoints(() => this.render()));
-		this._register(debug.onDidChangeWatchExpressions(() => { void this.refreshWatches(); this.render(); }));
+		this._register(debug.onDidChangeWatchExpressions(() => { void this.refreshWatches().then(() => this.render()); }));
 		this._register(debug.onDidChangeExceptionBreakpoints(() => this.render()));
 		this._register(debug.onDidChangeSession(session => this.acceptSessionChange(session)));
 		// Testing can pause a session before this view is first opened.
@@ -169,6 +193,9 @@ export class DebugViewPane extends ViewPane {
 	}
 
 	private acceptSessionChange(session: IDebugSession | undefined): void {
+		this.refreshGeneration++;
+		this.variableEdit = undefined;
+		this.variableEditControls.clear();
 		if (this.inspectedSessionId !== session?.id) {
 			this.inspectedSessionId = session?.id;
 			this.threads = [];
@@ -178,7 +205,7 @@ export class DebugViewPane extends ViewPane {
 			this.selectedFrameId = undefined;
 		}
 		if (session?.state === "stopped") void this.refreshStoppedState();
-		else if (session?.state === "running") { this.threads = []; this.frames = []; this.variableRows = []; this.watchResults = []; this.selectedFrameId = undefined; }
+		else { this.threads = []; this.frames = []; this.variableRows = []; this.watchResults = []; this.selectedFrameId = undefined; }
 		this.render();
 	}
 
@@ -199,45 +226,91 @@ export class DebugViewPane extends ViewPane {
 		const session = this.debug.session;
 		if (!session || session.state !== "stopped") return;
 		const generation = ++this.refreshGeneration;
+		this.variableEdit = undefined;
+		this.variableEditControls.clear();
+		this.frames = [];
+		this.variableRows = [];
+		this.watchResults = [];
+		this.selectedFrameId = undefined;
+		this.error = undefined;
+		this.render();
 		try {
 			const threads = await session.threads();
+			if (!this.isCurrentInspection(session, generation)) return;
 			const selectedThread = threads.find(thread => thread.id === session.threadId) ?? threads[0];
 			if (!selectedThread) throw new Error(localize("debug.noThreads", "The Debug Adapter did not report any stopped threads"));
 			session.selectThread(selectedThread.id);
 			const frames = await session.stackTrace(selectedThread.id);
-			if (generation !== this.refreshGeneration || this.debug.session !== session) return;
+			if (!this.isCurrentInspection(session, generation)) return;
 			this.threads = threads;
 			this.frames = frames;
 			this.selectedFrameId = frames[0]?.id;
-			await this.loadFrameVariables(session, frames[0]?.id, generation);
+			const frame = frames[0];
+			const results = await Promise.allSettled([
+				this.loadFrameVariables(session, frame?.id, generation),
+				frame && frame.lineNumber > 0 && frame.columnNumber > 0 ? this.openFrameSource(session, frame, generation) : Promise.resolve(),
+			]);
+			if (!this.isCurrentInspection(session, generation)) return;
+			for (const result of results) {
+				if (result.status === "rejected") this.error = message(result.reason);
+			}
 			await this.refreshWatches();
-		} catch (error) { this.error = message(error); }
+		} catch (error) {
+			if (!this.isCurrentInspection(session, generation)) return;
+			this.error = message(error);
+		}
+		if (!this.isCurrentInspection(session, generation)) return;
 		this.render();
 	}
 
+	private isCurrentInspection(session: IDebugSession, generation: number): boolean {
+		return !this.isDisposed && generation === this.refreshGeneration && this.debug.session === session && session.state === "stopped";
+	}
+
 	private async loadFrameVariables(session: IDebugSession, frameId: number | undefined, generation = this.refreshGeneration): Promise<void> {
+		if (!this.isCurrentInspection(session, generation)) return;
 		if (frameId === undefined) { this.variableRows = []; return; }
 		const scopes = await session.scopes(frameId);
+		if (!this.isCurrentInspection(session, generation)) return;
 		const variables = await Promise.all(scopes.map(scope => scope.variablesReference > 0 ? session.variables(scope.variablesReference) : Promise.resolve(Object.freeze([]) as readonly IDebugVariable[])));
-		if (generation !== this.refreshGeneration || this.debug.session !== session || this.selectedFrameId !== frameId) return;
-		this.variableRows = Object.freeze(scopes.flatMap((scope, index) => [this.scopeRow(scope), ...variables[index]!.map(variable => this.variableRow(variable, 1))]));
+		if (!this.isCurrentInspection(session, generation) || this.selectedFrameId !== frameId) return;
+		this.variableRows = Object.freeze(scopes.flatMap((scope, index) => [this.scopeRow(scope), ...variables[index]!.map(variable => this.variableRow(variable, 1, scope.variablesReference))]));
 	}
 
 	private activateFrame(event: Event): void {
 		const index = indexFromEvent(event, ".ash-debug-frame", "frameIndex", this.element.ownerDocument);
 		const frame = index === undefined ? undefined : this.frames[index];
 		const session = this.debug.session;
-		if (!frame || !session) return;
+		if (!frame || !session || session.state !== "stopped") return;
+		const generation = ++this.refreshGeneration;
+		this.variableEdit = undefined;
+		this.variableEditControls.clear();
 		void (async () => {
 			this.selectedFrameId = frame.id;
-			await this.openFrameSource(session, frame);
-			await this.loadFrameVariables(session, frame.id);
-			await this.refreshWatches();
+			this.variableRows = [];
+			this.watchResults = [];
+			this.error = undefined;
 			this.render();
-		})().catch(error => { this.error = message(error); this.render(); });
+			const results = await Promise.allSettled([
+				this.openFrameSource(session, frame, generation),
+				this.loadFrameVariables(session, frame.id, generation),
+			]);
+			if (!this.isCurrentInspection(session, generation)) return;
+			for (const result of results) {
+				if (result.status === "rejected") this.error = message(result.reason);
+			}
+			await this.refreshWatches();
+			if (!this.isCurrentInspection(session, generation)) return;
+			this.render();
+		})().catch(error => {
+			if (!this.isCurrentInspection(session, generation)) return;
+			this.error = message(error);
+			this.render();
+		});
 	}
 
-	private async openFrameSource(session: IDebugSession, frame: IDebugStackFrame): Promise<void> {
+	private async openFrameSource(session: IDebugSession, frame: IDebugStackFrame, generation: number): Promise<void> {
+		if (!this.isCurrentInspection(session, generation)) return;
 		const selection = frame.lineNumber > 0 && frame.columnNumber > 0 ? Range.fromPositions(new Position(frame.lineNumber, frame.columnNumber)) : undefined;
 		if (frame.source?.resource) {
 			await this.editor.openEditor({ resource: frame.source.resource, label: frame.source.name }, { selection });
@@ -245,6 +318,7 @@ export class DebugViewPane extends ViewPane {
 		}
 		if (frame.source?.sourceReference && frame.source.sourceReference > 0) {
 			const source = await session.source(frame.source);
+			if (!this.isCurrentInspection(session, generation)) return;
 			const name = frame.source.name ?? `source-${frame.source.sourceReference}`;
 			const resource = URI.parse(`debug-source://session/${encodeURIComponent(session.id)}/${frame.source.sourceReference}/${encodeURIComponent(name)}`);
 			await this.editor.openEditor({ resource, label: name, contentType: source.mimeType, readOnly: true, initialText: source.content }, { selection });
@@ -255,7 +329,10 @@ export class DebugViewPane extends ViewPane {
 		const index = indexFromEvent(event, ".ash-debug-variable", "variableIndex", this.element.ownerDocument);
 		const row = index === undefined ? undefined : this.variableRows[index];
 		const session = this.debug.session;
-		if (!row || !session || row.variablesReference <= 0) return;
+		if (!row || !session || session.state !== "stopped" || row.variablesReference <= 0 || this.variableEdit?.row.key === row.key) return;
+		this.variableEdit = undefined;
+		this.variableEditControls.clear();
+		const generation = this.refreshGeneration;
 		if (row.expanded) {
 			const end = descendantEnd(this.variableRows, index!, row.depth);
 			this.variableRows = Object.freeze([...this.variableRows.slice(0, index), { ...row, expanded: false }, ...this.variableRows.slice(end)]);
@@ -263,12 +340,86 @@ export class DebugViewPane extends ViewPane {
 			return;
 		}
 		void session.variables(row.variablesReference).then(variables => {
+			if (!this.isCurrentInspection(session, generation)) return;
 			const currentIndex = this.variableRows.findIndex(candidate => candidate.key === row.key);
-			if (currentIndex < 0) return;
-			const children = variables.map(variable => this.variableRow(variable, row.depth + 1));
+			if (currentIndex < 0 || this.variableRows[currentIndex]!.expanded) return;
+			const children = variables.map(variable => this.variableRow(variable, row.depth + 1, row.variablesReference));
 			this.variableRows = Object.freeze([...this.variableRows.slice(0, currentIndex), { ...row, expanded: true }, ...children, ...this.variableRows.slice(currentIndex + 1)]);
 			this.render();
-		}, error => { this.error = message(error); this.render(); });
+		}, error => {
+			if (!this.isCurrentInspection(session, generation)) return;
+			this.error = message(error);
+			this.render();
+		});
+	}
+
+	private editVariable(event: Event): void {
+		const index = indexFromEvent(event, ".ash-debug-variable", "variableIndex", this.element.ownerDocument);
+		const row = index === undefined ? undefined : this.variableRows[index];
+		const session = this.debug.session;
+		if (!row || !session || session.state !== "stopped" || !session.capabilities.supportsSetVariable || row.value === undefined || !row.parentVariablesReference || row.readOnly) return;
+		event.preventDefault();
+		this.variableEditControls.clear();
+		const controls = new DisposableStore();
+		this.variableEditControls.value = controls;
+		const form = h(this.element.ownerDocument, "form");
+		form.className = "ash-debug-variable-edit";
+		const input = controls.add(new InputBox(form, {
+			ariaLabel: localize("debug.editVariable", "Value of {0}", row.name),
+			presentation: "compact",
+		}));
+		input.inputElement.setAttribute("aria-description", localize("debug.editVariableHelp", "Press Enter to apply the value or Escape to cancel."));
+		input.value = row.value;
+		const edit: VariableEdit = { row, session, generation: this.refreshGeneration, input, form, pending: false };
+		this.variableEdit = edit;
+		controls.add(addDisposableListener(form, "submit", event => {
+			event.preventDefault();
+			void this.submitVariable(edit);
+		}));
+		controls.add(input.onKeyDown(event => {
+			if (event.key !== "Escape" || event.isComposing || edit.pending) return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.variableEdit = undefined;
+			this.variableEditControls.clear();
+			this.render();
+			this.variablesElement.querySelector<HTMLButtonElement>(`[data-variable-key="${row.key}"]`)?.focus();
+		}));
+		this.render();
+		input.focus();
+		input.select();
+	}
+
+	private async submitVariable(edit: VariableEdit): Promise<void> {
+		if (edit.pending || this.variableEdit !== edit || !this.isCurrentInspection(edit.session, edit.generation)) return;
+		edit.pending = true;
+		edit.input.readOnly = true;
+		edit.input.showValidation("");
+		try {
+			const variable = await edit.session.setVariable(edit.row.parentVariablesReference!, edit.row.name, edit.input.value);
+			if (this.variableEdit !== edit || !this.isCurrentInspection(edit.session, edit.generation)) return;
+			const index = this.variableRows.findIndex(row => row.key === edit.row.key);
+			const end = descendantEnd(this.variableRows, index, edit.row.depth);
+			// The adapter may replace the child reference when assigning a new value.
+			// Retire expanded children before exposing that new reference.
+			this.variableRows = Object.freeze([
+				...this.variableRows.slice(0, index),
+				{ ...edit.row, value: variable.value, type: variable.type, variablesReference: variable.variablesReference, expanded: false },
+				...this.variableRows.slice(end),
+			]);
+			await this.refreshWatches();
+			if (this.variableEdit !== edit || !this.isCurrentInspection(edit.session, edit.generation)) return;
+			this.variableEdit = undefined;
+			this.variableEditControls.clear();
+			this.render();
+			this.variablesElement.querySelector<HTMLButtonElement>(`[data-variable-key="${edit.row.key}"]`)?.focus();
+		} catch (error) {
+			if (this.variableEdit !== edit || !this.isCurrentInspection(edit.session, edit.generation)) return;
+			edit.pending = false;
+			edit.input.readOnly = false;
+			edit.input.showValidation(message(error));
+			edit.input.focus();
+		}
 	}
 
 	private addWatch(event: Event): void {
@@ -289,10 +440,13 @@ export class DebugViewPane extends ViewPane {
 		const expressions = this.debug.watchExpressions;
 		if (!session || session.state !== "stopped") { this.watchResults = expressions.map(expression => ({ expression })); return; }
 		const frameId = this.selectedFrameId;
-		this.watchResults = Object.freeze(await Promise.all(expressions.map(async expression => {
+		const generation = this.refreshGeneration;
+		const results = await Promise.all(expressions.map(async expression => {
 			try { return { expression, result: await session.evaluate(expression, frameId, "watch") }; }
 			catch (error) { return { expression, error: message(error) }; }
-		})));
+		}));
+		if (!this.isCurrentInspection(session, generation) || this.selectedFrameId !== frameId || this.debug.watchExpressions !== expressions) return;
+		this.watchResults = Object.freeze(results);
 	}
 
 	private async changeExceptionBreakpoints(): Promise<void> {
@@ -362,7 +516,23 @@ export class DebugViewPane extends ViewPane {
 		this.threadsElement.hidden = this.threads.length < 2;
 		this.rowControls.clear();
 		this.stackElement.replaceChildren(...this.frames.map((frame, index) => itemButton(this.rowControls, this.element.ownerDocument, `${frame.name}  ${frame.source?.name ?? frame.source?.path ?? ""}${frame.lineNumber > 0 ? `:${frame.lineNumber}` : ""}`, "ash-debug-frame", "frameIndex", index, frame.id === this.selectedFrameId)));
-		this.variablesElement.replaceChildren(...this.variableRows.map((row, index) => variableItem(this.rowControls, this.element.ownerDocument, row, index)));
+		const variableInputWasFocused = this.variableEdit?.input.hasFocus();
+		const variableKeys = new Set(this.variableRows.map(row => row.key));
+		for (const key of this.variableItems.keys()) {
+			if (!variableKeys.has(key)) {
+				this.variableItems.deleteAndDispose(key);
+			}
+		}
+		this.variablesElement.replaceChildren(...this.variableRows.map((row, index) => {
+			// Preserve the click target across expansion so double-click remains one gesture.
+			let item = this.variableItems.get(row.key);
+			if (!item) {
+				item = this.variableItems.set(row.key, new DebugVariableItem(this.element.ownerDocument));
+			}
+			item.update(row, index, stopped && session.capabilities.supportsSetVariable, this.variableEdit?.row.key === row.key ? this.variableEdit.form : undefined);
+			return item.domNode;
+		}));
+		if (variableInputWasFocused) this.variableEdit?.input.focus();
 		this.watchElement.replaceChildren(...this.debug.watchExpressions.map((expression, index) => watchItem(this.rowControls, this.element.ownerDocument, expression, this.watchResults.find(result => result.expression === expression), index)));
 		const selectedExceptions = this.debug.exceptionBreakpoints;
 		this.exceptionControls.clear();
@@ -387,7 +557,9 @@ export class DebugViewPane extends ViewPane {
 	}
 
 	private scopeRow(scope: IDebugScope): DebugVariableRow { return Object.freeze({ key: ++this.variableKey, name: scope.name, variablesReference: scope.variablesReference, depth: 0, expanded: true }); }
-	private variableRow(variable: IDebugVariable, depth: number): DebugVariableRow { return Object.freeze({ key: ++this.variableKey, name: variable.name, value: variable.value, variablesReference: variable.variablesReference, depth, expanded: false, ...(variable.type ? { type: variable.type } : {}) }); }
+	private variableRow(variable: IDebugVariable, depth: number, parentVariablesReference: number): DebugVariableRow {
+		return Object.freeze({ key: ++this.variableKey, name: variable.name, value: variable.value, variablesReference: variable.variablesReference, parentVariablesReference, readOnly: variable.presentationHint?.attributes?.includes("readOnly") || variable.presentationHint?.lazy === true, depth, expanded: false, ...(variable.type ? { type: variable.type } : {}) });
+	}
 }
 
 function select(document: Document, label: string): HTMLSelectElement { const element = h(document, "select"); element.setAttribute("aria-label", label); return element; }
@@ -416,14 +588,47 @@ function itemButton(owner: DisposableStore, document: Document, label: string, c
 	item.append(action);
 	return item;
 }
-function variableItem(owner: DisposableStore, document: Document, row: DebugVariableRow, index: number): HTMLLIElement {
-	const indicator = row.variablesReference > 0 ? row.expanded ? "▾ " : "▸ " : "  ";
-	const label = `${indicator}${row.name}${row.value === undefined ? "" : ` = ${row.value}`}${row.type ? ` : ${row.type}` : ""}`;
-	const item = itemButton(owner, document, label, "ash-debug-variable", "variableIndex", index);
-	const action = item.firstElementChild as HTMLButtonElement;
-	action.style.paddingInlineStart = `${6 + row.depth * 14}px`;
-	action.disabled = row.variablesReference <= 0 && row.value === undefined;
-	return item;
+class DebugVariableItem extends AbstractDisposable {
+	public readonly domNode: HTMLLIElement;
+	private readonly action: HTMLButtonElement;
+	private readonly hover: IManagedHover;
+
+	constructor(document: Document) {
+		super();
+		this.domNode = h(document, "li");
+		this.action = h(document, "button");
+		this.action.type = "button";
+		this.action.className = "ash-debug-variable";
+		this.hover = getHoverDelegate().setupHover({ target: this.action, content: "" });
+	}
+
+	public update(row: DebugVariableRow, index: number, supportsSetVariable: boolean, editForm: HTMLFormElement | undefined): void {
+		const indicator = row.variablesReference > 0 ? row.expanded ? "▾ " : "▸ " : "  ";
+		const label = `${indicator}${row.name}${row.value === undefined ? "" : ` = ${row.value}`}${row.type ? ` : ${row.type}` : ""}`;
+		this.action.textContent = label;
+		this.hover.update(label);
+		this.action.dataset.variableIndex = String(index);
+		this.action.dataset.variableKey = String(row.key);
+		if (row.variablesReference > 0) {
+			this.action.setAttribute("aria-expanded", String(row.expanded));
+		} else {
+			this.action.removeAttribute("aria-expanded");
+		}
+		if (supportsSetVariable && row.value !== undefined && !row.readOnly) {
+			this.action.setAttribute("aria-keyshortcuts", "F2");
+			this.action.setAttribute("aria-description", localize("debug.variableEditHint", "Press F2 or double-click to change the value."));
+		} else {
+			this.action.removeAttribute("aria-keyshortcuts");
+			this.action.removeAttribute("aria-description");
+		}
+		this.action.style.paddingInlineStart = `${6 + row.depth * 14}px`;
+		this.action.disabled = row.variablesReference <= 0 && row.value === undefined;
+		this.domNode.replaceChildren(editForm ?? this.action);
+	}
+
+	protected override disposeCore(): void {
+		this.hover.dispose();
+	}
 }
 function watchItem(owner: DisposableStore, document: Document, expression: string, result: DebugWatchResult | undefined, index: number): HTMLLIElement {
 	const item = h(document, "li");

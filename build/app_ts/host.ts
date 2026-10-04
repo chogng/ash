@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
-import { lstat, mkdir, readFile, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import { lstat, mkdir, readFile, readdir, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { appTsBuildPath } from './paths.ts';
@@ -10,6 +12,39 @@ const outputRoot = appTsBuildPath(repositoryRoot);
 const compiler = join(sourceRoot, 'node_modules/typescript/bin/tsc');
 const preload = join(outputRoot, 'preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs');
 const projects = ['tsconfig.main.json', 'tsconfig.preload.json'] as const;
+
+/** Publish hashes after copying the final desktop assets; package.json cannot hash itself. */
+export async function writeApplicationChecksums(applicationRoot: string): Promise<void> {
+  const checksums: Record<string, string> = {};
+  async function collect(directory: string): Promise<void> {
+    const entries = await readdir(join(applicationRoot, directory), { withFileTypes: true });
+    entries.sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      const path = `${directory}/${entry.name}`;
+      if (entry.isDirectory()) {
+        await collect(path);
+      } else if (entry.isFile()) {
+        const hash = createHash('sha256');
+        for await (const bytes of createReadStream(join(applicationRoot, path))) {
+          hash.update(bytes);
+        }
+        checksums[path] = hash.digest('hex');
+      } else {
+        throw new Error(`Application checksum assets must be regular files: ${path}`);
+      }
+    }
+  }
+  await collect('dist');
+  await collect('resources');
+  for (const path of ['dist/main/src/main.js', 'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs', 'dist/renderer/ash/electron-browser/workbench/workbench.html']) {
+    if (!Object.hasOwn(checksums, path)) {
+      throw new Error(`Application checksum assets omit an entrypoint: ${path}`);
+    }
+  }
+  const metadata = JSON.parse(await readFile(join(applicationRoot, 'package.json'), 'utf8'));
+  metadata.checksums = checksums;
+  await writeFile(join(applicationRoot, 'package.json'), `${JSON.stringify(metadata, null, 2)}\n`);
+}
 
 export async function prepareHostOutput(): Promise<void> {
   await mkdir(outputRoot, { recursive: true });

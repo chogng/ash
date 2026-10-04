@@ -6,6 +6,28 @@ import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { writeApplicationChecksums } from './host.ts';
+import { createHash } from 'node:crypto';
+
+test('packaging publishes final desktop assets without hashing metadata or user files', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'ash-publish-checksums-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const files = ['dist/main/src/main.js', 'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs', 'dist/renderer/ash/electron-browser/workbench/workbench.html', 'resources/tray/icon.png'];
+  for (const file of files) {
+    await mkdir(join(root, file, '..'), { recursive: true });
+    await writeFile(join(root, file), file);
+  }
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'ash-desktop', version: '1.0.0', checksums: { stale: 'old' } }));
+  await writeFile(join(root, 'user-settings.json'), 'not an installation asset');
+  await writeApplicationChecksums(root);
+  const metadata = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+  assert.deepEqual(metadata, {
+    name: 'ash-desktop', version: '1.0.0',
+    checksums: Object.fromEntries(files.map(file => [file, createHash('sha256').update(file).digest('hex')])),
+  });
+  await rm(join(root, files[0]));
+  await assert.rejects(writeApplicationChecksums(root), /omit an entrypoint/);
+});
 
 for (const mode of ['build', 'watch'] as const) {
   test(`Host ${mode} regenerates deleted outputs when incremental metadata remains`, { timeout: 30_000 }, async t => {

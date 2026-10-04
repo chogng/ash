@@ -1,3 +1,4 @@
+import type { IEditorGroup, IEditorGroupsContainer } from '../../../../../services/editor/common/editorGroupsService.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -57,6 +58,22 @@ const { IQuickAccessController } = await import(
 const { BrowserTitlebarPart } = await import(
 	"../../../../../../workbench/browser/parts/titlebar/titlebarPart.js"
 );
+const { BrowserTitleService, createBrowserTitlebarPart } = await import('../../titlebarPart.js');
+const { ITitleService } = await import('../../../../../services/title/browser/titleService.js');
+const { IEditorService } = await import('../../../../../services/editor/common/editorService.js');
+const { IWorkingCopyService } = await import('../../../../../services/workingCopy/common/workingCopyService.js');
+const { BrowserWorkingCopyService } = await import('../../../../../services/workingCopy/browser/browserWorkingCopyService.js');
+const { IWorkspaceContextService } = await import('../../../../../../platform/workspace/common/workspace.js');
+const { WorkspaceContextService } = await import('../../../../../services/workspaces/browser/workspaceContextService.js');
+const { ILabelService, LabelService } = await import('../../../../../../platform/label/common/labelService.js');
+const { ILocalizationService: LocalizationServiceId } = await import('../../../../../services/localization/common/localizationService.js');
+const { IConfigurationService } = await import('../../../../../../platform/configuration/common/configuration.js');
+const { InMemoryConfigurationService } = await import('../../../../../../platform/configuration/common/inMemoryConfigurationService.js');
+const { IContextKeyService } = await import('../../../../../../platform/contextkey/common/contextkey.js');
+const { DebugTitleContribution } = await import('../../../../../contrib/debug/browser/debugTitle.js');
+const { IDebugService } = await import('../../../../../services/debug/common/debugService.js');
+const { IHostService } = await import('../../../../../services/host/browser/host.js');
+const { URI } = await import('../../../../../../base/common/uri.js');
 const { BrowserMenubarControl } = await import(
 	"../../../../../../workbench/browser/parts/titlebar/menubarControl.js"
 );
@@ -67,6 +84,173 @@ const contextMenuService: IContextMenuService = {
 	showContextMenu() {},
 	hideContextMenu() {},
 };
+
+test('host focus follows registered windows without publishing a false blur during a handoff', async () => {
+	using resources = new DisposableStore();
+	const { BrowserHostService } = await import('../../../../../services/host/browser/browserHostService.js');
+	const { ILifecycleService } = await import('../../../../../services/lifecycle/common/lifecycle.js');
+	const { registerWindow } = await import('../../../../../../base/browser/window.js');
+	const { toDisposable } = await import('../../../../../../base/common/lifecycle.js');
+	const main = browserEnvironment.window;
+	const popup = new JSDOM('<!doctype html><body></body>');
+	resources.add(toDisposable(() => popup.window.close()));
+	let mainFocused = true;
+	let popupFocused = false;
+	Object.defineProperty(main.document, 'hasFocus', { configurable: true, value: () => mainFocused });
+	Object.defineProperty(popup.window.document, 'hasFocus', { configurable: true, value: () => popupFocused });
+	resources.add(toDisposable(() => Reflect.deleteProperty(main.document, 'hasFocus')));
+	const services = resources.add(new InstantiationService());
+	services.registerInstance(ILifecycleService, {} as import('../../../../../services/lifecycle/common/lifecycle.js').ILifecycleService);
+	const host = resources.add(services.createInstance(BrowserHostService));
+	resources.add(registerWindow(popup.window as unknown as Window));
+	const changes: boolean[] = [];
+	resources.add(host.onDidChangeFocus(value => changes.push(value)));
+	mainFocused = false;
+	main.dispatchEvent(new main.Event('blur'));
+	popupFocused = true;
+	popup.window.dispatchEvent(new popup.window.Event('focus'));
+	await new Promise(resolve => setTimeout(resolve, 10));
+	assert.equal(host.hasFocus, true);
+	assert.deepEqual(changes, []);
+	popupFocused = false;
+	popup.window.dispatchEvent(new popup.window.Event('blur'));
+	await new Promise(resolve => setTimeout(resolve, 10));
+	assert.equal(host.hasFocus, false);
+	assert.deepEqual(changes, [false]);
+	host.dispose();
+	mainFocused = true;
+	main.dispatchEvent(new main.Event('focus'));
+	await new Promise(resolve => setTimeout(resolve, 10));
+	assert.deepEqual(changes, [false]);
+});
+
+test('title service shares the resolved title with its registered part and releases both', async () => {
+	using resources = new DisposableStore();
+	const ownerDocument = browserEnvironment.window.document;
+	ownerDocument.body.replaceChildren();
+	const services = resources.add(new InstantiationService());
+	const commandService = resources.add(new CommandService(services));
+	const contextKeys = resources.add(new ContextKeyService());
+	const workspace = resources.add(new WorkspaceContextService({ id: 'title-service', folders: [] }));
+	const activeChanged = resources.add(new Emitter<void>());
+	let activeEditor: import('../../../../../services/editor/common/editorService.js').EditorInput | undefined;
+	const editors: import('../../../../../services/editor/common/editorService.js').IEditorService = {
+		get activeEditor() { return activeEditor; },
+		visibleEditors: [],
+		onDidActiveEditorChange: activeChanged.event,
+		onDidVisibleEditorsChange: Event.None,
+		async openEditor(input) { activeEditor = input; activeChanged.fire(); },
+		focusActiveEditor() {},
+	};
+	const groups: IEditorGroupsContainer = {
+		activeGroup: {
+			get activeInput() { return activeEditor; },
+			onDidChangeEditors: listener => activeChanged.event(() => listener({ kind: 'activeEditorChanged', editor: undefined })),
+		} as IEditorGroup,
+		onDidChangeActiveGroup: Event.None,
+	};
+	services.registerInstance(ICommandService, commandService);
+	services.registerInstance(IMenuService, new MenuService(commandService, contextKeys));
+	services.registerInstance(ContextMenuServiceId, contextMenuService);
+	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
+	services.registerInstance(LocalizationServiceId, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
+	services.registerInstance(IEditorService, editors);
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IWorkingCopyService, resources.add(new BrowserWorkingCopyService()));
+	services.registerInstance(ILabelService, resources.add(new LabelService(workspace)));
+	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
+	services.registerInstance(IContextKeyService, contextKeys);
+	const titleService = resources.add(services.createInstance(BrowserTitleService, ownerDocument.body, 'Ash Code', createBrowserTitlebarPart, groups));
+	services.registerInstance(ITitleService, titleService);
+	const shared = services.get(ITitleService);
+	const part = titleService.getPart(ownerDocument.body);
+	assert.equal(shared, titleService);
+	assert.equal(shared.getPart(part.domNode), part);
+	assert.equal(ownerDocument.querySelectorAll('[data-part="titlebar"]').length, 1);
+	const center = part.domNode.querySelector<HTMLButtonElement>('.ash-titlebar-command-center-button')!;
+	await editors.openEditor({ resource: URI.file('/draft.ts') });
+	workspace.updateWorkspace({ id: 'project', folders: [], name: '研究项目' });
+	assert.deepEqual([shared.windowTitle.value, center.title, center.getAttribute('aria-description')], Array(3).fill('draft.ts — 研究项目 — Ash Code'));
+	const configuration = services.get(IConfigurationService);
+	await configuration.updateValue('window.title', '${branch}${separator}${activeEditorShort}${separator}${appName}');
+	contextKeys.setContext('title.branch', 'main');
+	await commandService.executeCommand('registerWindowTitleVariable', 'branch', 'title.branch');
+	assert.equal(shared.windowTitle.value, 'main — draft.ts — Ash Code');
+	const popup = new JSDOM('<!doctype html><body></body>');
+	const popupChanged = resources.add(new Emitter<void>());
+	let popupInput = { resource: URI.file('/detached.ts') };
+	const popupGroups: IEditorGroupsContainer = {
+		activeGroup: {
+			get activeInput() { return popupInput; },
+			onDidChangeEditors: listener => popupChanged.event(() => listener({ kind: 'activeEditorChanged', editor: undefined })),
+		} as IEditorGroup,
+		onDidChangeActiveGroup: Event.None,
+	};
+	const auxiliary = shared.createAuxiliaryTitlebarPart(popup.window.document.body, popupGroups, services);
+	assert.equal(shared.getPart(auxiliary.container), auxiliary);
+	assert.equal(popup.window.document.title, 'main — detached.ts — Ash Code');
+	assert.throws(() => shared.createAuxiliaryTitlebarPart(popup.window.document.body, popupGroups, services), /already has a titlebar/);
+	shared.updateProperties({ prefix: '🔴' });
+	contextKeys.setContext('title.branch', 'feature');
+	assert.equal(shared.windowTitle.value, '🔴 feature — draft.ts — Ash Code');
+	assert.equal(popup.window.document.title, '🔴 feature — detached.ts — Ash Code');
+	popupInput = { resource: URI.file('/other.ts') };
+	popupChanged.fire();
+	assert.equal(shared.windowTitle.value, '🔴 feature — draft.ts — Ash Code');
+	assert.equal(popup.window.document.title, '🔴 feature — other.ts — Ash Code');
+	const visibility: boolean[] = [];
+	resources.add(auxiliary.onMenubarVisibilityChange(value => visibility.push(value)));
+	auxiliary.updateOptions({ compact: true });
+	assert.equal(auxiliary.container.classList.contains('ash-auxiliary-titlebar-compact'), true);
+	auxiliary.updateOptions({ compact: false });
+	assert.deepEqual(visibility, [false, true]);
+	auxiliary.dispose();
+	assert.equal(auxiliary.container.isConnected, false);
+	assert.equal(popupChanged.hasListeners(), false);
+	assert.throws(() => shared.getPart(popup.window.document.body), /no titlebar registered/);
+	popup.window.close();
+	const sessionStateChanged = resources.add(new Emitter<import('../../../../../services/debug/common/debugService.js').DebugSessionState>());
+	let state: import('../../../../../services/debug/common/debugService.js').DebugSessionState = 'running';
+	let focused = false;
+	const focusChanged = resources.add(new Emitter<boolean>());
+	services.registerInstance(IHostService, {
+		get hasFocus() { return focused; },
+		onDidChangeFocus: focusChanged.event,
+		async restart() {}, async openWindow() {},
+	});
+	services.registerInstance(IDebugService, {
+		session: { get state() { return state; }, onDidChangeState: sessionStateChanged.event },
+		onDidChangeSession: Event.None,
+	} as import('../../../../../services/debug/common/debugService.js').IDebugService);
+	const debugTitle = services.createInstance(DebugTitleContribution);
+	state = 'stopped';
+	sessionStateChanged.fire(state);
+	assert.equal(shared.windowTitle.value, '🔴 feature — draft.ts — Ash Code');
+	focused = true;
+	focusChanged.fire(true);
+	assert.equal(shared.windowTitle.value, 'feature — draft.ts — Ash Code');
+	focused = false;
+	focusChanged.fire(false);
+	state = 'running';
+	sessionStateChanged.fire(state);
+	assert.equal(shared.windowTitle.value, 'feature — draft.ts — Ash Code');
+	debugTitle.dispose();
+	assert.equal(focusChanged.hasListeners(), false);
+	assert.equal(sessionStateChanged.hasListeners(), false);
+	const otherDocument = ownerDocument.implementation.createHTMLDocument();
+	assert.throws(() => shared.getPart(otherDocument.body), /no titlebar registered/);
+	titleService.dispose();
+	assert.equal(part.domNode.isConnected, false);
+	assert.equal(activeChanged.hasListeners(), false);
+	ownerDocument.title = 'Next owner';
+	await editors.openEditor({ resource: URI.file('/next.ts') });
+	assert.equal(ownerDocument.title, 'Next owner');
+});
+
+test('title service rejects assembly without its required workspace service', () => {
+	using services = new InstantiationService();
+	assert.throws(() => services.createInstance(BrowserTitleService, browserEnvironment.window.document.body, 'Ash Code', createBrowserTitlebarPart, {} as IEditorGroupsContainer), /Unknown service: workspaceContextService/);
+});
 
 test("titlebar owns a menu-driven actions container", async () => {
 	using disposables = new DisposableStore();
@@ -104,12 +288,13 @@ test("titlebar owns a menu-driven actions container", async () => {
 			this.dispose();
 		},
 	};
+	services.registerInstance(LocalizationServiceId, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	const titlebar = disposables.add(services.createInstance(BrowserTitlebarPart, ownerDocument.body, {
-		windowTitle: { value: 'Ash Code', onDidChange: Event.None },
+		windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() {}, registerVariables() {} },
 		menuService,
 		contextMenuService,
 		localizationService: { whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
-	}, menubar));
+	}, () => menubar));
 
 	const actionsContainer = titlebar.domNode.querySelector(
 		".ash-workbench-part-content > .ash-titlebar-actions",
@@ -199,12 +384,10 @@ test("titlebar renders its product icon, command center, and application menu", 
 	const menubar = new BrowserMenubarControl(ownerDocument.body, menuService, contextMenuService);
 	const titleChanged = disposables.add(new Emitter<void>());
 	const windowTitle = { value: '研究项目 — Ash Code', onDidChange: titleChanged.event };
+	services.registerInstance(LocalizationServiceId, localizationService);
 	const titlebar = disposables.add(services.createInstance(BrowserTitlebarPart, ownerDocument.body, {
 		windowTitle,
-		menuService,
-		contextMenuService,
-		localizationService,
-	}, menubar));
+	}, () => menubar));
 
 	const titleChildren = [...titlebar.domNode.querySelector(
 		".ash-workbench-part-title",

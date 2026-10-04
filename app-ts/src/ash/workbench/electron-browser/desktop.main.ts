@@ -30,7 +30,7 @@ import { WorkbenchModeId } from '../common/workbenchMode.js';
 import { createElectronWorkbenchContextMenuService } from '../services/contextmenu/electron-browser/contextMenuService.js';
 import { loadUserThemes } from '../services/themes/browser/workbenchThemeService.js';
 import { ElectronLifecycleService } from '../services/lifecycle/electron-browser/lifecycleService.js';
-import { createElectronTitlebarPartFactory } from './parts/titlebar/titlebarPart.js';
+import { createElectronTitlebarPartFactory } from '../services/title/electron-browser/titleService.js';
 import { NativeDialogHandler } from './parts/dialogs/dialogHandler.js';
 import { DirectoryPermissionDialog } from './parts/dialogs/directoryPermissionDialog.js';
 import { ElectronWindow } from './window.js';

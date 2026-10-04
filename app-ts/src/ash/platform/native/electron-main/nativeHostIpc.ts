@@ -5,6 +5,7 @@ import type {
 	IpcRoute,
 } from "../../ipc/electron-main/trustedIpcRouter.js";
 import {
+	NATIVE_HOST_IS_ADMIN_CHANNEL,
 	NATIVE_HOST_PICK_FOLDER_CHANNEL,
 	NATIVE_HOST_PICK_FILE_CHANNEL,
 	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
@@ -46,6 +47,7 @@ import { validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions } from '..
 
 /** Main-process implementation of native operations for one window. */
 export interface INativeHostMainService {
+	isAdmin(): Promise<boolean>;
 	performDialogOperation(operation: NativeDialogOperation): unknown;
 	performShellCommand(operation: ShellCommandOperation): Promise<string>;
 	pickFolder(): Promise<string | undefined>;
@@ -67,6 +69,14 @@ export function nativeHostIpcRoutes(
 	service: INativeHostMainService,
 ): readonly IpcRoute<unknown, unknown>[] {
 	return [
+		{
+			channel: NATIVE_HOST_IS_ADMIN_CHANNEL,
+			validate: value => {
+				if (value !== undefined) { throw new TypeError('Desktop privilege reads accept no arguments'); }
+				return undefined;
+			},
+			invoke: () => service.isAdmin(),
+		},
 		{
 			channel: NATIVE_HOST_DIALOG_CHANNEL,
 			validate: validateNativeDialogOperation,

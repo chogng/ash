@@ -4,13 +4,13 @@
 
 ## 快速理解
 
-Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并同时运行多个 DAP 会话。用户可以设置持久化行断点、选择线程和栈帧、递归展开变量、维护 Watch、在调试控制台求值、启用异常断点、读取适配器提供的虚拟源码，以及启动 compound 配置。调试前后的 Tasks 由 Workbench 编排；后端只负责受信任的适配器进程和 DAP framing。
+Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并同时运行多个 DAP 会话。用户可以设置持久化行断点、选择线程和栈帧、递归展开和修改变量、维护 Watch、在调试控制台求值、启用异常断点、读取适配器提供的虚拟源码，以及启动 compound 配置。调试前后的 Tasks 由 Workbench 编排；后端只负责受信任的适配器进程和 DAP framing。
 
 | 使用场景 | 当前结果 | 关键边界 |
 | --- | --- | --- |
 | 启动或附加 | ✅ `launch`、`attach`、重启、停止和 `runInTerminal` | Workbench 解释配置；后端启动适配器 |
 | 断点 | ✅ 工作区持久化行断点、适配器确认状态、异常断点 | Editor 只提供通用 gutter |
-| 停住后检查 | ✅ 线程选择、调用栈、作用域、递归变量树和 `sourceReference` | DAP Session 拥有请求语义 |
+| 停住后检查 | 线程选择、调用栈、作用域、递归变量树和 `sourceReference`；侧栏检查暂停状态时，首个栈帧有可用行列号就定位源码；支持 `setVariable` 的适配器允许修改变量 | DAP Session 拥有请求语义；只读或尚未展开的延迟变量不能修改 |
 | Watch 与控制台 | ✅ 持久 Watch；独立 Panel `Debug Console` 提供多会话 DAP 输出、清理和 `evaluate` | Watch 持久；每窗口控制台历史有界且不进通用 Output |
 | 多目标调试 | ✅ 多会话、会话切换、compound 和 `stopAll` | 后端会话仍按连接隔离 |
 | SSH Remote 调试 | ✅ adapter 由远端 App Server 启动；`${workspaceFolder}`、断点、调用栈源码和 `runInTerminal` 使用远端路径/Terminal | stdio 不需要额外 Tunnel；socket/server adapter 尚未实现 |
@@ -58,6 +58,8 @@ Editor 不得 import Debug service；它只提供无领域语义的 gutter decor
 ## 持久性与失败语义
 
 工作区存储保留行断点、Watch 表达式和按适配器类型划分的异常过滤器。适配器确认状态、调用栈、变量、控制台输出和活跃会话不会持久化。控制台在当前窗口内最多保留 20 个会话、每会话 128,000 字符；会话结束后仍可查看，但不能继续求值。切换工作区时先保存旧状态，再恢复新工作区状态并停止旧会话。
+
+暂停时，在变量行按 F2 或双击可输入新值，Enter 提交，Escape 取消。适配器拒绝修改时保留输入并显示原因；成功后显示适配器返回的值、刷新 Watch，并把焦点还给变量行。继续执行、切换会话或栈帧会结束编辑，旧检查请求和修改请求的迟到结果不能更新当前侧栏。已经发出的修改仍由适配器执行，关闭输入框不会撤销它。
 
 compound 启动中任一配置失败时，已经启动的会话会回滚。自然退出和主动停止都只执行一次 `postDebugTask`。声明式适配器被卸载后，Workbench 会先清空旧 launch 候选再重新解析，避免继续执行已经失效的命令。
 

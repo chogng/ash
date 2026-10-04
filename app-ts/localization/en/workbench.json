@@ -1,5 +1,18 @@
 {
 	"ash": {
+		"integrity.failed": "Ash could not verify its desktop environment. See the logs for details.",
+		"integrity.modified": "Ash installation files have changed or are missing. Reinstall Ash to restore the published files.",
+		"window.title.title": "Window Title",
+		"window.title.description": "Build the title with ${activeEditorShort}, ${activeEditorMedium}, ${activeEditorLong}, ${activeFolderShort}, ${activeFolderMedium}, ${activeFolderLong}, ${folderName}, ${folderPath}, ${rootName}, ${rootPath}, ${appName}, ${dirty}, and ${separator}. Registered context variables are also supported.",
+		"window.title.placeholder": "Title template",
+		"window.title.invalid": "Window title must be text.",
+		"window.titleSeparator.title": "Window Title Separator",
+		"window.titleSeparator.description": "Text inserted by ${separator} between non-empty title values.",
+		"window.titleSeparator.placeholder": "Title separator",
+		"window.titleSeparator.invalid": "Window title separator must be text.",
+		"window.title.superuser": "[Superuser]",
+		"window.title.admin": "[Administrator]",
+		"window.title.invalidVariable": "Window title variables require a name and a context key.",
 		"taskbar.newWindow": "New Window",
 		"shell.recentProjects": "Recent Folders & Workspaces",
 		"shell.noRecentProjects": "No Recent Projects",

@@ -181,8 +181,9 @@ import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
 import { ActivitybarPart } from "./parts/activitybar/activitybarPart.js";
 import { GlobalCompositeBar } from './parts/globalCompositeBar.js';
 import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
-import type {
-	TitlebarPartFactory,
+import {
+	BrowserTitleService,
+	type TitlebarPartFactory,
 } from "./parts/titlebar/titlebarPart.js";
 import { PaneCompositePartService } from "./parts/paneCompositePartService.js";
 import { IPaneCompositePartService } from "../services/panecomposite/browser/panecomposite.js";
@@ -245,6 +246,7 @@ import { NativeAccessibilityService } from "../services/accessibility/electron-b
 import { IUntitledTextEditorService, UntitledTextEditorService } from "../services/untitled/common/untitledTextEditorService.js";
 import { UntitledTextEditorInput } from "../services/untitled/common/untitledTextEditorInput.js";
 import { BrowserWorkingCopyService } from "../services/workingCopy/browser/browserWorkingCopyService.js";
+import { ITitleService } from '../services/title/browser/titleService.js';
 import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyService.js";
 import { IActivityService } from '../services/activity/common/activity.js';
 import { ActivityService } from '../services/activity/browser/activityService.js';
@@ -301,7 +303,6 @@ import { WorkbenchQuickInputService } from "../services/quickinput/browser/quick
 import { ChatContextPickService } from "../services/chat/browser/chatContextPickService.js";
 import { IChatContextPickService } from "../services/chat/common/chatContextService.js";
 import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
-import { WindowTitle } from './parts/titlebar/windowTitle.js';
 import { BrowserClipboardService } from "../../platform/clipboard/browser/clipboardService.js";
 import { IClipboardService } from "../../platform/clipboard/common/clipboardService.js";
 
@@ -978,9 +979,11 @@ export class Workbench extends Disposable {
 			});
 			const windowServices = resources.add(services.createChild());
 			windowServices.registerSingleton(IEditorService, () => new BrowserEditorService(part));
-			resources.add(windowServices.createInstance(WindowTitle, getWindow(container), mode.title));
+			windowServices.registerInstance(IContextKeyService, contextKeyService);
+			const titlebar = services.get(ITitleService).createAuxiliaryTitlebarPart(container, part, windowServices);
 			return {
 				part,
+				titlebar,
 				resources: [resources],
 			};
 		}, accessibilityService, storage));
@@ -995,15 +998,9 @@ export class Workbench extends Disposable {
 		// The URL opener requires the completed editor service graph before the window announces readiness.
 		services.get(IURLService);
 		// Commands follow focus across windows; each window title follows only that window's EditorPart.
-		const mainWindowServices = this._register(services.createChild());
-		mainWindowServices.registerSingleton(IEditorService, () => new BrowserEditorService(editor));
-		const windowTitle = this._register(mainWindowServices.createInstance(WindowTitle, ownerWindow, mode.title));
-		const titlebar = this._register(createTitlebarPart(workbenchRoot, {
-			windowTitle,
-			menuService: menus,
-			contextMenuService: contextMenus,
-			localizationService,
-		}, services));
+		const titleService = this._register(services.createInstance(BrowserTitleService, workbenchRoot, mode.title, createTitlebarPart, editor));
+		services.registerInstance(ITitleService, titleService);
+		const titlebar = titleService.getPart(workbenchRoot);
 		if (initialActivityBarLocation === ActivityBarPosition.TOP || initialActivityBarLocation === ActivityBarPosition.BOTTOM) {
 			titlebar.setActivityActions({ bar: globalCompositeBar, showContextMenu: event => activitybar.showContextMenu(event) });
 		}

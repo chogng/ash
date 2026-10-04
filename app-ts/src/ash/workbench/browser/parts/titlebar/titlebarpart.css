@@ -68,3 +68,14 @@
   align-items: center;
   color: var(--ash-title-bar-action-foreground);
 }
+
+.ash-auxiliary-titlebar {
+  flex: 0 0 auto;
+  border-radius: 0;
+}
+
+.ash-auxiliary-titlebar-compact > .ash-workbench-part-title,
+.ash-auxiliary-titlebar-compact > .ash-workbench-part-content,
+.ash-auxiliary-titlebar-compact .ash-titlebar-center-adjacent-actions {
+  display: none;
+}

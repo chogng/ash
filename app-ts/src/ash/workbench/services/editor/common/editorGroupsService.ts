@@ -26,6 +26,12 @@ export interface IEditorGroup {
 	focus(): void;
 }
 
+/** Window-local group selection consumed by window chrome. Group state remains owned by EditorPart. */
+export interface IEditorGroupsContainer {
+	readonly activeGroup: IEditorGroup;
+	readonly onDidChangeActiveGroup: Event<IEditorGroup>;
+}
+
 /** Internal lifecycle controls used when an editor is moved instead of closed. */
 export interface EditorCloseOptions {
 	readonly skipConfirmation?: boolean;

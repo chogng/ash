@@ -85,6 +85,12 @@
 		"testing.staleSelection": "所选测试已改变。请刷新测试后重新选择。",
 		"testing.backendError": "测试后端错误：{0}",
 		"testing.verbosityTitle": "测试辅助功能帮助",
-		"testing.verbosityDescription": "测试树获得焦点时提示如何打开辅助功能帮助。"
+		"testing.verbosityDescription": "测试树获得焦点时提示如何打开辅助功能帮助。",
+		"debug.setVariableUnsupported": "调试适配器不支持修改变量。",
+		"debug.setVariableNotStopped": "请先暂停执行，再修改变量。",
+		"debug.invalidVariableValue": "变量值最多包含 32768 个字符，且不能包含空字符。",
+		"debug.editVariable": "{0} 的值",
+		"debug.editVariableHelp": "按 Enter 应用新值，按 Escape 取消。",
+		"debug.variableEditHint": "按 F2 或双击可修改变量值。"
 	}
 }

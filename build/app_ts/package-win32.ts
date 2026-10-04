@@ -1,4 +1,5 @@
 import { packager } from '@electron/packager';
+import { writeApplicationChecksums } from './host.ts';
 import { rebuild } from '@electron/rebuild';
 import { spawn } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
@@ -74,9 +75,11 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
     electronVersion: electronMetadata.version,
     platform: 'win32',
     arch: 'x64',
-    onlyModules: ['native-keymap'],
+    onlyModules: ['native-keymap', 'native-is-elevated'],
     force: true,
   });
+
+  await writeApplicationChecksums(appStage);
 
   const backend = options.get('--backend-package') ?? await buildBackend(stage);
   await validateBackend(backend);
