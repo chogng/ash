@@ -61,6 +61,7 @@ export interface GitBranch {
 	readonly objectId: string;
 	readonly current: boolean;
 	readonly upstream: string | undefined;
+	readonly checkedOutElsewhere?: boolean;
 }
 
 export type GitRemoteProvider = "github" | "gitlab" | "bitbucket" | "other";

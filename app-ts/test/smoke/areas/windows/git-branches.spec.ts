@@ -1,11 +1,45 @@
 import { execFile } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 
 const run = promisify(execFile);
 
 test.use({ gitRepository: true });
+
+test('Git branch picker explains occupancy and switches after the other worktree is removed', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+	const cwd = testWorkspace.directory;
+	const linked = await mkdtemp(join(tmpdir(), 'ash-branch-worktree-'));
+	try {
+		await run('git', ['worktree', 'add', '-b', 'occupied', linked], { cwd });
+		const page = workbench.page;
+		const picker = page.locator('.ash-quick-pick');
+		for (const command of ['git.switchBranch', 'git.deleteBranch']) {
+			await workbench.quickaccess.runCommand(command);
+			await picker.getByRole('combobox').fill('occupied');
+			await expect(picker.getByRole('option', { name: 'occupied Checked out in another worktree', exact: true })).toBeVisible();
+			await picker.getByRole('combobox').press('Enter');
+			await expect(page.getByRole('region', { name: 'Notifications' }).getByRole('status').filter({ hasText: 'Branch occupied is checked out in another worktree.' }).last()).toBeVisible();
+			await expect(picker).toHaveCount(0);
+		}
+		expect((await run('git', ['branch', '--show-current'], { cwd })).stdout.trim()).toBe('main');
+		expect((await run('git', ['branch', '--format=%(refname:short)', '--list', 'occupied'], { cwd })).stdout.trim()).toBe('occupied');
+
+		await run('git', ['worktree', 'remove', linked], { cwd });
+		await workbench.quickaccess.runCommand('git.switchBranch');
+		await picker.getByRole('combobox').fill('occupied');
+		await expect(picker.getByRole('option', { name: 'occupied', exact: true })).toBeVisible();
+		await picker.getByRole('combobox').press('Enter');
+		await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toContainText('occupied');
+		expect((await run('git', ['branch', '--show-current'], { cwd })).stdout.trim()).toBe('occupied');
+	} finally {
+		await rm(linked, { recursive: true, force: true });
+		await run('git', ['worktree', 'prune'], { cwd });
+	}
+});
 
 test('Git branch command switches branches and the status bar opens the branch picker', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');

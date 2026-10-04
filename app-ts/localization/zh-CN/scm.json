@@ -131,6 +131,8 @@
 		"git.detachedWorktree": "分离 HEAD",
 		"git.selectBranch": "选择 Git 分支",
 		"git.currentBranch": "当前分支",
+		"git.branchCheckedOutElsewhere": "分支 {0} 已在另一个工作树中检出。",
+		"git.branchWorktreeOccupancy": "已在另一个工作树中检出",
 		"git.noBranches": "此仓库没有可切换的分支。",
 		"git.switchBranchFailed": "无法切换分支：{0}",
 		"git.switchBranchRejected": "Git 拒绝切换。请检查本地修改和其他工作树。",

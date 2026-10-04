@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { AppServerRemoteError } from '../../../../../platform/app-server/common/appServerError.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -7,6 +8,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
+import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { type GitBranch, IGitService } from '../../common/gitService.js';
 import { GitCreateBranchCommandId, GitDeleteBranchCommandId, GitSwitchBranchCommandId } from '../../common/gitCommands.js';
 import '../../browser/gitBranches.js';
@@ -113,7 +115,43 @@ test('Git branch command leaves the current branch alone and reports a rejected 
 	]);
 });
 
-function quickInputSelecting(index: () => number, calls: string[]): IQuickInputService {
+for (const locale of ['en', 'zh-CN']) {
+	test(`Git branch commands explain worktree occupancy without switching or asking to delete (${locale})`, async () => {
+		const calls: string[] = [];
+		const rows: IQuickPickItem[][] = [];
+		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		if (locale === 'zh-CN') {
+			setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		}
+		try {
+			using services = new InstantiationService();
+			services.registerInstance(IGitService, {
+				getRepository: async () => ({ id: 'repo-1' }),
+				branches: async () => [{ name: 'occupied', objectId: 'one', current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }],
+				switchBranch: async () => { calls.push('switch'); },
+				deleteBranch: async () => { calls.push('delete'); },
+			} as unknown as IGitService);
+			services.registerInstance(IQuickInputService, quickInputSelecting(() => 0, calls, items => rows.push([...items])));
+			services.registerInstance(IDialogService, { confirm: async () => { calls.push('confirm'); return { confirmed: true }; } } as unknown as IDialogService);
+			services.registerInstance(INotificationService, { warning: (message: string) => { calls.push(message); } } as INotificationService);
+			using commands = new CommandService(services);
+			await commands.executeCommand(GitSwitchBranchCommandId);
+			await commands.executeCommand(GitDeleteBranchCommandId);
+
+			const message = locale === 'zh-CN' ? '分支 occupied 已在另一个工作树中检出。' : 'Branch occupied is checked out in another worktree.';
+			const detail = locale === 'zh-CN' ? '已在另一个工作树中检出' : 'Checked out in another worktree';
+			assert.deepEqual(calls, ['show:occupied', message, 'show:occupied', message]);
+			assert.deepEqual(rows.map(items => items.map(({ label, description, detail }) => ({ label, description, detail }))), [
+				[{ label: 'occupied', description: 'origin/occupied', detail }],
+				[{ label: 'occupied', description: 'origin/occupied', detail }],
+			]);
+		} finally {
+			resetNlsResolver();
+		}
+	});
+}
+
+function quickInputSelecting(index: () => number, calls: string[], inspect?: (items: readonly IQuickPickItem[]) => void): IQuickInputService {
 	return {
 		createQuickPick: <T extends IQuickPickItem>() => {
 			const accept = new Emitter<T>();
@@ -125,6 +163,7 @@ function quickInputSelecting(index: () => number, calls: string[]): IQuickInputS
 				onDidAccept: accept.event,
 				onDidHide: hide.event,
 				show(): void {
+					inspect?.(this.items);
 					calls.push(`show:${this.items.map(item => item.label).join(',')}`);
 					queueMicrotask(() => accept.fire(this.items[index()]!));
 				},

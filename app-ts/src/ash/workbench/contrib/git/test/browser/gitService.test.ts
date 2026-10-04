@@ -12,6 +12,26 @@ import { GitService } from "../../browser/gitService.js";
 import { GitConfiguration } from '../../common/gitConfiguration.js';
 import { GitWorkspaceError } from '../../common/gitService.js';
 
+test('GitService retries failed branch queries and reads worktree occupancy afresh', async () => {
+	let attempt = 0;
+	const api = {
+		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }] }),
+		branches: async () => {
+			if (++attempt === 1) throw new Error('Branch query failed');
+			return { branches: [{ name: 'topic', objectId: 'commit', current: false, upstream: null, checkedOutElsewhere: attempt === 2 }] };
+		},
+	} as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'disconnected', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
+
+	await assert.rejects(service.branches('root'), /Branch query failed/);
+	assert.deepEqual(await service.branches('root'), [{ name: 'topic', objectId: 'commit', current: false, upstream: undefined, checkedOutElsewhere: true }]);
+	assert.deepEqual(await service.branches('root'), [{ name: 'topic', objectId: 'commit', current: false, upstream: undefined, checkedOutElsewhere: false }]);
+});
+
 test('GitService catalog notifications supersede stale discovery and remove the active repository', async () => {
 	const pending: Array<(value: GitRepositoriesResult) => void> = [];
 	let notify: (event: ServerNotification) => void = () => { throw new Error('missing subscription'); };

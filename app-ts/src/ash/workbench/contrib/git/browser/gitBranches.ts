@@ -36,6 +36,10 @@ registerAction2(class GitSwitchBranchAction extends Action2 {
 			}
 			const selected = await pickBranch(accessor.get(IQuickInputService), branches);
 			if (!selected || selected.current) return;
+			if (selected.checkedOutElsewhere) {
+				notifications.warning(localize('git.branchCheckedOutElsewhere', 'Branch {0} is checked out in another worktree.', selected.name));
+				return;
+			}
 			await git.switchBranch(selected.name, targetRepositoryId);
 		} catch (error) {
 			const reason = error instanceof AppServerRemoteError && error.errorName === 'GitOperationFailed'
@@ -92,6 +96,10 @@ registerAction2(class GitDeleteBranchAction extends Action2 {
 			}
 			const selected = await pickBranch(accessor.get(IQuickInputService), branches, localize('git.selectBranchToDelete', 'Select a Git branch to delete'));
 			if (!selected) { return; }
+			if (selected.checkedOutElsewhere) {
+				notifications.warning(localize('git.branchCheckedOutElsewhere', 'Branch {0} is checked out in another worktree.', selected.name));
+				return;
+			}
 			const confirmation = await accessor.get(IDialogService).confirm({
 				title: localize('git.deleteBranchCommandTitle', 'Git: Delete Branch'),
 				message: localize('git.deleteBranchConfirm', 'Delete local branch {0}?', selected.name),
@@ -119,6 +127,7 @@ function pickBranch(quickInput: IQuickInputService, branches: readonly GitBranch
 	picker.items = branches.map(branch => ({
 		label: branch.name,
 		description: branch.current ? localize({ bundle: 'ash', key: 'git.currentBranch' }, 'Current') : branch.upstream,
+		detail: branch.checkedOutElsewhere ? localize('git.branchWorktreeOccupancy', 'Checked out in another worktree') : undefined,
 		branch,
 	}));
 	return new Promise(resolve => {
