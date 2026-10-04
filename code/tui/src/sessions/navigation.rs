@@ -2,8 +2,8 @@
 
 use super::Command;
 use super::SessionsState;
-use super::manager::SessionManagerPointerTarget;
 use super::manager::SessionManagerState;
+use super::manager::SessionManagerTarget;
 use crate::keymap::bindings;
 use crate::thread::preview::ConversationPreview;
 use crate::widgets::navigation::Navigation;
@@ -48,11 +48,11 @@ impl SessionNavigation {
     pub(crate) fn activate_manager_pointer(
         &mut self,
         model: &SessionsState,
-        target: &SessionManagerPointerTarget,
+        target: &SessionManagerTarget,
         click: crate::widgets::list_selection::ListSelectionClick,
     ) -> SessionManagerInputOutcome {
         if !matches!(self.screen(), Some(SessionScreen::Manager))
-            || !self.manager.focus_pointer(model.catalog(), target)
+            || !self.manager.focus_target(model.catalog(), target)
         {
             return SessionManagerInputOutcome::Unhandled;
         }
@@ -60,10 +60,10 @@ impl SessionNavigation {
         if matches!(
             (target, click),
             (
-                SessionManagerPointerTarget::Session(_),
+                SessionManagerTarget::Session(_),
                 crate::widgets::list_selection::ListSelectionClick::Single
             ) | (
-                SessionManagerPointerTarget::Group(_),
+                SessionManagerTarget::Group(_),
                 crate::widgets::list_selection::ListSelectionClick::Double
             )
         ) {

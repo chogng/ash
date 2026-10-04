@@ -1,6 +1,7 @@
 use ash_app_server_protocol::protocol::session::SessionRequestResult;
 use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
 mod active;
+mod color;
 mod completion;
 mod details;
 mod grouping;
@@ -22,7 +23,7 @@ pub(crate) use completion::prepare_command;
 pub(crate) use details::load_details;
 pub(crate) use grouping::GROUPING_KEY;
 pub(crate) use grouping::SessionGrouping;
-pub(crate) use manager::SessionManagerPointerTarget;
+pub(crate) use manager::SessionManagerTarget;
 pub(crate) use manager::SessionManagerView;
 pub(crate) use manager::draw_manager;
 pub(crate) use manager::pointer_target_at as session_manager_pointer_target_at;

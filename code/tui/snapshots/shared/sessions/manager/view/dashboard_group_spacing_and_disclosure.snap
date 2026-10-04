@@ -1,5 +1,5 @@
 ---
-source: code/tui/src/sessions/manager_tests.rs
+source: code/tui/src/sessions/manager/view_tests.rs
 expression: "frames.join(\"\\n\\n\")"
 ---
 ─ Dashboard ───────────────────────────── Group: Status  g ─

@@ -981,7 +981,7 @@ fn session_manager_items_hover_and_activate_without_changing_the_draft() {
             matches!(
                 super::target_at(&app, area, *column, *row),
                 Some(PointerTarget::SessionManager(
-                    crate::sessions::SessionManagerPointerTarget::Session(id)
+                    crate::sessions::SessionManagerTarget::Session(id)
                 )) if id.as_str() == "pointer-session"
             )
         })
@@ -990,7 +990,7 @@ fn session_manager_items_hover_and_activate_without_changing_the_draft() {
     assert!(matches!(
         app.fullscreen.pointer.hovered(),
         Some(PointerTarget::SessionManager(
-            crate::sessions::SessionManagerPointerTarget::Session(id)
+            crate::sessions::SessionManagerTarget::Session(id)
         )) if id.as_str() == "pointer-session"
     ));
     assert!(app.session_manager_focused());

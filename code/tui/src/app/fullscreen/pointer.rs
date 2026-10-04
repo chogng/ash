@@ -109,7 +109,7 @@ pub(crate) enum PointerTarget {
     Header(super::header::Target),
     HomeAction(super::home::Action),
     Issues(crate::issues::PointerTarget),
-    SessionManager(crate::sessions::SessionManagerPointerTarget),
+    SessionManager(crate::sessions::SessionManagerTarget),
     Approval(usize),
     Query(usize),
     Queue(QueueId),
@@ -603,7 +603,7 @@ fn clamp_to_rect(position: ratatui::layout::Position, area: Rect) -> ratatui::la
 
 fn activate_session_manager(
     app: &mut App,
-    target: crate::sessions::SessionManagerPointerTarget,
+    target: crate::sessions::SessionManagerTarget,
     click: crate::widgets::list_selection::ListSelectionClick,
 ) -> Option<AppCommand> {
     app.fullscreen.focus_page();

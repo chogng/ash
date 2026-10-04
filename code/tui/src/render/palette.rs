@@ -407,6 +407,16 @@ impl RenderTheme {
     pub(crate) const fn accent(self) -> Color {
         self.accent
     }
+    /// Slot order is stable even when terminal color conversion produces duplicate colors.
+    pub(super) const fn identity_colors(self) -> [Color; 5] {
+        [
+            self.accent,
+            self.keyword,
+            self.string,
+            self.function,
+            self.variable,
+        ]
+    }
     pub(crate) const fn accent_surface_background(self) -> Color {
         self.accent_surface_background
     }

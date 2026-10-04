@@ -137,6 +137,9 @@ impl<'a> RenderContext<'a> {
     pub(crate) const fn accent(self) -> Color {
         self.theme.accent()
     }
+    pub(crate) const fn identity_colors(self) -> [Color; 5] {
+        self.theme.identity_colors()
+    }
     pub(crate) const fn accent_surface_background(self) -> Color {
         self.theme.accent_surface_background()
     }
