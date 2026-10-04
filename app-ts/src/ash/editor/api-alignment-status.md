@@ -1,5 +1,27 @@
 # Editor API 对齐状态
 
+## 颜色选择器复用 base 控件（2026-10-04）
+
+按本轮用户授权，选色交互共用 `base/browser/ui/colorPicker`，Editor 在现有控制器与颜色服务上补文档能力。生产链为色块或命令 → `ColorPickerController` → `ColorPickerWidget` → base `ColorPicker` → 提供者格式 → 一次可撤销编辑。
+
+| 归属 | 当前职责 |
+| --- | --- |
+| base `ColorPicker` | 二维饱和度与亮度、色相、透明度、Hex / RGB / CSS / HSL / HSB 输入、指针捕获及键盘操作。嵌入方式使用 group 语义，外部调用方拥有弹窗 |
+| Editor `ColorPickerWidget` | 同一控件用于独立颜色窗口和 Hover，提供文档格式、恢复原色和提交动作；独立窗口按标准 `IContentWidget` 挂载，Hover 由共享内容控件承载，主题绑定随 Widget 释放 |
+| Editor `ColorPickerController` / `ColorService` | 颜色检测及提供者归属、请求取消、格式结果失效、光标与文档变化、多个选区插入及原子撤销。Hover 提交后跟踪新范围并重新取得当前文档版本的格式；提供者没有返回格式或请求失败时不生成替代编辑 |
+| `HoverColorPickerParticipant` / `ContentHoverController` | 色块与键盘入口进入共享 Hover，颜色和语言说明共用一个弹窗；共享显示延迟、隐藏延迟、修饰键、上下位置、焦点和释放链 |
+| `colorPickerContribution.ts` / `standaloneColorPickerActions.ts` / `color.ts` | 显示或聚焦 / 隐藏 / 插入动作、可见与聚焦上下文键、Enter / Escape、颜色及格式查询命令，以及无障碍帮助、当前颜色文本和提示开关 |
+
+原 Editor HSL 滑条、独立颜色转换和固定弹窗尺寸退出。首次有效格式结果按源文本选择格式，短 Hex 保留 Hex；后续刷新保留用户选择，等待最新结果时禁用提交。既有 Ash `ColorPickerController` 与 `common/languageColors.ts` 保留本轮确认的职责，不增加第二个控制器或搬入上游私有 Parts 类。
+
+Hover 在结束指针操作、键盘选色、切换格式或恢复原色时直接写入文档，每次提交可撤销，关闭后保留已提交编辑。独立颜色窗口先预览，通过 Apply 或 Enter 提交；文本输入框内的 Enter 只确认输入，关闭取消尚未提交的预览。等待最新格式时，键盘提交等待同一请求；关闭、换色或模型变化使过期结果失效。溢出控件仍归属原编辑器，跨编辑器切换后 Enter 不会改写另一个文档。
+
+`_executeDocumentColorProvider` 返回已加载模型的颜色范围与四个归一化分量；`_executeColorPresentationProvider` 按指定范围聚合所有匹配提供者的格式，不依赖先前的颜色检测，并遵循默认颜色提供者开关。本轮补齐上述用户能力，不把 `ColorDetector` / `ColorPickerWidget` 的其余上游公开成员计为已对齐，也不把 base 的复用记为上游 Parts 文件已实现。
+
+最终验证：22 项颜色定向单测和完整 Editor Chromium 回归的 778 个场景通过；完整 Editor 检查为 251 个单测文件、1544 项通过，文件集合、CSS 归属、台账及 Stanza 类型检查通过。Renderer 类型检查、Stanza 生产构建和产品冒烟测试源码编译通过。覆盖自动提交、格式长短变化后的范围跟踪、语言说明共存、延迟格式与取消、跨编辑器焦点、查询命令、指针及键盘、格式保留、附加编辑、多选区、撤销、主题、中文、无障碍帮助和释放。共享键盘派发保留正文输入前的快捷键处理，控件先处理自己的按键，并保留按钮的浏览器默认激活；固定标题栏折叠及粘贴选项的键盘回归通过。
+
+前一轮共享 base 改造的 Web / Electron UI / Electron App Server 冒烟已通过；本轮新增产品场景尚未运行。当前完整 Renderer 构建被独立的生成协议包 `app-server-protocol`（502097 字节）超过仓库 500000 字节限制阻塞，保留大小限制，未将前一轮产品结果算作本轮验证。
+
 ## Chat 编辑自动接受
 
 `chat.editing.autoAcceptDelay` 使用上游设置键与 0–100 秒范围，WINDOW 作用域，默认 0（手动审核）。对应 `chat/browser/chat.shared.contribution.ts` 注册真实配置，现有设置页 Chat → Defaults 展示并保存到 settings.json。Chat Editing 服务管理审阅、计时与取消，编辑器工具栏显示剩余秒数；审核列表支持取消已关闭文件和整批文件操作的自动接受。计时更新不重建差异区域和已聚焦的工具栏操作。
@@ -2304,7 +2326,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `common/viewLayout/viewLayout.ts` | `ViewLayout` | View Zone 的并行 map、`addViewZone` / `changeViewZone` / `removeViewZone` / `getViewZoneLayout` 已删除，标准 whitespace 同时决定纵向空间和最小内容宽度；仍多出 `layout`、`lineCount`、`onDidChange`、`setLineHeight`、`setViewportSize` 及两个零基行坐标入口，需等待 View/Widget 调用方迁完后收敛 |
 | `common/cursor/cursorTypeEditOperations.ts` | `TypeWithoutInterceptorsOperation` | 只拥有无拦截输入的编辑构造；结果选区由标准 `ICommand` 收集和 `CursorsController` 事务归一化，不再依赖仅本地编辑命令协议 |
 | `common/cursor/cursorTypeEditOperations.ts` | `AutoClosingOvertypeOperation` | 只根据自动闭合来源和当前位置构造覆盖命令；多光标、完整字素和物理行边界由本地行为测试直接验证，不要求复刻上游私有执行阶段 |
-| `contrib/colorPicker/browser/colorPickerWidget.ts` | `ColorPickerWidget` | 已回到对应路径并拥有挂载、控件事件和释放；保留 Ash 的颜色模型与展示，构造器和其余上游公开接口仍未全量对齐 |
+| `contrib/colorPicker/browser/colorPickerWidget.ts` | `ColorPickerWidget` | 复用 base ColorPicker 的选色控件，按 IContentWidget 挂载、定位和释放；Editor 保留文档格式与提交，构造器和其余上游公开接口仍未全量对齐 |
 | `contrib/peekView/browser/peekView.ts` | `PeekViewWidget` | 已回到对应路径并拥有标题、Escape 和关闭事件，导航 / 层级 / Quick Diff 接通释放；Ash 的内容容器与布局接口继续保留，未实现上游全部标题栏能力 |
 | `contrib/codeAction/browser/codeActionController.ts` | `CodeActionController` | 同路径贡献负责 Code Action 请求和编辑提交；动作列表、筛选、分组、分类标签页、忙碌状态和菜单释放由 platform/actionWidget 管理，焦点只在菜单拥有焦点时恢复，预览接入既有 Bulk Edit。完整上游公开契约仍待核对 |
 | `contrib/codelens/browser/codelensWidget.ts` | `CodeLensWidget` | 当前已使用 `CodeLensWidget` 名称；其余公开契约仍待按生产调用方逐项验收 |

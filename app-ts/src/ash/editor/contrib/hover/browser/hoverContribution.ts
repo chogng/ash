@@ -1,5 +1,6 @@
 import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { ContentHoverController } from './contentHoverController.js';
+import './hoverActions.js';
 
 registerEditorContribution({
 	id: 'editor.contrib.hover',

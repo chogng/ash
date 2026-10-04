@@ -37,12 +37,16 @@ export class ColorPicker extends Disposable {
 	private gesture: { readonly pointerId: number; readonly color: Color } | undefined;
 	private rangeOriginal: Color | undefined;
 
-	constructor(ownerDocument: Document) {
+	constructor(ownerDocument: Document, variant: 'dialog' | 'embedded' = 'dialog') {
 		super();
-		this.domNode = h(ownerDocument, 'div', { className: 'ash-color-picker', attributes: { role: 'dialog', 'aria-label': localize('colorPicker.title', 'Color picker'), 'aria-modal': 'false' } });
+		this.domNode = h(ownerDocument, 'div', { className: `ash-color-picker ${variant}`, attributes: { role: variant === 'dialog' ? 'dialog' : 'group', 'aria-label': localize('colorPicker.title', 'Color picker') } });
+		if (variant === 'dialog') { this.domNode.setAttribute('aria-modal', 'false'); }
 		focusedPickers.set(this.domNode, this);
 		const heading = h(ownerDocument, 'div', { className: 'ash-color-picker-heading' }, h(ownerDocument, 'span', {}, localize('colorPicker.title', 'Color picker')));
-		this._register(new Button(heading, { label: localize('colorPicker.close', 'Close'), size: 'small', onClick: () => this.closeEmitter.fire() }));
+		if (variant === 'dialog') {
+			this._register(new Button(heading, { label: localize('colorPicker.close', 'Close'), size: 'small', onClick: () => this.closeEmitter.fire() }));
+			this.domNode.append(heading);
+		}
 		this.markerDomNode = h(ownerDocument, 'span', { className: 'ash-color-picker-marker', attributes: { 'aria-hidden': 'true' } });
 		this.areaDomNode = h(ownerDocument, 'div', { className: 'ash-color-picker-area', attributes: { role: 'slider', tabindex: '0', 'aria-label': localize('colorPicker.area', 'Saturation and brightness'), 'aria-valuemin': '0', 'aria-valuemax': '100' } }, this.markerDomNode);
 		this.hueInput = h(ownerDocument, 'input', { className: 'ash-color-picker-hue', attributes: { type: 'range', min: '0', max: '360', step: '1', 'aria-label': localize('colorPicker.hue', 'Hue') } });
@@ -61,7 +65,7 @@ export class ColorPicker extends Disposable {
 		this.valuesDomNode = h(ownerDocument, 'div', { className: 'ash-color-picker-values' }, this.valueInput, this.channelsDomNode);
 		this.messageDomNode = h(ownerDocument, 'div', { className: 'ash-color-picker-message', attributes: { role: 'status' }, properties: { hidden: true } });
 		this.palettesDomNode = h(ownerDocument, 'div', { className: 'ash-color-picker-palettes' });
-		this.domNode.append(heading, this.areaDomNode, this.hueInput, h(ownerDocument, 'div', { className: 'ash-color-picker-checker' }, this.alphaInput), h(ownerDocument, 'div', { className: 'ash-color-picker-fields' }, this.formatInput, this.valuesDomNode, h(ownerDocument, 'label', { className: 'ash-color-picker-opacity' }, this.alphaNumberInput, h(ownerDocument, 'span', {}, '%'))), this.messageDomNode, this.palettesDomNode);
+		this.domNode.append(this.areaDomNode, this.hueInput, h(ownerDocument, 'div', { className: 'ash-color-picker-checker' }, this.alphaInput), h(ownerDocument, 'div', { className: 'ash-color-picker-fields' }, this.formatInput, this.valuesDomNode, h(ownerDocument, 'label', { className: 'ash-color-picker-opacity' }, this.alphaNumberInput, h(ownerDocument, 'span', {}, '%'))), this.messageDomNode, this.palettesDomNode);
 		this._register(addDisposableListener(this.formatInput, 'change', () => {
 			this.format = this.formatInput.value as ColorFormat;
 			this.render();

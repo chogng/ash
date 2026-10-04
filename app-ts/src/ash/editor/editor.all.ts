@@ -13,7 +13,7 @@ import './contrib/dropOrPasteInto/browser/dropIntoEditorContribution.js';
 import "./contrib/clipboard/browser/clipboard.js";
 import "./contrib/codeAction/browser/codeActionContributions.js";
 import "./contrib/codelens/browser/codelensController.js";
-import "./contrib/colorPicker/browser/colorPickerController.js";
+import "./contrib/colorPicker/browser/colorPickerContribution.js";
 import "./contrib/comment/browser/comment.js";
 import './contrib/contextmenu/browser/contextmenu.js';
 import './contrib/cursorUndo/browser/cursorUndo.js';

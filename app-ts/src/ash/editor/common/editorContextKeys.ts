@@ -1,6 +1,8 @@
 import { ContextKeyExpr, RawContextKey } from '../../platform/contextkey/common/contextkey.js';
 
 export namespace EditorContextKeys {
+	export const standaloneColorPickerVisible = new RawContextKey<boolean>('standaloneColorPickerVisible', false);
+	export const standaloneColorPickerFocused = new RawContextKey<boolean>('standaloneColorPickerFocused', false);
 	export const stickyScrollFocused = new RawContextKey<boolean>('stickyScrollFocused', false);
 	export const stickyScrollVisible = new RawContextKey<boolean>('stickyScrollVisible', false);
 	export const hasRenameProvider = new RawContextKey<boolean>('editorHasRenameProvider', false);

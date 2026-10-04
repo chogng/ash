@@ -5,6 +5,14 @@ import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { ColorPickerModel } from '../../browser/colorPickerModel.js';
 
+test('selecting a document presentation flushes only the final selection', () => {
+	using model = new ColorPickerModel(Color.white, [{ label: 'rgb' }, { label: 'hsl' }, { label: 'hex' }], 0);
+	const flushed: string[] = [];
+	using listener = model.onColorFlushed(() => flushed.push(model.presentation.label));
+	model.selectColorPresentation(2);
+	assert.deepEqual(flushed, ['hex']);
+});
+
 test('color picker model retains format choice while provider presentations refresh', () => {
 	const range = Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (9) + 1));
 	const presentations = ['rgba(255, 0, 0, 0.5)', 'hsla(0, 100%, 50%, 0.5)', '#ff000080'].map(label => ({ label, textEdit: { range, text: label } }));
@@ -19,6 +27,14 @@ test('color picker model retains format choice while provider presentations refr
 	];
 
 	assert.equal(model.presentation.label, '#00ff0080');
+	model.colorPresentations = [];
 	model.selectNextColorPresentation();
-	assert.equal(model.presentation.label, 'rgba(0, 255, 0, 0.5)');
+	model.colorPresentations = [
+		{ label: 'rgb(0, 255, 0)' },
+		{ label: 'hsl(120, 100%, 50%)' },
+		{ label: '#00ff0080' },
+	];
+	assert.equal(model.presentation.label, '#00ff0080');
+	model.selectNextColorPresentation();
+	assert.equal(model.presentation.label, 'rgb(0, 255, 0)');
 });

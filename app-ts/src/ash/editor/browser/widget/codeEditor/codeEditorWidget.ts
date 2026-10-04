@@ -812,7 +812,11 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	hasWidgetFocus(): boolean {
-		return this.currentModel !== null && this.widgetFocus.hasFocus;
+		if (!this.currentModel) { return false; }
+		if (this.widgetFocus.hasFocus) { return true; }
+		// Overflow content widgets belong to the editor even when their DOM is mounted outside its root.
+		const activeElement = this.rootDomNode.ownerDocument.activeElement;
+		return activeElement !== null && [...this.contentWidgets.values()].some(widget => widget.getDomNode().contains(activeElement));
 	}
 
 	getModel(): TextModel | null {

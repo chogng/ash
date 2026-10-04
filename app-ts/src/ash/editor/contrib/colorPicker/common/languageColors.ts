@@ -1,3 +1,4 @@
+import { Color, RGBA } from '../../../../base/common/color.js';
 import { type Event } from '../../../../base/common/event.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../common/core/range.js';
@@ -49,6 +50,29 @@ export class ColorService {
 	}
 
 	async provideColorPresentations(languageId: string, data: ColorData, color: IColor, signal: AbortSignal): Promise<readonly IColorPresentation[]> {
+		return await this.requestColorPresentations(languageId, data, color, signal) ?? Object.freeze([]);
+	}
+
+	public async provideColorPresentationsFromProviders(languageId: string, range: Range, color: IColor, enablement: DefaultColorDecoratorsEnablement, signal: AbortSignal): Promise<readonly IColorPresentation[]> {
+		const request = this.createRequest(languageId, signal);
+		const result: IColorPresentation[] = [];
+		let validProviderFound = false;
+		for (const provider of this.providers.ordered(this.model)) {
+			const values = await this.requestColorPresentations(languageId, { provider, information: { range, color } }, color, signal);
+			if (!isLanguageFeatureRequestCurrent(request)) { return Object.freeze([]); }
+			if (!values) { continue; }
+			validProviderFound = true;
+			result.push(...values);
+		}
+		if (enablement === 'always' || enablement === 'auto' && !validProviderFound) {
+			const values = await this.provideColorPresentations(languageId, { provider: this.defaultProvider, information: { range, color } }, color, signal);
+			if (!isLanguageFeatureRequestCurrent(request)) { return Object.freeze([]); }
+			result.push(...values);
+		}
+		return Object.freeze(result);
+	}
+
+	private async requestColorPresentations(languageId: string, data: ColorData, color: IColor, signal: AbortSignal): Promise<readonly IColorPresentation[] | undefined> {
 		const request: LanguageColorPresentationRequest = Object.freeze({
 			...this.createRequest(languageId, signal),
 			color,
@@ -57,11 +81,11 @@ export class ColorService {
 		try {
 			const values = await data.provider.provideColorPresentations(request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
-			return Object.freeze((values?.length ? values : createColorPresentations(request.range, color)).map(normalizePresentation));
+			return values ? Object.freeze(values.map(normalizePresentation)) : undefined;
 		} catch (error) {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			this.onError(error);
-			return Object.freeze(createColorPresentations(request.range, color).map(normalizePresentation));
+			return undefined;
 		}
 	}
 
@@ -123,28 +147,13 @@ function createColorPresentations(range: Range, color: IColor): readonly IColorP
 	const alphaByte = Math.round(color.alpha * 255);
 	const alpha = rounded(color.alpha, 3);
 	const rgb = alphaByte === 255 ? `rgb(${red}, ${green}, ${blue})` : `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-	const [hue, saturation, lightness] = rgbToHsl(color);
+	const hsla = new Color(new RGBA(red, green, blue, color.alpha)).hsla;
+	const hue = hsla.h;
+	const saturation = Math.round(hsla.s * 100);
+	const lightness = Math.round(hsla.l * 100);
 	const hsl = alphaByte === 255 ? `hsl(${hue}, ${saturation}%, ${lightness}%)` : `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
 	const hex = `#${[red, green, blue, ...(alphaByte === 255 ? [] : [alphaByte])].map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
 	return Object.freeze([rgb, hsl, hex].map(label => Object.freeze({ label, textEdit: Object.freeze({ range, text: label }) })));
-}
-
-function rgbToHsl(color: IColor): readonly [number, number, number] {
-	const red = color.red;
-	const green = color.green;
-	const blue = color.blue;
-	const maximum = Math.max(red, green, blue);
-	const minimum = Math.min(red, green, blue);
-	const delta = maximum - minimum;
-	const lightness = (maximum + minimum) / 2;
-	const saturation = delta === 0 ? 0 : delta / (1 - Math.abs(2 * lightness - 1));
-	let hue = 0;
-	if (delta !== 0) {
-		if (maximum === red) hue = 60 * (((green - blue) / delta) % 6);
-		else if (maximum === green) hue = 60 * ((blue - red) / delta + 2);
-		else hue = 60 * ((red - green) / delta + 4);
-	}
-	return Object.freeze([Math.round((hue + 360) % 360), Math.round(saturation * 100), Math.round(lightness * 100)]);
 }
 
 function normalizePresentation(value: IColorPresentation): IColorPresentation {

@@ -10,168 +10,61 @@
 }
 
 .stanza-editor-color-picker {
-	position: absolute;
 	z-index: 12;
 	box-sizing: border-box;
-	width: 320px;
-	padding: 10px;
+	width: 300px;
+	max-height: calc(100vh - 48px);
+	overflow-y: auto;
+	padding: var(--ash-spacing-size160);
 	color: var(--ash-editor-foreground);
 	background: var(--ash-editor-widget-background);
 	border: var(--ash-stroke-thickness) solid var(--ash-editor-widget-border);
-	border-radius: var(--ash-corner-radius-small);
-	box-shadow: 0 4px 12px var(--ash-editor-widget-shadow);
+	border-radius: var(--ash-corner-radius-large);
+	box-shadow: var(--ash-shadow-lg);
+	font-size: var(--ash-font-size-label1);
+}
+
+.stanza-editor-color-picker[hidden] {
+	display: none;
+}
+
+.stanza-editor-color-picker.hover {
+	border: 0;
+	box-shadow: none;
+	max-height: none;
+	overflow: visible;
 }
 
 .stanza-editor-color-picker-header,
-.stanza-editor-color-picker-actions,
-.stanza-editor-color-picker-control {
+.stanza-editor-color-picker-actions {
 	display: flex;
 	align-items: center;
+	gap: var(--ash-spacing-size80);
 }
 
 .stanza-editor-color-picker-header {
-	gap: 8px;
-	margin-bottom: 10px;
-}
-
-.stanza-editor-color-picker-preview {
-	position: relative;
-	box-sizing: border-box;
-	flex: 0 0 36px;
-	height: 28px;
-	overflow: hidden;
-	background:
-		linear-gradient(45deg, #808080 25%, transparent 25%, transparent 75%, #808080 75%),
-		linear-gradient(45deg, #808080 25%, #fff 25%, #fff 75%, #808080 75%);
-	background-position: 0 0, 4px 4px;
-	background-size: 8px 8px;
-	border: var(--ash-stroke-thickness) solid var(--ash-editor-widget-border);
-	border-radius: var(--ash-corner-radius-small);
-}
-
-.stanza-editor-color-picker-preview::after {
-	position: absolute;
-	inset: 0;
-	background: var(--stanza-editor-color-picker-value);
-	content: '';
+	margin-bottom: var(--ash-spacing-size120);
 }
 
 .stanza-editor-color-picker-presentation {
 	box-sizing: border-box;
-	flex: 1 1 auto;
+	flex: 1;
 	min-width: 0;
-	height: 28px;
-	padding: 0 6px;
+	height: var(--ash-spacing-size280);
+	padding: 0 var(--ash-spacing-size60);
 	color: var(--ash-input-foreground);
-	background: var(--ash-editor-input-background);
+	background: var(--ash-input-background);
 	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
 	border-radius: var(--ash-corner-radius-small);
-}
-
-.stanza-editor-color-picker-close {
-	flex: 0 0 28px;
-	height: 28px;
-	padding: 0;
-	font-size: var(--ash-font-size-heading2);
-	line-height: 1;
-	color: var(--ash-button-foreground);
-	background: transparent;
-	border: 0;
-	border-radius: var(--ash-corner-radius-small);
-	cursor: pointer;
-}
-
-.stanza-editor-color-picker-close:hover {
-	background: var(--ash-toolbar-hover-background);
-}
-
-.stanza-editor-color-picker-controls {
-	display: grid;
-	gap: 8px;
-}
-
-.stanza-editor-color-picker-control {
-	gap: 8px;
-}
-
-.stanza-editor-color-picker-control > span {
-	flex: 0 0 16px;
-	color: var(--ash-editor-description-foreground);
-	text-align: center;
-}
-
-.stanza-editor-color-picker-control > input {
-	flex: 1 1 auto;
-	min-width: 0;
-	margin: 0;
-	accent-color: var(--ash-accent-foreground);
-}
-
-.stanza-editor-color-picker-hue {
-	background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
-}
-
-.stanza-editor-color-picker-saturation {
-	background: linear-gradient(to right, #808080, var(--stanza-editor-color-picker-hue));
-}
-
-.stanza-editor-color-picker-lightness {
-	background: linear-gradient(to right, #000, var(--stanza-editor-color-picker-hue), #fff);
-}
-
-.stanza-editor-color-picker-alpha {
-	background: linear-gradient(to right, transparent, var(--stanza-editor-color-picker-opaque));
+	font: inherit;
 }
 
 .stanza-editor-color-picker-actions {
-	justify-content: flex-end;
-	gap: 8px;
-	margin-top: 12px;
+	justify-content: space-between;
+	margin-top: var(--ash-spacing-size120);
 }
 
-.stanza-editor-color-picker-actions button {
-	box-sizing: border-box;
-	min-width: 72px;
-	height: 28px;
-	padding: 0 10px;
-	border: var(--ash-stroke-thickness) solid transparent;
-	border-radius: var(--ash-corner-radius-small);
-	cursor: pointer;
-}
-
-.stanza-editor-color-picker-cancel {
-	color: var(--ash-button-foreground);
-	background: var(--ash-button-background);
-}
-
-.stanza-editor-color-picker-apply {
-	color: var(--ash-button-primary-foreground);
-	background: var(--ash-button-primary-background);
-}
-
-.stanza-editor-color-picker-apply:hover {
-	background: var(--ash-button-primary-hover-background);
-}
-
-.stanza-editor-color-picker button:focus-visible,
-.stanza-editor-color-picker select:focus-visible,
-.stanza-editor-color-picker input:focus-visible {
+.stanza-editor-color-picker-presentation:focus-visible {
 	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 	outline-offset: var(--ash-stroke-thickness);
-}
-
-.stanza-editor-color-picker button:disabled {
-	cursor: default;
-	opacity: 0.5;
-}
-
-@media (forced-colors: active) {
-	.stanza-editor .colorpicker-color-decoration {
-		border-color: CanvasText;
-		forced-color-adjust: none;
-	}
-
-	.stanza-editor-color-picker {
-		border-color: CanvasText;
-	}
 }

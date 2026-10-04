@@ -254,7 +254,7 @@ export class StandaloneCommandService extends Disposable implements ICommandServ
 	}
 }
 
-/** Resolves registered shortcuts and dispatches them while a standalone editor has text focus. */
+/** Resolves registered shortcuts in the focused standalone editor or its widgets. */
 export class StandaloneKeybindingService extends Disposable implements IKeybindingService {
 	private readonly resolver = new KeybindingResolver();
 	private readonly chords: KeybindingEvent[] = [];
@@ -271,7 +271,13 @@ export class StandaloneKeybindingService extends Disposable implements IKeybindi
 		super();
 		this.inChordModeKey = KeybindingContextKeys.inChordMode.bindTo(contextKeys);
 		this._register(toDisposable(() => this.clearChords()));
-		this._register(addDisposableListener(document, 'keydown', event => this.dispatch(event), true));
+		// Text shortcuts precede text input; widget controls handle their own keys before command dispatch.
+		this._register(addDisposableListener(document, 'keydown', event => {
+			if (this.editors.getFocusedCodeEditor()?.hasTextFocus()) { this.dispatch(event); }
+		}, true));
+		this._register(addDisposableListener(document, 'keydown', event => {
+			if (!this.editors.getFocusedCodeEditor()?.hasTextFocus()) { this.dispatch(event); }
+		}));
 		this._register(addDisposableListener(document, 'focusin', () => this.clearChords()));
 		this._register(addDisposableListener(document, 'compositionstart', () => this.clearChords()));
 		this._register(addDisposableListener(window, 'blur', () => this.clearChords()));
@@ -296,7 +302,12 @@ export class StandaloneKeybindingService extends Disposable implements IKeybindi
 	}
 
 	private dispatch(event: KeyboardEvent): void {
-		if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph') || !this.editors.getFocusedCodeEditor()?.hasTextFocus()) {
+		const context = this.contextKeys.getContext(event.target as Node);
+		if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph') || !this.editors.getFocusedCodeEditor()?.hasWidgetFocus()) {
+			return;
+		}
+		// Button activation is a browser default action, which runs after event propagation.
+		if ((event.key === 'Enter' || event.key === ' ') && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && (event.target as HTMLElement).tagName === 'BUTTON') {
 			return;
 		}
 		if (['Control', 'Meta', 'Alt', 'Shift'].includes(event.key)) {
@@ -307,7 +318,7 @@ export class StandaloneKeybindingService extends Disposable implements IKeybindi
 			this.clearChords();
 			return;
 		}
-		const result = this.resolver.resolve(this.contextKeys.getContext(event.target as Node), [...this.chords, event]);
+		const result = this.resolver.resolve(context, [...this.chords, event]);
 		if (result.kind === KeybindingResolveKind.NoMatch) {
 			if (this.inChordMode) {
 				stopEvent(event);

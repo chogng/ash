@@ -208,7 +208,8 @@ interface StandaloneHarness {
 	changeContributionState(reason: 'language' | 'edit' | 'dispose' | 'provider' | 'off' | 'on' | 'selection' | 'blur' | 'readonly'): void;
 	contributionPoint(column: number): { x: number; y: number };
 	readSelectionHighlights(): number;
-	prepareColorPicker(): void;
+	prepareColorPicker(documentation?: boolean): void;
+	executeColorCommand(id: string, color?: number[], range?: [number, number, number, number]): Promise<unknown>;
 	invokeLanguageAction(id: string): void;
 	setFoldingSelections(selections: [number, number, number, number][]): void;
 	setFoldingModelAttached(attached: boolean): void;
@@ -1113,12 +1114,15 @@ window.ashStandaloneIntegration = {
 		if (reason === 'dispose') callerEditor.dispose();
 		if (reason === 'blur') ownedEditor.focus();
 	},
-	prepareColorPicker: () => {
+	prepareColorPicker: (documentation = false) => {
+		languageRequestProviders.clear();
+		if (documentation) { languageRequestProviders.add(stanza.languages.registerHoverProvider('*', { provideHover: () => ({ contents: ['Color documentation'] }) })); }
 		callerEditor.setValue('const color = #ff000080;');
 		callerModel.setLanguage('css');
 		callerEditor.setPosition(new stanza.Position(1, 16));
 		callerEditor.focus();
 	},
+	executeColorCommand: (id, color, range) => callerEditor.invokeWithinContext(accessor => accessor.get(ICommandService).executeCommand(id, ...(color ? [color, { uri: callerModel.uri, range: new stanza.Range(...range!) }] : [callerModel.uri]))),
 	prepareParameterHints: (enabled = true, cycle = true, triggers = ['(', ','], retriggers = []) => {
 		parameterHintsRegistration?.dispose();
 		callerEditor.setValue('call');

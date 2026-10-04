@@ -29,7 +29,7 @@ export class ColorPickerModel extends Disposable {
 
 	set colorPresentations(colorPresentations: IColorPresentation[]) {
 		this._colorPresentations = colorPresentations;
-		if (this.presentationIndex > colorPresentations.length - 1) this.presentationIndex = 0;
+		if (colorPresentations.length > 0 && this.presentationIndex > colorPresentations.length - 1) this.presentationIndex = 0;
 		this._onDidChangePresentation.fire(this.presentation);
 	}
 
@@ -50,23 +50,28 @@ export class ColorPickerModel extends Disposable {
 	}
 
 	selectNextColorPresentation(): void {
-		this.presentationIndex = (this.presentationIndex + 1) % this.colorPresentations.length;
-		this.flushColor();
+		if (this.colorPresentations.length === 0) { return; }
+		this.selectColorPresentation((this.presentationIndex + 1) % this.colorPresentations.length);
+	}
+
+	public selectColorPresentation(index: number): void {
+		this.presentationIndex = index;
 		this._onDidChangePresentation.fire(this.presentation);
+		this.flushColor();
 	}
 
 	guessColorPresentation(color: Color, originalText: string): void {
 		void color;
 		let presentationIndex = -1;
 		for (let i = 0; i < this.colorPresentations.length; i++) {
-			if (originalText.toLowerCase() === this.colorPresentations[i]!.label) {
+			if (originalText.toLowerCase() === this.colorPresentations[i]!.label.toLowerCase()) {
 				presentationIndex = i;
 				break;
 			}
 		}
 
 		if (presentationIndex === -1) {
-			const originalTextPrefix = originalText.split('(')[0]!.toLowerCase();
+			const originalTextPrefix = originalText.trim().startsWith('#') ? '#' : originalText.split('(')[0]!.trim().toLowerCase();
 			for (let i = 0; i < this.colorPresentations.length; i++) {
 				if (this.colorPresentations[i]!.label.toLowerCase().startsWith(originalTextPrefix)) {
 					presentationIndex = i;

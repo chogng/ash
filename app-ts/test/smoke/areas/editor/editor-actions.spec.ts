@@ -1,5 +1,79 @@
 import { expect, test } from '../../../automation/test.js';
 
+test('editor color picker uses shared controls and applies one undoable color edit', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await editor.waitForTypeInEditor('#ff000080');
+	await workbench.quickaccess.runCommand('editor.action.showOrFocusStandaloneColorPicker');
+	const picker = page.getByRole('dialog', { name: 'Color picker', exact: true });
+	await expect(picker).toBeVisible();
+	await expect(picker.getByRole('slider', { name: 'Saturation and brightness' })).toBeFocused();
+	const hue = picker.getByRole('slider', { name: 'Hue', exact: true });
+	await hue.focus();
+	await hue.evaluate(element => {
+		(element as HTMLInputElement).value = '119';
+		element.dispatchEvent(new Event('input', { bubbles: true }));
+	});
+	await hue.press('ArrowRight');
+	await expect(picker.getByRole('combobox', { name: 'Document color format' })).toHaveValue('#00ff0080');
+	await picker.getByRole('button', { name: 'Apply', exact: true }).click();
+	await editor.waitForEditorContents(text => text === '#00ff0080');
+	await expect(editor.input).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+z');
+	await editor.waitForEditorContents(text => text === '#ff000080');
+	await page.keyboard.press('ControlOrMeta+Shift+c');
+	await expect(picker).toBeVisible();
+	await page.keyboard.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+	await expect(help).toBeVisible();
+	await expect(help.getByRole('textbox')).toHaveValue(/Document color format/u);
+	await page.keyboard.press('Escape');
+	await expect(picker.getByRole('slider', { name: 'Saturation and brightness' })).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(picker).toBeHidden();
+});
+
+test('editor color hover commits directly and standalone Enter applies with one undo', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await editor.waitForTypeInEditor('#ff000080');
+	await workbench.editors.groupAt(0).content.locator('.colorpicker-color-decoration').click();
+	const hoverPicker = page.locator('.stanza-editor-hover.interactive .stanza-editor-color-picker');
+	await expect(hoverPicker).toBeVisible();
+	const hue = hoverPicker.getByRole('slider', { name: 'Hue', exact: true });
+	await hue.focus();
+	await hue.evaluate(element => { (element as HTMLInputElement).value = '119'; element.dispatchEvent(new Event('input', { bubbles: true })); });
+	await hue.press('ArrowRight');
+	await editor.waitForEditorContents(text => text === '#00ff0080');
+	await expect(hoverPicker).toBeVisible();
+	await page.keyboard.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+	await expect(help.getByRole('textbox')).toHaveValue(/In a hover/u);
+	await page.keyboard.press('Escape');
+	await expect(hue).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(hoverPicker).toHaveCount(0);
+	await page.keyboard.press('ControlOrMeta+z');
+	await editor.waitForEditorContents(text => text === '#ff000080');
+	await workbench.quickaccess.runCommand('editor.action.showOrFocusStandaloneColorPicker');
+	const picker = page.getByRole('dialog', { name: 'Color picker', exact: true });
+	const opacity = picker.getByRole('slider', { name: 'Opacity', exact: true });
+	await opacity.focus();
+	await opacity.press('Home');
+	await expect(picker.getByRole('combobox', { name: 'Document color format' })).toHaveValue('#ff000000');
+	await opacity.press('Enter');
+	await expect(picker).toBeHidden();
+	await editor.waitForEditorContents(text => text === '#ff000000');
+	await page.keyboard.press('ControlOrMeta+z');
+	await editor.waitForEditorContents(text => text === '#ff000080');
+});
+
 test('opening find focuses its input and leaves editor text unchanged', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

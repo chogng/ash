@@ -1230,12 +1230,12 @@ test.describe('contribution lifecycle', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('hover'));
 		const first = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(3));
 		await page.mouse.move(first.x, first.y);
-		await expect(page.locator('#caller .stanza-editor-hover:not([hidden])')).toHaveText('alpha documentation');
-		await expect(page.locator('#caller .stanza-editor-hover')).toHaveCSS('font-family', /system-ui/);
+		await expect(page.locator('.stanza-editor-hover:not([hidden])')).toHaveText('alpha documentation');
+		await expect(page.locator('.stanza-editor-hover').first()).toHaveCSS('font-family', /system-ui/);
 		const next = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(9));
 		await page.mouse.move(next.x, next.y);
-		await expect(page.locator('#caller .stanza-editor-hover')).toBeHidden();
-		await expect(page.locator('#caller .stanza-editor-hover')).toHaveText('');
+		await expect(page.locator('.stanza-editor-hover').first()).toBeHidden();
+		await expect(page.locator('.stanza-editor-hover').first()).toHaveText('');
 	});
 });
 
@@ -5278,9 +5278,9 @@ test('color picker retains one widget, applies one undoable edit and releases it
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
 	await page.keyboard.press('ControlOrMeta+Shift+c');
-	const picker = page.locator('#caller .stanza-editor-color-picker');
+	const picker = page.locator('.stanza-editor-color-picker').first();
 	await expect(picker).toBeVisible();
-	await expect(picker.locator('option')).toHaveCount(3);
+	await expect(picker.locator('.stanza-editor-color-picker-presentation option')).toHaveCount(3);
 	await picker.evaluate(element => { element.dataset.retained = 'true'; });
 	const hue = picker.getByRole('slider', { name: 'Hue', exact: true });
 	await hue.focus();
@@ -5289,7 +5289,7 @@ test('color picker retains one widget, applies one undoable edit and releases it
 		element.dispatchEvent(new Event('input', { bubbles: true }));
 	});
 	await hue.press('ArrowRight');
-	await expect(picker.getByRole('combobox', { name: 'Color format' })).toHaveValue('#00ff0080');
+	await expect(picker.getByRole('combobox', { name: 'Document color format' })).toHaveValue('#00ff0080');
 	await picker.getByRole('button', { name: 'Apply', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
 	await expect(picker).toBeHidden();
@@ -5304,6 +5304,222 @@ test('color picker retains one widget, applies one undoable edit and releases it
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	await expect(picker).toHaveCount(0);
 	expect(errors).toEqual([]);
+});
+
+test('color picker shares the base controls, captures pointer drags and cancels without changing the document', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
+	await page.keyboard.press('ControlOrMeta+Shift+c');
+	const picker = page.locator('.stanza-editor-color-picker').first();
+	const area = picker.getByRole('slider', { name: 'Saturation and brightness' });
+	await expect(area).toBeFocused();
+	await expect(picker.getByRole('dialog')).toHaveCount(0);
+	await expect(picker.locator('.ash-color-picker')).toHaveAttribute('role', 'group');
+	await expect(area).toHaveCSS('outline-style', 'solid');
+	const bounds = await area.boundingBox();
+	expect(bounds).not.toBeNull();
+	await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(bounds!.x + bounds!.width + 20, bounds!.y - 20, { steps: 4 });
+	await page.mouse.up();
+	await expect(area).toHaveAttribute('aria-valuetext', 'Saturation 100%, brightness 100%');
+	await expect(picker.getByRole('combobox', { name: 'Document color format' })).toHaveValue('#ff000080');
+	await area.press('ArrowLeft');
+	await expect(area).toHaveAttribute('aria-valuetext', 'Saturation 99%, brightness 100%');
+	await picker.getByRole('button', { name: 'Restore original color' }).click();
+	await expect(area).toHaveAttribute('aria-valuetext', 'Saturation 100%, brightness 100%');
+	await area.evaluate(element => element.addEventListener('gotpointercapture', event => {
+		(element as HTMLElement).dataset.pointerId = String((event as PointerEvent).pointerId);
+	}, { once: true }));
+	await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(bounds!.x + bounds!.width / 2 + 1, bounds!.y + bounds!.height / 2);
+	expect(await area.evaluate(element => element.hasPointerCapture(Number((element as HTMLElement).dataset.pointerId)))).toBe(true);
+	await page.keyboard.press('Escape');
+	await expect(picker).toBeHidden();
+	expect(await picker.locator('.ash-color-picker-area').evaluate(element => element.hasPointerCapture(Number((element as HTMLElement).dataset.pointerId)))).toBe(false);
+	await page.mouse.up();
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000080;');
+	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('color picker commands insert at the selection and preserve the chosen document format', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('color: token;', [[1, 8, 1, 13]]));
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.showOrFocusStandaloneColorPicker'));
+	const picker = page.locator('.stanza-editor-color-picker').first();
+	await expect(picker).toBeVisible();
+	const documentFormat = picker.getByRole('combobox', { name: 'Document color format' });
+	await documentFormat.selectOption('#ffffff');
+	await picker.getByRole('combobox', { name: 'Color format', exact: true }).selectOption('hex');
+	await picker.getByRole('textbox', { name: 'Color value' }).fill('00ff00');
+	await picker.getByRole('textbox', { name: 'Color value' }).press('Enter');
+	await expect(documentFormat).toHaveValue('#00ff00');
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.showOrFocusStandaloneColorPicker'));
+	await expect(picker.getByRole('slider', { name: 'Saturation and brightness' })).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.insertColorWithStandaloneColorPicker'));
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('color: #00ff00;');
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('color: token;');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('color picker popup follows all themes outside the editor clipping region and closes when read-only changes', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
+	await page.keyboard.press('ControlOrMeta+Shift+c');
+	const picker = page.locator('.stanza-editor-color-picker').first();
+	await expect(picker).toBeVisible();
+	const editorBounds = await page.locator('#caller').boundingBox();
+	const pickerBounds = await picker.boundingBox();
+	expect(pickerBounds!.y + pickerBounds!.height).toBeGreaterThan(editorBounds!.y + editorBounds!.height);
+	for (const theme of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), theme);
+		await expect(picker).toHaveAttribute('data-color-theme', theme);
+		await expect(picker).toHaveCSS('font-size', '12px');
+		await expect(picker).toHaveCSS('border-radius', '8px');
+		if (theme.includes('high-contrast')) {
+			await expect(picker).toHaveCSS('box-shadow', 'none');
+			await expect(picker).toHaveCSS('border-style', 'solid');
+		}
+	}
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ readOnly: true }));
+	await expect(picker).toBeHidden();
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000080;');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('color picker inserts at every selection in one undo step and hover activation respects editor options', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('one two', [[1, 1, 1, 4], [1, 5, 1, 8]]));
+	await page.locator('#caller .stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+Shift+c');
+	const picker = page.locator('.stanza-editor-color-picker').first();
+	await expect(picker).toBeVisible();
+	await picker.getByRole('combobox', { name: 'Document color format' }).selectOption('#ffffff');
+	await picker.getByRole('button', { name: 'Apply', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('#ffffff #ffffff');
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('one two');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.prepareColorPicker();
+		window.ashStandaloneIntegration.updateContributionOptions({ colorDecoratorsActivatedOn: 'hover' });
+	});
+	const swatch = page.locator('#caller .colorpicker-color-decoration');
+	await swatch.hover();
+	await expect(picker).toBeVisible();
+	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ colorDecoratorsActivatedOn: 'click' }));
+	await expect(picker).toBeHidden();
+	await swatch.click();
+	await expect(picker).toBeVisible();
+	await page.keyboard.press('Escape');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('color hover shares documentation, commits finished gestures and follows changed document ranges', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker(true));
+	await page.locator('#caller .colorpicker-color-decoration').click();
+	const hover = page.locator('.stanza-editor-hover.interactive');
+	const picker = hover.locator('.stanza-editor-color-picker');
+	await expect(picker).toBeVisible();
+	await expect(hover.locator('.stanza-editor-hover-content')).toHaveText('Color documentation');
+	await expect(picker.getByRole('button', { name: 'Apply', exact: true })).toHaveCount(0);
+	const hue = picker.getByRole('slider', { name: 'Hue', exact: true });
+	await hue.focus();
+	await hue.evaluate(element => {
+		(element as HTMLInputElement).value = '119';
+		element.dispatchEvent(new Event('input', { bubbles: true }));
+	});
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000080;');
+	await hue.press('ArrowRight');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
+	await expect(picker).toBeVisible();
+	const format = picker.getByRole('combobox', { name: 'Document color format' });
+	await expect(format).toBeEnabled();
+	await format.selectOption('rgba(0, 255, 0, 0.502)');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = rgba(0, 255, 0, 0.502);');
+	await expect(format).toBeEnabled();
+	await format.selectOption('#00ff0080');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
+	const area = picker.getByRole('slider', { name: 'Saturation and brightness' });
+	const bounds = (await area.boundingBox())!;
+	await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(bounds.x + bounds.width / 4, bounds.y + bounds.height / 4);
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
+	await page.mouse.up();
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).not.toBe('const color = #00ff0080;');
+	await expect(picker).toBeVisible();
+	await area.press('Escape');
+	await expect(hover).toHaveCount(0);
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('color picker Enter uses its editor focus context and color text Enter confirms input', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
+	await page.keyboard.press('ControlOrMeta+Shift+c');
+	const picker = page.locator('.stanza-editor-color-picker').first();
+	const value = picker.getByRole('textbox', { name: 'Color value' });
+	await value.fill('00ff0080');
+	await value.press('Enter');
+	await expect(picker.getByRole('combobox', { name: 'Document color format' })).toHaveValue('#00ff0080');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000080;');
+	const area = picker.getByRole('slider', { name: 'Saturation and brightness' });
+	await area.focus();
+	await area.press('Enter');
+	await expect(picker).toBeHidden();
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
+	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+z');
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.showHover'));
+	const hoverPicker = page.locator('.stanza-editor-hover.interactive .stanza-editor-color-picker');
+	await expect(hoverPicker.getByRole('slider', { name: 'Saturation and brightness' })).toBeFocused();
+	await expect(page.getByRole('region', { name: 'Editor hover' })).toBeVisible();
+	await expect(page.locator('#caller .stanza-editor-accessibility-status')).toHaveText('Press Alt+F1 for color picker help.');
+	await page.keyboard.press('Escape');
+	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('color provider commands query loaded models, return formats and reject invalid arguments', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
+	const colors = await page.evaluate(() => window.ashStandaloneIntegration.executeColorCommand('_executeDocumentColorProvider'));
+	expect(colors).toEqual([{ range: { startLineNumber: 1, startColumn: 15, endLineNumber: 1, endColumn: 24 }, color: [1, 0, 0, 128 / 255] }]);
+	const formats = await page.evaluate(() => window.ashStandaloneIntegration.executeColorCommand('_executeColorPresentationProvider', [0, 1, 0, 1], [1, 15, 1, 24])) as { label: string; textEdit: { text: string } }[];
+	expect(formats.map(format => [format.label, format.textEdit.text])).toEqual([['rgb(0, 255, 0)', 'rgb(0, 255, 0)'], ['hsl(120, 100%, 50%)', 'hsl(120, 100%, 50%)'], ['#00ff00', '#00ff00']]);
+	expect(await page.evaluate(async () => {
+		try { await window.ashStandaloneIntegration.executeColorCommand('_executeColorPresentationProvider', [2, 0, 0, 1], [1, 15, 1, 24]); return ''; }
+		catch (error) { return (error as Error).message; }
+	})).toContain('four color components');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('color picker overflow focus routes Enter to its owning editor after another editor was active', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
+	const otherValue = await page.evaluate(() => window.ashStandaloneIntegration.state('owned').value);
+	await page.locator('#owned .stanza-editor-input').focus();
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.showOrFocusStandaloneColorPicker'));
+	const picker = page.locator('.stanza-editor-color-picker:not([hidden])');
+	const opacity = picker.getByRole('slider', { name: 'Opacity', exact: true });
+	await opacity.focus();
+	await opacity.press('Home');
+	await expect(picker.getByRole('combobox', { name: 'Document color format' })).toHaveValue('#ff000000');
+	await opacity.press('Enter');
+	await expect(picker).toHaveCount(0);
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000000;');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.state('owned').value)).toBe(otherValue);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 
 test('hover options control requests, delay and keyboard modifiers', async ({ page }) => {
@@ -5325,7 +5541,7 @@ test('hover options control requests, delay and keyboard modifiers', async ({ pa
 	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'off' } }));
 	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]!.aborted).toBe(true);
 	await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
-	const hover = page.locator('#caller .stanza-editor-hover');
+	const hover = page.locator('.stanza-editor-hover').first();
 	await expect(hover).toBeHidden();
 	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'onKeyboardModifier', delay: 0 }, multiCursorModifier: 'ctrlCmd' }));
 	await page.clock.runFor(1);
@@ -5680,7 +5896,7 @@ for (const kind of ['hover', 'selection'] as const) {
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([{ languageId: 'plaintext', aborted: true }]);
 			const before = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
 			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
-			await expect(page.locator('#caller .stanza-editor-hover:not([hidden])')).toHaveCount(0);
+			await expect(page.locator('.stanza-editor-hover:not([hidden])')).toHaveCount(0);
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(before);
 			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		});
@@ -5698,7 +5914,7 @@ for (const kind of ['hover', 'selection'] as const) {
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([{ languageId: 'typescript', aborted: false }]);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 		if (kind === 'hover') {
-			await expect(page.locator('#caller .stanza-editor-hover')).toHaveText('hover: typescript');
+			await expect(page.locator('.stanza-editor-hover').first()).toHaveText('hover: typescript');
 		} else {
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe('[1,1 -> 1,13]');
 		}
