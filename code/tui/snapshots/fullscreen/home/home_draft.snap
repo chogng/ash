@@ -31,4 +31,4 @@ expression: "text(&render(&app, terminal.width, terminal.height))"
   > 检 查 项 目 结 构                                                                                                                             
   ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Automatic model   
   ⏸ Manual                                                                                                                                  
-                                                                                                                 Enter send  ·  / commands
+  Enter send  ·  / commands

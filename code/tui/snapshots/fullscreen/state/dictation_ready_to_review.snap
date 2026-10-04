@@ -25,4 +25,4 @@ expression: render_dictation_frame(&app)
   > Please fix the parser and run tests                                         
   ─────────────────────────────────────────────────────────── Automatic model   
   ⏸ Manual                                                                      
-                            Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

@@ -61,6 +61,8 @@ screenMode = "fullscreen" # 或 "inline"
 
 fullscreen 的权限和 hintline 可以同时显示。inline 第二行在权限与 hintline 之间切换，第一行的模型、统计等聊天状态信息保持原位。命令面板、正文详情和管理页使用自己的容器，背景聊天 statusline 隐藏，底部由该容器显示操作提示。
 
+fullscreen 的 hintline 从内容区左侧开始，与底部 statusline 对齐；inline 的聊天 hintline 保持右对齐。
+
 ### Inline 第二行的覆盖与恢复
 
 **普通聊天时显示两行 statusline；需要操作提示时，hintline 替换第二行的整行内容。** 权限与操作提示不在这一行拼接，也不同时显示。覆盖只改变显示内容，不改变当前权限策略或 StatusLine 配置。

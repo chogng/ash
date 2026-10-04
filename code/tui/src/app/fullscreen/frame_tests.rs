@@ -182,7 +182,7 @@ fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() 
             .last()
             .unwrap()
             .trim_end()
-            .ends_with("Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort")
+            .starts_with("  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort")
     );
 }
 
@@ -210,8 +210,8 @@ fn effort_hint_shares_arrow_modifiers_only_when_both_bindings_match() {
                 .last()
                 .unwrap()
                 .trim_end()
-                .ends_with(&format!(
-                    "Enter send  ·  shift+tab mode  ·  {expected} effort"
+                .starts_with(&format!(
+                    "  Enter send  ·  shift+tab mode  ·  {expected} effort"
                 ))
         );
     }

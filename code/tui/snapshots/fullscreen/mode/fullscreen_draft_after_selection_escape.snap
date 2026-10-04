@@ -17,4 +17,4 @@ expression: render(&app)
   > x                                             
   ───────────────────────────── Automatic model   
   ⏸ Manual                                        
-                     Enter send · shift+tab mode
+  Enter send · shift+tab mode

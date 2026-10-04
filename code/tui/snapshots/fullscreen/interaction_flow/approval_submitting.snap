@@ -21,4 +21,4 @@ expression: "render(&app, 80, 20)"
 │Submitting…                                                                   │
 └──────────────────────────────────────────────────────────────────────────────┘
   ⏸ Manual
-                                                Waiting for the request result
+  Waiting for the request result

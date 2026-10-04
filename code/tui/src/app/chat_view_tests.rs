@@ -234,7 +234,8 @@ fn statusline_items_keep_their_configured_locations_and_switches_in_both_modes()
         match mode {
             ScreenMode::Fullscreen => {
                 assert!(!row(&before, regions.hintline.y).contains("Manual"));
-                assert!(row(&before, regions.hintline.y).contains("Enter send"));
+                assert!(row(&before, regions.hintline.y).starts_with("  Enter send"));
+                assert_eq!(before[(2, regions.hintline.y)].symbol(), "E");
             }
             ScreenMode::Inline => {
                 assert_eq!(regions.hintline.y, regions.statusline.bottom() - 1);
@@ -346,6 +347,10 @@ fn accounting_stays_in_the_bottom_statusline_in_both_modes() {
         assert!(!row(&buffer, regions.hintline.y).contains("cost"));
         assert!(row(&buffer, regions.statusline.bottom() - 1).contains("Manual"));
         assert_eq!(text(&buffer).matches("cost $0.01008").count(), 1);
+        if mode == ScreenMode::Fullscreen {
+            assert!(row(&buffer, regions.hintline.y).starts_with("  Enter send"));
+            assert_eq!(buffer[(2, regions.hintline.y)].symbol(), "E");
+        }
         match mode {
             ScreenMode::Fullscreen => crate::tui_assert_snapshot!(
                 app = &app;
@@ -404,6 +409,9 @@ fn permission_survives_tips_dictation_and_narrow_widths_in_both_modes() {
             let buffer = render(&app, area);
             assert!(row(&buffer, regions.tipline.y).contains("Copied"));
             assert!(row(&buffer, regions.statusline.bottom() - 1).contains("Manual"));
+            if mode == ScreenMode::Fullscreen {
+                assert!(row(&buffer, regions.hintline.y).starts_with("  Enter send"));
+            }
             assert_eq!(
                 buffer[(2, regions.statusline.bottom() - 1)].fg,
                 app.render_context().warning()

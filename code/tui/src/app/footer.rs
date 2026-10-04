@@ -64,11 +64,13 @@ pub(super) fn draw(
         ),
     };
     frame.render_widget(
-        Paragraph::new(line).alignment(if chat_visible(app) {
-            Alignment::Right
-        } else {
-            Alignment::Left
-        }),
+        Paragraph::new(line).alignment(
+            if app.screen_mode() == crate::terminal::ScreenMode::Inline && chat_visible(app) {
+                Alignment::Right
+            } else {
+                Alignment::Left
+            },
+        ),
         content,
     );
 }
