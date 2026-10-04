@@ -20,5 +20,5 @@ expression: "render(&app, 42, 20)"
   ──────────────────────────────────────
   > chat draft stays here
   ───────────────────── Automatic model
-  ⏸ Manual
+
   Enter to answer

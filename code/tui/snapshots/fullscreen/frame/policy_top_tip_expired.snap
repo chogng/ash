@@ -20,5 +20,5 @@ expression: "render(&app, 120, 20)"
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
   >                                                                                                                     
   ─────────────────────────────────────────────────────────────────────────────────────────────────── Automatic model   
-  ⏸ current: Manual · ▶ next: Bypass permissions                                                                        
-  Enter send  ·  ← Dashboard  ·  shift+tab mode  ·  shift+↓/↑ effort
+                                                                                                                        
+  ⏸ Manual · ← Dashboard

@@ -69,19 +69,18 @@ fn dashboard_shares_the_left_hint_row_and_permission_switch_in_both_modes() {
                     "{mode:?}: {hints}"
                 );
                 assert_ne!(buffer[(2, footer.hintline.y)].symbol(), " ");
-                let prefix = match mode {
-                    ScreenMode::Fullscreen => "  Enter 发送",
-                    ScreenMode::Inline if permissions => "  ⏸ 手动 · ← 仪表盘",
-                    ScreenMode::Inline => "  ← 仪表盘",
+                let expected = if permissions {
+                    "  ⏸ 手动 · ← 仪表盘"
+                } else {
+                    "  ← 仪表盘"
                 };
-                assert!(
-                    hints.replace(' ', "").starts_with(&prefix.replace(' ', "")),
-                    "{mode:?}: {hints}"
+                assert_eq!(
+                    hints.replace(' ', ""),
+                    expected.replace(' ', ""),
+                    "{mode:?}"
                 );
-                let permission_row = match mode {
-                    ScreenMode::Fullscreen => footer.statusline.y,
-                    ScreenMode::Inline => footer.hintline.y,
-                };
+                let permission_row = footer.hintline.y;
+                assert!(!row(&buffer, footer.statusline.y).contains("手动"));
                 assert_eq!(
                     row(&buffer, permission_row)
                         .replace(' ', "")
@@ -91,15 +90,13 @@ fn dashboard_shares_the_left_hint_row_and_permission_switch_in_both_modes() {
                 let key_column = (2..width)
                     .find(|&x| buffer[(x, footer.hintline.y)].symbol() == "←")
                     .unwrap();
-                if mode == ScreenMode::Inline {
-                    assert_eq!(key_column, if permissions { 11 } else { 2 });
-                }
+                assert_eq!(key_column, if permissions { 11 } else { 2 });
                 let key = &buffer[(key_column, footer.hintline.y)];
                 assert_eq!(key.fg, app.render_context().foreground());
                 assert!(key.modifier.contains(Modifier::BOLD));
                 frames.push(format!(
                     "{mode:?} · width={width} · permissions={permissions}\n{}",
-                    text(&buffer)
+                    text(&buffer).trim_end()
                 ));
 
                 settings.set_key_hint_style(KeyHintStyle::Muted);
@@ -153,4 +150,52 @@ fn footer_remains_bounded_when_the_terminal_cannot_fit_both_rows() {
             }
         }
     }
+}
+
+#[test]
+fn permission_keeps_its_position_and_shows_only_the_effective_mode() {
+    let mut frames = Vec::new();
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.set_current_approval_mode(Some(ash_protocol::ApprovalMode::Manual));
+        app.cycle_next_approval_mode(std::time::Instant::now());
+        app.cycle_next_approval_mode(std::time::Instant::now());
+        assert_eq!(
+            app.approval_mode(),
+            ash_protocol::ApprovalMode::BypassPermissions
+        );
+
+        let running = render(&app, 80, 14);
+        let footer = areas(&app, running.area);
+        assert_eq!(
+            row(&running, footer.hintline.y).trim(),
+            "⏸ Manual · ← Dashboard"
+        );
+        assert_eq!(
+            running[(2, footer.hintline.y)].fg,
+            app.render_context().warning()
+        );
+        assert!(!text(&running).contains("Bypass permissions"));
+        assert!(!text(&running).contains("current:"));
+        assert!(!text(&running).contains("next:"));
+        frames.push(format!("{mode:?} · running\n{}", text(&running).trim_end()));
+
+        app.set_current_approval_mode(None);
+        let idle = render(&app, 80, 14);
+        assert_eq!(areas(&app, idle.area), footer);
+        assert_eq!(
+            row(&idle, footer.hintline.y).trim(),
+            "▶ Bypass permissions · ← Dashboard"
+        );
+        assert_eq!(
+            idle[(2, footer.hintline.y)].fg,
+            app.render_context().danger()
+        );
+        assert!(!row(&idle, footer.statusline.y).contains("Bypass permissions"));
+        frames.push(format!("{mode:?} · idle\n{}", text(&idle).trim_end()));
+    }
+    crate::tui_assert_snapshot!("effective_permission_in_both_modes", frames.join("\n\n"));
 }

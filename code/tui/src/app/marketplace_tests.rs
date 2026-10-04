@@ -846,7 +846,7 @@ fn marketplace_chinese_completion_and_argument_hint_keep_the_shared_command() {
     crate::tui_assert_snapshot!(
         app = &app;
         "marketplace_chinese_command_completion",
-        format!("{completion}\n\n{hint}")
+        format!("{}\n\n{hint}", completion.trim_end_matches(' '))
     );
 }
 

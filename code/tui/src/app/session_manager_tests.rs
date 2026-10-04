@@ -821,7 +821,7 @@ fn dashboard_hintline(app: &App) -> String {
         }
     };
     render(app)
-        .lines()
+        .split('\n')
         .nth(usize::from(row))
         .unwrap()
         .to_owned()

@@ -2,8 +2,8 @@
 source: code/tui/src/app/footer_tests.rs
 expression: "frames.join(\"\\n\\n\")"
 ---
-Fullscreen · width=80 · permissions=true
-  .                                                                   [仪 表 盘 ]  
+Fullscreen · running
+  .                                                                [Dashboard]  
                                                                                 
                                                                                 
                                                                                 
@@ -11,15 +11,15 @@ Fullscreen · width=80 · permissions=true
                                                                                 
                                                                                 
                                                                                 
-                                                                                
+                                             /permission to change permissions  
   ────────────────────────────────────────────────────────────────────────────  
   >                                                                             
-  ────────────────────────────────────────────────────────────────────────────  
+  ─────────────────────────────────────────────────────────── Automatic model   
                                                                                 
-  ⏸ 手 动  · ← 仪 表 盘
+  ⏸ Manual · ← Dashboard
 
-Fullscreen · width=80 · permissions=false
-  .                                                                   [仪 表 盘 ]  
+Fullscreen · idle
+  .                                                                [Dashboard]  
                                                                                 
                                                                                 
                                                                                 
@@ -27,46 +27,14 @@ Fullscreen · width=80 · permissions=false
                                                                                 
                                                                                 
                                                                                 
-                                                                                
+                                             /permission to change permissions  
   ────────────────────────────────────────────────────────────────────────────  
   >                                                                             
-  ────────────────────────────────────────────────────────────────────────────  
+  ─────────────────────────────────────────────────────────── Automatic model   
                                                                                 
-  ← 仪 表 盘
+  ▶ Bypass permissions · ← Dashboard
 
-Fullscreen · width=32 · permissions=true
-  .                   [仪 表 盘 ]  
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-  ────────────────────────────  
-  >                             
-  ────────────────────────────  
-                                
-  ⏸ 手 动  · ← 仪 表 盘
-
-Fullscreen · width=32 · permissions=false
-  .                   [仪 表 盘 ]  
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-  ────────────────────────────  
-  >                             
-  ────────────────────────────  
-                                
-  ← 仪 表 盘
-
-Inline · width=80 · permissions=true
+Inline · running
                                                                                 
                                                                                 
                                                                                 
@@ -80,9 +48,9 @@ Inline · width=80 · permissions=true
 >                                                                               
 ────────────────────────────────────────────────────────────────────────────────
                                                                                 
-  ⏸ 手 动  · ← 仪 表 盘
+  ⏸ Manual · ← Dashboard
 
-Inline · width=80 · permissions=false
+Inline · idle
                                                                                 
                                                                                 
                                                                                 
@@ -96,36 +64,4 @@ Inline · width=80 · permissions=false
 >                                                                               
 ────────────────────────────────────────────────────────────────────────────────
                                                                                 
-  ← 仪 表 盘
-
-Inline · width=32 · permissions=true
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-────────────────────────────────
->                               
-────────────────────────────────
-                                
-  ⏸ 手 动  · ← 仪 表 盘
-
-Inline · width=32 · permissions=false
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-────────────────────────────────
->                               
-────────────────────────────────
-                                
-  ← 仪 表 盘
+  ▶ Bypass permissions · ← Dashboard

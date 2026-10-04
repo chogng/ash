@@ -16,5 +16,5 @@ expression: render(&app)
   ──────────────────────────────────────────────  
   >                                               
   ───────────────────────────── Automatic model   
-  ⏸ Manual                                        
-  Enter send · ← Dashboard · shift+tab mode
+                                                  
+  ⏸ Manual · ← Dashboard

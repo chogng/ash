@@ -34,42 +34,16 @@ pub(crate) fn draw_fullscreen_info(
     frame: &mut Frame<'_>,
     area: Rect,
     status_line: &StatusLineModel,
-    approval: TurnApprovalModes,
     runtime: StatusLineRuntime,
     context: RenderContext<'_>,
 ) {
-    let mut line = policy_line(status_line, area.width.into(), approval, context);
-    let information = top_line(
-        status_line.fullscreen_footer_segments_for_width(
-            information_width(&line, area.width.into()),
-            runtime,
-        ),
-        context,
+    frame.render_widget(
+        Paragraph::new(top_line(
+            status_line.fullscreen_footer_segments_for_width(area.width.into(), runtime),
+            context,
+        )),
+        area,
     );
-    if !information.spans.is_empty() {
-        if line.width() > 0 {
-            line.spans.push(Span::styled(
-                " · ",
-                Style::default().fg(context.chat_input_chrome()),
-            ));
-        }
-        line.spans.extend(information.spans);
-    }
-    frame.render_widget(Paragraph::new(line), area);
-}
-
-/// Resource sampling uses the same width left after permission as the rendered statistics.
-pub(crate) fn fullscreen_info_width(
-    status_line: &StatusLineModel,
-    width: usize,
-    approval: TurnApprovalModes,
-    context: RenderContext<'_>,
-) -> usize {
-    information_width(&policy_line(status_line, width, approval, context), width)
-}
-
-fn information_width(policy: &Line<'_>, width: usize) -> usize {
-    width.saturating_sub(policy.width() + usize::from(policy.width() > 0) * 3)
 }
 
 fn top_line(segments: Vec<StatusLineSegment>, context: RenderContext<'_>) -> Line<'static> {
@@ -149,45 +123,15 @@ fn styled_policy_line(
             Style::default().fg(context.chat_input_chrome()),
         );
     }
-    let next = approval_mode_display(approval.next);
-    if let Some(current_mode) = approval.current.filter(|current| *current != approval.next) {
-        let current = approval_mode_display(current_mode);
-        let spans = vec![
-            Span::styled(
-                current.icon,
-                Style::default().fg(mode_color(current_mode, context)),
-            ),
-            Span::styled(
-                format!(
-                    " {}: {} · ",
-                    context.localize("current"),
-                    context.localize(current.label)
-                ),
-                Style::default().fg(context.chat_input_chrome()),
-            ),
-            Span::styled(
-                next.icon,
-                Style::default().fg(mode_color(approval.next, context)),
-            ),
-            Span::styled(
-                format!(
-                    " {}: {}",
-                    context.localize("next"),
-                    context.localize(next.label)
-                ),
-                Style::default().fg(context.chat_input_chrome()),
-            ),
-        ];
-        return Line::from(spans);
-    }
-
+    let mode = approval.current.unwrap_or(approval.next);
+    let permission = approval_mode_display(mode);
     let spans = vec![
         Span::styled(
-            next.icon,
-            Style::default().fg(mode_color(approval.next, context)),
+            permission.icon,
+            Style::default().fg(mode_color(mode, context)),
         ),
         Span::styled(
-            format!(" {}", context.localize(next.label)),
+            format!(" {}", context.localize(permission.label)),
             Style::default().fg(context.chat_input_chrome()),
         ),
     ];

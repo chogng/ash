@@ -177,6 +177,12 @@ fn home_and_shared_hints_use_the_selected_language() {
     settings.set_language(crate::nls::Language::Chinese);
     app.update(crate::config::Event::SettingsReceived(settings));
     app.open_home();
+    let rendered = text(&render(&app, 80, 24));
+    assert_eq!(
+        rendered.lines().last().unwrap().replace(' ', ""),
+        "⏸手动·←仪表盘"
+    );
+    crate::tui_assert_snapshot!(app = &app; "home_input_chinese", rendered);
     app.handle_key(key(KeyCode::Tab));
 
     let rendered = text(&render(&app, 80, 24));
@@ -260,6 +266,7 @@ fn first_character_clears_welcome_and_keeps_the_workspace_header() {
     assert!(!rendered.contains("Ash Code v"));
     assert!(!rendered.contains("Resume session"));
     assert!(rendered.contains("> x"));
+    assert_eq!(rendered.lines().last().unwrap().trim(), "⏸ Manual");
     crate::tui_assert_snapshot!(app = &app; "home_after_first_character", rendered);
 
     app.handle_key(key(KeyCode::Backspace));

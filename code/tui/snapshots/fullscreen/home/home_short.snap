@@ -12,5 +12,5 @@ expression: text(&buffer)
   ────────────────────────────────────  
   > Build anything                      
   ─────────────────── Automatic model   
-  ⏸ Manual                              
+                                        
   Enter select · Esc input

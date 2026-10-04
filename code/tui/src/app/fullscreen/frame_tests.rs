@@ -171,51 +171,16 @@ fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() 
                 layout(&App::new(), Rect::new(0, 0, 80, 20))
                     .session
                     .footer
-                    .statusline
+                    .hintline
                     .y
             ))
             .unwrap()
             .contains("Manual")
     );
-    assert!(
-        rendered
-            .lines()
-            .last()
-            .unwrap()
-            .trim_end()
-            .starts_with("  Enter send  ·  ← Dashboard  ·  shift+tab mode  ·  shift+↓/↑ effort")
+    assert_eq!(
+        rendered.lines().last().unwrap().trim(),
+        "⏸ Manual · ← Dashboard"
     );
-}
-
-#[test]
-fn effort_hint_shares_arrow_modifiers_only_when_both_bindings_match() {
-    for (lower, raise, expected) in [
-        ("alt+arrowdown", "alt+arrowup", "alt+↓/↑"),
-        ("alt+arrowdown", "ctrl+arrowup", "alt+↓/ctrl+↑"),
-        ("alt+j", "alt+k", "alt+j/alt+k"),
-    ] {
-        let mut app = App::new();
-        let bindings = crate::keymap::compile_app_user_bindings(
-            &serde_json::json!([
-                {"key": lower, "command": "ashCode.action.decreaseReasoningEffort"},
-                {"key": raise, "command": "ashCode.action.increaseReasoningEffort"}
-            ]),
-            ash_keybinding::HostPlatform::current(),
-        )
-        .unwrap();
-        app.app_keymap.replace_user_bindings(bindings).unwrap();
-        let rendered = render(&app, 80, 20);
-        assert!(
-            rendered
-                .lines()
-                .last()
-                .unwrap()
-                .trim_end()
-                .starts_with(&format!(
-                    "  Enter send  ·  ← Dashboard  ·  shift+tab mode  ·  {expected} effort"
-                ))
-        );
-    }
 }
 
 #[test]
@@ -662,7 +627,7 @@ fn empty_session_input_offers_manager_navigation() {
             layout(&app, Rect::new(0, 0, 80, 20))
                 .session
                 .footer
-                .statusline
+                .hintline
                 .y
         )]
         .contains("⏸ Manual")
@@ -687,7 +652,7 @@ fn empty_session_input_offers_manager_navigation() {
 }
 
 #[test]
-fn narrow_session_prioritizes_permission_in_the_statusline() {
+fn narrow_session_keeps_permission_in_the_final_row() {
     let mut app = App::new();
     enter_session(
         &mut app,
@@ -702,8 +667,9 @@ fn narrow_session_prioritizes_permission_in_the_statusline() {
 
     assert!(!rows[top_tip_row].contains("Manual"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
-    assert!(rows[18].contains("⏸ Manual"));
-    assert!(!rows[19].contains("Manual"));
+    assert!(!rows[18].contains("Manual"));
+    assert!(rows[19].trim_start().starts_with("⏸"));
+    assert!(rows[19].contains("← Dashboard"));
 }
 
 #[test]
@@ -796,7 +762,7 @@ fn pending_steer_is_shown_once_in_chat_history() {
 }
 
 #[test]
-fn statusline_shows_permission_modes_above_input_shortcuts() {
+fn permission_modes_share_the_final_row_with_dashboard() {
     let mut app = App::new();
     for (mode, label) in [
         (ash_protocol::ApprovalMode::Manual, "⏸ Manual"),
@@ -809,8 +775,8 @@ fn statusline_shows_permission_modes_above_input_shortcuts() {
         app.set_next_approval_mode(mode);
         let screen = render(&app, 100, 20);
         let hints = screen.lines().last().unwrap().trim_end();
-        assert!(hints.contains("Enter send"));
-        assert!(!hints.contains(label));
+        assert!(hints.contains("← Dashboard"));
+        assert!(hints.contains(label));
         let top_tip = layout(&app, Rect::new(0, 0, 100, 20)).session.tipline;
         assert!(
             !screen
@@ -819,7 +785,7 @@ fn statusline_shows_permission_modes_above_input_shortcuts() {
                 .unwrap()
                 .contains(label)
         );
-        assert!(screen.lines().nth(18).unwrap().contains(label));
+        assert!(!screen.lines().nth(18).unwrap().contains(label));
     }
 }
 
@@ -829,9 +795,9 @@ fn key_hint_style_applies_to_fullscreen_without_changing_hint_text() {
     let contrast = render_buffer(&app, 100, 20);
     let row = 19;
     let x = (0..100)
-        .find(|x| contrast[(*x, row)].symbol() == "E")
+        .find(|x| contrast[(*x, row)].symbol() == "←")
         .unwrap();
-    assert_eq!(contrast[(x, row)].symbol(), "E");
+    assert_eq!(contrast[(x, row)].symbol(), "←");
     assert_eq!(contrast[(x, row)].fg, test_context().foreground());
     assert!(contrast[(x, row)].modifier.contains(Modifier::BOLD));
     assert_eq!(contrast[(x + 5, row)].fg, test_context().muted());
@@ -841,7 +807,7 @@ fn key_hint_style_applies_to_fullscreen_without_changing_hint_text() {
     settings.set_key_hint_style(crate::config::KeyHintStyle::Muted);
     app.update(crate::config::Event::SettingsReceived(settings));
     let muted = render_buffer(&app, 100, 20);
-    assert_eq!(muted[(x, row)].symbol(), "E");
+    assert_eq!(muted[(x, row)].symbol(), "←");
     assert_eq!(muted[(x, row)].fg, test_context().muted());
     assert!(muted[(x, row)].modifier.contains(Modifier::ITALIC));
     assert_eq!(muted[(x + 5, row)].fg, test_context().muted());
@@ -869,7 +835,7 @@ fn turn_activity_does_not_enter_status_line() {
             .progress
             .contains(ratatui::layout::Position::new(0, progress_row))
     );
-    assert!(rows[usize::from(areas.footer.statusline.y)].contains("Manual"));
+    assert!(rows[usize::from(areas.footer.hintline.y)].contains("Manual"));
 }
 
 #[test]
@@ -915,7 +881,7 @@ fn queue_focus_and_pointer_target_share_the_visible_row_identity() {
 }
 
 #[test]
-fn statusline_uses_a_distinct_color_for_each_approval_mode_symbol() {
+fn permission_uses_a_distinct_color_for_each_approval_mode_symbol() {
     let mut app = App::new();
     for (mode, icon, color) in [
         (
@@ -936,7 +902,7 @@ fn statusline_uses_a_distinct_color_for_each_approval_mode_symbol() {
     ] {
         app.set_next_approval_mode(mode);
         let buffer = render_buffer(&app, 100, 20);
-        let row = layout(&app, buffer.area).session.footer.statusline.y;
+        let row = layout(&app, buffer.area).session.footer.hintline.y;
         let column = (0..100)
             .find(|x| buffer[(*x, row)].symbol() == icon)
             .unwrap();
@@ -946,23 +912,6 @@ fn statusline_uses_a_distinct_color_for_each_approval_mode_symbol() {
             test_context().chat_input_chrome()
         );
     }
-}
-
-#[test]
-fn statusline_colors_current_and_next_modes_independently() {
-    let mut app = App::new();
-    app.set_current_approval_mode(Some(ash_protocol::ApprovalMode::Manual));
-    app.set_next_approval_mode(ash_protocol::ApprovalMode::Auto);
-    let buffer = render_buffer(&app, 120, 20);
-    let row = layout(&app, buffer.area).session.footer.statusline.y;
-    let current = (0..120)
-        .find(|x| buffer[(*x, row)].symbol() == "⏸")
-        .unwrap();
-    let next = (0..120)
-        .find(|x| buffer[(*x, row)].symbol() == "⏩")
-        .unwrap();
-    assert_eq!(buffer[(current, row)].fg, test_context().warning());
-    assert_eq!(buffer[(next, row)].fg, test_context().accent());
 }
 
 #[test]
@@ -1008,7 +957,7 @@ fn composer_shows_the_configured_model_once_at_wide_and_narrow_widths() {
             .contains(" Claude Sonnet (high) ")
     );
     assert!(!wide.contains("anthropic"));
-    assert!(wide.lines().nth(18).unwrap().contains("Manual"));
+    assert!(wide.lines().nth(19).unwrap().contains("Manual"));
 
     let narrow = render(&app, 24, 20);
     let narrow_input = layout(&app, Rect::new(0, 0, 24, 20)).input;
@@ -1020,7 +969,15 @@ fn composer_shows_the_configured_model_once_at_wide_and_narrow_widths() {
             .contains(" Claude Sonnet… ")
     );
     assert!(!narrow.contains("anthropic"));
-    assert!(narrow.lines().nth(18).unwrap().contains("Manual"));
+    assert!(
+        narrow
+            .lines()
+            .nth(19)
+            .unwrap()
+            .trim_start()
+            .starts_with("⏸")
+    );
+    assert!(narrow.lines().nth(19).unwrap().contains("← Dashboard"));
 }
 
 #[test]
@@ -1069,7 +1026,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     ));
 
     let buffer = render_buffer(&app, 80, 20);
-    let bottom_row = layout(&app, terminal_area).session.footer.statusline.y;
+    let bottom_row = layout(&app, terminal_area).session.footer.hintline.y;
     let hint_column = 78 - "/permission to change permissions".width() as u16;
     let hint = &buffer[(hint_column, top_tip_row)];
 
@@ -1153,7 +1110,7 @@ fn entire_top_tip_holds_then_fades_without_moving_the_composer() {
         for (full, faded) in before.content.iter().zip(&fading.content) {
             assert_eq!(full.symbol(), faded.symbol());
         }
-        // Only the transient hint fades; permission remains in the statusline.
+        // Only the transient hint fades; permission remains in the final row.
         for x in [hint_x, hint_x + 1, hint_x + 12] {
             let full = &before[(x, areas.tipline.y)];
             let faded = &fading[(x, areas.tipline.y)];
@@ -1185,16 +1142,18 @@ fn entire_top_tip_holds_then_fades_without_moving_the_composer() {
 }
 
 #[test]
-fn policy_changes_restart_the_fade_and_keep_current_and_next_modes_visible() {
+fn policy_changes_restart_the_fade_without_repeating_the_next_permission() {
     let mut app = App::new();
     let started = Instant::now();
     app.set_current_approval_mode(Some(ash_protocol::ApprovalMode::Manual));
     app.cycle_next_approval_mode(started);
     assert_eq!(app.approval_mode(), ash_protocol::ApprovalMode::Auto);
     let visible = render(&app, 120, 20);
-    assert!(visible.contains("current: Manual"));
-    assert!(visible.contains("next: Auto"));
-    crate::tui_assert_snapshot!(app = &app; "policy_top_tip_current_and_next", visible);
+    assert!(visible.contains("⏸ Manual"));
+    assert!(!visible.contains("current:"));
+    assert!(!visible.contains("next:"));
+    assert!(!visible.lines().last().unwrap().contains("Auto"));
+    crate::tui_assert_snapshot!(app = &app; "policy_top_tip_running_permission", visible);
     assert!(app.handle_tick(started + Duration::from_secs(4)));
     app.cycle_next_approval_mode(started + Duration::from_secs(4));
     assert_eq!(
@@ -1205,10 +1164,10 @@ fn policy_changes_restart_the_fade_and_keep_current_and_next_modes_visible() {
     let row = layout(&app, Rect::new(0, 0, 120, 20))
         .session
         .footer
-        .statusline
+        .hintline
         .y;
     assert_eq!(restarted[(2, row)].fg, test_context().warning());
-    assert!(render(&app, 120, 20).contains("next: Bypass permissions"));
+    assert!(!render(&app, 120, 20).contains("Bypass permissions"));
     assert!(!app.handle_tick(started + Duration::from_secs(7)));
     assert!(app.handle_tick(started + Duration::from_secs(9)));
     crate::tui_assert_snapshot!(app = &app; "policy_top_tip_expired", render(&app, 120, 20));
@@ -1403,7 +1362,7 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
             layout(&app, Rect::new(0, 0, 80, 20))
                 .session
                 .footer
-                .statusline
+                .hintline
                 .y
         )]
         .contains("⏸ Manual")
@@ -1411,17 +1370,19 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
 }
 
 #[test]
-fn turn_activity_does_not_replace_the_permission_mode_in_statusline() {
+fn turn_activity_does_not_replace_the_permission_mode_in_the_final_row() {
     let mut app = App::new();
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     let rendered = render(&app, 80, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
     let areas = layout(&app, Rect::new(0, 0, 80, 20)).session;
     let statusline = rows[usize::from(areas.footer.statusline.y)];
-    assert!(statusline.starts_with("  ⏸ Manual"));
+    assert!(!statusline.contains("Manual"));
     assert!(!statusline.contains("Working"));
-    assert!(rows[usize::from(areas.footer.hintline.y)].contains("Enter send"));
-    assert!(!rows[usize::from(areas.footer.hintline.y)].contains("Manual"));
+    assert_eq!(
+        rows[usize::from(areas.footer.hintline.y)].trim(),
+        "⏸ Manual · ← Dashboard"
+    );
 }
 
 #[test]
@@ -1541,7 +1502,7 @@ fn completed_error_remains_visible_in_the_scrollable_transcript() {
             layout(&app, Rect::new(0, 0, 80, 20))
                 .session
                 .footer
-                .statusline
+                .hintline
                 .y
         )]
         .contains("⏸ Manual")
@@ -3426,7 +3387,7 @@ fn chat_progress_stays_above_input_without_hiding_top_tip() {
             .progress
             .contains(ratatui::layout::Position::new(0, progress_row))
     );
-    assert!(rows[usize::from(areas.footer.statusline.y)].contains("Manual"));
+    assert!(rows[usize::from(areas.footer.hintline.y)].contains("Manual"));
     assert!(working.contains("Working..."));
     assert!(working.contains("ctrl+c to interrupt"));
     assert!(working.contains("Copied 42 chars"));

@@ -69,7 +69,6 @@ pub(super) fn draw(frame: &mut Frame<'_>, areas: Layout, app: &App, context: Ren
                 frame,
                 statusline,
                 app.status_line(),
-                app.approval_mode_status(),
                 app.status_line_runtime(),
                 context,
             ),
@@ -100,13 +99,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, areas: Layout, app: &App, context: Ren
 pub(super) fn line(app: &App, width: usize, context: RenderContext<'_>) -> Line<'static> {
     match bottom_content(app) {
         BottomContent::Keys(hints) => key_hint::line(hints, width, app.key_hint_style(), context),
-        BottomContent::InputHints => {
-            if app.screen_mode() == ScreenMode::Inline && chat_visible(app) {
-                inline_input_line(app, width, context)
-            } else {
-                key_hint::line(&input_hints(app), width, app.key_hint_style(), context)
-            }
-        }
+        BottomContent::InputHints => input_line(app, width, context),
         BottomContent::Warning(text) => Line::styled(text, Style::default().fg(context.warning())),
         BottomContent::Muted(text) => Line::styled(
             context.localize(text).into_owned(),
@@ -115,13 +108,11 @@ pub(super) fn line(app: &App, width: usize, context: RenderContext<'_>) -> Line<
     }
 }
 
-fn inline_input_line(app: &App, width: usize, context: RenderContext<'_>) -> Line<'static> {
-    let hint = key_hint::line(
-        &with_dashboard_hint(app, KeyHints::new()),
-        width,
-        app.key_hint_style(),
-        context,
-    );
+fn input_line(app: &App, width: usize, context: RenderContext<'_>) -> Line<'static> {
+    let hint = key_hint::line(&input_hints(app), width, app.key_hint_style(), context);
+    if !chat_visible(app) || !app.chat_input_focused() {
+        return hint;
+    }
     // Reserve the available action before shortening permission text on narrow terminals.
     let mut line = crate::status::policy_line(
         app.status_line(),
@@ -145,15 +136,9 @@ pub(super) fn process_resource_demand(app: &App, areas: Layout) -> ProcessResour
     }
     let runtime = app.status_line_runtime();
     let resources = match app.screen_mode() {
-        ScreenMode::Fullscreen => app.status_line().fullscreen_footer_process_resources(
-            crate::status::fullscreen_info_width(
-                app.status_line(),
-                statusline.width.into(),
-                app.approval_mode_status(),
-                app.render_context(),
-            ),
-            runtime,
-        ),
+        ScreenMode::Fullscreen => app
+            .status_line()
+            .fullscreen_footer_process_resources(statusline.width.into(), runtime),
         ScreenMode::Inline => app
             .status_line()
             .visible_process_resources(statusline.width.into(), runtime),
@@ -247,65 +232,13 @@ fn input_hints(app: &App) -> KeyHints {
         }
         return hints;
     }
-    if app.fullscreen_home_visible() {
-        if app.fullscreen_welcome_visible() && !app.fullscreen.input_focused() {
-            return KeyHints::new()
-                .with_compact_action("Enter", "select")
-                .with_compact_action("↑↓", "actions")
-                .with_compact_action("Esc", "input");
-        }
-        let hints = with_dashboard_hint(app, KeyHints::new().with_compact_action("Enter", "send"));
-        let hints = if app.fullscreen_welcome_visible() {
-            hints
-                .with_compact_action("Tab", "actions")
-                .with_compact_action("/", "commands")
-        } else {
-            hints.with_compact_action("/", "commands")
-        };
-        return hints;
+    if app.fullscreen_welcome_visible() && !app.fullscreen.input_focused() {
+        return KeyHints::new()
+            .with_compact_action("Enter", "select")
+            .with_compact_action("↑↓", "actions")
+            .with_compact_action("Esc", "input");
     }
-    let mut hints = with_dashboard_hint(
-        app,
-        KeyHints::new().with_compact_action(
-            "Enter",
-            if app.active_turn().is_some() {
-                "queue"
-            } else {
-                "send"
-            },
-        ),
-    );
-    if let Some(keys) = app.app_keymap.action_hint(
-        crate::keymap::AppKeymapAction::CycleCollaborationMode,
-        app.app_keymap_context(true),
-    ) {
-        hints = hints.with_compact_action(keys, "mode");
-    }
-    let context = app.app_keymap_context(true);
-    let lower = app.app_keymap.action_hint(
-        crate::keymap::AppKeymapAction::DecreaseReasoningEffort,
-        context,
-    );
-    let raise = app.app_keymap.action_hint(
-        crate::keymap::AppKeymapAction::IncreaseReasoningEffort,
-        context,
-    );
-    // Keep the pair together so a narrow terminal does not advertise only one direction.
-    match (lower, raise) {
-        (Some(lower), Some(raise)) => {
-            let keys = match (lower.strip_suffix('↓'), raise.strip_suffix('↑')) {
-                (Some(lower_prefix), Some(raise_prefix)) if lower_prefix == raise_prefix => {
-                    format!("{lower}/↑")
-                }
-                _ => format!("{lower}/{raise}"),
-            };
-            hints = hints.with_compact_action(keys, "effort");
-        }
-        (Some(lower), None) => hints = hints.with_compact_action(lower, "lower effort"),
-        (None, Some(raise)) => hints = hints.with_compact_action(raise, "raise effort"),
-        (None, None) => {}
-    }
-    hints
+    with_dashboard_hint(app, KeyHints::new())
 }
 
 fn with_dashboard_hint(app: &App, hints: KeyHints) -> KeyHints {

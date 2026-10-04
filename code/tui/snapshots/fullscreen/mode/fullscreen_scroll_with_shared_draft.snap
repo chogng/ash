@@ -16,5 +16,5 @@ expression: render(&app)
   ──────────────────────────────────────────────  
   > shared draft                                  
   ───────────────────────────── Automatic model   
-  ⏸ Manual                                        
-  Enter send · shift+tab mode
+                                                  
+  ⏸ Manual

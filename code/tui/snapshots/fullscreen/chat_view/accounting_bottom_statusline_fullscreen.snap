@@ -18,5 +18,5 @@ expression: text(&buffer)
   ────────────────────────────────────────────────────────────────────────────  
   > keep this draft                                                             
   ────────────────────────────────────────────────────────────────────────────  
-  ⏸ Manual · cache hit 75.0% · cost $0.01008                                    
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  cache hit 75.0% · cost $0.01008                                               
+  ⏸ Manual

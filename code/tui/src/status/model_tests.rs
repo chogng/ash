@@ -273,7 +273,7 @@ fn approval_modes_use_pause_fast_forward_and_play_symbols() {
 }
 
 #[test]
-fn running_turn_and_next_turn_are_both_explicit_when_the_modes_differ() {
+fn running_turn_permission_stays_visible_when_the_next_selection_differs() {
     let status_line = StatusLineModel::new();
 
     assert_eq!(
@@ -284,7 +284,7 @@ fn running_turn_and_next_turn_are_both_explicit_when_the_modes_differ() {
                 next: ApprovalMode::Auto,
             },
         ),
-        "⏸ current: Manual · ⏩ next: Auto"
+        "⏸ Manual"
     );
 }
 

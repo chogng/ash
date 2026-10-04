@@ -872,17 +872,9 @@ fn truncate_segments_with_ellipsis(
 }
 
 pub(super) fn approval_mode_text(approval: TurnApprovalModes) -> String {
-    let next = approval_mode_display(approval.next);
-    match approval.current {
-        Some(current) if current != approval.next => {
-            let current = approval_mode_display(current);
-            format!(
-                "{} current: {} · {} next: {}",
-                current.icon, current.label, next.icon, next.label
-            )
-        }
-        _ => format!("{} {}", next.icon, next.label),
-    }
+    // A changed selection applies to the next submission, never to the running turn.
+    let mode = approval_mode_display(approval.current.unwrap_or(approval.next));
+    format!("{} {}", mode.icon, mode.label)
 }
 
 pub(super) fn approval_mode_display(approval_mode: ApprovalMode) -> ApprovalModeDisplay {
