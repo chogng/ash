@@ -45,6 +45,116 @@ use remote::RemoteTarget;
 
 const MAX_REMOTE_TARGETS: usize = 32;
 const MAX_LOCAL_TARGETS: usize = 32;
+const TASK_CONTRACTS: &[ash_app_server_protocol::protocol::initialize::CapabilityRequirement] = &[
+    ash_app_server_protocol::protocol::initialize::CapabilityRequirement::exact(
+        "sessions",
+        ash_app_server_protocol::protocol::initialize::APP_SERVER_CAPABILITY_VERSION,
+    ),
+    ash_app_server_protocol::protocol::initialize::CapabilityRequirement::exact(
+        "threads",
+        ash_app_server_protocol::protocol::initialize::APP_SERVER_CAPABILITY_VERSION,
+    ),
+    ash_app_server_protocol::protocol::initialize::CapabilityRequirement::exact(
+        "turns",
+        ash_app_server_protocol::protocol::initialize::APP_SERVER_CAPABILITY_VERSION,
+    ),
+    ash_app_server_protocol::protocol::initialize::CapabilityRequirement::exact("taskDelivery", 1),
+];
+
+/// Backend task tools use the same SSH lifecycle as renderer routes. A bounded one-request
+/// connection owns its process until completion or cancellation; no renderer needs to stay open.
+pub(crate) fn task_request(
+    profile: RemoteProfile,
+    method: ash_app_server_protocol::protocol::registry::ClientMethod,
+    params: Value,
+    cancellation: &ash_async_utils::CancellationToken,
+) -> Result<Value, String> {
+    task_request_with_launch(
+        profile,
+        method,
+        params,
+        cancellation,
+        RemoteLaunch::from_environment(),
+    )
+}
+
+fn task_request_with_launch(
+    profile: RemoteProfile,
+    method: ash_app_server_protocol::protocol::registry::ClientMethod,
+    params: Value,
+    cancellation: &ash_async_utils::CancellationToken,
+    launch: RemoteLaunch,
+) -> Result<Value, String> {
+    use std::time::Duration;
+    use std::time::Instant;
+    thread::scope(|scope| {
+        let (outbound, incoming) = crate::server::message_queue::outbound_queue(16);
+        let initialize = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"clientInfo":{"name":"task-delivery","version":env!("CARGO_PKG_VERSION")},
+                "capabilities":{"notifications":false}}});
+        let target = RemoteTarget::start(
+            scope,
+            profile,
+            initialize.to_string().into(),
+            0,
+            launch,
+            Default::default(),
+            outbound,
+            Arc::new(Mutex::new(BTreeMap::new())),
+            Arc::new(Mutex::new(BTreeMap::new())),
+            Arc::new(Mutex::new(BTreeMap::new())),
+            TASK_CONTRACTS,
+        );
+        let deadline = Instant::now() + Duration::from_secs(120);
+        let receive = |id: u64| -> Result<Value, String> {
+            loop {
+                cancellation.check().map_err(|e| e.to_string())?;
+                if Instant::now() >= deadline {
+                    return Err("remote task request timed out; retry its saved delivery ID".into());
+                }
+                match incoming.recv_timeout(Duration::from_millis(25)) {
+                    Ok(message) => {
+                        let value: Value =
+                            serde_json::from_str(&message.raw).map_err(|e| e.to_string())?;
+                        if value.get("id").and_then(Value::as_u64) == Some(id) {
+                            if let Some(error) = value.get("error") {
+                                return Err(error.to_string());
+                            }
+                            return value
+                                .get("result")
+                                .cloned()
+                                .ok_or_else(|| "invalid remote task response".into());
+                        }
+                        if value.get("method").is_some() && value.get("id").is_some() {
+                            return Err(
+                                "remote task transport cannot own interactive host requests".into(),
+                            );
+                        }
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        if !target.is_alive() {
+                            return Err(
+                                "remote task connection closed; retry its saved delivery ID".into(),
+                            );
+                        }
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                        return Err("remote task connection closed".into());
+                    }
+                }
+            }
+        };
+        let result = (|| {
+            target.send(serde_json::json!({"jsonrpc":"2.0","id":2,"method":method.as_str(),"params":params}))
+                .map_err(|e| e.to_string())?;
+            receive(2)
+        })();
+        target.close();
+        // Drop the receiver before joining SSH: producers waiting on a full byte budget wake.
+        drop(incoming);
+        result
+    })
+}
 
 struct PendingCatalog {
     response: Value,
@@ -288,6 +398,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                                 Arc::clone(&remote_sessions),
                                 Arc::clone(&catalogs),
                                 Arc::clone(&remote_pending),
+                                ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES,
                             );
                             next_route_id += 1;
                             remote.insert(key.clone(), target);
@@ -435,6 +546,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                                 Arc::clone(&remote_sessions),
                                 Arc::clone(&catalogs),
                                 Arc::clone(&remote_pending),
+                                ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES,
                             );
                             next_route_id += 1;
                             if catalog_subscribed {

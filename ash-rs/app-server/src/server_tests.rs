@@ -15,6 +15,8 @@ mod memories_live_tests;
 
 #[path = "automation_tests.rs"]
 mod automation_tests;
+#[path = "task_delivery_host_tests.rs"]
+mod task_delivery_tests;
 #[path = "backup_tests.rs"]
 mod backup_tests;
 #[path = "infrastructure_tests.rs"]

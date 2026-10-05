@@ -332,7 +332,7 @@ impl UpdateBroker {
         }
     }
 
-    pub(super) fn publish_session_changed(&self, session_id: &SessionId) {
+    pub(crate) fn publish_session_changed(&self, session_id: &SessionId) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };

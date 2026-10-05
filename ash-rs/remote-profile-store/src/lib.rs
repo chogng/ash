@@ -1,3 +1,16 @@
+mod connection_catalog;
+pub use connection_catalog::RemoteConnectionCatalog;
+pub use connection_catalog::RemoteConnectionCatalogError;
+pub use connection_catalog::RemoteConnectionCatalogFailureKind;
+pub use connection_catalog::RemoteConnectionEntry;
+pub use connection_catalog::RemoteConnectionName;
+pub use connection_catalog::RemoteConnectionNameError;
+pub use connection_catalog::RemoteConnectionSaveMode;
+
+#[cfg(test)]
+#[path = "connection_catalog_tests.rs"]
+mod connection_catalog_tests;
+
 use std::fmt;
 use std::fs;
 use std::fs::File;

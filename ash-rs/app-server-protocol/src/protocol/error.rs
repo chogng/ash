@@ -5,6 +5,10 @@ use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 pub enum AppServerErrorName {
+    TaskDeliveryUnavailable,
+    TaskDeliveryConflict,
+    TaskDeliveryNotFound,
+    TaskDeliveryOperationFailed,
     ParseError,
     InvalidRequest,
     MethodNotFound,

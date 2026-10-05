@@ -12,7 +12,6 @@ use crate::server::message_queue::OutboundSender;
 use crate::server::request_dispatch::IncomingRequest;
 use crate::server::request_dispatch::RequestLane;
 use ash_app_server_protocol::protocol::initialize::InitializeResult;
-use ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
 use ash_app_server_protocol::protocol::initialize::ensure_protocol_compatible;
 use ash_app_server_protocol::rpc::JsonRpcRequest;
 use ash_app_server_protocol::rpc::JsonRpcResponse;
@@ -205,6 +204,7 @@ impl RemoteTarget {
         sessions: RemoteSessionIndex,
         catalogs: Catalogs,
         pending: RemotePending,
+        requirements: &'static [ash_app_server_protocol::protocol::initialize::CapabilityRequirement],
     ) -> Self {
         let input = Arc::new(RemoteMailbox::default());
         let incoming = Arc::clone(&input);
@@ -230,6 +230,7 @@ impl RemoteTarget {
                 sessions,
                 Arc::clone(&catalogs),
                 Arc::clone(&pending),
+                requirements,
             );
             worker_process.reap();
             incoming.close();
@@ -343,6 +344,7 @@ fn run(
     sessions: RemoteSessionIndex,
     catalogs: Catalogs,
     pending: RemotePending,
+    requirements: &[ash_app_server_protocol::protocol::initialize::CapabilityRequirement],
 ) -> io::Result<()> {
     let mut child = Command::new(launch.executable)
         .args([
@@ -369,7 +371,13 @@ fn run(
             let mut reader = JsonlReader::new(BufReader::new(stdout), DEFAULT_MAX_MESSAGE_BYTES);
             let result = (|| {
                 writer.write_message(&initialize)?;
-                read_initialize(&mut reader, &initialize, route_id, &reader_output)?;
+                read_initialize(
+                    &mut reader,
+                    &initialize,
+                    route_id,
+                    &reader_output,
+                    requirements,
+                )?;
                 Ok::<_, io::Error>(writer)
             })();
             let succeeded = result.is_ok();
@@ -430,6 +438,7 @@ fn read_initialize(
     initialize: &str,
     route_id: usize,
     outbound: &OutboundSender,
+    requirements: &[ash_app_server_protocol::protocol::initialize::CapabilityRequirement],
 ) -> io::Result<()> {
     let initialize: JsonRpcRequest<Value> = serde_json::from_str(initialize)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
@@ -459,7 +468,7 @@ fn read_initialize(
                 "SSH initialize response ID mismatch",
             ));
         }
-        return ensure_protocol_compatible(&response.result, REQUIRED_SESSION_CAPABILITIES)
+        return ensure_protocol_compatible(&response.result, requirements)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error));
     }
     Err(io::Error::new(

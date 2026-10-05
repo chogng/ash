@@ -201,6 +201,7 @@ use update_broker::UpdateBroker;
 pub use ash_codebase::CodebaseModels;
 
 pub struct AppServer {
+    pub(crate) task_delivery: Option<Arc<task_delivery::Runtime>>,
     backups: Option<Arc<ash_state::SqliteBackupStore>>,
     queue: Option<Arc<queue::QueueStore>>,
     queue_directory: Option<String>,
@@ -304,7 +305,7 @@ pub struct AppServer {
     teams: Option<Arc<ash_teams::TeamCoordinator>>,
     team_memberships: Arc<OnceLock<Arc<ash_teams::TeamCoordinator>>>,
     automation: Option<Arc<ash_automation::AutomationStore>>,
-    updates: Arc<UpdateBroker>,
+    pub(crate) updates: Arc<UpdateBroker>,
 }
 
 #[derive(Clone, Default)]
@@ -546,6 +547,7 @@ impl AppServer {
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
         Self {
+            task_delivery: None,
             queue: None,
             queue_directory: None,
             diagnostics,
@@ -1357,6 +1359,15 @@ impl AppServer {
         sleep::install(&mut builder, items.clone());
         history_notes::install(&mut builder, &self.threads, notes.clone());
         agent_message_board::install(&mut builder, &self.threads, message_board.clone());
+        if let Some(service) = &self.task_delivery {
+            let dirs = self
+                .env_runtime
+                .read()
+                .map_err(|_| "Environment runtime lock poisoned")?
+                .dir_grants
+                .clone();
+            crate::task_delivery_host::install(&mut builder, service.clone(), dirs);
+        }
         git_attribution::install(&mut builder, attribution);
         if let Some(backend) = image_backend {
             image_generation::install(
@@ -2494,6 +2505,11 @@ impl AppServer {
             Some(ClientMethod::QueueEnqueue) => self.queue_enqueue(&request.params),
             Some(ClientMethod::QueueList) => self.queue_list(&request.params),
             Some(ClientMethod::QueueCancel) => self.queue_cancel(&request.params),
+            Some(
+                method @ (ClientMethod::TaskSnapshotInfo
+                | ClientMethod::TaskReceive
+                | ClientMethod::TaskRead),
+            ) => self.task_delivery_request(method, &request.params, cancellation),
             Some(ClientMethod::NetworkRead) => self.network_read(),
             Some(ClientMethod::NetworkHttpConfigure) => {
                 self.network_http_configure(&request.params)
@@ -3139,6 +3155,13 @@ impl std::fmt::Display for RpcError {
 }
 
 impl RpcError {
+    pub(super) fn with_details(code: i64, message: AppServerErrorName, detail: String) -> Self {
+        Self {
+            code,
+            message,
+            detail: Some(detail),
+        }
+    }
     pub(super) fn new(code: i64, message: AppServerErrorName) -> Self {
         Self {
             code,

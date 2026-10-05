@@ -129,3 +129,10 @@ Windows 的后台进程生命周期集成测试使用 `just test-processes ash-a
 ## 远端 Agent 消息板
 
 App Server 按 profile 的 `messageBoard` 配置选择本地存储或外部消息板服务，沿用 `board_read` 与 `board_write` 的授权和参数。默认使用本地存储，同一 App Server 内的主代理和子代理可直接共享消息板。远端模式要求已有服务实现客户端协议；Ash 提供客户端接入，不提供独立消息板服务。配置、接口约定和通知生命周期见 [扩展文档](../docs/extensions.md#远端客户端)。
+
+## 跨机器任务
+
+持久 profile 的目录运行时安装 `remote_task_targets/send/list/read`，通过已保存的 SSH 连接把代码
+快照和验收要求交给目标机器。接收端提供 version 1 `taskDelivery` contract，以现有 Core、Queue
+和隔离工作目录创建独立 Session；状态和报告通过同一 SSH route 查询。包和回执归
+[`task-delivery`](../task-delivery/README.md)，App Server 只组合领域流程、目录权限、协议和传输。

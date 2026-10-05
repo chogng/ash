@@ -16,9 +16,11 @@ use ash_app_server_protocol::protocol::common::ClientCapabilities;
 #[cfg(unix)]
 use ash_app_server_protocol::protocol::common::ClientInfo;
 #[cfg(unix)]
-use ash_app_server_protocol::protocol::initialize::{
-    APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION,
-};
+use ash_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR;
+#[cfg(unix)]
+use ash_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_REVISION;
+#[cfg(unix)]
+use ash_app_server_protocol::protocol::initialize::ServerCapabilities;
 use ash_remote::RemoteDirPath;
 use ash_remote::RemoteProfile;
 use ash_remote::RemoteRuntime;
@@ -218,6 +220,13 @@ fn client_info() -> ClientInfo {
 
 #[cfg(unix)]
 fn write_initialize_server(path: &Path, protocol_major: u32, server_schema_hash: &str) {
+    let mut capabilities = ServerCapabilities {
+        sessions: true,
+        threads: true,
+        turns: true,
+        ..ServerCapabilities::default()
+    };
+    capabilities.advertise_contracts();
     let response = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -228,38 +237,7 @@ fn write_initialize_server(path: &Path, protocol_major: u32, server_schema_hash:
                 "revision": APP_SERVER_PROTOCOL_REVISION
             },
             "schemaHash": server_schema_hash,
-            "capabilities": {
-                "agentInteractions": false,
-                "documentCollaboration": false,
-                "sessions": true,
-                "projects": false,
-                "memories": false,
-                "threads": true,
-                "turns": true,
-                "resources": false,
-                "attachments": false,
-                "fileSystem": false,
-                "git": false,
-                "contentSearch": false,
-                "codebase": false,
-                "cloudCodebase": false,
-                "terminal": false,
-                "debugAdapter": false,
-                "typst": false,
-                "updateReplay": false,
-                "extensions": false,
-                "extensionHost": false,
-                "connectors": false,
-                "plugins": false,
-                "marketplace": false,
-                "mcp": false,
-                "mcpOAuth": false,
-                "contracts": {
-                    "sessions": { "version": APP_SERVER_CAPABILITY_VERSION },
-                    "threads": { "version": APP_SERVER_CAPABILITY_VERSION },
-                    "turns": { "version": APP_SERVER_CAPABILITY_VERSION }
-                }
-            },
+            "capabilities": capabilities,
             "slashCommands": []
         }
     })

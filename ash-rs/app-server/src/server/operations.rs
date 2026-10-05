@@ -409,6 +409,12 @@ impl AppServer {
             contracts: Default::default(),
         };
         capabilities.advertise_contracts();
+        if self.task_delivery.is_some() {
+            capabilities.contracts.insert(
+                "taskDelivery".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+        }
         if self.issue_reporter.is_some() {
             capabilities.contracts.insert(
                 "issueReporter".into(),

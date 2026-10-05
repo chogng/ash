@@ -1697,6 +1697,20 @@ use crate::protocol::syntax::SyntaxTokenKindDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxUpdateParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::task_delivery::CodeSnapshot;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::task_delivery::SnapshotInfo;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::task_delivery::SourceTask;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::task_delivery::TaskPackage;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::task_delivery::TaskReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::task_delivery::TaskReceipt;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::task_delivery::TaskReport;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::teams::*;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalAttachParams;
@@ -2731,6 +2745,9 @@ macro_rules! cancellation_definition {
 }
 
 client_methods! {
+    TaskSnapshotInfo => "task/snapshotInfo" { params: EmptyParams, response: SnapshotInfo, serialization: GlobalSharedRead, },
+    TaskReceive => "task/receive" { params: TaskPackage, response: TaskReceipt, serialization: GlobalExclusive, },
+    TaskRead => "task/read" { params: TaskReadParams, response: TaskReport, serialization: GlobalSharedRead, },
     QueueEdit => "queue/edit" { params: QueueEditParams, response: QueuedMessage, serialization: None, },
     ExtensionItems => "extension/items/list" { params: ExtensionItemsParams, response: ExtensionItemsResult, serialization: None, },
     QueueEnqueue => "queue/enqueue" {
@@ -5471,6 +5488,13 @@ typescript_bindings! {
     QueueCancelParams,
     QueueListResult,
     QueueInput,
+    CodeSnapshot,
+    SnapshotInfo,
+    SourceTask,
+    TaskPackage,
+    TaskReadParams,
+    TaskReceipt,
+    TaskReport,
     UserInput,
     QueuedMessage,
     QueueStatus,

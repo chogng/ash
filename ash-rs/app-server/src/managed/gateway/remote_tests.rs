@@ -85,6 +85,7 @@ fn ssh_initialize_routes_early_messages_and_keeps_the_buffered_stream() {
         &serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}).to_string(),
         7,
         &outbound,
+        ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES,
     )
     .unwrap();
     assert_eq!(received.recv().unwrap().raw, notification.to_string());
@@ -104,6 +105,7 @@ fn ssh_initialize_routes_early_messages_and_keeps_the_buffered_stream() {
         &serde_json::json!({"jsonrpc":"2.0","id":2,"method":"initialize","params":{}}).to_string(),
         7,
         &outbound,
+        ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES,
     )
     .unwrap_err();
     assert_eq!(error.kind(), io::ErrorKind::InvalidData);

@@ -7,25 +7,24 @@
 //! never initiates SSH.
 
 mod catalog;
-mod connection_catalog;
 mod install;
 mod runtime_updater;
 mod ssh;
 mod tunnel;
 
+pub use ash_remote_profile_store::RemoteConnectionCatalog;
+pub use ash_remote_profile_store::RemoteConnectionCatalogError;
+pub use ash_remote_profile_store::RemoteConnectionCatalogFailureKind;
+pub use ash_remote_profile_store::RemoteConnectionEntry;
+pub use ash_remote_profile_store::RemoteConnectionName;
+pub use ash_remote_profile_store::RemoteConnectionNameError;
 pub use ash_remote_profile_store::RemoteConnectionProfileRecord;
 pub use ash_remote_profile_store::RemoteConnectionProfileStore;
 pub use ash_remote_profile_store::RemoteConnectionProfileStoreError;
 pub use ash_remote_profile_store::RemoteConnectionProfileStoreFailureKind;
+pub use ash_remote_profile_store::RemoteConnectionSaveMode;
 pub use catalog::RemoteRuntimeCatalog;
 pub use catalog::RemoteRuntimeCatalogError;
-pub use connection_catalog::RemoteConnectionCatalog;
-pub use connection_catalog::RemoteConnectionCatalogError;
-pub use connection_catalog::RemoteConnectionCatalogFailureKind;
-pub use connection_catalog::RemoteConnectionEntry;
-pub use connection_catalog::RemoteConnectionName;
-pub use connection_catalog::RemoteConnectionNameError;
-pub use connection_catalog::RemoteConnectionSaveMode;
 pub use install::RemoteInstalledRuntime;
 pub use install::RemoteRuntimeArtifact;
 pub use install::RemoteRuntimeArtifactError;
@@ -60,10 +59,6 @@ pub use tunnel::select_available_loopback_port;
 #[cfg(test)]
 #[path = "catalog_tests.rs"]
 mod catalog_tests;
-
-#[cfg(test)]
-#[path = "connection_catalog_tests.rs"]
-mod connection_catalog_tests;
 
 #[cfg(test)]
 #[path = "ssh_tests.rs"]

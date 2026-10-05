@@ -45,6 +45,11 @@ Queue 或 Automation，也不接受旧 Agent 写入入口。
 
 ## 快速理解
 
+跨机器验收可以通过 Agent 的任务投递工具创建独立的目标 Session，携带当前 Thread 的 Git 快照和
+来源验收上下文。收到回执后目标任务由其持久队列继续执行，发送窗口可以关闭；发送端可查询进度，
+目标端可打开关联 Session 继续对话。它复用已保存的 SSH 连接和共享 App Server，契约与限制见
+[跨机器任务投递](../ash-rs/task-delivery/README.md)。
+
 Ash Desktop 的本地共享 Rust 后端通过 OpenSSH 连接目标主机的共享 App Server，并继续使用已有的 Files、Git、
 Terminal、Search、Codebase 和语言协议。前端不会为每个领域复制一套 Remote provider，SSH
 凭证也不会进入 Renderer。
@@ -543,7 +548,7 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - Shared platform probe/package installer：`ash-rs/remote-connections/src/install.rs`
 - Shared authenticated local catalog/network updater：`ash-rs/remote-connections/src/catalog.rs`、
   `ash-rs/remote-connections/src/runtime_updater.rs`
-- Shared named Remote target catalog：`ash-rs/remote-connections/src/connection_catalog.rs`
+- Shared named Remote target catalog：`ash-rs/remote-profile-store/src/connection_catalog.rs`
 - ash code SSH TUI composition and named connection catalog：`ash-cli/src/remote_connect.rs`
 - ash code managed runtime preparation/package binding：`ash-cli/src/remote_connect_runtime.rs`
 - ash code CLI-owned TUI reconnect policy：`ash-cli/src/remote_connect_tui.rs`
@@ -551,7 +556,7 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - ash code PTY 交互断线/恢复验证：`ash-cli/tests/remote_connect_interactive.rs`
 - ash code transport-neutral recovery handoff：`code/tui/src/app/recovery.rs`、
   `code/tui/src/sessions/active.rs`
-- Shared atomic connection profiles：`ash-rs/remote-connections/src/profile_store.rs`
+- Shared atomic connection profiles：`ash-rs/remote-profile-store/src/lib.rs`
 - app named connection CLI：`app-rs/src/features/remote/remote_connection_cli.rs`
 - app connection picker/process launcher：状态与界面由 `app-rs/settings/remote/remote_connection_picker.rs` 持有；产品输入、进程和窗口启动接线位于 `app-rs/src/features/remote/remote_connection_picker_input.rs`、`app-rs/src/features/remote/remote_connection_process.rs`、`app-rs/src/features/remote/remote_connection_launch_input.rs`
 - app connection manager：状态与界面由 `app-rs/settings/remote/remote_connection_manager.rs`、`app-rs/settings/remote/remote_connection_manager_view.rs` 持有；产品输入和持久化接线位于 `app-rs/src/features/remote/remote_connection_manager_input.rs`

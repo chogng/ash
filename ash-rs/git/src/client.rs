@@ -155,6 +155,13 @@ impl GitClient {
         }
     }
 
+    /// Changes validated execution limits without resolving the executable. Optional Git
+    /// workflows should report a missing installation when invoked, rather than at host startup.
+    pub fn with_limits(mut self, limits: GitExecutionLimits) -> Self {
+        self.limits = limits;
+        self
+    }
+
     /// Uses a caller-authorized absolute executable path and its inherited process environment.
     pub fn with_executable(executable: PathBuf, limits: GitExecutionLimits) -> GitResult<Self> {
         if !executable.is_absolute() {

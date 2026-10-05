@@ -20,6 +20,7 @@ members = [
     "ash-rs/ext/items",
     "ash-rs/ext/memories",
     "ash-rs/ext/queue",
+    "ash-rs/task-delivery",
     "ash-rs/analytics",
     "ash-rs/diagnostics",
     "ash-rs/response-debug-context",
@@ -310,6 +311,7 @@ guardian-environment = { package = "ash-guardian-environment", path = "ash-rs/gu
 memories-extension = { package = "ash-memories-extension", path = "ash-rs/ext/memories" }
 extension-items = { package = "ash-extension-items", path = "ash-rs/ext/items" }
 queue = { package = "ash-queue", path = "ash-rs/ext/queue" }
+task-delivery = { package = "ash-task-delivery", path = "ash-rs/task-delivery" }
 analytics = { package = "ash-analytics", path = "ash-rs/analytics" }
 response-debug-context = { package = "ash-response-debug-context", path = "ash-rs/response-debug-context" }
 diagnostics = { package = "ash-diagnostics", path = "ash-rs/diagnostics" }

@@ -10,7 +10,9 @@
 graph、local/remote-tracking refs、credential-free remote identity、最近 commit、revision file content、HEAD-to-working-tree 文本 Diff/增删行统计、typed
 stage/unstage/discard/commit/fetch/pull/push、local branch switch、worktree inventory、linked worktree mutation、
 仓库初始化、分支改名、远端分支删除、merge/rebase/cherry-pick 及继续或中止、stash、tag、remote 管理、amend/undo、部分 index 编辑、
-不可变 tree/blob 操作和基于 tree 的事务提交。持续监听和状态缓存由 App Server 拥有。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
+不可变 tree/blob 操作、任务快照的有界对象包导出/导入和基于 tree 的事务提交。任务包保留准确的
+HEAD 与工作树对象，导入验证摘要之外的 Git 完整性和对象类型，且不修改接收目录或 index；子模块
+和嵌入仓库不能由单个对象库表示，直接拒绝。持续监听和状态缓存由 App Server 拥有。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
 不属于本 crate。
 
 ## 为什么不是普通 `git utils`

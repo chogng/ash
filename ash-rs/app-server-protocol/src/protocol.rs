@@ -44,6 +44,7 @@ pub mod plugins;
 pub mod projects;
 pub mod provider;
 pub mod queue;
+pub mod task_delivery;
 pub mod registry;
 pub mod resources;
 pub mod search;

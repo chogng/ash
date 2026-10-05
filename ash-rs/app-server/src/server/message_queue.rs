@@ -163,6 +163,12 @@ impl OutboundReceiver {
     pub(crate) fn recv(&self) -> Result<OutgoingMessage, mpsc::RecvError> {
         self.receiver.recv()
     }
+    pub(crate) fn recv_timeout(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Result<OutgoingMessage, mpsc::RecvTimeoutError> {
+        self.receiver.recv_timeout(timeout)
+    }
 }
 
 impl Drop for OutboundReceiver {

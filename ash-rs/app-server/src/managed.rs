@@ -5,6 +5,7 @@ mod gateway;
 mod registry;
 mod ssh;
 mod web;
+pub(crate) use gateway::task_request;
 
 use ash_app_server_daemon::ConnectionOptions;
 use ash_app_server_daemon::ConnectionRole;

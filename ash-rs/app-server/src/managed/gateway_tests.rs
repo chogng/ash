@@ -550,6 +550,115 @@ fn remote_initialize_result() -> String {
 }
 
 #[cfg(unix)]
+fn task_ssh_fixture(
+    script: impl FnOnce(&std::path::Path) -> String,
+) -> (tempfile::TempDir, RemoteProfile, RemoteLaunch) {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = tempfile::tempdir().unwrap();
+    let executable = directory.path().join("ssh");
+    std::fs::write(
+        &executable,
+        format!("#!/bin/sh\n{}", script(directory.path())),
+    )
+    .unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let profile = RemoteProfile::new(
+        ash_remote::SshTarget::new(
+            ash_remote::SshHost::parse("mac").unwrap(),
+            ash_remote::RemoteDirPath::parse("/workspace").unwrap(),
+        ),
+        ash_remote::RemoteRuntime::new("/runtime/ash-remote-server").unwrap(),
+    );
+    (
+        directory,
+        profile,
+        RemoteLaunch {
+            executable: executable.into_os_string(),
+            initialize_timeout: std::time::Duration::from_secs(2),
+        },
+    )
+}
+
+#[cfg(unix)]
+#[test]
+fn task_delivery_ssh_checks_its_contract_and_pairs_the_task_response() {
+    let mut initialized: Value = serde_json::from_str(&remote_initialize_result()).unwrap();
+    initialized["result"]["capabilities"]["contracts"]["taskDelivery"] =
+        serde_json::json!({"version":1});
+    let (directory, profile, launch) = task_ssh_fixture(|root| {
+        format!(
+            "IFS= read -r initialize\nprintf '%s\\n' '{}'\nIFS= read -r request\nprintf '%s' \"$request\" > '{}'\nprintf '%s\\n' '{{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{{\"head\":\"{}\"}}}}'\nwhile IFS= read -r request; do :; done\n",
+            initialized.to_string().replace('\'', "'\"'\"'"),
+            root.join("request").display(),
+            "a".repeat(40)
+        )
+    });
+    let value = task_request_with_launch(
+        profile,
+        ash_app_server_protocol::protocol::registry::ClientMethod::TaskSnapshotInfo,
+        serde_json::json!({}),
+        &ash_async_utils::CancellationSource::new().token(),
+        launch,
+    )
+    .unwrap();
+    assert_eq!(value, serde_json::json!({"head":"a".repeat(40)}));
+    let request: Value =
+        serde_json::from_slice(&std::fs::read(directory.path().join("request")).unwrap()).unwrap();
+    assert_eq!(request["method"], "task/snapshotInfo");
+}
+
+#[cfg(unix)]
+#[test]
+fn task_delivery_ssh_rejects_an_old_backend_before_sending_a_task() {
+    let initialized = remote_initialize_result();
+    let (directory, profile, launch) = task_ssh_fixture(|root| {
+        format!(
+            "IFS= read -r initialize\nprintf '%s\\n' '{}'\nif IFS= read -r request; then printf '%s' \"$request\" > '{}'; fi\n",
+            initialized.replace('\'', "'\"'\"'"),
+            root.join("request").display()
+        )
+    });
+    let error = task_request_with_launch(
+        profile,
+        ash_app_server_protocol::protocol::registry::ClientMethod::TaskReceive,
+        serde_json::json!({}),
+        &ash_async_utils::CancellationSource::new().token(),
+        launch,
+    )
+    .unwrap_err();
+    assert!(error.contains("taskDelivery"), "{error}");
+    assert!(!directory.path().join("request").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn task_delivery_ssh_cancellation_closes_a_stalled_handshake() {
+    let (_directory, profile, launch) = task_ssh_fixture(|_| {
+        "IFS= read -r initialize\nwhile IFS= read -r request; do :; done\n".into()
+    });
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let token = cancellation.token();
+    let started = std::time::Instant::now();
+    std::thread::scope(|scope| {
+        scope.spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            cancellation.cancel();
+        });
+        assert!(
+            task_request_with_launch(
+                profile,
+                ash_app_server_protocol::protocol::registry::ClientMethod::TaskSnapshotInfo,
+                serde_json::json!({}),
+                &token,
+                launch
+            )
+            .is_err()
+        );
+    });
+    assert!(started.elapsed() < std::time::Duration::from_secs(1));
+}
+
+#[cfg(unix)]
 #[test]
 fn ssh_stop_is_delivered_while_all_ordinary_pending_slots_are_occupied() {
     let initialize = remote_initialize_result();

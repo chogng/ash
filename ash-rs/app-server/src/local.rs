@@ -1632,7 +1632,8 @@ pub fn open_app_server_with_codebase_providers(
     }
     if let Some(target) = report_issue_url {
         server = server.with_issue_reporter(
-            github::GitHubIssueReporter::new(&target, application_http.clone()).map_err(open_error)?,
+            github::GitHubIssueReporter::new(&target, application_http.clone())
+                .map_err(open_error)?,
         );
     }
     if options.session_state_mode == SessionStateMode::Durable {
@@ -1654,8 +1655,31 @@ pub fn open_app_server_with_codebase_providers(
             None => Arc::new(queue::QueueStore::open(&database_path).map_err(open_error)?),
         };
         server = server
-            .with_queue_store(queue, directory)
+            .with_queue_store(queue.clone(), directory)
             .map_err(OpenAppServerError)?;
+        if let Some(directory) = &options.dir_root {
+            let identity = ash_state::SqliteThreadStore::open(&database_path)
+                .map_err(open_error)?
+                .history_identity()
+                .map_err(open_error)?;
+            server.task_delivery = Some(Arc::new(
+                task_delivery::Runtime::open(
+                    &database_path,
+                    task_delivery::RuntimeServices {
+                        profile_root: options.profile_root.clone(),
+                        directory: directory.clone(),
+                        profile_id: identity,
+                        threads: Arc::downgrade(server.threads()),
+                        queue,
+                        config: config.clone(),
+                        peer: Arc::new(crate::task_delivery_host::SshPeer(
+                            options.profile_root.clone(),
+                        )),
+                    },
+                )
+                .map_err(open_error)?,
+            ));
+        }
     }
     server = server
         .with_skill_runtime(

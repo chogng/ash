@@ -677,6 +677,7 @@ dependencies = [
  "ash-subscriptions",
  "ash-supergrok",
  "ash-syntax",
+ "ash-task-delivery",
  "ash-teams",
  "ash-testing",
  "ash-thread-store",
@@ -795,6 +796,7 @@ dependencies = [
  "ash-queue",
  "ash-response-debug-context",
  "ash-slash-commands",
+ "ash-task-delivery",
  "ash-thread-transcript",
  "ash-utils-cargo-bin",
  "ash-utils-path-uri",
@@ -2849,6 +2851,33 @@ name = "ash-system-dictation"
 version = "0.1.0"
 dependencies = [
  "windows",
+]
+
+[[package]]
+name = "ash-task-delivery"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-config",
+ "ash-core",
+ "ash-features",
+ "ash-file-access",
+ "ash-git",
+ "ash-protocol",
+ "ash-queue",
+ "ash-remote",
+ "ash-remote-profile-store",
+ "ash-state",
+ "base64 0.22.1",
+ "rusqlite",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+ "ts-rs",
+ "worktree",
 ]
 
 [[package]]

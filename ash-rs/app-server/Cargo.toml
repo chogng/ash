@@ -58,6 +58,7 @@ guardian-environment = { workspace = true }
 dirs = { workspace = true }
 memories-extension = { workspace = true }
 queue = { workspace = true }
+task-delivery = { workspace = true, features = ["runtime"] }
 ash-otel = { workspace = true }
 otel-trace-websocket = { workspace = true }
 build-info = { workspace = true }

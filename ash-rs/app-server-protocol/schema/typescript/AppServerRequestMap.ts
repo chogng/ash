@@ -475,6 +475,7 @@ import type { SkillSetEnablementParams } from './types/SkillSetEnablementParams.
 import type { SkillSourceAddParams } from './types/SkillSourceAddParams.js';
 import type { SkillSourceRemoveParams } from './types/SkillSourceRemoveParams.js';
 import type { SkillSourceSetEnablementParams } from './types/SkillSourceSetEnablementParams.js';
+import type { SnapshotInfo } from './types/SnapshotInfo.js';
 import type { SyntaxAnalyzeParams } from './types/SyntaxAnalyzeParams.js';
 import type { SyntaxAnalyzeResult } from './types/SyntaxAnalyzeResult.js';
 import type { SyntaxCloseParams } from './types/SyntaxCloseParams.js';
@@ -482,6 +483,10 @@ import type { SyntaxOpenParams } from './types/SyntaxOpenParams.js';
 import type { SyntaxSelectionRangesParams } from './types/SyntaxSelectionRangesParams.js';
 import type { SyntaxSelectionRangesResult } from './types/SyntaxSelectionRangesResult.js';
 import type { SyntaxUpdateParams } from './types/SyntaxUpdateParams.js';
+import type { TaskPackage } from './types/TaskPackage.js';
+import type { TaskReadParams } from './types/TaskReadParams.js';
+import type { TaskReceipt } from './types/TaskReceipt.js';
+import type { TaskReport } from './types/TaskReport.js';
 import type { TeamCommandParams } from './types/TeamCommandParams.js';
 import type { TeamCommandResult } from './types/TeamCommandResult.js';
 import type { TeamListParams } from './types/TeamListParams.js';
@@ -542,6 +547,9 @@ import type { TypstCompileResult } from './types/TypstCompileResult.js';
 import type { JsonRpcRequest, JsonRpcResponse } from './protocol.js';
 
 export interface AppServerRequestMap {
+  "task/snapshotInfo": { params: Record<string, never>; response: SnapshotInfo };
+  "task/receive": { params: TaskPackage; response: TaskReceipt };
+  "task/read": { params: TaskReadParams; response: TaskReport };
   "queue/edit": { params: QueueEditParams; response: QueuedMessage };
   "extension/items/list": { params: ExtensionItemsParams; response: ExtensionItemsResult };
   "queue/enqueue": { params: QueueEnqueueParams; response: QueuedMessage };
@@ -937,6 +945,9 @@ readonly __params?: MethodParams<M>;
 readonly __result?: MethodResult<M>;
 };
 export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefinition<M> } = {
+  "task/snapshotInfo": { method: "task/snapshotInfo" },
+  "task/receive": { method: "task/receive" },
+  "task/read": { method: "task/read" },
   "queue/edit": { method: "queue/edit" },
   "extension/items/list": { method: "extension/items/list" },
   "queue/enqueue": { method: "queue/enqueue" },

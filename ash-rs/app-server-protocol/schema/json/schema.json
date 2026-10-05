@@ -2149,6 +2149,10 @@
     },
     "AppServerErrorName": {
       "enum": [
+        "TaskDeliveryUnavailable",
+        "TaskDeliveryConflict",
+        "TaskDeliveryNotFound",
+        "TaskDeliveryOperationFailed",
         "ParseError",
         "InvalidRequest",
         "MethodNotFound",
@@ -4890,6 +4894,54 @@
     },
     "ClientRequestSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "task/snapshotInfo",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "task/receive",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TaskPackage"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "task/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TaskReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -11022,6 +11074,54 @@
     },
     "ClientResultSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "task/snapshotInfo",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/SnapshotInfo"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "task/receive",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TaskReceipt"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "task/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TaskReport"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -17376,6 +17476,37 @@
         "state",
         "rootId",
         "localGeneration"
+      ],
+      "type": "object"
+    },
+    "CodeSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "head": {
+          "type": "string"
+        },
+        "pack": {
+          "description": "Base64 Git pack. Transport size is bounded before decoding.",
+          "type": "string"
+        },
+        "packDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "prerequisite": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tree": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "head",
+        "tree",
+        "pack",
+        "packDigest"
       ],
       "type": "object"
     },
@@ -41003,6 +41134,18 @@
       ],
       "type": "object"
     },
+    "SnapshotInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "head": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "head"
+      ],
+      "type": "object"
+    },
     "SourceKind": {
       "enum": [
         "projectFile",
@@ -41012,6 +41155,26 @@
         "manual"
       ],
       "type": "string"
+    },
+    "SourceTask": {
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "profileId",
+        "sessionId",
+        "threadId"
+      ],
+      "type": "object"
     },
     "StableTurnError": {
       "properties": {
@@ -41486,6 +41649,149 @@
         "previousRevision",
         "revision",
         "edits"
+      ],
+      "type": "object"
+    },
+    "TaskPackage": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/CodeSnapshot"
+        },
+        "context": {
+          "description": "Explicit handoff context and source acceptance evidence; never hidden reasoning.",
+          "type": "string"
+        },
+        "deliveryId": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceTask"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deliveryId",
+        "source",
+        "title",
+        "instructions",
+        "context",
+        "code"
+      ],
+      "type": "object"
+    },
+    "TaskReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "deliveryId": {
+          "$ref": "#/$defs/ContentDigest"
+        }
+      },
+      "required": [
+        "deliveryId"
+      ],
+      "type": "object"
+    },
+    "TaskReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "deliveryId": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "directory": {
+          "type": "string"
+        },
+        "head": {
+          "type": "string"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceTask"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "tree": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deliveryId",
+        "source",
+        "sessionId",
+        "threadId",
+        "directory",
+        "head",
+        "tree"
+      ],
+      "type": "object"
+    },
+    "TaskReport": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "messageTruncated": {
+          "type": "boolean"
+        },
+        "queueStatus": {
+          "$ref": "#/$defs/QueueStatus"
+        },
+        "receipt": {
+          "$ref": "#/$defs/TaskReceipt"
+        },
+        "turnError": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StableTurnError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turnId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turnStatus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "receipt",
+        "queueStatus",
+        "messageTruncated"
       ],
       "type": "object"
     },

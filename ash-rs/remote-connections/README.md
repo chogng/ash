@@ -85,6 +85,10 @@ publisher key。
 
 ## 连接配置档案契约
 
+`RemoteConnectionCatalog` 与 `RemoteConnectionProfileStore` 的存储实现都归 `ash-remote-profile-store`，
+本 crate 重新导出同一契约，供现有产品连接和管理命令使用。后端任务投递直接消费存储 owner，
+不依赖产品连接客户端，也不创建第二份目标目录。
+
 `RemoteConnectionCatalog` 是用户意图目录，与运行时代际历史分开。每个
 `RemoteConnectionEntry` 只含 canonical `RemoteConnectionName` 和一个 `SshTarget`，不包含运行时、
 SSH executable、任意 option、密码、私钥或 agent socket。使用 canonical 本机配置档案根的产品将
@@ -201,7 +205,7 @@ crate。其他产品可以拥有自己的生命周期和 UI。
 ## 验证
 
 ```bash
-cargo test -p ash-remote-connections
+just test ash-remote-connections
 ```
 
 更新器的确定性 fake-HTTP、缓存复用/篡改、原子失败和 linked-cache 测试位于
