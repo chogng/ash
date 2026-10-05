@@ -54,12 +54,19 @@ Git 查询和修改使用不同 capability：
 | 标签与远端配置 | `git.createTag`、`git.deleteTag`、`git.addRemote`、`git.removeRemote` | 清单不返回远端 URL 或凭据；删除标签和移除远端前确认 |
 | 修改或撤销提交 | `git.commitAmend` 提交当前 index；`git.undoCommit` 撤销最后提交并保留 index 和工作树 | 明确提示改写历史；撤销使用确认时的 HEAD 做原子比较，拒绝已变化的 HEAD；不撤销根提交 |
 | 部分暂存 | `git.stageHunk`、`git.unstageHunk` 选择文件与更改块；`git.stageSelectedRanges`、`git.unstageSelectedRanges` 使用编辑器选区 | Rust 重新计算 diff，检查两侧内容并持有 Git index 锁后更新 index；不修改工作文件；冲突、重命名、子模块、二进制和非 UTF-8 文件不支持部分操作 |
-| 查看 history graph | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，自动连续合并全部页面，按 lane 分配颜色并显示 local/remote refs；列表本身按视口虚拟化；history item 可展开 `git/commitChanges` 文件列表，点击文本文件再按需读取 `git/commitFile` 并挂到 Editor | 只包含本地已存在的 refs；自动 fetch 需主动开启；binary 或超限文件不作为文本 editor 打开 |
+| 查看 history graph | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，首屏读取一页，后续随列表渲染范围追加页面，按 lane 分配颜色并显示 local/remote refs；列表按视口虚拟化；history item 可展开 `git/commitChanges` 文件列表，点击文本文件再按需读取 `git/commitFile` 并挂到 Editor | 只包含本地已存在的 refs；自动 fetch 需主动开启；binary 或超限文件不作为文本 editor 打开 |
 | 自动获取远端更新 | App Server 读取共享 `[git]` 配置并逐仓库调度；`autofetch` 默认为 `"off"`，`"default"` 获取默认远端，`"all"` 获取全部远端；`autofetchPeriod` 默认 180 秒 | 三端共用配置，不提供仓库级覆盖；只对有修改授权的仓库执行，各仓库独立定时获取；只更新远端引用，不执行 pull |
 | 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
 | 提交和推送 | 使用系统 Git 的当前仓库配置 | 尚无凭据提示和进度 UI |
 
 ## SCM History 行布局
+
+History 使用公共 [`ListView`](../app-ts/src/ash/base/browser/ui/list/listView.ts) 管理滚动、行高、
+可见范围、行复用和有界缓存释放。SCM 提供提交内容、展开后的高度和操作资源，
+在列表永久移除行时释放对应资源；行离开渲染范围时关闭其详情卡片。
+“加载更多”作为列表的一行，在进入包含预渲染区域的渲染范围时请求下一页。
+分页保留已有提交行的对象，追加历史不会重建仍在显示的操作区或打断焦点。
+SCM 的 lane 分配和合并连线算法继续由 `scmHistory.ts` 负责。
 
 提交行只排列图形和标题，短 SHA 和日期不常驻，也不预留列宽。鼠标悬停或键盘焦点进入
 提交时，卡片按需读取作者、相对时间和完整时间、完整提交说明，以及文件数和增删行数。

@@ -27,6 +27,7 @@ test('SCM startup keeps commit hover targets stable in a large history', async (
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await history.locator('.ash-pane-view-header').click();
 	const graph = history.locator('.ash-scm-graph');
+	const viewport = graph.locator('.ash-scrollbar-viewport');
 	await expect(graph).toHaveAttribute('aria-busy', 'false');
 	const row = graph.getByRole('treeitem').filter({ hasText: 'Startup history 1997' });
 	await expect(row).toHaveAttribute('aria-setsize', '50');
@@ -69,7 +70,7 @@ test('SCM startup keeps commit hover targets stable in a large history', async (
 		await restarted.workbench.waitForUiIdle();
 		await expect(tooltip).toHaveAttribute('id', tooltipId!);
 		await expect(copy).toBeFocused();
-		await graph.evaluate(element => { element.scrollTop = 22; });
+		await viewport.evaluate(element => { element.scrollTop = 22; });
 		await restarted.workbench.waitForUiIdle();
 		expect(await retainedRow!.evaluate(element => element.isConnected)).toBe(true);
 		expect(await retainedToolbar!.evaluate(element => element.isConnected)).toBe(true);
@@ -92,24 +93,51 @@ test('SCM startup keeps commit hover targets stable in a large history', async (
 	await page.keyboard.press('Escape');
 	await expect(row).toBeFocused();
 
-	// Prefetch while several commits remain below the viewport.
-	await graph.evaluate(element => { element.scrollTop = 50 * 22 - element.clientHeight - 120; });
-	await expect(graph.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '100');
-	await graph.evaluate(element => { element.scrollTop = 50 * 22 - element.clientHeight; });
+	// Keep an overlapping commit's focused actions attached while prefetch appends another page.
+	await viewport.evaluate(element => { element.scrollTop = 50 * 22 - element.clientHeight - 260; });
+	const paginationRow = graph.getByRole('treeitem').filter({ hasText: 'Startup history 1960' });
+	await paginationRow.focus();
+	await expect(paginationRow).toHaveAttribute('aria-setsize', '50');
+	await paginationRow.press('Alt+ArrowDown');
+	const paginationTooltip = page.getByRole('tooltip');
+	const paginationTooltipId = await paginationTooltip.getAttribute('id');
+	const paginationCopy = paginationTooltip.getByRole('button', { name: 'Copy Commit Hash', exact: true });
+	await expect(paginationCopy).toBeFocused();
+	const paginationActions = await paginationRow.locator('.ash-scm-graph-actions').elementHandle();
+	try {
+		// Prefetch while several commits remain below the viewport.
+		await viewport.evaluate(element => { element.scrollTop = 50 * 22 - element.clientHeight - 120; });
+		await expect(paginationRow).toHaveAttribute('aria-setsize', '100');
+		expect(await paginationActions!.evaluate(element => element.isConnected)).toBe(true);
+		await expect(paginationTooltip).toHaveAttribute('id', paginationTooltipId!);
+		await expect(paginationCopy).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(paginationRow).toBeFocused();
+	} finally { await paginationActions?.dispose(); }
+	await viewport.evaluate(element => { element.scrollTop = 50 * 22 - element.clientHeight; });
 	await expect(row).toHaveCount(0);
 	await expect(graph.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '100');
 	await expect(graph).toHaveAttribute('aria-busy', 'false');
 	for (const scrollTop of [700, 22, 900, 400, 0]) {
-		await graph.evaluate((element, scrollTop) => { element.scrollTop = scrollTop; }, scrollTop);
+		await viewport.evaluate((element, scrollTop) => { element.scrollTop = scrollTop; }, scrollTop);
 		await restarted.workbench.waitForUiIdle();
-		await expect.poll(() => graph.evaluate(element => element.scrollTop)).toBe(scrollTop);
-		const coverage = await graph.evaluate(element => {
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(scrollTop);
+		const coverage = await viewport.evaluate(element => {
 			const bounds = element.getBoundingClientRect();
 			const rows = [...element.querySelectorAll('.ash-scm-graph-commit')].map(row => row.getBoundingClientRect());
 			return { topCovered: rows.some(row => row.top <= bounds.top + 3 && row.bottom > bounds.top + 3), bottomCovered: rows.some(row => row.top < bounds.bottom - 10 && row.bottom >= bounds.bottom - 10) };
 		});
 		expect(coverage).toEqual({ topCovered: true, bottomCovered: true });
 	}
+	// Cached rows must release their active hover when ListView takes them out of the render range.
+	await row.focus();
+	await row.press('Alt+ArrowDown');
+	await expect(page.getByRole('tooltip').getByRole('button', { name: 'Copy Commit Hash', exact: true })).toBeFocused();
+	await viewport.evaluate(element => { element.scrollTop = element.scrollHeight - element.clientHeight; });
+	await expect(row).toHaveCount(0);
+	await expect(page.getByRole('tooltip')).toHaveCount(0);
+	expect(await graph.getByRole('treeitem').count()).toBeLessThan(100);
+
 });
 
 test('SCM history connects repeated merge parents back to the main lane', async ({ target, testWorkspace, reloadWorkbench }) => {
@@ -249,7 +277,9 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	await expect(latest).toHaveAttribute('aria-expanded', 'false');
 	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['main.ts', 'other.ts']);
 	await expect(comparisons.locator('.stanza-multi-diff-editor-section')).toHaveCount(2);
-	await latest.locator('.ash-scm-graph-subject').click({ button: 'right', position: { x: 3, y: 8 } });
+	// A long branch badge can cover the title; open this comparison through the commit's keyboard menu.
+	await latest.focus();
+	await latest.press('Shift+F10');
 	await page.getByRole('menuitem', { name: 'Open Changes', exact: true }).click();
 	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['main.ts', 'other.ts']);
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Review all files' })).toHaveCount(1);

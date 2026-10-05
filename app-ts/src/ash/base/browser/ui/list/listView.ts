@@ -288,8 +288,9 @@ export class ListView<T> extends Disposable {
 
 	private updateAccessibility(row: HTMLDivElement, item: T): void {
 		const accessibility = this.options.accessibilityProvider;
-		setRole(row, accessibility?.getRole?.(item) ?? (this.options.role === "tree" ? "treeitem" : "option"));
-		setAriaAttribute(row, "selected", false);
+		const role = accessibility?.getRole?.(item) ?? (this.options.role === "tree" ? "treeitem" : "option");
+		setRole(row, role);
+		setAriaAttribute(row, "selected", role === "presentation" ? undefined : false);
 		this.setNumericAria(row, "aria-level", accessibility?.getAriaLevel?.(item));
 		this.setNumericAria(row, "aria-setsize", accessibility?.getAriaSetSize?.(item));
 		this.setNumericAria(row, "aria-posinset", accessibility?.getAriaPosInSet?.(item));

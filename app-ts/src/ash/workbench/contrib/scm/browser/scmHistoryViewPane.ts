@@ -1,6 +1,6 @@
 import { localize2, localize, getNLSLanguage } from '../../../../nls.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { observeElementSize } from "../../../../base/browser/observer.js";
+import { ListView } from '../../../../base/browser/ui/list/listView.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
 import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -77,7 +77,6 @@ registerAction2(class extends Action2 {
 });
 
 const PageSize = 50;
-const Overscan = 8;
 
 type ExpandedCommit =
 	| { readonly state: "loading" }
@@ -89,9 +88,11 @@ interface HistoryPage {
 	readonly hasMore: boolean;
 }
 
-// Each visible commit owns its actions and hover independently of viewport updates.
+type HistoryListItem = { readonly type: 'commit'; model: ISCMHistoryItemViewModel } | { readonly type: 'loadMore' };
+
+// Each rendered commit owns its actions and hover independently of viewport updates.
 class HistoryItemRow extends Disposable {
-	public readonly element: HTMLLIElement;
+	public readonly element: HTMLDivElement;
 	public readonly resources = this._register(new DisposableStore());
 	public readonly changes = this._register(new DisposableStore());
 	public expanded: ExpandedCommit | undefined;
@@ -100,7 +101,7 @@ class HistoryItemRow extends Disposable {
 
 	constructor(public historyItemViewModel: ISCMHistoryItemViewModel, public graph: SVGSVGElement, document: Document) {
 		super();
-		this.element = h(document, 'li');
+		this.element = h(document, 'div');
 		this._register(toDisposable(() => this.element.remove()));
 	}
 }
@@ -112,7 +113,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private readonly busyContext: IContextKey<boolean>;
 	private readonly providerIdContext: IContextKey<string>;
 	private readonly graphElement: HTMLDivElement;
-	private readonly renderedRows = this._register(new DisposableMap<string, HistoryItemRow>());
+	private readonly rowResources = this._register(new DisposableMap<string, HistoryItemRow>());
 	private readonly resourceLabels: ResourceLabels;
 	private readonly more = this._register(new DisposableStore());
 	private readonly providerListener = this._register(new MutableDisposable());
@@ -123,9 +124,9 @@ export class SCMHistoryViewPane extends ViewPane {
 	private loading = false;
 	private moreError: string | undefined;
 	private rows: readonly ISCMHistoryItemViewModel[] = [];
-	private list: HTMLOListElement | undefined;
-	private topSpacer: HTMLLIElement | undefined;
-	private bottomSpacer: HTMLLIElement | undefined;
+	private list: ListView<HistoryListItem> | undefined;
+	private readonly listResources = this._register(new MutableDisposable<DisposableStore>());
+	private readonly loadMoreItem: HistoryListItem = { type: 'loadMore' };
 	private readonly expanded = new Map<string, ExpandedCommit>();
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
@@ -138,11 +139,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.contentElement.classList.add("ash-scm-secondary-pane");
 		this.graphElement = h(container.ownerDocument, "div");
 		this.graphElement.className = "ash-scm-graph";
-		this._register(addDisposableListener(this.graphElement, "scroll", () => {
-			this.renderRows();
-		}));
 		this.contentElement.append(this.graphElement);
-		this._register(observeElementSize(this.graphElement, () => this.renderRows()));
 		this.busyContext = SCMHistoryBusyContext.bindTo(contextKeyService);
 		this._register(toDisposable(() => this.busyContext.reset()));
 		this.providerIdContext = SCMHistoryProviderIdContext.bindTo(contextKeyService);
@@ -183,11 +180,10 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.loading = false;
 		this.moreError = undefined;
 		this.rows = [];
+		this.listResources.clear();
 		this.list = undefined;
-		this.topSpacer = undefined;
-		this.bottomSpacer = undefined;
 		this.expanded.clear();
-		this.renderedRows.clearAndDisposeAll();
+		this.rowResources.clearAndDisposeAll();
 		this.more.clear();
 		this.graphElement.textContent = "Loading commit graph…";
 		this.graphElement.setAttribute('role', 'status');
@@ -228,87 +224,91 @@ export class SCMHistoryViewPane extends ViewPane {
 	private renderGraph(page: HistoryPage): void {
 		this.graphElement.removeAttribute('role');
 		this.graphElement.removeAttribute('aria-live');
-		this.renderedRows.clearAndDisposeAll();
-		this.more.clear();
-		this.rows = toISCMHistoryItemViewModelArray(page.items, new Map(), this.head);
-		const children: HTMLElement[] = [];
+		this.listResources.clear();
 		this.list = undefined;
-		this.topSpacer = undefined;
-		this.bottomSpacer = undefined;
+		this.more.clear();
+		this.graphElement.replaceChildren();
+		this.rows = toISCMHistoryItemViewModelArray(page.items, new Map(), this.head);
 		if (page.items.length === 0) {
-			const empty = h(this.graphElement.ownerDocument, "p");
-			empty.className = "ash-scm-empty";
-			empty.textContent = "No commits yet.";
-			children.push(empty);
+			const empty = h(this.graphElement.ownerDocument, 'p');
+			empty.className = 'ash-scm-empty';
+			empty.textContent = 'No commits yet.';
+			this.graphElement.append(empty);
 		} else {
-			this.list = h(this.graphElement.ownerDocument, "ol");
-			this.list.className = "ash-scm-graph-list";
-			this.list.setAttribute("role", "tree");
-			this.list.setAttribute('aria-label', this.graphLabel);
-			this.list.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a commit to expand its files. Press Shift+F10 or the Context Menu key for commit actions: view or compare changes, create a branch, cherry-pick, copy commit information, or add to Chat. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that commit. Press Enter on a reference badge for branch actions. Checkout includes detached commits; More includes creating a tag. Press Alt+Down Arrow to focus commit details and use its actions; Escape returns to the commit.'));
-			this.topSpacer = this.renderSpacer(0);
-			this.bottomSpacer = this.renderSpacer(0);
-			this.list.append(this.topSpacer, this.bottomSpacer);
-			children.push(this.list);
+			const resources = new DisposableStore();
+			this.listResources.value = resources;
+			const list = resources.add(new ListView<HistoryListItem>(this.graphElement, {
+				role: 'tree',
+				ariaLabel: this.graphLabel,
+				scrolling: 'managed',
+				getId: item => item.type === 'commit' ? item.model.historyItem.id : 'loadMore',
+				getHeight: item => item.type === 'commit' ? this.rowHeight(item.model.historyItem) : SWIMLANE_HEIGHT * 2,
+				reuseRows: true,
+				// The commit contains its own focusable actions and expanded file list.
+				accessibilityProvider: { getRole: () => 'presentation' },
+				renderItem: (item, index) => {
+					if (item.type === 'loadMore') return this.renderMore();
+					const rendered = this.renderCommit(item.model, renderSCMHistoryItemGraph(item.model, this.rowHeight(item.model.historyItem), this.graphElement.ownerDocument));
+					this.updateCommitAccessibility(rendered, index);
+					return rendered.element;
+				},
+				updateItem: (item, index, row) => {
+					if (item.type === 'loadMore') {
+						this.more.clear();
+						row.replaceChildren(this.renderMore());
+						return;
+					}
+					const rendered = this.rowResources.get(item.model.historyItem.id)!;
+					this.updateCommitRow(rendered, item.model);
+					this.updateCommitAccessibility(rendered, index);
+				},
+				onDidRemoveRow: row => {
+					if (row.dataset.listId === 'loadMore') this.more.clear();
+					else this.rowResources.deleteAndDispose(row.dataset.listId!);
+				},
+			}));
+			this.list = list;
+			list.domNode.classList.add('ash-scm-graph-viewport');
+			list.element.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a commit to expand its files. Press Shift+F10 or the Context Menu key for commit actions: view or compare changes, create a branch, cherry-pick, copy commit information, or add to Chat. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that commit. Press Enter on a reference badge for branch actions. Checkout includes detached commits; More includes creating a tag. Press Alt+Down Arrow to focus commit details and use its actions; Escape returns to the commit.'));
+			resources.add(list.onDidRenderRows(() => {
+				for (const [, row] of this.rowResources) {
+					if (!row.hover?.visible) continue;
+					if (!row.element.isConnected) row.hover.hide();
+					else this.contextViewService.layout();
+				}
+				// Pagination follows the ListView render range, including its overscan and resize updates.
+				if (list.row(this.rows.length) && this.isBodyVisible() && !this.moreError) void this.loadMore();
+			}));
+			this.updateList();
 		}
-		if (page.hasMore) children.push(this.renderMore());
-		this.graphElement.replaceChildren(...children);
-		this.renderRows();
-		this.graphElement.setAttribute("aria-busy", this.loading ? "true" : "false");
+		this.graphElement.setAttribute('aria-busy', this.loading ? 'true' : 'false');
 	}
 
-	private renderRows(): void {
+	private updateCommitAccessibility(row: HistoryItemRow, index: number): void {
+		row.element.setAttribute('aria-posinset', String(index + 1));
+		row.element.setAttribute('aria-setsize', String(this.rows.length));
+	}
+
+	private updateList(): void {
 		const list = this.list;
-		if (!list || this.rows.length === 0) return;
-		const listTop = offsetTopWithinScrollContainer(list, this.graphElement);
-		const viewportTop = Math.max(0, this.graphElement.scrollTop - listTop);
-		const viewportHeight = Math.max(SWIMLANE_HEIGHT, this.graphElement.clientHeight);
-		const offsets = this.rowOffsets();
-		const firstVisible = offsets.findIndex((offset, index) => offset + this.rowHeight(this.rows[index].historyItem) > viewportTop);
-		const start = Math.max(0, (firstVisible < 0 ? this.rows.length - 1 : firstVisible) - Overscan);
-		let end = start;
-		while (end < this.rows.length && offsets[end] < viewportTop + viewportHeight) end += 1;
-		end = Math.min(this.rows.length, Math.max(start + 1, end + Overscan));
-		const totalHeight = offsets.at(-1)! + this.rowHeight(this.rows.at(-1)!.historyItem);
-		// Grow the spacers before removing rows so the scroll range never collapses mid-update.
-		this.topSpacer!.style.height = `${offsets[start] ?? 0}px`;
-		this.bottomSpacer!.style.height = `${totalHeight - (offsets[end] ?? totalHeight)}px`;
-		const visibleIds = new Set(this.rows.slice(start, end).map(row => row.historyItem.id));
-		for (const [id] of this.renderedRows) {
-			if (!visibleIds.has(id)) this.renderedRows.deleteAndDispose(id);
-		}
-		let previous: Element = this.topSpacer!;
-		for (let index = start; index < end; index += 1) {
-			const model = this.rows[index];
-			let row = this.renderedRows.get(model.historyItem.id);
-			if (!row) {
-				row = this.renderCommit(model, renderSCMHistoryItemGraph(model, this.rowHeight(model.historyItem), this.graphElement.ownerDocument));
+		if (!list) return;
+		// Stable elements let ListView preserve attached commit actions and keyboard focus across pages.
+		const items: HistoryListItem[] = this.rows.map((model, index) => {
+			const existing = list.items[index];
+			if (existing?.type === 'commit' && existing.model.historyItem.id === model.historyItem.id) {
+				existing.model = model;
+				return existing;
 			}
-			this.updateCommitRow(row, model);
-			row.element.setAttribute('aria-posinset', String(index + 1));
-			row.element.setAttribute('aria-setsize', String(this.rows.length));
-			// Inserting only new rows leaves overlapping nodes, focus, and active hover targets connected.
-			if (previous.nextElementSibling !== row.element) list.insertBefore(row.element, previous.nextSibling);
-			previous = row.element;
-		}
-		for (const [, row] of this.renderedRows) {
-			if (row.hover?.visible) {
-				this.contextViewService.layout();
-				break;
-			}
-		}
-		// The overscan reaches the page boundary before the viewport does; recheck after each page and resize.
-		if (end === this.rows.length && this.graphElement.clientHeight > 0 && this.isBodyVisible() && !this.moreError) void this.loadMore();
+			return { type: 'commit', model };
+		});
+		if (this.page?.hasMore) items.push(this.loadMoreItem);
+		list.items = items;
 	}
 
-	private rowOffsets(): number[] {
-		const offsets: number[] = [];
-		let offset = 0;
-		for (const row of this.rows) {
-			offsets.push(offset);
-			offset += this.rowHeight(row.historyItem);
-		}
-		return offsets;
+	private updateCommitHeight(historyItem: ISCMHistoryItem): void {
+		const index = this.rows.findIndex(model => model.historyItem.id === historyItem.id);
+		this.list?.updateElementHeight(index, this.rowHeight(historyItem));
+		this.list?.rerender(index);
 	}
 
 	private rowHeight(historyItem: ISCMHistoryItem): number {
@@ -316,14 +316,6 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (!expanded) return SWIMLANE_HEIGHT;
 		const childRows = expanded.state === "ready" ? Math.max(1, expanded.result.length) : 1;
 		return SWIMLANE_HEIGHT * (childRows + 1);
-	}
-
-	private renderSpacer(height: number): HTMLLIElement {
-		const spacer = h(this.graphElement.ownerDocument, "li");
-		spacer.className = "ash-scm-graph-spacer";
-		spacer.setAttribute("aria-hidden", "true");
-		spacer.style.height = `${height}px`;
-		return spacer;
 	}
 
 	private renderMore(): HTMLDivElement {
@@ -347,17 +339,12 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	private updateMore(): void {
-		const current = this.graphElement.querySelector(".ash-scm-graph-load-more");
-		if (!this.page?.hasMore) {
-			current?.remove();
-			this.more.clear();
-		} else if (current) {
+		const current = this.graphElement.querySelector('.ash-scm-graph-load-more');
+		if (current) {
 			this.more.clear();
 			current.replaceWith(this.renderMore());
-		} else {
-			this.graphElement.append(this.renderMore());
 		}
-		this.graphElement.setAttribute("aria-busy", this.loading ? "true" : "false");
+		this.graphElement.setAttribute('aria-busy', this.loading ? 'true' : 'false');
 	}
 
 	private async loadMore(): Promise<void> {
@@ -378,7 +365,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.rows = toISCMHistoryItemViewModelArray(this.page.items, new Map(), this.head);
 			this.loading = false;
 			this.updateMore();
-			this.renderRows();
+			this.updateList();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
 			this.loading = false;
@@ -390,7 +377,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private renderCommit(historyItemViewModel: ISCMHistoryItemViewModel, graph: SVGSVGElement): HistoryItemRow {
 		const historyItem = historyItemViewModel.historyItem;
 		const document = this.graphElement.ownerDocument;
-		const rendered = this.renderedRows.set(historyItem.id, new HistoryItemRow(historyItemViewModel, graph, document));
+		const rendered = this.rowResources.set(historyItem.id, new HistoryItemRow(historyItemViewModel, graph, document));
 		const item = rendered.element;
 		const resources = rendered.resources;
 		item.className = "ash-scm-graph-commit";
@@ -676,14 +663,14 @@ export class SCMHistoryViewPane extends ViewPane {
 
 	private async toggleCommit(historyItem: ISCMHistoryItem): Promise<void> {
 		if (this.expanded.delete(historyItem.id)) {
-			this.renderRows();
+			this.updateCommitHeight(historyItem);
 			return;
 		}
 		const provider = this.provider;
 		if (!provider) return;
 		const generation = this.generation;
 		this.expanded.set(historyItem.id, { state: "loading" });
-		this.renderRows();
+		this.updateCommitHeight(historyItem);
 		try {
 			const result = await provider.provideHistoryItemChanges(historyItem.id, historyItem.parentIds[0]);
 			if (this.isDisposed || generation !== this.generation || !this.expanded.has(historyItem.id)) return;
@@ -692,7 +679,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			if (this.isDisposed || generation !== this.generation || !this.expanded.has(historyItem.id)) return;
 			this.expanded.set(historyItem.id, { state: "error", message: error instanceof Error ? error.message : String(error) });
 		}
-		this.renderRows();
+		this.updateCommitHeight(historyItem);
 	}
 
 	private async openCommitChange(historyItem: ISCMHistoryItem, change: ISCMHistoryItemChange, options: IOpenEditorOptions): Promise<void> {
@@ -841,10 +828,4 @@ function changeStatusLabel(status: string): string {
 		case "ignored": return "!";
 		default: return status.slice(0, 1).toUpperCase();
 	}
-}
-
-function offsetTopWithinScrollContainer(element: HTMLElement, scrollContainer: HTMLElement): number {
-	if (element.offsetParent === scrollContainer) return element.offsetTop;
-	if (element.offsetParent === scrollContainer.offsetParent) return element.offsetTop - scrollContainer.offsetTop;
-	return element.getBoundingClientRect().top - scrollContainer.getBoundingClientRect().top + scrollContainer.scrollTop;
 }

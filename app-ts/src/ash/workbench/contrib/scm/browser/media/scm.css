@@ -32,49 +32,18 @@
   min-height: 0;
   flex: 1 1 auto;
   padding: 2px 0 8px;
-  overflow: auto;
-  scrollbar-color: var(--ash-scrollbar-slider-background) transparent;
-  scrollbar-width: thin;
-}
-
-.ash-scm-graph::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-.ash-scm-graph::-webkit-scrollbar-track,
-.ash-scm-graph::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
-.ash-scm-graph::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: var(--ash-corner-radius-medium);
-  background: var(--ash-scrollbar-slider-background) padding-box;
-}
-
-.ash-scm-graph::-webkit-scrollbar-thumb:hover {
-  background: var(--ash-scrollbar-slider-hover-background) padding-box;
-}
-
-.ash-scm-graph::-webkit-scrollbar-thumb:active {
-  background: var(--ash-scrollbar-slider-active-background) padding-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .ash-scm-graph > .ash-scm-command {
-  margin-left: 8px;
+  margin-left: var(--ash-spacing-size80);
 }
 
-.ash-scm-graph-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.ash-scm-graph-spacer {
-  display: block;
-  padding: 0;
-  pointer-events: none;
+.ash-scm-graph-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .ash-scm-graph-commit {
@@ -310,6 +279,8 @@
 }
 
 .ash-scm-graph-load-more {
+  box-sizing: border-box;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;

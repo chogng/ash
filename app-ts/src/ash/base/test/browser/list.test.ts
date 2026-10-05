@@ -72,6 +72,29 @@ test("ListView owns flat rows and sizing without Widget selection policy", () =>
 	dom.window.close();
 });
 
+test('ListView can host independently focusable tree items without duplicating their semantics', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using view = new ListView<string>(dom.window.document.body, {
+			role: 'tree',
+			accessibilityProvider: { getRole: () => 'presentation' },
+			renderItem: item => {
+				const commit = h(dom.window.document, 'div', undefined, item);
+				commit.setAttribute('role', 'treeitem');
+				commit.tabIndex = 0;
+				return commit;
+			},
+		});
+		view.items = ['First'];
+		const row = view.row(0)!;
+		assert.equal(row.getAttribute('role'), 'presentation');
+		assert.equal(row.hasAttribute('aria-selected'), false);
+		const item = row.querySelector<HTMLElement>('[role="treeitem"]')!;
+		item.focus();
+		assert.equal(dom.window.document.activeElement, item);
+	} finally { dom.window.close(); }
+});
+
 test("ListView keeps unchanged rows attached when tree items are inserted or removed", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const view = new ListView<string>(dom.window.document.body, {
