@@ -2,10 +2,8 @@ import { decodeBase64, VSBuffer } from "../../../base/common/buffer.js";
 import type { ExtensionCatalogReload, ExtensionResourceRequest, IExtensionApi } from "../common/extensionApi.js";
 import { normalizeExtensionCatalog, normalizeExtensionResourceChunk, normalizeExtensionResourceOpenResult, verifyExtensionResourceDigest } from "../common/extensionApi.js";
 import type { IResourceApi } from "../../app-server/common/appServerApi.js";
-import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
 import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
-import bundledThemes from '../common/generated/theme-defaults.json' with { type: 'json' };
 import { localize } from '../../../nls.js';
 
 /** Reads complete package snapshots prepared by the browser build, without server transport. */
@@ -27,20 +25,6 @@ export function createBrowserExtensionApi(): IExtensionApi {
 				throw new Error(localize('extensions.browser.resourceMissing', 'Browser extension resource is not in the current package: {0}/{1}', request.extensionId, request.path));
 			}
 			return decodeBase64(extension[request.path]).buffer;
-		},
-	};
-}
-
-export function createDisconnectedExtensionApi(unavailable: UnavailableOperation): IExtensionApi {
-	const catalog = normalizeExtensionCatalog({ generation: 1, diagnostics: [], extensions: [bundledThemes.descriptor] });
-	const resources: Readonly<Record<string, string>> = bundledThemes.resources;
-	return {
-		list: async () => catalog,
-		readResource: async request => {
-			if (request.generation !== catalog.generation || request.extensionId !== bundledThemes.descriptor.id || !Object.hasOwn(resources, request.path)) {
-				return unavailable('extensions.readResource');
-			}
-			return new TextEncoder().encode(resources[request.path]);
 		},
 	};
 }

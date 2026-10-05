@@ -50,7 +50,7 @@ export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegi
 		localizationKey: { bundle: "ash.views", key: "refactorPreview" },
 		order: 1,
 		hideByDefault: true,
-		canToggleVisibility: false,
+		canToggleVisibility: true,
 		ctorDescriptor: new SyncDescriptor(BulkEditPane),
 	}]);
 }

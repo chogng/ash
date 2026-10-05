@@ -7,7 +7,8 @@
 > [`ash-rs/extensions/README.md`](../../../../../../ash-rs/extensions/README.md).
 
 This service is the Workbench composition boundary for static extension packages. Rust owns
-discovery and immutable resource authority; runtime adapters convert transport DTOs; this service
+server-backed discovery and immutable resource authority; `build/resources/extensions.ts` prepares
+the packaged browser catalog used by offline windows. Runtime adapters convert transport DTOs; this service
 owns Workbench catalog types and decides which supported declarative contributions become active.
 It never executes extension JavaScript or gives extensions editor DOM, model, Worker-port, or host
 filesystem access.
@@ -41,6 +42,17 @@ filesystem access.
 
 `configurationDefaults`, `semanticTokenScopes`, extension JavaScript, LSP declarations, and dynamic
 UI are not activated by this loader.
+
+The Workbench composition root also creates `BrowserExtensionHostApi` for packaged `browser`
+entries. It owns the window's extension Workers alongside the App Server executable-host transport.
+`build/resources/extensions.ts` bundles each browser entry and its dependencies into an immutable ES
+module. Activation receives the window language, registration callbacks, and command execution.
+`MainThreadExtensionApi` installs extension commands and manifest editor menus;
+`MainThreadCustomEditors` installs text-backed editor providers in the shared pane registry.
+The Markdown package under `extensions/markdown-language-features` owns its preview rendering and
+actions. `WebviewEditor` hosts the content, and `CustomTextEditorModel` holds a reference to the same
+text state used by the source editor. Independent custom tabs retain their editor ID in working sets.
+Browser packages use Ash's bounded registration contract, not the complete VS Code extension API.
 
 Theme documents accept the four supported `uiTheme` values, hexadecimal colors, package-relative
 JSON `include` files, `tokenColors` arrays or package-relative TextMate theme files, and semantic token styles. Token

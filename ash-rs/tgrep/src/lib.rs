@@ -11,6 +11,8 @@ use serde_json::Value;
 use serde_json::json;
 use std::collections::BTreeSet;
 use std::fmt;
+use std::io::Seek;
+use std::io::SeekFrom;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
@@ -377,6 +379,7 @@ impl Session {
             "--json",
             "--sort",
             "path",
+            "--multiline",
         ]);
         command
             .arg("--max-count")
@@ -396,36 +399,30 @@ impl Session {
         command.arg("--").arg(query.pattern).args(paths);
         // Positive CLI globs override ignore rules. Apply index globs after the ordinary
         // directory walk, before the global row budget, including explicitly named dirty files.
-        let records = process::scan(
-            command,
-            query.max_results + 1,
-            cancellation,
-            deadline,
-            &|record| {
-                if !filter_corpus {
-                    return Ok(true);
-                }
-                let path = record["data"]["path"]["text"]
-                    .as_str()
-                    .ok_or_else(|| failed("tgrep returned a non-text path"))?;
-                let absolute = self.root.join(path);
-                let relative = absolute
-                    .strip_prefix(&scope)
-                    .map_err(|_| failed("tgrep returned an out-of-scope path"))?;
-                // Index glob filtering also prunes excluded ancestor directories, even when
-                // dirty files were passed individually rather than reached through a walk.
-                if relative
-                    .ancestors()
-                    .skip(1)
-                    .filter(|p| !p.as_os_str().is_empty())
-                    .any(|parent| overrides.matched(scope.join(parent), true).is_ignore())
-                {
-                    return Ok(false);
-                }
-                Ok(!overrides.matched(absolute, false).is_ignore())
-            },
-        )?;
-        let mut matches = Vec::new();
+        let records = process::scan(command, usize::MAX, cancellation, deadline, &|record| {
+            if !filter_corpus {
+                return Ok(true);
+            }
+            let path = record["data"]["path"]["text"]
+                .as_str()
+                .ok_or_else(|| failed("tgrep returned a non-text path"))?;
+            let absolute = self.root.join(path);
+            let relative = absolute
+                .strip_prefix(&scope)
+                .map_err(|_| failed("tgrep returned an out-of-scope path"))?;
+            // Index glob filtering also prunes excluded ancestor directories, even when
+            // dirty files were passed individually rather than reached through a walk.
+            if relative
+                .ancestors()
+                .skip(1)
+                .filter(|p| !p.as_os_str().is_empty())
+                .any(|parent| overrides.matched(scope.join(parent), true).is_ignore())
+            {
+                return Ok(false);
+            }
+            Ok(!overrides.matched(absolute, false).is_ignore())
+        })?;
+        let mut blocks: Vec<(PathBuf, usize, u64, usize)> = Vec::new();
         for record in records {
             if record.get("type").and_then(Value::as_str) != Some("match") {
                 continue;
@@ -442,18 +439,70 @@ impl Session {
                 path.strip_prefix(".").unwrap_or(path)
             };
             self.validate_result_path(path, query.scope)?;
-            let text = data["lines"]["text"]
-                .as_str()
-                .ok_or_else(|| failed("tgrep returned non-text content"))?;
-            matches.push(Match {
-                path: path.to_path_buf(),
-                line_number: data["line_number"]
-                    .as_u64()
-                    .filter(|n| *n > 0)
-                    .ok_or_else(|| failed("invalid tgrep line number"))?
-                    as usize,
-                content: text.strip_suffix('\n').unwrap_or(text).to_owned(),
-            });
+            let line = data["line_number"]
+                .as_u64()
+                .filter(|n| *n > 0)
+                .ok_or_else(|| failed("invalid tgrep line number"))?
+                as usize;
+            let offset = data["absolute_offset"]
+                .as_u64()
+                .ok_or_else(|| failed("invalid tgrep byte offset"))?;
+            if let Some((previous_path, first_line, _, length)) = blocks.last_mut()
+                && previous_path == path
+                && line == *first_line + *length
+            {
+                *length += 1;
+            } else {
+                blocks.push((path.to_path_buf(), line, offset, 1));
+            }
+        }
+        let mut matches = Vec::new();
+        let expression = regex::RegexBuilder::new(query.pattern)
+            .case_insensitive(query.case_insensitive)
+            .multi_line(true)
+            .crlf(true)
+            .build()
+            .map_err(|e| failed(e.to_string()))?;
+        for (path, first_line, offset, line_count) in blocks {
+            check(cancellation, deadline)?;
+            // JSON emits each covered line and normalizes its terminator. Read the
+            // engine-selected interval to restore exact CRLF and Unicode offsets.
+            let mut file = std::fs::File::open(self.root.join(&path))?;
+            file.seek(SeekFrom::Start(offset))?;
+            let mut reader = std::io::BufReader::new(file);
+            let mut content = String::new();
+            for _ in 0..line_count {
+                std::io::BufRead::read_line(&mut reader, &mut content)?;
+            }
+            let starts: Vec<usize> = std::iter::once(0)
+                .chain(content.match_indices('\n').map(|(index, _)| index + 1))
+                .collect();
+            for found in expression.find_iter(&content) {
+                let first = starts.partition_point(|start| *start <= found.start()) - 1;
+                let last =
+                    starts.partition_point(|start| *start < found.end().max(found.start() + 1)) - 1;
+                let end = starts.get(last + 1).copied().unwrap_or(content.len());
+                let preview = content[starts[first]..end].trim_end_matches(['\r', '\n']);
+                let end = if found.end() > starts[first] + preview.len() {
+                    end
+                } else {
+                    starts[first] + preview.len()
+                };
+                let found = Match {
+                    path: path.clone(),
+                    line_number: first_line + first,
+                    content: content[starts[first]..end].to_owned(),
+                };
+                if matches.last() != Some(&found) {
+                    matches.push(found);
+                }
+                if matches.len() > query.max_results {
+                    break;
+                }
+            }
+            if matches.len() > query.max_results {
+                break;
+            }
         }
         order(&mut matches);
         // Retain one extra row so the caller can report the global result limit.

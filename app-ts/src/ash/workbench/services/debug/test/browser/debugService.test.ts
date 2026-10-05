@@ -18,6 +18,7 @@ import { type ITaskRun, type IWorkspaceTask, type TaskProvider, type TaskProvide
 import { ITerminalService } from "../../../../contrib/terminal/browser/terminal.js";
 import { DebugAdapterFactoryRegistry, createStaticDebugAdapterFactory } from "../../common/debugAdapterFactory.js";
 import { DebugService } from "../../../../contrib/debug/browser/debugService.js";
+import { DebugAdapterSession } from "../../browser/debugAdapterSession.js";
 
 const launchJson = `{
   "version": "0.2.0",
@@ -39,12 +40,102 @@ test("DebugService persists workspace breakpoints and watch expressions", async 
 	using adapters = new DebugAdapterFactoryRegistry();
 	using first = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
 	first.toggleBreakpoint(resource, 7);
+	first.updateBreakpoint(first.breakpoints[0]!.id, { enabled: false, condition: 'value > 0', hitCondition: '>= 3', logMessage: ' value = {value} ' });
 	first.addWatchExpression("value + 1");
 	await storage.flush();
 
 	using second = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
-	assert.deepEqual(second.breakpoints.map(breakpoint => [breakpoint.resource.toString(), breakpoint.lineNumber]), [[resource.toString(), 7]]);
+	assert.deepEqual(second.breakpoints, [{ id: `${resource.toString()}:7`, resource, lineNumber: 7, enabled: false, verified: false, condition: 'value > 0', hitCondition: '>= 3', logMessage: ' value = {value} ' }]);
 	assert.deepEqual(second.watchExpressions, ["value + 1"]);
+	second.setBreakpointsEnabled(true);
+	second.updateBreakpoint(second.breakpoints[0]!.id, { condition: '', hitCondition: '', logMessage: '' });
+	assert.deepEqual(second.breakpoints.map(point => ({ enabled: point.enabled, condition: point.condition, hitCondition: point.hitCondition, logMessage: point.logMessage })), [{ enabled: true, condition: undefined, hitCondition: undefined, logMessage: undefined }]);
+	assert.throws(() => second.updateBreakpoint(second.breakpoints[0]!.id, { condition: '\0' }), /no null characters/);
+	second.removeAllBreakpoints();
+	await storage.flush();
+	using third = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
+	assert.deepEqual(third.breakpoints, []);
+});
+
+test('DebugService persists durable breakpoint families and retires session addresses', async () => {
+	const root = URI.file('C:\\project');
+	const storage = new TestStorageService();
+	using resources = new DisposableStore();
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new DebugAdapterFactoryRegistry();
+	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters);
+	await service.refresh();
+	service.addFunctionBreakpoint({ name: 'app::worker', condition: ' counter > 0 ', hitCondition: '>= 2' });
+	const session = await service.startDebugging(service.configurations[1]!);
+	const stopped = new Promise<void>(resolve => {
+		const listener = resources.add(session.onDidChangeState(state => {
+			if (state === 'stopped') { listener.dispose(); resolve(); }
+		}));
+	});
+	processes.event(session.id, 'stopped', { threadId: 1 });
+	await stopped;
+	const focusedFrames: unknown[] = [];
+	resources.add(service.onDidFocusStackFrame(frame => focusedFrames.push(frame)));
+	const focusedFrame = { id: 11, name: 'main', lineNumber: 4, columnNumber: 1, instructionPointerReference: '0x1000' };
+	service.focusStackFrame(focusedFrame);
+	assert.equal(service.focusedStackFrame, focusedFrame);
+	const options = { sessionId: session.id, dataId: ' memory:counter ', description: '', accessTypes: ['read', 'write', 'readWrite'] as const, accessType: 'readWrite' as const, canPersist: true, condition: 'counter > 0' };
+	service.addDataBreakpoint(options);
+	service.addDataBreakpoint({ ...options, dataId: 'stack:counter', canPersist: false });
+	service.addInstructionBreakpoint({ instructionReference: '0x1000', offset: -4, hitCondition: '2' });
+	assert.throws(() => service.addDataBreakpoint({ ...options, sessionId: 'other' }), /paused session/);
+	assert.throws(() => service.addDataBreakpoint({ ...options, accessTypes: ['write'] }), /Unsupported data/);
+	assert.throws(() => service.addInstructionBreakpoint({ instructionReference: '0x1000', offset: 1.5 }), /integer/);
+	assert.throws(() => service.updateBreakpoint(service.functionBreakpoints[0]!.id, { offset: 4 }), /Only instruction/);
+	await (session as DebugAdapterSession).syncBreakpoints();
+	const last = (command: string) => processes.requests.filter(request => request.command === command).at(-1)?.arguments;
+	assert.deepEqual(last('setFunctionBreakpoints'), { breakpoints: [{ name: 'app::worker', condition: ' counter > 0 ', hitCondition: '>= 2' }] });
+	assert.deepEqual(last('setDataBreakpoints'), { breakpoints: [
+		{ dataId: ' memory:counter ', accessType: 'readWrite', condition: 'counter > 0' },
+		{ dataId: 'stack:counter', accessType: 'readWrite', condition: 'counter > 0' },
+	] });
+	assert.deepEqual(last('setInstructionBreakpoints'), { breakpoints: [{ instructionReference: '0x1000', offset: -4, hitCondition: '2' }] });
+	await service.stop(session);
+	assert.equal(service.focusedStackFrame, undefined);
+	assert.deepEqual(focusedFrames, [focusedFrame, undefined]);
+	assert.equal(service.dataBreakpoints.length, 1);
+	assert.equal(service.instructionBreakpoints.length, 0);
+	await storage.flush();
+	const stored = JSON.parse(storage.get('memento/debug.workspace', StorageScope.WORKSPACE)!);
+	assert.equal(stored.version, 2);
+	assert.equal(stored.dataBreakpoints.length, 1);
+	assert.equal(stored.dataBreakpoints[0].sessionId, undefined);
+	assert.equal(stored.functionBreakpoints[0].verified, undefined);
+	using restored = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters);
+	assert.equal(restored.functionBreakpoints[0]?.name, 'app::worker');
+	assert.equal(restored.functionBreakpoints[0]?.verified, false);
+	assert.equal(restored.dataBreakpoints[0]?.dataId, ' memory:counter ');
+	assert.equal(restored.dataBreakpoints[0]?.sessionId, undefined);
+	assert.deepEqual(restored.instructionBreakpoints, []);
+	restored.setBreakpointsEnabled(false);
+	assert.equal(restored.functionBreakpoints[0]?.enabled, false);
+	assert.equal(restored.dataBreakpoints[0]?.enabled, false);
+	restored.removeAllBreakpoints();
+	assert.deepEqual(restored.functionBreakpoints, []);
+	assert.deepEqual(restored.dataBreakpoints, []);
+});
+
+test('DebugService migrates source breakpoint storage without losing expressions or watches', async () => {
+	const root = URI.file('C:\\project');
+	const storage = new TestStorageService();
+	storage.store('memento/debug.workspace', JSON.stringify({ version: 1, breakpoints: [{ resource: URI.joinPath(root, 'main.ts').toString(), lineNumber: 7, enabled: false, condition: 'x > 0' }], watchExpressions: ['x'], exceptionBreakpoints: {} }), StorageScope.WORKSPACE, StorageTarget.USER);
+	using resources = new DisposableStore();
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new DebugAdapterFactoryRegistry();
+	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters);
+	assert.equal(service.breakpoints[0]?.condition, 'x > 0');
+	assert.equal(service.breakpoints[0]?.enabled, false);
+	assert.deepEqual(service.watchExpressions, ['x']);
+	assert.deepEqual(service.functionBreakpoints, []);
+	await storage.flush();
+	assert.equal(JSON.parse(storage.get('memento/debug.workspace', StorageScope.WORKSPACE)!).version, 2);
 });
 
 test("DebugService starts compounds, runs launch lifecycle tasks, and owns multiple sessions", async () => {
@@ -149,11 +240,12 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 		this.requests.push(request);
 		const command = String(request.command);
 		if (command === "launch") this.enqueue(state, { seq: 0, type: "event", event: "initialized" });
-		const body = command === "initialize" ? { supportsConfigurationDoneRequest: true } : {};
+		const body = command === "initialize" ? { supportsConfigurationDoneRequest: true, supportsFunctionBreakpoints: true, supportsDataBreakpoints: true, supportsInstructionBreakpoints: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true } : command.startsWith('set') && command.endsWith('Breakpoints') ? { breakpoints: ((request.arguments as { breakpoints?: unknown[] })?.breakpoints ?? []).map(() => ({ verified: true })) } : {};
 		this.enqueue(state, { seq: 0, type: "response", request_seq: request.seq, success: true, command, body });
 	}
 	async read(sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> { const state = this.sessions.get(sessionId)!; return { messages: state.messages.filter(message => message.sequence >= afterSequence).slice(0, maxMessages), nextSequence: state.next, outputGap: false, stderr: "", exited: false, exitCode: null, protocolError: null }; }
 	async close(sessionId: string): Promise<void> { this.sessions.delete(sessionId); }
+	event(sessionId: string, event: string, body: unknown): void { this.enqueue(this.sessions.get(sessionId)!, { seq: 0, type: 'event', event, body }); }
 	async getConnectionState(): Promise<AppServerConnectionState> { return "ready"; }
 	dispose(): void { this.connectionEmitter.dispose(); }
 	[Symbol.dispose](): void { this.dispose(); }

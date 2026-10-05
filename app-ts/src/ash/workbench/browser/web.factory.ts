@@ -39,7 +39,6 @@ import { URI } from '../../base/common/uri.js';
 import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 import { createBrowserExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
-import { BrowserExtensionHostApi } from '../../platform/extensionHost/browser/extensionHostApi.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
 export async function createWebWorkbench(
@@ -118,7 +117,7 @@ export async function startWebWorkbench(
 		let api = host?.api;
 		if (!api) {
 			const extensions = createBrowserExtensionApi();
-			api = { ...createDisconnectedRendererApi(), extensions, extensionHost: workbench.add(new BrowserExtensionHostApi(extensions)) };
+			api = { ...createDisconnectedRendererApi(), extensions };
 		}
 		const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> };
 		const browserFileSystemProvider = !host && picker.showDirectoryPicker && globalThis.indexedDB

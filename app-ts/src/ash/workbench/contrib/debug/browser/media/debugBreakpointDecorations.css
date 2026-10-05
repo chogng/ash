@@ -16,3 +16,14 @@
 .ash-debug-breakpoint-gutter.disabled {
   opacity: 0.55;
 }
+
+.ash-debug-breakpoint-gutter.logpoint::before {
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+
+.ash-debug-breakpoint-gutter.conditional::before {
+  box-sizing: border-box;
+  border: var(--ash-stroke-thickness) solid currentColor;
+  background: transparent;
+}

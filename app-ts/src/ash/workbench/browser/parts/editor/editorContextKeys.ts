@@ -41,6 +41,7 @@ export class EditorContextKeyController extends Disposable {
 			return keys;
 		});
 		this._register(this.source.onDidChangeEditors(() => this.update()));
+		this._register(this.editorRegistry.onDidChange(() => this.update()));
 		this._register(toDisposable(() => this.reset()));
 	}
 

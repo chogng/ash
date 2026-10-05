@@ -1,5 +1,10 @@
 import { AppServerAvailableContext } from '../../../../platform/renderer/common/rendererHost.js';
-import { localize2 } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
+import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { DisassemblyView } from './disassemblyView.js';
+import { DisassemblyViewInput } from '../common/disassemblyViewInput.js';
+import { OPEN_DISASSEMBLY_VIEW_COMMAND_ID } from '../common/debug.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
@@ -9,6 +14,16 @@ import { IDebugService } from "../../../services/debug/common/debugService.js";
 import { IDebugConsoleService } from "../../../services/debug/common/debugConsoleService.js";
 import { IViewsService } from "../../../services/views/common/viewsService.js";
 import { CLEAR_DEBUG_CONSOLE_COMMAND_ID, CONTINUE_DEBUG_COMMAND_ID, DEBUG_CONSOLE_VIEW_ID, DEBUG_VIEW_ID, FOCUS_DEBUG_CONSOLE_COMMAND_ID, PAUSE_DEBUG_COMMAND_ID, RESTART_DEBUG_COMMAND_ID, START_DEBUG_COMMAND_ID, STEP_INTO_DEBUG_COMMAND_ID, STEP_OUT_DEBUG_COMMAND_ID, STEP_OVER_DEBUG_COMMAND_ID, STOP_ALL_DEBUG_COMMAND_ID, STOP_DEBUG_COMMAND_ID } from "../common/debug.js";
+
+registerAction2(class OpenDisassemblyAction extends Action2 {
+	constructor() { super({ id: OPEN_DISASSEMBLY_VIEW_COMMAND_ID, title: localize2('debug.openDisassembly', 'Open Disassembly View'), f1: true }); }
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const session = accessor.get(IDebugService).session;
+		if (!session?.capabilities.supportsDisassembleRequest) { throw new Error(localize('debug.disassemblyUnsupported', 'The debug adapter does not support disassembly.')); }
+		if (session.state !== 'stopped') { throw new Error(localize('debug.disassemblyRequiresPause', 'Pause debugging to view disassembly.')); }
+		await accessor.get(IEditorService).openEditor(new DisassemblyViewInput(), { pinned: true });
+	}
+});
 
 registerAction2(class ToggleBreakpointAction extends Action2 {
 	constructor() {
@@ -75,6 +90,10 @@ for (const [id, title, keybinding, operation] of [
 		override run(accessor: ServicesAccessor): void {
 			const session = accessor.get(IDebugService).session;
 			if (!session) return;
+			if (operation === 'stepOver' || operation === 'stepInto' || operation === 'stepOut') {
+				const pane = accessor.get(IEditorPartsService).activePane?.getControl?.();
+				if (pane instanceof DisassemblyView) { void pane.step(operation); return; }
+			}
 			void session[operation]().catch(reportError);
 		}
 	});

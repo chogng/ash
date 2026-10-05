@@ -45,6 +45,7 @@ pub(super) fn search(
         "--no-require-git",
         "--max-filesize=64M",
         "--sort=path",
+        "--multiline",
     ]);
     for glob in &query.include_patterns {
         command.arg("--glob").arg(glob);
@@ -174,11 +175,7 @@ fn parse(stdout: impl Read, max_results: usize) -> Result<SearchResult, Error> {
         let path = data["path"]["text"].as_str().ok_or_else(missing)?;
         let path = Path::new(path);
         let path = path.strip_prefix(".").unwrap_or(path).to_path_buf();
-        let content = data["lines"]["text"]
-            .as_str()
-            .ok_or_else(missing)?
-            .trim_end_matches(['\r', '\n'])
-            .to_owned();
+        let text = data["lines"]["text"].as_str().ok_or_else(missing)?;
         let line_number = data["line_number"]
             .as_u64()
             .filter(|n| *n > 0)
@@ -190,19 +187,53 @@ fn parse(stdout: impl Read, max_results: usize) -> Result<SearchResult, Error> {
             .map(|r| {
                 let start = r["start"].as_u64().ok_or_else(missing)? as usize;
                 let end = r["end"].as_u64().ok_or_else(missing)? as usize;
-                if start > end || !content.is_char_boundary(start) || !content.is_char_boundary(end)
-                {
+                if start > end || !text.is_char_boundary(start) || !text.is_char_boundary(end) {
                     return Err(missing());
                 }
                 Ok(MatchRange { start, end })
             })
             .collect::<Result<Vec<_>, Error>>()?;
-        matches.push(Match {
-            path,
-            line_number,
-            content,
-            ranges,
-        });
+        let starts: Vec<usize> = std::iter::once(0)
+            .chain(text.match_indices('\n').map(|(index, _)| index + 1))
+            .collect();
+        for range in ranges {
+            let first = starts.partition_point(|start| *start <= range.start) - 1;
+            let last = starts.partition_point(|start| *start < range.end.max(range.start + 1)) - 1;
+            let end = starts.get(last + 1).copied().unwrap_or(text.len());
+            let preview = text[starts[first]..end].trim_end_matches(['\r', '\n']);
+            let end = if range.end > starts[first] + preview.len() {
+                end
+            } else {
+                starts[first] + preview.len()
+            };
+            let content = &text[starts[first]..end];
+            let relative = MatchRange {
+                start: range.start - starts[first],
+                end: range.end - starts[first],
+            };
+            if let Some(previous) = matches.last_mut()
+                && previous.path == path
+                && previous.line_number == line_number + first
+                && previous.content == content
+            {
+                previous.ranges.push(relative);
+                continue;
+            }
+            if matches.len() == max_results {
+                return Ok(SearchResult {
+                    matches,
+                    limit_hit: true,
+                    freshness: Freshness::Current,
+                    index_stats: None,
+                });
+            }
+            matches.push(Match {
+                path: path.clone(),
+                line_number: line_number + first,
+                content: content.to_owned(),
+                ranges: vec![relative],
+            });
+        }
     }
     Ok(SearchResult {
         matches,

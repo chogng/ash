@@ -47,6 +47,7 @@ export class EditorAccessibilityHelpContribution extends Disposable implements I
 							? localize('accessibility.editorScreenReaderOn', 'Screen reader optimization is enabled.')
 							: localize('accessibility.editorScreenReaderOff', 'Screen reader optimization is disabled.'),
 						localize('accessibility.editorRead', 'Use arrow keys to read text, Shift with arrow keys to select, and Ctrl+C or Command+C to copy. <keybinding:actions.find> opens Find.'),
+						localize('accessibility.editorViews', '<keybinding:workbench.action.splitEditor> opens a second editor group. For files with multiple editor types, the selector at the end of the breadcrumbs lets you switch views. Markdown title actions open a preview or reopen the current tab as a preview.'),
 						editor.getOption(EditorOption.tabFocusMode)
 							? localize('accessibility.editorTabFocus', 'Tab moves focus to the next control. <keybinding:editor.action.toggleTabFocusMode> changes this behavior.')
 							: localize('accessibility.editorTabIndent', 'Tab inserts indentation. <keybinding:editor.action.toggleTabFocusMode> lets Tab move focus to the next control.'),

@@ -14,6 +14,24 @@ export type EditorTitleScrollbarVisibility = 'auto' | 'visible' | 'hidden';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
+export const EditorOpenSideBySideDirectionConfiguration = configurationRegistry.registerConfiguration<'right' | 'down'>({
+	key: 'workbench.editor.openSideBySideDirection', scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['right', 'down'] }, defaultValue: 'right',
+	parse: value => {
+		if (value !== 'right' && value !== 'down') throw new TypeError(localize('workbench.editor.openSideBySideDirection.invalid', 'Editor split direction must be right or down.'));
+		return value;
+	},
+	setting: {
+		get title() { return localize('workbench.editor.openSideBySideDirection.title', 'Workbench › Editor: Open Side by Side Direction'); },
+		get description() { return localize('workbench.editor.openSideBySideDirection.description', 'Controls whether editors open side by side to the right or below.'); },
+		valueType: 'select',
+		get options() { return [
+			{ value: 'right' as const, label: localize('workbench.editor.openSideBySideDirection.right', 'Right') },
+			{ value: 'down' as const, label: localize('workbench.editor.openSideBySideDirection.down', 'Down') },
+		]; },
+	},
+});
+
 export const EditorTabSizingConfiguration = configurationRegistry.registerConfiguration<EditorTabSizing>({
 	key: 'workbench.editor.tabSizing',
 	scope: ConfigurationScope.WINDOW,

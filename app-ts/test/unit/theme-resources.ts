@@ -1,11 +1,20 @@
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { readFileSync } from 'node:fs';
+import type { IExtensionApi } from '../../src/ash/platform/extensions/common/extensionApi.js';
 
 const output = resolve(import.meta.dirname, '../../../.build/app-ts/test/src/ash');
-const { createDisconnectedExtensionApi } = await import(pathToFileURL(resolve(output, 'platform/extensions/browser/extensionApi.js')).href);
+const { normalizeExtensionCatalog } = await import(pathToFileURL(resolve(output, 'platform/extensions/common/extensionApi.js')).href);
+const { decodeBase64 } = await import(pathToFileURL(resolve(output, 'base/common/buffer.js')).href);
 const { ExtensionColorThemeService } = await import(pathToFileURL(resolve(output, 'workbench/services/extensions/browser/extensionColorThemeService.js')).href);
-// Test processes initialize the bundled contributions through the same resource API as the UI.
-const themes = new ExtensionColorThemeService(createDisconnectedExtensionApi((operation: string) => { throw new Error(operation); }), {
+const bundle = JSON.parse(readFileSync(new URL('../../src/ash/platform/extensions/common/generated/browser.json', import.meta.url), 'utf8'));
+const catalog = normalizeExtensionCatalog(bundle.catalog);
+// Node reads the same packaged bytes from disk; UI windows fetch the generated asset.
+const api: IExtensionApi = {
+	list: async () => catalog,
+	readResource: async request => decodeBase64(bundle.resources[request.extensionId][request.path]).buffer,
+};
+const themes = new ExtensionColorThemeService(api, {
 	subscribe: () => ({ dispose() {} }),
 });
 await themes.start();

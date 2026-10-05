@@ -22,8 +22,37 @@ import { MainThreadExtensionApi } from '../../../../api/browser/mainThreadExtens
 import { createExtensionHostLanguageProviderBatch } from '../../../../api/browser/extensionHostLanguageBridge.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { IOutputService } from '../../../output/common/output.js';
+import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
+import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
+
+test('extension editor menus capture the clicked input and reject malformed replacement menus before commit', async () => {
+	const placement = { menu: 'editor/title/context', when: 'resourceLangId == markdown', group: 'navigation@1' };
+	const registration = { kind: 'command' as const, registrationId: 'preview', command: 'acme.preview', title: 'Preview', menus: [placement] };
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.old', [registration]));
+	const commands = new CommandRegistry();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const inputs = [{ resource: URI.file('/notes/clicked.md') }, { resource: URI.file('/notes/active.md') }];
+	const group = { id: 'clicked-group', inputs, activeInput: inputs[1] };
+	services.registerInstance(IEditorPart, { groups: [group], activeGroup: group } as unknown as IEditorPart);
+	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	await service.start();
+	await services.invokeFunction(accessor => commands.getCommand('acme.preview')!(accessor, { groupId: group.id, editorIndex: 0 }));
+	assert.deepEqual(JSON.parse(JSON.stringify(api.invocations[0]!.payload)), {
+		arguments: [{ groupId: group.id, editorIndex: 0 }],
+		activeEditor: { resource: inputs[0]!.resource.toJSON(), groupId: group.id, editorIndex: 0 },
+	});
+	const placements = MenusRegistry.getMenuItems(MenuId.EditorTitleContext).filter(item => 'command' in item && item.command.id === 'acme.preview');
+	assert.equal(placements.length, 1);
+	api.current = snapshot(2, 'acme.new', [{ ...registration, menus: [{ ...placement, group: 'navigation@bad-order' }] }]);
+	await service.reload();
+	assert.equal(service.state, 'degraded');
+	assert.equal(commands.hasCommand('acme.old'), true);
+	assert.equal(commands.hasCommand('acme.new'), false);
+	assert.deepEqual(MenusRegistry.getMenuItems(MenuId.EditorTitleContext).filter(item => 'command' in item && item.command.id === 'acme.preview'), placements);
+});
 
 test('range formatting bridge preserves the request snapshot and forwards cancellation', async () => {
 	using languages = new LanguageFeaturesService();

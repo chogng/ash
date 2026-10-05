@@ -1,5 +1,5 @@
 import "./media/breadcrumbscontrol.css";
-import { h } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { BreadcrumbsItem, BreadcrumbsWidget } from "../../../../base/browser/ui/breadcrumbs/breadcrumbsWidget.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
@@ -16,6 +16,8 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 export class EditorBreadcrumbsControl extends Disposable {
 	readonly domNode: HTMLElement;
 	private readonly widget: BreadcrumbsWidget;
+	private readonly editorTypeButton: HTMLButtonElement;
+	private selectEditorType: ((anchor: HTMLElement) => void) | undefined;
 	private input: EditorInput | undefined;
 	private symbols: readonly SymbolElement[] = [];
 	private filePath: BreadcrumbsPathMode = "on";
@@ -40,6 +42,13 @@ export class EditorBreadcrumbsControl extends Disposable {
 			breadcrumbsFocusForeground: undefined,
 			breadcrumbsFocusAndSelectionForeground: undefined,
 		}));
+		this.editorTypeButton = h(container.ownerDocument, 'button');
+		this.editorTypeButton.type = 'button';
+		this.editorTypeButton.className = 'ash-breadcrumbs-editor-type';
+		this.editorTypeButton.hidden = true;
+		this.editorTypeButton.setAttribute('aria-haspopup', 'menu');
+		this.domNode.append(this.editorTypeButton);
+		this._register(addDisposableListener(this.editorTypeButton, 'click', () => this.selectEditorType?.(this.editorTypeButton)));
 		this._register(this.widget.onDidSelectItem(event => {
 			if (!(event.item instanceof EditorBreadcrumbItem)) {
 				return;
@@ -77,6 +86,17 @@ export class EditorBreadcrumbsControl extends Disposable {
 	setSymbols(symbols: readonly SymbolElement[]): void {
 		this.symbols = symbols;
 		this.render();
+	}
+
+	setEditorType(label: string | undefined, select: ((anchor: HTMLElement) => void) | undefined): void {
+		this.selectEditorType = select;
+		this.editorTypeButton.hidden = label === undefined;
+		this.editorTypeButton.textContent = label ?? '';
+		this.editorTypeButton.setAttribute('aria-label', localize('breadcrumbs.editorTypeLabel', 'Select editor: {0}', label ?? ''));
+		const chevron = h(this.domNode.ownerDocument, 'span');
+		chevron.className = 'lxicon lxicon-chevron-down';
+		chevron.setAttribute('aria-hidden', 'true');
+		this.editorTypeButton.append(chevron);
 	}
 
 	setPathModes(filePath: BreadcrumbsPathMode, symbolPath: BreadcrumbsPathMode): void {

@@ -58,6 +58,7 @@ import { ModalEditorPart } from "./modalEditorPart.js";
 import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from "../../../services/editor/common/editorState.js";
 import { editorInputKey } from "./editorTabsControl.js";
 import { WorkbenchConfiguration } from "../../../common/configuration.js";
+import { EditorOpenSideBySideDirectionConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 
 export { EditorOpenSupersededError } from "./editorGroupView.js";
 
@@ -213,7 +214,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 			documentCollaborationApi: options.documentCollaborationApi,
 			serverEvents: options.serverEvents,
 			workingCopyService: options.workingCopyService,
-			onWillCloseEditor: (group, input, pane) => this.confirmEditorClose(group, input, pane),
+			onWillCloseEditor: (group, input, pane, closingGroups) => this.confirmEditorClose(group, input, pane, closingGroups),
 			onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range, selectionSource: TextEditorSelectionSource.JUMP }).then(() => undefined),
 			onApplyWorkspaceEdit: options.bulkEditService ? (edit, bulkOptions) => options.bulkEditService!.apply(edit, bulkOptions).then(() => undefined) : undefined,
 			titleActions: options.titleActions,
@@ -521,11 +522,12 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 	async confirmCloseAllEditors(): Promise<boolean> {
 		const modalInput = this.modalEditor.activeInput;
 		const modalPane = this.modalEditor.activePane;
-		if (modalInput && modalPane && !await this.confirmEditorClose(undefined, modalInput, modalPane)) return false;
 		const inputsByGroup = this._groups.map(({ group }) => ({ group, inputs: [...group.inputs] }));
+		const closingGroups = inputsByGroup.map(({ group }) => group.id);
+		if (modalInput && modalPane && !await this.confirmEditorClose(undefined, modalInput, modalPane, closingGroups)) return false;
 		for (const { group, inputs } of inputsByGroup) {
 			for (const input of inputs) {
-				if (!await group.confirmCloseEditor(input)) return false;
+				if (!await group.confirmCloseEditor(input, closingGroups)) return false;
 			}
 		}
 		return true;
@@ -567,7 +569,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 		this.setActiveGroup(created.group);
 		try {
 			for (const input of inputs) {
-				await created.group.openEditor(input, { pinned: true });
+				const preferredEditorId = source.editors.find(editor => editor.input === input)?.paneId;
+				await created.group.openEditor(input, { pinned: true, preferredEditorId });
 			}
 			created.group.focus();
 		} catch (error) {
@@ -660,9 +663,13 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 		return await this.closeEditor(input);
 	}
 
-	private async confirmEditorClose(group: IEditorGroupView | undefined, input: EditorInput, pane: IEditorPane): Promise<boolean> {
+	private async confirmEditorClose(group: IEditorGroupView | undefined, input: EditorInput, pane: IEditorPane, closingGroups: readonly EditorGroupId[] = []): Promise<boolean> {
 		const workingCopy = pane.workingCopy;
 		if (!workingCopy?.isDirty) return true;
+		// Another open view still owns this dirty document, including a custom view in the same group.
+		if (this._groups.some(host => !closingGroups.includes(host.group.id) && host.group.editors.some(other => other.canRevert && (host.group !== group || other.input !== input) && other.input.resource.toString() === input.resource.toString()))) {
+			return true;
+		}
 		if (!this.fileDialogService) return false;
 		const label = editorInputLabel(input);
 		const decision = await this.fileDialogService.showSaveConfirm([label], workingCopy.hasExternalChange
@@ -724,7 +731,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 		const sourceIndex = this.groupIndex(source);
 		const existing = this._groups[sourceIndex + 1];
 		if (existing) return { host: existing, created: false };
-		return { host: this.insertGroup(source, Direction.Right), created: true };
+		const direction = this.groupOptions.configurationService?.getValue<string>(EditorOpenSideBySideDirectionConfiguration) === 'down' ? Direction.Down : Direction.Right;
+		return { host: this.insertGroup(source, direction), created: true };
 	}
 
 	private insertGroup(source: EditorGroupView, direction: GridDirection): EditorGroupHost {

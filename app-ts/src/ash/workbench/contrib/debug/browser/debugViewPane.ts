@@ -3,7 +3,12 @@ import { getHoverDelegate, type IManagedHover } from "../../../../base/browser/u
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
 import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
-import { AbstractDisposable, DisposableMap, DisposableStore, MutableDisposable } from "../../../../base/common/lifecycle.js";
+import { Pane, PaneView } from "../../../../base/browser/ui/splitview/paneview.js";
+import { observeElementSize } from "../../../../base/browser/observer.js";
+import { FileNotFoundError, IFileService } from "../../../../platform/files/common/files.js";
+import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { localize } from "../../../../nls.js";
@@ -14,8 +19,10 @@ import { URI } from "../../../../base/common/uri.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
+import { DisassemblyViewInput } from '../common/disassemblyViewInput.js';
+import { DISASSEMBLY_VIEW_ID } from '../common/debug.js';
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
-import { type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, IDebugService, type IDebugSession, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../../../services/debug/common/debugService.js";
+import { type DebugBreakpoint, type IDebugBreakpointUpdate, type IDataBreakpointOptions, type IDataBreakpoint, type IFunctionBreakpoint, type IInstructionBreakpoint, type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, IDebugService, type IDebugSession, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../../../services/debug/common/debugService.js";
 
 interface DebugVariableRow {
 	readonly key: number;
@@ -47,19 +54,27 @@ interface VariableEdit {
 
 type DebugOperation = "start" | "continue" | "pause" | "restart" | "stepOver" | "stepInto" | "stepOut" | "stop" | "stopAll";
 
-interface DebugSection {
-	readonly domNode: HTMLDetailsElement;
-	readonly summary: HTMLElement;
-	readonly list: HTMLUListElement;
-	readonly label: () => string;
-}
+type BreakpointEditorState =
+	| { readonly kind: "source"; readonly breakpoint: IDebugBreakpoint }
+	| { readonly kind: "function"; readonly breakpoint?: IFunctionBreakpoint }
+	| { readonly kind: "data"; readonly breakpoint: IDataBreakpoint; readonly options?: never }
+	| { readonly kind: "data"; readonly breakpoint?: undefined; readonly options: IDataBreakpointOptions }
+	| { readonly kind: "instruction"; readonly breakpoint?: IInstructionBreakpoint; readonly instructionReference: string };
 
 /** Code Debug sidebar with multi-session inspection, recursive variables, watches, and exceptions. */
 export class DebugViewPane extends ViewPane {
+	private readonly paneView: PaneView;
+	private readonly welcome: DebugSection;
+	private readonly welcomeButton: Button;
+	private readonly welcomeDescription: HTMLElement;
+	private readonly controls: HTMLElement;
+	private readonly configureButton: Button;
+	private readonly watchToolbar: WorkbenchToolBar;
+	private mountedSections: readonly DebugSection[] = [];
+	private hasDebugged = false;
 	private readonly startButton: Button;
 	private readonly sessionToolbar: WorkbenchToolBar;
 	private readonly sections: readonly DebugSection[];
-	private readonly exceptionSection: DebugSection;
 	private readonly rowControls = this._register(new DisposableStore());
 	private readonly variableItems = this._register(new DisposableMap<number, DebugVariableItem>());
 	private readonly variableEditControls = this._register(new MutableDisposable<DisposableStore>());
@@ -76,6 +91,11 @@ export class DebugViewPane extends ViewPane {
 	private readonly watchInput: HTMLInputElement;
 	private readonly exceptionsElement: HTMLUListElement;
 	private readonly breakpointsElement: HTMLUListElement;
+	private readonly breakpointToolbar: WorkbenchToolBar;
+	private readonly instructionToolbar: WorkbenchToolBar;
+	private readonly breakpointItems = this._register(new DisposableMap<string, DebugBreakpointItem>());
+	private readonly breakpointEditControls = this._register(new MutableDisposable<DisposableStore>());
+	private breakpointEdit: { readonly id?: string; readonly form: HTMLFormElement; readonly sessionId?: string } | undefined;
 	private readonly exceptionControls = this._register(new DisposableStore());
 	private threads: readonly IDebugThread[] = [];
 	private frames: readonly IDebugStackFrame[] = [];
@@ -87,12 +107,22 @@ export class DebugViewPane extends ViewPane {
 	private refreshGeneration = 0;
 	private error: string | undefined;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @IDebugService private readonly debug: IDebugService, @IEditorService private readonly editor: IEditorService, @IContextMenuService contextMenus: IContextMenuService) {
+	constructor(
+		container: HTMLElement,
+		options: IViewPaneOptions,
+		@IDebugService private readonly debug: IDebugService,
+		@IEditorService private readonly editor: IEditorService,
+		@IContextMenuService contextMenus: IContextMenuService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IWorkspaceOpenService private readonly workspaceOpen: IWorkspaceOpenService,
+		@IFileService private readonly files: IFileService,
+	) {
 		super(container, options);
 		const document = container.ownerDocument;
 		this.setHeaderVisible(false);
 		this.contentElement.classList.add("ash-debug");
 		const controls = h(document, "div");
+		this.controls = controls;
 		controls.className = "ash-debug-controls";
 		const launch = h(document, "div");
 		launch.className = "ash-debug-launch";
@@ -105,6 +135,14 @@ export class DebugViewPane extends ViewPane {
 		}));
 		this.configurationsElement = select(document, localize("debug.configuration", "Debug configuration"));
 		launch.append(this.configurationsElement);
+		this.configureButton = this._register(new Button(launch, {
+			label: localize("debug.configure", "Open launch.json"),
+			icon: Lxicon.settings,
+			iconOnly: true,
+			size: "small",
+			title: localize("debug.configure", "Open launch.json"),
+			onClick: () => { void this.configure().catch(error => { this.error = message(error); this.render(); }); },
+		}));
 		this.sessionsElement = select(document, localize("debug.session", "Active debug session"));
 		this.sessionToolbar = this._register(new WorkbenchToolBar(controls, contextMenus, { ariaLabel: localize("debug.controls", "Debug controls") }));
 		controls.prepend(launch, this.sessionsElement);
@@ -114,19 +152,48 @@ export class DebugViewPane extends ViewPane {
 		this.statusElement.setAttribute("aria-live", "polite");
 		this.threadsElement = select(document, localize("debug.thread", "Debug thread"));
 		this.threadsElement.classList.add("ash-debug-thread-select");
-		const stack = section(document, () => localize("debug.callStack", "Call Stack"), "ash-debug-stack");
-		const variables = section(document, () => localize("debug.variables", "Variables"), "ash-debug-variables");
-		const watch = section(document, () => localize("debug.watch", "Watch"), "ash-debug-watch");
-		this.exceptionSection = section(document, () => localize("debug.exceptions", "Exception Breakpoints"), "ash-debug-exceptions");
-		const breakpoints = section(document, () => localize("debug.breakpoints", "Breakpoints"), "ash-debug-breakpoints");
-		this.sections = [variables, watch, stack, breakpoints, this.exceptionSection];
+		this.contentElement.append(controls, this.statusElement);
+		this.paneView = this._register(new PaneView(this.contentElement));
+		const stack = this._register(new DebugSection(this.paneView.element, "ash-debug-stack", () => localize("debug.callStack", "Call Stack"), 180));
+		const variables = this._register(new DebugSection(this.paneView.element, "ash-debug-variables", () => localize("debug.variables", "Variables"), 240));
+		const watch = this._register(new DebugSection(this.paneView.element, "ash-debug-watch", () => localize("debug.watch", "Watch"), 80));
+		const breakpoints = this._register(new DebugSection(this.paneView.element, "ash-debug-breakpoints", () => localize("debug.breakpoints", "Breakpoints"), 120));
+		this.sections = [variables, watch, stack, breakpoints];
+		this.welcome = this._register(new DebugSection(this.paneView.element, "ash-debug-welcome", () => localize("debug.run", "Run"), 400));
+		this.welcome.list.remove();
+		this.welcome.body.classList.add("ash-debug-welcome-content");
+		this.welcomeButton = this._register(new Button(this.welcome.body, {
+			label: localize("debug.createLaunch", "Create a launch.json file"),
+			presentation: "primary",
+			onClick: () => { void this.configure().catch(error => { this.error = message(error); this.render(); }); },
+		}));
+		this.welcomeDescription = h(document, "p");
+		this.welcome.body.append(this.welcomeDescription);
 		this.stackElement = stack.list;
 		this.variablesElement = variables.list;
 		this.watchElement = watch.list;
-		this.exceptionsElement = this.exceptionSection.list;
+		this.exceptionsElement = h(document, "ul");
+		this.exceptionsElement.className = "ash-debug-list ash-debug-exceptions";
+		this.exceptionsElement.setAttribute("aria-label", localize("debug.exceptions", "Exception Breakpoints"));
+		breakpoints.body.append(this.exceptionsElement);
 		this.breakpointsElement = breakpoints.list;
+		this.breakpointToolbar = this._register(new WorkbenchToolBar(breakpoints.actions, contextMenus, { ariaLabel: localize("debug.breakpoints", "Breakpoints") }));
+		const breakpointActions = [
+			{
+				id: "debug.addFunctionBreakpoint",
+				label: localize("debug.addFunctionBreakpoint", "Add Function Breakpoint"),
+				icon: Lxicon.add,
+				run: () => this.showBreakpointEditor({ kind: "function" }),
+			},
+			{ id: "debug.enableAllBreakpoints", label: localize("debug.enableAllBreakpoints", "Enable All Breakpoints"), icon: Lxicon.check, run: () => this.debug.setBreakpointsEnabled(true) },
+			{ id: "debug.disableAllBreakpoints", label: localize("debug.disableAllBreakpoints", "Disable All Breakpoints"), icon: Lxicon.pause, run: () => this.debug.setBreakpointsEnabled(false) },
+			{ id: "debug.removeAllBreakpoints", label: localize("debug.removeAllBreakpoints", "Remove All Breakpoints"), icon: Lxicon.close, run: () => this.debug.removeAllBreakpoints() },
+		];
+		this.breakpointToolbar.setActions(breakpointActions.map(action => ({ ...action, tooltip: action.label, enabled: true })));
+		this.instructionToolbar = this._register(new WorkbenchToolBar(stack.actions, contextMenus, { ariaLabel: localize("debug.callStack", "Call Stack") }));
 		this.watchForm = h(document, "form");
-		this.watchForm.className = "ash-debug-input-form";
+		this.watchForm.className = "ash-debug-input-form empty";
+		this.watchForm.hidden = true;
 		this.watchInput = h(document, "input");
 		this.watchInput.type = "text";
 		this.watchForm.append(this.watchInput);
@@ -137,9 +204,51 @@ export class DebugViewPane extends ViewPane {
 			type: "submit",
 			title: localize("debug.addWatch", "Add watch expression"),
 		}));
-		watch.domNode.append(this.watchForm);
-		stack.domNode.insertBefore(this.threadsElement, stack.list);
-		this.contentElement.append(controls, this.statusElement, ...this.sections.map(section => section.domNode));
+		watch.body.prepend(this.watchForm);
+		this.watchToolbar = this._register(new WorkbenchToolBar(watch.actions, contextMenus, { ariaLabel: localize("debug.watch", "Watch") }));
+		const addWatchLabel = localize("debug.addWatch", "Add watch expression");
+		const removeAllWatchesLabel = localize("debug.removeAllWatches", "Remove All Expressions");
+		this.watchToolbar.setActions([
+			{
+				id: "debug.addWatch",
+				label: addWatchLabel,
+				tooltip: addWatchLabel,
+				enabled: true,
+				icon: Lxicon.add,
+				run: () => {
+					watch.setCollapsed(false);
+					this.watchForm.hidden = false;
+					this.watchForm.classList.remove("empty");
+					this.watchInput.focus();
+				},
+			},
+			{
+				id: "debug.removeAllWatches",
+				label: removeAllWatchesLabel,
+				tooltip: removeAllWatchesLabel,
+				enabled: true,
+				icon: Lxicon.close,
+				run: () => {
+					for (const expression of this.debug.watchExpressions) {
+						this.debug.removeWatchExpression(expression);
+					}
+				},
+			},
+		]);
+		stack.body.insertBefore(this.threadsElement, stack.list);
+		this._register(addDisposableListener(this.watchInput, "keydown", event => {
+			if (event.key === "Escape" && !event.isComposing) {
+				event.preventDefault();
+				this.watchInput.value = "";
+				this.watchForm.hidden = true;
+				this.watchForm.classList.add("empty");
+				this.watchToolbar.focus();
+			}
+		}));
+		this._register(observeElementSize(this.paneView.element, size => {
+			if (size.height > 0 && size.width > 0) this.paneView.layout(size.height, size.width);
+		}));
+		this._register(workspace.onDidChangeWorkspace(() => this.render()));
 		this._register(addDisposableListener(this.sessionsElement, "change", () => this.selectSession()));
 		this._register(addDisposableListener(this.threadsElement, "change", () => { void this.selectThread(); }));
 		this._register(addDisposableListener(this.stackElement, "click", event => this.activateFrame(event)));
@@ -155,7 +264,6 @@ export class DebugViewPane extends ViewPane {
 		this._register(addDisposableListener(this.watchElement, "click", event => this.removeWatch(event)));
 		this._register(addDisposableListener(this.watchForm, "submit", event => this.addWatch(event)));
 		this._register(addDisposableListener(this.exceptionsElement, "change", () => { void this.changeExceptionBreakpoints(); }));
-		this._register(addDisposableListener(this.breakpointsElement, "click", event => this.activateBreakpoint(event)));
 		this._register(debug.onDidChangeConfigurations(() => this.render()));
 		this._register(debug.onDidChangeBreakpoints(() => this.render()));
 		this._register(debug.onDidChangeWatchExpressions(() => { void this.refreshWatches().then(() => this.render()); }));
@@ -164,6 +272,24 @@ export class DebugViewPane extends ViewPane {
 		// Testing can pause a session before this view is first opened.
 		this.acceptSessionChange(debug.session);
 		void debug.refresh().catch(error => { this.error = message(error); this.render(); });
+	}
+
+	private async configure(): Promise<void> {
+		const activeResource = this.editor.activeEditor?.resource;
+		const folder = (activeResource ? this.workspace.getWorkspaceFolder(activeResource) : null) ?? this.workspace.getWorkspace().folders[0];
+		if (!folder) {
+			await this.workspaceOpen.openFolder();
+			return;
+		}
+		const resource = URI.joinPath(folder.uri, ".vscode", "launch.json");
+		try {
+			await this.files.stat(resource);
+		} catch (error) {
+			if (!(error instanceof FileNotFoundError)) throw error;
+			await this.files.createDirectory(URI.joinPath(folder.uri, ".vscode"));
+			await this.files.writeFileBytes(resource, new TextEncoder().encode('{\n\t"version": "0.2.0",\n\t"configurations": []\n}\n'));
+		}
+		await this.editor.openEditor({ resource }, { pinned: true, ignoreError: true });
 	}
 
 	private control(operation: DebugOperation): void {
@@ -193,6 +319,7 @@ export class DebugViewPane extends ViewPane {
 	}
 
 	private acceptSessionChange(session: IDebugSession | undefined): void {
+		if (session) this.hasDebugged = true;
 		this.refreshGeneration++;
 		this.variableEdit = undefined;
 		this.variableEditControls.clear();
@@ -246,9 +373,11 @@ export class DebugViewPane extends ViewPane {
 			this.frames = frames;
 			this.selectedFrameId = frames[0]?.id;
 			const frame = frames[0];
+			this.debug.focusStackFrame(frame);
 			const results = await Promise.allSettled([
 				this.loadFrameVariables(session, frame?.id, generation),
-				frame && frame.lineNumber > 0 && frame.columnNumber > 0 ? this.openFrameSource(session, frame, generation) : Promise.resolve(),
+				// Pausing while disassembly is active must keep instruction stepping in that editor.
+				frame && frame.lineNumber > 0 && frame.columnNumber > 0 && this.editor.activeEditor?.editorId !== DISASSEMBLY_VIEW_ID ? this.openFrameSource(session, frame, generation) : Promise.resolve(),
 			]);
 			if (!this.isCurrentInspection(session, generation)) return;
 			for (const result of results) {
@@ -287,6 +416,7 @@ export class DebugViewPane extends ViewPane {
 		this.variableEditControls.clear();
 		void (async () => {
 			this.selectedFrameId = frame.id;
+			this.debug.focusStackFrame(frame);
 			this.variableRows = [];
 			this.watchResults = [];
 			this.error = undefined;
@@ -427,6 +557,9 @@ export class DebugViewPane extends ViewPane {
 		const expression = this.watchInput.value;
 		this.debug.addWatchExpression(expression);
 		this.watchInput.value = "";
+		this.watchForm.hidden = true;
+		this.watchForm.classList.add("empty");
+		this.watchToolbar.focus();
 	}
 
 	private removeWatch(event: Event): void {
@@ -455,13 +588,133 @@ export class DebugViewPane extends ViewPane {
 		catch (error) { this.error = message(error); this.render(); }
 	}
 
-	private activateBreakpoint(event: Event): void {
-		const index = indexFromEvent(event, ".ash-debug-breakpoint, .ash-debug-breakpoint-remove", "breakpointIndex", this.element.ownerDocument);
-		const breakpoint = index === undefined ? undefined : this.debug.breakpoints[index];
-		const remove = event.target instanceof this.element.ownerDocument.defaultView!.Element && Boolean(event.target.closest(".ash-debug-breakpoint-remove"));
-		if (!breakpoint) return;
-		if (remove) this.debug.removeBreakpoint(breakpoint.id);
-		else void this.editor.openEditor({ resource: breakpoint.resource }, { selection: lineSelection(breakpoint.lineNumber) }).catch(error => { this.error = message(error); this.render(); });
+	private editBreakpoint(breakpoint: IDebugBreakpoint): void {
+		this.showBreakpointEditor({ kind: "source", breakpoint });
+	}
+
+	private editAdditionalBreakpoint(breakpoint: Exclude<DebugBreakpoint, IDebugBreakpoint>): void {
+		switch (breakpoint.kind) {
+			case "function": this.showBreakpointEditor({ kind: "function", breakpoint }); break;
+			case "data": {
+				this.showBreakpointEditor({ kind: "data", breakpoint });
+				break;
+			}
+			case "instruction": this.showBreakpointEditor({ kind: "instruction", breakpoint, instructionReference: breakpoint.instructionReference }); break;
+		}
+	}
+
+	private showBreakpointEditor(state: BreakpointEditorState): void {
+		const breakpoint = state.breakpoint;
+		this.breakpointEditControls.clear();
+		const controls = new DisposableStore();
+		this.breakpointEditControls.value = controls;
+		const form = h(this.element.ownerDocument, "form");
+		form.className = "ash-debug-breakpoint-edit";
+		controls.add(toDisposable(() => form.remove()));
+		form.setAttribute("aria-label", localize("debug.editBreakpoint", "Edit breakpoint"));
+		const inputs = new Map<keyof IDebugBreakpointUpdate, InputBox>();
+		const field = (key: keyof IDebugBreakpointUpdate, title: string, value = ""): InputBox => {
+			const label = h(this.element.ownerDocument, "label");
+			label.textContent = title;
+			form.append(label);
+			const input = controls.add(new InputBox(label, { ariaLabel: title, presentation: "compact" }));
+			input.value = value;
+			const capabilities = this.debug.session?.capabilities;
+			const supported = key === "condition" ? capabilities?.supportsConditionalBreakpoints
+				: key === "hitCondition" ? capabilities?.supportsHitConditionalBreakpoints
+					: key === "logMessage" ? capabilities?.supportsLogPoints : undefined;
+			if (supported === false) input.inputElement.setAttribute("aria-description", localize("debug.breakpointUnsupported", "The active debug adapter does not support this breakpoint option."));
+			inputs.set(key, input);
+			return input;
+		};
+		if (state.kind === "function") field("name", localize("debug.functionName", "Function name"), state.breakpoint?.name);
+		if (state.kind === "instruction") {
+			field("instructionReference", localize("debug.instructionAddress", "Instruction address"), state.instructionReference);
+			field("offset", localize("debug.instructionOffset", "Instruction byte offset"), String(state.breakpoint?.offset ?? 0));
+		}
+		let access: HTMLSelectElement | undefined;
+		if (state.kind === "data") {
+			const data = state.breakpoint ?? state.options;
+			const label = h(this.element.ownerDocument, "label");
+			label.textContent = localize("debug.dataAccess", "Break on access");
+			access = select(this.element.ownerDocument, label.textContent);
+			access.append(...data.accessTypes.map(type => option(this.element.ownerDocument, type, dataAccessLabel(type))));
+			access.value = data.accessType;
+			label.append(access);
+			form.append(label);
+		}
+		field("condition", localize("debug.breakpointCondition", "Expression condition"), breakpoint?.condition);
+		field("hitCondition", localize("debug.breakpointHitCondition", "Hit count condition"), breakpoint?.hitCondition);
+		if (state.kind === "source") field("logMessage", localize("debug.breakpointLogMessage", "Log message"), state.breakpoint.logMessage);
+		const close = () => {
+			this.breakpointEdit = undefined;
+			form.remove();
+			this.breakpointEditControls.clear();
+			if (breakpoint) this.breakpointItems.get(breakpoint.id)?.focusEdit();
+			else this.breakpointToolbar.focus();
+		};
+		controls.add(new Button(form, { label: localize("debug.saveBreakpoint", "Save breakpoint"), type: "submit", presentation: "primary" }));
+		controls.add(new Button(form, { label: localize("debug.cancelBreakpoint", "Cancel breakpoint edit"), onClick: close }));
+		controls.add(addDisposableListener(form, "keydown", event => {
+			if (event.key === "Escape" && !event.isComposing) {
+				event.preventDefault();
+				event.stopPropagation();
+				close();
+			}
+		}));
+		controls.add(addDisposableListener(form, "submit", event => {
+			event.preventDefault();
+			try {
+				const update: { -readonly [K in keyof IDebugBreakpointUpdate]: IDebugBreakpointUpdate[K] } = {};
+				for (const [key, input] of inputs) {
+					if (key === "offset") {
+						if (!/^[+-]?\d+$/.test(input.value.trim()) || !Number.isSafeInteger(Number(input.value))) {
+							input.showValidation(localize("debug.invalidInstructionOffset", "Instruction byte offset must be an integer."));
+							return;
+						}
+						update.offset = Number(input.value);
+					} else if (key === "name" || key === "instructionReference" || key === "condition" || key === "hitCondition" || key === "logMessage") update[key] = input.value;
+				}
+				if (state.kind === "instruction" && !update.instructionReference?.trim()) {
+					inputs.get("instructionReference")!.showValidation(localize("debug.instructionAddressRequired", "Enter an instruction address."));
+					return;
+				}
+				if (access) update.accessType = access.value as IDataBreakpointOptions["accessType"];
+				if (breakpoint) this.debug.updateBreakpoint(breakpoint.id, update);
+				else if (state.kind === "function") {
+					if (!update.name?.trim()) throw new Error(localize("debug.functionNameRequired", "Enter a function name."));
+					this.debug.addFunctionBreakpoint({ name: update.name, condition: update.condition, hitCondition: update.hitCondition });
+				} else if (state.kind === "data" && !state.breakpoint) this.debug.addDataBreakpoint({ ...state.options, accessType: update.accessType!, condition: update.condition, hitCondition: update.hitCondition });
+				else if (state.kind === "instruction") this.debug.addInstructionBreakpoint({ instructionReference: update.instructionReference!, offset: update.offset, condition: update.condition, hitCondition: update.hitCondition });
+				close();
+			} catch (error) { inputs.values().next().value!.showValidation(message(error)); }
+		}));
+		const sessionId = state.kind === "instruction" ? this.debug.session!.id : state.kind === "data" && !state.breakpoint ? state.options.sessionId : undefined;
+		this.breakpointEdit = { id: breakpoint?.id, form, sessionId };
+		this.sections[3]!.setCollapsed(false);
+		this.breakpointsElement.before(form);
+		const first = inputs.values().next().value!;
+		if (access) access.focus();
+		else { first.focus(); first.select(); }
+	}
+
+	private async breakOnVariable(index: number): Promise<void> {
+		const row = this.variableRows[index];
+		const session = this.debug.session;
+		if (!row?.parentVariablesReference || !session || session.state !== "stopped") return;
+		const generation = this.refreshGeneration;
+		try {
+			const info = await session.dataBreakpointInfo(row.name, row.parentVariablesReference, this.selectedFrameId);
+			if (!this.isCurrentInspection(session, generation)) return;
+			if (info.dataId === null) throw new Error(info.description);
+			const accessType = info.accessTypes.includes("write") ? "write" : info.accessTypes[0];
+			if (!accessType) throw new Error(localize("debug.noDataAccess", "The adapter did not provide a supported data access type."));
+			this.showBreakpointEditor({ kind: "data", options: { ...info, dataId: info.dataId, sessionId: session.id, accessType } });
+		} catch (error) {
+			if (!this.isCurrentInspection(session, generation)) return;
+			this.error = message(error);
+			this.render();
+		}
 	}
 
 	private render(): void {
@@ -477,7 +730,7 @@ export class DebugViewPane extends ViewPane {
 		this.startButton.label = localize("debug.start", "Start Debugging");
 		this.startButton.setTitle(this.startButton.label);
 		for (const section of this.sections) {
-			section.summary.textContent = section.label();
+			section.setTitle(section.label());
 			section.list.setAttribute("aria-label", section.label());
 		}
 		this.configurationsElement.replaceChildren(...this.debug.configurations.map(configuration => option(this.element.ownerDocument, configuration.id, configuration.workspaceFolderName ? `${configuration.name} — ${configuration.workspaceFolderName}` : configuration.name)), ...this.debug.compounds.map(compound => option(this.element.ownerDocument, compound.id, localize("debug.compound", "{0} (compound)", `${compound.name}${compound.workspaceFolderName ? ` — ${compound.workspaceFolderName}` : ""}`))));
@@ -491,6 +744,31 @@ export class DebugViewPane extends ViewPane {
 		const session = this.debug.session;
 		const active = session !== undefined && session.state !== "terminated" && session.state !== "error";
 		const stopped = session?.state === "stopped";
+		const showInspection = hasConfigurations || active || this.hasDebugged;
+		const hasFolder = this.workspace.getWorkspace().folders.length > 0;
+		this.controls.hidden = !showInspection;
+		this.controls.classList.toggle("empty", !showInspection);
+		this.configureButton.enabled = hasFolder;
+		this.welcomeButton.label = hasFolder ? localize("debug.createLaunch", "Create a launch.json file") : localize("debug.openFolder", "Open Folder");
+		this.welcomeButton.enabled = hasFolder || this.workspaceOpen.canOpenFolder;
+		this.welcomeDescription.textContent = hasFolder
+			? localize("debug.welcomeConfigure", "To customize Run and Debug, create a launch.json file and add a debug configuration.")
+			: localize("debug.welcomeOpenFolder", "To customize Run and Debug, open a folder and create a launch.json file.");
+		let desiredSections: readonly DebugSection[];
+		if (showInspection) {
+			desiredSections = this.sections;
+		} else if (this.debug.breakpoints.length + this.debug.functionBreakpoints.length + this.debug.dataBreakpoints.length + this.debug.instructionBreakpoints.length > 0) {
+			desiredSections = [this.welcome, this.sections[3]!];
+		} else {
+			desiredSections = [this.welcome];
+		}
+		for (const section of this.mountedSections) {
+			if (!desiredSections.includes(section)) this.paneView.removePane(section);
+		}
+		for (const [index, section] of desiredSections.entries()) {
+			if (!this.mountedSections.includes(section)) this.paneView.addPane(section, section.initialSize, index);
+		}
+		this.mountedSections = desiredSections;
 		this.sessionToolbar.element.hidden = !active;
 		this.sessionToolbar.element.classList.toggle("empty", !active);
 		this.sessionToolbar.element.setAttribute("aria-label", localize("debug.controls", "Debug controls"));
@@ -506,11 +784,13 @@ export class DebugViewPane extends ViewPane {
 		if (session) this.sessionsElement.value = session.id;
 		this.sessionsElement.hidden = this.debug.sessions.length < 2;
 		this.statusElement.classList.toggle("error", this.error !== undefined);
-		let status = hasConfigurations ? localize("debug.ready", "Select a configuration to start debugging.") : localize("debug.configureLaunch", "Add a debug configuration in .vscode/launch.json to get started.");
+		let status = "";
 		if (session) {
 			status = `${session.configuration.name}: ${sessionStateLabel(session.state)}${session.reason ? ` (${session.reason})` : ""}`;
 		}
 		this.statusElement.textContent = this.error ?? status;
+		this.statusElement.hidden = !this.statusElement.textContent;
+		this.statusElement.classList.toggle("empty", !this.statusElement.textContent);
 		this.threadsElement.replaceChildren(...this.threads.map(thread => option(this.element.ownerDocument, String(thread.id), thread.name)));
 		if (session?.threadId) this.threadsElement.value = String(session.threadId);
 		this.threadsElement.hidden = this.threads.length < 2;
@@ -527,9 +807,9 @@ export class DebugViewPane extends ViewPane {
 			// Preserve the click target across expansion so double-click remains one gesture.
 			let item = this.variableItems.get(row.key);
 			if (!item) {
-				item = this.variableItems.set(row.key, new DebugVariableItem(this.element.ownerDocument));
+				item = this.variableItems.set(row.key, new DebugVariableItem(this.element.ownerDocument, index => { void this.breakOnVariable(index); }));
 			}
-			item.update(row, index, stopped && session.capabilities.supportsSetVariable, this.variableEdit?.row.key === row.key ? this.variableEdit.form : undefined);
+			item.update(row, index, stopped && session.capabilities.supportsSetVariable, stopped && session.capabilities.supportsDataBreakpoints, this.variableEdit?.row.key === row.key ? this.variableEdit.form : undefined);
 			return item.domNode;
 		}));
 		if (variableInputWasFocused) this.variableEdit?.input.focus();
@@ -537,23 +817,44 @@ export class DebugViewPane extends ViewPane {
 		const selectedExceptions = this.debug.exceptionBreakpoints;
 		this.exceptionControls.clear();
 		this.exceptionsElement.replaceChildren(...(session?.capabilities.exceptionBreakpointFilters ?? []).map(filter => exceptionItem(this.exceptionControls, this.element.ownerDocument, filter.filter, filter.label, filter.description, selectedExceptions.length > 0 ? selectedExceptions.includes(filter.filter) : filter.default)));
-		const noExceptions = !session || session.capabilities.exceptionBreakpointFilters.length === 0;
-		this.exceptionSection.domNode.hidden = noExceptions;
-		this.exceptionSection.domNode.classList.toggle("empty", noExceptions);
-		this.breakpointsElement.replaceChildren(...this.debug.breakpoints.map((breakpoint, index) => breakpointItem(this.rowControls, this.element.ownerDocument, breakpoint, index)));
-		for (const [list, label] of [
-			[this.variablesElement, localize("debug.emptyVariables", "Variables appear when execution pauses.")],
-			[this.watchElement, localize("debug.emptyWatch", "Add an expression to watch its value.")],
-			[this.stackElement, localize("debug.emptyStack", "The call stack appears when execution pauses.")],
-			[this.breakpointsElement, localize("debug.emptyBreakpoints", "Click the editor gutter to add a breakpoint.")],
-		] as const) {
-			if (list.childElementCount === 0) {
-				const empty = h(this.element.ownerDocument, "li");
-				empty.className = "ash-debug-empty";
-				empty.textContent = label;
-				list.append(empty);
-			}
+		const allBreakpoints: readonly DebugBreakpoint[] = [...this.debug.breakpoints, ...this.debug.functionBreakpoints, ...this.debug.dataBreakpoints, ...this.debug.instructionBreakpoints];
+		const instructionLabel = localize("debug.addInstructionBreakpoint", "Add Instruction Breakpoint");
+		this.instructionToolbar.setActions([{
+			id: "debug.addInstructionBreakpoint",
+			label: instructionLabel,
+			tooltip: instructionLabel,
+			icon: Lxicon.add,
+			enabled: Boolean(stopped && session.capabilities.supportsInstructionBreakpoints),
+			run: () => this.showBreakpointEditor({ kind: "instruction", instructionReference: this.frames.find(frame => frame.id === this.selectedFrameId)?.instructionPointerReference ?? "" }),
+		}, {
+			id: 'debug.action.openDisassemblyView', label: localize('debug.openDisassembly', 'Open Disassembly View'), tooltip: localize('debug.openDisassembly', 'Open Disassembly View'), icon: Lxicon.code,
+			enabled: Boolean(stopped && session.capabilities.supportsDisassembleRequest),
+			run: () => this.editor.openEditor(new DisassemblyViewInput(), { pinned: true }),
+		}]);
+		const breakpointIds = new Set(allBreakpoints.map(breakpoint => breakpoint.id));
+		for (const id of this.breakpointItems.keys()) {
+			if (!breakpointIds.has(id)) this.breakpointItems.deleteAndDispose(id);
 		}
+		const edit = this.breakpointEdit;
+		if (edit && ((edit.id && !breakpointIds.has(edit.id)) || (edit.sessionId && (edit.sessionId !== session?.id || !stopped)))) {
+			edit.form.remove();
+			this.breakpointEdit = undefined;
+			this.breakpointEditControls.clear();
+		}
+		const focusedBreakpointControl = this.breakpointsElement.contains(this.element.ownerDocument.activeElement) ? this.element.ownerDocument.activeElement as HTMLElement : undefined;
+		this.breakpointsElement.replaceChildren(...allBreakpoints.map(breakpoint => {
+			let item = this.breakpointItems.get(breakpoint.id);
+			if (!item) item = this.breakpointItems.set(breakpoint.id, new DebugBreakpointItem(this.element.ownerDocument, this.debug, point => {
+				if ("resource" in point) void this.editor.openEditor({ resource: point.resource }, { selection: lineSelection(point.lineNumber) }).catch(error => { this.error = message(error); this.render(); });
+				else this.editAdditionalBreakpoint(point);
+			}, point => {
+				if ("resource" in point) this.editBreakpoint(point);
+				else this.editAdditionalBreakpoint(point);
+			}));
+			item.update(breakpoint);
+			return item.domNode;
+		}));
+		if (focusedBreakpointControl?.isConnected) focusedBreakpointControl.focus();
 	}
 
 	private scopeRow(scope: IDebugScope): DebugVariableRow { return Object.freeze({ key: ++this.variableKey, name: scope.name, variablesReference: scope.variablesReference, depth: 0, expanded: true }); }
@@ -564,17 +865,24 @@ export class DebugViewPane extends ViewPane {
 
 function select(document: Document, label: string): HTMLSelectElement { const element = h(document, "select"); element.setAttribute("aria-label", label); return element; }
 function option(document: Document, value: string, label: string): HTMLOptionElement { const element = h(document, "option"); element.value = value; element.textContent = label; return element; }
-function section(document: Document, label: () => string, className: string): DebugSection {
-	const domNode = h(document, "details");
-	domNode.className = "ash-debug-section";
-	domNode.open = true;
-	const summary = h(document, "summary");
-	summary.textContent = label();
-	const list = h(document, "ul");
-	list.className = `ash-debug-list ${className}`;
-	list.setAttribute("aria-label", label());
-	domNode.append(summary, list);
-	return { domNode, summary, list, label };
+class DebugSection extends Pane {
+	public readonly list: HTMLUListElement;
+	public readonly body: HTMLElement;
+	public readonly actions: HTMLElement;
+
+	constructor(container: HTMLElement, className: string, public readonly label: () => string, public readonly initialSize: number) {
+		super(container, { id: className, title: label(), minimumBodySize: 32 });
+		this.body = this.contentElement;
+		this.actions = this.headerActionsElement;
+		this.element.classList.add("ash-debug-section");
+		this.body.classList.add("ash-debug-section-content");
+		this.list = h(container.ownerDocument, "ul");
+		this.list.className = `ash-debug-list ${className}`;
+		this.list.setAttribute("aria-label", label());
+		this.body.append(this.list);
+		// PaneView mounts only sections needed for the current debug state.
+		this.element.remove();
+	}
 }
 function itemButton(owner: DisposableStore, document: Document, label: string, className: string, dataName: string, index: number, selected = false): HTMLLIElement {
 	const item = h(document, "li");
@@ -588,21 +896,33 @@ function itemButton(owner: DisposableStore, document: Document, label: string, c
 	item.append(action);
 	return item;
 }
-class DebugVariableItem extends AbstractDisposable {
+class DebugVariableItem extends Disposable {
 	public readonly domNode: HTMLLIElement;
 	private readonly action: HTMLButtonElement;
 	private readonly hover: IManagedHover;
+	private readonly dataBreakpoint: Button;
+	private variableIndex = 0;
 
-	constructor(document: Document) {
+	constructor(document: Document, breakOnData: (index: number) => void) {
 		super();
 		this.domNode = h(document, "li");
 		this.action = h(document, "button");
 		this.action.type = "button";
 		this.action.className = "ash-debug-variable";
-		this.hover = getHoverDelegate().setupHover({ target: this.action, content: "" });
+		this.hover = this._register(getHoverDelegate().setupHover({ target: this.action, content: "" }));
+		this.dataBreakpoint = this._register(new Button(this.domNode, {
+			label: localize("debug.breakOnData", "Break on data access"),
+			icon: Lxicon.add,
+			iconOnly: true,
+			size: "small",
+			title: localize("debug.breakOnData", "Break on data access"),
+			onClick: () => breakOnData(this.variableIndex),
+		}));
+		this.dataBreakpoint.domNode.classList.add("ash-debug-variable-data");
 	}
 
-	public update(row: DebugVariableRow, index: number, supportsSetVariable: boolean, editForm: HTMLFormElement | undefined): void {
+	public update(row: DebugVariableRow, index: number, supportsSetVariable: boolean, supportsDataBreakpoints: boolean, editForm: HTMLFormElement | undefined): void {
+		this.variableIndex = index;
 		const indicator = row.variablesReference > 0 ? row.expanded ? "▾ " : "▸ " : "  ";
 		const label = `${indicator}${row.name}${row.value === undefined ? "" : ` = ${row.value}`}${row.type ? ` : ${row.type}` : ""}`;
 		this.action.textContent = label;
@@ -623,11 +943,12 @@ class DebugVariableItem extends AbstractDisposable {
 		}
 		this.action.style.paddingInlineStart = `${6 + row.depth * 14}px`;
 		this.action.disabled = row.variablesReference <= 0 && row.value === undefined;
-		this.domNode.replaceChildren(editForm ?? this.action);
-	}
-
-	protected override disposeCore(): void {
-		this.hover.dispose();
+		const canWatch = supportsDataBreakpoints && Boolean(row.parentVariablesReference) && !editForm;
+		this.dataBreakpoint.label = localize("debug.breakOnVariable", "Break on data access for {0}", row.name);
+		this.dataBreakpoint.enabled = canWatch;
+		this.dataBreakpoint.domNode.hidden = !canWatch;
+		this.dataBreakpoint.domNode.classList.toggle("empty", !canWatch);
+		this.domNode.replaceChildren(editForm ?? this.action, this.dataBreakpoint.domNode);
 	}
 }
 function watchItem(owner: DisposableStore, document: Document, expression: string, result: DebugWatchResult | undefined, index: number): HTMLLIElement {
@@ -649,18 +970,76 @@ function watchItem(owner: DisposableStore, document: Document, expression: strin
 	return item;
 }
 function exceptionItem(owner: DisposableStore, document: Document, filter: string, label: string, description: string | undefined, checked: boolean): HTMLLIElement { const item = h(document, "li"); const control = owner.add(new Checkbox(item, { label, checked })); control.element.classList.add("ash-debug-exception-toggle"); control.input.dataset.exceptionFilter = filter; if (description) control.element.title = description; return item; }
-function breakpointItem(owner: DisposableStore, document: Document, breakpoint: IDebugBreakpoint, index: number): HTMLLIElement {
-	const item = itemButton(owner, document, `${basename(breakpoint.resource)}:${breakpoint.lineNumber}`, "ash-debug-breakpoint", "breakpointIndex", index);
-	const remove = owner.add(new Button(item, {
-		label: localize("debug.removeBreakpoint", "Remove breakpoint"),
-		icon: Lxicon.close,
-		iconOnly: true,
-		size: "small",
-		title: localize("debug.removeBreakpoint", "Remove breakpoint"),
-	})).domNode;
-	remove.classList.add("ash-debug-breakpoint-remove");
-	remove.dataset.breakpointIndex = String(index);
-	return item;
+class DebugBreakpointItem extends Disposable {
+	public readonly domNode: HTMLLIElement;
+	private readonly checkbox: Checkbox;
+	private readonly action: HTMLButtonElement;
+	private readonly edit: Button;
+	private breakpoint!: DebugBreakpoint;
+
+	constructor(document: Document, debug: IDebugService, open: (breakpoint: DebugBreakpoint) => void, edit: (breakpoint: DebugBreakpoint) => void) {
+		super();
+		this.domNode = h(document, "li");
+		this.checkbox = this._register(new Checkbox(this.domNode, {
+			onChange: enabled => debug.updateBreakpoint(this.breakpoint.id, { enabled }),
+		}));
+		this.action = h(document, "button");
+		this.action.type = "button";
+		this.action.className = "ash-debug-breakpoint";
+		this.domNode.append(this.action);
+		this._register(addDisposableListener(this.action, "click", () => open(this.breakpoint)));
+		this._register(addDisposableListener(this.action, "keydown", event => {
+			if (event.key === "F2") {
+				event.preventDefault();
+				edit(this.breakpoint);
+			}
+		}));
+		this.edit = this._register(new Button(this.domNode, {
+			label: localize("debug.editBreakpoint", "Edit breakpoint"),
+			icon: Lxicon.settings,
+			iconOnly: true,
+			size: "small",
+			title: localize("debug.editBreakpoint", "Edit breakpoint"),
+			onClick: () => edit(this.breakpoint),
+		}));
+		this._register(new Button(this.domNode, {
+			label: localize("debug.removeBreakpoint", "Remove breakpoint"),
+			icon: Lxicon.close,
+			iconOnly: true,
+			size: "small",
+			title: localize("debug.removeBreakpoint", "Remove breakpoint"),
+			onClick: () => debug.removeBreakpoint(this.breakpoint.id),
+		}));
+	}
+
+	public update(breakpoint: DebugBreakpoint): void {
+		this.breakpoint = breakpoint;
+		let location: string;
+		if ("resource" in breakpoint) location = `${basename(breakpoint.resource)}:${breakpoint.lineNumber}`;
+		else if (breakpoint.kind === "function") location = localize("debug.functionBreakpointLabel", "Function: {0}", breakpoint.name);
+		else if (breakpoint.kind === "data") location = localize("debug.dataBreakpointLabel", "Data: {0} ({1})", breakpoint.description, dataAccessLabel(breakpoint.accessType));
+		else location = localize("debug.instructionBreakpointLabel", "Instruction: {0} (offset {1})", breakpoint.instructionReference, breakpoint.offset ?? 0);
+		this.domNode.dataset.breakpointId = breakpoint.id;
+		this.domNode.dataset.breakpointKind = "resource" in breakpoint ? "source" : breakpoint.kind;
+		this.domNode.classList.toggle("disabled", !breakpoint.enabled);
+		this.domNode.classList.toggle("unverified", !breakpoint.verified);
+		this.checkbox.checked = breakpoint.enabled;
+		this.checkbox.input.setAttribute("aria-label", localize("debug.enableBreakpoint", "Enable breakpoint at {0}", location));
+		const details = [breakpoint.condition, breakpoint.hitCondition, "resource" in breakpoint ? breakpoint.logMessage : undefined].filter(Boolean).join("; ");
+		this.action.textContent = `${location}${details ? ` — ${details}` : ""}`;
+		this.action.title = ["resource" in breakpoint ? breakpoint.resource.toString() : location, details, breakpoint.message].filter(Boolean).join("\n");
+		if (breakpoint.message) this.action.setAttribute("aria-description", breakpoint.message);
+		else this.action.removeAttribute("aria-description");
+	}
+
+	public focusEdit(): void { this.edit.domNode.focus(); }
+}
+function dataAccessLabel(type: IDataBreakpointOptions["accessType"]): string {
+	switch (type) {
+		case "read": return localize("debug.dataRead", "Read");
+		case "write": return localize("debug.dataWrite", "Write");
+		case "readWrite": return localize("debug.dataReadWrite", "Read and write");
+	}
 }
 function indexFromEvent(event: Event, selector: string, dataName: string, document: Document): number | undefined { const target = event.target instanceof document.defaultView!.Element ? event.target.closest<HTMLElement>(selector) : null; const raw = target?.dataset[dataName]; if (raw === undefined) return undefined; const index = Number(raw); return Number.isSafeInteger(index) && index >= 0 ? index : undefined; }
 function descendantEnd(rows: readonly DebugVariableRow[], index: number, depth: number): number { let end = index + 1; while (end < rows.length && rows[end]!.depth > depth) end += 1; return end; }

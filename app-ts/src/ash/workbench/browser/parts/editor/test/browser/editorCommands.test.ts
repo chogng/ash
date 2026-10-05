@@ -121,6 +121,7 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		const closedInputs: typeof activeInput[] = [];
 		let cancelClose = false;
 		const activeGroup = {
+			openEditor: async (_input: unknown, options: { preferredEditorId: string }) => { chosen = options.preferredEditorId; },
 			id: "main",
 			inputs: [activeInput],
 			selectedInputs: [activeInput],

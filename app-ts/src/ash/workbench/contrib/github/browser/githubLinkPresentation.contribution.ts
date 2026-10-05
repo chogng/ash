@@ -239,7 +239,8 @@ function parseTarget(resource: URI): LinkTarget | undefined {
 	return repository ? { kind: 'repository', owner: repository[1], repo: repository[2] } : undefined;
 }
 
-registerWorkbenchContribution(GitHubLinkPresentationContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(GitHubLinkPresentationContribution));
+// Opener resolves CodeEditorService; editor parts are registered by the BlockRestore phase.
+registerWorkbenchContribution(GitHubLinkPresentationContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(GitHubLinkPresentationContribution));
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.GitHub,

@@ -97,6 +97,61 @@ fn both_engines_share_literals_unicode_filters_limits_and_current_reads() {
 }
 
 #[test]
+fn current_engines_return_complete_multiline_ranges_with_unicode_and_crlf() {
+    let (_temporary, root) = fixture();
+    fs::write(
+        root.canonical_path().join("main.txt"),
+        "中文😀 first\r\nsecond end\r\nfirst\nsecond\n",
+    )
+    .unwrap();
+    let service = Service::new(Backend::Tgrep, ripgrep(), None).unwrap();
+    let token = CancellationSource::new().token();
+    for backend in [Backend::Tgrep, Backend::Ripgrep] {
+        service.configure(backend).unwrap();
+        let mut q = query("first\nsecond");
+        q.pattern = Pattern::Literal;
+        q.freshness = Freshness::Current;
+        let result = service.search(&root, &q, &token).unwrap();
+        assert_eq!(result.matches.len(), 2, "{backend:?}");
+        assert_eq!(result.matches[0].line_number, 1);
+        assert_eq!(result.matches[0].content, "中文😀 first\r\nsecond end");
+        let range = result.matches[0].ranges[0];
+        assert_eq!(
+            &result.matches[0].content[range.start..range.end],
+            "first\r\nsecond"
+        );
+        assert_eq!(result.matches[1].line_number, 3);
+        q.pattern = Pattern::Regex;
+        q.query = "(first)\n(second)".into();
+        assert_eq!(service.search(&root, &q, &token).unwrap().matches.len(), 2);
+        q.query = r"^first\s+second$".into();
+        let result = service.search(&root, &q, &token).unwrap();
+        assert_eq!(result.matches.len(), 1, "{backend:?}");
+        assert_eq!(result.matches[0].line_number, 3);
+        q.query = r"^second end$".into();
+        let result = service.search(&root, &q, &token).unwrap();
+        assert_eq!(result.matches.len(), 1, "{backend:?}");
+        assert_eq!(result.matches[0].line_number, 2);
+        assert_eq!(result.matches[0].content, "second end");
+        q.query = "first\nsecond".into();
+        q.pattern = Pattern::Literal;
+        let result = service
+            .search_with_documents(
+                &root,
+                &q,
+                &[DocumentContent {
+                    path: root.canonical_path().join("main.txt"),
+                    text: "中文😀 first\r\nsecond unsaved\r\n".into(),
+                }],
+                &token,
+            )
+            .unwrap();
+        assert_eq!(result.matches.len(), 1);
+        assert_eq!(result.matches[0].content, "中文😀 first\r\nsecond unsaved");
+    }
+}
+
+#[test]
 fn empty_editor_view_retains_indexed_globs_and_paged_statistics() {
     let (_temporary, dir) = fixture();
     fs::write(

@@ -86,7 +86,7 @@ export class EditorGroupModel {
 
 	public indexOf(input: EditorInput): number {
 		const key = extUri.getComparisonKey(input.resource);
-		return this.editors.findIndex(editor => extUri.getComparisonKey(editor.input.resource) === key);
+		return this.editors.findIndex(editor => editor.input.editorId === input.editorId && extUri.getComparisonKey(editor.input.resource) === key);
 	}
 
 	public findEditor(input: EditorInput): IEditorGroupModelEntry | undefined {

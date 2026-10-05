@@ -9,8 +9,9 @@ Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并�
 | 使用场景 | 当前结果 | 关键边界 |
 | --- | --- | --- |
 | 启动或附加 | ✅ `launch`、`attach`、重启、停止和 `runInTerminal` | Workbench 解释配置；后端启动适配器 |
-| 断点 | ✅ 工作区持久化行断点、适配器确认状态、异常断点 | Editor 只提供通用 gutter |
-| 停住后检查 | 线程选择、调用栈、作用域、递归变量树和 `sourceReference`；侧栏检查暂停状态时，首个栈帧有可用行列号就定位源码；支持 `setVariable` 的适配器允许修改变量 | DAP Session 拥有请求语义；只读或尚未展开的延迟变量不能修改 |
+| 断点 | 行断点、函数断点、变量数据断点、指令地址断点、条件和命中次数、日志消息、单独或批量启用/禁用、适配器确认状态、异常断点 | 条件和日志能力取决于适配器；不支持时显示未验证原因，不下发普通断点 |
+| 停住后检查 | 线程选择、调用栈、作用域、递归变量树和 `sourceReference`；侧栏检查暂停状态时，首个栈帧有可用行列号时定位源码，正在查看反汇编时保留反汇编编辑器；支持 `setVariable` 的适配器允许修改变量 | DAP Session 拥有请求语义；只读或尚未展开的延迟变量不能修改 |
+| 反汇编 | 中央编辑器展示地址、机器码、指令与符号；地址跳转、分页、当前指令、F9 指令断点、源代码导航与指令单步 | 需要适配器声明反汇编能力；指令单步另需粒度能力；恢复执行后清空旧指令 |
 | Watch 与控制台 | ✅ 持久 Watch；独立 Panel `Debug Console` 提供多会话 DAP 输出、清理和 `evaluate` | Watch 持久；每窗口控制台历史有界且不进通用 Output |
 | 多目标调试 | ✅ 多会话、会话切换、compound 和 `stopAll` | 后端会话仍按连接隔离 |
 | SSH Remote 调试 | ✅ adapter 由远端 App Server 启动；`${workspaceFolder}`、断点、调用栈源码和 `runInTerminal` 使用远端路径/Terminal | stdio 不需要额外 Tunnel；socket/server adapter 尚未实现 |
@@ -57,7 +58,11 @@ Editor 不得 import Debug service；它只提供无领域语义的 gutter decor
 
 ## 持久性与失败语义
 
-工作区存储保留行断点、Watch 表达式和按适配器类型划分的异常过滤器。适配器确认状态、调用栈、变量、控制台输出和活跃会话不会持久化。控制台在当前窗口内最多保留 20 个会话、每会话 128,000 字符；会话结束后仍可查看，但不能继续求值。切换工作区时先保存旧状态，再恢复新工作区状态并停止旧会话。
+工作区存储保留行断点、函数断点，以及适配器明确允许持久化的数据断点；同时保存启用状态、条件、行断点日志消息、Watch 表达式和按适配器类型划分的异常过滤器。旧版行断点存储迁移到版本 2。不能持久化的数据标识和指令地址只属于创建它们的会话，会话结束即移除。适配器确认状态、调用栈、变量、控制台输出和活跃会话不会持久化。控制台在当前窗口内最多保留 20 个会话、每会话 128,000 字符；会话结束后仍可查看，但不能继续求值。切换工作区时先保存旧状态，再恢复新工作区状态并停止旧会话。
+
+在断点行按 F2 或点击编辑按钮，可修改表达式条件、命中次数条件和日志消息；Enter 保存，Escape 取消。表达式语法由适配器决定，日志消息中的空白和插值内容原样发送。不支持某项能力的适配器不会收到对应断点，侧栏和 gutter 提示未验证原因。单行复选框和分组工具栏分别控制单个或全部断点；每个会话按顺序下发完整的文件断点集合，已经编辑或删除的断点不会被迟到的确认结果覆盖。
+
+断点工具栏可添加函数断点。暂停时，变量行的数据访问按钮通过 `dataBreakpointInfo` 查询可用位置，再选择读取、写入或读写中断；无可用位置时显示适配器说明。调用堆栈工具栏可添加指令断点，带入选中栈帧的 `instructionPointerReference`，允许输入地址和正负字节偏移。三类断点分别使用 `setFunctionBreakpoints`、`setDataBreakpoints` 和 `setInstructionBreakpoints`，不支持的类型或条件会显示原因；所有替换请求按会话排序。
 
 暂停时，在变量行按 F2 或双击可输入新值，Enter 提交，Escape 取消。适配器拒绝修改时保留输入并显示原因；成功后显示适配器返回的值、刷新 Watch，并把焦点还给变量行。继续执行、切换会话或栈帧会结束编辑，旧检查请求和修改请求的迟到结果不能更新当前侧栏。已经发出的修改仍由适配器执行，关闭输入框不会撤销它。
 
@@ -65,6 +70,6 @@ compound 启动中任一配置失败时，已经启动的会话会回滚。自�
 
 ## 当前实现与后续演进
 
-当前已实现：已授权 stdio adapter、连接级归属、有界 framing/分页、显式和声明式适配器解析、初始化与请求配对、持久行断点、异常断点、线程/栈/递归变量、Watch/`evaluate`、调试控制台、虚拟源码、多会话、compound、restart、Tasks 生命周期、`runInTerminal`、Code-only 组装和断点 gutter。Remote Workbench 复用相同协议让 App Server 在远端启动 adapter，并保持 Workspace 变量、断点、调用栈源码和集成终端都映射到同一个远端 Environment。
+当前已实现：已授权 stdio adapter、连接级归属、有界 framing/分页、显式和声明式适配器解析、初始化与请求配对、持久行断点和函数断点、变量数据断点、指令断点、异常断点、线程/栈/递归变量、Watch/`evaluate`、调试控制台、虚拟源码、多会话、compound、restart、Tasks 生命周期、`runInTerminal`、Code-only 组装和断点 gutter。Remote Workbench 复用相同协议让 App Server 在远端启动 adapter，并保持 Workspace 变量、断点、调用栈源码和集成终端都映射到同一个远端 Environment。
 
-仍属于后续扩展：条件/日志/函数/数据/指令断点，socket/server adapter，跨进程会话恢复，以及 VS Code Debug Extension API 兼容层。Ash Host v1 的 runtime core 已存在，但 production enforcing launcher 和跨层 Debug factory bridge 未完成验证前，不能把声明式适配器发现描述成可执行第三方扩展运行时。
+仍属于后续扩展：socket/server adapter，跨进程会话恢复，以及 VS Code Debug Extension API 兼容层。Ash Host v1 的 runtime core 已存在，但 production enforcing launcher 和跨层 Debug factory bridge 未完成验证前，不能把声明式适配器发现描述成可执行第三方扩展运行时。

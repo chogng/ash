@@ -113,7 +113,7 @@ const {
 } = await import(
 	"../../../../../../workbench/browser/parts/editor/editorGroupWatermark.js"
 );
-const { SplitEditorHorizontalCommandId } = await import(
+const { SPLIT_EDITOR } = await import(
 	"../../../../../../workbench/browser/parts/editor/editorActions.js"
 );
 const { BrowserEditorService } = await import("../../../../../../workbench/services/editor/browser/browserEditorService.js");
@@ -790,6 +790,38 @@ test("EditorPart saves before closing and pins a dirty preview", async () => {
 	dom.window.close();
 });
 
+test('closing one custom view keeps the dirty document, while closing all views still requires a decision', async () => {
+	const { CustomEditorInput } = await import('../../../../../contrib/customEditor/browser/customEditorInput.js');
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const registry = new EditorPaneRegistry();
+		const source = input('C:/project/draft.md');
+		const preview = new CustomEditorInput(source, 'test.editor.preview');
+		using copy = new TestWorkingCopy(source.resource);
+		copy.markDirty();
+		using sourceRegistration = registry.registerEditorPane(descriptor('stanza.editor.code', '.md', () => new TestEditorPane('stanza.editor.code', copy)));
+		using previewRegistration = registry.registerEditorPane({
+			id: preview.editorId, name: 'Markdown Preview',
+			canOpen: () => EditorPaneMatch.Optional,
+			create: () => new TestEditorPane(preview.editorId, copy),
+		});
+		const dialogs = new TestFileDialogService(ConfirmResult.CANCEL, ConfirmResult.DONT_SAVE);
+		using editor = createEditorPart(dom.window.document.body, { registry, fileDialogService: dialogs });
+		await editor.openEditor(source);
+		await editor.openEditor(preview);
+		assert.deepEqual(editor.activeGroup.inputs, [source, preview]);
+		assert.equal(await editor.closeEditor(preview), true);
+		assert.deepEqual({ prompts: dialogs.prompts, dirty: copy.isDirty }, { prompts: [], dirty: true });
+		await editor.openEditor(preview);
+		assert.equal(await editor.closeAllEditors(), false);
+		assert.deepEqual(editor.activeGroup.inputs, [source, preview]);
+		assert.equal(await editor.closeAllEditors(), true);
+		assert.deepEqual({ prompts: dialogs.prompts, dirty: copy.isDirty, reverts: copy.revertCount }, {
+			prompts: [['draft.md'], ['draft.md']], dirty: false, reverts: 1,
+		});
+	} finally { dom.window.close(); }
+});
+
 test('EditorPart pins an already dirty working copy before opening another preview', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
@@ -1445,6 +1477,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 	const services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using commands = new CommandService(services);
+	services.registerInstance(IConfigurationService, new InMemoryConfigurationService());
 	const menus = new MenuService(commands, contextKeys);
 	const editor = createEditorPart(dom.window.document.body, {
 		registry,
@@ -1472,18 +1505,18 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 		[...toolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []]
 			.map((item) => item.dataset.actionId),
 		[
-			SplitEditorHorizontalCommandId,
+			SPLIT_EDITOR,
 			"ash.toolbar.moreActions",
 		],
 	);
 	assert.deepEqual(
 		[...toolbar?.querySelectorAll<HTMLButtonElement>("button") ?? []]
 			.map((button) => button.title),
-		["Split Editor Horizontal", "More Actions"],
+		["Split Right", "More Actions"],
 	);
 
 	toolbar?.querySelector<HTMLButtonElement>(
-		`[data-action-id="${SplitEditorHorizontalCommandId}"] button`,
+		`[data-action-id="${SPLIT_EDITOR}"] button`,
 	)?.click();
 	await nextTask();
 

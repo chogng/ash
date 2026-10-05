@@ -1,7 +1,7 @@
 import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IEditorGroup } from '../../../services/editor/common/editorGroupsService.js';
 import type { EditorInput, EditorOpenOptions } from '../../../services/editor/common/editorService.js';
-import type { EditorInstanceId } from '../../../services/editor/common/editorState.js';
+import type { EditorGroupId, EditorInstanceId } from '../../../services/editor/common/editorState.js';
 import type { SerializedEditorViewState } from '../../../services/editor/common/editorWorkingSet.js';
 import type { IEditorPane } from './editorPane.js';
 
@@ -17,7 +17,7 @@ export interface IEditorGroupView extends IEditorGroup {
 	restoreEditorViewState(input: EditorInput, state: SerializedEditorViewState | undefined): boolean;
 	openEditor(input: EditorInput, options?: EditorOpenOptions, instanceId?: EditorInstanceId): Promise<IEditorPane>;
 	activateEditor(input: EditorInput): IEditorPane;
-	confirmCloseEditor(input: EditorInput): Promise<boolean>;
+	confirmCloseEditor(input: EditorInput, closingGroups?: readonly EditorGroupId[]): Promise<boolean>;
 	replaceEditor(input: EditorInput, replacement: EditorInput): Promise<void>;
 	moveEditorTo(input: EditorInput, target: IEditorGroupView, targetIndex: number): Promise<void>;
 	setContent(content: Element): Promise<boolean>;

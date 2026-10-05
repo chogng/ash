@@ -52,9 +52,9 @@ function breakpointDecoration(breakpoint: IDebugBreakpoint) {
 	const label = `Remove breakpoint at line ${breakpoint.lineNumber}`;
 	return {
 		description: 'debug-breakpoint',
-		glyphMarginClassName: ['ash-debug-breakpoint-gutter', breakpoint.enabled ? 'enabled' : 'disabled', breakpoint.verified ? 'verified' : 'unverified'].join(' '),
+		glyphMarginClassName: ['ash-debug-breakpoint-gutter', breakpoint.enabled ? 'enabled' : 'disabled', breakpoint.verified ? 'verified' : 'unverified', ...(breakpoint.logMessage ? ['logpoint'] : breakpoint.condition || breakpoint.hitCondition ? ['conditional'] : [])].join(' '),
 		glyphMargin: { position: GlyphMarginLane.Left, persistLane: true },
-		glyphMarginHoverMessage: { value: breakpoint.message ?? label },
+		glyphMarginHoverMessage: { value: [breakpoint.message ?? label, breakpoint.condition, breakpoint.hitCondition, breakpoint.logMessage].filter(Boolean).join('\n') },
 		zIndex: 10,
 	};
 }

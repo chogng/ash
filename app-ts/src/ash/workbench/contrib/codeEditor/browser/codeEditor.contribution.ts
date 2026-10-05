@@ -21,12 +21,13 @@ import { CodeEditorConfiguration, type WrappingIndentSetting } from "../common/e
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
 import { TextFileSaveErrorHandler } from '../../files/browser/editors/textFileSaveErrorHandler.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
+import { localize } from '../../../../nls.js';
 
 registerWorkbenchContribution("workbench.contrib.codeLensCachePersistence", WorkbenchPhase.BlockStartup, accessor => bindCodeLensCacheStorage(accessor.get(IStorageService)));
 
 registerEditorPane({
 	id: CODE_EDITOR_ID,
-	name: "Stanza Code",
+	name: localize('workbench.textEditor', 'Text Editor'),
 	canOpen: matchCodeEditor,
 	create: options => {
 		if (!options.textFileService) throw new Error("Stanza Code requires the Workbench text file service");

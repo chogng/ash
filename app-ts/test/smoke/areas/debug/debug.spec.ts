@@ -24,10 +24,11 @@ function accept(request) {
   const args = request.arguments || {};
   let body = {};
   let success = true;
-  if (request.command === 'initialize') body = { supportsConfigurationDoneRequest: true, supportsSetVariable: true };
+  if (request.command === 'initialize') body = { supportsConfigurationDoneRequest: true, supportsSetVariable: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true, supportsLogPoints: true, supportsFunctionBreakpoints: true, supportsDataBreakpoints: true, supportsInstructionBreakpoints: true, supportsDisassembleRequest: true, supportsSteppingGranularity: true };
   if (request.command === 'launch') event('initialized', {});
   if (request.command === 'threads') body = { threads: [{ id: 7, name: 'main' }] };
-  if (request.command === 'stackTrace') body = { stackFrames: [{ id: 11, name: 'main', source: { name: 'debug-program.js', path: source }, line, column: 1 }] };
+  if (request.command === 'stackTrace') body = { stackFrames: [{ id: 11, name: 'main', source: { name: 'debug-program.js', path: source }, line, column: 1, instructionPointerReference: '0x' + (0x1000 + (line - 2) * 4).toString(16) }] };
+  if (request.command === 'disassemble') body = { instructions: Array.from({ length: args.instructionCount }, (_, index) => ({ address: '0x' + (Number(args.memoryReference) + args.offset + (args.instructionOffset + index) * 4).toString(16), instructionBytes: '90', instruction: 'mov r0, r1', location: { name: 'debug-program.js', path: source }, line: 2, column: 1 })) };
   if (request.command === 'scopes') body = { scopes: [{ name: 'Locals', variablesReference: 10, expensive: false }] };
   if (request.command === 'variables') body = { variables: args.variablesReference === 10 ? [
     { name: 'answer', value: answer, variablesReference: 0 },
@@ -36,6 +37,8 @@ function accept(request) {
   ] : [{ name: 'child', value: child, variablesReference: 0 }] };
   if (request.command === 'evaluate') body = { result: answer, variablesReference: 0 };
   if (request.command === 'setBreakpoints') body = { breakpoints: args.breakpoints.map(point => ({ line: point.line, verified: true })) };
+  if (['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].includes(request.command)) body = { breakpoints: args.breakpoints.map(() => ({ verified: true })) };
+  if (request.command === 'dataBreakpointInfo') body = { dataId: 'memory:' + args.name, description: args.name, accessTypes: ['read', 'write', 'readWrite'], canPersist: false };
   if (request.command === 'setVariable') {
     success = /^\d+$/.test(args.value);
     if (success) {
@@ -98,7 +101,53 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 	await expect(pane.locator('.ash-debug-frame')).toContainText('debug-program.js:2');
 	await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content.includes('console.log(answer)'));
 	await expect(page.getByRole('tab', { name: 'debug-program.js', exact: true, selected: true })).toContainText('debug-program.js');
+	await workbench.quickaccess.runCommand('editor.debug.action.toggleBreakpoint');
+	const breakpoint = pane.locator('.ash-debug-breakpoints > li').filter({ hasText: 'debug-program.js:2' });
+	await expect(breakpoint).toBeVisible();
+	await breakpoint.getByRole('button', { name: 'Edit breakpoint', exact: true }).click();
+	await pane.getByRole('textbox', { name: 'Expression condition', exact: true }).fill('answer > 0');
+	await pane.getByRole('textbox', { name: 'Hit count condition', exact: true }).fill('>= 2');
+	await pane.getByRole('textbox', { name: 'Log message', exact: true }).fill('answer={answer}');
+	await pane.getByRole('button', { name: 'Save breakpoint', exact: true }).click();
+	const breakpointRequests = async () => (await readFile(join(testWorkspace.directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: { breakpoints?: unknown[] } }).filter(request => request.command === 'setBreakpoints');
+	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([{ line: 2, condition: 'answer > 0', hitCondition: '>= 2', logMessage: 'answer={answer}' }]);
+	await breakpoint.getByRole('checkbox').uncheck();
+	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([]);
+	await pane.getByRole('button', { name: 'Enable All Breakpoints', exact: true }).click();
+	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([{ line: 2, condition: 'answer > 0', hitCondition: '>= 2', logMessage: 'answer={answer}' }]);
+	await pane.getByRole('button', { name: 'Remove All Breakpoints', exact: true }).click();
+	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([]);
 
+	const lastArguments = async (command: string) => (await readFile(join(testWorkspace.directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: unknown }).filter(request => request.command === command).at(-1)?.arguments;
+	await pane.getByRole('button', { name: 'Add Function Breakpoint', exact: true }).click();
+	const functionName = pane.getByRole('textbox', { name: 'Function name', exact: true });
+	await functionName.fill('main');
+	await pane.getByRole('textbox', { name: 'Expression condition', exact: true }).fill('answer > 0');
+	await functionName.press('Enter');
+	await expect.poll(() => lastArguments('setFunctionBreakpoints')).toEqual({ breakpoints: [{ name: 'main', condition: 'answer > 0' }] });
+	await pane.getByRole('button', { name: 'Break on data access for answer', exact: true }).click();
+	await pane.getByRole('combobox', { name: 'Break on access', exact: true }).selectOption('readWrite');
+	await pane.getByRole('button', { name: 'Save breakpoint', exact: true }).click();
+	await expect.poll(() => lastArguments('dataBreakpointInfo')).toEqual({ name: 'answer', variablesReference: 10, frameId: 11 });
+	await expect.poll(() => lastArguments('setDataBreakpoints')).toEqual({ breakpoints: [{ dataId: 'memory:answer', accessType: 'readWrite' }] });
+	await pane.getByRole('button', { name: 'Add Instruction Breakpoint', exact: true }).click();
+	await expect(pane.getByRole('textbox', { name: 'Instruction address', exact: true })).toHaveValue('0x1000');
+	const instructionOffset = pane.getByRole('textbox', { name: 'Instruction byte offset', exact: true });
+	await instructionOffset.fill('-4');
+	await instructionOffset.press('Enter');
+	await expect.poll(() => lastArguments('setInstructionBreakpoints')).toEqual({ breakpoints: [{ instructionReference: '0x1000', offset: -4 }] });
+	await pane.getByRole('button', { name: 'Disable All Breakpoints', exact: true }).click();
+	for (const command of ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints']) {
+		await expect.poll(() => lastArguments(command)).toEqual({ breakpoints: [] });
+	}
+	await pane.getByRole('button', { name: 'Enable All Breakpoints', exact: true }).click();
+	await expect.poll(() => lastArguments('setInstructionBreakpoints')).toEqual({ breakpoints: [{ instructionReference: '0x1000', offset: -4 }] });
+	await pane.getByRole('button', { name: 'Remove All Breakpoints', exact: true }).click();
+	for (const command of ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints']) {
+		await expect.poll(() => lastArguments(command)).toEqual({ breakpoints: [] });
+	}
+
+	await pane.getByRole('button', { name: 'Add watch expression', exact: true }).click();
 	await pane.getByRole('textbox', { name: 'Add watch expression' }).fill('answer');
 	await pane.getByRole('textbox', { name: 'Add watch expression' }).press('Enter');
 	await expect(pane.locator('.ash-debug-watch-value')).toHaveText('answer = 42');
@@ -139,7 +188,44 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 	await pane.getByRole('button', { name: 'Step Over', exact: true }).click();
 	await expect(pane.locator('.ash-debug-frame')).toContainText('debug-program.js:3');
 	await expect(pane.locator('.ash-debug-variable').filter({ hasText: 'answer =' })).toContainText('answer = 43');
+	await pane.getByRole('button', { name: 'Open Disassembly View', exact: true }).click();
+	const disassembly = page.locator('.ash-disassembly');
+	const instructions = disassembly.getByRole('grid', { name: 'Disassembly', exact: true });
+	await expect(page.getByRole('tab', { name: 'Disassembly', exact: true, selected: true })).toBeVisible();
+	await expect(disassembly.locator('[data-instruction-address="0x1004"]')).toHaveAttribute('aria-current', 'step');
+	await expect.poll(() => lastArguments('disassemble')).toEqual({ memoryReference: '0x1004', offset: 0, instructionOffset: 0, instructionCount: 50, resolveSymbols: true });
+	await instructions.focus();
+	await instructions.press('F9');
+	await expect.poll(() => lastArguments('setInstructionBreakpoints')).toEqual({ breakpoints: [{ instructionReference: '0x1004', offset: 0 }] });
+	await instructions.press('F9');
+	await expect.poll(() => lastArguments('setInstructionBreakpoints')).toEqual({ breakpoints: [] });
+	await disassembly.getByRole('button', { name: 'Next instructions', exact: true }).click();
+	await expect.poll(() => lastArguments('disassemble')).toEqual({ memoryReference: '0x1004', offset: 0, instructionOffset: 50, instructionCount: 50, resolveSymbols: true });
+	await disassembly.getByRole('button', { name: 'Current instruction', exact: true }).click();
+	await expect(disassembly.locator('[data-instruction-address="0x1004"]')).toBeVisible();
+	await disassembly.getByRole('button', { name: 'Open instruction source', exact: true }).click();
+	await expect(page.getByRole('tab', { name: 'debug-program.js', exact: true, selected: true })).toBeVisible();
+	await workbench.quickaccess.runCommand('debug.action.openDisassemblyView');
+	await expect(page.getByRole('tab', { name: 'Disassembly', exact: true, selected: true })).toBeVisible();
+	await expect(page.getByRole('tab', { name: 'Disassembly', exact: true })).toHaveCount(1);
+	await instructions.focus();
+	await instructions.press('Alt+F1');
+	const help = page.getByRole('textbox', { name: 'Accessibility Help', exact: true });
+	await expect(help).toHaveValue(/Press F9 to toggle its instruction breakpoint/);
+	await help.press('Escape');
+	await expect(instructions).toBeFocused();
+	await instructions.press('Alt+F2');
+	const accessible = page.getByRole('textbox', { name: 'Accessible View', exact: true });
+	await expect(accessible).toHaveValue(/Current instruction: 0x1004/);
+	await accessible.press('Escape');
+	await expect(instructions).toBeFocused();
+	await instructions.press('F10');
+	await expect.poll(() => lastArguments('next')).toEqual({ threadId: 7, granularity: 'instruction' });
+	await expect(disassembly.locator('[data-instruction-address="0x1008"]')).toHaveAttribute('aria-current', 'step');
+	await expect(page.getByRole('tab', { name: 'Disassembly', exact: true, selected: true })).toBeVisible();
 	await pane.getByRole('button', { name: 'Stop', exact: true }).click();
+	await expect(disassembly.getByRole('status')).toHaveText('Pause debugging to view disassembly.');
+	await expect(disassembly.locator('[data-instruction-address]')).toHaveCount(0);
 	await expect(pane.locator('.ash-debug-frame, .ash-debug-variable')).toHaveCount(0);
 	await expect(pane.getByRole('toolbar', { name: 'Debug controls' })).toBeHidden();
 	const requests = (await readFile(join(testWorkspace.directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: unknown });

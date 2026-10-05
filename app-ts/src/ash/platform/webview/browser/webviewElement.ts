@@ -12,6 +12,7 @@ import {
 export interface WebviewElementOptions {
 	readonly title?: string;
 	readonly initialHtml?: string;
+	readonly forwardKeyboardEvents?: boolean;
 }
 
 interface WebviewMessageEnvelope {
@@ -46,7 +47,10 @@ let webviewInstanceCounter = 0;
  */
 export class WebviewElement extends Disposable {
 	private readonly _onDidMessage = this._register(new Emitter<unknown>());
+	private readonly keyboardEvents = this._register(new Emitter<KeyboardEvent>());
+	public readonly onDidKeyboardEvent = this.keyboardEvents.event;
 	private readonly channel: string;
+	private readonly forwardKeyboardEvents: boolean;
 	private active = true;
 
 	readonly element: HTMLIFrameElement;
@@ -62,6 +66,7 @@ export class WebviewElement extends Disposable {
 
 		const instanceId = `webview_${++webviewInstanceCounter}`;
 		this.channel = `ash-webview:${instanceId}`;
+		this.forwardKeyboardEvents = options.forwardKeyboardEvents === true;
 		const element = h(ownerDocument, "iframe");
 		this.element = element;
 		element.name = instanceId;
@@ -83,6 +88,7 @@ export class WebviewElement extends Disposable {
 		element.srcdoc = createWebviewDocument(
 			this.channel,
 			validateHtml(options.initialHtml ?? ""),
+			this.forwardKeyboardEvents,
 		);
 		container.append(element);
 
@@ -91,6 +97,17 @@ export class WebviewElement extends Disposable {
 			"message",
 			(event) => {
 				if (event.source !== element.contentWindow) return;
+				if (this.forwardKeyboardEvents && event.data?.channel === `${this.channel}:keyboard`) {
+					const keyboard = event.data;
+					if ((keyboard.type !== 'keydown' && keyboard.type !== 'keyup') || typeof keyboard.key !== 'string' || typeof keyboard.code !== 'string') return;
+					if (![keyboard.altKey, keyboard.ctrlKey, keyboard.shiftKey, keyboard.metaKey, keyboard.repeat].every(value => typeof value === 'boolean')) return;
+					this.keyboardEvents.fire(new targetWindow.KeyboardEvent(keyboard.type, {
+						key: keyboard.key, code: keyboard.code, altKey: keyboard.altKey, ctrlKey: keyboard.ctrlKey,
+						shiftKey: keyboard.shiftKey, metaKey: keyboard.metaKey, repeat: keyboard.repeat,
+						bubbles: true, cancelable: true,
+					}));
+					return;
+				}
 				const envelope = validateEnvelope(event.data, this.channel);
 				if (envelope) this._onDidMessage.fire(envelope.message);
 			},
@@ -108,6 +125,7 @@ export class WebviewElement extends Disposable {
 		this.element.srcdoc = createWebviewDocument(
 			this.channel,
 			validateHtml(html),
+			this.forwardKeyboardEvents,
 		);
 	}
 
@@ -142,7 +160,7 @@ export class WebviewElement extends Disposable {
 	}
 }
 
-function createWebviewDocument(channel: string, html: string): string {
+function createWebviewDocument(channel: string, html: string, forwardKeyboardEvents: boolean): string {
 	const bootstrap = `(() => {
     const channel = ${JSON.stringify(channel)};
     let acquired = false;
@@ -160,6 +178,15 @@ function createWebviewDocument(channel: string, html: string): string {
         });
       }
     });
+    ${forwardKeyboardEvents ? `for (const type of ['keydown', 'keyup']) {
+      document.addEventListener(type, event => {
+        if (event.isComposing) return;
+        if (type === 'keydown' && (event.key === 'F1' || (event.altKey && event.key === 'F2'))) event.preventDefault();
+        globalThis.parent.postMessage({ channel: channel + ':keyboard', type,
+          key: event.key, code: event.code, altKey: event.altKey, ctrlKey: event.ctrlKey,
+          shiftKey: event.shiftKey, metaKey: event.metaKey, repeat: event.repeat }, '*');
+      });
+    }` : ''}
   })();`;
 	return `<!DOCTYPE html>
 <html>

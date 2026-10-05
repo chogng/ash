@@ -65,6 +65,29 @@ function page(searchId: string): Awaited<ReturnType<IContentSearchApi['read']>> 
 	return { searchId, matches: [], nextMatch: 0, completed: true, limitHit: false, error: null };
 }
 
+test('browser file search returns complete multiline blocks and respects Unicode word boundaries', async () => {
+	const root = URI.file('/@browser/granted');
+	const service = new FileContentSearchService({
+		async readDirectory() { return [{ resource: URI.joinPath(root, 'main.txt'), name: 'main.txt', kind: FileKind.File }]; },
+		async readFileBytes(resource) { return { resource, revision: '1', bytes: new TextEncoder().encode('中文😀 first\r\nsecond end\r\nfirst\nsecond\nneedles needle 中文needle') }; },
+	}, { getWorkspace: () => ({ id: 'granted', folders: [{ id: 'granted', uri: root, name: 'granted', index: 0 }] }) });
+	const progress: ContentSearchMatch[] = [];
+	const complete = await service.search({ ...query, text: 'first\nsecond' }, { onProgress: matches => progress.push(...matches) });
+	assert.deepEqual({ complete, progress }, {
+		complete: { resultCount: 2, limitHit: false, error: undefined },
+		progress: [
+			{ dirId: 'granted', dirName: 'granted', path: 'main.txt', lineNumber: 1, preview: '中文😀 first\nsecond end', ranges: [{ start: 5, end: 17 }] },
+			{ dirId: 'granted', dirName: 'granted', path: 'main.txt', lineNumber: 3, preview: 'first\nsecond', ranges: [{ start: 0, end: 12 }] },
+		],
+	});
+	const regexMatches: ContentSearchMatch[] = [];
+	await service.search({ ...query, text: '(first)\r\n(second)', patternKind: 'regex' }, { onProgress: matches => regexMatches.push(...matches) });
+	assert.deepEqual(regexMatches, progress);
+	const words: ContentSearchMatch[] = [];
+	await service.search({ ...query, wholeWord: true }, { onProgress: matches => words.push(...matches) });
+	assert.deepEqual(words[0]!.ranges, [{ start: 8, end: 14 }]);
+});
+
 test('content search forwards freshness and reads all result pages before releasing the job', async () => {
 	for (const freshness of [undefined, 'indexed'] as const) {
 		let requested: ContentSearchFreshness | undefined;

@@ -1,0 +1,69 @@
+.ash-disassembly {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-background);
+}
+
+.ash-disassembly[hidden] {
+	display: none;
+}
+
+.ash-disassembly-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-disassembly-address {
+	display: flex;
+	flex: 1;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+}
+
+.ash-disassembly-address .ash-input-box {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-disassembly-status {
+	padding: 0 var(--ash-spacing-size80) var(--ash-spacing-size40);
+	font-size: var(--ash-font-size-label1);
+	color: var(--ash-description-foreground);
+}
+
+.ash-disassembly-instructions {
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+	overflow: auto;
+	font-family: var(--ash-font-family-monospace);
+}
+
+.ash-disassembly-text {
+	display: block;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-disassembly-text.current {
+	background: var(--ash-list-active-selection-background);
+	color: var(--ash-list-active-selection-foreground);
+	font-weight: var(--ash-font-weight-semi-bold);
+}
+
+.ash-disassembly .ash-button.checked {
+	color: var(--ash-error-foreground);
+}
+
+.ash-disassembly .ash-button.disabled-breakpoint,
+.ash-disassembly .ash-button.unverified {
+	opacity: 0.5;
+}

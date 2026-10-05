@@ -271,7 +271,7 @@ impl Service {
         let excludes = document_globs(&query.exclude_patterns)?;
         let mut disk_query = query.clone();
         disk_query.freshness = Freshness::Current;
-        let mut matches = Vec::new();
+        let mut matches: Vec<Match> = Vec::new();
         let mut limit_hit = false;
         let mut replaced_scope = false;
         let mut documents = documents.iter().collect::<Vec<_>>();
@@ -297,15 +297,34 @@ impl Service {
             {
                 continue;
             }
-            for (line, text) in document.text.lines().enumerate() {
-                let ranges = regex
-                    .find_iter(text)
-                    .map(|found| MatchRange {
-                        start: found.start(),
-                        end: found.end(),
-                    })
-                    .collect::<Vec<_>>();
-                if ranges.is_empty() {
+            let text = &document.text;
+            let starts: Vec<usize> = std::iter::once(0)
+                .chain(text.match_indices('\n').map(|(index, _)| index + 1))
+                .collect();
+            for found in regex.find_iter(text) {
+                if found.is_empty() {
+                    continue;
+                }
+                let first = starts.partition_point(|start| *start <= found.start()) - 1;
+                let last = starts.partition_point(|start| *start < found.end()) - 1;
+                let end = starts.get(last + 1).copied().unwrap_or(text.len());
+                let preview = text[starts[first]..end].trim_end_matches(['\r', '\n']);
+                let end = if found.end() > starts[first] + preview.len() {
+                    end
+                } else {
+                    starts[first] + preview.len()
+                };
+                let content = &text[starts[first]..end];
+                let range = MatchRange {
+                    start: found.start() - starts[first],
+                    end: found.end() - starts[first],
+                };
+                if let Some(previous) = matches.last_mut()
+                    && previous.path == relative
+                    && previous.line_number == first + 1
+                    && previous.content == content
+                {
+                    previous.ranges.push(range);
                     continue;
                 }
                 if matches.len() == query.max_results {
@@ -314,9 +333,9 @@ impl Service {
                 }
                 matches.push(Match {
                     path: relative.to_path_buf(),
-                    line_number: line + 1,
-                    content: text.into(),
-                    ranges,
+                    line_number: first + 1,
+                    content: content.into(),
+                    ranges: vec![range],
                 });
             }
         }
@@ -436,7 +455,7 @@ fn status(s: tgrep::Status) -> IndexStatus {
 pub(crate) fn validate(query: &Query) -> Result<regex::Regex, Error> {
     if query.query.is_empty()
         || query.query.len() > 16384
-        || query.query.contains(['\0', '\n', '\r'])
+        || query.query.contains('\0')
         || query.max_results == 0
         || query.max_results > 5000
         || query.include_patterns.len() > 64
@@ -461,8 +480,13 @@ pub(crate) fn validate(query: &Query) -> Result<regex::Regex, Error> {
         }
     }
     let pattern = match query.pattern {
-        Pattern::Literal => regex::escape(&query.query),
-        Pattern::Regex => query.query.clone(),
+        Pattern::Literal => regex::escape(&query.query.replace("\r\n", "\n").replace('\r', "\n"))
+            .replace('\n', r"\r?\n"),
+        Pattern::Regex => query
+            .query
+            .replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .replace('\n', r"\r?\n"),
     };
     let insensitive = match query.case_sensitivity {
         CaseSensitivity::Insensitive => true,
@@ -470,9 +494,9 @@ pub(crate) fn validate(query: &Query) -> Result<regex::Regex, Error> {
         CaseSensitivity::Smart => !query.query.chars().any(char::is_uppercase),
     };
     let pattern = if insensitive {
-        format!("(?i){pattern}")
+        format!("(?mRi){pattern}")
     } else {
-        pattern
+        format!("(?mR){pattern}")
     };
     regex::Regex::new(&pattern).map_err(|e| Error::InvalidInput(e.to_string()))
 }

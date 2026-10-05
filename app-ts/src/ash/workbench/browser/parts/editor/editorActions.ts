@@ -1,7 +1,7 @@
 import { localize2 } from '../../../../nls.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
-import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
+import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
@@ -20,6 +20,32 @@ import { GoFilter, IHistoryService } from '../../../services/history/common/hist
 import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { resolveCommandsContext } from './editorCommandsContext.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { EditorOpenSideBySideDirectionConfiguration } from '../../../services/editor/common/editorConfiguration.js';
+
+export const SPLIT_EDITOR = 'workbench.action.splitEditor';
+
+registerAction2(class SplitEditorAction extends Action2 {
+	constructor() {
+		super({ id: SPLIT_EDITOR, title: localize2('workbench.splitEditor', 'Split Editor'), f1: true,
+			keybinding: { primary: Keybinding.single(logicalKey('\\', { primaryKey: true })) } });
+	}
+	override run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
+		const direction = accessor.get(IConfigurationService).getValue<string>(EditorOpenSideBySideDirectionConfiguration);
+		return splitEditors(accessor, args, direction === 'down' ? Direction.Down : Direction.Right);
+	}
+});
+
+for (const down of [false, true]) {
+	const primary = { id: SPLIT_EDITOR,
+		title: down ? localize2('workbench.splitEditorDown', 'Split Down') : localize2('workbench.splitEditorRight', 'Split Right'),
+		icon: down ? Lxicon.splitVertical : Lxicon.splitHorizontal };
+	const alternate = { id: down ? 'workbench.action.splitEditorRight' : 'workbench.action.splitEditorDown',
+		title: down ? localize2('workbench.splitEditorRight', 'Split Right') : localize2('workbench.splitEditorDown', 'Split Down'),
+		icon: down ? Lxicon.splitHorizontal : Lxicon.splitVertical };
+	MenusRegistry.appendMenuItem(MenuId.EditorTitle, { command: primary, alt: alternate, group: 'navigation', order: 100000,
+		when: down ? ContextKeyExpr.equals('config.workbench.editor.openSideBySideDirection', 'down') : ContextKeyExpr.notEquals('config.workbench.editor.openSideBySideDirection', 'down') });
+}
 
 export const FocusBreadcrumbsCommandId = "workbench.action.focusBreadcrumbs";
 export const ToggleEditorGroupLockCommandId = "workbench.action.toggleEditorGroupLock";
@@ -64,11 +90,6 @@ registerAction2(class SplitEditorHorizontalAction extends Action2 {
 			tooltip: localize2({ bundle: 'ash', key: 'workbench.splitEditorHorizontal' }, 'Split Editor Horizontal'),
 			icon: Lxicon.splitHorizontal,
 			f1: true,
-			menu: {
-				id: MenuId.EditorTitle,
-				group: "navigation",
-				order: 1,
-			},
 		});
 	}
 

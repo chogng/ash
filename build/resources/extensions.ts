@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { build } from 'vite';
 
 const root = resolve(import.meta.dirname, '../..');
 const directory = resolve(root, 'extensions/theme-defaults');
@@ -28,6 +29,16 @@ export async function prepareBrowserExtensions(): Promise<void> {
 			}
 		}
 		await collect(packageRoot);
+		if (typeof manifest.browser === 'string') {
+			// Each Worker imports one immutable module. Package dependencies stay inside that module.
+			const entry = manifest.browser.replace(/^\.\//, '');
+			const result = await build({ configFile: false, logLevel: 'error',
+				build: { write: false, minify: false, lib: { entry: resolve(packageRoot, entry), formats: ['es'], fileName: 'extension' } } });
+			const outputs = Array.isArray(result) ? result.flatMap(output => output.output) : 'output' in result ? result.output : [];
+			const chunks = outputs.filter(output => output.type === 'chunk');
+			if (chunks.length !== 1) throw new Error(`Browser extension '${id}' must produce one ES module`);
+			packageResources[entry] = Buffer.from(chunks[0].code).toString('base64');
+		}
 		bundledResources[id] = packageResources;
 		extensions.push({ id, name: manifest.name, publisher: manifest.publisher, version: manifest.version, displayName: manifest.name, sourceKind: index < builtInCount ? 'builtIn' : 'user', manifestJson, manifestSha256: digest(manifestJson), packageSha256: digest(JSON.stringify(packageResources)) });
 	}

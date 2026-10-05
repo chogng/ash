@@ -8,6 +8,9 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 
 /** A resource requested through the Workbench editor service. */
 export interface EditorInput {
+	/** Distinguishes an independent custom editor tab from a text tab for the same resource. */
+	readonly editorId?: string;
+	toUntyped?(): EditorInput;
 	readonly capabilities?: EditorInputCapabilities;
 	readonly resource: URI;
 	readonly contentType?: string;

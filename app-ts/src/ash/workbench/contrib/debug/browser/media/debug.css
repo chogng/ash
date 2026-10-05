@@ -2,8 +2,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: var(--ash-spacing-size80);
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .ash-debug-controls {
@@ -11,6 +10,7 @@
   flex: 0 0 auto;
   flex-direction: column;
   gap: var(--ash-spacing-size60);
+  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 }
 
 .ash-debug-launch {
@@ -26,6 +26,7 @@
 
 .ash-debug-controls select,
 .ash-debug-thread-select,
+.ash-debug-breakpoint-edit select,
 .ash-debug-input-form input {
   box-sizing: border-box;
   min-width: 0;
@@ -49,14 +50,19 @@
   align-self: flex-end;
 }
 
+.ash-debug-controls.empty,
 .ash-debug-controls > .empty,
-.ash-debug-section.empty {
+.ash-debug-status.empty,
+.ash-debug-input-form.empty {
+  display: none;
+}
+
+.ash-debug-variable-data.empty {
   display: none;
 }
 
 .ash-debug select:focus-visible,
-.ash-debug input:focus-visible,
-.ash-debug-section > summary:focus-visible {
+.ash-debug input:focus-visible {
   outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
@@ -75,23 +81,28 @@
 }
 
 .ash-debug-section {
-  flex: 0 0 auto;
   min-width: 0;
-  margin-bottom: var(--ash-spacing-size60);
 }
 
-.ash-debug-section > summary {
+.ash-debug-section-content {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.ash-debug-welcome-content {
   box-sizing: border-box;
-  min-height: 28px;
-  padding: var(--ash-spacing-size60) var(--ash-spacing-size40);
-  border-radius: var(--ash-corner-radius-small);
-  font-size: var(--ash-font-size-label1);
-  font-weight: var(--ash-font-weight-semi-bold);
-  cursor: pointer;
+  padding: var(--ash-spacing-size160) var(--ash-spacing-size200);
+  font-size: var(--ash-font-size-body1);
+  line-height: 1.5;
 }
 
-.ash-debug-section > summary:hover {
-  background: var(--ash-toolbar-hover-background);
+.ash-debug-welcome-content > .ash-button {
+  width: 100%;
+}
+
+.ash-debug-welcome-content > p {
+  margin: var(--ash-spacing-size120) 0;
+  color: var(--ash-description-foreground);
 }
 
 .ash-debug-list {
@@ -112,8 +123,8 @@
 .ash-debug-breakpoint {
   flex: 1;
   min-width: 0;
-  min-height: 24px;
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
+  height: 22px;
+  padding: 0 var(--ash-spacing-size60);
   overflow: hidden;
   border: var(--ash-stroke-thickness) solid transparent;
   border-radius: var(--ash-corner-radius-small);
@@ -154,7 +165,7 @@
   display: flex;
   align-items: center;
   gap: var(--ash-spacing-size40);
-  padding: var(--ash-spacing-size40) 0;
+  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 }
 
 .ash-debug-input-form input {
@@ -171,6 +182,7 @@
 }
 
 .ash-debug-variable-edit {
+  box-sizing: border-box;
   display: flex;
   flex: 1;
   min-width: 0;
@@ -182,19 +194,39 @@
   min-width: 0;
 }
 
-.ash-debug-empty {
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label1);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
 .ash-debug-exceptions label {
   display: flex;
   gap: var(--ash-spacing-size60);
   align-items: center;
   padding: var(--ash-spacing-size40);
+}
+
+.ash-debug-breakpoints > li > .ash-checkbox {
+  flex: 0 0 auto;
+  padding-left: var(--ash-spacing-size60);
+}
+
+.ash-debug-breakpoints > li.disabled > .ash-debug-breakpoint {
+  color: var(--ash-description-foreground);
+}
+
+.ash-debug-breakpoint-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ash-spacing-size80);
+  padding: var(--ash-spacing-size80);
+}
+
+.ash-debug-breakpoint-edit > label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ash-spacing-size40);
+  width: 100%;
+  min-width: 0;
+}
+
+.ash-debug-breakpoint-edit .ash-input-box {
+  min-width: 0;
 }
 
 .ash-debug-console {
@@ -251,5 +283,5 @@
   min-height: 0;
   padding: 0 8px 4px;
   color: var(--ash-error-foreground);
-  font-size: 12px;
+  font-size: var(--ash-font-size-label1);
 }

@@ -25,6 +25,6 @@ export class Search {
 	async search(text: string): Promise<void> {
 		await this.query.fill(text);
 		await this.query.press('Enter');
-		await expect(this.element.getByRole('button', { name: 'Search', exact: true })).toBeEnabled();
+		await expect(this.element.getByRole('tree')).toHaveAttribute('aria-busy', 'false');
 	}
 }

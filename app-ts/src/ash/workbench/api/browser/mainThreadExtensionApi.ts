@@ -1,5 +1,5 @@
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import { MenuId, MenusRegistry } from '../../../platform/actions/common/actions.js';
+import { MenuId, MenusRegistry, type IMenuItem } from '../../../platform/actions/common/actions.js';
 import type { CommandDefinition, CommandRegistration, CommandRegistry } from '../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostLanguageRegistration, type ExtensionHostRegistration, type ExtensionHostRuntime } from '../../../platform/extensionHost/common/extensionHostApi.js';
@@ -9,6 +9,11 @@ import { ITestingService, type TestProfileProvider, type TestProfileProviderRegi
 import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from '../../services/output/common/output.js';
 import { createExtensionHostLanguageProviderBatch, extensionHostLanguageProviderId, unsupportedExtensionHostLanguageOperations, type ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
 import { createExtensionHostTaskProvider, createExtensionHostTestProfileProvider, extensionHostCanonicalTaskId, extensionHostWorkflowProviderId } from './extensionHostWorkflowBridge.js';
+import { MainThreadCustomEditors } from './mainThreadCustomEditors.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { parseContextKeyExpression } from '../../../platform/contextkey/common/contextKeyExpressionParser.js';
+import { Icon } from '../../../base/common/icon.js';
+import { IEditorPart } from '../../browser/parts/editor/editorPart.js';
 
 export interface ExtensionApiIssue {
 	readonly extensionId: string;
@@ -17,6 +22,7 @@ export interface ExtensionApiIssue {
 }
 
 interface ContributionSet {
+	readonly menus: readonly { readonly id: MenuId; readonly item: IMenuItem }[];
 	readonly commands: readonly CommandDefinition[];
 	readonly languages: Required<LanguageProviderBatch>;
 	readonly tasks: readonly TaskProvider[];
@@ -50,6 +56,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly outputCursors = new Map<string, ExtensionOutputCursor>();
 	private readonly namedOutputChannels = this._register(new DisposableMap<string, IOutputChannel>());
 	private readonly namedOutputCursors = new Map<string, ExtensionNamedOutputCursor>();
+	private readonly customEditors: MainThreadCustomEditors;
 
 	constructor(
 		commands: CommandRegistry,
@@ -60,8 +67,10 @@ export class MainThreadExtensionApi extends Disposable {
 		@ITaskService tasks: ITaskService,
 		@ITestingService testing: ITestingService,
 		@IOutputService private readonly outputService: IOutputService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
+		this.customEditors = this._register(instantiation.createInstance(MainThreadCustomEditors, this.invocationTimeoutMillis));
 		this.commandRegistration = this._register(commands.registerMany([]));
 		this.languageRegistration = this._register(languageFeatures.registerProviderBatch({}));
 		this.taskRegistration = this._register(tasks.registerTaskProviders([]));
@@ -88,12 +97,14 @@ export class MainThreadExtensionApi extends Disposable {
 			throw error;
 		}
 		this.projectOutput(snapshot);
+		this.customEditors.update(snapshot);
 		return contributions.issues;
 	}
 
 	public clear(): void {
 		this.assertNotDisposed();
 		this.revokeContributions();
+		this.customEditors.clear();
 		for (const key of this.namedOutputChannels.keys()) {
 			this.namedOutputChannels.deleteAndDispose(key);
 		}
@@ -103,6 +114,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private buildContributions(snapshot: ExtensionHostFleetSnapshot): ContributionSet {
 		const controller = new AbortController();
 		const commands: CommandDefinition[] = [];
+		const menus: { id: MenuId; item: IMenuItem }[] = [];
 		const languages = mutableLanguageBatch();
 		const tasks: TaskProvider[] = [];
 		const tests: TestProfileProvider[] = [];
@@ -116,12 +128,42 @@ export class MainThreadExtensionApi extends Disposable {
 		for (const runtime of snapshot.extensions) {
 			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
+				if (registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
 					continue;
 				}
 				const invoke = this.registrationInvoker(runtime, registration, controller.signal);
 				if (registration.kind === "command") {
-					commands.push(Object.freeze({ id: registration.command, metadata: { description: registration.title }, handler: (_accessor: ServicesAccessor, ...args: readonly unknown[]) => invoke("execute", normalizeExtensionHostPayload({ arguments: args }), controller.signal) }));
+					commands.push(Object.freeze({ id: registration.command, metadata: { description: registration.title }, handler: (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
+						if (!registration.menus?.some(placement => placement.menu.startsWith('editor/'))) {
+							return invoke('execute', normalizeExtensionHostPayload({ arguments: args }), controller.signal);
+						}
+						const part = accessor.get(IEditorPart);
+						const context = args[0] as { groupId?: string; editorIndex?: number } | undefined;
+						const group = typeof context?.groupId === 'string' ? part.groups.find(group => group.id === context.groupId) : part.activeGroup;
+						const input = typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
+						return invoke('execute', normalizeExtensionHostPayload({ arguments: args, activeEditor: input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null }), controller.signal);
+					} }));
+					for (const placement of registration.menus ?? []) {
+						const [group, orderText] = (placement.group ?? '').split('@');
+						const order = orderText === undefined ? undefined : Number(orderText);
+						if (order !== undefined && !Number.isFinite(order)) {
+							throw new TypeError(`Invalid menu order for extension command '${registration.command}'`);
+						}
+						const alternate = runtime.registrations.find(candidate => candidate.kind === 'command' && candidate.command === placement.alt);
+						let id = MenuId.for(placement.menu);
+						if (placement.menu === 'editor/title') {
+							id = MenuId.EditorTitle;
+						} else if (placement.menu === 'editor/title/context') {
+							id = MenuId.EditorTitleContext;
+						}
+						menus.push({ id, item: {
+							command: { id: registration.command, title: registration.title, icon: registration.icon ? Icon.fromId(registration.icon) : undefined },
+							alt: alternate?.kind === 'command' ? { id: alternate.command, title: alternate.title, icon: alternate.icon ? Icon.fromId(alternate.icon) : undefined } : undefined,
+							when: placement.when ? parseContextKeyExpression(placement.when) : undefined,
+							group,
+							order,
+						} });
+					}
 					continue;
 				}
 				if (registration.kind === "languageProvider") {
@@ -146,7 +188,7 @@ export class MainThreadExtensionApi extends Disposable {
 				issues.push({ extensionId: runtime.id, registrationId: registration.registrationId, message: `Debug Adapter registration '${registration.debuggerType}' is active, but this Workbench has no asynchronous Host-broker DAP session seam` });
 			}
 		}
-		return Object.freeze({ commands: Object.freeze(commands), languages: freezeLanguageBatch(languages), tasks: Object.freeze(tasks), tests: Object.freeze(tests), issues: Object.freeze(issues), controller });
+		return Object.freeze({ menus: Object.freeze(menus), commands: Object.freeze(commands), languages: freezeLanguageBatch(languages), tasks: Object.freeze(tasks), tests: Object.freeze(tests), issues: Object.freeze(issues), controller });
 	}
 
 	private registrationInvoker(runtime: ExtensionHostRuntime, registration: ExtensionHostRegistration, generationSignal: AbortSignal): ExtensionHostProviderInvoker {
@@ -203,6 +245,8 @@ export class MainThreadExtensionApi extends Disposable {
 		for (const command of next.commands) {
 			this.commandMenus.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: command.id, title: command.metadata!.description } }));
 		}
+		// Menu declarations belong to the activated package, and disappear with its command authority.
+		this.commandMenus.add(MenusRegistry.appendMenuItems(next.menus));
 		previous?.controller.abort("Extension Host fleet generation was replaced");
 	}
 

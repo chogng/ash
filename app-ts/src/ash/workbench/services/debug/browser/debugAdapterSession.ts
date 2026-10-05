@@ -1,4 +1,4 @@
-import { timeout } from "../../../../base/common/async.js";
+import { TaskQueue, timeout } from "../../../../base/common/async.js";
 import { getErrorMessage } from "../../../../base/common/errors.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -6,7 +6,7 @@ import { URI } from "../../../../base/common/uri.js";
 import { localize } from "../../../../nls.js";
 import { type IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
-import { type DebugEvaluateContext, type DebugSessionState, type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugExceptionBreakpointFilter, type IDebugScope, type IDebugSession, type IDebugSessionCapabilities, type IDebugSource, type IDebugSourceContent, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../common/debugService.js";
+import { type DebugBreakpoint, type DebugEvaluateContext, type DebugSessionState, type DebugSteppingGranularity, type IDisassembledInstruction, type IBaseBreakpoint, type IDataBreakpointInfoResponse, type DataBreakpointAccessType, type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugExceptionBreakpointFilter, type IDebugScope, type IDebugSession, type IDebugSessionCapabilities, type IDebugSource, type IDebugSourceContent, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../common/debugService.js";
 
 interface DapRequest { readonly seq: number; readonly type: "request"; readonly command: string; readonly arguments?: unknown }
 interface DapResponse { readonly seq: number; readonly type: "response"; readonly request_seq: number; readonly success: boolean; readonly command: string; readonly message?: string; readonly body?: unknown }
@@ -19,6 +19,7 @@ export interface DebugAdapterSessionStartOptions {
 	readonly configuration: IDebugConfiguration;
 	readonly processService: IDebugAdapterProcessService;
 	readonly breakpoints: () => readonly IDebugBreakpoint[];
+	readonly additionalBreakpoints?: () => readonly Exclude<DebugBreakpoint, IDebugBreakpoint>[];
 	readonly workspace: URI;
 	readonly runInTerminal?: (argumentsValue: unknown) => Promise<Readonly<Record<string, unknown>>>;
 	readonly updateBreakpoints?: (updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string }[]) => void;
@@ -42,17 +43,29 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 	private initializedRejecter: ((error: Error) => void) | undefined;
 	private readonly initializedPromise = new Promise<void>((resolve, reject) => { this.initializedResolver = resolve; this.initializedRejecter = reject; });
 	private readonly syncedBreakpointSources = new Set<string>();
+	private readonly breakpointSync = new TaskQueue();
 	private supportsConfigurationDone = false;
-	private _capabilities: IDebugSessionCapabilities = Object.freeze({ supportsRestart: false, supportsTerminate: false, supportsSetVariable: false, exceptionBreakpointFilters: Object.freeze([]) });
+	private _capabilities: IDebugSessionCapabilities = Object.freeze({ supportsRestart: false, supportsTerminate: false, supportsSetVariable: false, supportsConditionalBreakpoints: false, supportsHitConditionalBreakpoints: false, supportsLogPoints: false, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, exceptionBreakpointFilters: Object.freeze([]) });
 
 	readonly onDidChangeState: Event<DebugSessionState> = this.stateEmitter.event;
 	readonly onDidOutput: Event<string> = this.outputEmitter.event;
 	get output(): string { return this.retainedOutput; }
 
-	private constructor(readonly configuration: IDebugConfiguration, private readonly processService: IDebugAdapterProcessService, readonly id: string, private readonly breakpoints: () => readonly IDebugBreakpoint[], private readonly workspace: URI, private readonly runInTerminal: DebugAdapterSessionStartOptions["runInTerminal"], private readonly updateBreakpoints: DebugAdapterSessionStartOptions["updateBreakpoints"], private readonly exceptionBreakpoints: DebugAdapterSessionStartOptions["exceptionBreakpoints"]) {
+	private constructor(
+		readonly configuration: IDebugConfiguration,
+		private readonly processService: IDebugAdapterProcessService,
+		readonly id: string,
+		private readonly breakpoints: () => readonly IDebugBreakpoint[],
+		private readonly workspace: URI,
+		private readonly runInTerminal: DebugAdapterSessionStartOptions["runInTerminal"],
+		private readonly updateBreakpoints: DebugAdapterSessionStartOptions["updateBreakpoints"],
+		private readonly exceptionBreakpoints: DebugAdapterSessionStartOptions["exceptionBreakpoints"],
+		private readonly additionalBreakpoints: DebugAdapterSessionStartOptions["additionalBreakpoints"],
+	) {
 		super();
 		this.sessionId = id;
 		this._register(toDisposable(() => {
+			this.breakpointSync.clearPending();
 			for (const pending of this.pending.values()) { clearTimeout(pending.timeout); pending.reject(new Error("Debug session was disposed")); }
 			this.pending.clear();
 		}));
@@ -65,7 +78,7 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 			...adapter,
 			...(options.configuration.dirId ? { dirId: options.configuration.dirId } : {}),
 		});
-		const session = new DebugAdapterSession(options.configuration, options.processService, sessionId, options.breakpoints, options.workspace, options.runInTerminal, options.updateBreakpoints, options.exceptionBreakpoints);
+		const session = new DebugAdapterSession(options.configuration, options.processService, sessionId, options.breakpoints, options.workspace, options.runInTerminal, options.updateBreakpoints, options.exceptionBreakpoints, options.additionalBreakpoints);
 		try {
 			session.polling = true;
 			void session.poll();
@@ -85,9 +98,9 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 
 	continue(): Promise<void> { return this.threadCommand("continue"); }
 	pause(): Promise<void> { return this.threadCommand("pause"); }
-	stepOver(): Promise<void> { return this.threadCommand("next"); }
-	stepInto(): Promise<void> { return this.threadCommand("stepIn"); }
-	stepOut(): Promise<void> { return this.threadCommand("stepOut"); }
+	stepOver(granularity?: DebugSteppingGranularity): Promise<void> { return this.threadCommand("next", granularity); }
+	stepInto(granularity?: DebugSteppingGranularity): Promise<void> { return this.threadCommand("stepIn", granularity); }
+	stepOut(granularity?: DebugSteppingGranularity): Promise<void> { return this.threadCommand("stepOut", granularity); }
 
 	async restart(): Promise<void> {
 		if (!this._capabilities.supportsRestart) throw new Error("The Debug Adapter does not support restart requests");
@@ -157,9 +170,77 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 		await this.request("setExceptionBreakpoints", { filters: normalized });
 	}
 
-	async syncBreakpoints(): Promise<void> {
+	async dataBreakpointInfo(name: string, variablesReference?: number, frameId?: number): Promise<IDataBreakpointInfoResponse> {
+		if (!this._capabilities.supportsDataBreakpoints) throw new Error(localize("debug.unsupportedDataBreakpoints", "Debug Adapter does not support data breakpoints"));
+		if (this._state !== "stopped") throw new Error(localize("debug.dataRequiresPause", "Data breakpoints require the paused session that identified the variable."));
+		const argumentsValue: Record<string, unknown> = { name: string(name, "data breakpoint name") };
+		if (variablesReference !== undefined) argumentsValue.variablesReference = positiveInteger(variablesReference, "variablesReference");
+		if (frameId !== undefined) argumentsValue.frameId = positiveInteger(frameId, "frameId");
+		const response = await this.request("dataBreakpointInfo", argumentsValue);
+		const body = record(response.body, "dataBreakpointInfo");
+		const dataId = body.dataId === null ? null : string(body.dataId, "dataId");
+		const accessTypes = body.accessTypes === undefined ? ["write"] : array(body.accessTypes, "accessTypes");
+		if (!accessTypes.every(type => type === "read" || type === "write" || type === "readWrite")) throw new TypeError("Invalid data breakpoint access types");
+		return { dataId, description: string(body.description, "description"), canPersist: body.canPersist === true, accessTypes: Object.freeze(accessTypes as DataBreakpointAccessType[]) };
+	}
+
+	async disassemble(memoryReference: string, offset: number, instructionOffset: number, instructionCount: number): Promise<readonly IDisassembledInstruction[]> {
+		if (!this._capabilities.supportsDisassembleRequest) {
+			throw new Error(localize("debug.disassemblyUnsupported", "The debug adapter does not support disassembly."));
+		}
+		if (this._state !== "stopped") {
+			throw new Error(localize("debug.disassemblyRequiresPause", "Pause debugging to view disassembly."));
+		}
+		if (!memoryReference.trim() || memoryReference.includes("\0") || memoryReference.length > 32_768) {
+			throw new TypeError("Invalid disassembly memory reference");
+		}
+		if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(instructionOffset) || !Number.isSafeInteger(instructionCount) || instructionCount <= 0 || instructionCount > 200) {
+			throw new TypeError("Disassembly offsets must be integers and instruction count must be between 1 and 200");
+		}
+		const response = await this.request("disassemble", { memoryReference, offset, instructionOffset, instructionCount, resolveSymbols: true });
+		const instructions = array(record(response.body, "disassemble").instructions, "instructions");
+		if (instructions.length > instructionCount) { throw new TypeError("Disassembly returned more instructions than requested"); }
+		let location: IDebugSource | undefined;
+		return Object.freeze(instructions.map((value, index) => {
+			const item = record(value, `instructions[${index}]`);
+			const instruction: { -readonly [K in keyof IDisassembledInstruction]: IDisassembledInstruction[K] } = {
+				address: string(item.address, "instruction address"),
+				instruction: string(item.instruction, "instruction"),
+			};
+			if (!instruction.address) { throw new TypeError("Instruction address must not be empty"); }
+			if (item.instructionBytes !== undefined) { instruction.instructionBytes = string(item.instructionBytes, "instructionBytes"); }
+			if (item.symbol !== undefined) { instruction.symbol = string(item.symbol, "symbol"); }
+			// DAP permits the source to be omitted when adjacent instructions share a file.
+			if (item.location !== undefined) { location = source(item.location, "instruction location", this.workspace); }
+			if (location) { instruction.location = location; }
+			if (item.line !== undefined) { instruction.line = positiveInteger(item.line, "instruction line", true); }
+			if (item.column !== undefined) { instruction.column = positiveInteger(item.column, "instruction column", true); }
+			if (item.endLine !== undefined) { instruction.endLine = positiveInteger(item.endLine, "instruction end line", true); }
+			if (item.endColumn !== undefined) { instruction.endColumn = positiveInteger(item.endColumn, "instruction end column", true); }
+			if (item.presentationHint !== undefined) {
+				if (item.presentationHint !== "normal" && item.presentationHint !== "invalid") { throw new TypeError("Invalid instruction presentation hint"); }
+				instruction.presentationHint = item.presentationHint;
+			}
+			return Object.freeze(instruction);
+		}));
+	}
+
+	syncBreakpoints(): Promise<void> {
+		// DAP replaces each source's entire breakpoint set. Keep edits in order so
+		// a slower previous request cannot reinstall a removed or disabled point.
+		return this.breakpointSync.schedule(() => this.sendBreakpoints());
+	}
+
+	private async sendBreakpoints(): Promise<void> {
 		const groups = new Map<string, IDebugBreakpoint[]>();
 		for (const breakpoint of this.breakpoints().filter(breakpoint => breakpoint.enabled && (breakpoint.resource.scheme === "file" || isRemoteResource(breakpoint.resource)))) {
+			const unsupported = breakpoint.logMessage && !this._capabilities.supportsLogPoints ? localize("debug.unsupportedLogpoints", "Debug Adapter does not support logpoints")
+				: breakpoint.condition && !this._capabilities.supportsConditionalBreakpoints ? localize("debug.unsupportedConditionalBreakpoints", "Debug Adapter does not support conditional breakpoints")
+					: breakpoint.hitCondition && !this._capabilities.supportsHitConditionalBreakpoints ? localize("debug.unsupportedHitConditions", "Debug Adapter does not support hit conditions") : undefined;
+			if (unsupported) {
+				this.updateBreakpoints?.([{ id: breakpoint.id, verified: false, message: unsupported }]);
+				continue;
+			}
 			const path = breakpoint.resource.scheme === "file" ? breakpoint.resource.fsPath : breakpoint.resource.path;
 			const group = groups.get(path) ?? [];
 			group.push(breakpoint);
@@ -168,10 +249,61 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 		const sources = new Set([...this.syncedBreakpointSources, ...groups.keys()]);
 		for (const path of sources) {
 			const breakpoints = groups.get(path) ?? [];
-			const response = await this.request("setBreakpoints", { source: { path }, breakpoints: breakpoints.map(breakpoint => ({ line: breakpoint.lineNumber })) });
-			this.updateBreakpoints?.(breakpointUpdates(response.body, breakpoints));
+			const response = await this.request("setBreakpoints", { source: { path }, breakpoints: breakpoints.map(breakpoint => ({
+				line: breakpoint.lineNumber,
+				...(breakpoint.condition === undefined ? {} : { condition: breakpoint.condition }),
+				...(breakpoint.hitCondition === undefined ? {} : { hitCondition: breakpoint.hitCondition }),
+				...(breakpoint.logMessage === undefined ? {} : { logMessage: breakpoint.logMessage }),
+			})) });
+			const current = new Map(this.breakpoints().map(breakpoint => [breakpoint.id, breakpoint]));
+			// Verification changes from another session do not change the request.
+			// Only apply a reply while the user's breakpoint configuration matches.
+			this.updateBreakpoints?.(breakpointUpdates(response.body, breakpoints).filter(update => {
+				const requested = breakpoints.find(breakpoint => breakpoint.id === update.id)!;
+				const latest = current.get(update.id);
+				return latest?.enabled === requested.enabled && latest.lineNumber === requested.lineNumber
+					&& latest.condition === requested.condition && latest.hitCondition === requested.hitCondition && latest.logMessage === requested.logMessage;
+			}));
 			if (breakpoints.length === 0) this.syncedBreakpointSources.delete(path);
 			else this.syncedBreakpointSources.add(path);
+		}
+		await this.sendAdditionalBreakpoints();
+	}
+
+	private async sendAdditionalBreakpoints(): Promise<void> {
+		const configured = this.additionalBreakpoints?.() ?? [];
+		const families = [
+			{ kind: "function", command: "setFunctionBreakpoints", supported: this._capabilities.supportsFunctionBreakpoints, reason: localize("debug.unsupportedFunctionBreakpoints", "Debug Adapter does not support function breakpoints") },
+			{ kind: "data", command: "setDataBreakpoints", supported: this._capabilities.supportsDataBreakpoints, reason: localize("debug.unsupportedDataBreakpoints", "Debug Adapter does not support data breakpoints") },
+			{ kind: "instruction", command: "setInstructionBreakpoints", supported: this._capabilities.supportsInstructionBreakpoints, reason: localize("debug.unsupportedInstructionBreakpoints", "Debug Adapter does not support instruction breakpoints") },
+		] as const;
+		for (const family of families) {
+			const candidates = configured.filter(point => {
+				if (point.kind !== family.kind || !point.enabled) return false;
+				if (point.kind === "data") return point.canPersist ? point.adapterType === this.configuration.type : point.sessionId === this.id;
+				if (point.kind === "instruction") return point.sessionId === this.id;
+				return true;
+			});
+			if (!family.supported) {
+				this.updateBreakpoints?.(candidates.map(point => ({ id: point.id, verified: false, message: family.reason })));
+				continue;
+			}
+			const points = candidates.filter(point => {
+				const unsupported = point.condition && !this._capabilities.supportsConditionalBreakpoints
+					? localize("debug.unsupportedConditionalBreakpoints", "Debug Adapter does not support conditional breakpoints")
+					: point.hitCondition && !this._capabilities.supportsHitConditionalBreakpoints
+						? localize("debug.unsupportedHitConditions", "Debug Adapter does not support hit conditions") : undefined;
+				if (!unsupported) return true;
+				this.updateBreakpoints?.([{ id: point.id, verified: false, message: unsupported }]);
+				return false;
+			});
+			const response = await this.request(family.command, { breakpoints: points.map(additionalBreakpointArguments) });
+			const current = new Map((this.additionalBreakpoints?.() ?? []).map(point => [point.id, point]));
+			this.updateBreakpoints?.(breakpointUpdates(response.body, points).filter(update => {
+				const latest = current.get(update.id);
+				const requested = points.find(point => point.id === update.id)!;
+				return latest?.enabled === true && JSON.stringify(additionalBreakpointArguments(latest)) === JSON.stringify(additionalBreakpointArguments(requested));
+			}));
 		}
 	}
 
@@ -185,10 +317,23 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 	}
 
 	private async initialize(workspaceFolder: string): Promise<void> {
-		const initialized = await this.request("initialize", { clientID: "ash", clientName: "Ash Code", adapterID: this.configuration.type, pathFormat: "path", linesStartAt1: true, columnsStartAt1: true, supportsVariableType: true, supportsVariablePaging: true, supportsRunInTerminalRequest: Boolean(this.runInTerminal), supportsArgsCanBeInterpretedByShell: Boolean(this.runInTerminal) });
+		const initialized = await this.request("initialize", { clientID: "ash", clientName: "Ash Code", adapterID: this.configuration.type, pathFormat: "path", linesStartAt1: true, columnsStartAt1: true, supportsVariableType: true, supportsVariablePaging: true, supportsMemoryReferences: true, supportsRunInTerminalRequest: Boolean(this.runInTerminal), supportsArgsCanBeInterpretedByShell: Boolean(this.runInTerminal) });
 		const capabilities = initialized.body && typeof initialized.body === "object" ? initialized.body as Record<string, unknown> : {};
 		this.supportsConfigurationDone = capabilities.supportsConfigurationDoneRequest === true;
-		this._capabilities = Object.freeze({ supportsRestart: capabilities.supportsRestartRequest === true, supportsTerminate: capabilities.supportsTerminateRequest === true || capabilities.supportTerminateDebuggee === true, supportsSetVariable: capabilities.supportsSetVariable === true, exceptionBreakpointFilters: exceptionBreakpointFilters(capabilities.exceptionBreakpointFilters) });
+		this._capabilities = Object.freeze({
+			supportsRestart: capabilities.supportsRestartRequest === true,
+			supportsTerminate: capabilities.supportsTerminateRequest === true || capabilities.supportTerminateDebuggee === true,
+			supportsSetVariable: capabilities.supportsSetVariable === true,
+			supportsConditionalBreakpoints: capabilities.supportsConditionalBreakpoints === true,
+			supportsHitConditionalBreakpoints: capabilities.supportsHitConditionalBreakpoints === true,
+			supportsLogPoints: capabilities.supportsLogPoints === true,
+			supportsFunctionBreakpoints: capabilities.supportsFunctionBreakpoints === true,
+			supportsDataBreakpoints: capabilities.supportsDataBreakpoints === true,
+			supportsInstructionBreakpoints: capabilities.supportsInstructionBreakpoints === true,
+			supportsDisassembleRequest: capabilities.supportsDisassembleRequest === true,
+			supportsSteppingGranularity: capabilities.supportsSteppingGranularity === true,
+			exceptionBreakpointFilters: exceptionBreakpointFilters(capabilities.exceptionBreakpointFilters),
+		});
 		const launch = this.request(this.configuration.request, expandWorkspaceVariables(this.configuration.arguments, workspaceFolder));
 		void launch.catch(error => { this.initializedRejecter?.(error instanceof Error ? error : new Error(getErrorMessage(error))); });
 		await withTimeout(this.initializedPromise, REQUEST_TIMEOUT_MS, "Debug Adapter did not emit the initialized event");
@@ -200,10 +345,13 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 		if (this._state === "starting") this.setState("running");
 	}
 
-	private async threadCommand(command: string): Promise<void> {
+	private async threadCommand(command: string, granularity?: DebugSteppingGranularity): Promise<void> {
+		if (granularity && !this._capabilities.supportsSteppingGranularity) {
+			throw new Error(localize("debug.instructionStepUnsupported", "The debug adapter does not support instruction stepping."));
+		}
 		const previousState = this._state;
 		if (command !== "pause") this.setState("running");
-		try { await this.request(command, { threadId: await this.requireThreadId() }); }
+		try { await this.request(command, { threadId: await this.requireThreadId(), ...(granularity ? { granularity } : {}) }); }
 		catch (error) { if (command !== "pause" && this._state === "running") this.setState(previousState); throw error; }
 	}
 
@@ -344,7 +492,7 @@ function event(value: Record<string, unknown>): DapEvent {
 
 function stackFrame(value: unknown, index: number, workspace: URI): IDebugStackFrame {
 	const frame = record(value, `stackFrames[${index}]`);
-	return { id: positiveInteger(frame.id, `stackFrames[${index}].id`), name: string(frame.name, `stackFrames[${index}].name`), lineNumber: positiveInteger(frame.line, `stackFrames[${index}].line`, true), columnNumber: positiveInteger(frame.column, `stackFrames[${index}].column`, true), ...(frame.source === undefined ? {} : { source: source(frame.source, `stackFrames[${index}].source`, workspace) }) };
+	return { id: positiveInteger(frame.id, `stackFrames[${index}].id`), name: string(frame.name, `stackFrames[${index}].name`), lineNumber: positiveInteger(frame.line, `stackFrames[${index}].line`, true), columnNumber: positiveInteger(frame.column, `stackFrames[${index}].column`, true), ...(frame.source === undefined ? {} : { source: source(frame.source, `stackFrames[${index}].source`, workspace) }), ...(frame.instructionPointerReference === undefined ? {} : { instructionPointerReference: string(frame.instructionPointerReference, "instructionPointerReference") }) };
 }
 
 function thread(value: unknown, index: number): IDebugThread {
@@ -387,7 +535,22 @@ function exceptionBreakpointFilters(value: unknown): readonly IDebugExceptionBre
 	}));
 }
 
-function breakpointUpdates(value: unknown, requested: readonly IDebugBreakpoint[]): readonly { readonly id: string; readonly verified: boolean; readonly message?: string }[] {
+function additionalBreakpointArguments(point: Exclude<DebugBreakpoint, IDebugBreakpoint>): Record<string, unknown> {
+	const argumentsValue: Record<string, unknown> = {};
+	switch (point.kind) {
+		case "function": argumentsValue.name = point.name; break;
+		case "data": argumentsValue.dataId = point.dataId; argumentsValue.accessType = point.accessType; break;
+		case "instruction":
+			argumentsValue.instructionReference = point.instructionReference;
+			if (point.offset !== undefined) argumentsValue.offset = point.offset;
+			break;
+	}
+	if (point.condition !== undefined) argumentsValue.condition = point.condition;
+	if (point.hitCondition !== undefined) argumentsValue.hitCondition = point.hitCondition;
+	return argumentsValue;
+}
+
+function breakpointUpdates(value: unknown, requested: readonly IBaseBreakpoint[]): readonly { readonly id: string; readonly verified: boolean; readonly message?: string }[] {
 	if (!value || typeof value !== "object" || Array.isArray(value) || !Array.isArray((value as Record<string, unknown>).breakpoints)) return [];
 	const received = (value as Record<string, unknown>).breakpoints as readonly unknown[];
 	return Object.freeze(requested.flatMap((breakpoint, index) => {

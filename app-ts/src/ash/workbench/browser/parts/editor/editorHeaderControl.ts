@@ -28,6 +28,9 @@ import type { EditorInput } from "./editorInput.js";
 import type { IEditorPane } from "./editorPane.js";
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from '../../../services/editor/common/editorConfiguration.js';
+import type { IEditorPaneDescriptor } from '../../editor.js';
+import { createEditorTypeActions } from './editorTypePicker.js';
+import { BreadcrumbsShowEditorTypeConfiguration } from './breadcrumbs.js';
 
 export interface EditorHeaderActions {
 	readonly menuService: IMenuService;
@@ -48,11 +51,14 @@ export class EditorHeaderControl extends Disposable {
 	private outline: OutlineModel | null = null;
 	private readonly symbolListeners = this._register(new DisposableStore());
 	private readonly symbolRequest = this._register(new MutableDisposable<IDisposable>());
+	private editorTypes: readonly IEditorPaneDescriptor[] = [];
+	private selectEditorType: ((id: string) => Promise<unknown>) | undefined;
+	private showEditorType: boolean;
 
 	constructor(
 		private readonly titleContainer: HTMLElement,
 		tabsRow: HTMLElement,
-		actions: EditorHeaderActions | undefined,
+		private readonly actions: EditorHeaderActions | undefined,
 		configurationService: IConfigurationService | undefined,
 		onSelectBreadcrumb: ((element: FileElement) => void) | undefined,
 		group: EditorGroupId | undefined,
@@ -75,6 +81,7 @@ export class EditorHeaderControl extends Disposable {
 					highlightToggledItems: true,
 					hoverAnchorPosition: AnchorPosition.Below,
 					contextKeyService: actions.contextKeyService,
+					menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
 				},
 			)
 			: new WorkbenchToolBar(
@@ -96,6 +103,7 @@ export class EditorHeaderControl extends Disposable {
 			?? configuration.defaultValue;
 		this.filePath = configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsFilePathConfiguration) ?? "on";
 		this.symbolPath = configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsSymbolPathConfiguration) ?? "on";
+		this.showEditorType = configurationService?.getValue<boolean>(BreadcrumbsShowEditorTypeConfiguration) ?? true;
 		this.breadcrumbs.setPathModes(this.filePath, this.symbolPath);
 		this.updateBreadcrumbVisibility();
 		if (configurationService) {
@@ -105,6 +113,10 @@ export class EditorHeaderControl extends Disposable {
 			);
 			updateScrollbar();
 			this._register(configurationService.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(BreadcrumbsShowEditorTypeConfiguration)) {
+					this.showEditorType = configurationService.getValue<boolean>(BreadcrumbsShowEditorTypeConfiguration);
+					this.updateEditorType();
+				}
 				if (event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) || event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)) updateScrollbar();
 				if (event.affectsConfiguration(BreadcrumbsEnabledConfiguration)) {
 					this.breadcrumbsEnabled = configurationService.getValue<boolean>(BreadcrumbsEnabledConfiguration);
@@ -122,6 +134,28 @@ export class EditorHeaderControl extends Disposable {
 
 	get height(): number {
 		return this.breadcrumbs.domNode.hidden ? 0 : 22;
+	}
+
+	setEditorTypes(choices: readonly IEditorPaneDescriptor[], select: (id: string) => Promise<unknown>): void {
+		this.editorTypes = choices;
+		this.selectEditorType = select;
+		this.updateEditorType();
+	}
+
+	private updateEditorType(): void {
+		const current = this.editorTypes.find(choice => choice.id === this.activePane?.id);
+		const choices = this.editorTypes;
+		const select = this.selectEditorType;
+		this.breadcrumbs.setEditorType(this.showEditorType && choices.length > 1 ? current?.name : undefined,
+			this.actions && current && select ? anchor => {
+				this.actions!.contextMenuProvider.showContextMenu({
+					getAnchor: () => anchor,
+					getActions: () => createEditorTypeActions(choices, current.id, select),
+					getCheckedActionsRepresentation: () => 'radio',
+					autoSelectFirstItem: true,
+					onHide: () => anchor.focus(),
+				});
+			} : undefined);
 	}
 
 	setInput(input: EditorInput | undefined, pane?: IEditorPane): void {

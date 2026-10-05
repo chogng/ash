@@ -22,9 +22,9 @@ import type { IServerEventApi } from "../../../../platform/app-server/common/app
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import type { EditorCloseOptions } from '../../../services/editor/common/editorGroupsService.js';
 import type { IEditorGroupView } from './editor.js';
-import { ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
+import { ActiveEditorContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceLanguageIdContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
-import { EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
+import { EditorPaneVisibility, isEditorPaneWithStatus, type IEditorPane } from "./editorPane.js";
 import { EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, isEditorPaneWithSelection } from '../../../common/editor.js';
 import { isEditorPaneWithViewState } from "./editorWithViewState.js";
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
@@ -75,7 +75,7 @@ export interface EditorGroupOptions {
 	readonly serverEvents?: IServerEventApi;
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly onSave?: (group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
-	readonly onWillCloseEditor?: (group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
+	readonly onWillCloseEditor?: (group: IEditorGroupView, input: EditorInput, pane: IEditorPane, closingGroups?: readonly EditorGroupId[]) => Promise<boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>;
 	readonly titleActions?: EditorHeaderActions;
@@ -93,6 +93,7 @@ export interface EditorGroupOptions {
 /** Releases tab-scoped listeners; EditorPanes owns the pane itself. */
 class EditorGroupEntry extends Disposable implements EditorTabDescriptor {
 	public readonly labelListener = this._register(new MutableDisposable<IDisposable>());
+	public readonly statusListener = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(public readonly state: IEditorGroupModelEntry, public readonly paneInstance: EditorPaneInstance) {
 		super();
@@ -139,7 +140,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private readonly serverEvents: IServerEventApi | undefined;
 	private readonly workingCopyService: IWorkingCopyService | undefined;
 	private readonly onSave: ((group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
-	private readonly onWillCloseEditor: ((group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
+	private readonly onWillCloseEditor: EditorGroupOptions['onWillCloseEditor'];
 	private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
 	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>) | undefined;
 	private readonly titleActions: EditorHeaderActions | undefined;
@@ -265,6 +266,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			}));
 		}
 		this._register(this.titleControl.onDidChangeHeight(() => this.layout(this.groupDimension)));
+		this._register(this.registry.onDidChange(() => this.renderChrome()));
 		this._register(toDisposable(() => {
 			this.cancelPendingOpen();
 		}));
@@ -288,6 +290,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			const resource = EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.PRIMARY });
 			menuContext.setContext(ResourceContext.key, resource?.toString());
 			menuContext.setContext(ResourceSchemeContext.key, resource?.scheme);
+			menuContext.setContext(ResourceLanguageIdContext.key, input.languageId ?? (resource && this.languageResolver?.resolveLanguageId({ resource })));
+			menuContext.setContext(ActiveEditorContext.key, entry.paneInstance.pane.id);
 			menuContext.setContext(MultipleEditorsSelectedInGroupContext.key, this.selectedInputs.includes(input) && this.selectedInputs.length > 1);
 			menuContext.setContext(ActiveEditorPinnedContext.key, !entry.preview);
 			menuContext.setContext(ActiveEditorStickyContext.key, entry.sticky);
@@ -423,6 +427,11 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		options: EditorOpenOptions = {},
 		instanceId?: EditorInstanceId,
 	): Promise<IEditorPane> {
+		if (input.toUntyped && options.preferredEditorId !== undefined && options.preferredEditorId !== input.editorId) {
+			const pane = await this.openEditor(input.toUntyped(), { ...options, index: this.model.indexOf(input) });
+			if (this.entry(input)) await this.closeEditor(input);
+			return pane;
+		}
 		const sequence = ++this.openSequence;
 		this.cancelPendingOpen();
 		const existing = this.entry(input);
@@ -437,7 +446,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		let descriptor: IEditorPaneDescriptor;
 		try {
 			const matchInput = this.languageResolver
-				? { ...input, languageId: input.languageId ?? this.languageResolver.resolveLanguageId({ resource: input.resource, ...(input.contentType === undefined ? {} : { contentType: input.contentType }) }) }
+				? Object.create(input, { languageId: { value: input.languageId ?? this.languageResolver.resolveLanguageId({ resource: input.resource, ...(input.contentType === undefined ? {} : { contentType: input.contentType }) }) } }) as EditorInput
 				: input;
 			const association = options.preferredEditorId === undefined && this.configurationService
 				? associatedEditorId(
@@ -445,7 +454,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 					this.configurationService.getValue<EditorAssociations>(isDiffEditorInput(input) ? DiffEditorAssociationsConfiguration : EditorAssociationsConfiguration),
 				)
 				: undefined;
-			const selected = this.registry.getEditorPane(matchInput, association ? { ...options, preferredEditorId: association } : options);
+			const selected = this.registry.getEditorPane(matchInput, { ...options, preferredEditorId: options.preferredEditorId ?? input.editorId ?? association });
 			if (!selected) {
 				throw new RangeError(`No editor can open ${input.resource}`);
 			}
@@ -566,6 +575,13 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: closedState, reason: existing ? "replace" : "previewReplace" }));
 		}
 		entry.labelListener.value = input.onDidChangeLabel?.(() => this.publishEditorState(entry));
+		if (isEditorPaneWithStatus(pane)) {
+			let languageId = pane.getStatus().languageId;
+			entry.statusListener.value = pane.onDidChangeStatus(() => {
+				const current = pane.getStatus().languageId;
+				if (current !== languageId) { languageId = current; this.publishEditorState(entry); }
+			});
+		}
 		paneInstance.observeWorkingCopy(() => {
 			if (entry.preview && entry.paneInstance.pane.workingCopy?.isDirty) this.model.pin(entry.input);
 			this.publishEditorState(entry);
@@ -607,11 +623,11 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		return entry.paneInstance.pane;
 	}
 
-	async confirmCloseEditor(input: EditorInput): Promise<boolean> {
+	async confirmCloseEditor(input: EditorInput, closingGroups?: readonly EditorGroupId[]): Promise<boolean> {
 		const entry = this.entry(input);
 		if (!entry) return true;
 		if (!entry.paneInstance.pane.workingCopy?.isDirty) return true;
-		return await this.onWillCloseEditor?.(this, entry.input, entry.paneInstance.pane) ?? false;
+		return await this.onWillCloseEditor?.(this, entry.input, entry.paneInstance.pane, closingGroups) ?? false;
 	}
 
 	async closeEditor(input: EditorInput, options: EditorCloseOptions = {}): Promise<boolean> {
@@ -700,7 +716,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	async setContent(content: Element): Promise<boolean> {
 		const inputs = [...this.inputs];
 		for (const input of inputs) {
-			if (!await this.confirmCloseEditor(input)) return false;
+			if (!await this.confirmCloseEditor(input, [this.id])) return false;
 		}
 		this.openSequence += 1;
 		this.cancelPendingOpen();
@@ -775,6 +791,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 
 	private renderChrome(): void {
 		this.titleControl.setEditors(this.entries, this.activeInput, this.activePane, this.model.selectedEditorIds);
+		const input = this.activeInput;
+		this.titleControl.setEditorTypes(input ? this.registry.getEditorPanesForInput(input) : [], async id => {
+			if (input && this.inputs.includes(input)) await this.openEditor(input, { preferredEditorId: id, pinned: true });
+		});
 	}
 
 	private selectTab(input: EditorInput, modifiers: { toggle: boolean; range: boolean }): boolean {

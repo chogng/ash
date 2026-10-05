@@ -49,5 +49,5 @@ export abstract class EditorTabsControl extends Disposable {
 }
 
 export function editorInputKey(input: EditorInput): string {
-	return input.resource.toString();
+	return input.editorId ? JSON.stringify([input.resource.toString(), input.editorId]) : input.resource.toString();
 }

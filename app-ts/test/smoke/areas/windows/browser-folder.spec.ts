@@ -20,6 +20,7 @@ test('standalone browser searches granted files and disables process commands', 
 	await page.getByRole('tab', { name: 'Search', exact: true }).click();
 	const search = page.getByRole('textbox', { name: 'Search workspace' });
 	await expect(search).toBeVisible();
+	await page.getByRole('button', { name: 'Toggle Search Details', exact: true }).click();
 	await page.getByRole('textbox', { name: 'Files to include' }).fill('**/*.txt');
 	await page.getByRole('textbox', { name: 'Files to exclude' }).fill('ignore.txt');
 	await search.fill('browser needle');

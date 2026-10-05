@@ -26,6 +26,7 @@ import { h } from "../../../../base/browser/dom.js";
 import { localize } from "../../../../nls.js";
 import { WorkbenchConfiguration, type ModernUIEditorTabStyle, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
+import type { IEditorPaneDescriptor } from '../../editor.js';
 
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 
@@ -108,6 +109,10 @@ export class EditorTitleControl extends Disposable {
 	get height(): number {
 		const rows = this.tabs instanceof MultiRowEditorControl ? this.tabs.rowCount : 1;
 		return EditorTitleControl.HEIGHT * rows + this.header.height;
+	}
+
+	setEditorTypes(choices: readonly IEditorPaneDescriptor[], select: (id: string) => Promise<unknown>): void {
+		this.header.setEditorTypes(choices, select);
 	}
 
 	setLocked(locked: boolean): void {

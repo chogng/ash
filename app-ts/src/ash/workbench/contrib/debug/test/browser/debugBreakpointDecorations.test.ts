@@ -28,6 +28,14 @@ test('Breakpoint editor contribution projects semantic glyph-margin decorations'
 
 	debug.setBreakpoints([{ id: 'second', resource, lineNumber: 3, enabled: false, verified: false }]);
 	assert.deepEqual(decorationState(model), [{ lineNumber: 3, lane: GlyphMarginLane.Left, persistLane: true, className: 'ash-debug-breakpoint-gutter disabled unverified' }]);
+	debug.setBreakpoints([
+		{ id: 'condition', resource, lineNumber: 2, enabled: true, verified: true, condition: 'counter > 0' },
+		{ id: 'log', resource, lineNumber: 3, enabled: true, verified: true, logMessage: 'counter={counter}' },
+	]);
+	assert.deepEqual(decorationState(model), [
+		{ lineNumber: 2, lane: GlyphMarginLane.Left, persistLane: true, className: 'ash-debug-breakpoint-gutter enabled verified conditional' },
+		{ lineNumber: 3, lane: GlyphMarginLane.Left, persistLane: true, className: 'ash-debug-breakpoint-gutter enabled verified logpoint' },
+	]);
 	dom.window.close();
 });
 

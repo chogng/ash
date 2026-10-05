@@ -6,7 +6,7 @@ import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService }
 import { type AppServerConnectionState } from "../../../../../platform/app-server/common/appServerApi.js";
 import { createSshRemoteWorkspaceUri } from "../../../../../platform/remote/common/remote.js";
 import { DebugAdapterSession } from "../../browser/debugAdapterSession.js";
-import { type IDebugBreakpoint, type IDebugConfiguration } from "../../common/debugService.js";
+import { DebugBreakpoint, type IDebugBreakpoint, type IDebugConfiguration } from "../../common/debugService.js";
 
 test("DebugAdapterSession handles zero-sequence DAP messages, clears breakpoints, and resolves an omitted stopped thread", async () => {
 	using processes = new FakeDebugAdapterProcessService();
@@ -23,7 +23,7 @@ test("DebugAdapterSession handles zero-sequence DAP messages, clears breakpoints
 	assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: breakpointPath }, breakpoints: [{ line: 4 }] });
 	assert.deepEqual(processes.request("setExceptionBreakpoints").arguments, { filters: ["uncaught"] });
 	assert.deepEqual(updates, [{ id: "main:4", verified: true }]);
-	assert.deepEqual(session.capabilities, { supportsRestart: true, supportsTerminate: true, supportsSetVariable: true, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions", default: false }] });
+	assert.deepEqual(session.capabilities, { supportsRestart: true, supportsTerminate: true, supportsSetVariable: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true, supportsLogPoints: true, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions", default: false }] });
 	processes.event("output", { output: "adapter ready\n" });
 	await waitFor(() => session.output === "adapter ready\n");
 
@@ -106,6 +106,174 @@ test("DebugAdapterSession gates mutations on adapter capability and validates ad
 	}
 });
 
+test("DebugAdapterSession sends expressions unchanged and does not install unsupported breakpoint types", async () => {
+	let points: readonly IDebugBreakpoint[] = [breakpoint(4), { ...breakpoint(5), condition: 'answer > 0' }, { ...breakpoint(6), hitCondition: '% 3' }, { ...breakpoint(7), logMessage: ' answer = {answer} ' }];
+	using supported = new FakeDebugAdapterProcessService();
+	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: supported, breakpoints: () => points, workspace: URI.file('/workspace') });
+	try {
+		assert.deepEqual(supported.request('setBreakpoints').arguments, { source: { path: points[0]!.resource.fsPath }, breakpoints: [
+			{ line: 4 }, { line: 5, condition: 'answer > 0' }, { line: 6, hitCondition: '% 3' }, { line: 7, logMessage: ' answer = {answer} ' },
+		] });
+	} finally { await session.disconnect(); }
+	using unsupported = new FakeDebugAdapterProcessService(undefined, true, false);
+	const updates: unknown[] = [];
+	const other = await DebugAdapterSession.start({ configuration: configuration(), processService: unsupported, breakpoints: () => points, workspace: URI.file('/workspace'), updateBreakpoints: values => updates.push(...values) });
+	try {
+		assert.deepEqual(unsupported.request('setBreakpoints').arguments, { source: { path: points[0]!.resource.fsPath }, breakpoints: [{ line: 4 }] });
+		assert.deepEqual(updates, [
+			{ id: 'main:5', verified: false, message: 'Debug Adapter does not support conditional breakpoints' },
+			{ id: 'main:6', verified: false, message: 'Debug Adapter does not support hit conditions' },
+			{ id: 'main:7', verified: false, message: 'Debug Adapter does not support logpoints' },
+			{ id: 'main:4', verified: true },
+		]);
+		points = [{ ...breakpoint(4), logMessage: 'answer={answer}' }];
+		await other.syncBreakpoints();
+		assert.deepEqual(unsupported.requests('setBreakpoints').at(-1)?.arguments, { source: { path: points[0]!.resource.fsPath }, breakpoints: [] });
+	} finally { await other.disconnect(); }
+});
+
+test("DebugAdapterSession cancels pending breakpoint replacements when disposed", async () => {
+	using processes = new FakeDebugAdapterProcessService();
+	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => [breakpoint(4)], workspace: URI.file('/workspace') });
+	processes.holdBreakpoints = true;
+	const running = assert.rejects(session.syncBreakpoints(), /Debug session was disposed/);
+	await waitFor(() => processes.heldBreakpointResponse !== undefined);
+	const queued = assert.rejects(session.syncBreakpoints(), { name: 'CancellationError', message: 'Operation cancelled' });
+	await session.disconnect();
+	await Promise.all([running, queued]);
+	assert.equal(processes.requests('setBreakpoints').length, 2);
+});
+
+test("DebugAdapterSession orders breakpoint replacements and discards verification for an edited point", async () => {
+	using processes = new FakeDebugAdapterProcessService();
+	let points: readonly IDebugBreakpoint[] = [breakpoint(4)];
+	const updates: unknown[] = [];
+	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => points, workspace: URI.file('/workspace'), updateBreakpoints: values => updates.push(...values) });
+	try {
+		updates.length = 0;
+		processes.holdBreakpoints = true;
+		points = [{ ...breakpoint(4), condition: 'counter > 1' }];
+		const edit = session.syncBreakpoints();
+		await waitFor(() => processes.heldBreakpointResponse !== undefined);
+		points = [];
+		const remove = session.syncBreakpoints();
+		assert.equal(processes.requests('setBreakpoints').length, 2);
+		processes.releaseBreakpoints();
+		await Promise.all([edit, remove]);
+		assert.deepEqual(processes.requests('setBreakpoints').slice(1).map(request => request.arguments), [
+			{ source: { path: breakpoint(4).resource.fsPath }, breakpoints: [{ line: 4, condition: 'counter > 1' }] },
+			{ source: { path: breakpoint(4).resource.fsPath }, breakpoints: [] },
+		]);
+		assert.deepEqual(updates, []);
+	} finally { await session.disconnect(); }
+});
+
+test("DebugAdapterSession configures all breakpoint families and queries variable access without crossing sessions", async () => {
+	using processes = new FakeDebugAdapterProcessService(undefined, true, true, true);
+	let points: readonly Exclude<DebugBreakpoint, IDebugBreakpoint>[] = [
+		{ kind: 'function', id: 'function', name: 'app::worker', enabled: true, verified: false, condition: 'counter > 0', hitCondition: '>= 2' },
+		{ kind: 'data', id: 'data', dataId: 'memory:counter', description: 'counter', enabled: true, verified: false, accessType: 'readWrite', accessTypes: ['readWrite'], canPersist: false, adapterType: 'example', sessionId: 'debug-1' },
+		{ kind: 'instruction', id: 'instruction', instructionReference: '0x1000', offset: -4, enabled: true, verified: false, sessionId: 'debug-1' },
+		{ kind: 'instruction', id: 'other-session', instructionReference: '0x2000', enabled: true, verified: false, sessionId: 'debug-2' },
+	];
+	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => [], additionalBreakpoints: () => points, workspace: URI.file('/workspace') });
+	try {
+		assert.deepEqual(['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].map(command => processes.request(command).arguments), [
+			{ breakpoints: [{ name: 'app::worker', condition: 'counter > 0', hitCondition: '>= 2' }] },
+			{ breakpoints: [{ dataId: 'memory:counter', accessType: 'readWrite' }] },
+			{ breakpoints: [{ instructionReference: '0x1000', offset: -4 }] },
+		]);
+		await assert.rejects(session.dataBreakpointInfo('counter', 20, 11), /paused session/);
+		processes.event('stopped', { threadId: 7 });
+		await waitFor(() => session.state === 'stopped');
+		assert.deepEqual(await session.dataBreakpointInfo('counter', 20, 11), { dataId: 'memory:counter', description: 'counter', canPersist: false, accessTypes: ['read', 'write', 'readWrite'] });
+		assert.deepEqual(processes.request('dataBreakpointInfo').arguments, { name: 'counter', variablesReference: 20, frameId: 11 });
+		processes.dataInfoReply = { dataId: null, description: 'No stable memory location' };
+		assert.deepEqual(await session.dataBreakpointInfo('temporary', 20), { dataId: null, description: 'No stable memory location', canPersist: false, accessTypes: ['write'] });
+		processes.dataInfoReply = { dataId: 'counter', description: 'counter', accessTypes: ['execute'] };
+		await assert.rejects(session.dataBreakpointInfo('counter', 20), /Invalid data breakpoint access types/);
+		points = [];
+		await session.syncBreakpoints();
+		assert.deepEqual(['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].map(command => processes.requests(command).at(-1)?.arguments), [{ breakpoints: [] }, { breakpoints: [] }, { breakpoints: [] }]);
+	} finally { await session.disconnect(); }
+});
+
+test('DebugAdapterSession excludes unsupported conditions from every additional family', async () => {
+	using processes = new FakeDebugAdapterProcessService(undefined, true, false, true);
+	const updates: unknown[] = [];
+	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => [], additionalBreakpoints: () => [
+		{ kind: 'function', id: 'function', name: 'main', enabled: true, verified: false, condition: 'counter > 0' },
+		{ kind: 'data', id: 'data', dataId: 'memory', description: 'counter', enabled: true, verified: false, accessType: 'write', accessTypes: ['write'], canPersist: true, adapterType: 'example', hitCondition: '2' },
+		{ kind: 'instruction', id: 'instruction', instructionReference: '0x1000', enabled: true, verified: false, sessionId: 'debug-1', condition: 'counter > 0' },
+	], workspace: URI.file('/workspace'), updateBreakpoints: values => updates.push(...values) });
+	try {
+		assert.deepEqual(['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].map(command => processes.request(command).arguments), [{ breakpoints: [] }, { breakpoints: [] }, { breakpoints: [] }]);
+		assert.deepEqual(updates, [
+			{ id: 'function', verified: false, message: 'Debug Adapter does not support conditional breakpoints' },
+			{ id: 'data', verified: false, message: 'Debug Adapter does not support hit conditions' },
+			{ id: 'instruction', verified: false, message: 'Debug Adapter does not support conditional breakpoints' },
+		]);
+	} finally { await session.disconnect(); }
+});
+
+test("DebugAdapterSession reports unsupported breakpoint families without sending their commands", async () => {
+	using processes = new FakeDebugAdapterProcessService();
+	const updates: unknown[] = [];
+	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => [], additionalBreakpoints: () => [
+		{ kind: 'function', id: 'function', name: 'main', enabled: true, verified: false },
+		{ kind: 'data', id: 'data', dataId: 'memory', description: 'value', enabled: true, verified: false, accessType: 'write', accessTypes: ['write'], canPersist: true, adapterType: 'example' },
+		{ kind: 'instruction', id: 'instruction', instructionReference: '0x1000', enabled: true, verified: false, sessionId: 'debug-1' },
+	], workspace: URI.file('/workspace'), updateBreakpoints: values => updates.push(...values) });
+	try {
+		assert.deepEqual(updates, [
+			{ id: 'function', verified: false, message: 'Debug Adapter does not support function breakpoints' },
+			{ id: 'data', verified: false, message: 'Debug Adapter does not support data breakpoints' },
+			{ id: 'instruction', verified: false, message: 'Debug Adapter does not support instruction breakpoints' },
+		]);
+		assert.deepEqual(processes.sent.filter(message => ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].includes(String(message.command))), []);
+		await assert.rejects(session.dataBreakpointInfo('value', 20), /does not support data breakpoints/);
+	} finally { await session.disconnect(); }
+});
+
+test('disassembly preserves byte and instruction offsets, resolves remote sources, and sends instruction stepping granularity', async () => {
+	using processes = new FakeDebugAdapterProcessService(undefined, true, true, true, true);
+	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: createSshRemoteWorkspaceUri('work-server', '/srv/project') });
+	try {
+		assert.equal((processes.request('initialize').arguments as Record<string, unknown>).supportsMemoryReferences, true);
+		await assert.rejects(session.disassemble('0x1000', 4, -2, 50), /Pause debugging/);
+		processes.event('stopped', { threadId: 7 });
+		await waitFor(() => session.state === 'stopped');
+		const instructions = await session.disassemble('0x1000', 4, -2, 50);
+		assert.deepEqual(processes.request('disassemble').arguments, { memoryReference: '0x1000', offset: 4, instructionOffset: -2, instructionCount: 50, resolveSymbols: true });
+		assert.deepEqual(instructions.map(instruction => ({ ...instruction, location: { ...instruction.location, resource: instruction.location?.resource?.toString() } })), [{ address: '0x1000', instruction: 'mov r0, r1', instructionBytes: '90', symbol: 'main', location: { name: 'main.ts', path: '/srv/project/main.ts', resource: 'ash-remote://ssh+work-server/srv/project/main.ts' }, line: 4, column: 1 }]);
+		await assert.rejects(session.disassemble('0x1000', 0.5, 0, 50), /offsets must be integers/);
+		await assert.rejects(session.disassemble('0x1000', 0, 0, 0), /instruction count/);
+		assert.equal(processes.requests('disassemble').length, 1);
+		processes.disassemblyReply = { instructions: [
+			{ address: '0x1000', instruction: 'mov r0, r1', location: { path: '/srv/project/main.ts' }, line: 4 },
+			{ address: '0x1004', instruction: 'ret', line: 5, endLine: 6, endColumn: 3 },
+		] };
+		const sameSource = await session.disassemble('0x1000', 0, 0, 2);
+		assert.equal(sameSource[1]?.location?.resource?.toString(), 'ash-remote://ssh+work-server/srv/project/main.ts');
+		assert.deepEqual({ line: sameSource[1]?.line, endLine: sameSource[1]?.endLine, endColumn: sameSource[1]?.endColumn }, { line: 5, endLine: 6, endColumn: 3 });
+		processes.disassemblyReply = { instructions: [{ address: '0x1000', instruction: 42 }] };
+		await assert.rejects(session.disassemble('0x1000', 0, 0, 1), /instruction must be a string/);
+		await session.stepOver('instruction');
+		assert.deepEqual(processes.request('next').arguments, { threadId: 7, granularity: 'instruction' });
+	} finally { await session.disconnect(); }
+});
+
+test('unsupported adapters receive neither disassembly nor instruction stepping requests', async () => {
+	using processes = new FakeDebugAdapterProcessService();
+	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+	try {
+		await assert.rejects(session.disassemble('0x1000', 0, 0, 50), /does not support disassembly/);
+		await assert.rejects(session.stepInto('instruction'), /does not support instruction stepping/);
+		assert.deepEqual(processes.requests('disassemble'), []);
+		assert.deepEqual(processes.requests('stepIn'), []);
+	} finally { await session.disconnect(); }
+});
+
 class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	private readonly connectionEmitter = new Emitter<AppServerConnectionState>();
 	private readonly messages: Array<{ readonly sequence: number; readonly message: unknown }> = [];
@@ -114,9 +282,13 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	started: unknown;
 	closed = false;
 	setVariableReply: Record<string, unknown> | undefined;
+	holdBreakpoints = false;
+	heldBreakpointResponse: Record<string, unknown> | undefined;
+	disassemblyReply: Record<string, unknown> = { instructions: [{ address: '0x1000', instruction: 'mov r0, r1', instructionBytes: '90', symbol: 'main', location: { name: 'main.ts', path: '/srv/project/main.ts' }, line: 4, column: 1 }] };
+	dataInfoReply: Record<string, unknown> = { dataId: 'memory:counter', description: 'counter', canPersist: false, accessTypes: ['read', 'write', 'readWrite'] };
 	readonly onConnectionState = this.connectionEmitter.event;
 
-	constructor(private readonly stackFramePath = "C:\\workspace\\main.ts", private readonly supportsSetVariable = true) {}
+	constructor(private readonly stackFramePath = "C:\\workspace\\main.ts", private readonly supportsSetVariable = true, private readonly supportsAdvancedBreakpoints = true, private readonly supportsBreakpointFamilies = false, private readonly supportsDisassembly = false) {}
 
 	async start(options: unknown): Promise<string> { this.started = options; return "debug-1"; }
 
@@ -126,7 +298,7 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 		if (request.type !== "request") return;
 		const command = String(request.command);
 		if (command === "launch") this.event("initialized");
-		const body = command === "initialize" ? { supportsConfigurationDoneRequest: true, supportsRestartRequest: true, supportsTerminateRequest: true, supportsSetVariable: this.supportsSetVariable, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions" }] }
+		const body = command === "initialize" ? { supportsConfigurationDoneRequest: true, supportsRestartRequest: true, supportsTerminateRequest: true, supportsSetVariable: this.supportsSetVariable, supportsConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsHitConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsLogPoints: this.supportsAdvancedBreakpoints, supportsFunctionBreakpoints: this.supportsBreakpointFamilies, supportsDataBreakpoints: this.supportsBreakpointFamilies, supportsInstructionBreakpoints: this.supportsBreakpointFamilies, supportsDisassembleRequest: this.supportsDisassembly, supportsSteppingGranularity: this.supportsDisassembly, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions" }] }
 			: command === "threads" ? { threads: [{ id: 7, name: "main" }, { id: 8, name: "worker" }] }
 			: command === "stackTrace" ? { stackFrames: [{ id: 11, name: "main", source: { name: "main.ts", path: this.stackFramePath }, line: 4, column: 1 }, { id: 12, name: "system", line: 0, column: 0 }] }
 			: command === "scopes" ? { scopes: [{ name: "Locals", variablesReference: 20 }] }
@@ -134,9 +306,14 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 			: command === "setVariable" ? this.setVariableReply ?? { value: (request.arguments as Record<string, unknown>).value, type: "number" }
 			: command === "evaluate" ? { result: "42", type: "number", variablesReference: 0 }
 			: command === "source" ? { content: "const generated = true;", mimeType: "text/typescript" }
+			: command === "disassemble" ? this.disassemblyReply
+			: command === "dataBreakpointInfo" ? this.dataInfoReply
+			: ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].includes(command) ? { breakpoints: ((request.arguments as { breakpoints: unknown[] }).breakpoints).map(() => ({ verified: true })) }
 			: command === "setBreakpoints" && Array.isArray((request.arguments as Record<string, unknown>)?.breakpoints) && ((request.arguments as Record<string, unknown>).breakpoints as unknown[]).length > 0 ? { breakpoints: [{ verified: true }] }
 			: {};
-		this.enqueue({ seq: 0, type: "response", request_seq: request.seq, success: true, command, body });
+		const response = { seq: 0, type: "response", request_seq: request.seq, success: true, command, body };
+		if (command === 'setBreakpoints' && this.holdBreakpoints) this.heldBreakpointResponse = response;
+		else this.enqueue(response);
 	}
 
 	async read(_sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> {
@@ -147,6 +324,12 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	async close(): Promise<void> { this.closed = true; }
 	async getConnectionState(): Promise<AppServerConnectionState> { return "ready"; }
 	dispose(): void { this.connectionEmitter.dispose(); }
+	releaseBreakpoints(): void {
+		assert.ok(this.heldBreakpointResponse);
+		this.holdBreakpoints = false;
+		this.enqueue(this.heldBreakpointResponse);
+		this.heldBreakpointResponse = undefined;
+	}
 	[Symbol.dispose](): void { this.dispose(); }
 
 	event(event: string, body?: unknown): void { this.enqueue({ seq: 0, type: "event", event, ...(body === undefined ? {} : { body }) }); }

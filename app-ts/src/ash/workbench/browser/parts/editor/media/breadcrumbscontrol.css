@@ -14,3 +14,35 @@
 .ash-editor-breadcrumbs[hidden] {
 	display: none;
 }
+
+.ash-editor-breadcrumbs > .ash-breadcrumbs-widget {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-breadcrumbs-editor-type {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	margin-left: auto;
+	padding: 0 var(--ash-spacing-size40);
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.ash-breadcrumbs-editor-type[hidden] {
+	display: none;
+}
+
+.ash-breadcrumbs-editor-type:hover {
+	color: var(--ash-foreground);
+}
+
+.ash-breadcrumbs-editor-type:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: calc(-1 * var(--ash-stroke-thickness));
+}

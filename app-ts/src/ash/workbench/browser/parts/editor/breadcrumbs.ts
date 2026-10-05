@@ -4,6 +4,7 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 import { Registry } from "../../../../platform/registry/common/platform.js";
 import type { EditorGroupId } from "../../../services/editor/common/editorState.js";
 import type { EditorBreadcrumbsControl } from "./breadcrumbsControl.js";
+import { localize } from '../../../../nls.js';
 
 export interface IBreadcrumbsService {
 	register(group: EditorGroupId, control: EditorBreadcrumbsControl): IDisposable;
@@ -30,6 +31,19 @@ export class BreadcrumbsService implements IBreadcrumbsService {
 }
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
+export const BreadcrumbsShowEditorTypeConfiguration = configurationRegistry.registerConfiguration<boolean>({
+	key: 'breadcrumbs.showEditorType', defaultValue: true,
+	parse: value => {
+		if (typeof value !== 'boolean') throw new TypeError(localize('breadcrumbs.showEditorType.invalid', 'Show Editor Type must be a boolean.'));
+		return value;
+	},
+	setting: {
+		get title() { return localize('breadcrumbs.showEditorType.title', 'Breadcrumbs: Show Editor Type'); },
+		get description() { return localize('breadcrumbs.showEditorType.description', 'Shows an editor selector for resources that support multiple editors.'); },
+		valueType: 'boolean',
+	},
+});
 
 export const BreadcrumbsEnabledConfiguration = configurationRegistry.registerConfiguration<boolean>({
 	key: "breadcrumbs.enabled",

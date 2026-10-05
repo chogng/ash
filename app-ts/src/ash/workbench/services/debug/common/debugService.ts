@@ -26,13 +26,88 @@ export interface IDebugCompound {
 	readonly stopAll: boolean;
 }
 
-export interface IDebugBreakpoint {
+export interface IBaseBreakpoint {
 	readonly id: string;
-	readonly resource: URI;
-	readonly lineNumber: number;
 	readonly enabled: boolean;
 	readonly verified: boolean;
 	readonly message?: string;
+	readonly condition?: string;
+	readonly hitCondition?: string;
+}
+
+export interface IDebugBreakpoint extends IBaseBreakpoint {
+	readonly resource: URI;
+	readonly lineNumber: number;
+	readonly logMessage?: string;
+}
+
+export interface IFunctionBreakpoint extends IBaseBreakpoint {
+	readonly kind: "function";
+	readonly name: string;
+}
+
+export type DataBreakpointAccessType = "read" | "write" | "readWrite";
+
+export interface IDataBreakpointInfoResponse {
+	readonly dataId: string | null;
+	readonly description: string;
+	readonly accessTypes: readonly DataBreakpointAccessType[];
+	readonly canPersist: boolean;
+}
+
+export interface IDataBreakpoint extends IBaseBreakpoint {
+	readonly kind: "data";
+	readonly dataId: string;
+	readonly description: string;
+	readonly accessType: DataBreakpointAccessType;
+	readonly accessTypes: readonly DataBreakpointAccessType[];
+	readonly canPersist: boolean;
+	readonly adapterType: string;
+	/** Non-persistent data identifiers belong only to the session that issued them. */
+	readonly sessionId?: string;
+}
+
+export interface IInstructionBreakpoint extends IBaseBreakpoint {
+	readonly kind: "instruction";
+	readonly instructionReference: string;
+	readonly offset?: number;
+	/** Instruction addresses are valid only for the current debuggee. */
+	readonly sessionId: string;
+}
+
+export type DebugBreakpoint = IDebugBreakpoint | IFunctionBreakpoint | IDataBreakpoint | IInstructionBreakpoint;
+
+export interface IFunctionBreakpointOptions {
+	readonly name: string;
+	readonly condition?: string;
+	readonly hitCondition?: string;
+}
+
+export interface IDataBreakpointOptions extends IDataBreakpointInfoResponse {
+	readonly dataId: string;
+	readonly sessionId: string;
+	readonly accessType: DataBreakpointAccessType;
+	readonly condition?: string;
+	readonly hitCondition?: string;
+}
+
+export interface IInstructionBreakpointOptions {
+	readonly instructionReference: string;
+	readonly offset?: number;
+	readonly condition?: string;
+	readonly hitCondition?: string;
+}
+
+export interface IDebugBreakpointUpdate {
+	readonly enabled?: boolean;
+	/** Empty text removes the corresponding expression. */
+	readonly condition?: string;
+	readonly hitCondition?: string;
+	readonly logMessage?: string;
+	readonly name?: string;
+	readonly accessType?: DataBreakpointAccessType;
+	readonly instructionReference?: string;
+	readonly offset?: number;
 }
 
 export interface IDebugSource {
@@ -55,7 +130,23 @@ export interface IDebugStackFrame {
 	readonly source?: IDebugSource;
 	readonly lineNumber: number;
 	readonly columnNumber: number;
+	readonly instructionPointerReference?: string;
 }
+
+export interface IDisassembledInstruction {
+	readonly address: string;
+	readonly instruction: string;
+	readonly instructionBytes?: string;
+	readonly symbol?: string;
+	readonly location?: IDebugSource;
+	readonly line?: number;
+	readonly column?: number;
+	readonly endLine?: number;
+	readonly endColumn?: number;
+	readonly presentationHint?: "normal" | "invalid";
+}
+
+export type DebugSteppingGranularity = "statement" | "line" | "instruction";
 
 export interface IDebugScope {
 	readonly name: string;
@@ -98,6 +189,14 @@ export interface IDebugSessionCapabilities {
 	readonly supportsRestart: boolean;
 	readonly supportsTerminate: boolean;
 	readonly supportsSetVariable: boolean;
+	readonly supportsConditionalBreakpoints: boolean;
+	readonly supportsHitConditionalBreakpoints: boolean;
+	readonly supportsLogPoints: boolean;
+	readonly supportsFunctionBreakpoints: boolean;
+	readonly supportsDataBreakpoints: boolean;
+	readonly supportsInstructionBreakpoints: boolean;
+	readonly supportsDisassembleRequest: boolean;
+	readonly supportsSteppingGranularity: boolean;
 	readonly exceptionBreakpointFilters: readonly IDebugExceptionBreakpointFilter[];
 }
 
@@ -115,9 +214,9 @@ export interface IDebugSession extends IDisposable {
 	readonly onDidOutput: Event<string>;
 	continue(): Promise<void>;
 	pause(): Promise<void>;
-	stepOver(): Promise<void>;
-	stepInto(): Promise<void>;
-	stepOut(): Promise<void>;
+	stepOver(granularity?: DebugSteppingGranularity): Promise<void>;
+	stepInto(granularity?: DebugSteppingGranularity): Promise<void>;
+	stepOut(granularity?: DebugSteppingGranularity): Promise<void>;
 	restart(): Promise<void>;
 	threads(): Promise<readonly IDebugThread[]>;
 	selectThread(threadId: number): void;
@@ -127,6 +226,9 @@ export interface IDebugSession extends IDisposable {
 	setVariable(variablesReference: number, name: string, value: string): Promise<IDebugVariable>;
 	evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult>;
 	source(source: IDebugSource): Promise<IDebugSourceContent>;
+	dataBreakpointInfo(name: string, variablesReference?: number, frameId?: number): Promise<IDataBreakpointInfoResponse>;
+	/** Byte offset and instruction offset use different DAP units. */
+	disassemble(memoryReference: string, offset: number, instructionOffset: number, instructionCount: number): Promise<readonly IDisassembledInstruction[]>;
 	setExceptionBreakpoints(filters: readonly string[]): Promise<void>;
 	disconnect(): Promise<void>;
 }
@@ -136,12 +238,17 @@ export interface IDebugService extends IDisposable {
 	readonly configurations: readonly IDebugConfiguration[];
 	readonly compounds: readonly IDebugCompound[];
 	readonly breakpoints: readonly IDebugBreakpoint[];
+	readonly functionBreakpoints: readonly IFunctionBreakpoint[];
+	readonly dataBreakpoints: readonly IDataBreakpoint[];
+	readonly instructionBreakpoints: readonly IInstructionBreakpoint[];
 	readonly watchExpressions: readonly string[];
 	readonly exceptionBreakpoints: readonly string[];
 	readonly sessions: readonly IDebugSession[];
 	readonly session: IDebugSession | undefined;
+	readonly focusedStackFrame: IDebugStackFrame | undefined;
+	readonly onDidFocusStackFrame: Event<IDebugStackFrame | undefined>;
 	readonly onDidChangeConfigurations: Event<readonly IDebugConfiguration[]>;
-	readonly onDidChangeBreakpoints: Event<readonly IDebugBreakpoint[]>;
+	readonly onDidChangeBreakpoints: Event<readonly DebugBreakpoint[]>;
 	readonly onDidChangeWatchExpressions: Event<readonly string[]>;
 	readonly onDidChangeExceptionBreakpoints: Event<readonly string[]>;
 	readonly onDidChangeSession: Event<IDebugSession | undefined>;
@@ -151,11 +258,18 @@ export interface IDebugService extends IDisposable {
 	startDebugging(configuration: IDebugConfiguration): Promise<IDebugSession>;
 	startCompound(compound: IDebugCompound): Promise<readonly IDebugSession[]>;
 	setActiveSession(session: IDebugSession): void;
+	focusStackFrame(frame: IDebugStackFrame | undefined): void;
 	restart(session?: IDebugSession): Promise<IDebugSession>;
 	stop(session?: IDebugSession): Promise<void>;
 	stopAll(): Promise<void>;
 	toggleBreakpoint(resource: URI, lineNumber: number): void;
 	removeBreakpoint(id: string): void;
+	updateBreakpoint(id: string, update: IDebugBreakpointUpdate): void;
+	setBreakpointsEnabled(enabled: boolean): void;
+	removeAllBreakpoints(): void;
+	addFunctionBreakpoint(options: IFunctionBreakpointOptions): void;
+	addDataBreakpoint(options: IDataBreakpointOptions): void;
+	addInstructionBreakpoint(options: IInstructionBreakpointOptions): void;
 	addWatchExpression(expression: string): void;
 	removeWatchExpression(expression: string): void;
 	setExceptionBreakpoints(filters: readonly string[]): Promise<void>;

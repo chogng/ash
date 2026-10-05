@@ -3,13 +3,17 @@ import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export const enum AccessibleViewProviderId {
+	Disassembly = 'disassembly',
 	GitHub = 'github',
 	Editor = 'editor',
+	WebviewEditor = 'webviewEditor',
 	ColorPicker = 'colorPicker',
 	BulkEditPreview = 'bulkEditPreview',
 	ActionWidget = 'actionWidget',
 	InspectEditorTokens = 'inspectEditorTokens',
 	Explorer = 'explorer',
+	SearchHelp = 'searchHelp',
+	SearchEditorHelp = 'searchEditorHelp',
 	GettingStarted = 'gettingStarted',
 	OpenEditors = 'openEditors',
 	SessionsActivityBar = 'sessionsActivityBar',
@@ -51,13 +55,16 @@ export const enum AccessibleViewType {
 }
 
 export const enum AccessibilityVerbositySettingId {
+	Disassembly = 'accessibility.verbosity.disassembly',
 	GitHub = 'accessibility.verbosity.github',
 	Editor = 'accessibility.verbosity.editor',
+	WebviewEditor = 'accessibility.verbosity.webviewEditor',
 	ColorPicker = 'accessibility.verbosity.colorPicker',
 	BulkEditPreview = 'accessibility.verbosity.bulkEditPreview',
 	ActionWidget = 'accessibility.verbosity.actionWidget',
 	InspectEditorTokens = 'accessibility.verbosity.inspectEditorTokens',
 	Explorer = 'accessibility.verbosity.explorer',
+	Find = 'accessibility.verbosity.find',
 	GettingStarted = 'accessibility.verbosity.gettingStarted',
 	OpenEditors = 'accessibility.verbosity.openEditors',
 	SessionsActivityBar = 'accessibility.verbosity.sessionsActivityBar',

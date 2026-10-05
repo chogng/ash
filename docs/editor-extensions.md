@@ -1,7 +1,7 @@
 # 编辑器扩展系统
 
-> 本文是 Ash 编辑器扩展的跨层架构权威文档，明确区分两条当前边界：声明式静态 Editor
-> Extension 与 Ash 原生可执行 Editor Extension Host v1。静态目录实现见
+> 本文说明 Ash 编辑器扩展的三条边界：声明式资源目录、窗口内的浏览器 Worker，以及
+> App Server 管理的可执行扩展进程。静态目录实现见
 > [`ash-rs/extensions/README.md`](../ash-rs/extensions/README.md)，声明式 Workbench 投影见
 > [`app-ts/src/ash/workbench/services/extensions/README.md`](../app-ts/src/ash/workbench/services/extensions/README.md)，
 > 可执行进程与 RPC 实现见
@@ -11,11 +11,12 @@
 
 ## 快速理解
 
-Ash 有两种不能互相冒充的 Editor Extension。声明式扩展读取主机限定目录中的
-`package.json`、language/TextMate/snippet/theme/debugger 资源，不执行包内代码；可执行扩展则必须先
+声明式扩展读取主机限定目录中的 `package.json`、language/TextMate/snippet/theme/debugger 资源，
+不执行包内代码。随产品打包或开发者显式指定的浏览器扩展在窗口自己的 Worker 中运行，
+Markdown 预览使用这条路径。App Server 管理的可执行扩展必须先
 绑定一个 immutable package/executable 与独立 enable/grant authority，再由每扩展独立进程通过 Ash
 Host RPC v1 注册窄 provider。来源可以是 legacy Plugin authority，也可以是 Marketplace Manager；
-两类扩展可以最终服务同一个 Workbench，但 manifest、身份、信任、刷新和失败语义始终分开。
+这些路径服务同一个 Workbench，但 manifest、身份、信任、刷新和失败语义由各自的宿主负责。
 这里的声明式 `Extension` 是领域 consumer，不是独立 Marketplace 或 package family；当前远端
 Theme/Language package 通过 typed adapter 进入它；Theme 的 portable manifest 由 host 规范化为声明式
 manifest，同时 package 原始 bytes/digest 保持不变。通用 `asset` 不会被自动解释为编辑器扩展。
@@ -23,6 +24,7 @@ manifest，同时 package 原始 bytes/digest 保持不变。通用 `asset` 不�
 | 用户或产品场景 | 当前行为 | 明确不会发生 |
 | --- | --- | --- |
 | 打开受支持的源码文件 | 使用内置声明式扩展提供的语言关联、配置、grammar 和 snippet | 不下载扩展，不执行 manifest 中的脚本 |
+| 打开 Markdown 预览 | 内置浏览器扩展注册命令、菜单和文本预览，源码与预览共享未保存内容 | 不把 Markdown 渲染器放进工作台编辑器实现 |
 | 主机配置静态用户扩展目录 | 扫描该目录的直接子包，非法包产生诊断 | Workspace 或 Renderer 不能提交任意扩展根 |
 | Marketplace Theme / Language | Manager 验证同一 package 后，将声明式 assets 投影进共享 Extension catalog | 不建立 `extension-marketplace`，不执行静态资源 |
 | Legacy Plugin 声明 `declarativeExtensions[]` | 仅 effective exact package 的静态目录进入 catalog | 本地兼容来源不成为远端 Marketplace 旁路 |
@@ -39,17 +41,25 @@ manifest，同时 package 原始 bytes/digest 保持不变。通用 `asset` 不�
 先规范化为 Host deployment，Host runtime 不解析任何 package manifest。App Server broker 以及
 Workbench 的 Commands/Language/Tasks/task-backed Testing、数据通道和链接展示接入已实现；由于生产
 launcher 尚未实现，默认产品仍以 capability=false 失败关闭，不能描述为可启用第三方代码的生产路径。
-后续章节分别说明两条流程、所有权、信任与失败边界、完成度及演进。
+后续章节说明这些流程、所有权、信任与失败边界、完成度及演进。
 
-独立 Web 开发入口另有可信开发路径：`build/resources/extensions.ts` 将内置包及显式配置的
+Web 和 Electron 的工作台共用可信浏览器扩展入口：`build/resources/extensions.ts` 将内置包及显式配置的
 `ASH_WEB_EXTENSION_PATHS` 冻结为 Browser catalog 和资源快照。`platform/extensions/browser/extensionApi.ts`
 提供同一目录与资源契约；`platform/extensionHost/browser/extensionHostApi.ts` 持有每个可执行包的 Worker，
 `extensionHostWorker.ts` 在 Worker 内导入 package 的单文件 ESM `browser` 入口，调用
-`activate({ register })`。注册与调用复用 Ash Host API v1，不提供 `vscode` 模块或 Node API。
+`activate({ register, executeCommand, language })`。注册与调用使用 Ash 的有界扩展契约，不提供完整的 `vscode` 模块或 Node API。
 Worker 持有调用的取消信号；到达截止时间后终止 Worker 并撤销该 incarnation 的注册。
 刷新、替换和关闭页面释放 Worker 与入口 Blob URL。Vite 监听开发包文件并重新生成快照、刷新页面。
 该路径仅执行内置或开发者显式指定的可信资源，不属于 Marketplace 执行许可或生产第三方隔离路径。
 Worker 无法访问 Workbench DOM，但仍是同源代码，不宣称具备生产 launcher 的 hard limits。
+
+离线窗口仍加载打包目录中的语言声明和主题，因此 Markdown 动作不依赖后端连接。
+工作台组合入口同时持有浏览器 Worker 与 App Server 可执行扩展的注册快照；同一扩展 ID 只能由一个
+运行宿主持有。`MainThreadExtensionApi` 把扩展命令和编辑器菜单接入工作台，
+`MainThreadCustomEditors` 注册文本自定义编辑器。内置 `extensions/markdown-language-features`
+提供 Markdown 预览和打开、侧边打开、重新打开、显示源码动作；工作台通用 `WebviewEditor`
+承载预览，`CustomTextEditorModel` 引用源码的共享文本模型。源码和独立预览标签可以同时打开，
+未保存文本、保存状态和关闭确认仍由同一文档状态决定。此入口没有扩大第三方扩展的生产执行许可。
 
 ## 1. 两条 App Server 装载与激活路径
 

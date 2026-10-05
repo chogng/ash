@@ -6,7 +6,7 @@ import { Event } from '../../../base/common/event.js';
 import { createDisconnectedLanguageServerService } from "../../language/browser/languageServerService.js";
 import { createDisconnectedAppServerApi, createDisconnectedResourceApi, createDisconnectedServerEventApi } from "./appServerApi.js";
 import { createDisconnectedFileApi } from "../../files/browser/fileApi.js";
-import { createDisconnectedExtensionApi } from "../../extensions/browser/extensionApi.js";
+import { createBrowserExtensionApi } from "../../extensions/browser/extensionApi.js";
 import { createDisconnectedDiffApi } from "../../diff/browser/diffApi.js";
 import { createDisconnectedSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import { createDisconnectedGitApi } from "../../git/browser/gitApi.js";
@@ -51,7 +51,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		typst: createDisconnectedTypstApi(unavailableOperation),
 		documentCollaboration: createDisconnectedDocumentCollaborationApi(unavailableOperation),
 		resource: createDisconnectedResourceApi(unavailableOperation),
-		extensions: createDisconnectedExtensionApi(unavailableOperation),
+		extensions: createBrowserExtensionApi(),
 		extensionHost: createDisconnectedExtensionHostApi(unavailableOperation),
 		fs: createDisconnectedFileApi(unavailableOperation),
 		diff: createDisconnectedDiffApi(unavailableOperation),

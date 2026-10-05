@@ -8,6 +8,8 @@ export interface IEditorPaneDescriptor {
 	readonly id: string;
 	readonly name: string;
 	canOpen(input: EditorInput): EditorPaneMatch;
+	/** Creates a distinct tab identity when this editor opens beside the source. */
+	createInput?(source: EditorInput): EditorInput;
 	create(options: EditorPaneCreationOptions): IEditorPane;
 }
 

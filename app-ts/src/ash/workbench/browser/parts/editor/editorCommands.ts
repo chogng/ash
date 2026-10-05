@@ -9,6 +9,9 @@ import { IEditorPart } from "./editorPart.js";
 import { IEditorGroupsService } from "../../../services/editor/common/editorGroupsService.js";
 import { resolveCommandsContext } from "./editorCommandsContext.js";
 import { showEditorTypePicker } from "./editorTypePicker.js";
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { URI, type UriComponents } from '../../../../base/common/uri.js';
+import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 
 export const CLOSE_EDITOR_COMMAND_ID = "workbench.action.closeActiveEditor";
 
@@ -52,11 +55,49 @@ registerAction2(class ReopenWithAction extends Action2 {
 			id: REOPEN_WITH_COMMAND_ID,
 			title: localize2({ bundle: "ash", key: "workbench.reopenWithEditor" }, "Reopen Editor With..."),
 			f1: true,
+			menu: { id: MenuId.EditorTitleContext, group: '1_open', order: 20, when: EditorsVisibleContext.isEqualTo(true) },
 		});
 	}
 
-	override run(accessor: ServicesAccessor): void {
-		showEditorTypePicker(accessor.get(IEditorPart), accessor.get(IQuickInputService));
+	override run(accessor: ServicesAccessor, context?: unknown): void {
+		const groupId = typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'string' ? context.groupId : undefined;
+		const editorIndex = typeof context === 'object' && context !== null && 'editorIndex' in context && typeof context.editorIndex === 'number' ? context.editorIndex : undefined;
+		showEditorTypePicker(accessor.get(IEditorPart), accessor.get(IQuickInputService), groupId, editorIndex);
+	}
+});
+
+export const REOPEN_ACTIVE_EDITOR_WITH_COMMAND_ID = 'reopenActiveEditorWith';
+export const API_OPEN_WITH_EDITOR_COMMAND_ID = '_workbench.openWith';
+
+CommandsRegistry.register(REOPEN_ACTIVE_EDITOR_WITH_COMMAND_ID, async (accessor, override, ...args) => {
+	if (typeof override !== 'string') throw new TypeError('Editor override must be a string');
+	const part = accessor.get(IEditorPart);
+	if (args.length === 0) { await part.reopenActiveEditorWith(override === 'default' ? CODE_EDITOR_ID : override); return; }
+	for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors) {
+		const owner = part.groups.find(candidate => candidate.id === group.id);
+		for (const input of editors) await owner?.openEditor(input, { preferredEditorId: override === 'default' ? CODE_EDITOR_ID : override, pinned: true });
+	}
+});
+
+CommandsRegistry.register(API_OPEN_WITH_EDITOR_COMMAND_ID, async (accessor, resource, id, columnAndOptions, sourceGroupId) => {
+	if (typeof id !== 'string' || typeof resource !== 'object' || resource === null) throw new TypeError('Open With requires a URI and editor ID');
+	const uri = URI.from(resource as UriComponents);
+	const part = accessor.get(IEditorPart);
+	const source = typeof sourceGroupId === 'string' ? part.groups.find(group => group.id === sourceGroupId) : part.activeGroup;
+	if (!source) return;
+	const matching = source.inputs.filter(input => input.resource.toString() === uri.toString());
+	const input = matching.find(input => !input.editorId) ?? matching[0]?.toUntyped?.() ?? { resource: uri };
+	const column = Array.isArray(columnAndOptions) ? columnAndOptions[0] : undefined;
+	const preferredEditorId = id === 'default' ? CODE_EDITOR_ID : id;
+	const descriptor = part.getEditorPaneChoices(input).find(choice => choice.id === preferredEditorId);
+	if (!descriptor) throw new RangeError(`No matching editor '${preferredEditorId}'`);
+	const opened = descriptor.createInput ? descriptor.createInput(input) : input;
+	if (column === -2) {
+		source.focus();
+		await part.openEditor(opened, { preferredEditorId, pinned: true }, 'sideGroup');
+	} else {
+		const target = typeof column === 'number' && column > 0 ? part.groups[column - 1] : source;
+		await target?.openEditor(opened, { preferredEditorId, pinned: true });
 	}
 });
 

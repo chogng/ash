@@ -10,6 +10,33 @@ export const accessibleViewVerbosityEnabled = new RawContextKey<boolean>('access
 export const accessibleViewCurrentProviderId = new RawContextKey<string>('accessibleViewCurrentProviderId', '');
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Disassembly, defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') { throw new TypeError(localize('debug.disassemblyVerbosityInvalid', 'Disassembly accessibility verbosity must be a boolean.')); }
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('debug.disassemblyVerbosityTitle', 'Disassembly accessibility help'); },
+		get description() { return localize('debug.disassemblyVerbosityDescription', 'Announce how to open accessibility help when disassembly receives focus.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.WebviewEditor,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('webview.verbosity.invalid', 'Webview editor accessibility verbosity must be a boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('webview.verbosity.title', 'Webview editor accessibility help'); },
+		get description() { return localize('webview.verbosity.description', 'Announce how to open accessibility help when a webview editor receives focus.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ScmInput,
 	defaultValue: true,
 	parse(value: unknown): boolean {
@@ -228,6 +255,20 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		valueType: 'boolean',
 		title: localize({ bundle: 'ash', key: 'git.mergeVerbosityTitle' }, 'Merge editor accessibility help'),
 		description: localize({ bundle: 'ash', key: 'git.mergeVerbosityDescription' }, 'Announce how to open merge editor accessibility help when the editor receives focus.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Find,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') { throw new TypeError('Search accessibility verbosity must be boolean'); }
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('search.verbosityTitle', 'Search accessibility help'),
+		description: localize('search.verbosityDescription', 'Announce how to open accessibility help when search receives focus.'),
 	},
 });
 

@@ -11,6 +11,7 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				search: resolve(import.meta.dirname, 'search.html'),
 				debug: resolve(import.meta.dirname, 'debug.html'),
 				testing: resolve(import.meta.dirname, "testing.html"),
 				table: resolve(import.meta.dirname, 'table.html'),

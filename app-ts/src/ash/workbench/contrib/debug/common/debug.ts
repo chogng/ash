@@ -1,4 +1,9 @@
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+
+export const CONTEXT_DISASSEMBLY_VIEW_FOCUS = new RawContextKey<boolean>('disassemblyViewFocus', false);
 export const DEBUG_VIEW_ID = "workbench.view.debug";
+export const DISASSEMBLY_VIEW_ID = 'workbench.debug.disassemblyView';
+export const OPEN_DISASSEMBLY_VIEW_COMMAND_ID = 'debug.action.openDisassemblyView';
 export const DEBUG_CONSOLE_VIEW_ID = "workbench.panel.debugConsole";
 export const FOCUS_DEBUG_CONSOLE_COMMAND_ID = "workbench.debug.action.focusRepl";
 export const CLEAR_DEBUG_CONSOLE_COMMAND_ID = "workbench.debug.panel.action.clearReplAction";

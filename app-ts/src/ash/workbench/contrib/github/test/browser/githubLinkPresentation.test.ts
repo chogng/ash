@@ -36,6 +36,8 @@ function setup(resources: DisposableStore, github: GitHubService): { services: I
 	services.registerInstance(ILinkPresentationService, links);
 	const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [GitHubLinkPresentationContribution.ID]));
 	host.advance(WorkbenchPhase.BlockStartup);
+	assert.equal(links.getLinkPresentationRule(URI.parse('https://github.com/team/repo')), undefined);
+	host.advance(WorkbenchPhase.BlockRestore);
 	return { services, accounts, links, notifications, signIns };
 }
 

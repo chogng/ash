@@ -40,6 +40,18 @@ export interface ExtensionHostCommandRegistration extends ExtensionHostRegistrat
 	readonly kind: "command";
 	readonly command: string;
 	readonly title: string;
+	readonly icon?: string;
+	readonly menus?: readonly { readonly menu: string; readonly when?: string; readonly group?: string; readonly alt?: string }[];
+}
+
+/** Browser custom text providers render a shared document, without owning its persistence. */
+export interface ExtensionHostCustomEditorRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'customTextEditor';
+	readonly viewType: string;
+	readonly displayName: string;
+	readonly selectors: readonly string[];
+	readonly languageIds?: readonly string[];
+	readonly priority: 'default' | 'option';
 }
 
 export interface ExtensionHostLanguageRegistration extends ExtensionHostRegistrationBase {
@@ -81,7 +93,7 @@ export interface ExtensionHostExternalUriOpenerRegistration extends ExtensionHos
 	readonly label: string;
 }
 
-export type ExtensionHostRegistration = ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
+export type ExtensionHostRegistration = ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
 
 export interface ExtensionHostRuntime {
 	readonly id: string;
@@ -291,6 +303,21 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 	const input = record(value, "Extension Host registration");
 	const kind = input.kind;
 	const registrationId = boundedText(input.registrationId, "Extension Host registration ID", 256);
+	if (kind === 'customTextEditor') {
+		exactKeys(input, 'Custom text editor registration', ['kind', 'registrationId', 'viewType', 'displayName', 'selectors', 'priority'], ['languageIds']);
+		const selectors = boundedArray(input.selectors, 'Custom editor selectors', 64).map(selector => boundedText(selector, 'Custom editor selector', 512));
+		const languageIds = input.languageIds === undefined ? undefined : boundedArray(input.languageIds, 'Custom editor languages', 64).map(language => boundedText(language, 'Custom editor language', 256));
+		if (selectors.length === 0) {
+			throw new TypeError('Custom text editor requires resource selectors');
+		}
+		assertUnique(selectors, 'Custom editor selectors');
+		if (languageIds) {
+			assertUnique(languageIds, 'Custom editor languages');
+		}
+		return Object.freeze({ kind, registrationId, viewType: boundedText(input.viewType, 'Custom editor view type', 128),
+			displayName: boundedText(input.displayName, 'Custom editor display name', 512), selectors: Object.freeze(selectors),
+			priority: stringEnum(input.priority, 'Custom editor priority', ['default', 'option'] as const), ...(languageIds ? { languageIds: Object.freeze(languageIds) } : {}) });
+	}
 	if (kind === 'externalUriOpener') {
 		exactKeys(input, 'Extension Host external URI opener registration', ['kind', 'label', 'registrationId', 'schemes']);
 		const schemes = boundedArray(input.schemes, 'Extension Host opener schemes', 2).map(scheme => stringEnum(scheme, 'Extension Host opener scheme', ['http', 'https'] as const));
@@ -299,8 +326,16 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		return Object.freeze({ kind, registrationId, schemes: Object.freeze(schemes), label: boundedText(input.label, 'Extension Host opener label', 512) });
 	}
 	if (kind === "command") {
-		exactKeys(input, "Extension Host command registration", ["command", "kind", "registrationId", "title"]);
-		return Object.freeze({ kind, registrationId, command: boundedText(input.command, "Extension Host command", 256), title: boundedText(input.title, "Extension Host command title", 512) });
+		exactKeys(input, "Extension Host command registration", ["command", "kind", "registrationId", "title"], ['icon', 'menus']);
+		const menus = input.menus === undefined ? undefined : boundedArray(input.menus, 'Extension command menus', 64).map(value => {
+			const menu = exactRecord(value, 'Extension command menu', ['menu'], ['when', 'group', 'alt']);
+			return Object.freeze({ menu: boundedText(menu.menu, 'Extension command menu ID', 128),
+				...(menu.when === undefined ? {} : { when: boundedText(menu.when, 'Extension menu condition', 2048) }),
+				...(menu.group === undefined ? {} : { group: boundedText(menu.group, 'Extension menu group', 256) }),
+				...(menu.alt === undefined ? {} : { alt: boundedText(menu.alt, 'Extension menu alternate command', 256) }) });
+		});
+		return Object.freeze({ kind, registrationId, command: boundedText(input.command, "Extension Host command", 256), title: boundedText(input.title, "Extension Host command title", 512),
+			...(input.icon === undefined ? {} : { icon: boundedText(input.icon, 'Extension command icon', 128) }), ...(menus === undefined ? {} : { menus: Object.freeze(menus) }) });
 	}
 	if (kind === "languageProvider") {
 		exactKeys(input, "Extension Host language registration", ["kind", "languageIds", "operations", "registrationId"]);
@@ -431,14 +466,14 @@ function record(value: unknown, owner: string): Record<string, unknown> {
 	return value as Record<string, unknown>;
 }
 
-function exactRecord(value: unknown, owner: string, keys: readonly string[]): Record<string, unknown> {
+function exactRecord(value: unknown, owner: string, keys: readonly string[], optional: readonly string[] = []): Record<string, unknown> {
 	const result = record(value, owner);
-	exactKeys(result, owner, keys);
+	exactKeys(result, owner, keys, optional);
 	return result;
 }
 
-function exactKeys(value: Record<string, unknown>, owner: string, keys: readonly string[]): void {
-	const actual = Object.keys(value).sort();
+function exactKeys(value: Record<string, unknown>, owner: string, keys: readonly string[], optional: readonly string[] = []): void {
+	const actual = Object.keys(value).filter(key => !optional.includes(key)).sort();
 	const expected = [...keys].sort();
 	if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) throw new TypeError(`${owner} has an invalid shape`);
 }

@@ -21,6 +21,7 @@ export interface ContentSearchMatch {
 /** A content query applied to the current workspace. */
 export interface IContentSearchQuery {
 	readonly text: string;
+	readonly wholeWord?: boolean;
 	readonly patternKind: ContentSearchPatternKind;
 	readonly caseSensitivity: ContentSearchCaseSensitivity;
 	readonly includePatterns: readonly string[];

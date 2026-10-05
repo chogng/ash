@@ -21,8 +21,9 @@ export class FileContentSearchService implements IContentSearchService {
 		const folders = this.workspaceContext.getWorkspace().folders;
 		if (!folders.length) { return { resultCount: 0, limitHit: false, error: localize('search.openFolder', 'Open a folder to search files.') }; }
 		if (!query.text) { return { resultCount: 0, limitHit: false, error: undefined }; }
-		const sensitive = query.caseSensitivity === 'sensitive' || (query.caseSensitivity === 'smart' && /[A-Z]/.test(query.text));
-		const expression = new RegExp(query.patternKind === 'regex' ? query.text : escapeRegExpCharacters(query.text), sensitive ? 'gu' : 'giu');
+		const sensitive = query.caseSensitivity === 'sensitive' || (query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text));
+		const pattern = query.text.replace(/\r\n|\r/g, '\n');
+		const expression = new RegExp(query.patternKind === 'regex' ? pattern : escapeRegExpCharacters(pattern), sensitive ? 'gmu' : 'gmiu');
 		const limit = query.maxResults ?? DEFAULT_MAX_RESULTS;
 		let resultCount = 0;
 		let limitHit = false;
@@ -42,13 +43,35 @@ export class FileContentSearchService implements IContentSearchService {
 					if (bytes.includes(0)) { continue; }
 					let content: string;
 					try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { continue; } // Binary resources do not produce text matches.
-					for (const [index, preview] of content.split(/\r\n|\r|\n/).entries()) {
+					content = content.replace(/\r\n|\r/g, '\n');
+					const lineStarts = [0];
+					for (let offset = content.indexOf('\n'); offset >= 0; offset = content.indexOf('\n', offset + 1)) { lineStarts.push(offset + 1); }
+					let lineIndex = 0;
+					const blocks = new Map<string, { lineNumber: number; preview: string; ranges: { start: number; end: number }[] }>();
+					for (const found of content.matchAll(expression)) {
 						throwIfAborted(options.signal);
-						const ranges = [...preview.matchAll(expression)].filter(result => result[0].length > 0).map(result => ({ start: result.index, end: result.index + result[0].length }));
-						if (!ranges.length) { continue; }
-						if (resultCount === limit) { limitHit = true; return; }
-						resultCount++;
-						options.onProgress?.([{ dirId: folder.id, dirName: folder.name, path, lineNumber: index + 1, preview, ranges }]);
+						if (!found[0].length) { continue; }
+						const start = found.index;
+						const end = start + found[0].length;
+						if (query.wholeWord && (/[\p{L}\p{N}_]$/u.test(content.slice(Math.max(0, start - 2), start)) || /^[\p{L}\p{N}_]/u.test(content.slice(end, end + 2)))) { continue; }
+						while (lineIndex + 1 < lineStarts.length && lineStarts[lineIndex + 1]! <= start) { lineIndex++; }
+						const blockStart = lineStarts[lineIndex]!;
+						const nextLine = content.indexOf('\n', end);
+						const blockEnd = nextLine < 0 ? content.length : nextLine;
+						const key = `${blockStart}:${blockEnd}`;
+						let block = blocks.get(key);
+						if (!block) {
+							if (resultCount === limit) { limitHit = true; break; }
+							resultCount++;
+							block = { lineNumber: lineIndex + 1, preview: content.slice(blockStart, blockEnd), ranges: [] };
+							blocks.set(key, block);
+						}
+						block.ranges.push({ start: start - blockStart, end: end - blockStart });
+					}
+					const results = [...blocks.values()].map(block => ({ dirId: folder.id, dirName: folder.name, path, ...block }));
+					for (let offset = 0; offset < results.length; offset += RESULT_BATCH_SIZE) {
+						options.onProgress?.(results.slice(offset, offset + RESULT_BATCH_SIZE));
+						throwIfAborted(options.signal);
 					}
 				}
 			};
@@ -99,8 +122,8 @@ export class BrowserContentSearchService implements IContentSearchService {
 		throwIfAborted(options.signal);
 		const started = await this.api.start({
 			...(folder ? { dirId: folder.id } : {}),
-			query: query.text,
-			patternKind: query.patternKind,
+			query: query.wholeWord ? `\\b(?:${query.patternKind === 'regex' ? query.text : escapeRegExpCharacters(query.text.replace(/\r\n|\r/g, '\n')).replaceAll('\n', '\\r?\\n')})\\b` : query.text,
+			patternKind: query.wholeWord ? 'regex' : query.patternKind,
 			freshness: query.freshness ?? "current",
 			caseSensitivity: query.caseSensitivity,
 			includePatterns: [...query.includePatterns],

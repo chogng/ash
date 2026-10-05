@@ -60,6 +60,8 @@ import { ILifecycleService, LifecyclePhase, type ShutdownReason } from "../servi
 import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAdapterProcessService.js";
 import { ITestExecutionService } from '../../platform/testing/common/testExecutionService.js';
 import { IExtensionHostApi } from "../../platform/extensionHost/common/extensionHostApi.js";
+import { BrowserExtensionHostApi } from '../../platform/extensionHost/browser/extensionHostApi.js';
+import { createBrowserExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
 import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
@@ -506,7 +508,10 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
 		services.registerInstance(INetworkDiagnosticsService, api.networkDiagnostics);
 		services.registerInstance(IHooksService, api.hooks);
-		services.registerInstance(IExtensionHostApi, api.extensionHost);
+		const commandService = this._register(new CommandService(services));
+		services.registerInstance(ICommandService, commandService);
+		// Browser packages always execute in Workers; server executable packages keep their process host.
+		services.registerInstance(IExtensionHostApi, this._register(services.createInstance(BrowserExtensionHostApi, createBrowserExtensionApi(), api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);
@@ -817,8 +822,6 @@ export class Workbench extends Disposable {
 		services.registerSingleton(IURLService, () => createURLService(services));
 		const userKeyboardLayoutService = userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
 		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
-		const commandService = this._register(new CommandService(services));
-		services.registerInstance(ICommandService, commandService);
 		const notificationsCenter = this._register(new NotificationsCenter(workbenchRoot, feedbackHost, notificationService, statusbarService, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
