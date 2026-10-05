@@ -25,4 +25,4 @@ expression: "text(&render(&app, 80, 24))"
                                                                                 
                                                                                 
                                                                                 
-  Enter to expand · g to group · Esc to return
+  Enter/→ to expand · g to group · Esc to return

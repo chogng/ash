@@ -33,7 +33,7 @@ expression: "screens.join(\"\\n\\n\")"
                                                                   │
                                                                   │
 
-  Enter 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · →/Esc 返 回
+  Enter/→ 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · Esc 返 回
 
 ─ 仪 表 盘  ─────────────────────────────────────────────────────────────────────────── 分 组 : 项 目   g ─
 
@@ -66,7 +66,7 @@ expression: "screens.join(\"\\n\\n\")"
                                                                   │
                                                                   │
 
-  Enter 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · →/Esc 返 回
+  Enter/→ 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · Esc 返 回
 
 ─ 仪 表 盘  ─────────────────────────────────────────────────────────────────────────── 分 组 : 状 态   g ─
 
@@ -99,7 +99,7 @@ expression: "screens.join(\"\\n\\n\")"
                                                                   │
                                                                   │
 
-  Enter 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · →/Esc 返 回
+  Enter/→ 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · Esc 返 回
 
 ─ 仪 表 盘  ─────────────────────────────────────────────────────────────────────────── 分 组 : 状 态   g ─
 
@@ -132,4 +132,4 @@ expression: "screens.join(\"\\n\\n\")"
                                                                   │
                                                                   │
                                                          无 法 保 存 仪 表 盘 分 组 方 式 ： read-only profile
-  Enter 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · →/Esc 返 回
+  Enter/→ 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · Esc 返 回

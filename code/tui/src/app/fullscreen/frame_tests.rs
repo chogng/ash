@@ -674,9 +674,12 @@ fn left_from_a_session_opens_the_manager() {
             .is_none()
     );
     assert!(app.session_manager_view().is_some());
-    assert!(
-        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))
-            .is_none()
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
+        Some(AppCommand::Sessions(crate::sessions::Command::Resume {
+            session_id: "current".into(),
+            preferred_thread_id: Some(ThreadId::new("current").unwrap()),
+        }))
     );
     assert!(app.session_manager_view().is_some());
     assert!(

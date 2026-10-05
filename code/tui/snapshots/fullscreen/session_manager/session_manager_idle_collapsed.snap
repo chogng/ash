@@ -33,4 +33,4 @@ expression: render(&app)
                                                                   │
                                                                   │
 
-  Enter to expand · g to group · Esc to return
+  Enter/→ to expand · g to group · Esc to return

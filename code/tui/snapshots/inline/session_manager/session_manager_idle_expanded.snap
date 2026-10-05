@@ -5,15 +5,15 @@ expression: render(&app)
 ─ Dashboard ───────────────────────────────────────────────────────────────────── Group: Status  g ─
 
     Sessions                           Status           Updated   │ Session details
-  Idle (1) -                                                      │
-> ○ Snapshot session                   idle                       │ Snapshot session
-                                                                  │ idle
-  Archived (0)                                                    │
-                                                                  │ Project
-                                                                  │ No project
-                                                                  │ Model: No model selected
+> Idle (1) -                                                      │
+  ○ Snapshot session                   idle                       │   Idle (1)
                                                                   │
-                                                                  │ Threads: 1
+  Archived (0)                                                    │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
                                                                   │
                                                                   │
                                                                   │
@@ -33,4 +33,4 @@ expression: render(&app)
                                                                   │
                                                                   │
 
-  Enter/→ to open · Space to preview · Ctrl+X to archive · i to details · Esc to return
+  Enter/← to collapse · g to group · Esc to return

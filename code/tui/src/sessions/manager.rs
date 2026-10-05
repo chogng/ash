@@ -238,18 +238,6 @@ impl SessionManagerState {
         }
     }
 
-    pub(crate) fn inline_status_hint(&self) -> &'static crate::widgets::key_hint::KeyHints {
-        if !self.focused || self.selected.is_none() {
-            &bindings::INLINE_DASHBOARD_RETURN_HINTS
-        } else if self.selected_group().is_some() {
-            self.selection_hint()
-        } else if self.selected_archived {
-            &bindings::INLINE_ARCHIVED_HINTS
-        } else {
-            &bindings::INLINE_SESSION_HINTS
-        }
-    }
-
     pub(super) fn toggle_selected_pin(&mut self) -> bool {
         if self.selected_archived {
             return false;

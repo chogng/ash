@@ -5046,10 +5046,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "ouvrir le tableau de bord lorsque la saisie a le focus et ne contient ni texte ni pièce jointe",
     ),
     translation(
-        "return from inline Dashboard; group arrows expand or collapse",
-        "inline のダッシュボードから戻る；グループの矢印キーは展開・折りたたみ",
-        "从 inline 仪表盘返回；分组上的方向键用于展开或收起",
-        "revenir du tableau de bord inline ; les flèches des groupes déplient ou replient",
+        "open the selected Dashboard session; group arrows expand or collapse",
+        "ダッシュボードで選択中のセッションを開く；グループの矢印キーは展開・折りたたみ",
+        "打开仪表盘中选中的会话；分组上的方向键用于展开或收起",
+        "ouvrir la session sélectionnée du tableau de bord ; les flèches des groupes déplient ou replient",
     ),
     translation(
         "ask the Agent to create or inspect a pull request",

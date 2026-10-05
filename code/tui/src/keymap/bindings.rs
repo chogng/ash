@@ -661,8 +661,6 @@ pub(crate) const SHORTCUT_HELP: Keybinding = Keybinding::new(
 .primary();
 pub(crate) const DASHBOARD_OPEN: Keybinding =
     Keybinding::new(&[(NONE, KeyCode::Left)], "Dashboard");
-pub(crate) const INLINE_DASHBOARD_RETURN: Keybinding =
-    Keybinding::new(&[(NONE, KeyCode::Right), (NONE, KeyCode::Esc)], "return");
 pub(crate) const HOOK_REFRESH: Keybinding =
     Keybinding::new(&[(NONE, KeyCode::Char('r'))], "refresh");
 pub(crate) const NETWORK_REFRESH: Keybinding =
@@ -733,8 +731,10 @@ pub(crate) const SAVE: Keybinding = Keybinding::new(ENTER, "save");
 // Actions on focused product surfaces.
 pub(crate) const APPROVE: Keybinding = Keybinding::new(ENTER, "confirm");
 pub(crate) const ANSWER: Keybinding = Keybinding::new(ENTER, "answer");
-pub(crate) const SESSION_OPEN: Keybinding = Keybinding::new(ENTER, "open");
-pub(crate) const SESSION_RESTORE: Keybinding = Keybinding::new(ENTER, "restore");
+const SESSION_ACTIVATE: &[(KeyModifiers, KeyCode)] =
+    &[(NONE, KeyCode::Enter), (NONE, KeyCode::Right)];
+pub(crate) const SESSION_OPEN: Keybinding = Keybinding::new(SESSION_ACTIVATE, "open");
+pub(crate) const SESSION_RESTORE: Keybinding = Keybinding::new(SESSION_ACTIVATE, "restore");
 pub(crate) const SESSION_PREVIEW: Keybinding = Keybinding::new(SPACE, "preview");
 pub(crate) const SESSION_ARCHIVE: Keybinding =
     Keybinding::new(&[(CTRL, KeyCode::Char('x'))], "archive");
@@ -745,8 +745,10 @@ pub(crate) const SESSION_DETAILS: Keybinding =
 pub(crate) const SESSION_GROUPING: Keybinding =
     Keybinding::new(&[(NONE, KeyCode::Char('g'))], "group");
 pub(crate) const SESSION_PIN: Keybinding = Keybinding::new(&[(NONE, KeyCode::Char('p'))], "pin");
-pub(crate) const GROUP_EXPAND: Keybinding = Keybinding::new(ENTER, "expand");
-pub(crate) const GROUP_COLLAPSE: Keybinding = Keybinding::new(ENTER, "collapse");
+pub(crate) const GROUP_EXPAND: Keybinding =
+    Keybinding::new(&[(NONE, KeyCode::Enter), (NONE, KeyCode::Right)], "expand");
+pub(crate) const GROUP_COLLAPSE: Keybinding =
+    Keybinding::new(&[(NONE, KeyCode::Enter), (NONE, KeyCode::Left)], "collapse");
 pub(crate) const THREAD_SWITCH: Keybinding = Keybinding::new(ENTER, "switch");
 pub(crate) const TRANSCRIPT_EXPAND: Keybinding = Keybinding::new(SPACE, "expand");
 pub(crate) const TRANSCRIPT_DETAILS: Keybinding = Keybinding::new(ENTER, "view details");
@@ -805,39 +807,31 @@ pub(crate) static THREAD_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[THREAD_SWITCH, RETURN_INPUT]));
 pub(crate) static CANCEL_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[CANCEL]));
 pub(crate) static RETURN_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[ESC_RETURN]));
-pub(crate) static INLINE_DASHBOARD_RETURN_HINTS: LazyLock<KeyHints> =
-    LazyLock::new(|| hints(&[INLINE_DASHBOARD_RETURN]));
 pub(crate) static INPUT_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[ESC_RETURN]));
 pub(crate) static EXPAND_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[GROUP_EXPAND, SESSION_GROUPING, ESC_RETURN]));
 pub(crate) static COLLAPSE_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[GROUP_COLLAPSE, SESSION_GROUPING, ESC_RETURN]));
-fn session_hints(return_binding: Keybinding) -> KeyHints {
+pub(crate) static SESSION_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     hints(&[
         SESSION_OPEN,
         SESSION_PREVIEW,
         SESSION_ARCHIVE,
         SESSION_DETAILS,
         SESSION_GROUPING,
-        return_binding,
+        ESC_RETURN,
     ])
-}
-pub(crate) static SESSION_HINTS: LazyLock<KeyHints> = LazyLock::new(|| session_hints(ESC_RETURN));
-pub(crate) static INLINE_SESSION_HINTS: LazyLock<KeyHints> =
-    LazyLock::new(|| session_hints(INLINE_DASHBOARD_RETURN));
-fn archived_hints(return_binding: Keybinding) -> KeyHints {
+});
+pub(crate) static ARCHIVED_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     hints(&[
         SESSION_RESTORE,
         SESSION_PREVIEW,
         SESSION_DELETE,
         SESSION_DETAILS,
         SESSION_GROUPING,
-        return_binding,
+        ESC_RETURN,
     ])
-}
-pub(crate) static ARCHIVED_HINTS: LazyLock<KeyHints> = LazyLock::new(|| archived_hints(ESC_RETURN));
-pub(crate) static INLINE_ARCHIVED_HINTS: LazyLock<KeyHints> =
-    LazyLock::new(|| archived_hints(INLINE_DASHBOARD_RETURN));
+});
 pub(crate) static QUEUE_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     const MOVE_KEYS: &[(KeyModifiers, KeyCode)] = &[QUEUE_UP.bindings[0], QUEUE_DOWN.bindings[0]];
     let move_keys = Keybinding::new(MOVE_KEYS, "move");
@@ -917,8 +911,8 @@ pub(crate) fn fixed_bindings() -> impl Iterator<Item = (&'static str, &'static s
                 "return one interaction level; pending approval/query requires an explicit answer",
             ),
             (
-                INLINE_DASHBOARD_RETURN.keys(),
-                "return from inline Dashboard; group arrows expand or collapse",
+                SESSION_OPEN.keys(),
+                "open the selected Dashboard session; group arrows expand or collapse",
             ),
         ]
     });

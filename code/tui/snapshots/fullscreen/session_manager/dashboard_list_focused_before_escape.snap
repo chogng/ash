@@ -33,4 +33,4 @@ expression: render(&app)
                                                                   │
                                                                   │
 
-  Enter to open · Space to preview · Ctrl+X to archive · i to details · g to group · Esc to return
+  Enter/→ to open · Space to preview · Ctrl+X to archive · i to details · Esc to return

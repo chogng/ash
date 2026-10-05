@@ -40,9 +40,9 @@ fn archived_is_a_peer_heading_and_owns_archived_sessions_even_when_pinned() {
         assert_eq!(
             state.selection_hint().text(),
             if expanded {
-                "Enter to collapse · g to group · Esc to return"
+                "Enter/← to collapse · g to group · Esc to return"
             } else {
-                "Enter to expand · g to group · Esc to return"
+                "Enter/→ to expand · g to group · Esc to return"
             }
         );
         terminal

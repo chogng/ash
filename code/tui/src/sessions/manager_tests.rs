@@ -134,7 +134,7 @@ fn every_group_heading_is_selectable_and_collapses_only_its_own_sessions() {
         assert_eq!(state.selected_group(), Some(group.clone()));
         assert_eq!(
             state.selection_hint().text(),
-            "Enter to expand · g to group · Esc to return"
+            "Enter/→ to expand · g to group · Esc to return"
         );
         let collapsed = manager_items(&sessions, &state.pinned, &state.collapsed, state.grouping)
             .iter()
@@ -155,7 +155,7 @@ fn every_group_heading_is_selectable_and_collapses_only_its_own_sessions() {
         state.toggle_selected_group();
         assert_eq!(
             state.selection_hint().text(),
-            "Enter to collapse · g to group · Esc to return"
+            "Enter/← to collapse · g to group · Esc to return"
         );
         assert_eq!(
             manager_items(&sessions, &state.pinned, &state.collapsed, state.grouping)

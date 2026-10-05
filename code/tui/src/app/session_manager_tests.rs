@@ -196,7 +196,7 @@ fn dashboard_simulates_navigation_and_transient_details() {
     assert!(app.session_manager_focused());
     assert_eq!(
         app.session_manager_hint().text(),
-        "Enter to open · Space to preview · Ctrl+X to archive · i to details · g to group · Esc to return"
+        "Enter/→ to open · Space to preview · Ctrl+X to archive · i to details · g to group · Esc to return"
     );
 
     assert_eq!(app.handle_key(key(KeyCode::Char('i'))), None);
@@ -204,7 +204,7 @@ fn dashboard_simulates_navigation_and_transient_details() {
     assert!(app.session_manager_view().is_some());
     let loading = render(&app);
     assert_eq!(loading.matches("Esc to close").count(), 1);
-    assert!(!loading.contains("Enter to open"));
+    assert!(!loading.contains("Enter/→ to open"));
     crate::tui_assert_snapshot!(app = &app; "session_details_loading", loading);
     let (generation, session_id) = app.take_session_details_request().unwrap();
     assert_eq!(session_id, session().session_id);
@@ -291,13 +291,11 @@ fn dashboard_command_opens_the_manager() {
 }
 
 #[test]
-fn dashboard_escape_exits_from_focused_list_and_right_does_not_exit() {
+fn dashboard_escape_exits_from_focused_list() {
     let mut app = active_session_app();
     assert_eq!(app.handle_key(key(KeyCode::Left)), None);
     assert!(app.session_manager_view().is_some());
     assert!(app.session_manager_hint().text().ends_with("Esc to return"));
-    assert_eq!(app.handle_key(key(KeyCode::Right)), None);
-    assert!(app.session_manager_view().is_some());
 
     assert!(app.session_manager_focused());
     app.handle_key(key(KeyCode::F(6)));
@@ -309,8 +307,6 @@ fn dashboard_escape_exits_from_focused_list_and_right_does_not_exit() {
     assert!(app.session_manager_focused());
     assert!(!app.fullscreen.input_focused());
     assert!(app.session_manager_hint().text().ends_with("Esc to return"));
-    assert_eq!(app.handle_key(key(KeyCode::Right)), None);
-    assert!(app.session_manager_view().is_some());
     crate::tui_assert_snapshot!(app = &app; "dashboard_list_focused_before_escape", render(&app));
 
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
@@ -321,39 +317,74 @@ fn dashboard_escape_exits_from_focused_list_and_right_does_not_exit() {
 }
 
 #[test]
-fn inline_dashboard_arrows_return_from_the_session_list() {
-    let mut app = active_session_app();
-    let mut settings = crate::config::TerminalSettings::default();
-    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
-    settings.set_language(crate::nls::Language::Chinese);
-    app.update(crate::config::Event::SettingsReceived(settings));
-    assert_eq!(app.handle_key(key(KeyCode::Left)), None);
-    assert!(app.session_manager_focused());
-    assert!(
-        app.session_manager_hint()
-            .text()
-            .ends_with("→/Esc to return")
-    );
-    assert!(render(&app).replace(' ', "").contains("→/Esc返回"));
-    let mut frames = vec![format!("Dashboard\n{}", render(&app))];
-    assert_eq!(app.handle_key(key(KeyCode::Right)), None);
-    assert!(app.session_manager_view().is_none());
-    assert!(!app.session_manager_focused());
-    assert!(app.chat_input_focused());
-    assert_eq!(
-        app.sessions.active_session_id().unwrap().as_str(),
-        "current"
-    );
-    assert_eq!(app.screen_thread_id().as_str(), "current");
-    assert!(app.input().is_empty());
-    assert!(app.can_open_dashboard_from_input());
-    frames.push(format!("Conversation after →\n{}", render(&app)));
-    assert_eq!(app.handle_key(key(KeyCode::Left)), None);
-    assert!(app.session_manager_focused());
-    assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
-    assert!(app.session_manager_view().is_none());
-    assert!(app.chat_input_focused());
-    crate::tui_assert_snapshot!(app = &app; "inline_dashboard_arrow_navigation", frames.join("\n\n"));
+fn dashboard_enter_and_right_open_the_selected_session_in_both_modes() {
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        for home in [false, true] {
+            for open_key in [KeyCode::Right, KeyCode::Enter] {
+                let mut app = active_session_app();
+                let mut selected = session();
+                selected.session_id = SessionId::new("selected").unwrap();
+                selected.title = "Selected conversation".into();
+                selected.threads[0].thread_id = ThreadId::new("selected-child").unwrap();
+                app.update(SessionEvent::CatalogReceived(vec![session(), selected]));
+                app.update(ThreadEvent::ContextChanged {
+                    session_id: SessionId::new("selected").unwrap(),
+                    thread_id: ThreadId::new("selected-child").unwrap(),
+                });
+                app.update(ThreadEvent::ContextChanged {
+                    session_id: SessionId::new("current").unwrap(),
+                    thread_id: ThreadId::new("current").unwrap(),
+                });
+                let mut settings = crate::config::TerminalSettings::default();
+                settings.set_screen_mode(mode);
+                settings.set_language(crate::nls::Language::Chinese);
+                app.update(crate::config::Event::SettingsReceived(settings));
+                if home {
+                    app.open_home();
+                }
+                assert_eq!(app.handle_key(key(KeyCode::Left)), None);
+                assert_eq!(app.handle_key(key(KeyCode::Down)), None);
+                assert!(app.session_manager_focused());
+                assert_eq!(
+                    app.handle_key(key(open_key)),
+                    Some(AppCommand::Sessions(SessionCommand::Resume {
+                        session_id: "selected".into(),
+                        preferred_thread_id: Some(ThreadId::new("selected-child").unwrap()),
+                    }))
+                );
+                let before = render(&app);
+                assert!(before.replace(' ', "").contains("Enter/→打开"));
+                app.update(ThreadEvent::ContextChanged {
+                    session_id: SessionId::new("selected").unwrap(),
+                    thread_id: ThreadId::new("selected-child").unwrap(),
+                });
+                app.show_conversation();
+                assert!(app.session_manager_view().is_none());
+                assert!(!app.session_manager_focused());
+                assert!(app.chat_input_focused());
+                assert!(!app.starts_new_session());
+                assert_eq!(
+                    app.sessions.active_session_id().unwrap().as_str(),
+                    "selected"
+                );
+                assert_eq!(app.screen_thread_id().as_str(), "selected-child");
+                assert!(app.can_open_dashboard_from_input());
+                crate::tui_assert_snapshot!(
+                    app = &app;
+                    "dashboard_open_selected_session",
+                    format!("Dashboard\n{before}\n\nOpened selected conversation\n{}", render(&app))
+                );
+                assert_eq!(app.handle_key(key(KeyCode::Left)), None);
+                assert!(app.session_manager_focused());
+                assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
+                assert!(app.session_manager_view().is_none());
+                assert!(app.chat_input_focused());
+            }
+        }
+    }
 }
 
 #[test]
@@ -367,7 +398,7 @@ fn inline_dashboard_arrows_keep_group_preview_and_detail_interactions() {
     assert!(
         app.session_manager_hint()
             .text()
-            .contains("Enter to collapse")
+            .contains("Enter/← to collapse")
     );
     assert!(!app.session_manager_hint().text().contains("→/Esc"));
     app.handle_key(key(KeyCode::Left));
@@ -392,9 +423,13 @@ fn inline_dashboard_arrows_keep_group_preview_and_detail_interactions() {
     assert!(app.overlay().is_some());
     app.handle_key(key(KeyCode::Esc));
     assert!(app.session_manager_focused());
-    app.handle_key(key(KeyCode::Right));
-    assert!(app.session_manager_view().is_none());
-    assert!(app.chat_input_focused());
+    assert_eq!(
+        app.handle_key(key(KeyCode::Right)),
+        Some(AppCommand::Sessions(SessionCommand::Resume {
+            session_id: "current".into(),
+            preferred_thread_id: Some(ThreadId::new("current").unwrap()),
+        }))
+    );
 }
 
 #[test]
@@ -426,7 +461,7 @@ fn dashboard_preserves_the_conversation_draft_and_blocks_background_input() {
 }
 
 #[test]
-fn inline_dashboard_return_is_discoverable_in_localized_help() {
+fn dashboard_open_is_discoverable_in_localized_help() {
     let mut app = active_session_app();
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
@@ -435,11 +470,11 @@ fn inline_dashboard_return_is_discoverable_in_localized_help() {
     app.insert_text("/help");
     app.handle_key(key(KeyCode::Enter));
     app.handle_key(key(KeyCode::Char('/')));
-    app.handle_paste("inline".into());
+    app.handle_paste("仪表盘".into());
     let output = render(&app);
-    assert!(output.contains("→/Esc"));
-    assert!(output.replace(' ', "").contains("从inline仪表盘返回"));
-    crate::tui_assert_snapshot!(app = &app; "inline_dashboard_return_help_chinese", output);
+    assert!(output.contains("Enter/→"));
+    assert!(output.replace(' ', "").contains("打开仪表盘中选中的会话"));
+    crate::tui_assert_snapshot!(app = &app; "dashboard_open_help_chinese", output);
 }
 
 #[test]
@@ -576,20 +611,22 @@ fn session_manager_archived_group_restores_deletes_and_previews() {
     assert!(
         app.session_manager_hint()
             .text()
-            .contains("Enter to expand")
+            .contains("Enter/→ to expand")
     );
     app.handle_key(key(KeyCode::Enter));
     app.handle_key(key(KeyCode::Down));
     crate::tui_assert_snapshot!(app = &app; "session_manager_archived_expanded", render(&app));
-    assert_eq!(
-        app.handle_key(key(KeyCode::Enter)),
-        Some(
-            SessionCommand::Restore {
-                session_id: archived.session_id.clone()
-            }
-            .into()
-        )
-    );
+    for open_key in [KeyCode::Enter, KeyCode::Right] {
+        assert_eq!(
+            app.handle_key(key(open_key)),
+            Some(
+                SessionCommand::Restore {
+                    session_id: archived.session_id.clone()
+                }
+                .into()
+            )
+        );
+    }
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
         Some(
@@ -616,51 +653,89 @@ fn session_manager_archived_group_restores_deletes_and_previews() {
 
 #[test]
 fn session_manager_group_keys_collapse_expand_and_skip_hidden_sessions() {
-    let mut app = active_session_app();
-    app.handle_key(key(KeyCode::Left));
-    app.handle_key(key(KeyCode::Up));
-    assert!(
-        app.session_manager_hint()
-            .text()
-            .contains("Enter to collapse")
-    );
-    assert!(render(&app).contains("> Idle (1)"));
-    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
-    assert!(
-        app.session_manager_hint()
-            .text()
-            .contains("Enter to expand")
-    );
-    assert!(!render(&app).contains("Snapshot session"));
-    assert!(app.session_preview().is_none());
-    crate::tui_assert_snapshot!(app = &app; "session_manager_idle_collapsed", render(&app));
-
-    app.update(SessionEvent::CatalogReceived(vec![session()]));
-    assert!(
-        app.session_manager_hint()
-            .text()
-            .contains("Enter to expand")
-    );
-    app.handle_key(key(KeyCode::Down));
-    assert!(render(&app).contains("> Archived (0)"));
-    app.handle_key(key(KeyCode::Up));
-    assert_eq!(app.handle_key(key(KeyCode::Char(' '))), None);
-    assert!(app.session_preview().is_none());
-    assert!(render(&app).contains("Snapshot session"));
-    crate::tui_assert_snapshot!(app = &app; "session_manager_idle_expanded", render(&app));
-
-    for code in [KeyCode::Left, KeyCode::Left] {
-        assert_eq!(app.handle_key(key(code)), None);
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = active_session_app();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.handle_key(key(KeyCode::Left));
+        app.handle_key(key(KeyCode::Up));
+        assert!(
+            app.session_manager_hint()
+                .text()
+                .contains("Enter/← to collapse")
+        );
+        assert!(render(&app).contains("> Idle (1)"));
+        assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
+        assert!(
+            app.session_manager_hint()
+                .text()
+                .contains("Enter/→ to expand")
+        );
         assert!(!render(&app).contains("Snapshot session"));
-    }
-    for code in [KeyCode::Right, KeyCode::Right] {
-        assert_eq!(app.handle_key(key(code)), None);
+        assert!(app.session_preview().is_none());
+        crate::tui_assert_snapshot!(app = &app; "session_manager_idle_collapsed", render(&app));
+
+        app.update(SessionEvent::CatalogReceived(vec![session()]));
+        assert!(
+            app.session_manager_hint()
+                .text()
+                .contains("Enter/→ to expand")
+        );
+        app.handle_key(key(KeyCode::Down));
+        assert!(render(&app).contains("> Archived (0)"));
+        app.handle_key(key(KeyCode::Up));
+        assert_eq!(app.handle_key(key(KeyCode::Char(' '))), None);
+        assert!(app.session_preview().is_none());
         assert!(render(&app).contains("Snapshot session"));
+        crate::tui_assert_snapshot!(app = &app; "session_manager_idle_expanded", render(&app));
+
+        for code in [KeyCode::Left, KeyCode::Left] {
+            assert_eq!(app.handle_key(key(code)), None);
+            assert!(!render(&app).contains("Snapshot session"));
+        }
+        for code in [KeyCode::Right, KeyCode::Right] {
+            assert_eq!(app.handle_key(key(code)), None);
+            assert!(render(&app).contains("Snapshot session"));
+        }
+        assert!(app.session_manager_focused());
+        app.handle_key(key(KeyCode::Down));
+        assert!(matches!(app.handle_key(key(KeyCode::Enter)),
+            Some(AppCommand::Sessions(SessionCommand::Resume { session_id, .. })) if session_id == "current"));
     }
-    assert!(app.session_manager_focused());
-    app.handle_key(key(KeyCode::Down));
-    assert!(matches!(app.handle_key(key(KeyCode::Enter)),
-        Some(AppCommand::Sessions(SessionCommand::Resume { session_id, .. })) if session_id == "current"));
+}
+
+#[test]
+fn dashboard_group_arrow_hints_follow_expansion_in_chinese_in_both_modes() {
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = active_session_app();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        settings.set_language(crate::nls::Language::Chinese);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.handle_key(key(KeyCode::Left));
+        app.handle_key(key(KeyCode::Up));
+        let expanded = render(&app);
+        assert!(expanded.replace(' ', "").contains("Enter/←折叠"));
+        assert_eq!(app.handle_key(key(KeyCode::Left)), None);
+        assert!(app.session_manager_focused());
+        let collapsed = render(&app);
+        assert!(!collapsed.contains("Snapshot session"));
+        assert!(collapsed.replace(' ', "").contains("Enter/→展开"));
+        assert_eq!(app.handle_key(key(KeyCode::Right)), None);
+        assert_eq!(render(&app), expanded);
+        crate::tui_assert_snapshot!(
+            app = &app;
+            "dashboard_group_arrow_hints_chinese",
+            format!("Expanded\n{expanded}\n\nCollapsed\n{collapsed}")
+        );
+    }
 }
 
 fn preview_result(

@@ -260,12 +260,6 @@ pub(in crate::app) fn handle_screen_navigation_key(
         && app.inline.sessions.manager().focused()
     {
         return match app.inline.sessions.handle_manager_key(&app.sessions, key) {
-            // Group arrows belong to the list; otherwise → returns to the active session.
-            SessionManagerInputOutcome::Unhandled
-                if bindings::INLINE_DASHBOARD_RETURN.matches(key) =>
-            {
-                exit_manager(app)
-            }
             SessionManagerInputOutcome::Unhandled => None,
             SessionManagerInputOutcome::GroupingChanged(grouping) => {
                 Some(Some(app.cycle_session_grouping(grouping)))

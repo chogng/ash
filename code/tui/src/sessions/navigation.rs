@@ -58,7 +58,7 @@ impl SessionNavigation {
         {
             return SessionManagerInputOutcome::Unhandled;
         }
-        // A Session click selects its summary; activation is Enter or a double click.
+        // A Session click selects its summary; activation is Enter, Right or a double click.
         if matches!(
             (target, click),
             (

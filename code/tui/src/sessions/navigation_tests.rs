@@ -134,6 +134,7 @@ fn manager_repeats_only_navigation_and_keeps_mutations_for_key_presses() {
     for kind in [KeyEventKind::Repeat, KeyEventKind::Release] {
         for (code, modifiers) in [
             (KeyCode::Enter, KeyModifiers::NONE),
+            (KeyCode::Right, KeyModifiers::NONE),
             (KeyCode::Char(' '), KeyModifiers::NONE),
             (KeyCode::Char('i'), KeyModifiers::NONE),
             (KeyCode::Char('p'), KeyModifiers::NONE),

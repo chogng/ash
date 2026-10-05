@@ -33,4 +33,4 @@ expression: render(&app)
                                                                   │
                                                                   │
 
-  Enter to collapse · g to group · Esc to return
+  Enter/← to collapse · g to group · Esc to return
