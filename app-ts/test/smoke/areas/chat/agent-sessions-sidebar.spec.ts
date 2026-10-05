@@ -1,7 +1,7 @@
 import { expect, test } from "../../../automation/test.js";
 
 test('Agent Sessions list opens inside Chat and closes with Escape in Web and Electron', async ({ driver, target, workbench }) => {
-	test.skip(target.workbenchMode !== "code" || target.appServerMode !== "disabled", "The disconnected Code Workbench provides a deterministic Chat shell.");
+	test.skip(target.appServerMode !== "disabled", "The disconnected Code Workbench provides a deterministic Chat shell.");
 	const page = workbench.page;
 	if (!await page.locator(".ash-chat-view-pane").isVisible()) {
 		await page.getByRole("button", { name: "Show Secondary Side Bar", exact: true }).click();

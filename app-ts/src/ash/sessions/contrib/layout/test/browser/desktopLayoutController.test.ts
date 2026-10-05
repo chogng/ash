@@ -1,12 +1,12 @@
 import { IPaneCompositePartService } from '../../../../../workbench/services/panecomposite/browser/panecomposite.js';
 import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import assert from 'node:assert/strict';
-import { suite, suiteTeardown, test } from 'mocha';
+import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
@@ -29,9 +29,6 @@ const { DesktopLayoutController } = await import('../../browser/desktopLayoutCon
 const { BaseLayoutController } = await import('../../browser/baseSessionLayoutController.js');
 class WorkingSetController extends BaseLayoutController {}
 const storageKey = 'sessions.singlePane.layoutState';
-const storageEnvironment = new JSDOM('<!doctype html>', { url: 'https://sessions-layout.test' });
-suiteTeardown(() => storageEnvironment.window.close());
-let storageSequence = 0;
 
 suite('DesktopLayoutController', () => {
 	test('Code restores each session panel view only while the panel is visible', async () => {
@@ -307,8 +304,9 @@ class TestCatalog extends Disposable {
 }
 
 class LayoutFixture extends Disposable {
+	private readonly storageEnvironment = new JSDOM('', { url: 'https://sessions-layout.test' });
 	public readonly services = this._register(new InstantiationService());
-	public readonly storage = this._register(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, applicationId: `layout-controller-${++storageSequence}`, workspaceId: 'sessions', backend: storageEnvironment.window.localStorage, flushInterval: 0 }));
+	public readonly storage = this._register(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'sessions', backend: this.storageEnvironment.window.localStorage, flushInterval: 0 }));
 	public readonly lifecycle = this._register(new TestLifecycle(undefined, new NullLoggerService(), this.storage));
 	public readonly catalog = this._register(new TestCatalog());
 	public readonly editor = this._register(new TestEditors());
@@ -325,6 +323,7 @@ class LayoutFixture extends Disposable {
 	public readonly controller: WorkingSetController;
 	constructor(saved?: readonly unknown[]) {
 		super();
+		this._register(toDisposable(() => this.storageEnvironment.window.close()));
 		if (saved) {
 			this.storage.store(storageKey, JSON.stringify(saved), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		}

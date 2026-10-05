@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { suite, test } from 'mocha';
@@ -11,31 +11,61 @@ import { StorageDatabaseChannel } from '../../electron-main/storageIpc.js';
 
 suite('Desktop storage owner', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
-	const application: IStorageIdentity = { applicationId: 'ash.code', scope: StorageScope.APPLICATION, id: 'application' };
+	const application: IStorageIdentity = { scope: StorageScope.APPLICATION, id: 'application' };
 	const entry = (value: string) => ({ value, target: StorageTarget.MACHINE });
 
-	test('retiring an application moves resources by scope and preserves conflicting target state', async () => {
+	for (const reversed of [false, true]) {
+		test(`startup migrates v1 scopes and archives the source before v2 writes (reversed: ${reversed})`, async () => {
+			const directory = await mkdtemp(join(tmpdir(), 'ash-store-'));
+			try {
+				const file = join(directory, 'state.json');
+				const identity = { scope: StorageScope.WORKSPACE, id: 'research' };
+				const storages = [
+					{ identity: { ...identity, applicationId: 'academic' }, revision: 5, isNew: false, entries: { editors: entry('paper'), layout: entry('academic') } },
+					{ identity: { ...identity, applicationId: 'code' }, revision: 2, isNew: false, entries: { layout: entry('code') } },
+					{ identity: { applicationId: 'academic', scope: StorageScope.PROFILE, id: 'sessions' }, revision: 1, isNew: false, entries: { sidebar: entry('360') } },
+					{ identity: { ...application, applicationId: 'code' }, revision: 3, isNew: false, entries: { fonts: entry('cache') } },
+				];
+				const source = JSON.stringify({ version: 1, storages: reversed ? storages.reverse() : storages });
+				await writeFile(file, source);
+				using storage = new StorageMainService(file);
+				await storage.initialize();
+				assert.deepEqual({ ...(await storage.getItems(identity)).entries }, { editors: entry('paper'), layout: entry('code') });
+				assert.equal((await storage.getItems(identity)).revision, 6);
+				assert.deepEqual({ ...(await storage.getItems({ scope: StorageScope.PROFILE, id: 'sessions' })).entries }, { sidebar: entry('360') });
+				assert.deepEqual({ ...(await storage.getItems(application)).entries }, { fonts: entry('cache') });
+				assert.equal(await readFile(`${file}.v1`, 'utf8'), source);
+				await storage.updateItems(identity, 'editors', null);
+				await storage.close();
+				using restored = new StorageMainService(file);
+				await restored.initialize();
+				assert.deepEqual({ ...(await restored.getItems(identity)).entries }, { layout: entry('code') }, 'Archived data must never be replayed');
+				const data = JSON.parse(await readFile(file, 'utf8'));
+				assert.equal(data.version, 2);
+				assert.equal(data.storages.length, 3);
+				assert.equal(data.storages.some((snapshot: { identity: object }) => 'applicationId' in snapshot.identity), false);
+				assert.equal(await readFile(`${file}.v1`, 'utf8'), source);
+			} finally { await rm(directory, { recursive: true, force: true }); }
+		});
+	}
+
+	test('invalid v1 identities and failed archival leave the original file untouched', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-store-'));
 		try {
 			const file = join(directory, 'state.json');
+			const snapshot = { identity: { ...application, applicationId: 'unknown' }, revision: 0, isNew: false, entries: {} };
+			const invalid = JSON.stringify({ version: 1, storages: [snapshot] });
+			await writeFile(file, invalid);
+			using invalidStorage = new StorageMainService(file);
+			await assert.rejects(invalidStorage.initialize(), /Invalid legacy Desktop storage identity/);
+			assert.equal(await readFile(file, 'utf8'), invalid);
+			snapshot.identity.applicationId = 'code';
+			const source = JSON.stringify({ version: 1, storages: [snapshot] });
+			await writeFile(file, source);
+			await mkdir(`${file}.v1`);
 			using storage = new StorageMainService(file);
-			await storage.initialize();
-			const oldIdentity = { applicationId: 'academic', scope: StorageScope.WORKSPACE, id: 'research' };
-			const newIdentity = { ...oldIdentity, applicationId: 'code' };
-			await storage.getItems(oldIdentity, { editors: entry('paper.ash-academic'), layout: entry('academic-layout') });
-			await storage.getItems(newIdentity, { layout: entry('code-layout') });
-			assert.deepEqual(await storage.migrateApplicationStorage('academic', 'code'), ['workspace/research/layout']);
-			assert.deepEqual({ ...(await storage.getItems(newIdentity)).entries }, { editors: entry('paper.ash-academic'), layout: entry('code-layout') });
-			assert.deepEqual({ ...(await storage.getItems(oldIdentity)).entries }, { layout: entry('academic-layout') });
-			await storage.updateItems(newIdentity, 'layout', entry('academic-layout'));
-			assert.deepEqual(await storage.migrateApplicationStorage('academic', 'code'), []);
-			assert.deepEqual(await storage.migrateApplicationStorage('academic', 'code'), []);
-			await storage.close();
-			using restored = new StorageMainService(file);
-			await restored.initialize();
-			assert.deepEqual({ ...(await restored.getItems(newIdentity)).entries }, { editors: entry('paper.ash-academic'), layout: entry('academic-layout') });
-			const data = JSON.parse(await readFile(file, 'utf8'));
-			assert.equal(data.storages.some((snapshot: { identity: IStorageIdentity }) => snapshot.identity.applicationId === 'academic'), false);
+			await assert.rejects(storage.initialize(), { code: 'EISDIR' });
+			assert.equal(await readFile(file, 'utf8'), source);
 		} finally { await rm(directory, { recursive: true, force: true }); }
 	});
 
@@ -55,7 +85,7 @@ suite('Desktop storage owner', () => {
 			using restored = new StorageMainService(file);
 			await restored.initialize();
 			assert.deepEqual({ ...(await restored.getItems(application)).entries }, { first: entry('one'), second: entry('two') });
-			assert.equal(JSON.parse(await readFile(file, 'utf8')).version, 1);
+			assert.equal(JSON.parse(await readFile(file, 'utf8')).version, 2);
 		} finally { await rm(directory, { recursive: true, force: true }); }
 	});
 

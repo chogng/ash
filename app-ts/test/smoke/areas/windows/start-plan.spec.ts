@@ -3,7 +3,7 @@ import { expect, test } from '../../../automation/test.js';
 test.use({ openWorkspace: false });
 
 test('Start Plan connections appear in Manage Accounts and keyboard cancellation restores the picker', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the account backend.');
+	test.skip(target.appServerMode !== 'required', 'Requires the account backend.');
 	const picker = workbench.quickaccess;
 	await picker.runCommand('workbench.action.manageAccounts');
 	await expect(picker.input).toHaveAttribute('placeholder', 'Select an account to manage');

@@ -11,8 +11,8 @@ import './contrib/bulkEdit/browser/bulkEditService.js';
  * Shared Workbench registrations loaded by every renderer host.
  *
  * Host-specific services and contributions belong in `workbench.web.main.ts`
- * or `workbench.desktop.main.ts`, while product entries remain responsible
- * for selecting their editor contributions.
+ * or `workbench.desktop.main.ts`. Product entries initialize localization
+ * before loading this bundle and keep Sessions composition outside Workbench.
  */
 import "./browser/workbench.contribution.js";
 import "./contrib/modernUI/browser/modernUI.contribution.js";
@@ -32,3 +32,28 @@ import './contrib/output/browser/output.contribution.js';
 import './contrib/dropOrPasteInto/browser/dropOrPasteInto.contribution.js';
 import './contrib/externalUriOpener/common/externalUriOpener.contribution.js';
 import './contrib/folding/browser/folding.contribution.js';
+import './contrib/call/browser/call.contribution.js';
+import './contrib/automation/browser/automation.contribution.js';
+import '../editor/editor.code.all.js';
+import '../editor/standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.js';
+import './contrib/codeEditor/browser/codeEditor.contribution.js';
+import './contrib/documentEditor/browser/documentEditor.contribution.js';
+import './contrib/academic/browser/academicEditor.contribution.js';
+import './contrib/debug/browser/debug.contribution.js';
+import './contrib/tasks/browser/tasks.contribution.js';
+import './contrib/testing/browser/testing.contribution.js';
+import './services/extensionHost/browser/extensionHostServiceRegistration.js';
+import './services/codebaseSymbols/browser/codebaseSymbolsServiceRegistration.js';
+import { ISyntaxApi } from '../platform/syntax/common/syntaxApi.js';
+import { ILanguageFeaturesService } from '../editor/common/services/languageFeatures.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from './common/contributions.js';
+import { AppServerSyntaxProviders } from './services/language/browser/appServerSyntaxProviders.js';
+
+registerWorkbenchContribution(
+	'code.contrib.appServerSyntax',
+	WorkbenchPhase.BlockStartup,
+	accessor => new AppServerSyntaxProviders(
+		accessor.get(ILanguageFeaturesService),
+		accessor.get(ISyntaxApi),
+	),
+);

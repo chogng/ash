@@ -13,7 +13,7 @@ is canonical for the renderer implementation and extension points.
 | Desktop window host | `platform/windows/electron-main/windowImpl.ts` and `windowsMainService.ts` | the first owns each Electron window and its resources; the second owns live Workbench and Sessions windows; `code/electron-main/app.ts` supplies Sessions workspace context and connections |
 | Main-process close | `platform/lifecycle/electron-main/lifecycleMainService.ts` | waits for either renderer to finish shutdown before closing its window |
 | Workbench window selection | `platform/windows/electron-main/windowsFinder.ts` and `platform/windows/electron-main/windowsMainService.ts` | match folder or workspace files to live windows, reuse a matching Workbench, and keep active-window order; Sessions owns the return action and its IPC contract |
-| Browser window navigation | `code/browser/workbench/modes/code.ts` and `sessions/browser/web.main.ts` | navigate to their sibling renderer page; the Sessions profile validates its return path |
+| Browser window navigation | `code/browser/workbench/workbench.ts` and `sessions/browser/web.main.ts` | navigate to their sibling renderer page; the Sessions profile validates its return path |
 | Browser renderer lifecycle | `workbench/services/lifecycle/browser/lifecycleService.ts` | joins shutdown work when the browser page closes |
 | Electron renderer close | `workbench/services/lifecycle/electron-browser/lifecycleService.ts` | checks shutdown vetoes and joins save work before either Electron window closes |
 | Code profile | `code/common/codeSessionsProfile.ts` | defines the Code window identity and page route used by both browser and Electron entries |
@@ -40,11 +40,11 @@ is canonical for the renderer implementation and extension points.
 | Design | [`contrib/design/`](contrib/design/README.md) | owns the Sessions design editor and its document, editing, rendering and file lifecycle; loads through `sessions.common.main.ts`. Sessions Settings exposes its profile-scoped cursor and accessibility preferences in Design. |
 | Application menu and titlebar actions | `browser/menus.ts`, `browser/parts/menubar.contribution.ts`, and `browser/layoutActions.ts` | Sessions owns its menu root, File menu, and layout action menu; common sections are explicitly shared. The Workbench BrowserMenubarControl owns menu interaction; the layout and Sessions service own sidebar visibility and history |
 | Session chat commands | `browser/actions/sessionsChatActions.ts` | maps the reused ChatWidget New Chat and History commands to the Sessions window's draft and active-chat selection |
-| Open Agents Window | `code/browser/workbench/modes/code.ts`, `workbench/contrib/chat/electron-browser/`, `contrib/openAgentsWindow/electron-browser/`, and `workbench/browser/parts/titlebar/` | the Code browser mode owns page navigation; the Chat desktop contribution owns the titlebar action, hover label, and window command; the Sessions desktop contribution owns system-wide shortcut synchronization; the Workbench titlebar owns the shared mark and motion. Shared shortcut selection lives in `workbench/contrib/keybindings/`, while `platform/globalKeybindings/` owns operating-system registrations |
+| Open Agents Window | `code/browser/workbench/workbench.ts`, `workbench/contrib/chat/electron-browser/`, `contrib/openAgentsWindow/electron-browser/`, and `workbench/browser/parts/titlebar/` | the browser product entry owns page navigation; the Chat desktop contribution owns the titlebar action, hover label, and window command; the Sessions desktop contribution owns system-wide shortcut synchronization; the Workbench titlebar owns the shared mark and motion. Shared shortcut selection lives in `workbench/contrib/keybindings/`, while `platform/globalKeybindings/` owns operating-system registrations |
 
 The dedicated Sessions renderer reuses Workbench Chat presentation, editor, and
 service contracts. Workbench production code does not import Sessions modules;
-the Code and Academic mode entries load the Sessions contribution that registers
+the browser and Electron product entries load the Sessions contribution that registers
 their Session-backed Chat view and actions. The shared `ChatWidget` renders a
 model supplied by Sessions and does not create or select Sessions itself.
 The dedicated window supplies one `NewChatInputWidget` per retained pane
@@ -98,7 +98,11 @@ joins pending attachment resolution before flushing storage.
    Desktop initializes its window storage through the Main `storage` channel
    before creating Parts. Main merges key updates into `workbench-state.json`
    and broadcasts revisions; the browser page uses its scoped `localStorage`
-   adapter. The old Desktop document is removed only after a validated,
+   adapter. Storage identity contains only scope and profile/workspace id;
+   the product entry supplies no storage namespace. Main archives the original
+   v1 document before writing v2; both adapters retire the old Code/Academic
+   browser namespaces before opening scopes. Migration archives never participate
+   in runtime reads. The old Desktop document is removed only after a validated,
    non-conflicting import has reached disk. Sessions retains its own profile
    and `sessions` workspace identity. The renderer lifecycle service joins
    storage and Desktop log flush before disposal; Main owns log retention.

@@ -602,7 +602,7 @@ test("Frontend lexical tokens stay independent of App Server syntax facts", () =
 	const syntaxOperations = readFileSync(resolve(desktopRoot, "../ash-rs/app-server/src/server/syntax_operations.rs"), "utf8");
 	const syntaxAdapter = readFileSync(join(workbenchRoot, "services/language/browser/appServerSyntaxProviders.ts"), "utf8");
 	const sharedWorkbench = readFileSync(join(workbenchRoot, "browser/workbench.ts"), "utf8");
-	const codeContribution = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/code.contribution.ts"), "utf8");
+	const workbenchContributions = readFileSync(join(workbenchRoot, "workbench.common.main.ts"), "utf8");
 	const academicContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
 	const styling = readFileSync(join(editorRoot, "common/services/semanticTokensProviderStyling.ts"), "utf8");
 	assert.doesNotMatch(packageManifest, /tree-sitter/u);
@@ -614,7 +614,7 @@ test("Frontend lexical tokens stay independent of App Server syntax facts", () =
 	assert.match(syntaxAdapter, /provideDiagnostics/u);
 	assert.match(sharedWorkbench, /syntaxWorkerFactory/u);
 	assert.doesNotMatch(sharedWorkbench, /new AppServerSyntaxProviders/u);
-	assert.match(codeContribution, /new AppServerSyntaxProviders/u);
+	assert.match(workbenchContributions, /new AppServerSyntaxProviders/u);
 	assert.doesNotMatch(academicContribution, /AppServerSyntaxProviders/u);
 	assert.match(styling, /LanguageToken/u);
 	for (const file of collectFiles(editorRoot)) {
@@ -636,56 +636,63 @@ test("Code Workbench composes code and Academic document contributions", () => {
 
 	const browserEntry = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench.ts"), "utf8");
 	const electronEntry = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench.ts"), "utf8");
-	const codeContribution = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/code.contribution.ts"), "utf8");
+	const workbenchContributions = readFileSync(join(workbenchRoot, "workbench.common.main.ts"), "utf8");
 	const academicContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
-	const electronCodeMode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/code.ts"), "utf8");
 	for (const entry of [browserEntry, electronEntry]) {
-		assert.match(entry, /__ASH_WORKBENCH_MODE__/u);
-		assert.match(entry, /resolveWorkbenchModeIdFromUrl/u);
-		assert.match(entry, /satisfies Record<WorkbenchModeId/u);
-		assert.match(entry, /modes\/code/u);
-		assert.doesNotMatch(entry, /modes\/academic/u);
+		assert.doesNotMatch(entry, /WorkbenchMode|__ASH_WORKBENCH_MODE__/u);
+		assert.doesNotMatch(entry, /applicationId|AshStorageApplicationId/u);
+		assert.doesNotMatch(entry, /modeLoaders|modes\//u);
+		assert.match(entry, /await import\([^)]*workbench\.(?:web|desktop)\.main/u);
+		assert.match(entry, /sessions\/browser\/workbenchChat\.contribution/u);
 		assert.doesNotMatch(entry, /if\s*\([^)]*(?:code|academic)/u);
 		assert.doesNotMatch(entry, /editor\/editor\.(?:code|academic)\.all/u);
 	}
-	assert.match(codeContribution, /editor\/editor\.code\.all/u);
-	assert.match(codeContribution, /standaloneGotoSymbolQuickAccess/u);
-	assert.match(codeContribution, /workbench\/contrib\/codeEditor\/browser\/codeEditor\.contribution/u);
-	assert.match(codeContribution, /workbench\/contrib\/tasks\/browser\/tasks\.contribution/u);
-	assert.match(codeContribution, /workbench\/contrib\/testing\/browser\/testing\.contribution/u);
-	assert.match(codeContribution, /workbench\/contrib\/debug\/browser\/debug\.contribution/u);
-	assert.match(codeContribution, /codeWorkbenchServices/u);
-	assert.doesNotMatch(codeContribution, /editor\/editor\.academic\.all/u);
+	assert.match(workbenchContributions, /editor\/editor\.code\.all/u);
+	assert.match(workbenchContributions, /standaloneGotoSymbolQuickAccess/u);
+	assert.match(workbenchContributions, /contrib\/codeEditor\/browser\/codeEditor\.contribution/u);
+	assert.match(workbenchContributions, /contrib\/tasks\/browser\/tasks\.contribution/u);
+	assert.match(workbenchContributions, /contrib\/testing\/browser\/testing\.contribution/u);
+	assert.match(workbenchContributions, /contrib\/debug\/browser\/debug\.contribution/u);
+	assert.doesNotMatch(workbenchContributions, /editor\/editor\.academic\.all/u);
 	assert.match(academicContribution, /registerEditorProfile/u);
-	assert.match(codeContribution, /workbench\/contrib\/academic\/browser\/academicEditor\.contribution/u);
-	assert.match(codeContribution, /workbench\/contrib\/documentEditor\/browser\/documentEditor\.contribution/u);
+	assert.match(workbenchContributions, /contrib\/academic\/browser\/academicEditor\.contribution/u);
+	assert.match(workbenchContributions, /contrib\/documentEditor\/browser\/documentEditor\.contribution/u);
 	assert.doesNotMatch(academicContribution, /workbench\/contrib\/(?:tasks|testing|debug)/u);
 	assert.doesNotMatch(academicContribution, /workbench\/contrib\/extensionHost/u);
 	assert.doesNotMatch(academicContribution, /editor\/editor\.code\.all/u);
-	assert.match(electronCodeMode, /browser\/workbench\/modes\/code\.contribution/u);
+	assert.doesNotMatch(workbenchContributions, /sessions\//u);
+	assert.match(browserEntry, /await startBrowserWorkbench\(\{ productName: AshWorkbenchName/u);
+	assert.match(electronEntry, /await main\(\{ productName: AshWorkbenchName/u);
 });
 
-test("Code services are installed by mode-selected service registrations rather than UI contributions", () => {
+test("Workbench entries select runtime services and load feature services through their contributions", () => {
 	const workbench = readFileSync(join(workbenchRoot, "browser/workbench.ts"), "utf8");
-	const productServices = readFileSync(resolve(workbenchRoot, "../code/browser/workbench/codeWorkbenchServices.ts"), "utf8");
-	const tasks = readFileSync(join(workbenchRoot, "services/tasks/browser/taskServiceRegistration.ts"), "utf8");
+	const workbenchContributions = readFileSync(join(workbenchRoot, "workbench.common.main.ts"), "utf8");
+	const tasks = readFileSync(join(workbenchRoot, "contrib/tasks/browser/taskService.ts"), "utf8");
 	const testing = readFileSync(join(workbenchRoot, "services/testing/browser/testingServiceRegistration.ts"), "utf8");
-	const debug = readFileSync(join(workbenchRoot, "services/debug/browser/debugServiceRegistration.ts"), "utf8");
+	const debug = readFileSync(join(workbenchRoot, "contrib/debug/browser/debugService.ts"), "utf8");
+	const debugContribution = readFileSync(join(workbenchRoot, "contrib/debug/browser/debug.contribution.ts"), "utf8");
+	const testingContribution = readFileSync(join(workbenchRoot, "contrib/testing/browser/testing.contribution.ts"), "utf8");
 	assert.doesNotMatch(workbench, /services\/(?:tasks|testing|debug)\/(?:browser|common)/u);
 	assert.doesNotMatch(workbench, /product\.id\s*===\s*["']code["']/u);
 	assert.match(workbench, /installWorkbenchServiceContributions/u);
-	assert.match(productServices, /taskServiceRegistration/u);
-	assert.match(productServices, /testingServiceRegistration/u);
-	assert.match(productServices, /debugServiceRegistration/u);
-	assert.match(productServices, /extensionHostServiceRegistration/u);
-	assert.match(productServices, /codebaseSymbolsServiceRegistration/u);
+	for (const runtime of ["web", "desktop"]) {
+		const entry = readFileSync(join(workbenchRoot, `workbench.${runtime}.main.ts`), "utf8");
+		assert.match(entry, /contrib\/tasks\/browser\/taskService/u);
+	}
+	assert.match(workbenchContributions, /extensionHostServiceRegistration/u);
+	assert.match(workbenchContributions, /codebaseSymbolsServiceRegistration/u);
+	assert.match(debugContribution, /import ["']\.\/debugService\.js["']/u);
+	assert.match(testingContribution, /services\/testing\/browser\/testingServiceRegistration/u);
+	assert.doesNotMatch(workbenchContributions, /testingServiceRegistration|contrib\/debug\/browser\/debugService/u);
+	assert.equal(existsSync(resolve(workbenchRoot, "../code/browser/workbench/codeWorkbenchServices.ts")), false);
 	for (const registration of [tasks, testing, debug]) assert.match(registration, /registerWorkbenchServiceContribution/u);
 	for (const contribution of ["tasks", "testing", "debug"]) assert.doesNotMatch(readFileSync(join(workbenchRoot, `contrib/${contribution}/browser/${contribution}.contribution.ts`), "utf8"), /registerWorkbenchServiceContribution/u);
 });
 
 test("Code renderers select App Server debug transport without Electron debug IPC", () => {
-	const browserCode = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/code.ts"), "utf8");
-	const electronCode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/code.ts"), "utf8");
+	const browserCode = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench.ts"), "utf8");
+	const electronCode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench.ts"), "utf8");
 	const main = readFileSync(resolve(editorRoot, "../code/electron-main/main.ts"), "utf8");
 	const sharedElectronRenderer = readFileSync(resolve(editorRoot, "../platform/native/electron-browser/rendererApi.ts"), "utf8");
 	const sharedDisconnectedRenderer = readFileSync(resolve(editorRoot, "../platform/app-server/browser/rendererApi.ts"), "utf8");

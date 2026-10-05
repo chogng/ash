@@ -1,7 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('editor accessibility help resolves shortcuts, traps focus and returns to the text', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
+test('editor accessibility help resolves shortcuts, traps focus and returns to the text', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -25,8 +24,7 @@ test('editor accessibility help resolves shortcuts, traps focus and returns to t
 	await editor.waitForEditorContents(contents => contents === 'Keep this text unchanged.');
 });
 
-test('screen reader mode has a working status action and can be disabled from its notification', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
+test('screen reader mode has a working status action and can be disabled from its notification', async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('editor.action.toggleScreenReaderAccessibilityMode');
 	const status = page.getByRole('button', { name: 'Screen Reader Optimized', exact: true });
@@ -64,8 +62,7 @@ test('accessible view help returns to the reading position before returning to n
 	await expect(page.getByRole('region', { name: 'Notification Center', exact: true })).toBeVisible();
 });
 
-test('editor accessibility help and screen reader status use the selected Chinese language', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
+test('editor accessibility help and screen reader status use the selected Chinese language', async ({ workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
 	await picker.getByRole('combobox').fill('简体中文');
@@ -84,8 +81,7 @@ test('editor accessibility help and screen reader status use the selected Chines
 	await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
 });
 
-test('unfocused view dimming follows keyboard focus and preserves the focused high contrast part', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
+test('unfocused view dimming follows keyboard focus and preserves the focused high contrast part', async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	const settings = workbench.editors.groupAt(0).editor;

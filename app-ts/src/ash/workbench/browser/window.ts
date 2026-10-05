@@ -8,13 +8,11 @@ import { onUnexpectedError } from "../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
 import { environment } from "../../base/common/platform.js";
 import { type WorkbenchState, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
-import type { WorkbenchModeId } from "../common/workbenchMode.js";
 import { type IWorkbenchHostService, type WorkbenchTextDownload } from "../services/host/common/workbenchHostService.js";
 import { h } from "../../base/browser/dom.js";
 
 export interface WorkbenchWindowOptions {
 	readonly root: HTMLElement;
-	readonly modeId: WorkbenchModeId;
 	readonly workbenchState: WorkbenchState;
 }
 
@@ -39,13 +37,11 @@ export class WorkbenchWindow
 		this.targetWindow = this.ownerDocument.defaultView;
 
 		options.root.classList.add("ash-workbench");
-		options.root.setAttribute("data-workbench-mode", options.modeId);
 		options.root.setAttribute("data-runtime", environment.runtime);
 		options.root.setAttribute("data-os", environment.os);
 		this.setWorkbenchState(options.workbenchState);
 		this._register(toDisposable(() => {
 			options.root.classList.remove("ash-workbench");
-			options.root.removeAttribute("data-workbench-mode");
 			options.root.removeAttribute("data-runtime");
 			options.root.removeAttribute("data-os");
 			options.root.removeAttribute("data-workbench-state");

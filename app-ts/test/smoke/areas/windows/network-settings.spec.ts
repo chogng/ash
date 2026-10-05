@@ -5,7 +5,7 @@ import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
 test('Network Settings supports search, keyboard help and Chinese labels while disconnected', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode === 'required', 'Exercises disconnected Workbench Settings.');
+	test.skip(target.appServerMode === 'required', 'Exercises disconnected Workbench Settings.');
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.locator('.ash-settings-editor');
@@ -43,7 +43,7 @@ test('Network Settings supports search, keyboard help and Chinese labels while d
 });
 
 test('Network Settings persists HTTP mode, copies configured domains and reports real HTTP reachability', async ({ target, workbench, application }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Uses the real backend transport and isolated provider configuration.');
+	test.skip(target.appServerMode !== 'required', 'Uses the real backend transport and isolated provider configuration.');
 	const requests: { url: string; authorization: string | undefined; version: string }[] = [];
 	const server = createServer((request, response) => {
 		requests.push({ url: request.url!, authorization: request.headers.authorization, version: request.httpVersion });

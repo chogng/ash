@@ -49,6 +49,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 		buildId: undefined,
 		rendererBuildId: undefined,
 		backendBytes: undefined,
+		// Historical report field, independent of application startup inputs.
 		workbenchMode: 'code',
 		workspace: 'isolated test workspace',
 		credentialFixture: 'offline test credentials',

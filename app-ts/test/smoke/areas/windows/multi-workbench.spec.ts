@@ -72,7 +72,7 @@ test("a second instance opens an independent Workbench and reuses an existing Wo
 });
 
 test('Open in Agents reuses one window across Workbench workspaces', async ({ application, target, workbench, testWorkspace }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires Code Electron');
+	test.skip(target.kind !== 'electron', 'Requires Code Electron');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 
 	const secondWorkspace = await createTestWorkspace();
@@ -123,7 +123,7 @@ test('Open in Agents reuses one window across Workbench workspaces', async ({ ap
 });
 
 test('dirty editor content survives an immediate Electron window close', async ({ application, target }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code Electron Workbench and App Server');
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code Electron Workbench and App Server');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const workspace = await createTestWorkspace();
 	workspacesToDispose.push(workspace);

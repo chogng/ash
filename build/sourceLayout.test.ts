@@ -91,7 +91,7 @@ function walk(directory: string): string[] {
 }
 
 
-test('build mode catalog loads without frontend runtime or settings migration modules', () => {
+test('build product identity loads without frontend runtime or settings migration modules', () => {
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
     import assert from 'node:assert/strict';
     import { registerHooks } from 'node:module';
@@ -100,9 +100,9 @@ test('build mode catalog loads without frontend runtime or settings migration mo
       if (url.includes('/app-ts/src/')) loaded.push(url);
       return nextLoad(url, context);
     } });
-    const { WorkbenchModeRegistry } = await import('./app-ts/src/ash/workbench/common/workbenchMode.ts');
-    assert.equal(WorkbenchModeRegistry.get(WorkbenchModeRegistry.defaultModeId).dedicatedSessions.rendererEntry, 'sessions-code');
-    assert.deepEqual(loaded.map(url => url.split('/').at(-1)), ['workbenchMode.ts']);
+    const { AshSessionsRendererEntry } = await import('./app-ts/src/ash/code/common/application.ts');
+    assert.equal(AshSessionsRendererEntry, 'sessions-code');
+    assert.deepEqual(loaded.map(url => url.split('/').at(-1)), ['application.ts']);
   `], { cwd: repositoryRoot, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
 });

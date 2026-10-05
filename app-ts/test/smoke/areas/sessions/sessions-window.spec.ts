@@ -56,7 +56,7 @@ async function replaceChatInput(editor: Editor, text: string): Promise<void> {
 }
 
 test('Sessions dictation introduction preserves the draft and restores focus after accessible help', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Uses the Sessions desktop window.');
+	test.skip(target.kind !== 'electron', 'Uses the Sessions desktop window.');
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
 	const page = await workbench.openAgentsWindow(target.kind);
 	const chat = page.locator('.ash-sessions-chat-slot .ash-chat:visible').first();
@@ -188,7 +188,6 @@ async function expectFloatingComposerHover(card: Locator, input: Locator, blurTa
 }
 
 test('Sessions Design canvas keeps grid and cursor readable across themes', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	for (const [theme, scheme] of [
 		['Ash Light', 'light'],
 		['Ash Dark', 'dark'],
@@ -288,7 +287,6 @@ test('Sessions Design canvas keeps grid and cursor readable across themes', asyn
 });
 
 test('Sessions Design contribution keeps its viewport and applies canvas cursor settings', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const design = navigation.getByRole('button', { name: 'Design', exact: true });
@@ -393,7 +391,6 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 });
 
 test('Sessions Design floating tools draw, edit motion and expose reusable code', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
@@ -545,7 +542,7 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 });
 
 test('Sessions Design canvas context menu edits the pointed object and preserves keyboard focus', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || (target.kind === 'electron' && process.platform === 'darwin'), 'DOM menu focus is tested in the browser; macOS system menus have a separate scenario.');
+	test.skip((target.kind === 'electron' && process.platform === 'darwin'), 'DOM menu focus is tested in the browser; macOS system menus have a separate scenario.');
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
@@ -605,7 +602,7 @@ test('Sessions Design canvas context menu edits the pointed object and preserves
 });
 
 test('Sessions Design macOS canvas menu dispatches editing through Main', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || process.platform !== 'darwin');
+	test.skip(target.kind !== 'electron' || process.platform !== 'darwin');
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
@@ -639,7 +636,6 @@ test('Sessions Design macOS canvas menu dispatches editing through Main', async 
 });
 
 test('Sessions Design edits vector geometry and preserves a complete undo gesture', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
@@ -697,7 +693,6 @@ test('Sessions Design edits vector geometry and preserves a complete undo gestur
 });
 
 test('Sessions Design color picker preserves formats, previews gestures and exports transparent fills', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	test.setTimeout(90_000);
 	let page = workbench.page;
 	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
@@ -830,7 +825,6 @@ test('Sessions Design color picker preserves formats, previews gestures and expo
 });
 
 test('Sessions Design property pane groups fields, collapses with the keyboard and edits path strokes', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
 	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
 	else {
@@ -910,7 +904,6 @@ test('Sessions Design property pane groups fields, collapses with the keyboard a
 });
 
 test('Sessions Design frames keep child geometry, nested selection and whole-gesture undo', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
 	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
 	else {
@@ -958,7 +951,7 @@ test('Sessions Design frames keep child geometry, nested selection and whole-ges
 });
 
 test('Sessions Design imports backend asset versions, crops independently and reopens a portable media package', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || (target.kind === 'electron' && target.appServerMode !== 'required'));
+	test.skip((target.kind === 'electron' && target.appServerMode !== 'required'));
 	test.skip(target.kind === 'browser' && target.appServerMode !== 'required');
 	let page = workbench.page;
 	const directory = await realpath(testWorkspace.directory);
@@ -1044,7 +1037,7 @@ test('Sessions Design imports backend asset versions, crops independently and re
 });
 
 test('Sessions Design saves and reopens an editable file through App Server', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires desktop file operations through App Server');
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires desktop file operations through App Server');
 	if (!('windows' in application)) { throw new Error('Expected Electron application'); }
 	const packagePath = join(await realpath(testWorkspace.directory), 'design.ash-design');
 	const filePath = join(packagePath, 'manifest.json');
@@ -1116,7 +1109,7 @@ test('Sessions Design saves and reopens an editable file through App Server', as
 });
 
 test('Sessions Design saves and opens a browser folder without replacing the workspace', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled' || target.workbenchMode !== 'code', 'Requires the standalone browser file picker');
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires the standalone browser file picker');
 	const page = workbench.page;
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
@@ -1180,7 +1173,6 @@ test('Sessions Design saves and opens a browser folder without replacing the wor
 });
 
 test('Sessions Design edits text and Bézier handles and transforms groups with keyboard and pointer', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
@@ -1257,7 +1249,7 @@ test('Sessions Design edits text and Bézier handles and transforms groups with 
 });
 
 test('Sessions Design exports SVG and HTML and reopens grouped text and paths through the file service', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || (target.kind === 'electron' && target.appServerMode !== 'required'));
+	test.skip((target.kind === 'electron' && target.appServerMode !== 'required'));
 	test.skip(target.kind === 'browser' && target.appServerMode !== 'disabled');
 	let page = workbench.page;
 	let folderName = '';
@@ -1353,7 +1345,6 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 });
 
 test('Sessions composer attaches files, chooses permissions, and restores the unsent draft', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	const composer = page.locator('.ash-sessions-chat-input').first();
 	const editor = new Editor(composer);
@@ -1453,7 +1444,6 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 });
 
 test('Sessions composer configuration leaves Workbench input defaults unchanged', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	const parent = workbench.page;
 	if (!await parent.locator('.ash-chat-view-pane').isVisible()) {
 		await parent.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -1516,7 +1506,6 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 });
 
 test('Sessions input shadow has its own theme color when general widget shadows are transparent', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	const parent = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const settings = parent.getByRole('dialog', { name: 'Ash Settings' });
@@ -1565,7 +1554,6 @@ test('Sessions input shadow has its own theme color when general widget shadows 
 });
 
 test('Sessions chat fills its content area without a duplicate session title', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	const sessionsContent = page.locator('[data-part="sessions"] > .ash-workbench-part-content');
 	const navigation = page.locator('.ash-sessions-activity-content');
@@ -1584,7 +1572,6 @@ test('Sessions chat fills its content area without a duplicate session title', a
 });
 
 test('Sessions new session keeps the welcome composer stable across frames', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	for (let session = 0; session < 3; session++) {
 		await page.setViewportSize([{ width: 1793, height: 1333 }, { width: 1280, height: 800 }, { width: 760, height: 600 }][session]!);
@@ -1635,7 +1622,6 @@ test('Sessions new session keeps the welcome composer stable across frames', asy
 });
 
 test('Sessions empty chat centers a growing input card and keeps the draft across themes and navigation', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	const setColorScheme = (colorScheme: 'light' | 'dark') => workbench.setAppearance(application, colorScheme, page);
 	const chat = page.locator('.ash-sessions-chat-slot .ash-chat:visible').first();
@@ -1707,7 +1693,6 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 });
 
 test('Sessions input card keeps a visible border without shadow or focus outline in high contrast', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const picker = workbench.page.locator('.ash-quick-pick');
@@ -1747,7 +1732,6 @@ test('Sessions input card keeps a visible border without shadow or focus outline
 test.describe('Notification Center', () => {
 	test.use({ openWorkspace: false });
 	test('Sessions window does not show an empty Notification Center button', async ({ application, target, workbench }) => {
-		test.skip(target.workbenchMode !== 'code', 'Requires Code Sessions');
 		let page = workbench.page;
 		if (target.kind === 'browser') {
 			await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
@@ -1799,7 +1783,7 @@ async function expectActivityIconSize(navigation: Locator, size: number): Promis
 }
 
 test('Code chat mode menu shows the available icons and selection', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || (target.kind !== 'browser' && target.kind !== 'electron'), 'Requires Code browser or Electron UI');
+	test.skip((target.kind !== 'browser' && target.kind !== 'electron'), 'Requires Code browser or Electron UI');
 	let page = workbench.page;
 	if (target.kind === 'browser') {
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
@@ -1895,7 +1879,7 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 });
 
 test('Browser Code Sessions Activity Bar centers icons and changes size and position through its menu', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code', 'Requires the browser Code Sessions page');
+	test.skip(target.kind !== 'browser', 'Requires the browser Code Sessions page');
 	const page = workbench.page;
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	const activityBar = page.locator('[data-part="activitybar"]');
@@ -2118,7 +2102,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 });
 
 test('Browser Sessions settings scroll each pane independently', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Requires the browser Code Sessions page');
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires the browser Code Sessions page');
 	const page = workbench.page;
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	await page.locator('.ash-sessions-activity-bottom button').last().click();
@@ -2155,7 +2139,7 @@ test('Browser Sessions settings scroll each pane independently', async ({ target
 });
 
 test('Browser Models Settings controls which models appear in the picker', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires browser Code Sessions with App Server');
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires browser Code Sessions with App Server');
 	const page = workbench.page;
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	const modelButton = page.locator('[data-action-id="ash.chat.input.model"] button').first();
@@ -2218,7 +2202,7 @@ test('Browser Models Settings controls which models appear in the picker', async
 });
 
 test('Electron Code Sessions Activity Bar follows its position and size settings', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
+	test.skip(target.kind !== 'electron', 'Requires the Code Sessions window');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = await workbench.openAgentsWindow(target.kind);
 	const original = await page.evaluate(async () => {
@@ -2285,7 +2269,7 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 });
 
 test('Electron Sessions account menu opens the Sessions settings page', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
+	test.skip(target.kind !== 'electron', 'Requires the Code Sessions window');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	if (process.platform === 'darwin') {
 		// The system menu is outside Playwright's page DOM; use the product's custom menu for this UI flow.
@@ -2358,7 +2342,7 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 });
 
 test('Sessions and IDE layout styles switch independently', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
+	test.skip(target.kind !== 'electron', 'Requires the Code Sessions window');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
 	const sessionsWindow = sessionsPage.locator('.ash-sessions-window');
@@ -2414,7 +2398,7 @@ test('Sessions and IDE layout styles switch independently', async ({ application
 });
 
 test('Sessions applies an installed extension color theme', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Code Sessions and App Server extension resources');
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires Code Sessions and App Server extension resources');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const openSessions = workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button");
 	const sessionPagePromise = application.waitForEvent('window');
@@ -2435,7 +2419,7 @@ test('Sessions applies an installed extension color theme', async ({ application
 });
 
 test('Open in Agents moves the IDE chat draft and preserves drafts when the target chat is occupied', async ({ application, driver, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the Code Electron chat shell');
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'Uses the Code Electron chat shell');
 	if (target.kind !== 'electron' || !('windows' in application)) throw new Error('Agents Window handoff requires Electron');
 
 	const workbenchPage = workbench.page;
@@ -2483,7 +2467,7 @@ test('Open in Agents moves the IDE chat draft and preserves drafts when the targ
 });
 
 test('Open in Agents selects the same session thread in the Agents Window', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires Code Electron with App Server');
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires Code Electron with App Server');
 	if (target.kind !== 'electron' || !('windows' in application)) throw new Error('Agents Window handoff requires Electron');
 
 	const workbenchPage = workbench.page;
@@ -2527,7 +2511,7 @@ test('Open in Agents selects the same session thread in the Agents Window', asyn
 });
 
 test('Agents macOS fullscreen hides window controls and restores them on exit', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || process.platform !== 'darwin', 'Requires macOS Code Electron window controls');
+	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'Requires macOS Code Electron window controls');
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
 	const spacer = sessionsPage.locator('.ash-sessions-window-controls-spacer');
@@ -2558,7 +2542,7 @@ test('Agents macOS fullscreen hides window controls and restores them on exit', 
 
 test("Code opens Sessions in a dedicated Electron window and returns to Workbench", async ({ application, target, workbench }) => {
 	test.skip(
-		target.kind !== "electron" || target.workbenchMode !== "code",
+		target.kind !== "electron",
 		"This scenario verifies the Code Electron Sessions window.",
 	);
 	if (target.kind !== "electron") {
@@ -2611,7 +2595,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	});
 	expect(configurationChange.updatedRevision).toBe(configurationChange.notifiedRevision);
 	await expect(sessionsPage.locator(".ash-code-sessions-window")).toHaveCSS("display", "flex");
-	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-workbench-mode", "code");
+
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-runtime", "electron");
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-workbench-state", "empty");
 	await workbench.setAppearance(application, "dark", sessionsPage);
@@ -2799,7 +2783,6 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 });
 
 test('Sessions menus and history actions stay independent from Workbench', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
 	if (target.kind === 'browser' || process.platform !== 'darwin') {
 		const workbenchMenu = page.getByRole('button', { name: 'Application menu', exact: true });
@@ -2846,7 +2829,7 @@ test('Sessions menus and history actions stay independent from Workbench', async
 });
 
 test('Sessions titlebar aligns its application menu and actions', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code');
+	test.skip(target.kind !== 'electron');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
 	const toolbar = sessionsPage.locator('[data-part="titlebar"] .ash-toolbar');
@@ -2900,7 +2883,6 @@ test('Sessions titlebar aligns its application menu and actions', async ({ appli
 });
 
 test('Sessions titlebar sidebar toggle stays transparent at rest and responds to pointer and keyboard', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	const workbenchToggle = workbench.page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button');
 	await expect(workbenchToggle).toHaveCSS('border-radius', '4px');
 	await workbenchToggle.hover();
@@ -2988,7 +2970,6 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 });
 
 test('Sessions titlebar sidebar toggle stays transparent at rest with hover and keyboard outlines in high contrast', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const search = workbench.page.locator('.ash-quick-pick').getByRole('combobox');
@@ -3045,7 +3026,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 });
 
 test('Browser Sessions application menu uses Sessions actions', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code');
+	test.skip(target.kind !== 'browser');
 	await workbench.page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	const menu = workbench.page.getByRole('button', { name: 'Application menu' });
 	await menu.click();
@@ -3057,7 +3038,6 @@ test('Browser Sessions application menu uses Sessions actions', async ({ target,
 });
 
 test('Sessions Activity Bar tooltips follow side, top and bottom placement without replacing buttons', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const chat = navigation.getByRole('button', { name: /^Chat(?:\.|$)/u });
@@ -3133,7 +3113,6 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 });
 
 test('Sessions Activity Bar changes layout while retaining the same session, draft, attachments and history', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	let navigation = page.locator('.ash-sessions-activity-content');
 	let composer = page.locator('.ash-sessions-chat-input:visible').first();
@@ -3198,10 +3177,10 @@ test('Sessions Activity Bar changes layout while retaining the same session, dra
 });
 
 test('closing the Workbench keeps Sessions usable and Return to Workbench reopens the workspace', async ({ target }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'This scenario requires Code Electron');
+	test.skip(target.kind !== 'electron', 'This scenario requires Code Electron');
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-dedicated-close-'));
 	try {
-		const { application, driver, close } = await launchElectron({ appServerMode: target.appServerMode, workbenchMode: 'code', userDataDirectory });
+		const { application, driver, close } = await launchElectron({ appServerMode: target.appServerMode, userDataDirectory });
 		try {
 			const parent = driver.workbench.page;
 			const childPromise = application.waitForEvent('window');
@@ -3233,7 +3212,7 @@ test('closing the Workbench keeps Sessions usable and Return to Workbench reopen
 });
 
 test('Code registers and releases a user system-wide Open Agents Window shortcut', async ({ target }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'This scenario requires Code Electron');
+	test.skip(target.kind !== 'electron', 'This scenario requires Code Electron');
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-shortcut-'));
 	const profileDirectory = join(userDataDirectory, 'profile');
 	const resourcePath = join(profileDirectory, 'keybindings.json');
@@ -3244,7 +3223,7 @@ test('Code registers and releases a user system-wide Open Agents Window shortcut
 		systemWide: true,
 	}]));
 	try {
-		const { application, close } = await launchElectron({ appServerMode: 'disabled', workbenchMode: 'code', userDataDirectory, profileDirectory });
+		const { application, close } = await launchElectron({ appServerMode: 'disabled', userDataDirectory, profileDirectory });
 		try {
 			await expect.poll(() => application.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Control+Alt+Shift+F24'))).toBe(true);
 			await writeFile(resourcePath, '[]\n');
@@ -3259,14 +3238,14 @@ test('Code registers and releases a user system-wide Open Agents Window shortcut
 });
 
 test('Agents retains the system-wide shortcut after the Workbench closes and forwards command arguments', async ({ target }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'This scenario requires Code Electron');
+	test.skip(target.kind !== 'electron', 'This scenario requires Code Electron');
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-agents-shortcut-'));
 	const profileDirectory = join(userDataDirectory, 'profile');
 	const resourcePath = join(profileDirectory, 'keybindings.json');
 	await mkdir(profileDirectory);
 	await writeFile(resourcePath, '[]\n');
 	try {
-		const { application, driver, close } = await launchElectron({ appServerMode: 'disabled', workbenchMode: 'code', userDataDirectory, profileDirectory });
+		const { application, driver, close } = await launchElectron({ appServerMode: 'disabled', userDataDirectory, profileDirectory });
 		try {
 			await application.evaluate(({ globalShortcut }) => {
 				const register = globalShortcut.register;

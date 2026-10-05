@@ -2,15 +2,12 @@ import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
-test.beforeEach(async ({ target, workbench }) => {
-	if (target.workbenchMode === 'code') {
-		// Fresh profiles restore Welcome after startup services; earlier input can be replaced during restoration.
-		await expect(workbench.page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
-	}
+test.beforeEach(async ({ workbench }) => {
+	// Fresh profiles restore Welcome after startup services; earlier input can be replaced during restoration.
+	await expect(workbench.page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
 });
 
-test('Skills command opens Settings after the Skills sidebar is removed', async ({ target, application, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
+test('Skills command opens Settings after the Skills sidebar is removed', async ({ application, workbench }) => {
 	const page = workbench.page;
 	await new QuickAccess(page).runCommand('ash.skills.open');
 	const settings = page.locator('.ash-settings-editor');
@@ -29,8 +26,7 @@ test('Skills command opens Settings after the Skills sidebar is removed', async 
 	await page.locator('.ash-modal-editor-close').click();
 });
 
-test('Marketplace view tab uses the extensions icon', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
+test('Marketplace view tab uses the extensions icon', async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.getByRole('region', { name: 'Primary sidebar' }).isVisible()) {
 		await page.getByRole('button', { name: 'Show Primary Side Bar', exact: true }).click();
@@ -50,7 +46,6 @@ test('Marketplace view tab uses the extensions icon', async ({ target, workbench
 });
 
 test('Marketplace slash commands open their Workbench owners without sending a chat message', async ({ target, application, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -114,7 +109,6 @@ test('Marketplace slash commands open their Workbench owners without sending a c
 });
 
 test('Language server Settings replaces the sidebar and saves backend configuration', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.languageServers.open');
 	let settings = page.locator('.ash-settings-editor');

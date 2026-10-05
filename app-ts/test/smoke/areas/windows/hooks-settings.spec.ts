@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
 test('Hooks Settings exposes all events with keyboard search and accessibility help', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Hooks are configured in Code Settings.');
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -39,7 +38,7 @@ test('Hooks Settings exposes all events with keyboard search and accessibility h
 });
 
 test('Hooks Settings reads saved TOML, appends a draft, and opens project configuration', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Uses an isolated desktop profile with App Server.');
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Uses an isolated desktop profile with App Server.');
 	if (!('windows' in application)) return;
 	const profile = await application.evaluate(() => process.env.ASH_HOME);
 	if (!profile) throw new Error('The test application has no isolated profile');
@@ -92,8 +91,7 @@ test('Hooks Settings reads saved TOML, appends a draft, and opens project config
 });
 
 
-test('Settings uses one search across Models, Hooks and registered configuration', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Uses Code Settings.');
+test('Settings uses one search across Models, Hooks and registered configuration', async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });

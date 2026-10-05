@@ -51,7 +51,6 @@ import {
 } from "../../base/common/lifecycle.js";
 import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from "../../base/common/errors.js";
 import { assertDefined } from "../../base/common/types.js";
-import { WorkbenchModeRegistry, type WorkbenchModeId } from "../common/workbenchMode.js";
 import { URI } from "../../base/common/uri.js";
 import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
 import { IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
@@ -311,7 +310,7 @@ import { IClipboardService } from "../../platform/clipboard/common/clipboardServ
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
-	readonly modeId: WorkbenchModeId;
+	readonly productName: string;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly api: IRendererHost;
 	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
@@ -343,7 +342,7 @@ export interface IStartWorkbenchOptions {
 
 /** Starts the browser workbench and binds its commands to the initial UI. */
 export async function startWorkbench({
-	modeId,
+	productName,
 	defaultLayout,
 	api,
 	browserFileSystemProvider,
@@ -379,10 +378,10 @@ export async function startWorkbench({
 		await themes.start();
 		const ownerWindow = container.ownerDocument.defaultView;
 		if (!ownerWindow) { throw new Error('Workbench requires an owner window'); }
-		storage = await createStorageService({ ownerWindow, applicationId: WorkbenchModeRegistry.get(modeId).storageNamespace, workspaceId: workspace.id });
+		storage = await createStorageService({ ownerWindow, workspaceId: workspace.id });
 		userDataFiles = await createUserDataFileSystemProvider();
 		return new Workbench(
-			modeId,
+			productName,
 			defaultLayout,
 			api,
 			container,
@@ -443,7 +442,7 @@ export class Workbench extends Disposable {
 	private previousUnexpectedError: { message: string | undefined; time: number } = { message: undefined, time: 0 };
 
 	constructor(
-		modeId: WorkbenchModeId,
+		productName: string,
 		defaultLayout: WorkbenchDefaultLayout | undefined,
 		api: IRendererHost,
 		workbenchRoot: HTMLElement,
@@ -682,7 +681,6 @@ export class Workbench extends Disposable {
 		const workbenchState = workspaceContext.getWorkbenchState();
 		const workbenchWindow = this._register(new WorkbenchWindow({
 			root: workbenchRoot,
-			modeId,
 			workbenchState,
 		}));
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
@@ -1005,7 +1003,7 @@ export class Workbench extends Disposable {
 		// The URL opener requires the completed editor service graph before the window announces readiness.
 		services.get(IURLService);
 		// Commands follow focus across windows; each window title follows only that window's EditorPart.
-		const titleService = this._register(services.createInstance(BrowserTitleService, workbenchRoot, mode.title, createTitlebarPart, editor));
+		const titleService = this._register(services.createInstance(BrowserTitleService, workbenchRoot, productName, createTitlebarPart, editor));
 		services.registerInstance(ITitleService, titleService);
 		const titlebar = titleService.getPart(workbenchRoot);
 		if (initialActivityBarLocation === ActivityBarPosition.TOP || initialActivityBarLocation === ActivityBarPosition.BOTTOM) {

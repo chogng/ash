@@ -9,10 +9,10 @@ export async function readStorageEntries(application: PlaywrightApplication, pag
 	if ('windows' in application) {
 		const directory = await application.evaluate(({ app }) => app.getPath('userData'));
 		const document = JSON.parse(await readFile(join(directory, 'workbench-state.json'), 'utf8')) as { storages: IStorageSnapshot[] };
-		return document.storages.find(snapshot => snapshot.identity.applicationId === identity.applicationId && snapshot.identity.scope === identity.scope && snapshot.identity.id === identity.id)?.entries ?? {};
+		return document.storages.find(snapshot => snapshot.identity.scope === identity.scope && snapshot.identity.id === identity.id)?.entries ?? {};
 	}
 	return page.evaluate(identity => {
-		const key = `ash.${encodeURIComponent(identity.applicationId)}.storage.${identity.scope}${identity.scope === 'application' ? '' : `.${encodeURIComponent(identity.id)}`}`;
+		const key = `ash.storage.${identity.scope}${identity.scope === 'application' ? '' : `.${encodeURIComponent(identity.id)}`}`;
 		const value = localStorage.getItem(key);
 		return value ? JSON.parse(value).entries : {};
 	}, identity);
@@ -27,7 +27,7 @@ export async function seedStorageOnNextLoad(application: PlaywrightApplication, 
 			const { StorageMainService } = require(modulePath);
 			const original = StorageMainService.prototype.getItems;
 			StorageMainService.prototype.getItems = async function(identity: IStorageIdentity, legacy?: Readonly<Record<string, IStorageEntry>>) {
-				if (identity.applicationId !== target.applicationId || identity.scope !== target.scope || identity.id !== target.id) {
+				if (identity.scope !== target.scope || identity.id !== target.id) {
 					return original.call(this, identity, legacy);
 				}
 				// This fixture is consumed once; subsequent writes and reloads use the unmodified owner.
@@ -41,7 +41,7 @@ export async function seedStorageOnNextLoad(application: PlaywrightApplication, 
 	}
 	await page.addInitScript(({ identity, entries, marker }) => {
 		if (sessionStorage.getItem(marker)) { return; }
-		const key = `ash.${encodeURIComponent(identity.applicationId)}.storage.${identity.scope}${identity.scope === 'application' ? '' : `.${encodeURIComponent(identity.id)}`}`;
+		const key = `ash.storage.${identity.scope}${identity.scope === 'application' ? '' : `.${encodeURIComponent(identity.id)}`}`;
 		const source = localStorage.getItem(key);
 		const document = source ? JSON.parse(source) : { version: 1, entries: {} };
 		for (const [key, entry] of Object.entries(entries)) {

@@ -1,7 +1,7 @@
 import { expect, test } from '../../../automation/test.js';
 
 test('selected Chat tab uses the tab surface instead of list selection blue', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -23,7 +23,7 @@ test('selected Chat tab uses the tab surface instead of list selection blue', as
 });
 
 test('opening another Chat tab keeps the existing composer mounted', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();

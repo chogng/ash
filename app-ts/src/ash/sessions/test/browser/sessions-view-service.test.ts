@@ -1,6 +1,7 @@
+import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
+import { setup, teardown, test } from "mocha";
 import { JSDOM } from 'jsdom';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
@@ -13,13 +14,15 @@ import { ISessionsManagementService, type SessionsManagementState } from "../../
 import { SessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
 import type { SessionsViewSelection } from "../../../sessions/services/sessions/browser/sessionsService.js";
 
-const storageEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+let storageResources: DisposableStore;
+setup(() => { storageResources = new DisposableStore(); });
+teardown(() => storageResources.dispose());
 ensureNoDisposablesAreLeakedInTestSuite();
-let storageSequence = 0;
-suiteTeardown(() => storageEnvironment.window.close());
 
 function createTestStorage(): BrowserStorageService {
-	return new BrowserStorageService({ ownerWindow: storageEnvironment.window as unknown as Window, applicationId: `view-test-${++storageSequence}`, workspaceId: 'sessions', flushInterval: 0 });
+	const storageEnvironment = new JSDOM('', { url: 'https://ash.test' });
+	storageResources.add(toDisposable(() => storageEnvironment.window.close()));
+	return new BrowserStorageService({ ownerWindow: storageEnvironment.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 }
 
 function createView(sessions: ISessionsManagementService, storage: IStorageService): SessionsService {

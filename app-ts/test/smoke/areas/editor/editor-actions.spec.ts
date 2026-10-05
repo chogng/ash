@@ -1,7 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('editor color picker uses shared controls and applies one undoable color edit', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('editor color picker uses shared controls and applies one undoable color edit', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -36,8 +35,7 @@ test('editor color picker uses shared controls and applies one undoable color ed
 	await expect(picker).toBeHidden();
 });
 
-test('editor color hover commits directly and standalone Enter applies with one undo', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('editor color hover commits directly and standalone Enter applies with one undo', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -74,8 +72,7 @@ test('editor color hover commits directly and standalone Enter applies with one 
 	await editor.waitForEditorContents(text => text === '#ff000080');
 });
 
-test('opening find focuses its input and leaves editor text unchanged', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('opening find focuses its input and leaves editor text unchanged', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -94,8 +91,7 @@ test('opening find focuses its input and leaves editor text unchanged', async ({
 	await expect(editor.input).toBeFocused();
 });
 
-test('closed find options show a checked button when toggled from the editor', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('closed find options show a checked button when toggled from the editor', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -117,8 +113,7 @@ test('closed find options show a checked button when toggled from the editor', a
 	await expect(matchCase).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 });
 
-test('editor breadcrumbs use the base widget for keyboard focus and activation', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('editor breadcrumbs use the base widget for keyboard focus and activation', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const breadcrumbs = workbench.editors.groupAt(0).title.getByRole('navigation', { name: 'Editor breadcrumbs' });
@@ -158,7 +153,7 @@ test('editor breadcrumbs use the base widget for keyboard focus and activation',
 });
 
 test('browser editor breadcrumbs start at the opened workspace and navigate its directories', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled' || target.workbenchMode !== 'code', 'Requires the browser filesystem');
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires the browser filesystem');
 	const page = workbench.page;
 	const folderName = await page.evaluate(async () => {
 		const storage = await navigator.storage.getDirectory();
@@ -193,9 +188,7 @@ test('browser editor breadcrumbs start at the opened workspace and navigate its 
 	await expect(breadcrumbs.getByRole('button')).toHaveText([folderName, 'src', 'sibling.ts']);
 });
 
-test('Code exposes editor view actions in the command palette', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
-
+test('Code exposes editor view actions in the command palette', async ({ workbench }) => {
 	await workbench.page.keyboard.press('F1');
 	const picker = workbench.page.locator('.ash-quick-pick');
 	const colors = await picker.evaluate(element => {

@@ -4,7 +4,6 @@ const image = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72,
 const longName = 'library-secondary-product-photography-for-the-autumn-brand-campaign-and-design-reference.png';
 
 test('Sessions Library opens a retained editor with accessible browsing controls', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
 	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
 	else {
@@ -58,7 +57,7 @@ test('Sessions Library opens a retained editor with accessible browsing controls
 });
 
 test('Sessions Library imports real images and preserves favorites and collections after reload', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required');
+	test.skip(target.appServerMode !== 'required');
 	let page = workbench.page;
 	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
 	else {
@@ -132,7 +131,6 @@ test('Sessions Library imports real images and preserves favorites and collectio
 });
 
 test('Sessions Library keeps text and keyboard focus readable across themes', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
 	for (const [theme, scheme] of [['Ash Light', 'light'], ['Ash Dark', 'dark'], ['Ash High Contrast Dark', 'high-contrast-dark'], ['Ash High Contrast Light', 'high-contrast-light']]) {
 		if (target.kind === 'browser') {
@@ -178,7 +176,6 @@ test('Sessions Library keeps text and keyboard focus readable across themes', as
 });
 
 test('Sessions Library uses Chinese labels and localized keyboard help', async ({ application, target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');
 	let settings = page.locator('.ash-settings-editor');

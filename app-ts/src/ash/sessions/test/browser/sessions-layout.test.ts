@@ -272,7 +272,6 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
 	const dom = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
 	const createStorage = () => new BrowserStorageService({
 		ownerWindow: dom.window as unknown as Window,
-		applicationId: "code",
 		workspaceId: "sessions",
 		profileId: "code-sessions",
 		backend: dom.window.localStorage,
@@ -330,7 +329,7 @@ test('Sessions layout completion exposes settled Parts through the window contai
 
 test('Sessions Part availability preserves user visibility and cached widths during persistence', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
-	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'code', workspaceId: 'sessions', flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 	const parts = createParts(dom.window.document);
 	using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_200, 800), storageService: storage });
 	layout.layout(new Dimension(1_200, 800));
@@ -392,7 +391,7 @@ const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
 
 function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPartInstance>, options: import('../../browser/workbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService } = {}): import('../../browser/workbench.js').SessionsWorkbenchLayout {
-	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, applicationId: 'sessions-test', workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
+	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
 	const storage = options.storageService ?? ownedStorage!;
 	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);

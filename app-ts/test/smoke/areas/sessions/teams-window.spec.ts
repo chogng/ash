@@ -1,7 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 
 test('Agents Collaboration page stays empty and selects its Activity Bar entry', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires Code Sessions');
 	let page = await workbench.openAgentsWindow(target.kind);
 	const activityBar = page.locator('.ash-sessions-activity-content');
 	await expect(activityBar.getByRole('button', { name: /^Chat/ })).toHaveAttribute('aria-current', 'page');

@@ -9,7 +9,6 @@ import {
 	DisposableStore,
 	type IDisposable,
 } from "../../base/common/lifecycle.js";
-import type { WorkbenchModeId } from "../common/workbenchMode.js";
 import {
 	createDisconnectedRendererApi,
 } from "../../platform/app-server/browser/rendererApi.js";
@@ -29,7 +28,7 @@ import type {
 	IWebWorkbenchHost,
 } from "./web.api.js";
 import { startWorkbench } from "./workbench.js";
-import { BrowserStorageService, migrateBrowserStorage } from '../services/storage/browser/storageService.js';
+import { BrowserStorageService } from '../services/storage/browser/storageService.js';
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
 import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
@@ -37,20 +36,17 @@ import { BrowserLifecycleService } from '../services/lifecycle/browser/lifecycle
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { EMPTY_WORKSPACE_ID_KEY } from '../services/host/browser/browserHostService.js';
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
-import { migrateAcademicWorkbenchSettings } from '../common/workbenchModeMigration.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
 export async function createWebWorkbench(
-	modeId: WorkbenchModeId,
 	options: IWebWorkbenchConstructionOptions,
 ): Promise<IWebWorkbench> {
 	installBaseUiStyles();
 	const ownerWindow = options.container.ownerDocument.defaultView;
 	if (!ownerWindow) throw new Error('Workbench requires an owner window');
-	const conflicts = migrateBrowserStorage(ownerWindow.localStorage, 'academic', 'code');
-	if (conflicts.length > 0) { console.warn('Academic state migration retained conflicting entries', conflicts); }
+
 	return startWorkbench({
-		modeId,
+		productName: options.productName,
 		createURLService: services => services.createInstance(BrowserURLService, options.urlCallbackProvider),
 		createTextDocumentHost: options.createTextDocumentHost,
 		createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
@@ -82,12 +78,12 @@ function getEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {
 }
 
 /**
- * Starts a Workbench mode from the optional global Web host and owns page
+ * Starts the Workbench from the optional global Web host and owns page
  * shutdown. A page without an embedder starts in an explicit disconnected
  * state so its UI remains inspectable without claiming backend availability.
  */
 export async function startWebWorkbench(
-	modeId: WorkbenchModeId,
+	options: Pick<IStartWorkbenchOptions, 'productName'>,
 	hostLifetime?: IDisposable,
 	createTextDocumentHost?: IStartWorkbenchOptions['createTextDocumentHost'],
 ): Promise<IDisposable> {
@@ -96,16 +92,13 @@ export async function startWebWorkbench(
 	workbench.add(hostLifetime);
 	try {
 		const configurationApi = workbench.add(new IndexedDbConfigurationApi());
-		let initialConfigurationSnapshot = await configurationApi.read();
-		const migratedSource = migrateAcademicWorkbenchSettings(initialConfigurationSnapshot.document.source);
-		if (migratedSource !== undefined) {
-			initialConfigurationSnapshot = await configurationApi.update({ expectedRevision: initialConfigurationSnapshot.revision, document: { version: 1, source: migratedSource } });
-		}
+		const initialConfigurationSnapshot = await configurationApi.read();
 		const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> };
 		const browserFileSystemProvider = !host && picker.showDirectoryPicker && globalThis.indexedDB
 			? new HTMLFileSystemProvider(globalThis.indexedDB)
 			: undefined;
-		const instance = await createWebWorkbench(modeId, {
+		const instance = await createWebWorkbench({
+			...options,
 			urlCallbackProvider: host?.urlCallbackProvider,
 			api: host?.api ?? createDisconnectedRendererApi(),
 			createTextDocumentHost,

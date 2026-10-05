@@ -76,7 +76,7 @@ process.stdin.on('data', data => {
 `;
 
 test.beforeEach(async ({ target, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code DAP process boundary.');
+	test.skip(target.appServerMode !== 'required', 'Requires the Code DAP process boundary.');
 	const directory = testWorkspace.directory;
 	await mkdir(join(directory, '.vscode'));
 	await writeFile(join(directory, 'debug-adapter.cjs'), adapter);

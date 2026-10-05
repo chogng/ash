@@ -6,7 +6,7 @@ const source = `fn main() {}\n#[cfg(test)]\nmod checks {\n    #[test] fn passes(
 
 test.describe('built-in Rust testing', () => {
 	test.beforeEach(async ({ target, testWorkspace }) => {
-		test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Rust testing backend and Code workbench.');
+		test.skip(target.appServerMode !== 'required', 'Requires the Rust testing backend and Code workbench.');
 		await writeFile(testWorkspace.rustFile, source);
 	});
 
@@ -103,7 +103,7 @@ test.describe('built-in Rust testing', () => {
 test.describe('testing without a backend', () => {
 	test.use({ openWorkspace: false });
 	test.beforeEach(({ target }) => {
-		test.skip(target.appServerMode !== 'disabled' || target.workbenchMode !== 'code', 'Checks UI-only workbench availability.');
+		test.skip(target.appServerMode !== 'disabled', 'Checks UI-only workbench availability.');
 	});
 	test('Testing opens with accessible controls and disables execution without discovered cases', async ({ workbench }) => {
 		const page = workbench.page;
@@ -120,8 +120,7 @@ test.describe('testing without a backend', () => {
 test.describe('Run and Debug sidebar layout', () => {
 	test.use({ openWorkspace: false });
 
-	test('debug sidebar has a compact launch row, keyboard collapsible sections and readable themes', async ({ target, workbench, restartWorkbench }) => {
-		test.skip(target.workbenchMode !== 'code', 'Requires the Code workbench.');
+	test('debug sidebar has a compact launch row, keyboard collapsible sections and readable themes', async ({ workbench, restartWorkbench }) => {
 		let page = workbench.page;
 		const tab = page.getByRole('tab', { name: 'Run and Debug', exact: true }).first();
 		await tab.click();

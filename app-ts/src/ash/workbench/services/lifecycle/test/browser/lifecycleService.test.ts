@@ -190,6 +190,6 @@ function createLifecycleServices(browser: JSDOM, navigationType = 'navigate'): I
 	Object.defineProperty(browser.window.performance, 'getEntriesByType', { configurable: true, value: () => [{ type: navigationType }] });
 	const services = new InstantiationService();
 	services.registerInstance(ILogService, new NullLoggerService());
-	services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'lifecycle-test', workspaceId: 'workspace', flushInterval: 0 }));
+	services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 }));
 	return services;
 }

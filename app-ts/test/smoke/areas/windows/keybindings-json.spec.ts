@@ -13,7 +13,6 @@ async function replaceJson(input: Locator, source: string): Promise<void> {
 }
 
 test('Keybindings JSON saves the profile file, applies shortcuts after reload and uses Chinese labels', async ({ target, application, workbench, reloadWorkbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires Code Preferences');
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	let group = workbench.editors.groupAt(0);
 	let tab = group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' });
@@ -48,7 +47,7 @@ test('Keybindings JSON saves the profile file, applies shortcuts after reload an
 });
 
 test('Keybindings JSON completes paste command arguments and ordered provider preferences', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires product JSON language declarations');
+	test.skip(target.appServerMode !== 'required', 'Requires product JSON language declarations');
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	const group = workbench.editors.groupAt(0);
 	const options = group.content.locator('.stanza-editor-completion-option');
@@ -70,7 +69,7 @@ test('Keybindings JSON completes paste command arguments and ordered provider pr
 });
 
 test('Keybindings external changes reload clean models and preserve dirty text on save conflict', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Uses an external profile-file writer');
+	test.skip(target.kind !== 'electron', 'Uses an external profile-file writer');
 	if (!('windows' in application)) throw new Error('Requires Electron');
 	const profile = await application.evaluate(() => process.env.ASH_HOME);
 	if (!profile) throw new Error('Test profile unavailable');

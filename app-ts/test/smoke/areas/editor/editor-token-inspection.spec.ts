@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
 test('Markdown customization updates rendered styles and the token scope report', async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires the Code product grammar resources');
+	test.skip(target.appServerMode !== 'required', 'Requires the Code product grammar resources');
 	const page = workbench.page;
 	await writeFile(join(testWorkspace.directory, 'inspect.md'), '# Heading\n');
 	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
@@ -53,8 +53,7 @@ test('Markdown customization updates rendered styles and the token scope report'
 	await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-token').filter({ hasText: 'Heading' })).toHaveCSS('color', 'rgb(101, 67, 33)');
 });
 
-test('token inspection handles plaintext, Chinese labels, keyboard close and focus restoration', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
+test('token inspection handles plaintext, Chinese labels, keyboard close and focus restoration', async ({ workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = page.getByRole('dialog', { name: 'Select Display Language' });

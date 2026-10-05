@@ -55,7 +55,7 @@ test("OutputService rejects ambiguous channel ownership and invalid entries", ()
 
 test("OutputService restores the workspace active channel when its producer returns", () => {
 	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
-	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: "output-test", workspaceId: "workspace", backend: browser.window.localStorage, flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "workspace", backend: browser.window.localStorage, flushInterval: 0 });
 	{
 		using outputResources = new DisposableStore();
 		const output = workbenchInstantiationService(outputResources, storage).get(IOutputService);
@@ -150,7 +150,7 @@ test("OutputFilterState combines include, exclude, severity, and category filter
 
 test("OutputFilterState restores workspace-local filter choices", () => {
 	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
-	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: "output-filter-test", workspaceId: "workspace", backend: browser.window.localStorage, flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "workspace", backend: browser.window.localStorage, flushInterval: 0 });
 	{
 		using filterResources = new DisposableStore();
 		const filters = workbenchInstantiationService(filterResources, storage).get(IOutputService).filters;

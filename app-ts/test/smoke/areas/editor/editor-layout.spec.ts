@@ -536,8 +536,7 @@ test("editor layout remains valid across workbench window sizes", async ({ drive
 	expect(observedSizes.size).toBe(3);
 });
 
-test("split editor groups keep visible boundaries", async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== "code", "This scenario requires the Code product");
+test("split editor groups keep visible boundaries", async ({ workbench }) => {
 	const editors = workbench.editors;
 	const page = workbench.page;
 

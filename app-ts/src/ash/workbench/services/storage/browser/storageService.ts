@@ -15,36 +15,32 @@ interface StoredDocument {
 	readonly entries: Readonly<Record<string, StoredEntry>>;
 }
 
-/** Completes namespace retirement before opening the target storage adapter. */
-export function migrateBrowserStorage(backend: Storage, sourceApplicationId: string, targetApplicationId: string): readonly string[] {
-	const sourcePrefix = `ash.${encodeURIComponent(sourceApplicationId)}.storage.`;
-	const targetPrefix = `ash.${encodeURIComponent(targetApplicationId)}.storage.`;
-	const keys = Array.from({ length: backend.length }, (_, index) => backend.key(index)!).filter(key => key.startsWith(sourcePrefix));
-	const conflicts: string[] = [];
-	for (const sourceKey of keys) {
-		const source = parseStoredDocument(backend.getItem(sourceKey)!);
-		const targetKey = targetPrefix + sourceKey.slice(sourcePrefix.length);
-		const targetSource = backend.getItem(targetKey);
-		const target = targetSource === null ? new Map<string, StoredEntry>() : parseStoredDocument(targetSource);
-		const remaining = new Map<string, StoredEntry>();
-		for (const [key, entry] of source) {
-			const existing = target.get(key);
-			if (existing && (existing.value !== entry.value || existing.target !== entry.target)) {
-				remaining.set(key, entry);
-				conflicts.push(`${sourceKey}/${key}`);
-			} else { target.set(key, entry); }
+/** Retires old namespaces before either browser or Desktop storage reads its scopes. */
+export function migrateBrowserStorage(backend: Storage): void {
+	// Current storage wins, then Code, then Academic. Archives are never read by the adapter.
+	for (const applicationId of ['code', 'academic']) {
+		const prefix = `ash.${applicationId}.storage.`;
+		const keys = Array.from({ length: backend.length }, (_, index) => backend.key(index)!).filter(key => key.startsWith(prefix));
+		for (const sourceKey of keys) {
+			const original = backend.getItem(sourceKey)!;
+			const source = parseStoredDocument(original);
+			const suffix = sourceKey.slice(prefix.length);
+			const targetKey = `ash.storage.${suffix}`;
+			const targetSource = backend.getItem(targetKey);
+			const target = targetSource === null ? new Map<string, StoredEntry>() : parseStoredDocument(targetSource);
+			for (const [key, entry] of source) {
+				if (!target.has(key)) { target.set(key, entry); }
+			}
+			// Archive and destination must both reach storage before removing the source.
+			backend.setItem(`ash.storage.v1.${applicationId}.${suffix}`, original);
+			backend.setItem(targetKey, serializeStoredDocument(target));
+			backend.removeItem(sourceKey);
 		}
-		// Persist the destination first so an interrupted cleanup can safely run again.
-		backend.setItem(targetKey, serializeStoredDocument(target));
-		if (remaining.size > 0) { backend.setItem(sourceKey, serializeStoredDocument(remaining)); }
-		else { backend.removeItem(sourceKey); }
 	}
-	return conflicts;
 }
 
 export interface BrowserStorageServiceOptions {
 	readonly ownerWindow: Window;
-	readonly applicationId: string;
 	readonly workspaceId: string;
 	readonly profileId?: string;
 	readonly backend?: Storage;
@@ -64,7 +60,7 @@ export class BrowserStorageService extends Disposable implements IStorageService
 	private readonly ownerWindow: Window;
 	private readonly backend: Storage | undefined;
 	private readonly onError: (error: unknown) => void;
-	private readonly namespace: string;
+	private readonly namespace = 'ash.storage';
 	private readonly applicationStorageKey: string;
 	private readonly profileStorageKey: string;
 	private workspaceStorageKey: string;
@@ -78,7 +74,6 @@ export class BrowserStorageService extends Disposable implements IStorageService
 		super();
 		this.ownerWindow = options.ownerWindow;
 		this.onError = options.onError ?? ((error) => console.error("Failed to access browser storage", error));
-		validateIdentifier(options.applicationId, "application");
 		validateIdentifier(options.workspaceId, "workspace");
 		const profileId = options.profileId ?? "default";
 		validateIdentifier(profileId, "profile");
@@ -86,11 +81,11 @@ export class BrowserStorageService extends Disposable implements IStorageService
 		if (!Number.isFinite(flushInterval) || flushInterval < 0) {
 			throw new RangeError("Browser storage flush interval must be non-negative and finite");
 		}
-		this.namespace = `ash.${encodeURIComponent(options.applicationId)}.storage`;
 		this.applicationStorageKey = `${this.namespace}.application`;
 		this.profileStorageKey = `${this.namespace}.profile.${encodeURIComponent(profileId)}`;
 		this.workspaceStorageKey = workspaceStorageKey(this.namespace, options.workspaceId);
 		this.backend = options.backend ?? readLocalStorage(this.ownerWindow, this.onError);
+		if (this.backend) { migrateBrowserStorage(this.backend); }
 		for (const scope of storageScopes) {
 			this.entries.set(scope, this.load(scope));
 		}

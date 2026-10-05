@@ -4,7 +4,7 @@ import { expect, test } from '../../../automation/test.js';
 test.use({ openWorkspace: false });
 
 test('desktop privileges reach the window title through the Main process', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'This scenario requires the desktop Code product');
+	test.skip(target.kind !== 'electron', 'This scenario requires the desktop Code product');
 	const page = workbench.page;
 	const isAdmin = await page.evaluate(async () => {
 		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
@@ -22,7 +22,6 @@ test('desktop privileges reach the window title through the Main process', async
 });
 
 test('window title and command center follow the active editor and its dirty state', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
 	const center = page.locator('.ash-titlebar-command-center-button');
 	await expect(page).toHaveTitle('Welcome — Ash Code');
@@ -68,8 +67,7 @@ test('window title template and separator settings update the title and command 
 	await expect(page).toHaveTitle('Ash Code | Untitled-2');
 });
 
-test('activity bar badges stay over the icon and can be hidden independently through the menu', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('activity bar badges stay over the icon and can be hidden independently through the menu', async ({ application, workbench }) => {
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const explorer = workbench.element.locator('.ash-composite-bar-destination[data-action-id="ash.sidebar"]');
@@ -142,8 +140,7 @@ test('activity bar badges stay over the icon and can be hidden independently thr
 	}
 });
 
-test('activity bar badge colors follow theme customizations and survive reopening', async ({ application, target, workbench, reloadWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('activity bar badge colors follow theme customizations and survive reopening', async ({ application, workbench, reloadWorkbench }) => {
 	const badge = (): Locator => workbench.element.locator('.ash-composite-bar-destination[data-action-id="ash.sidebar"] .ash-composite-bar-badge');
 	await workbench.openExplorer();
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
@@ -193,8 +190,7 @@ test('activity bar badge colors follow theme customizations and survive reopenin
 	await expect(badge()).toHaveCSS('color', 'rgb(0, 0, 0)');
 });
 
-test('activity bar badge setting updates immediately and persists in settings.json', async ({ application, target, workbench, reloadWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('activity bar badge setting updates immediately and persists in settings.json', async ({ application, workbench, reloadWorkbench }) => {
 	const explorer = (): Locator => workbench.element.locator('.ash-composite-bar-destination[data-action-id="ash.sidebar"]');
 	const badge = (): Locator => explorer().locator('.ash-composite-bar-badge');
 	const createActivity = async (): Promise<void> => {
@@ -244,8 +240,7 @@ test('activity bar badge setting updates immediately and persists in settings.js
 	await expect(badge()).toHaveCount(1);
 });
 
-test('activity bar badge visibility survives reopening the workbench', async ({ application, target, workbench, reloadWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('activity bar badge visibility survives reopening the workbench', async ({ application, workbench, reloadWorkbench }) => {
 	let explorer = workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Explorer', exact: true });
 	await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Hide Badge']);
 	({ application, workbench } = await reloadWorkbench());
@@ -257,8 +252,7 @@ test('activity bar badge visibility survives reopening the workbench', async ({ 
 	expect(await workbench.menus.inspect(application, () => explorer.click({ button: 'right' }))).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Hide Badge', enabled: true })]));
 });
 
-test('maximized Panel keeps its state when the sidebar moves and restores its height', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('maximized Panel keeps its state when the sidebar moves and restores its height', async ({ application, workbench }) => {
 	const page = workbench.page;
 	const panel = page.locator('[data-part="panel"]');
 	const editor = page.locator('[data-part="editor"]');
@@ -285,7 +279,6 @@ test('maximized Panel keeps its state when the sidebar moves and restores its he
 });
 
 test('Manage Accounts command opens the account picker when the account service is available', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
 	await page.keyboard.press('F1');
 	const commandPicker = page.locator('.ash-quick-pick');
@@ -392,7 +385,6 @@ test('desktop GitHub authorization opens a browser URL and can be cancelled with
 });
 
 test('primary sidebar toggle sits immediately after the application menu', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
 	const page = workbench.page;
 	const actionId = 'workbench.action.toggleSideBar';
@@ -424,8 +416,7 @@ test('primary sidebar toggle sits immediately after the application menu', async
 	}
 });
 
-test('activity bar remains visible and reopens a selected sidebar view in the light theme', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('activity bar remains visible and reopens a selected sidebar view in the light theme', async ({ application, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Ash Light');
@@ -529,8 +520,7 @@ test('activity bar remains visible and reopens a selected sidebar view in the li
 	await expect(search).toHaveAttribute('aria-selected', 'true');
 });
 
-test('activity bar tooltips follow left, right, top and bottom placement', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('activity bar tooltips follow left, right, top and bottom placement', async ({ application, workbench }) => {
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const sidebar = page.locator('[data-part="sidebar"]');
@@ -602,8 +592,7 @@ test('activity bar tooltips follow left, right, top and bottom placement', async
 	await checkTooltip(activitybar.getByRole('button', { name: 'Manage', exact: true }), 'right');
 });
 
-test('activity bar keeps global actions visible and moves excess views into a menu', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('activity bar keeps global actions visible and moves excess views into a menu', async ({ application, workbench }) => {
 	const page = workbench.page;
 	await page.setViewportSize({ width: 1024, height: 280 });
 	const activitybar = page.locator('[data-part="activitybar"]');
@@ -629,8 +618,7 @@ test('activity bar keeps global actions visible and moves excess views into a me
 	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 });
 
-test('activity bar context menu hides and restores view icons', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('activity bar context menu hides and restores view icons', async ({ application, workbench }) => {
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const explorer = activitybar.getByRole('tab', { name: 'Explorer' });
@@ -651,7 +639,7 @@ test('activity bar context menu hides and restores view icons', async ({ applica
 });
 
 test('Accounts and Manage menus open beside the activity bar and below the title bar', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code', 'This scenario requires the web Code workbench');
+	test.skip(target.kind !== 'browser', 'This scenario requires the web Code workbench');
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const accounts = activitybar.getByRole('button', { name: 'Accounts' });
@@ -693,7 +681,7 @@ test('Accounts and Manage menus open beside the activity bar and below the title
 });
 
 test('macOS custom right activity bar menus open beside their buttons', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || process.platform !== 'darwin', 'This scenario requires macOS Electron Code');
+	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires macOS Electron Code');
 	const page = workbench.page;
 	await page.getByRole('button', { name: 'Search commands' }).click();
 	await page.getByRole('dialog', { name: 'Search commands (type >, @, or ? for modes)' }).getByRole('combobox').fill('Ash Settings');
@@ -813,8 +801,7 @@ test('a late macOS menu close callback leaves the next menu open', async ({ targ
 	}
 });
 
-test('blank activity bar context menu lists and toggles views', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('blank activity bar context menu lists and toggles views', async ({ application, workbench }) => {
 	const activitybar = workbench.page.locator('[data-part="activitybar"]');
 	const compositeBar = activitybar.locator('.ash-composite-bar');
 	const search = activitybar.getByRole('tab', { name: 'Search' });
@@ -834,7 +821,6 @@ test('blank activity bar context menu lists and toggles views', async ({ applica
 });
 
 test('activity bar context menu changes size and position', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const titlebar = page.locator('[data-part="titlebar"]');
@@ -971,8 +957,7 @@ test('activity bar context menu changes size and position', async ({ application
 	await expect(activitybar).toBeHidden();
 });
 
-test('activity bar icon size follows position and compact in Flat and Modern layouts', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('activity bar icon size follows position and compact in Flat and Modern layouts', async ({ application, workbench }) => {
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const sidebar = page.locator('[data-part="sidebar"]');
@@ -1033,8 +1018,7 @@ test('activity bar icon size follows position and compact in Flat and Modern lay
 	}
 });
 
-test('top activity bar places the view selector inside the sidebar', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('top activity bar places the view selector inside the sidebar', async ({ application, workbench }) => {
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const sidebar = page.locator('[data-part="sidebar"]');
@@ -1076,8 +1060,7 @@ test('top activity bar places the view selector inside the sidebar', async ({ ap
 	await expect.poll(leftInsets).toEqual({ tab: 0, title: 12, paneTwisty: 8 });
 });
 
-test('command center opens without a first-run guide', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('command center opens without a first-run guide', async ({ workbench }) => {
 	const page = workbench.page;
 	const search = page.getByRole('button', { name: 'Search commands' });
 	await expect(search).toBeVisible();
@@ -1105,8 +1088,7 @@ test('macOS sidebar toggle starts at the window control safe area', async ({ tar
 	expect(gap).toBeLessThanOrEqual(4);
 });
 
-test('titlebar navigation moves through editor history beside Quick Access', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('titlebar navigation moves through editor history beside Quick Access', async ({ workbench }) => {
 	const page = workbench.page;
 	const navigation = page.locator('.ash-titlebar-command-center-navigation');
 	const back = navigation.getByRole('button', { name: 'Go Back' });
@@ -1155,8 +1137,7 @@ test('titlebar navigation moves through editor history beside Quick Access', asy
 	await expect(forward).toBeDisabled();
 });
 
-test('titlebar navigation restores a cursor location in the same editor', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('titlebar navigation restores a cursor location in the same editor', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
@@ -1176,7 +1157,6 @@ test('titlebar navigation restores a cursor location in the same editor', async 
 });
 
 test('Sessions entry sits beside Quick Access and animates its Ash mark on intent', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
 	const commandCenter = page.locator('.ash-titlebar-command-center-button');
 	const actionId = target.kind === 'electron' ? 'workbench.action.chat.openAgentsWindow.titleBar' : 'ash.code.open-sessions';
@@ -1306,8 +1286,7 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 	}
 });
 
-test('titlebar toolbar icons fit inside their buttons', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('titlebar toolbar icons fit inside their buttons', async ({ workbench }) => {
 	const page = workbench.page;
 	const sidebarToggle = page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button');
 	const panelToggle = page.locator('.ash-titlebar-actions [data-action-id="workbench.action.togglePanel"] button');
@@ -1351,7 +1330,6 @@ test('titlebar toolbar icons fit inside their buttons', async ({ target, workben
 });
 
 test('Quick Access has no backdrop and lets workbench controls receive clicks', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
 	const page = workbench.page;
 	await page.keyboard.press('F1');
@@ -1366,8 +1344,7 @@ test('Quick Access has no backdrop and lets workbench controls receive clicks', 
 	await expect(page.getByRole('menu').first()).toBeVisible();
 });
 
-test('Quick Access scrolls its results within the list', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('Quick Access scrolls its results within the list', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('F1');
 	const picker = page.locator('.ash-quick-pick');
@@ -1449,7 +1426,6 @@ test('Quick Access scrolls its results within the list', async ({ target, workbe
 });
 
 test('titlebar command center opens command search and restores focus', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Ash Light');

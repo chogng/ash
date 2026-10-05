@@ -213,7 +213,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(IFileDialogService, new FileDialogService({ kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(INotificationService, notifications);
-	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'test', workspaceId: 'test', flushInterval: 0 }));
+	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
 	registerTestDictationOnboarding(services);
 	services.registerInstance(ISessionsManagementService, sessionService);
@@ -310,12 +310,12 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 
 test('Sessions draft state restores text and images while isolating Threads and workspaces', async () => {
 	const ownerWindow = browserEnvironment.window as unknown as Window;
-	using storage = new BrowserStorageService({ ownerWindow, applicationId: 'draft-test', workspaceId: 'workspace-a', flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow, workspaceId: 'workspace-a', flushInterval: 0 });
 	const draft = { mode: 'debug' as const, text: 'Review this', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }] };
 	writeNewChatDraftState(storage, draft, 'untitled:first');
 	writeNewChatDraftState(storage, { mode: 'plan', text: 'Thread draft', contexts: [] }, 'thread-1');
 	await storage.flush();
-	using restored = new BrowserStorageService({ ownerWindow, applicationId: 'draft-test', workspaceId: 'workspace-a', flushInterval: 0 });
+	using restored = new BrowserStorageService({ ownerWindow, workspaceId: 'workspace-a', flushInterval: 0 });
 	assert.deepEqual(readNewChatDraftState(restored, 'untitled:first'), draft);
 	assert.deepEqual(readNewChatDraftState(restored, 'thread-1'), { mode: 'plan', text: 'Thread draft', contexts: [] });
 	assert.equal(readNewChatDraftState(restored, 'thread-2'), undefined);
@@ -329,7 +329,7 @@ test('Sessions draft state restores text and images while isolating Threads and 
 
 test('legacy drafts merge by session identity and conflicting content survives until recovery', async () => {
 	const ownerWindow = browserEnvironment.window as unknown as Window;
-	using storage = new BrowserStorageService({ ownerWindow, applicationId: 'draft-migration-test', workspaceId: 'sessions', flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow, workspaceId: 'sessions', flushInterval: 0 });
 	const chatDraft = { mode: 'agent' as const, text: 'Chat text', contexts: [] };
 	const codeDraft = { mode: 'plan' as const, text: 'Code text', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }] };
 	storage.store('sessions.draftState:thread-1', JSON.stringify(chatDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -342,7 +342,7 @@ test('legacy drafts merge by session identity and conflicting content survives u
 	storage.remove(recovered[0]!.key, StorageScope.WORKSPACE);
 	assert.deepEqual(migrateNewChatDraftState(storage), []);
 	await storage.flush();
-	using restored = new BrowserStorageService({ ownerWindow, applicationId: 'draft-migration-test', workspaceId: 'sessions', flushInterval: 0 });
+	using restored = new BrowserStorageService({ ownerWindow, workspaceId: 'sessions', flushInterval: 0 });
 	assert.deepEqual([readNewChatDraftState(restored, 'thread-1'), readNewChatDraftState(restored, 'untitled:recovered')], [codeDraft, chatDraft]);
 });
 

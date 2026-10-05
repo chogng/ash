@@ -4,7 +4,6 @@ import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
 test('Sessions registered pages coordinate Parts and retain drafts through drag and keyboard ordering', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const items = navigation.locator('.ash-sessions-activity-top .ash-action-view-item');
@@ -72,7 +71,6 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 
 for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
 	test(`Sessions registered navigation retains selection and exposes hover and keyboard focus in ${theme}`, async ({ application, target, workbench }) => {
-		test.skip(target.workbenchMode !== 'code');
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const search = workbench.page.locator('.ash-quick-pick').getByRole('combobox');
 		await search.fill(theme);

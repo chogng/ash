@@ -4,7 +4,7 @@ import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 
 test('large YAML lockfiles highlight text and minimap without editor interaction', async ({ target, testWorkspace, workbench }, testInfo) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Bundled language grammars require the Code App Server product.');
+	test.skip(target.appServerMode !== 'required', 'Bundled language grammars require the Code App Server product.');
 	const text = await readFile(new URL('../../../../../pnpm-lock.yaml', import.meta.url), 'utf8');
 	const page = workbench.page;
 	const syntaxWorkers: string[] = [];
@@ -71,7 +71,7 @@ test.beforeEach(async ({ workbench }) => {
 });
 
 test('file tab copy and reveal actions target inactive and selected files', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop files require App Server');
+	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop files require App Server');
 	const page = workbench.page;
 	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 		await page.evaluate(async () => {
@@ -194,7 +194,7 @@ test('file tab copy and reveal actions target inactive and selected files', asyn
 
 test("App Server workspace files open in Stanza and save through the editor region", async ({ target, testWorkspace, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -248,7 +248,7 @@ test("App Server workspace files open in Stanza and save through the editor regi
 });
 
 test('Bazel workspace files load bundled Starlark and bazelrc grammars', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires extension resources from App Server');
+	test.skip(target.appServerMode !== 'required', 'Requires extension resources from App Server');
 	const samples = [
 		['BUILD.bazel', 'cc_library(name = "bazel_smoke")', 'string', 'bazel_smoke'],
 		['defs.bzl', 'def impl(ctx):\n    return 42\n', 'keyword', 'return'],
@@ -269,7 +269,7 @@ test('Bazel workspace files load bundled Starlark and bazelrc grammars', async (
 
 test('Find input recalls saved searches with arrow keys and restores the draft', async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== 'required' || target.workbenchMode !== 'code',
+		target.appServerMode !== 'required',
 		'This scenario requires the Code App Server product',
 	);
 
@@ -320,7 +320,7 @@ test('Find input recalls saved searches with arrow keys and restores the draft',
 
 test("Show All Editors searches recent editors and restores editor focus", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -369,7 +369,7 @@ test("Show All Editors searches recent editors and restores editor focus", async
 });
 
 test("Editor tabs support modifier selection and close the selected set", async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== "required" || target.workbenchMode !== "code", "This scenario requires the Code App Server product");
+	test.skip(target.appServerMode !== "required", "This scenario requires the Code App Server product");
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
@@ -395,7 +395,7 @@ test("Editor tabs support modifier selection and close the selected set", async 
 
 test("Editor breadcrumbs open sibling and nested files", async ({ target, testWorkspace, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -456,7 +456,7 @@ test("Editor breadcrumbs open sibling and nested files", async ({ target, testWo
 
 test("Sticky and ordinary editors occupy separate tab rows", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -516,7 +516,7 @@ test("Sticky and ordinary editors occupy separate tab rows", async ({ target, wo
 
 test("Connected editor tab follows horizontal tab scrolling", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -542,7 +542,7 @@ test("Connected editor tab follows horizontal tab scrolling", async ({ target, w
 
 test("Single editor tab uses the available title width", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -572,7 +572,7 @@ test("Single editor tab uses the available title width", async ({ target, workbe
 
 test("Binary content shows an editor error with a working alternative", async ({ target, testWorkspace, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -609,7 +609,7 @@ test("Binary content shows an editor error with a working alternative", async ({
 
 test("Compare open files as binary shows both byte views", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 	const page = workbench.page;
@@ -636,7 +636,7 @@ test("Compare open files as binary shows both byte views", async ({ target, work
 
 test("Reopen Editor With switches the active file to Binary Editor", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -661,7 +661,7 @@ test("Reopen Editor With switches the active file to Binary Editor", async ({ ta
 
 test("Close Editor command closes the active tab", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -682,7 +682,7 @@ test("Close Editor command closes the active tab", async ({ target, workbench })
 
 test('Dragging a tab to a group edge shows the split target and moves the editor', async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== 'required' || target.workbenchMode !== 'code',
+		target.appServerMode !== 'required',
 		'This scenario requires the Code App Server product',
 	);
 
@@ -731,7 +731,7 @@ test('Dragging a tab to a group edge shows the split target and moves the editor
 
 test('minimap slider follows its theme color in the running editor', async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== 'required' || target.workbenchMode !== 'code',
+		target.appServerMode !== 'required',
 		'This scenario requires the Code App Server product',
 	);
 
@@ -755,7 +755,7 @@ test('minimap slider follows its theme color in the running editor', async ({ ta
 
 test('Code opens Go to Line from the command palette in the focused editor', async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== 'required' || target.workbenchMode !== 'code',
+		target.appServerMode !== 'required',
 		'This scenario requires the Code App Server product',
 	);
 
@@ -783,7 +783,7 @@ test('Code opens Go to Line from the command palette in the focused editor', asy
 
 test("Code highlights Rust locally and obtains document symbols asynchronously", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -812,7 +812,7 @@ test("Code highlights Rust locally and obtains document symbols asynchronously",
 });
 
 test('Git files load bundled highlighting through the product extension catalog', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
 	const samples = [
 		['.gitignore', '# generated\n!keep.log\n**/*.log', 'ignore', '!'],
 		['COMMIT_EDITMSG', 'Fix\n\n#\tnew file: file', 'git-commit', 'new file: file'],
@@ -842,7 +842,7 @@ test('Git files load bundled highlighting through the product extension catalog'
 });
 
 test('Markdown source styles follow all Ash themes and refresh after editing and undo', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code App Server product');
+	test.skip(target.appServerMode !== 'required', 'This scenario requires the Code App Server product');
 	const source = '# Heading\n\n**strong** *emphasis* ~~removed~~ `inline` [link](https://example.com)\n\n- item\n> quote\n\n```javascript\nconst value = "hello";\n```';
 	await writeFile(join(testWorkspace.directory, 'syntax.md'), source);
 	const page = workbench.page;
@@ -892,7 +892,7 @@ test('Markdown source styles follow all Ash themes and refresh after editing and
 
 test("Code finds local workspace symbols when the language server has no workspace-symbol provider", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -916,7 +916,7 @@ test("Code finds local workspace symbols when the language server has no workspa
 
 test("Code searches and opens a workspace symbol from unsaved editor content", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 	test.setTimeout(120_000);
@@ -953,7 +953,7 @@ test("Code searches and opens a workspace symbol from unsaved editor content", a
 
 test("Code expands and shrinks Smart Select through semantic editor state", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 	test.setTimeout(120_000);
@@ -982,7 +982,7 @@ test("Code expands and shrinks Smart Select through semantic editor state", asyn
 
 test("Code shows App Server LSP completions in Stanza", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -1008,7 +1008,7 @@ test("Code shows App Server LSP completions in Stanza", async ({ target, workben
 
 test("Code streams current App Server LSP diagnostics into Stanza", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -1039,7 +1039,7 @@ test("Code streams current App Server LSP diagnostics into Stanza", async ({ tar
 
 test("Code applies and undoes App Server LSP document formatting in Stanza", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -1062,7 +1062,7 @@ test("Code applies and undoes App Server LSP document formatting in Stanza", asy
 
 test("Code shows App Server LSP parameter hints in Stanza", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -1086,7 +1086,7 @@ test("Code shows App Server LSP parameter hints in Stanza", async ({ target, wor
 
 test("Code shows App Server LSP inlay hints in Stanza", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -1103,7 +1103,7 @@ test("Code shows App Server LSP inlay hints in Stanza", async ({ target, workben
 
 test("Code keeps App Server LSP linked edits in one undo step", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -1134,7 +1134,7 @@ test("Code keeps App Server LSP linked edits in one undo step", async ({ target,
 
 test("Code renders workspace PDFs and persists review annotations", async ({ target, testWorkspace, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -1179,7 +1179,7 @@ test.describe("large files", () => {
 
 	test("Code keeps a 300,001-line file editable and saveable without background tokenization", async ({ target, testWorkspace, workbench }) => {
 		test.skip(
-			target.appServerMode !== "required" || target.workbenchMode !== "code",
+			target.appServerMode !== "required",
 			"This scenario requires the Code App Server product",
 		);
 		test.setTimeout(120_000);
@@ -1217,7 +1217,7 @@ function selectedCharacterCount(status: string | null): number {
 
 for (const mode of ['manual save', 'unsaved', 'auto save after delay', 'auto save on focus change'] as const) {
 	test(`Code preserves ${mode} file edits across restart`, async ({ target, testWorkspace, workbench, restartWorkbench }) => {
-		test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+		test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
 		if (mode.startsWith('auto save')) {
 			await workbench.settingsEditor.openUserSettingsUI();
 			await workbench.settingsEditor.selectCategory('editor');
@@ -1277,7 +1277,7 @@ for (const mode of ['manual save', 'unsaved', 'auto save after delay', 'auto sav
 
 test("Code restores unsaved editor content after a browser reload", async ({ target, testWorkspace, workbench }) => {
 	test.skip(
-		target.kind !== "browser" || target.appServerMode !== "required" || target.workbenchMode !== "code",
+		target.kind !== "browser" || target.appServerMode !== "required",
 		"This scenario requires the browser-hosted Code App Server product",
 	);
 
@@ -1309,7 +1309,7 @@ test("Code restores unsaved editor content after a browser reload", async ({ tar
 
 test("Code restores an untitled draft and opens the next document separately", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "disabled" || target.workbenchMode !== "code",
+		target.appServerMode !== "disabled",
 		"This scenario requires the standalone Code workbench",
 	);
 
@@ -1357,7 +1357,7 @@ async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolea
 
 
 test('Code editor scrollbar follows wheel, keyboard and thumb dragging in the desktop window', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires a Code workspace');
+	test.skip(target.appServerMode !== 'required', 'Requires a Code workspace');
 	await writeFile(testWorkspace.file, Array.from({ length: 200 }, (_, index) => `// line ${index} ${'x'.repeat(180)}`).join('\n'));
 	const page = workbench.page;
 	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
@@ -1390,7 +1390,7 @@ test('Code editor scrollbar follows wheel, keyboard and thumb dragging in the de
 });
 
 test('Code replaces a selection with multiline text and remains editable', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires a Code workspace');
+	test.skip(target.appServerMode !== 'required', 'Requires a Code workspace');
 	const page = workbench.page;
 	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 	await expect(fileRow).toHaveCount(1);
@@ -1414,7 +1414,7 @@ test('Code replaces a selection with multiline text and remains editable', async
 });
 
 test('file open failures stay in the editor and binary actions work with an existing file open', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.kind === 'electron' && target.appServerMode === 'disabled', 'Requires the browser filesystem or a connected desktop workspace');
+	test.skip(target.kind === 'electron' && target.appServerMode === 'disabled', 'Requires the browser filesystem or a connected desktop workspace');
 	const page = workbench.page;
 	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 		await page.evaluate(async () => {
@@ -1478,7 +1478,7 @@ test('file open failures stay in the editor and binary actions work with an exis
 });
 
 test('text-file saves retain UTF-8 BOM and CRLF, and external reloads remain undoable', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
 	const group = workbench.editors.groupAt(0);
 	for (const bom of ['', '\uFEFF']) {
 		const name = bom ? 'bom-crlf.txt' : 'plain-crlf.txt';
@@ -1505,7 +1505,7 @@ test('text-file saves retain UTF-8 BOM and CRLF, and external reloads remain und
 
 
 test('Agent document requests preserve unsaved editor content, undo, BOM and CRLF', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
 	const page = workbench.page;
 	await installDocumentProtocolProbe(page);
 	await workbench.reloadWindow();
@@ -1541,7 +1541,7 @@ test('Agent document requests preserve unsaved editor content, undo, BOM and CRL
 
 
 test('Agent document requests use the Agents window model and save closed files through editor services', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
 	const page = await workbench.openAgentsWindow(target.kind);
 	await installDocumentProtocolProbe(page);
 	await workbench.reloadWindow(page);
@@ -1559,7 +1559,7 @@ test('Agent document requests use the Agents window model and save closed files 
 });
 
 test('Agent review commands are available without an App Server connection', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode === 'required', 'Exercises the disconnected Code workbench');
+	test.skip(target.appServerMode === 'required', 'Exercises the disconnected Code workbench');
 	await workbench.quickaccess.runCommand('chatEditing.reviewChanges');
 	const picker = workbench.page.getByRole('dialog', { name: 'Review Agent changes', exact: true });
 	await expect(picker).toBeVisible();
@@ -1578,7 +1578,7 @@ test('Agent review commands are available without an App Server connection', asy
 });
 
 test('Agent review accepts individual hunks and rejects the remainder without losing user edits', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
 	const page = workbench.page;
 	await installDocumentProtocolProbe(page);
 	const restored = page.waitForEvent('console', { predicate: message => message.text() === '[lifecycle] Workbench restored' });

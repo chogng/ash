@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
 test.beforeEach(async ({ target, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires workspace content search.');
+	test.skip(target.appServerMode !== 'required', 'Requires workspace content search.');
 	await mkdir(join(testWorkspace.directory, 'src'));
 	await writeFile(join(testWorkspace.directory, 'src', 'alpha.ts'), 'ash_search_token\nASH_SEARCH_TOKEN\nash_search_token:42\n');
 	await writeFile(join(testWorkspace.directory, 'src', 'beta.js'), 'ash_search_token\n');

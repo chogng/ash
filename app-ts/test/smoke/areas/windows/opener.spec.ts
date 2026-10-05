@@ -33,7 +33,7 @@ test('Output channels open from the product command palette', async ({ workbench
 });
 
 test('Output task file links open the editor at their line and column from the keyboard', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires workspace task execution.');
+	test.skip(target.appServerMode !== 'required', 'Requires workspace task execution.');
 	const taskLabel = 'Check src/link-target.ts:12:7 now';
 	await mkdir(join(testWorkspace.directory, 'src'), { recursive: true });
 	await mkdir(join(testWorkspace.directory, '.vscode'), { recursive: true });
@@ -149,8 +149,7 @@ test('editor document links open from the keyboard and modifier click', async ({
 	}
 });
 
-test('editor Open Link and Output help are localized after a display-language restart', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code command palette.');
+test('editor Open Link and Output help are localized after a display-language restart', async ({ workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');

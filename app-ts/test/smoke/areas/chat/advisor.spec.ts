@@ -2,7 +2,7 @@ import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
 test('Model picker keeps search quiet and aligns menu rows and the chosen icon', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires the model catalog.');
+	test.skip(target.appServerMode !== 'required', 'Requires the model catalog.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -101,7 +101,7 @@ test('Model picker keeps search quiet and aligns menu rows and the chosen icon',
 });
 
 test('Disconnected model picker explains the empty catalog and opens settings', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This state requires a disconnected backend.');
+	test.skip(target.appServerMode !== 'disabled', 'This state requires a disconnected backend.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -137,7 +137,7 @@ test('Disconnected model picker explains the empty catalog and opens settings', 
 });
 
 test('Model picker saves Fast and context settings separately from thinking effort', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'The model catalog requires the product backend.');
+	test.skip(target.appServerMode !== 'required', 'The model catalog requires the product backend.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -267,7 +267,7 @@ test('Model picker saves Fast and context settings separately from thinking effo
 });
 
 test('Model picker details and keyboard help follow the Chinese display language', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'The model catalog requires the product backend.');
+	test.skip(target.appServerMode !== 'required', 'The model catalog requires the product backend.');
 	let page = workbench.page;
 	await page.keyboard.press('F1');
 	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Configure Display Language');
@@ -308,7 +308,7 @@ test('Model picker details and keyboard help follow the Chinese display language
 });
 
 test('New Chat starts with the last model chosen in the picker', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'The model catalog requires the product backend.');
+	test.skip(target.appServerMode !== 'required', 'The model catalog requires the product backend.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -353,7 +353,7 @@ async function expectModelPickerAnchored(picker: import('@playwright/test').Loca
 }
 
 test('Advisor settings and direct questions use one chat command', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Advisor configuration requires the product backend.');
+	test.skip(target.appServerMode !== 'required', 'Advisor configuration requires the product backend.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -382,7 +382,7 @@ test('Advisor settings and direct questions use one chat command', async ({ targ
 });
 
 test('Model provider key entry uses the App Server and shows only saved status', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Model provider keys require the product backend.');
+	test.skip(target.appServerMode !== 'required', 'Model provider keys require the product backend.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -427,7 +427,7 @@ test('Model provider key entry uses the App Server and shows only saved status',
 
 
 test('Model connections support Chinese labels and keyboard navigation', async ({ target, workbench, restartWorkbench }) => {
-    test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Model connections require the product backend.');
+    test.skip(target.appServerMode !== 'required', 'Model connections require the product backend.');
     let page = workbench.page;
     if (!await page.locator('.ash-chat-view-pane').isVisible()) {
         await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();

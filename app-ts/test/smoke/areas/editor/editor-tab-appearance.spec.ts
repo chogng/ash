@@ -96,8 +96,7 @@ test.describe('File tab label format', () => {
 	});
 });
 
-test('tab command groups close and split the clicked tabs from mouse and keyboard', async ({ target, application, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
+test('tab command groups close and split the clicked tabs from mouse and keyboard', async ({ application, workbench }) => {
 	const page = workbench.page;
 	const choose = async (tab: Locator, label: string, keyboard = false): Promise<void> => {
 		await workbench.menus.select(application, async () => {
@@ -193,8 +192,7 @@ test('editor tabs distinguish the active document from the tab strip across them
 	}
 });
 
-test('double-clicking Welcome keeps it in the ordinary row and preserves an explicit pin', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('double-clicking Welcome keeps it in the ordinary row and preserves an explicit pin', async ({ workbench }) => {
 	const page = workbench.page;
 	const welcome = page.getByRole('tab', { name: 'Welcome', exact: true });
 	const ordinary = page.locator('.ash-ordinary-editor-tabs-row .ash-tab').filter({ has: welcome });
@@ -225,8 +223,7 @@ test('double-clicking Welcome keeps it in the ordinary row and preserves an expl
 	await expect(ordinary).toHaveCount(1);
 });
 
-test('pin commands follow the focused inactive tab and preserve editor selection', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('pin commands follow the focused inactive tab and preserve editor selection', async ({ workbench }) => {
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
 	await page.keyboard.press('ControlOrMeta+N');
@@ -256,8 +253,7 @@ test('pin commands follow the focused inactive tab and preserve editor selection
 	await expect(first).toBeFocused();
 });
 
-test('pinned editor action stays Unpin on hover and returns the editor to the ordinary row', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('pinned editor action stays Unpin on hover and returns the editor to the ordinary row', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 
@@ -313,7 +309,6 @@ test('pinned editor action stays Unpin on hover and returns the editor to the or
 });
 
 test('editor tab menu targets the clicked tab and opens from the keyboard', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS displays this menu through Electron');
 	const page = workbench.page;
 	const createUntitled = async (): Promise<void> => {
@@ -350,7 +345,7 @@ test('editor tab menu targets the clicked tab and opens from the keyboard', asyn
 });
 
 test('macOS Electron editor tab menu targets mouse and keyboard actions', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'darwin' || target.workbenchMode !== 'code', 'This scenario requires the macOS Code desktop product');
+	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires the macOS Code desktop product');
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
 	await page.keyboard.press('ControlOrMeta+N');
@@ -370,8 +365,7 @@ test('macOS Electron editor tab menu targets mouse and keyboard actions', async 
 });
 
 
-test('editor icon setting updates existing tabs and survives pinning', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
+test('editor icon setting updates existing tabs and survives pinning', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const group = workbench.editors.groupAt(0);

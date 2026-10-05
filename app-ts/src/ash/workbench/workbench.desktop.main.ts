@@ -8,6 +8,8 @@ import "../platform/update/common/update.config.contribution.js";
 import "./workbench.common.main.js";
 import "./services/update/electron-browser/updateService.js";
 import './services/workspaces/electron-browser/workspacesService.js';
+import './contrib/tasks/browser/taskService.js';
+import './contrib/chat/electron-browser/chat.contribution.js';
 import { NativeHostService } from './services/host/electron-browser/nativeHostService.js';
 import { IHostService } from './services/host/browser/host.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';

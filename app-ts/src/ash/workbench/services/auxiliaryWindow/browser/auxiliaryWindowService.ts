@@ -12,7 +12,7 @@ import { getIconDefinition } from "../../../../platform/theme/common/iconRegistr
 import { IThemeService } from "../../../../platform/theme/common/themeService.js";
 
 const WORKBENCH_ROOT_CLASSES = ["ash-reduce-motion", "ash-enable-motion", "ash-reduce-transparency", "ash-underline-links"] as const;
-const WORKBENCH_ROOT_ATTRIBUTES = ["data-os", "data-runtime", "data-workbench-mode", "data-workbench-state"] as const;
+const WORKBENCH_ROOT_ATTRIBUTES = ["data-os", "data-runtime", "data-workbench-state"] as const;
 const AUXILIARY_WINDOW_STATE_KEY = 'auxiliaryEditorWindowState';
 
 export interface AuxiliaryWindowBounds {

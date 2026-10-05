@@ -82,7 +82,7 @@ test('authenticated Web cannot claim directory authority or read an ungranted wo
 });
 
 test('Web opens a selected server folder with explicit authorization and a separate session', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the connected Code browser');
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires the connected Code browser');
 	const page = workbench.page;
 	const original = await page.evaluate(() => {
 		const endpoint = new URL(sessionStorage.getItem('ash.appServer.endpoint')!);

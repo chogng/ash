@@ -7,9 +7,9 @@ import type { IChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import { StorageScope, StorageTarget, WillSaveStateReason, type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, type StorageValue } from '../../../../platform/storage/common/storage.js';
 import { validateStorageEntries, validateStorageSnapshot, type IStorageIdentity, type IStorageEntry, type IStorageSnapshot } from '../../../../platform/storage/common/storageIpc.js';
+import { migrateBrowserStorage } from '../browser/storageService.js';
 
 interface StorageOptions {
-	readonly applicationId: string;
 	readonly workspaceId: string;
 	readonly profileId?: string;
 	readonly ownerWindow: Window;
@@ -37,12 +37,13 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 
 	public async initialize(): Promise<void> {
 		this.assertNotDisposed();
+		migrateBrowserStorage(this.options.ownerWindow.localStorage);
 		const resources = new DisposableStore();
 		this.subscriptions.value = resources;
 		for (const scope of [StorageScope.APPLICATION, StorageScope.PROFILE, StorageScope.WORKSPACE]) {
 			const identity = this.identity(scope);
 			resources.add(this.channel.listen<unknown>('onDidChangeStorage', identity)(value => this.accept(validateStorageSnapshot(value))));
-			const key = `ash.${encodeURIComponent(identity.applicationId)}.storage.${scope}${scope === StorageScope.APPLICATION ? '' : `.${encodeURIComponent(identity.id)}`}`;
+			const key = `ash.storage.${scope}${scope === StorageScope.APPLICATION ? '' : `.${encodeURIComponent(identity.id)}`}`;
 			const legacy = this.options.ownerWindow.localStorage.getItem(key);
 			let entries: Record<string, IStorageEntry> | undefined;
 			if (legacy !== null) {
@@ -98,7 +99,7 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 		let id = 'application';
 		if (scope === StorageScope.PROFILE) { id = this.options.profileId ?? 'default'; }
 		if (scope === StorageScope.WORKSPACE) { id = this.workspaceId; }
-		return { applicationId: this.options.applicationId, scope, id };
+		return { scope, id };
 	}
 	private snapshot(scope: StorageScope): IStorageSnapshot {
 		const snapshot = this.snapshots.get(scope);

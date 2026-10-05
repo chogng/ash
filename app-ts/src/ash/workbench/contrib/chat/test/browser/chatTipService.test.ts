@@ -9,7 +9,7 @@ import { ChatTipService } from '../../browser/chatTipService.js';
 test('welcome tip dismissal persists once and follows other profile writers until disposal', () => {
 	const dom = new JSDOM('<!doctype html>', { url: 'https://ash.test' });
 	try {
-		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'code', workspaceId: 'test', backend: dom.window.localStorage, flushInterval: 0 });
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', backend: dom.window.localStorage, flushInterval: 0 });
 		using services = new InstantiationService();
 		services.registerInstance(IStorageService, storage);
 		using tips = services.createInstance(ChatTipService);

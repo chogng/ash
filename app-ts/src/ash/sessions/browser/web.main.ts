@@ -24,7 +24,6 @@ import { BrowserClipboardService } from '../../platform/clipboard/browser/clipbo
 import { connectBrowserWorkbenchHost } from '../../workbench/browser/web.host.js';
 import { workspaceFromIdentifier } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../../workbench/browser/startupError.js';
-import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { Workbench } from "./workbench.js";
 import { BrowserStorageService } from '../../workbench/services/storage/browser/storageService.js';
@@ -41,19 +40,19 @@ registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
 
 /** Starts a browser-hosted Sessions page with the optional renderer host. */
-export async function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile): Promise<void> {
+export async function startBrowserSessions(profile: SessionsProfile): Promise<void> {
 	let connectedHost: IDisposable | undefined;
 	try {
 		let documentClient: AppServerProtocolClient | undefined;
 		connectedHost = await connectBrowserWorkbenchHost([client => { documentClient = client; return {}; }], true);
-		await mountBrowserSessions(modeId, profile, connectedHost, documentClient);
+		await mountBrowserSessions(profile, connectedHost, documentClient);
 	} catch (error) {
 		connectedHost?.dispose();
 		showStartupError(error, text => new BrowserClipboardService(window.navigator.clipboard).writeText(text));
 	}
 }
 
-async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile, connectedHost?: IDisposable, documentClient?: AppServerProtocolClient): Promise<void> {
+async function mountBrowserSessions(profile: SessionsProfile, connectedHost?: IDisposable, documentClient?: AppServerProtocolClient): Promise<void> {
 	installBaseUiStyles();
 	const sessions = new DisposableStore();
 	try {
@@ -71,7 +70,6 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 				return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
 			} : undefined,
 			contributionIds: ['chat.edits.editorOverlay', 'workbench.contrib.dataChannels'],
-			modeId,
 			createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
 			createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 			profile,

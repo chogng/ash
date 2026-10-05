@@ -84,8 +84,7 @@ test('a failed desktop menu selection restores capture and leaves Main running',
 	await expect(button).toHaveAttribute('aria-expanded', 'false');
 });
 
-test('a failed dialog choice cancels the request and permits the next confirmation', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Checks the Code editor save confirmation.');
+test('a failed dialog choice cancels the request and permits the next confirmation', async ({ application, workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	const group = workbench.editors.groupAt(0);
 	const tab = group.tabs.filter({ hasText: 'Untitled-1' });

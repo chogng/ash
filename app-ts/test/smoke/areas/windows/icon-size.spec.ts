@@ -7,8 +7,7 @@ test('Toolbar icons render at the standard 16px size', async ({ workbench }) => 
 	await expect(icon).toHaveCSS('height', '16px');
 });
 
-test('terminal split action joins both buttons with the shared control radius', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('terminal split action joins both buttons with the shared control radius', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('button', { name: 'Show Panel', exact: true }).click();
 	const split = page.locator('[data-part="panel"] .ash-dropdown-with-primary-action-view-item');

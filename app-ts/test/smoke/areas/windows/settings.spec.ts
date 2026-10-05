@@ -3,8 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-test('Color settings suggest registered keys and descriptions with keyboard and mouse selection', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires Code Settings');
+test('Color settings suggest registered keys and descriptions with keyboard and mouse selection', async ({ workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -99,8 +98,7 @@ test('Color settings suggest registered keys and descriptions with keyboard and 
 	await expect(chineseSettings).toBeVisible();
 });
 
-test('Settings sidebar stays at two levels and searches voice input inside Application', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires Code Settings');
+test('Settings sidebar stays at two levels and searches voice input inside Application', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -127,8 +125,7 @@ test('Settings sidebar stays at two levels and searches voice input inside Appli
 	await expect(application).not.toHaveAttribute('aria-expanded');
 });
 
-test('Dictation settings entry reveals Voice input in Application', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires Code Settings');
+test('Dictation settings entry reveals Voice input in Application', async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.chat.open');
 	await workbench.quickaccess.runCommand('workbench.action.chat.dictation.showIntroduction');
@@ -141,7 +138,6 @@ test('Dictation settings entry reveals Voice input in Application', async ({ tar
 });
 
 test('Dictation settings separate local models and cloud API connections with keyboard help', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires Code Settings');
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -178,7 +174,6 @@ test('Dictation settings separate local models and cloud API connections with ke
 });
 
 test('Local model management reports backend import errors and unavailable capture', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires Code Settings');
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -249,7 +244,7 @@ test('Desktop Voice imports after Settings closes and shares model deletion with
 });
 
 test('Workbench exposes current Tools and Sandbox capabilities', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Code with App Server');
+	test.skip(target.appServerMode !== 'required', 'Requires Code with App Server');
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -270,7 +265,7 @@ test('Workbench exposes current Tools and Sandbox capabilities', async ({ target
 });
 
 test('Workbench Models switches control the model picker', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Code with App Server');
+	test.skip(target.appServerMode !== 'required', 'Requires Code with App Server');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -320,7 +315,7 @@ test('Workbench Models switches control the model picker', async ({ target, work
 });
 
 test('Workbench and Sessions Models share model visibility', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Electron Code with App Server');
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires Electron Code with App Server');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = workbench.page;
 	if (process.platform === 'darwin') {
@@ -366,7 +361,7 @@ test('Workbench and Sessions Models share model visibility', async ({ applicatio
 });
 
 test('Browser Workbench and Sessions persist model visibility across page navigation', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires browser Code with App Server');
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires browser Code with App Server');
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -443,33 +438,30 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 		await expect(voiceInput.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();
 		await expect(voiceInput.getByRole('textbox', { name: 'Local dictation model' })).toHaveCount(0);
 	}
-	if (target.workbenchMode === 'code') {
-		await page.locator('[data-settings-group-id="workbench"]').click();
-		await page.locator('[data-settings-category-id="startup"]').click();
-		const startupNavigationRow = page.locator('.ash-tree-row', { has: page.locator('[data-settings-category-id="startup"]') });
-		await expect(startupNavigationRow).not.toHaveAttribute('aria-expanded');
-		await expect(page.locator('[data-settings-target-id="startup.group.startup-windows"], [data-settings-target-id="startup.group.startup-editor"]')).toHaveCount(0);
-		await expect(rootTitle).toHaveCount(0);
-		await expect(rootDescription).toHaveCount(0);
-		if (target.kind === 'electron') await expect(page.locator('[data-configuration-key="window.restoreWindows"]')).toBeVisible();
-		await expect(page.locator('[data-configuration-key="workbench.editor.restoreEditors"]')).toBeVisible();
-		const startupEditor = page.locator('[data-configuration-key="workbench.startupEditor"]').getByRole('combobox');
-		await expect(startupEditor).toBeVisible();
-		const startupRow = page.locator('[data-settings-item-id="workbench.startupEditor"]');
-		const [startupRowBounds, startupControlBounds] = await Promise.all([startupRow.boundingBox(), startupEditor.boundingBox()]);
-		expect(startupRowBounds).not.toBeNull();
-		expect(startupControlBounds).not.toBeNull();
-		expect(Math.abs(startupRowBounds!.x + startupRowBounds!.width - 16 - startupControlBounds!.x - startupControlBounds!.width)).toBeLessThanOrEqual(1);
-		await startupEditor.click();
-		await expect(page.getByRole('option', { name: 'Welcome in empty workbench' })).toBeVisible();
-		await page.keyboard.press('Escape');
-		await expect(page.locator('.ash-notification')).toHaveCount(0);
-		await expect(page.locator('[data-settings-category-id="sessions"]')).toHaveCount(0);
-	}
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="startup"]').click();
+	const startupNavigationRow = page.locator('.ash-tree-row', { has: page.locator('[data-settings-category-id="startup"]') });
+	await expect(startupNavigationRow).not.toHaveAttribute('aria-expanded');
+	await expect(page.locator('[data-settings-target-id="startup.group.startup-windows"], [data-settings-target-id="startup.group.startup-editor"]')).toHaveCount(0);
+	await expect(rootTitle).toHaveCount(0);
+	await expect(rootDescription).toHaveCount(0);
+	if (target.kind === 'electron') await expect(page.locator('[data-configuration-key="window.restoreWindows"]')).toBeVisible();
+	await expect(page.locator('[data-configuration-key="workbench.editor.restoreEditors"]')).toBeVisible();
+	const startupEditor = page.locator('[data-configuration-key="workbench.startupEditor"]').getByRole('combobox');
+	await expect(startupEditor).toBeVisible();
+	const startupRow = page.locator('[data-settings-item-id="workbench.startupEditor"]');
+	const [startupRowBounds, startupControlBounds] = await Promise.all([startupRow.boundingBox(), startupEditor.boundingBox()]);
+	expect(startupRowBounds).not.toBeNull();
+	expect(startupControlBounds).not.toBeNull();
+	expect(Math.abs(startupRowBounds!.x + startupRowBounds!.width - 16 - startupControlBounds!.x - startupControlBounds!.width)).toBeLessThanOrEqual(1);
+	await startupEditor.click();
+	await expect(page.getByRole('option', { name: 'Welcome in empty workbench' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(page.locator('.ash-notification')).toHaveCount(0);
+	await expect(page.locator('[data-settings-category-id="sessions"]')).toHaveCount(0);
 });
 
 test('File opening settings save through their controls and survive reloading the window', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code Workbench');
 	const page = workbench.page;
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	const openSettings = async () => {
@@ -507,7 +499,7 @@ test('File opening settings save through their controls and survive reloading th
 });
 
 test('editor settings apply immediately, persist after reload and reset to their default', async ({ application, target, workbench, reloadWorkbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires a workspace text editor.');
+	test.skip(target.appServerMode !== 'required', 'Requires a workspace text editor.');
 	let page = workbench.page;
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
 	let numbers = workbench.editors.groupAt(0).editor.element.locator('.line-numbers');
@@ -623,7 +615,6 @@ test.describe('Manage menu', () => {
 	test.use({ openWorkspace: false });
 
 	test('Manage menu runs its other workbench commands', async ({ application, target, workbench }) => {
-		test.skip(target.workbenchMode !== 'code');
 		const page = workbench.page;
 		const manageButton = page.getByRole('button', { name: 'Manage' });
 		const layoutButton = page.locator('[data-action-id="workbench.action.toggleAuxiliaryBar"] button');
@@ -661,8 +652,7 @@ test.describe('Manage menu', () => {
 		await expect(manageButton).toBeFocused();
 	});
 
-	test('Manage Themes menu changes the color theme', async ({ application, target, workbench }) => {
-		test.skip(target.workbenchMode !== 'code');
+	test('Manage Themes menu changes the color theme', async ({ application, workbench }) => {
 		const page = workbench.page;
 		const open = () => page.getByRole('button', { name: 'Manage' }).click();
 		const themes = await workbench.menus.inspect(application, open, ['Themes']);

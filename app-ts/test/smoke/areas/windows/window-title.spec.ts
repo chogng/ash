@@ -9,8 +9,7 @@ test.beforeEach(async ({ workbench }) => {
 	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
 });
 
-test('window title follows the active editor, unsaved changes, restored content and close', async ({ target, application, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario uses Code text editors');
+test('window title follows the active editor, unsaved changes, restored content and close', async ({ application, workbench }) => {
 	const page = workbench.page;
 	const workspaceTitle = await page.title();
 	expect(workspaceTitle).toMatch(/Ash Code$/u);
@@ -38,8 +37,7 @@ test('window title follows the active editor, unsaved changes, restored content 
 	await expect(page).toHaveTitle(workspaceTitle);
 });
 
-test('detached editor titles follow their own window when focus and dirty state change', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario uses Code text editors');
+test('detached editor titles follow their own window when focus and dirty state change', async ({ workbench }) => {
 	const page = workbench.page;
 	const workspaceTitle = await page.title();
 	await page.keyboard.press('ControlOrMeta+N');
@@ -80,7 +78,7 @@ test('detached editor titles follow their own window when focus and dirty state 
 });
 
 test('saving a workspace file clears the window title dirty marker', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code App Server product');
+	test.skip(target.appServerMode !== 'required', 'This scenario requires the Code App Server product');
 	const page = workbench.page;
 	const workspaceTitle = await page.title();
 	const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });

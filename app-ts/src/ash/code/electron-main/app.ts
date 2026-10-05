@@ -1,3 +1,4 @@
+import { AshWorkbenchName, AshSessionsRendererEntry } from '../common/application.js';
 import { randomUUID } from 'node:crypto';
 import { isAdmin } from '../../platform/native/electron-main/nativeHostMainService.js';
 import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
@@ -28,7 +29,6 @@ import { createUuid } from '../../base/common/uuid.js';
 import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableDisposable, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
 import { AshApplicationId, AshApplicationName } from '../common/application.js';
-import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRendererEntry, withWorkbenchModeId, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
 import { AppServerConnectionRelay } from "../../platform/app-server/electron-main/appServerConnectionRelay.js";
 import { DevelopmentAppServerReloader } from "../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js";
@@ -126,7 +126,6 @@ import { HOST_RESTART_CHANNEL, WINDOW_OPEN_EXTERNAL_URI_CHANNEL } from '../../pl
 export type AppServerStartupMode = "required" | "disabled";
 
 export interface AshApplicationOptions {
-	readonly initialModeId: WorkbenchModeId;
 	readonly rendererRoot: string;
 	/** Selects whether this Electron process starts the App Server before opening its window. */
 	readonly appServerStartupMode: AppServerStartupMode;
@@ -152,7 +151,6 @@ interface WorkbenchWindowRecord {
 	readonly supervisor: AppServerConnectionRelay;
 	readonly resources: DisposableStore;
 	readonly remoteConnections: IRemoteConnectionService;
-	modeId: WorkbenchModeId;
 	windowsStateHandler: WindowsStateHandler;
 	windowStateTracking: IDisposable;
 	openWorkspace?: (root: string) => Promise<void>;
@@ -162,18 +160,16 @@ interface WorkbenchWindowRecord {
 class SessionsWindowRecord extends Disposable {
 	readonly workspaceContext: WorkspaceContextMainService;
 	readonly remoteConnections: IRemoteConnectionService;
-	readonly modeId: WorkbenchModeId;
 	readonly runtimeResources = this._register(new MutableDisposable<DisposableStore>());
 	supervisor: AppServerConnectionRelay | undefined;
 	windowState: { readonly window: BrowserWindow; readonly handler: WindowsStateHandler; readonly tracking: IDisposable } | undefined;
 	private readonly handoffs = new Map<string, { readonly options: IOpenAgentsWindowOptions; readonly resolve: () => void; readonly reject: (error: Error) => void }>();
 	private readonly handoffQueue: string[] = [];
 
-	constructor(workspaceContext: WorkspaceContextMainService, remoteConnections: IRemoteConnectionService, modeId: WorkbenchModeId) {
+	constructor(workspaceContext: WorkspaceContextMainService, remoteConnections: IRemoteConnectionService) {
 		super();
 		this.workspaceContext = this._register(workspaceContext);
 		this.remoteConnections = remoteConnections;
-		this.modeId = modeId;
 		this._register(toDisposable(() => this.rejectHandoffs(new Error('Agents Window closed before the handoff completed'))));
 	}
 
@@ -210,7 +206,7 @@ class SessionsWindowRecord extends Disposable {
 
 type WindowSessionEntry =
 	| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier }
-	| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier; readonly modeId: WorkbenchModeId };
+	| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier };
 
 const AGENTS_WINDOW_KEY = 'agents';
 
@@ -226,7 +222,6 @@ async function watchProfileFiles(profileRoot: string, window: BrowserWindow, res
 
 /** Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown. */
 export class AshApplication extends Disposable {
-	private defaultModeId: WorkbenchModeId;
 	private readonly rendererRoot: string;
 	private readonly appServerStartupMode: AppServerStartupMode;
 	private readonly disposableTracker: DisposableTracker | undefined;
@@ -331,7 +326,6 @@ export class AshApplication extends Disposable {
 		tracking: globalThis.Disposable | undefined,
 	) {
 		super();
-		this.defaultModeId = options.initialModeId;
 		this.rendererRoot = options.rendererRoot;
 		this.appServerStartupMode = options.appServerStartupMode;
 		this.disposableTracker = disposableTracker;
@@ -348,10 +342,10 @@ export class AshApplication extends Disposable {
 				const focused = BrowserWindow.fromId(windowId);
 				const parentId = focused ? this.auxiliaryWindowsMainService.getWindowByWebContents(focused.webContents)?.parentId : undefined;
 				const record = this.workbenchWindowData.get(parentId ?? windowId);
-				if (record) return this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), record.modeId, options);
+				if (record) return this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), options);
 				const session = this.sessionsWindow.value;
 				if (session && this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY)?.id === (parentId ?? windowId)) {
-					return this.openSessionsWindow(session.workspaceContext.getWorkspace(), session.workspaceContext.getResolvedWorkspace(), session.modeId, options);
+					return this.openSessionsWindow(session.workspaceContext.getWorkspace(), session.workspaceContext.getResolvedWorkspace(), options);
 				}
 			},
 			onError: error => console.error('Failed to open Agents Window from a system-wide shortcut', error),
@@ -434,7 +428,7 @@ export class AshApplication extends Disposable {
 		await this.loggerService.initialize();
 		throwIfCancelled(token);
 		this.mainProcessIpcServer.registerChannel('logger', new LoggerChannel(this.loggerService));
-		this.logService.info('lifecycle', 'Desktop startup', { mode: this.defaultModeId, appServer: this.appServerStartupMode });
+		this.logService.info('lifecycle', 'Desktop startup', { appServer: this.appServerStartupMode });
 		await this.createPersistentServices(token);
 		throwIfCancelled(token);
 		const localeValue = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
@@ -446,9 +440,6 @@ export class AshApplication extends Disposable {
 		const storage = this.storageMainService = this._register(new StorageMainService(join(app.getPath('userData'), 'workbench-state.json')));
 		await storage.initialize();
 		throwIfCancelled(token);
-		const academicStateConflicts = await storage.migrateApplicationStorage('academic', 'code');
-		throwIfCancelled(token);
-		if (academicStateConflicts.length > 0) { this.logService.warn('storage', 'Academic state migration retained conflicting entries', { keys: academicStateConflicts }); }
 		this.mainProcessIpcServer.registerChannel('storage', new StorageDatabaseChannel(storage));
 		const launchServices = this._register(new InstantiationService());
 		launchServices.registerInstance(IStateService, this.services.state);
@@ -529,7 +520,7 @@ export class AshApplication extends Disposable {
 		}
 		const launch = await this.resolveWorkspace();
 		if (!app.isPackaged && process.env.ASH_DEV_AGENTS_WINDOW === '1') {
-			await this.openSessionsWindow(launch.workspace, await workspaces.resolveWorkspace(launch.workspace), this.defaultModeId);
+			await this.openSessionsWindow(launch.workspace, await workspaces.resolveWorkspace(launch.workspace));
 			return;
 		}
 		await this.restoreWindowSession(workspaces, launch.explicit, wasUpdated);
@@ -549,7 +540,7 @@ export class AshApplication extends Disposable {
 				if (entry.kind === 'workbench') {
 					await this.openWorkspace(entry.workspace, workspaces);
 				} else {
-					await this.openSessionsWindow(entry.workspace, await workspaces.resolveWorkspace(entry.workspace), entry.modeId);
+					await this.openSessionsWindow(entry.workspace, await workspaces.resolveWorkspace(entry.workspace));
 				}
 			} catch (error) {
 				console.error('Failed to restore window', error);
@@ -617,9 +608,7 @@ export class AshApplication extends Disposable {
 					{ label: messages['tray.showWindow']!, click: () => this.handleActivate() },
 					{ label: messages['taskbar.newWindow']!, click: () => this.handleLaunchArguments(['--new-window'], process.cwd()) },
 				];
-				if (WorkbenchModeRegistry.get(this.shellWorkbenchModeId()).dedicatedSessions) {
-					items.push({ label: messages['taskbar.agentsWindow']!, click: () => this.handleLaunchArguments(['--agents-window'], process.cwd()) });
-				}
+				items.push({ label: messages['taskbar.agentsWindow']!, click: () => this.handleLaunchArguments(['--agents-window'], process.cwd()) });
 				items.push(
 					{ type: 'separator' },
 					{ label: messages['shell.recentProjects']!, submenu: recentItems },
@@ -709,7 +698,7 @@ export class AshApplication extends Disposable {
 		const workspace = launch.args.workspace
 			? await this.windowsMainService.resolveWorkspaceOpenTarget(launch.args.workspace, launch.cwd)
 			: active?.workspaceContext.getWorkspace() ?? createEmptyWorkspaceIdentifier();
-		await this.openSessionsWindow(workspace, await workspaces.resolveWorkspace(workspace), active?.modeId ?? this.defaultModeId);
+		await this.openSessionsWindow(workspace, await workspaces.resolveWorkspace(workspace));
 	}
 
 	private async handleProtocolUrl(uri: URI, options?: IOpenURLOptions): Promise<boolean> {
@@ -773,10 +762,6 @@ export class AshApplication extends Disposable {
 		return arguments_;
 	}
 
-	private shellWorkbenchModeId(): WorkbenchModeId {
-		const modeId = configurationValues(this.services.configuration.read().document)[WorkbenchModeConfigurationKey];
-		return WorkbenchModeRegistry.isModeId(modeId) ? modeId : this.defaultModeId;
-	}
 
 	private recentProjectLabel(recent: IRecent): string {
 		return recent.label ?? basename(recentWorkspaceUri(recent).fsPath);
@@ -792,9 +777,7 @@ export class AshApplication extends Disposable {
 		const actions = [
 			{ title: messages['taskbar.newWindow']!, description: messages['taskbar.newWindowDescription']!, argument: '--new-window' },
 		];
-		if (WorkbenchModeRegistry.get(this.shellWorkbenchModeId()).dedicatedSessions) {
-			actions.push({ title: messages['taskbar.agentsWindow']!, description: messages['taskbar.agentsWindowDescription']!, argument: '--agents-window' });
-		}
+		actions.push({ title: messages['taskbar.agentsWindow']!, description: messages['taskbar.agentsWindowDescription']!, argument: '--agents-window' });
 		await this.workspacesHistory.updateWindowsJumpList({
 			executable: process.execPath,
 			launchArguments,
@@ -1090,7 +1073,7 @@ export class AshApplication extends Disposable {
 			logProgress: createRemoteRuntimeInstallProgressLogger(),
 		}));
 		resources.add(new ElectronRemoteRuntimeInstallWindow({
-			productName: WorkbenchModeRegistry.get(this.defaultModeId).title,
+			productName: AshWorkbenchName,
 			icon: this.windowIconPath,
 			rendererEntry: this.resolveRendererEntry("remoteRuntimeInstall"),
 			webPreferences: this.createSandboxWebPreferences(),
@@ -1125,7 +1108,7 @@ export class AshApplication extends Disposable {
 					: message;
 				const result = await this.dialogs.showMessageBox({
 					type: "error",
-					title: `${WorkbenchModeRegistry.get(this.defaultModeId).title} startup failed`,
+					title: `${AshWorkbenchName} startup failed`,
 					message: "The App Server could not be validated.",
 					detail,
 					buttons: ["Retry", this.windowsMainService.getWindowCount() === 0 ? "Quit" : "Cancel"],
@@ -1157,7 +1140,7 @@ export class AshApplication extends Disposable {
 			backgroundColor: this.themeMainService.getBackgroundColor(),
 			titleBarStyle,
 			webPreferences: this.createSandboxWebPreferences(),
-			title: WorkbenchModeRegistry.get(this.defaultModeId).title,
+			title: AshWorkbenchName,
 			tabbingIdentifier: process.platform === 'darwin' ? 'ash-workbench' : undefined,
 			icon: this.windowIconPath,
 		}, resources);
@@ -1172,7 +1155,6 @@ export class AshApplication extends Disposable {
 			supervisor,
 			resources,
 			remoteConnections,
-			modeId: this.defaultModeId,
 			windowsStateHandler,
 			windowStateTracking,
 		};
@@ -1303,7 +1285,7 @@ export class AshApplication extends Disposable {
 				}
 				const load = async (): Promise<void> => {
 					try {
-						await this.loadRendererEntry(window, this.resolveRendererEntry('workbench', record.modeId));
+						await this.loadRendererEntry(window, this.resolveRendererEntry('workbench'));
 						await this.windowsMainService.whenReady(window);
 					} finally {
 						loadingWorkspace = false;
@@ -1378,7 +1360,7 @@ export class AshApplication extends Disposable {
 				},
 				...this.windowFileDialogs(window),
 				openWorkspace: (root) => transitionToFolder(root, true),
-				openAgentsWindow: options => this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), record.modeId, options),
+				openAgentsWindow: options => this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), options),
 				revealFile: path => {
 					if (!isAbsolute(path)) throw new TypeError('File path to reveal must be absolute');
 					shell.showItemInFolder(path);
@@ -1411,7 +1393,7 @@ export class AshApplication extends Disposable {
 		windowDisposables.add(this.trustedIpcRouter.register(
 			{
 				webContents: window.webContents,
-				allowedEntryUrls: new Set(WorkbenchModeRegistry.modeIds.map(modeId => normalizeEntryUrl(this.resolveRendererEntry("workbench", modeId).url))),
+				allowedEntryUrls: new Set([normalizeEntryUrl(this.resolveRendererEntry("workbench").url)]),
 			},
 			ipcRoutes,
 		));
@@ -1522,29 +1504,25 @@ export class AshApplication extends Disposable {
 		return browserServices;
 	}
 
-	private openSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, modeId: WorkbenchModeId, handoff?: IOpenAgentsWindowOptions): Promise<void> {
-		const opening = this.sessionsWindowOpenQueue.then(() => this.performOpenSessionsWindow(workspace, resolvedWorkspace, modeId, handoff));
+	private openSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, handoff?: IOpenAgentsWindowOptions): Promise<void> {
+		const opening = this.sessionsWindowOpenQueue.then(() => this.performOpenSessionsWindow(workspace, resolvedWorkspace, handoff));
 		this.sessionsWindowOpenQueue = opening.then(() => undefined, () => undefined);
 		return opening;
 	}
 
 	/** Opens the one Agents window and selects the requesting Workspace before a handoff. */
-	private async performOpenSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, modeId: WorkbenchModeId, handoff?: IOpenAgentsWindowOptions): Promise<void> {
-		const mode = WorkbenchModeRegistry.get(modeId);
-		if (!mode.dedicatedSessions) {
-			throw new Error(`${mode.title} does not provide a dedicated Sessions window`);
-		}
+	private async performOpenSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, handoff?: IOpenAgentsWindowOptions): Promise<void> {
 		const workspaces = this.workspaces;
 		if (!workspaces) throw new Error('Workspace service is not initialized');
 		let sessions = this.sessionsWindow.value;
 		if (!sessions) {
 			const remoteConnections = this.createRemoteConnections(workspaces);
 			const workspaceContext = new WorkspaceContextMainService(workspace, resolvedWorkspace);
-			sessions = new SessionsWindowRecord(workspaceContext, remoteConnections, modeId);
+			sessions = new SessionsWindowRecord(workspaceContext, remoteConnections);
 			this.sessionsWindow.value = sessions;
 		}
 		const session = sessions;
-		const sessionsEntry = this.resolveRendererEntry("sessions", session.modeId);
+		const sessionsEntry = this.resolveRendererEntry("sessions");
 		const sessionsWindowState = this.createWindowsStateHandler(UNKNOWN_EMPTY_WINDOW_WORKSPACE, {
 			storageKey: 'sessionsWindowState',
 			// Agents uses workspace window dimensions even before a project is selected.
@@ -1556,7 +1534,7 @@ export class AshApplication extends Disposable {
 			AGENTS_WINDOW_KEY,
 			options => new BrowserWindow(options),
 			{
-				title: `${WorkbenchModeRegistry.get(session.modeId).title} Sessions`,
+				title: `${AshWorkbenchName} Sessions`,
 				titleBarStyle,
 				icon: this.windowIconPath,
 				state: sessionsWindowState.restoreWindowState(),
@@ -1643,7 +1621,7 @@ export class AshApplication extends Disposable {
 						{
 							channel: NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
 							validate: validateOpenAgentsWindow,
-							invoke: (options: unknown) => this.openSessionsWindow(session.workspaceContext.getWorkspace(), session.workspaceContext.getResolvedWorkspace(), session.modeId, options as IOpenAgentsWindowOptions | undefined),
+							invoke: (options: unknown) => this.openSessionsWindow(session.workspaceContext.getWorkspace(), session.workspaceContext.getResolvedWorkspace(), options as IOpenAgentsWindowOptions | undefined),
 						},
 						{
 							channel: NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
@@ -1699,7 +1677,7 @@ export class AshApplication extends Disposable {
 			() => {
 				const closedWorkspace = session.workspaceContext.getWorkspace();
 				if (this.sessionsWindow.value === session) this.sessionsWindow.clear();
-				this.windowSessionStateHandler.windowClosed({ kind: 'sessions', workspace: closedWorkspace, modeId: session.modeId });
+				this.windowSessionStateHandler.windowClosed({ kind: 'sessions', workspace: closedWorkspace });
 			},
 		);
 		await this.selectSessionsWorkspace(session, workspace, resolvedWorkspace);
@@ -1755,16 +1733,12 @@ export class AshApplication extends Disposable {
 		throw new Error(operation === 'install' ? 'No writable bin directory is available in PATH' : 'The ash command is not installed in PATH');
 	}
 
-	private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall", modeId: WorkbenchModeId = this.defaultModeId): RendererEntry {
-		const mode = WorkbenchModeRegistry.get(modeId);
+	private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall"): RendererEntry {
 		const entry = kind === "workbench"
-			? WorkbenchRendererEntry
+			? "workbench"
 			: kind === "sessions"
-				? mode.dedicatedSessions?.rendererEntry
+				? AshSessionsRendererEntry
 				: "remoteRuntimeInstall";
-		if (!entry) {
-			throw new Error(`${mode.title} does not provide a Sessions renderer entry`);
-		}
 		const directory = kind === "remoteRuntimeInstall" ? "remote-runtime-install" : kind;
 		const file = join(
 			this.rendererRoot,
@@ -1779,7 +1753,7 @@ export class AshApplication extends Disposable {
 			: pathToFileURL(file).href;
 		return {
 			file,
-			url: kind === "workbench" ? withWorkbenchModeId(baseUrl, modeId) : baseUrl,
+			url: baseUrl,
 			useDevelopmentUrl,
 		};
 	}
@@ -1908,7 +1882,7 @@ export class AshApplication extends Disposable {
 		try {
 			await this.dialogs.showMessageBox({
 				type: "error",
-				title: `${WorkbenchModeRegistry.get(this.defaultModeId).title} window failed`,
+				title: `${AshWorkbenchName} window failed`,
 				message: "The requested Workspace could not be opened.",
 				detail: message.slice(0, 8_000),
 				buttons: ["OK"],
@@ -2053,7 +2027,7 @@ export class AshApplication extends Disposable {
 				entry: { kind: 'workbench' as const, workspace: this.workbenchWindowData.get(window.id)!.workspaceContext.getWorkspace() },
 				focused: window.id === focusedWindowId,
 			})),
-			...(sessionsWindow && session ? [{ id: sessionsWindow.id, entry: { kind: 'sessions' as const, workspace: session.workspaceContext.getWorkspace(), modeId: session.modeId }, focused: sessionsWindow.id === focusedWindowId }] : []),
+			...(sessionsWindow && session ? [{ id: sessionsWindow.id, entry: { kind: 'sessions' as const, workspace: session.workspaceContext.getWorkspace() }, focused: sessionsWindow.id === focusedWindowId }] : []),
 		];
 	}
 
@@ -2134,8 +2108,7 @@ export class AshApplication extends Disposable {
 }
 
 function isWindowSessionEntry(entry: IWindowSessionEntry): entry is WindowSessionEntry {
-	return (entry.kind === 'workbench' && entry.modeId === undefined)
-		|| (entry.kind === 'sessions' && WorkbenchModeRegistry.isModeId(entry.modeId));
+	return entry.kind === 'workbench' || entry.kind === 'sessions';
 }
 
 function workspaceTransitionError(

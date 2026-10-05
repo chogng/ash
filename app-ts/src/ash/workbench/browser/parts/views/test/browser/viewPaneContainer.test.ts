@@ -25,7 +25,7 @@ const { BrowserStorageService } = await import("../../../../../../workbench/serv
 const { IStorageService } = await import("../../../../../../platform/storage/common/storage.js");
 
 function createStorage(workspaceId: string) {
-	return new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, applicationId: "panes", workspaceId, backend: browserEnvironment.window.localStorage, flushInterval: 0 });
+	return new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId, backend: browserEnvironment.window.localStorage, flushInterval: 0 });
 }
 
 test("ViewPaneContainer opens a fixed visible view without toggling its visibility", () => {

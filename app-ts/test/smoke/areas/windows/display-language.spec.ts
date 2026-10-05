@@ -3,7 +3,6 @@ import { expect, test } from '../../../automation/test.js';
 test.use({ openWorkspace: false });
 
 test('display language stays unchanged until restart and initializes Chinese command titles', async ({ target, workbench, restartWorkbench, deferRestart, restartMessage }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
 	let page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');
 	let settings = page.locator('.ash-settings-editor');
@@ -69,8 +68,7 @@ test('display language stays unchanged until restart and initializes Chinese com
 	await expect(workbench.page.getByRole('dialog', { name: 'Ash Settings' })).toBeVisible();
 });
 
-test('command palette saves and clears a pending display language without changing current commands', async ({ target, workbench, deferRestart }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
+test('command palette saves and clears a pending display language without changing current commands', async ({ workbench, deferRestart }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
@@ -84,8 +82,7 @@ test('command palette saves and clears a pending display language without changi
 	await expect(settings.getByRole('combobox', { name: 'Interface language', exact: true })).toHaveText('English');
 });
 
-test('display language picker opens Marketplace with language packs selected', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('display language picker opens Marketplace with language packs selected', async ({ workbench }) => {
 	const page = workbench.page;
 	await expect(page.getByRole('button', { name: 'Search commands', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Manage', exact: true })).toBeVisible();

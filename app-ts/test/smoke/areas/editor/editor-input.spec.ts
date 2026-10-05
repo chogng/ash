@@ -1,8 +1,7 @@
 import { expect, test } from '../../../automation/test.js';
 import type { ElectronApplication } from '@playwright/test';
 
-test('editor preserves space and tab indentation and places input at the rendered text', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('editor preserves space and tab indentation and places input at the rendered text', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -66,8 +65,7 @@ test('editor preserves space and tab indentation and places input at the rendere
 	await expect(editor.input).toBeFocused();
 });
 
-test('active indent guides keep a thin stroke without gutter symbol icons', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('active indent guides keep a thin stroke without gutter symbol icons', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -91,8 +89,7 @@ test('active indent guides keep a thin stroke without gutter symbol icons', asyn
 	await expect(editor.input).toBeFocused();
 });
 
-test('line numbers stay aligned while scrolling and gutter clicks edit the visible line', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('line numbers stay aligned while scrolling and gutter clicks edit the visible line', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -134,8 +131,7 @@ test('line numbers stay aligned while scrolling and gutter clicks edit the visib
 	await expect(editor.input).toBeFocused();
 });
 
-test('multiline text input is restored by one undo in the editor', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('multiline text input is restored by one undo in the editor', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -149,8 +145,7 @@ test('multiline text input is restored by one undo in the editor', async ({ targ
 	await expect(editor.input).toBeFocused();
 });
 
-test('browser range replacement restores its text and selection through undo and redo', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('browser range replacement restores its text and selection through undo and redo', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -180,7 +175,6 @@ test('browser range replacement restores its text and selection through undo and
 });
 
 test('multiline paste undo and redo preserve the final editor line', async ({ target, workbench, application }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -215,8 +209,7 @@ test('multiline paste undo and redo preserve the final editor line', async ({ ta
 	}
 });
 
-test('minimap reflects equal-length text edits in the workbench', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('minimap reflects equal-length text edits in the workbench', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -243,8 +236,7 @@ test('minimap reflects equal-length text edits in the workbench', async ({ targe
 	await expect(editor.element.locator('.minimap')).toHaveAttribute('aria-hidden', 'true');
 });
 
-test('built-in themes apply scrollbar and minimap colors through hover and dragging', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('built-in themes apply scrollbar and minimap colors through hover and dragging', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -311,8 +303,7 @@ test('built-in themes apply scrollbar and minimap colors through hover and dragg
 	}
 });
 
-test('editor scrollbar track background follows the theme through hover and dragging', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('editor scrollbar track background follows the theme through hover and dragging', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -352,8 +343,7 @@ test('editor scrollbar track background follows the theme through hover and drag
 	}
 });
 
-test('minimap shadow indicates content beyond the right edge', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('minimap shadow indicates content beyond the right edge', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -388,8 +378,7 @@ test('minimap shadow indicates content beyond the right edge', async ({ target, 
 	await expect.poll(async () => (await readShadow()).shadow).not.toBe('none');
 });
 
-test('minimap slider has modern corners and reaches the scrollbar bottom', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('minimap slider has modern corners and reaches the scrollbar bottom', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -421,8 +410,7 @@ test('minimap slider has modern corners and reaches the scrollbar bottom', async
 	await expect(editor.element.locator('.stanza-editor-input')).toBeFocused();
 });
 
-test('clicking inside editor text places insertion at the clicked character', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('clicking inside editor text places insertion at the clicked character', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -465,8 +453,7 @@ test('clicking inside editor text places insertion at the clicked character', as
 	}
 });
 
-test('dragging editor text after horizontal scrolling replaces the selected characters', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('dragging editor text after horizontal scrolling replaces the selected characters', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -522,8 +509,7 @@ test('dragging editor text after horizontal scrolling replaces the selected char
 	await expect(line).toHaveText('mode switcher > !');
 });
 
-test('Chinese drag selection does not jump when pointer capture starts or ends', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('Chinese drag selection does not jump when pointer capture starts or ends', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -562,8 +548,7 @@ test('Chinese drag selection does not jump when pointer capture starts or ends',
 	await expect(editor.lines.first()).toHaveText(`${text.slice(0, anchorOffset)}!${text.slice(anchorOffset)}`);
 });
 
-test('text editor automation follows input, replacement, and folding in its group', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('text editor automation follows input, replacement, and folding in its group', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -589,8 +574,7 @@ test('text editor automation follows input, replacement, and folding in its grou
 	await expect(editor.input).toBeFocused();
 });
 
-test('theme color settings update editor colors and restore defaults when removed', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('theme color settings update editor colors and restore defaults when removed', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -650,8 +634,7 @@ test('theme color settings update editor colors and restore defaults when remove
 	await expect(editor.lines.first()).toHaveText('prefix selected suffix');
 });
 
-test('text editor automation keeps split group inputs and contents separate', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('text editor automation keeps split group inputs and contents separate', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const first = workbench.editors.groupAt(0).editor;

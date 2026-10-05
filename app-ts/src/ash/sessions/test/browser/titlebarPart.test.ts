@@ -120,7 +120,7 @@ const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
 
 function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: import('../../browser/workbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService } = {}): import('../../browser/workbench.js').SessionsWorkbenchLayout {
-	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, applicationId: 'sessions-test', workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
+	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
 	const storage = options.storageService ?? ownedStorage!;
 	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);

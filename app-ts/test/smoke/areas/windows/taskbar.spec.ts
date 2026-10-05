@@ -158,7 +158,7 @@ test('taskbar projects share Welcome history and respect items removed in Window
 test('Desktop imports existing Welcome projects once into the shared history', async ({ application, workbench }, testInfo) => {
 	const folder = testInfo.outputPath('old folder');
 	const workspace = testInfo.outputPath('old.code-workspace');
-	const identity = { applicationId: 'code', scope: StorageScope.PROFILE, id: 'default' };
+	const identity = { scope: StorageScope.PROFILE, id: 'default' };
 	await seedStorageOnNextLoad(application, workbench.page, identity, {
 		'workbench.recentWorkspaces': { value: JSON.stringify([
 			{ root: folder, name: 'Migrated Folder', lastOpened: 2 },

@@ -5,7 +5,6 @@ import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/s
 import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
 
 test('Sessions content shares one raised card with equal right and bottom margins', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	const card = page.locator('.ash-sessions-content-card');
 	const sidebar = page.locator('[data-part="sidebar"]');
@@ -82,7 +81,6 @@ test('Sessions content shares one raised card with equal right and bottom margin
 });
 
 test('Sessions shared layout preserves user geometry across views, resize and reload', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	const failures: string[] = [];
 	page.on('pageerror', error => failures.push(error.message));
@@ -151,7 +149,6 @@ test('Sessions shared layout preserves user geometry across views, resize and re
 });
 
 test('Sessions merges legacy pane arrangements and retains shared selections and drafts after reload', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	const failures: string[] = [];
 	page.on('pageerror', error => failures.push(error.message));
@@ -204,7 +201,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	codeReferences.push(await draftReference());
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
 	// Restore an existing split arrangement; Add is ordinary navigation, not a split command.
-	const identity = { applicationId: target.workbenchMode, scope: StorageScope.WORKSPACE, id: 'sessions' };
+	const identity = { scope: StorageScope.WORKSPACE, id: 'sessions' };
 	await expect.poll(async () => Boolean((await readStorageEntries(application, page, identity))['sessions.viewState'])).toBe(true);
 	await seedStorageOnNextLoad(application, page, identity, {
 		'sessions.viewState': { value: JSON.stringify({ version: 1, pages: { chat: { visible: chatReferences, active: 0 }, code: { visible: codeReferences, active: 1 } } }), target: StorageTarget.MACHINE },

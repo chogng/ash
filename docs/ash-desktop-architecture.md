@@ -117,8 +117,9 @@ Rust primitive 与 model adapter 的实现细节分别见
 | --- | --- | --- |
 | 每实例 xterm、Tab、输入、焦点和 panel actions | Renderer | ✅ `TerminalViewPane` / `TerminalInstanceWidget` |
 | 实例列表、active instance、输入 batching 与 resize coalescing | Renderer `ITerminalService` | ✅ |
-| Typed IPC 与 App Server DTO adapter | Preload / Electron Main | ✅ exact-shape validation |
-| Terminal ID、workspace binding、输出 ring 与 connection cleanup | Rust / App Server | ✅ connection-owned |
+| 前端进程契约与 App Server DTO adapter | Renderer `platform/terminal` | 已接通生成 decoder，适配器统一转换原始字节与退出码；Main 透明转发协议 frame |
+| SSH Terminal bearer lease 与 attach | Renderer `ReconnectableTerminalProcessService` | 同一后端内 30 秒有界恢复；Main 不保存 token |
+| Terminal ID、workspace binding、输出 ring 与 connection cleanup | Rust `exec-server` | 已实现 connection-owned 与 reconnectable 生命周期 |
 | PTY/ConPTY spawn、raw bytes、resize 与进程终止 | `ash-utils-pty` | ✅ |
 | 可信 Shell Profile discovery 与 ID 解析 | Rust / App Server | ✅ 不暴露 executable |
 | 宿主终端环境继承 | Electron Main + Rust / App Server | ✅ 双层 allowlist，凭据变量不进入 App Server 或 PTY |
@@ -344,7 +345,7 @@ last-active state，最后才使用默认尺寸。旧的 `windowState` 与 `wind
 `preserve`、`all`（默认）、`folders`、`one` 和 `none`。直接指定 Folder 或 Workspace 时，
 除 `preserve` 外以本次目标为准。手动关闭的窗口从清单移除；关闭最后一个窗口导致应用退出时，
 保留该窗口作为下次启动目标。Agents 窗口可以单独恢复，不要求同时打开 Workbench。
-Workbench 使用共享 profile 当前的 `workbench.mode`，Agents 窗口恢复其原有模式。
+Workbench 与 Agents 使用固定产品入口，窗口恢复只依赖窗口种类与工作区；旧记录中的模式字段在读取时移除。
 `LifecycleMainService` 在更新安装时记录目标版本；首次启动该版本时，无论 `window.restoreWindows` 当前选项如何，
 均恢复上次打开的全部窗口，然后清除更新标记。普通启动继续遵循用户设置。
 Workbench 的 `workbench.editor.restoreEditors` 默认开启。`WorkbenchLayout` 判断是否恢复编辑器，
@@ -438,11 +439,11 @@ execute(method: string, params?: unknown): Promise<unknown>
 | 外部 URL 与剪贴板 | `IOpenerService` / `IClipboardService` | Browser、Electron Main adapters | Connector host 注入适配器 |
 | 编辑器打开 | `IEditorService` | `BrowserEditorService` | Workbench 把具体 `EditorPart` 封装在 service 后面 |
 | 窗口宿主操作 | `IWorkbenchHostService` | `WorkbenchWindow` | Workbench 注册当前窗口实现 |
-| Code Mode 能力 | 各领域 `I*Service` | 对应 browser service implementation | `codeWorkbenchServices.ts` 按 Mode 静态选择并按依赖安装 |
+| Code Mode 能力 | 各领域 `I*Service` | 对应 browser service implementation | `workbench.common.main.ts` 加载共同贡献与 Extension Host、Codebase Symbols；Web、Desktop 入口选择 Tasks 实现；Debug、Testing contribution 加载各自服务注册，窗口容器按依赖安装 |
 
 `common/*Service.ts` 只能包含调用方使用的领域类型和 service identifier。IPC channel、生成 DTO、
-context bridge API 与 host validation 留在 `*Ipc.ts` 或具体运行时实现中；UI contribution 不得负责
-创建 service。`workbenchServiceContributions.ts` 只描述 service、依赖与安装函数，composition root
+context bridge API 与 host validation 留在 `*Ipc.ts` 或具体运行时实现中。功能 contribution 可以加载
+所属 service 注册，但实例创建与释放由窗口容器统一负责。`workbenchServiceContributions.ts` 只描述 service、依赖与安装函数，composition root
 负责提供原始 capability，并在缺失依赖或依赖环时启动失败。
 
 Electron 主进程连接由 `IMainProcessService` 提供 channel。Workbench 和 Sessions 在创建领域 API 前，先取得可信路由确认的窗口 ID，再连接当前文档的 MessagePort；构造函数不发起连接。Main 根据已校验的发送窗口赋予连接上下文，Renderer 只能提交回复 nonce。窗口重载或关闭会取消该连接的请求并释放订阅，其他窗口的连接继续使用。
@@ -453,7 +454,7 @@ Ash 当前没有 VS Code `externalServices` 中的 telemetry machine ID / Market
 也没有构建时替换的 Copilot license endpoint，因此不建立同名空目录。Marketplace 请求继续由
 `platform/marketplace` 拥有；不可把任意网络调用、外部 URL 或产品常量汇总进一个模糊的
 `externalServices` 或 `endpoint` 包。运行时事实保留在 `base/common/environment.ts`，固定 Desktop
-应用身份保留在 `code/common/application.ts`，内置模式目录保留在 `workbench/common/workbenchMode.ts`，
+应用标题和 Sessions 页面名保留在 `code/common/application.ts`，由产品入口提供。存储以用户数据根、作用域及 profile/workspace id 隔离，不再携带产品身份；
 跨客户端本地资料根在 `platform/profile`；只有出现需要注入、替换或拥有生命周期的真实
 调用方时，才把这些不可变策略升级成 service。
 
@@ -751,7 +752,8 @@ Ctrl/Cmd+Alt+V 启动，再按该快捷键结束，
 
 ### 6.7 集成终端
 
-Terminal contribution 只依赖 Workbench service layer 的 `ITerminalService`。实例管理、输入
+Terminal 的实例契约与实例管理位于 `workbench/contrib/terminal/browser/terminal.ts` 和
+`terminalService.ts`。Tasks、Debug 的执行编排由各自 contribution 消费该契约。输入
 batching、resize coalescing 和 polling 由 `TerminalService` 负责；process contract 位于
 platform layer 的 `ITerminalProcessService`。`IRendererHost` 直接提供该领域契约；Electron、
 Vite development 和 disconnected runtime 分别实现它，wire DTO 只出现在对应 runtime
@@ -762,11 +764,11 @@ TerminalViewPane / xterm
   → ITerminalService
   → TerminalService (Renderer)
   → ITerminalProcessService
-  → ElectronTerminalProcessService + IAppServerApi
-  → trusted Electron IPC
-  → platform/terminal/electron-main/terminalIpcRoutes
+  → AppServerTerminalProcessService / SSH ReconnectableTerminalProcessService
+  → Renderer AppServerProtocolClient
+  → MessagePort transport → Main transparent relay
   → terminal/* App Server methods
-  → TerminalService (Rust)
+  → exec-server TerminalService (Rust)
   → ash-utils-pty
 ```
 
@@ -792,15 +794,22 @@ protocol 的显式流控选择，不再是 JSONL request loop 的串行限制。
 batch，对 resize 做 microtask coalescing；Rust 仍重新校验输入 byte limit、rows/cols、owner 和
 output cursor。
 
-Terminal 当前只在单根 workspace composition 中可用；空窗口会显示 terminal service
-unavailable。PTY
-不跨 App Server crash 恢复。每个实例拥有独立 xterm widget，Tab 切换或 Panel 隐藏不会丢失
+Terminal 服务要求已打开的 Workspace folder；多根窗口把选定 `dirId` 绑定到该实例，空窗口明确拒绝
+进程操作。Remote 多根工作区尚未实现。PTY 不跨后端进程重启恢复。每个实例拥有独立 xterm widget，Tab 切换或 Panel 隐藏不会丢失
 窗口生命周期内的 scrollback 与 ANSI parser 状态。xterm、尺寸适配器和样式在创建终端实例时按需加载；
 组件先订阅输出，再加载渲染器，加载期间的输出、命令状态和退出消息按顺序保留。加载完成前关闭
 组件会清理订阅和待显示内容；焦点已移到其他控件时不再抢回。Profile picker 只提交 App Server 已列出的
-稳定 ID。Supervisor 离开 ready 后，运行实例进入 `disconnected`；恢复 ready 后用户可以显式
-Relaunch，新 PTY 使用原 Profile，但不会重放未确认输入或冒充旧进程。当前尚无 shell
-integration、跨进程 reconnection attach 或跨应用重启的持久 scrollback。
+稳定 ID。连接离开 ready 后，本地 `connectionOwned` 实例进入 `disconnected`；用户可显式
+Relaunch，新 PTY 使用原 Profile，不重放未确认输入。SSH `reconnectable` 实例进入 `reconnecting`，
+Renderer 在同一后端的 30 秒租约内 attach 原 PTY，首次续读成功后才回到 `running`。后端已有
+命令状态检测，但尚未接入完整前端 shell integration capability、跨后端重启恢复或持久 scrollback。
+窗口服务按实例 ID 持有可释放资源，关闭完成后撤销该持有关系；窗口或实例释放会立即停止输入与读取。
+窗口释放后的创建结果、实例关闭后的重启结果仍拥有真实 PTY，必须关闭后才结束操作。
+同一实例的并发重启共享一次创建，并发 close 共享释放结果；close 也等待进行中的重启清理，避免遗留第二个 PTY。
+创建、释放和移动均在列表、标题与活动项更新后发出 `onDidChangeInstances`。创建与重启开始读取前查询窗口当前连接状态，
+避免异步返回覆盖已发生的断线。Tasks 与 DAP 在发送命令前要求新实例处于 running；否则关闭自己创建的实例并报告启动失败，
+不在连接恢复后自动发送这次命令。
+platform 到 services 的装配缺口、对应目录与职责见 [Terminal 对齐台账](../app-ts/docs/terminal-api-alignment-status.md)。
 
 ### 6.8 产品链接与 URL 回调
 

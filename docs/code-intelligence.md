@@ -438,7 +438,8 @@ comment，public module 保持 private implementation + named exports。
 | new retrieval source | `ash-codebase` | RRF、origin/degradation、materialization、Core evidence |
 | semantic edge | future graph owner | source freshness、resolver identity、navigation/AI consumers |
 
-`app-ts/src/ash/code/*/workbench/modes/code.ts` 只允许导入 Code 模式 contribution 与宿主 adapter；
+`app-ts/src/ash/code/*/workbench/workbench.ts` 初始化本地化、加载运行环境入口与 Sessions 贡献，并选择宿主 adapter；
+共同贡献及符号服务注册由 `workbench.common.main.ts` 装载，运行环境实现由 Web、Desktop 入口选择；
 `workbenchServiceContributions.ts` 只拥有静态安装机制；`workbench.ts` 只组合所有产品共同的服务。
 `extensionHost.contribution.ts` 在 Extension Host 明确支持 workspace-symbol operation 前不参与内置
 symbol index。`ash-tools` 保持通用 Tool contract，不拥有 `search_code` 的候选或排名。

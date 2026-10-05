@@ -53,7 +53,6 @@
     "src/ash/platform/workspace/electron-main/**/*.ts",
     "src/ash/platform/workspaces/common/**/*.ts",
     "src/ash/platform/workspaces/electron-main/**/*.ts",
-    "src/ash/platform/workspaces/node/**/*.ts",
-    "src/ash/workbench/common/workbenchMode.ts"
+    "src/ash/platform/workspaces/node/**/*.ts"
   ]
 }

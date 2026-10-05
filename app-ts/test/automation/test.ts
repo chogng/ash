@@ -127,7 +127,7 @@ export const test = base.extend<PlaywrightFixtures>({
 		}
 		const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
 		const options = {
-			appServerMode: target.appServerMode, workbenchMode: target.workbenchMode, userDataDirectory,
+			appServerMode: target.appServerMode, userDataDirectory,
 			workspaceDirectory: openWorkspace ? testWorkspace.directory : undefined,
 			workspacePermissions: openWorkspace ? 'development' as const : undefined,
 		};

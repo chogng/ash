@@ -9,7 +9,7 @@ import { BrowserStorageService } from '../../browser/storageService.js';
 test('stored observables preserve local identity, batch notifications and reload other writers without writing back', () => {
 	const dom = new JSDOM('<!doctype html>', { url: 'https://ash.test' });
 	try {
-		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'code', workspaceId: 'test', backend: dom.window.localStorage, flushInterval: 0 });
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', backend: dom.window.localStorage, flushInterval: 0 });
 		storage.store('state', 'invalid', StorageScope.PROFILE, StorageTarget.USER);
 		using value = observableMemento<readonly number[]>({ key: 'state', defaultValue: [], toStorage: state => JSON.stringify(state), fromStorage: serialized => JSON.parse(serialized) })(StorageScope.PROFILE, StorageTarget.USER, storage);
 		const observed: Array<readonly number[]> = [];

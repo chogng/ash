@@ -32,7 +32,6 @@ test('Code Sessions starts with dialog dependencies and confirms closing a dirty
 });
 
 test('Code sessions restore editor tabs through Back, Forward and reopening without focusing the editor', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	let navigation = page.locator('.ash-sessions-activity-content');
 	let editors = page.locator('[data-part="editor"]');
@@ -64,7 +63,6 @@ test('Code sessions restore editor tabs through Back, Forward and reopening with
 });
 
 test('Code panel stays below the main region and retains its views across session layouts', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	let navigation = page.locator('.ash-sessions-activity-content');
 	let panel = page.locator('[data-part="panel"]');
@@ -106,7 +104,6 @@ test('Code panel stays below the main region and retains its views across sessio
 });
 
 test('Code connects layout commands to View, Add tab and the panel shortcut', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
@@ -190,7 +187,6 @@ test('Code connects layout commands to View, Add tab and the panel shortcut', as
 });
 
 test('Code shares its tabs across all four editor and Details states', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
 	let editor = page.locator('[data-part="editor"]');
@@ -273,7 +269,6 @@ test.describe('Sessions from an Electron Workbench', () => {
 	test.skip(({ target }) => target.kind === 'browser', 'The browser Sessions page has its own launch test below.');
 
 	test('Sessions Code reuses Files and Changes and retains its Workbench editor across pages', async ({ application, target, workbench, testWorkspace }) => {
-		test.skip(target.workbenchMode !== 'code');
 		if (target.appServerMode === 'required') {
 			await mkdir(join(testWorkspace.directory, 'nested'), { recursive: true });
 			await writeFile(join(testWorkspace.directory, 'nested', 'child.ts'), 'export const child = 1;\n');

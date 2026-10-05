@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 test.use({ openWorkspace: false });
 
 test('Explorer selection stays beneath its scrollbar', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
 	const page = workbench.page;
 	await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
@@ -41,7 +41,7 @@ test('Explorer selection stays beneath its scrollbar', async ({ target, workbenc
 });
 
 test('browser opens an authorized local folder and saves its files', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
 	const page = workbench.page;
 	const folderName = await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
@@ -194,7 +194,7 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 });
 
 test('browser Explorer expands and collapses a folder without replacing sibling rows', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
 	const page = workbench.page;
 	await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
@@ -239,7 +239,7 @@ test('browser Explorer expands and collapses a folder without replacing sibling 
 });
 
 test('browser nests related files when Explorer file nesting is enabled', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
 	const page = workbench.page;
 	await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();

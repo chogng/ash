@@ -55,12 +55,11 @@ test(
 
 		const workbenchWindow = new WorkbenchWindow({
 			root,
-			modeId: "code",
 			workbenchState: WorkbenchState.FOLDER,
 		});
 
 		assert.equal(root.classList.contains("ash-workbench"), true);
-		assert.equal(root.dataset.workbenchMode, "code");
+		assert.equal(root.hasAttribute("data-workbench-mode"), false);
 		assert.equal(root.dataset.workbenchState, "folder");
 		workbenchWindow.setWorkbenchState(WorkbenchState.EMPTY);
 		assert.equal(root.dataset.workbenchState, "empty");
@@ -109,7 +108,6 @@ test("WorkbenchWindow forwards secondary runtime errors to the central error han
 	assert.ok(root);
 	const workbenchWindow = new WorkbenchWindow({
 		root,
-		modeId: "code",
 		workbenchState: WorkbenchState.FOLDER,
 	});
 	const previousHandler = errorHandler.getUnexpectedErrorHandler();

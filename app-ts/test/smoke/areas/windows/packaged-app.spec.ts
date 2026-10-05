@@ -18,7 +18,7 @@ test('Windows package saves files, executes a terminal command and restarts with
 		const workspace = join(directory, 'workspace');
 		await mkdir(workspace);
 		await mkdir(join(userData, 'profile'), { recursive: true });
-		await writeFile(join(userData, 'profile', 'settings.json'), '{"update.policy":"never","workbench.mode":"code"}');
+		await writeFile(join(userData, 'profile', 'settings.json'), '{"update.policy":"never"}');
 		await writeFile(join(workspace, 'main.ts'), 'const release = 1;\n');
 		const { version } = JSON.parse(await readFile(join(bundlePath, 'resources', 'app', 'package.json'), 'utf8'));
 		await exercisePackagedWorkbench(bundlePath, version, userData, workspace, 'const release = 2;', testInfo, 'package');
@@ -41,7 +41,6 @@ test('macOS package launches, opens a window tab, and installs its shell command
 	await mkdir(shellBin, { recursive: true });
 	const environment = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined));
 	delete environment.ASH_DESKTOP_UI_ONLY;
-	environment.ASH_WORKBENCH_MODE = 'code';
 	environment.ASH_HOME = join(userDataDirectory, 'profile');
 	environment.HOME = userDataDirectory;
 	environment.PATH = `${shellBin}:${environment.PATH ?? ''}`;

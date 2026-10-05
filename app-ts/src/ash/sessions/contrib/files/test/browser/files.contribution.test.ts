@@ -37,7 +37,7 @@ test('Sessions Files selects one view from the current folder state and creates 
 	using services = new InstantiationService();
 	const storageEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'https://ash-files.test' });
 	using storageOwner = toDisposable(() => storageEnvironment.window.close());
-	using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, applicationId: 'sessions-files-test', workspaceId: 'empty', backend: storageEnvironment.window.localStorage, flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'empty', backend: storageEnvironment.window.localStorage, flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
 	using host = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 		viewContainer: model.viewContainer,

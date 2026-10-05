@@ -26,7 +26,6 @@ test("RecentWorkspacesService records, persists, deduplicates, and reopens folde
 	};
 	using storage = new BrowserStorageService({
 		ownerWindow: browser.window as unknown as Window,
-		applicationId: "recent-workspaces-test",
 		workspaceId: "alpha",
 		backend: browser.window.localStorage,
 		flushInterval: 0,
@@ -66,7 +65,6 @@ test("RecentWorkspacesService records, persists, deduplicates, and reopens folde
 
 	using restoredStorage = new BrowserStorageService({
 		ownerWindow: browser.window as unknown as Window,
-		applicationId: "recent-workspaces-test",
 		workspaceId: "restored",
 		backend: browser.window.localStorage,
 		flushInterval: 0,
@@ -94,7 +92,7 @@ test("RecentWorkspacesService records, persists, deduplicates, and reopens folde
 test("browser history migrates Welcome records and clears the old key", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
 	try {
-		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: "legacy-recent-test", workspaceId: "empty", backend: browser.window.localStorage, flushInterval: 0 });
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "empty", backend: browser.window.localStorage, flushInterval: 0 });
 		storage.store(LEGACY_RECENT_WORKSPACES_STORAGE_KEY, JSON.stringify([
 			{ root: "/workspaces/team.code-workspace", name: "Team", lastOpened: 2 },
 			{ root: "/workspaces/alpha", name: "alpha", lastOpened: 1 },

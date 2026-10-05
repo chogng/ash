@@ -6,6 +6,7 @@
  */
 import "./workbench.common.main.js";
 import './services/workspaces/browser/workspacesService.js';
+import './contrib/tasks/browser/taskService.js';
 import { BrowserHostService } from './services/host/browser/browserHostService.js';
 import { IHostService } from './services/host/browser/host.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';

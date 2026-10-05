@@ -317,7 +317,6 @@ export class WindowsStateHandler {
 export interface IWindowSessionEntry {
 	readonly kind: string;
 	readonly workspace: IAnyWorkspaceIdentifier;
-	readonly modeId?: string;
 }
 
 export interface IWindowSession<TEntry extends IWindowSessionEntry> {
@@ -351,15 +350,16 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 		const windows: TEntry[] = [];
 		for (const candidate of value.windows) {
 			if (!isRecord(candidate) || !isNonEmptyString(candidate.kind)) return undefined;
-			if (Object.keys(candidate).sort().join(',') !== (candidate.modeId === undefined ? 'kind,workspace' : 'kind,modeId,workspace')) return undefined;
-			if (candidate.modeId !== undefined && !isNonEmptyString(candidate.modeId)) return undefined;
+			// Older records carried a product mode. Read their workspace, then omit that retired field when saving.
+			const keys = Object.keys(candidate).filter(key => key !== 'modeId').sort().join(',');
+			if (keys !== 'kind,workspace') return undefined;
 			let workspace: IAnyWorkspaceIdentifier;
 			try {
 				workspace = parseWorkspaceIdentifier(candidate.workspace);
 			} catch {
 				return undefined;
 			}
-			const entry: IWindowSessionEntry = { kind: candidate.kind, workspace, ...(candidate.modeId === undefined ? {} : { modeId: candidate.modeId }) };
+			const entry: IWindowSessionEntry = { kind: candidate.kind, workspace };
 			if (!this.isEntry(entry)) return undefined;
 			windows.push(entry);
 		}
@@ -411,7 +411,6 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 			windows: entries.map(entry => ({
 				kind: entry.kind,
 				workspace: serializeWorkspaceIdentifier(entry.workspace),
-				...(entry.modeId === undefined ? {} : { modeId: entry.modeId }),
 			})),
 		});
 		await this.stateService.flush();

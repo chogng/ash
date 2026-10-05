@@ -1,8 +1,7 @@
 import { localizationPlugin } from "../../resources/localization.ts";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
-import { AshRendererDirectory } from "../../../app-ts/src/ash/code/common/application.js";
-import { WorkbenchModeRegistry } from "../../../app-ts/src/ash/workbench/common/workbenchMode.js";
+import { AshRendererDirectory, AshSessionsRendererEntry } from "../../../app-ts/src/ash/code/common/application.js";
 import { appTsBuildPath } from "../paths.ts";
 import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
 import { desktopStartupTracePlugin } from './desktopStartupTracePlugin.ts';
@@ -15,22 +14,16 @@ import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
 export default defineConfig(() => {
   const desktopRoot = resolve(import.meta.dirname, "../../../app-ts");
   const repositoryRoot = resolve(desktopRoot, "..");
-  const workbenchModeId = WorkbenchModeRegistry.resolveModeId(process.env.ASH_WORKBENCH_MODE);
   const webAppServerEnabled = process.env.ASH_WEB_APP_SERVER === "1";
   const developmentPort = webAppServerEnabled ? 5174 : 5173;
   const sourceRoot = resolve(desktopRoot, "src/ash/code");
   const browserEntry = "browser/workbench/workbench";
   const electronEntry = "electron-browser/workbench/workbench";
-  const mode = WorkbenchModeRegistry.get(workbenchModeId);
-  const developmentEntries = [browserEntry, electronEntry];
-  if (mode.dedicatedSessions) {
-    developmentEntries.push(`browser/sessions/${mode.dedicatedSessions.rendererEntry}`, `electron-browser/sessions/${mode.dedicatedSessions.rendererEntry}`);
-  }
-  const dedicatedSessionsEntries = WorkbenchModeRegistry.definitions.flatMap(mode => mode.dedicatedSessions ? [mode.dedicatedSessions.rendererEntry] : []);
-  const sessionsInputs = Object.fromEntries(dedicatedSessionsEntries.flatMap(rendererEntry => [
-    [`browser/sessions/${rendererEntry}`, resolve(sourceRoot, `browser/sessions/${rendererEntry}.html`)],
-    [`electron-browser/sessions/${rendererEntry}`, resolve(sourceRoot, `electron-browser/sessions/${rendererEntry}.html`)],
-  ]));
+  const developmentEntries = [browserEntry, electronEntry, `browser/sessions/${AshSessionsRendererEntry}`, `electron-browser/sessions/${AshSessionsRendererEntry}`];
+  const sessionsInputs = {
+    [`browser/sessions/${AshSessionsRendererEntry}`]: resolve(sourceRoot, `browser/sessions/${AshSessionsRendererEntry}.html`),
+    [`electron-browser/sessions/${AshSessionsRendererEntry}`]: resolve(sourceRoot, `electron-browser/sessions/${AshSessionsRendererEntry}.html`),
+  };
   const remoteRuntimeInstallInput = {
     "electron-browser/remote-runtime-install/remoteRuntimeInstall": resolve(sourceRoot, "electron-browser/remote-runtime-install/remoteRuntimeInstall.html"),
   };
@@ -40,7 +33,6 @@ export default defineConfig(() => {
     root: sourceRoot,
     publicDir: resolve(repositoryRoot, "resources/server"),
     define: {
-      __ASH_WORKBENCH_MODE__: JSON.stringify(workbenchModeId),
       __ASH_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),
     },
     plugins: [
@@ -73,7 +65,7 @@ export default defineConfig(() => {
       host: "127.0.0.1",
       port: developmentPort,
       strictPort: true,
-      // Transform the current mode's entry graphs while the host starts, before its first navigation.
+      // Transform the product entry graphs while the host starts, before its first navigation.
       warmup: { clientFiles: developmentEntries.map(entry => resolve(sourceRoot, `${entry}.html`)) },
     },
     build: {

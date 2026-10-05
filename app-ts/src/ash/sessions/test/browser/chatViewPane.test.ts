@@ -133,8 +133,8 @@ const { ChatListWidget } = await import(
 );
 const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
 const testStorageEnvironment = new JSDOM('', { url: 'https://ash.test/' });
+const storageResources = new DisposableStore();
 const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
-let testStorageSequence = 0;
 const { ChatWidget, openChatMarkdownLink } = await import("../../../workbench/contrib/chat/browser/widget/chatWidget.js");
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { readNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
@@ -145,6 +145,7 @@ await import(
 suiteTeardown(() => {
 	for (const storage of testStorages) storage.dispose();
 	testStorageEnvironment.window.close();
+	storageResources.dispose();
 	browserEnvironment.window.close();
 	for (const name of [
 		"window",
@@ -1782,7 +1783,9 @@ interface FakeOptions {
 }
 
 function createTestStorage(): InstanceType<typeof BrowserStorageService> {
-	return new BrowserStorageService({ ownerWindow: testStorageEnvironment.window as unknown as Window, applicationId: `chat-test-${++testStorageSequence}`, workspaceId: 'test', flushInterval: 0 });
+	const environment = new JSDOM('', { url: 'https://ash.test' });
+	storageResources.add(toDisposable(() => environment.window.close()));
+	return new BrowserStorageService({ ownerWindow: environment.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
 }
 
 const modelServices = new WeakMap<IChatService, ILanguageModelsService>();

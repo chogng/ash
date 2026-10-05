@@ -51,10 +51,10 @@ class TestStateService implements IStateService {
 test('window session state owner persists active Workbench and Agents windows and the last closed window', async () => {
 	type Entry =
 		| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier }
-		| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier; readonly modeId: string };
-	const isEntry = (entry: IWindowSessionEntry): entry is Entry => entry.kind === 'workbench' && entry.modeId === undefined || entry.kind === 'sessions' && entry.modeId === 'code';
+		| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier };
+	const isEntry = (entry: IWindowSessionEntry): entry is Entry => entry.kind === 'workbench' || entry.kind === 'sessions';
 	const workbench: Entry = { kind: 'workbench', workspace: folderWorkspace };
-	const agents: Entry = { kind: 'sessions', workspace: multiRootWorkspace, modeId: 'code' };
+	const agents: Entry = { kind: 'sessions', workspace: multiRootWorkspace };
 	const state = new TestStateService();
 	let windows: readonly IWindowSessionWindow<Entry>[] = [
 		{ id: 1, entry: workbench, focused: false },
@@ -72,7 +72,7 @@ test('window session state owner persists active Workbench and Agents windows an
 		active: 1,
 		windows: [
 			{ kind: 'workbench', workspace: serializeWorkspaceIdentifier(folderWorkspace) },
-			{ kind: 'sessions', workspace: serializeWorkspaceIdentifier(multiRootWorkspace), modeId: 'code' },
+			{ kind: 'sessions', workspace: serializeWorkspaceIdentifier(multiRootWorkspace) },
 		],
 	});
 	const restored = new WindowSessionStateHandler(state, () => windows, isEntry).readSession();
@@ -92,6 +92,23 @@ test('window session state owner persists active Workbench and Agents windows an
 	assert.deepEqual(handler.readSession(), { windows: [workbench], active: 0 });
 	handler.resumeAutomaticSaves();
 	assert.deepEqual(handler.readSession(), { windows: [agents], active: 0 });
+});
+
+test('window session state reads retired mode fields and saves only window kind and workspace', async () => {
+	const state = new TestStateService();
+	state.setItem('windowSession', {
+		version: 1, active: 0,
+		windows: [{ kind: 'sessions', workspace: serializeWorkspaceIdentifier(multiRootWorkspace), modeId: 'academic' }],
+	});
+	const handler = new WindowSessionStateHandler(state, () => [], (entry): entry is IWindowSessionEntry => entry.kind === 'sessions');
+	const restored = handler.readSession();
+	assert.deepEqual(restored, { active: 0, windows: [{ kind: 'sessions', workspace: multiRootWorkspace }] });
+	handler.windowClosed(restored!.windows[0]!);
+	await handler.saveSession();
+	assert.deepEqual(state.getItem('windowSession'), {
+		version: 1, active: 0,
+		windows: [{ kind: 'sessions', workspace: serializeWorkspaceIdentifier(multiRootWorkspace) }],
+	});
 });
 
 class TestWindow implements IStatefulWindow {

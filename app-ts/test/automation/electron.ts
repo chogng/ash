@@ -1,7 +1,7 @@
 import { dirname, join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { createTestEnvironment } from './testEnvironment.js';
-import type { AppServerTestMode, DesktopWorkbenchMode } from "./testTarget.js";
+import type { AppServerTestMode } from "./testTarget.js";
 
 export interface ElectronLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
@@ -11,7 +11,6 @@ export interface ElectronLaunchOptions {
 	readonly profileDirectory?: string;
 	readonly workspaceDirectory?: string;
 	readonly workspacePermissions?: "development";
-	readonly workbenchMode?: DesktopWorkbenchMode;
 	readonly extraArgs?: readonly string[];
 	readonly recordVideo?: {
 		readonly directory: string;
@@ -49,7 +48,6 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 	} else {
 		delete environment.ASH_DESKTOP_UI_ONLY;
 	}
-	environment.ASH_WORKBENCH_MODE = options.workbenchMode ?? "code";
 	environment.ASH_HOME = options.profileDirectory ?? resolve(options.userDataDirectory, "profile");
 	delete environment.ASH_PROFILE_ROOT;
 	delete environment.ELECTRON_RUN_AS_NODE;

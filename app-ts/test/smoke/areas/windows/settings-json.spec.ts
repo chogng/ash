@@ -11,8 +11,7 @@ async function pasteJson(input: Locator, source: string): Promise<void> {
 	}, source);
 }
 
-test('Preferred paste and drop commands reveal editable settings and persist their order', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code settings editor');
+test('Preferred paste and drop commands reveal editable settings and persist their order', async ({ workbench }) => {
 	const group = workbench.editors.groupAt(0);
 	const tab = group.tabs.filter({ hasText: 'User Settings (JSON)' });
 	const preferences = ['uri.path.relative', 'uri.path.absolute'];
@@ -41,7 +40,7 @@ test('Preferred paste and drop commands reveal editable settings and persist the
 });
 
 test('Preferred paste and drop JSON completions use registered provider kinds', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires the product language declarations');
+	test.skip(target.appServerMode !== 'required', 'Requires the product language declarations');
 	const group = workbench.editors.groupAt(0);
 	for (const [command, key] of [
 		['workbench.action.configurePreferredPasteAction', 'editor.pasteAs.preferences'],
@@ -65,7 +64,6 @@ test('Preferred paste and drop JSON completions use registered provider kinds', 
 });
 
 test('Settings JSON opens a pinned tab, reveals a value, saves immediately and persists Chinese labels', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code settings editor');
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -134,7 +132,7 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 });
 
 test('Saving JSON token customization refreshes Markdown and the canonical profile settings', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires the product grammar resources');
+	test.skip(target.appServerMode !== 'required', 'Requires the product grammar resources');
 	const page = workbench.page;
 	await writeFile(join(testWorkspace.directory, 'settings-style.md'), '# Heading\n');
 	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
@@ -171,8 +169,7 @@ test('Saving JSON token customization refreshes Markdown and the canonical profi
 	await expect(heading).toHaveCSS('color', 'rgb(101, 67, 33)');
 });
 
-test('Settings JSON rejects invalid values and preserves dirty edits during a configuration conflict', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code settings editor');
+test('Settings JSON rejects invalid values and preserves dirty edits during a configuration conflict', async ({ application, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	const group = workbench.editors.groupAt(0);

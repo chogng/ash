@@ -251,9 +251,13 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 		await session.quit();
 		application = undefined;
 
-		const saved = JSON.parse(await readFile(join(userDataDirectory, 'state.json'), 'utf8')) as { windowSession: { active: number; windows: readonly { kind: string }[] } };
+		const saved = JSON.parse(await readFile(join(userDataDirectory, 'state.json'), 'utf8')) as { windowSession: { active: number; windows: { kind: string; modeId?: string }[] } };
 		expect(saved.windowSession.windows.map(window => window.kind)).toEqual(['workbench', 'sessions']);
 		expect(saved.windowSession.active).toBe(1);
+		expect(saved.windowSession.windows.every(window => !('modeId' in window))).toBe(true);
+		// Exercise a persisted record from before product modes were removed.
+		saved.windowSession.windows.find(window => window.kind === 'sessions')!.modeId = 'code';
+		await writeFile(join(userDataDirectory, 'state.json'), JSON.stringify(saved));
 
 		session = await launch(userDataDirectory);
 		application = session.application;
@@ -269,6 +273,8 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 		await expect((await application.firstWindow()).locator('.ash-sessions-window')).toBeVisible();
 		await session.quit();
 		application = undefined;
+		const updated = JSON.parse(await readFile(join(userDataDirectory, 'state.json'), 'utf8')) as typeof saved;
+		expect(updated.windowSession.windows.every(window => !('modeId' in window))).toBe(true);
 
 		session = await launch(userDataDirectory, folder);
 		application = session.application;

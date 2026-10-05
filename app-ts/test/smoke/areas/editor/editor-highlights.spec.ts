@@ -1,7 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('symbol highlight backgrounds align with their text in the workbench editor', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+test('symbol highlight backgrounds align with their text in the workbench editor', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;

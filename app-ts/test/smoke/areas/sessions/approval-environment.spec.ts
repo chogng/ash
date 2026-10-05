@@ -5,7 +5,6 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 test('Sessions review environment scans a draft, accepts entries, and excludes changed sources', async ({ application, target, workbench, testWorkspace }) => {
-	test.skip(target.workbenchMode !== 'code');
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true }).click();
 	const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));

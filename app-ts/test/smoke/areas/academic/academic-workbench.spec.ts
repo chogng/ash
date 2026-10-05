@@ -2,7 +2,6 @@ import { expect, test } from '../../../automation/test.js';
 import { readFile } from 'node:fs/promises';
 
 test('Academic is a document contribution in the Code Workbench', async ({ workbench }) => {
-	await expect(workbench.element).toHaveAttribute('data-workbench-mode', 'code');
 	await expect(workbench.page.locator("[data-action-id='ash.academic.open-sessions']")).toHaveCount(0);
 });
 
@@ -37,5 +36,18 @@ test('browser opens and saves Academic beside code without changing Workbench', 
 	await expect(group.content.locator('.stanza-editor')).toBeVisible();
 	await group.tabs.filter({ hasText: 'paper.ash-academic' }).click();
 	await expect(group.content.locator('textarea.stanza-document-text-input').first()).toHaveValue('Browser paper');
-	await expect(workbench.element).toHaveAttribute('data-workbench-mode', 'code');
 });
+
+for (const retiredMode of ['academic', 'unregistered']) {
+	test(`browser opens the fixed Workbench and Sessions from a ${retiredMode} mode link`, async ({ target, workbench }) => {
+		test.skip(target.kind !== 'browser', 'This scenario enters through a browser URL.');
+		const url = new URL(workbench.page.url());
+		url.searchParams.set('ash-workbench-mode', retiredMode);
+		await workbench.page.goto(url.href);
+		await workbench.waitForReady();
+		await expect(workbench.page).toHaveTitle(/Ash Code/u);
+		const sessions = await workbench.openAgentsWindow('browser');
+		expect(new URL(sessions.url()).pathname).toMatch(/sessions\/sessions-code\.html$/u);
+		await expect(sessions.locator('.ash-sessions-window')).toBeVisible();
+	});
+}

@@ -163,7 +163,6 @@ import { AccessibleViewService } from '../../workbench/contrib/accessibility/bro
 import { IAccountService } from '../../platform/accounts/common/accountService.js';
 import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { INativeHostService } from '../../workbench/common/services.js';
-import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { ActivityBarPosition } from '../../workbench/common/configuration.js';
 import { ChatService } from "../../workbench/services/chat/browser/chatService.js";
 import { AppServerAccountService } from '../../workbench/services/accounts/browser/appServerAccountService.js';
@@ -190,8 +189,8 @@ import { ISessionsService, SessionsService } from "../services/sessions/browser/
 import { registerLayoutActions } from './layoutActions.js';
 import { DesktopLayoutController } from '../contrib/layout/browser/desktopLayoutController.js';
 import { PanelPart } from './parts/panelPart.js';
-import { ITerminalService } from '../../workbench/services/terminal/common/terminal.js';
-import { TerminalService } from '../../workbench/services/terminal/browser/terminalService.js';
+import { ITerminalProcessService } from '../../platform/terminal/common/terminal.js';
+import { installWorkbenchServiceContributions } from '../../workbench/browser/workbenchServiceContributions.js';
 import { AuxiliaryBarPart } from "./parts/auxiliarybar/auxiliaryBarPart.js";
 import { disposableWindowTimeout } from '../../base/browser/scheduler.js';
 import { ActivityBarPart } from './parts/activitybar/activityBarPart.js';
@@ -205,7 +204,6 @@ import { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
 export interface IWorkbenchOptions {
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly contributionIds: readonly string[];
-	readonly modeId: WorkbenchModeId;
 	readonly profile: SessionsProfile;
 	readonly api: IRendererHost;
 	readonly workspaceSelection: () => SessionWorkspaceSelection;
@@ -250,7 +248,7 @@ export class Workbench extends Disposable {
 			await themes.start();
 			const ownerWindow = options.container.ownerDocument.defaultView;
 			if (!ownerWindow) { throw new Error('Sessions renderer requires an owner window'); }
-			storage = await options.createStorageService({ ownerWindow, applicationId: WorkbenchModeRegistry.get(options.modeId).storageNamespace, workspaceId: 'sessions', profileId: options.profile.id });
+			storage = await options.createStorageService({ ownerWindow, workspaceId: 'sessions', profileId: options.profile.id });
 			userDataFiles = await options.createUserDataFileSystemProvider();
 			return new Workbench(options, themes, storage, logger, userDataFiles);
 		} catch (error) {
@@ -267,12 +265,6 @@ export class Workbench extends Disposable {
 		super();
 		this._register(themes);
 		this.workspaceSelection = options.workspaceSelection;
-		if (options.profile.modeId !== options.modeId) {
-			throw new TypeError(`Sessions profile '${options.profile.id}' belongs to '${options.profile.modeId}', not '${options.modeId}'`);
-		}
-		if (options.profile.id !== "code-sessions") {
-			throw new TypeError(`Unsupported Code Sessions profile '${options.profile.id}'`);
-		}
 		const ownerDocument = options.container.ownerDocument;
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
@@ -284,6 +276,7 @@ export class Workbench extends Disposable {
 			serviceCollection.set(id, descriptor);
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
+		const serviceContributionReady: Promise<void>[] = [];
 		if (options.browserViewService) { services.registerInstance(IBrowserViewService, options.browserViewService); }
 		services.registerInstance(IAssetService, options.api.assets);
 		services.registerInstance(IExtensionHostApi, options.api.extensionHost);
@@ -307,7 +300,6 @@ export class Workbench extends Disposable {
 		themeService.initialize();
 		const workbenchWindow = this._register(new WorkbenchWindow({
 			root: options.container,
-			modeId: options.modeId,
 			workbenchState: WorkbenchState.EMPTY,
 		}));
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
@@ -619,7 +611,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IEditorGroupsService, editors);
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
 		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode));
-		services.registerInstance(ITerminalService, this._register(new TerminalService(options.api.terminal, workspace)));
+		services.registerInstance(ITerminalProcessService, options.api.terminal);
+		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		const panel = this._register(services.createInstance(PanelPart, this.domNode));
 		const panes = this._register(services.createInstance(PaneCompositePartService, new Map<ViewContainerLocation, PaneCompositePart>([
 			[ViewContainerLocation.Sidebar, sidebar],
@@ -666,7 +659,7 @@ export class Workbench extends Disposable {
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		this.lifecycleService.phase = LifecyclePhase.Ready;
-		this.whenRestored = keybindingsReady.then(() => this.initialize(view, configurationService, ownerWindow, layoutController, contributions, storage, commandService, recoveredDrafts));
+		this.whenRestored = Promise.all([keybindingsReady, ...serviceContributionReady]).then(() => this.initialize(view, configurationService, ownerWindow, layoutController, contributions, storage, commandService, recoveredDrafts));
 	}
 
 	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {

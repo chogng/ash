@@ -1,7 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('Empty chat keeps its input near the pane edges', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Uses the Code Chat shell.');
+test('Empty chat keeps its input near the pane edges', async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -47,7 +46,7 @@ test('Empty chat keeps its input near the pane edges', async ({ target, workbenc
 });
 
 test('Agent mode picker compacts when the model needs room', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -89,7 +88,7 @@ test('Agent mode picker compacts when the model needs room', async ({ target, wo
 });
 
 test('Chat can switch from Plan back to Agent without selecting a different Agent', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -113,7 +112,7 @@ test('Chat can switch from Plan back to Agent without selecting a different Agen
 });
 
 test('Chat mode picker exposes all five modes with one checked selection', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -133,8 +132,7 @@ test('Chat mode picker exposes all five modes with one checked selection', async
 	}
 });
 
-test('Chat mode choices use the shared action widget and floating elevation across themes', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Uses the Code Chat shell.');
+test('Chat mode choices use the shared action widget and floating elevation across themes', async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -181,7 +179,7 @@ test('Chat mode choices use the shared action widget and floating elevation acro
 });
 
 test('Model picker uses free toolbar space before truncating its label', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -215,8 +213,7 @@ test('Model picker uses free toolbar space before truncating its label', async (
 	}
 });
 
-test('Chat input omits the unused find control and keeps the prompt evenly inset', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Uses the Code Chat shell.');
+test('Chat input omits the unused find control and keeps the prompt evenly inset', async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -257,7 +254,7 @@ test('Chat input omits the unused find control and keeps the prompt evenly inset
 });
 
 test('Chat input places the microphone beside voice or send at the right edge', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -320,7 +317,7 @@ test('Chat input places the microphone beside voice or send at the right edge', 
 });
 
 test('Desktop Chat guides a missing local model to Dictation settings without opening the microphone', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the connected desktop');
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the connected desktop');
 	const page = workbench.page;
 	const original = await page.evaluate(async () => {
 		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
@@ -392,7 +389,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 });
 
 test('Chat input resizes with wrapped text and retains keyboard focus', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -421,7 +418,7 @@ test('Chat input resizes with wrapped text and retains keyboard focus', async ({
 });
 
 test('Chat input explicitly opens slash suggestions from the keyboard', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -440,7 +437,7 @@ test('Chat input explicitly opens slash suggestions from the keyboard', async ({
 });
 
 test('Chat input returns to the empty message state when a slash command is deleted', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -459,7 +456,7 @@ test('Chat input returns to the empty message state when a slash command is dele
 });
 
 test('Chat input suggests and completes a command with a missing character', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -482,7 +479,7 @@ test('Chat input suggests and completes a command with a missing character', asy
 });
 
 test('Chat input matches slash command descriptions without selecting a command', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();

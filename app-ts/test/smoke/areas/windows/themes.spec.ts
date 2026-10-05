@@ -239,8 +239,7 @@ test('Desktop migrates a user theme through the file provider and applies its co
 });
 
 
-test('structured theme settings persist scoped colors and token rules after reload', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code product settings');
+test('structured theme settings persist scoped colors and token rules after reload', async ({ workbench }) => {
 	const page = workbench.page;
 	const entries = [
 		{ setting: 'workbench.colorCustomizations', key: '[Ash Dark][Ash Light]', value: { 'editor.selectionBackground': '#123456' } },

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { setup, test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IAction } from '../../../base/common/actions.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
@@ -39,7 +39,7 @@ const { IStorageService } = await import('../../../platform/storage/common/stora
 const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
 await import('../../sessions.common.main.js');
 suiteTeardown(() => browser.window.close());
-let storageSequence = 0;
+setup(() => browser.window.localStorage.clear());
 const { SessionsConfiguration } = await import('../../common/configuration.js');
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/browser/configurationService.js');
@@ -62,7 +62,7 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Desi
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextMenuService, contextMenu);
 	services.registerInstance(IHoverService, hovers);
-	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: `activity-test-${++storageSequence}`, workspaceId: 'sessions', flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
 	using menuServices = registerMenus(services);
 	using executed = services.get(ICommandService).onWillExecuteCommand(event => selectedActions.push(event.commandId.slice('sessions.open.'.length)));
@@ -134,7 +134,7 @@ test('Sessions Activity Bar context menu changes its own position and size setti
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextMenuService, contextMenu);
 	services.registerInstance(IHoverService, hovers);
-	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: `activity-test-${++storageSequence}`, workspaceId: 'sessions', flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
 	using menuServices = registerMenus(services);
 	const bar = services.createInstance(ActivityBarPart, ownerDocument.body, { async showAccountMenu() {} });
@@ -187,7 +187,7 @@ test('navigation order survives a new window and includes new menu contributions
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextMenuService, contextMenu);
 	services.registerInstance(IHoverService, hovers);
-	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: `activity-test-${++storageSequence}`, workspaceId: 'sessions', flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
 	using menuServices = registerMenus(services);
 	using bar = services.createInstance(ActivityBarPart, document.body, { showAccountMenu() {} });
@@ -221,7 +221,7 @@ test('navigation and ordering labels use the Chinese language catalog', async ()
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IContextMenuService, menus);
 		services.registerInstance(IHoverService, hovers);
-		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: `activity-test-${++storageSequence}`, workspaceId: 'sessions', flushInterval: 0 });
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 		services.registerInstance(IStorageService, storage);
 		using menuServices = registerMenus(services);
 		using bar = services.createInstance(ActivityBarPart, ownerDocument.body, { showAccountMenu() {} });

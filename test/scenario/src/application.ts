@@ -77,7 +77,6 @@ export class ApplicationService {
 		try {
 			const launched = await launchElectron({
 				appServerMode: 'required',
-				workbenchMode: 'code',
 				userDataDirectory,
 				workspaceDirectory: options.workspacePath,
 				workspacePermissions: options.workspacePath ? 'development' : undefined,

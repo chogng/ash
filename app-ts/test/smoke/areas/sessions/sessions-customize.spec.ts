@@ -22,7 +22,6 @@ async function openSettings(page: Page, label = 'Settings'): Promise<Locator> {
 }
 
 test('Settings place Advisor in Agents and retain Customize controls across tabs', async ({ application, target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	if (target.kind === 'electron' && process.platform === 'darwin') await useCustomMenus(workbench.page);
 	let page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');
@@ -199,7 +198,6 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 });
 
 test('Sessions Customize uses Chinese labels and localized Skills controls', async ({ application, target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code');
 	if (target.kind === 'electron' && process.platform === 'darwin') await useCustomMenus(workbench.page);
 	let originalPage = workbench.page;
 	await originalPage.keyboard.press('ControlOrMeta+,');

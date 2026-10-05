@@ -39,7 +39,7 @@ test('Sessions split insertion preserves an unrelated pane and retained input fo
 	const second = new TestView(document);
 	const third = new TestView(document);
 	try {
-		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'grid-test', workspaceId: 'test', flushInterval: 0 });
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
 		using services = new InstantiationService();
 		services.registerInstance(IStorageService, storage);
 		using layout = services.createInstance(SessionGridLayout, document.body, first);
@@ -66,7 +66,7 @@ test('Sessions rearrangement keeps live inputs and does not steal focus from ano
 	const first = new TestView(document);
 	const second = new TestView(document);
 	try {
-		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'grid-test', workspaceId: 'test', flushInterval: 0 });
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
 		using services = new InstantiationService();
 		services.registerInstance(IStorageService, storage);
 		using layout = services.createInstance(SessionGridLayout, document.body, first);
@@ -90,7 +90,7 @@ test('Sessions restores and immediately saves widths from both legacy layouts wi
 	const browser = new JSDOM('<!doctype html><body><button>Sidebar</button></body>', { url: 'https://ash.test', pretendToBeVisual: true });
 	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent']);
 	try {
-		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'grid-test', workspaceId: 'test', flushInterval: 0 });
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
 		storage.store('sessions.gridState.chat', JSON.stringify({ version: 1, widths: [{ id: 'first', width: 300 }, { id: 'missing', width: 200 }, { id: 'second', width: 600 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		storage.store('sessions.gridState.code', JSON.stringify({ version: 1, widths: [{ id: 'code', width: 900 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using services = new InstantiationService();
@@ -129,7 +129,7 @@ test('Sessions ignores saved widths when every pane has been replaced before its
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test', pretendToBeVisual: true });
 	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent']);
 	try {
-		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'grid-test', workspaceId: 'test', flushInterval: 0 });
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
 		storage.store('sessions.gridState.code', JSON.stringify({ version: 1, widths: [{ id: 'old', width: 900 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using services = new InstantiationService();
 		services.registerInstance(IStorageService, storage);

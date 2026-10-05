@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test';
 test.use({ openWorkspace: false });
 
 test('browser keeps its save confirmation in the workbench', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code', 'This scenario requires the Code browser');
+	test.skip(target.kind !== 'browser', 'This scenario requires the Code browser');
 	const page = workbench.page;
 	await page.keyboard.press('F1');
 	await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
@@ -27,7 +27,7 @@ test('browser keeps its save confirmation in the workbench', async ({ target, wo
 });
 
 test('desktop dirty editor sends its choices through the owning window dialog', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled');
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
@@ -39,7 +39,7 @@ test('desktop dirty editor sends its choices through the owning window dialog', 
 });
 
 test('browser Save As writes an untitled editor to the selected folder', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
 	const page = workbench.page;
 	const folderName = await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
@@ -110,7 +110,7 @@ async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolea
 }
 
 test('browser Open File selects multiple files from the current workspace', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
 	const page = workbench.page;
 	await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();

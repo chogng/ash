@@ -93,7 +93,7 @@ test('Activity Bar global actions open account and management menus', async () =
 	services.registerInstance(LocalizationServiceId, localization);
 	const logService: ILogService = { trace() {}, debug() {}, info() {}, warn() {}, error() {} };
 	services.registerInstance(LogServiceId, logService);
-	const storage = disposables.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'code', workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
+	const storage = disposables.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	services.registerInstance(StorageServiceId, storage);
 	let settingsOpened = false;
 	let manageAccountsOpened = 0;

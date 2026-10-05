@@ -54,7 +54,7 @@ test('Activity Bar badge menu uses Chinese labels and restores independent visib
 		using secondContainer = ViewsRegistry.registerViewContainer({ id: 'badge-second', title: 'Second', location: ViewContainerLocation.Sidebar });
 		using contexts = new ContextKeyService();
 		using views = new ViewDescriptorService({}, contexts);
-		const options = { ownerWindow: dom.window as unknown as Window, applicationId: 'badge-test', workspaceId: 'first', flushInterval: 0 };
+		const options = { ownerWindow: dom.window as unknown as Window, workspaceId: 'first', flushInterval: 0 };
 		using storage = new BrowserStorageService(options);
 		let actions: readonly IAction[] = [];
 		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
@@ -91,7 +91,7 @@ test('Activity Bar badge menu uses Chinese labels and restores independent visib
 		await actions.find(action => action.label === '显示徽章')!.run();
 		assert.equal(restored.domNode.querySelector('[data-action-id="badge-first"] .ash-count-badge')?.textContent, '8');
 		await restoredStorage.flush();
-		const profileKey = 'ash.badge-test.storage.profile.default';
+		const profileKey = 'ash.storage.profile.default';
 		dom.window.dispatchEvent(new dom.window.StorageEvent('storage', { key: profileKey, newValue: dom.window.localStorage.getItem(profileKey), storageArea: dom.window.localStorage }));
 		assert.equal(bar.domNode.querySelector('[data-action-id="badge-first"] .ash-count-badge')?.textContent, '1');
 		updated.dispose();

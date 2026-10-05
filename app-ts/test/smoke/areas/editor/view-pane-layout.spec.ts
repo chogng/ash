@@ -2,8 +2,7 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
-test('view commands reveal retained containers and focus the requested view', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code workbench.');
+test('view commands reveal retained containers and focus the requested view', async ({ workbench }) => {
 	const page = workbench.page;
 	const output = page.locator('[data-view-id="ash.output"]');
 	await workbench.quickaccess.runCommand('workbench.action.output.show');
@@ -26,8 +25,7 @@ test('view commands reveal retained containers and focus the requested view', as
 	}
 });
 
-test('multiple view panes resize independently and restore their layout after reload', async ({ target, workbench, reloadWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code workbench.');
+test('multiple view panes resize independently and restore their layout after reload', async ({ workbench, reloadWorkbench }) => {
 	let page = workbench.page;
 	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	let container = page.locator('[data-view-container-id="ash.git"]');

@@ -104,7 +104,7 @@ BrowserViewMainService.prototype.getOrCreateBrowserView = function(...args) {
   return create.apply(this, args);
 };
 const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(output, 'ash/code/electron-main/main.js')).href)});
-startElectronApplication({ initialModeId: 'code' });
+startElectronApplication();
 `);
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory: directory });
 	const application = await _electron.launch({ executablePath: configuration.executablePath, args: configuration.args.map(argument => argument === desktop ? entry : argument), cwd: configuration.cwd, env: configuration.env });

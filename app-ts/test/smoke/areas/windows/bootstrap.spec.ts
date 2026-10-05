@@ -41,7 +41,7 @@ Tray.prototype.setContextMenu = function(menu) {
 app.on('quit', () => writeFileSync(${JSON.stringify(testInfo.outputPath('tray-cleanup.json'))}, JSON.stringify({ destroyed: globalThis.__ashTray.isDestroyed() })));
 void app.whenReady().then(async () => {
 	const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)});
-	startElectronApplication({ initialModeId: 'code' });
+	startElectronApplication();
 });
 `);
 	return entry;
@@ -52,29 +52,28 @@ test.beforeEach(({}, testInfo) => {
 });
 
 for (const scenario of [
-	{ name: 'missing settings', settings: undefined, mode: 'code' },
-	{ name: 'retired Academic JSONC mode migration', settings: '{\n// startup mode\n"workbench.mode":"academic",\n}', mode: 'code' },
-	{ name: 'unregistered mode', settings: '{"workbench.mode":"unknown"}', mode: 'code' },
-	{ name: 'obsolete settings wrapper', settings: '{"version":1,"values":{"workbench.mode":"academic"}}', mode: 'code' },
+	{ name: 'missing settings', settings: undefined },
+	{ name: 'retired Academic JSONC setting', settings: '{\n// startup mode\n"workbench.mode":"academic",\n}' },
+	{ name: 'unregistered mode', settings: '{"workbench.mode":"unknown"}' },
+	{ name: 'obsolete settings wrapper', settings: '{"version":1,"values":{"workbench.mode":"academic"}}' },
 ]) {
-	test(`Desktop startup selects its mode from ${scenario.name}`, async ({}, testInfo) => {
+	test(`Desktop startup opens the fixed Workbench with ${scenario.name}`, async ({}, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		const profile = join(userDataDirectory, 'profile');
 		await mkdir(profile, { recursive: true });
 		if (scenario.settings !== undefined) await writeFile(join(profile, 'settings.json'), scenario.settings);
 		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
 		const environment = { ...configuration.env };
-		delete environment.ASH_WORKBENCH_MODE;
+		environment.ASH_WORKBENCH_MODE = 'academic'; // Retired launch input must not select a product.
 		const application = await _electron.launch({ executablePath: configuration.executablePath, args: [...configuration.args], cwd: configuration.cwd, env: environment });
 		try {
 			const page = await application.firstWindow();
 			await expect(page.locator('.ash-workbench')).toBeVisible();
-			expect(new URL(page.url()).searchParams.get('ash-workbench-mode')).toBe(scenario.mode);
-			if (scenario.name === 'retired Academic JSONC mode migration') {
+			expect(new URL(page.url()).searchParams.get('ash-workbench-mode')).toBeNull();
+			if (scenario.name === 'retired Academic JSONC setting') {
 				const source = await readFile(join(profile, 'settings.json'), 'utf8');
 				expect(source).toContain('// startup mode');
-				expect(source).toContain('"code"');
-				expect(source).not.toContain('"academic"');
+				expect(source).toBe(scenario.settings);
 			}
 		} finally {
 			await application.close();
@@ -100,7 +99,7 @@ app.setAppPath(${JSON.stringify(packagedRoot)});
 Object.defineProperty(app, 'isPackaged', { value: true });
 try {
 	const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)});
-	await startElectronApplication({ initialModeId: 'code' });
+	await startElectronApplication();
 } catch (error) {
 	console.error(error);
 	app.exit(1);
@@ -143,7 +142,7 @@ void app.whenReady().then(async () => {
 	if (${JSON.stringify(boundary)} === 'readiness') {
 		let releaseReady;
 		app.whenReady = () => new Promise(resolve => { releaseReady = resolve; });
-		await startElectronApplication({ initialModeId: 'code' });
+		await startElectronApplication();
 		events.push('quit-before-ready');
 		app.quit();
 		releaseReady();
@@ -154,7 +153,7 @@ void app.whenReady().then(async () => {
 			await initialize.call(this);
 			events.push('initialized');
 		};
-		await startElectronApplication({ initialModeId: 'code' });
+		await startElectronApplication();
 	}
 });
 `);
@@ -377,10 +376,10 @@ test('Windows development launcher shows the Workbench window', async ({}, testI
 
 test('Desktop exits with a failure status when entry initialization fails', async ({}, testInfo) => {
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory: testInfo.outputPath('user-data') });
-	const result = await runUntilExit({ ...configuration, env: { ...configuration.env, ASH_WORKBENCH_MODE: 'invalid-mode' } });
+	const result = await runUntilExit({ ...configuration, env: { ...configuration.env, ASH_HOME: 'relative-profile' } });
 	expect(result.code).toBe(1);
 	expect(result.output).toContain('Failed to initialize Ash');
-	expect(result.output).toContain('invalid-mode');
+	expect(result.output).toContain('ASH_HOME must be a non-empty absolute directory path');
 });
 
 test('Desktop exits with a failure status when persistent services cannot start', async ({}, testInfo) => {

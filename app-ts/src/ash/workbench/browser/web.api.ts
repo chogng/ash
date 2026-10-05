@@ -28,6 +28,7 @@ export interface IWebWorkbenchHost {
 
 /** Inputs used to create one browser-hosted Workbench instance. */
 export interface IWebWorkbenchConstructionOptions {
+	readonly productName: string;
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly api: IRendererHost;
 	readonly urlCallbackProvider?: IURLCallbackProvider;

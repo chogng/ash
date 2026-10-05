@@ -11,7 +11,7 @@ interface StartupProbeApp extends App {
 test.use({ openWorkspace: false });
 
 test('Agents starts its connection before loading the page and reconnects on reload', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Code Electron with App Server');
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires Code Electron with App Server');
 	if (!('windows' in application)) throw new Error('Expected Electron');
 	const mainRoot = resolve(import.meta.dirname, '../../../../../.build/app-ts/main/src');
 	await application.evaluate(({ app }, mainRoot) => {

@@ -49,7 +49,7 @@ const { ILayoutService } = await import("../../../platform/layout/browser/layout
 const { IWorkbenchLayoutService, workbenchPartIds } = await import("../../../workbench/services/layout/browser/layoutService.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
 const paneStorageEnvironment = new JSDOM("<!doctype html><body></body>", { url: "https://ash-pane.test" });
-const paneStorage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, applicationId: "pane-composite-tests", workspaceId: "window", backend: paneStorageEnvironment.window.localStorage, flushInterval: 0 });
+const paneStorage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: "window", backend: paneStorageEnvironment.window.localStorage, flushInterval: 0 });
 suiteTeardown(() => {
 	paneStorage.dispose();
 	paneStorageEnvironment.window.close();
@@ -192,7 +192,7 @@ function createLayoutHarness(
 		const storageDom = new JSDOM('', { url: 'https://ash.test' });
 		disposables.add(toDisposable(() => storageDom.window.close()));
 		storage = disposables.add(new BrowserStorageService({
-			ownerWindow: ownerDocument.defaultView!, applicationId: 'test-layout', workspaceId: 'test', flushInterval: 0,
+			ownerWindow: ownerDocument.defaultView!, workspaceId: 'test', flushInterval: 0,
 			backend: storageDom.window.localStorage,
 		}));
 	}
@@ -530,7 +530,7 @@ test('Workbench layout requires its services and hosts overlays before Parts cre
 	const options = { workbenchState: WorkbenchState.FOLDER };
 	assert.throws(() => services.createInstance(WorkbenchLayout, container, options), /storageService/);
 	using storage = new BrowserStorageService({
-		ownerWindow: dom.window as unknown as Window, applicationId: 'layout', workspaceId: 'test',
+		ownerWindow: dom.window as unknown as Window, workspaceId: 'test',
 		backend: dom.window.localStorage, flushInterval: 0,
 	});
 	services.registerInstance(IStorageService, storage);
@@ -800,7 +800,6 @@ test("empty workbench starts with sidebars hidden and restores saved visibility"
 	const dom = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
 	const createStorage = (workspaceId: string) => new BrowserStorageService({
 		ownerWindow: dom.window as unknown as Window,
-		applicationId: "code-startup-defaults",
 		workspaceId,
 		backend: dom.window.localStorage,
 		flushInterval: 0,
@@ -880,7 +879,6 @@ test("Workbench default layout applies to new workspaces unless forced", async (
 	});
 	const createStorage = (workspaceId: string) => new BrowserStorageService({
 		ownerWindow: dom.window as unknown as Window,
-		applicationId: "code",
 		workspaceId,
 		backend: dom.window.localStorage,
 		flushInterval: 0,
@@ -968,7 +966,6 @@ test("Workbench layout restores scoped state through the storage service", async
 	});
 	const createStorage = (workspaceId: string) => new BrowserStorageService({
 		ownerWindow: dom.window as unknown as Window,
-		applicationId: "code",
 		workspaceId,
 		backend: dom.window.localStorage,
 		flushInterval: 0,
@@ -1025,7 +1022,6 @@ test("Workbench layout re-applies the active workspace state after storage switc
 	});
 	const storage = new BrowserStorageService({
 		ownerWindow: dom.window as unknown as Window,
-		applicationId: "code",
 		workspaceId: "workspace-a",
 		backend: dom.window.localStorage,
 		flushInterval: 0,
@@ -1302,7 +1298,6 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 	}, contextKeys));
 	const createStorage = (workspaceId: string) => new BrowserStorageService({
 		ownerWindow: dom.window as unknown as Window,
-		applicationId: "code",
 		workspaceId,
 		backend: dom.window.localStorage,
 		flushInterval: 0,
@@ -1610,7 +1605,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	}
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
-	const storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'code', workspaceId: 'test', backend: dom.window.localStorage, flushInterval: 0 });
+	const storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', backend: dom.window.localStorage, flushInterval: 0 });
 	const firstBar = new DisposableStore();
 	let actions: readonly IAction[] = [];
 	const contextMenuProvider: IContextMenuProvider = { showContextMenu(options) { actions = options.getActions(); } };
@@ -1643,7 +1638,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	firstBar.dispose();
 	storage.dispose();
 
-	const restoredStorage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'code', workspaceId: 'other', backend: dom.window.localStorage, flushInterval: 0 });
+	const restoredStorage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'other', backend: dom.window.localStorage, flushInterval: 0 });
 	const restored = new CompositeBar(dom.window.document.body, {
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
@@ -2007,7 +2002,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 	for (const id of ['first', 'second', 'third']) {
 		disposables.add(registry.registerViewContainer({ id, title: id, location: ViewContainerLocation.Sidebar }));
 	}
-	const storageOptions = { ownerWindow: dom.window as unknown as Window, applicationId: 'activity-order', workspaceId: 'first', flushInterval: 0 };
+	const storageOptions = { ownerWindow: dom.window as unknown as Window, workspaceId: 'first', flushInterval: 0 };
 	const storage = disposables.add(new BrowserStorageService(storageOptions));
 	const contexts = disposables.add(new ContextKeyService());
 	const descriptors = disposables.add(new ViewDescriptorService({ registry }, contexts));

@@ -43,7 +43,7 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 	if (!storage) {
 		const browser = new JSDOM('', { url: 'https://ash.test' });
 		resources.add(toDisposable(() => browser.window.close()));
-		storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'output-tests', workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
+		storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	}
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(ITextModelResourceService, {

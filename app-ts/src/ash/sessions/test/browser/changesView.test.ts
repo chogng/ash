@@ -31,7 +31,7 @@ test('Changes ignores an old conversation response and opens a shared read-only 
 		using config = new WorkbenchConfigurationService();
 		using contexts = new ContextKeyService();
 		using notifications = new NotificationService();
-		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'changes', workspaceId: 'sessions', flushInterval: 0 });
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 		let selection = selected('old');
 		const sessions: ISessionsService = {
 			onDidChange: changed.event, get activeSelection() { return selection; }, get visibleSelections() { return [selection]; },

@@ -5,7 +5,6 @@ import { AccessibilityConfiguration } from "../../platform/accessibility/common/
 import { Registry } from "../../platform/registry/common/platform.js";
 import { isMacintosh, isWeb } from "../../base/common/platform.js";
 import { DEFAULT_MENU_STYLE, DEFAULT_TITLE_BAR_STYLE, MenuSettings, TitleBarSetting, parseMenuStyle, parseTitleBarStyle, type MenuStyleConfiguration, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
-import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry } from "./workbenchMode.js";
 
 export type WorkbenchLayoutStyle = "modern" | "flat";
 export const enum ActivityBarPosition {
@@ -92,14 +91,6 @@ export const WorkbenchConfiguration = Object.freeze({
 			},
 		}),
 	} : {}),
-	mode: configurationRegistry.registerConfiguration({
-		key: WorkbenchModeConfigurationKey,
-		defaultValue: WorkbenchModeRegistry.defaultModeId,
-		parse(value: unknown) {
-			if (typeof value !== "string") throw new TypeError(`Unknown Workbench mode: ${String(value)}`);
-			return WorkbenchModeRegistry.resolveModeId(value);
-		},
-	}),
 	...ThemeConfigurationSettings,
 	layoutStyle: configurationRegistry.registerConfiguration<WorkbenchLayoutStyle>({
 		key: "workbench.layoutStyle",

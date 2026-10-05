@@ -8,7 +8,7 @@ test.use({ openWorkspace: false });
 
 for (const entry of ['welcome', 'explorer'] as const) {
 	test(`desktop ${entry} folder entry opens the Windows folder chooser`, async ({ application, target, workbench }) => {
-		test.skip(process.platform !== 'win32' || target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Windows Code desktop');
+		test.skip(process.platform !== 'win32' || target.kind !== 'electron', 'Requires the Windows Code desktop');
 		if (!('windows' in application)) throw new Error('Expected Electron');
 		const page = workbench.page;
 		if (entry === 'explorer') {
@@ -26,7 +26,7 @@ for (const entry of ['welcome', 'explorer'] as const) {
 
 for (const entry of ['welcome', 'explorer', 'recent'] as const) {
 	test(`desktop ${entry} folder entry loads the workspace and file contents`, async ({ application, target, testWorkspace, workbench }) => {
-		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code desktop and App Server');
+		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the Code desktop and App Server');
 		if (!('windows' in application)) throw new Error('Expected Electron');
 		const originalDialog = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
 		await application.evaluate(({ dialog }, folder) => {
@@ -62,7 +62,7 @@ for (const entry of ['welcome', 'explorer', 'recent'] as const) {
 }
 
 test('desktop window commands update zoom and open the window switcher', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop');
+	test.skip(target.kind !== 'electron', 'This scenario requires the Code desktop');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = workbench.page;
 	await expect(page.locator('[data-statusbar-item-id="ash.status.zoom"]')).toHaveCount(0);
@@ -96,8 +96,7 @@ test('desktop window commands update zoom and open the window switcher', async (
 	await expect(picker).toHaveCount(0);
 });
 
-test('keyboard layout stays in commands while the status bar is quiet', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code workbench');
+test('keyboard layout stays in commands while the status bar is quiet', async ({ workbench }) => {
 	const page = workbench.page;
 	await expect(page.locator('[data-statusbar-item-id="ash.status.keyboardLayout"]')).toHaveCount(0);
 	await expect(page.locator('.ash-workbench-statusbar')).toHaveAttribute('aria-live', 'off');
@@ -110,7 +109,7 @@ test('keyboard layout stays in commands while the status bar is quiet', async ({
 });
 
 test('opening a folder names the target and explains the permission choice in the selected language', async ({ application, target, testWorkspace, workbench, restartWorkbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code desktop and App Server');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');

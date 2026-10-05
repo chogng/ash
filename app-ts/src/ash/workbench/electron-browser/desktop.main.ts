@@ -1,6 +1,5 @@
 import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
 import { RelayURLService } from '../services/url/electron-browser/urlService.js';
-import { migrateBrowserStorage } from '../services/storage/browser/storageService.js';
 import { IBackupService } from '../../platform/backup/common/backup.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { WORKSPACE_RECOVERY_CHANNEL } from '../../platform/window/common/window.js';
@@ -26,8 +25,7 @@ import { createElectronRendererApi, type ElectronRendererCapabilityContribution 
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../browser/startupError.js';
 import { NativeHostColorSchemeService } from '../services/themes/electron-browser/nativeHostColorSchemeService.js';
-import { startWorkbench, type Workbench } from '../browser/workbench.js';
-import { WorkbenchModeId } from '../common/workbenchMode.js';
+import { startWorkbench, type IStartWorkbenchOptions, type Workbench } from '../browser/workbench.js';
 import { createElectronWorkbenchContextMenuService } from '../services/contextmenu/electron-browser/contextMenuService.js';
 import { loadUserThemes } from '../services/themes/browser/workbenchThemeService.js';
 import { ElectronLifecycleService } from '../services/lifecycle/electron-browser/lifecycleService.js';
@@ -43,7 +41,7 @@ import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
 export class DesktopMain extends Disposable {
 	private opened = false;
 
-	constructor(private readonly modeId: WorkbenchModeId, private readonly rendererCapabilities: readonly ElectronRendererCapabilityContribution[]) {
+	constructor(private readonly options: Pick<IStartWorkbenchOptions, 'productName'>, private readonly rendererCapabilities: readonly ElectronRendererCapabilityContribution[]) {
 		super();
 	}
 
@@ -73,7 +71,7 @@ export class DesktopMain extends Disposable {
 				client => { documentClient = client; return {}; },
 				...this.rendererCapabilities,
 				client => registerLocalTranscriptionService(transcriptionServices, client),
-			], { browser: true, textDocuments: this.modeId === WorkbenchModeId.Code }, permissionDialog, mainProcessService));
+			], { browser: true, textDocuments: true }, permissionDialog, mainProcessService));
 			performance.mark('ash.desktop.api-ready');
 			profileServices.registerInstance(IFileService, api.localFiles);
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
@@ -87,12 +85,12 @@ export class DesktopMain extends Disposable {
 			const hostColorScheme = await api.nativeHost.getOSColorScheme();
 			performance.mark('ash.desktop.workbench-start');
 			const workbench = this._register(await startWorkbench({
-				modeId: this.modeId,
+				...this.options,
 				createURLService: services => {
 					services.registerInstance(IMainProcessService, mainProcessService);
 					return services.createInstance(RelayURLService, windowId as number);
 				},
-				createTextDocumentHost: documentClient && this.modeId === WorkbenchModeId.Code ? services => {
+				createTextDocumentHost: documentClient ? services => {
 					const editing = services.get(IChatEditingService);
 					return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 				} : undefined,
@@ -102,8 +100,6 @@ export class DesktopMain extends Disposable {
 					return services.createChild(new ServiceCollection([IBackupService, api.backup])).createInstance(WorkingCopyBackupService);
 				},
 				createStorageService: async options => {
-					const conflicts = migrateBrowserStorage(options.ownerWindow.localStorage, 'academic', 'code');
-					if (conflicts.length > 0) { console.warn('Academic state migration retained conflicting entries', conflicts); }
 					const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
 					try { await storage.initialize(); return storage; }
 					catch (error) { storage.dispose(); throw error; }
@@ -190,6 +186,6 @@ export class DesktopMain extends Disposable {
 	}
 }
 
-export function main(modeId: WorkbenchModeId, rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = []): Promise<void> {
-	return new DesktopMain(modeId, rendererCapabilities).open();
+export function main(options: Pick<IStartWorkbenchOptions, 'productName'>, rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = []): Promise<void> {
+	return new DesktopMain(options, rendererCapabilities).open();
 }

@@ -24,7 +24,7 @@ test('Session files preserve their original directory through selection, directo
 		using services = new InstantiationService();
 		using provider = new MemoryProvider();
 		using management = new SessionsManagementService(provider);
-		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'session-files', workspaceId: 'sessions', flushInterval: 0 });
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 		services.registerInstance(ISessionsManagementService, management);
 		services.registerInstance(IStorageService, storage);
 		using sessions = services.createInstance(SessionsService);

@@ -8,7 +8,7 @@ import { expect, test } from '../../../automation/test.js';
 test.describe('Git ignore decorations', () => {
 	test.use({ gitRepository: true });
 	test.beforeEach(async ({ target, testWorkspace }) => {
-		if (target.appServerMode !== 'required' || target.workbenchMode !== 'code') return;
+		if (target.appServerMode !== 'required') return;
 		const root = testWorkspace.directory;
 		await mkdir(join(root, 'ignored-dir'));
 		await writeFile(join(root, 'ignored-dir', 'child.txt'), 'ignored');
@@ -18,7 +18,7 @@ test.describe('Git ignore decorations', () => {
 	});
 
 	test('Explorer grays ignored files and expanded directories and updates after ignore rules change', async ({ target, testWorkspace, workbench }) => {
-		test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Git backend');
+		test.skip(target.appServerMode !== 'required', 'Requires the Git backend');
 		const page = workbench.page;
 		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 		if (await showSidebar.isVisible()) await showSidebar.click();
@@ -120,7 +120,6 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 });
 
 test('Explorer scrollbar stays at the pane edge while rows remain inset', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code Explorer');
 	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
 	const names = Array.from({ length: 100 }, (_, index) => `scroll-${String(index).padStart(3, '0')}.txt`);
 	if (target.appServerMode === 'required') {
@@ -203,7 +202,6 @@ test('Explorer scrollbar stays at the pane edge while rows remain inset', async 
 });
 
 test('Explorer smooth scrolling accumulates wheel input, keeps touchpad input immediate and honors reduced motion', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code Explorer');
 	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
 	const names = Array.from({ length: 100 }, (_, index) => `smooth-${String(index).padStart(3, '0')}.txt`);
 	if (target.appServerMode === 'required') await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
@@ -342,7 +340,6 @@ test('Explorer keeps logical row focus when scrolling removes the focused row fr
 });
 
 test('Explorer tree guides align with ancestor arrows and settings update without replacing rows', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires the Code Explorer');
 	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
 	const page = workbench.page;
 	const hasFileIcons = target.appServerMode === 'required';
@@ -480,7 +477,7 @@ test('Explorer tree guides align with ancestor arrows and settings update withou
 });
 
 test('Tree settings controls persist their values across a window reload', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Settings reload is covered by the standalone UI projects');
+	test.skip(target.appServerMode !== 'disabled', 'Settings reload is covered by the standalone UI projects');
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	await page.locator('[data-settings-group-id="workbench"]').click();
@@ -510,7 +507,7 @@ test('Tree settings controls persist their values across a window reload', async
 });
 
 test('List smooth scrolling settings persist and display their Chinese translation', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Settings reload is covered by the standalone UI projects');
+	test.skip(target.appServerMode !== 'disabled', 'Settings reload is covered by the standalone UI projects');
 	let page = workbench.page;
 	const openSetting = async (dialogName: string, title: string) => {
 		await workbench.quickaccess.runCommand('workbench.action.openSettings');

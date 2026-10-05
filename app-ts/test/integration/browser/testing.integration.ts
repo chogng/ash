@@ -18,7 +18,7 @@ import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/w
 import { TestingService } from '../../../src/ash/workbench/services/testing/browser/testingService.js';
 import { TestExecutionService, TestDebugService } from '../../../src/ash/workbench/services/testing/test/common/testExecutionService.js';
 import { type ITaskService } from '../../../src/ash/workbench/services/tasks/common/taskService.js';
-import { type ITerminalService } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
+import { type ITerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { type IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { type IEditorService, type EditorOpenOptions } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { TestingViewPane } from '../../../src/ash/workbench/contrib/testing/browser/testingViewPane.js';

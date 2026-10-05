@@ -5,7 +5,7 @@ const defaultVisibleModelNames = ['GPT-6.1 Sol', 'Claude Sonnet 5.5', 'Grok 4.7'
 const defaultEnabledModelNames = ['GPT-6.1 Sol', 'GPT-6 Luna', 'GPT-6 Astra', 'Claude Sonnet 5.5', 'Claude Opus 5.5', 'Grok 4.7'];
 
 test('Models Settings saves enabled choices, preserves keyboard focus and restores Chinese help', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Uses the product model catalog.');
+	test.skip(target.appServerMode !== 'required', 'Uses the product model catalog.');
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -46,8 +46,7 @@ test('Models Settings saves enabled choices, preserves keyboard focus and restor
 	await page.keyboard.press('Escape');
 });
 
-test('Models Settings offers provider creation with compact fields and keyboard navigation', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Uses Code Settings.');
+test('Models Settings offers provider creation with compact fields and keyboard navigation', async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -101,7 +100,7 @@ test('Models Settings offers provider creation with compact fields and keyboard 
 });
 
 test('Models Settings saves custom model IDs and keys and tests the configured endpoint', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Uses App Server and its isolated configuration.');
+	test.skip(target.appServerMode !== 'required', 'Uses App Server and its isolated configuration.');
 	const requests: { path: string; model?: string; key: string | undefined }[] = [];
 	let rejectDiscovery = false;
 	const server = createServer(async (request, response) => {

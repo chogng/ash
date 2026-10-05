@@ -77,7 +77,7 @@
 
 变量不存在、在低层 CSS 中引用 `.ash-workbench`、在页面根上使用 `:has()`、使用 `[class*=...]` 等 class 子串选择器都会使检查失败。设计提示覆盖间距、字重、字体角色、图标、圆角和标准描边，不修改 CSS，也不影响退出码；默认检查 Sessions，显式指定路径时检查所选文件。圆角提示要求按表面层级选择，圆形或胶囊不能按最近的数字机械替换。
 
-桌面启动步骤在对应源码中直接记录 `performance.mark`，普通构建也保留这些打点。`ASH_DESKTOP_STARTUP_TRACE=1` 让构建检查追踪所需的打点是否进入 JavaScript 产物，并启用 `Desktop startup trace` 场景；插件不改写启动源码。构造完成、视图恢复完成和整体恢复完成是不同的时间点；切换工作区不重复记录启动打点。构建使用的 Workbench 模式清单不加载设置迁移，持久化设置与旧链接迁移由 `workbenchModeMigration.ts` 承担。
+桌面启动步骤在对应源码中直接记录 `performance.mark`，普通构建也保留这些打点。`ASH_DESKTOP_STARTUP_TRACE=1` 让构建检查追踪所需的打点是否进入 JavaScript 产物，并启用 `Desktop startup trace` 场景；插件不改写启动源码。构造完成、视图恢复完成和整体恢复完成是不同的时间点；切换工作区不重复记录启动打点。构建固定包含 Workbench 与 Sessions 页面，不读取模式环境变量；旧 profile 与存储数据迁移由各自现有 owner 处理。
 
 验证完整开发包时使用 `just ash-package`，需要让 Code TUI 运行该包时使用 `just ash-package-run`。日常 `just ash` 只准备源码运行所需程序。
 

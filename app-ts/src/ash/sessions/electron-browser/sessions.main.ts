@@ -12,7 +12,6 @@ import { InstantiationService } from "../../platform/instantiation/common/instan
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { DisposableStore, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
-import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { createElectronRendererApi } from "../../platform/native/electron-browser/rendererApi.js";
 import { registerLocalTranscriptionService } from '../../workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 import { DirectoryPermissionDialog } from '../../workbench/electron-browser/parts/dialogs/directoryPermissionDialog.js';
@@ -37,7 +36,7 @@ import { NativeWorkbenchStorageService } from '../../workbench/services/storage/
 import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
 
 /** Starts the Code-specific Electron Sessions page. */
-export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): Promise<IDisposable> {
+export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	installBaseUiStyles();
 	const container = document.querySelector<HTMLElement>("#app");
 	if (!container) throw new Error("Sessions renderer requires an #app container");
@@ -123,7 +122,6 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 		} : undefined,
 		contributionIds: ['workbench.contrib.nativeWindow', OpenAgentsWindowSystemWideKeybindingContribution.ID, 'chat.edits.editorOverlay', 'workbench.contrib.dataChannels', 'workbench.contrib.externalUriOpener', 'workbench.contrib.browserView', 'workbench.contrib.browserView.restore'],
 		browserViewService: api.browserView,
-		modeId,
 		createLogService: () => logger.createLogger('agents'),
 		createStorageService: async options => {
 			const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);

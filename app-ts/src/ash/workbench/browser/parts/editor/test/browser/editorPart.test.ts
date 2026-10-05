@@ -1754,7 +1754,7 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code", workingCopy)));
 	const main = createEditorPart(dom.window.document.body, { registry });
 	const windows = new TestAuxiliaryWindowService();
-	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'editor-parts-test', workspaceId: 'workspace', flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
 	const editorParts = new EditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
 		onDidChangeScreenReaderOptimized: Event.None,
 		isScreenReaderOptimized: () => false,
@@ -1809,7 +1809,7 @@ test('tab split commands route to an inactive auxiliary window by source group',
 		using registration = registry.registerEditorPane(descriptor('stanza.editor.code', '.ts', () => new TestEditorPane('stanza.editor.code')));
 		using main = createEditorPart(dom.window.document.body, { registry });
 		using windows = new TestAuxiliaryWindowService();
-		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'tab-split-test', workspaceId: 'workspace', flushInterval: 0 });
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
 		using parts = new EditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
 			onDidChangeScreenReaderOptimized: Event.None,
 			isScreenReaderOptimized: () => false,
@@ -1846,7 +1846,7 @@ test('EditorParts restores main and auxiliary editor windows with their active p
 	const firstDom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
 	const firstMain = createEditorPart(firstDom.window.document.body, { registry });
 	using firstWindows = new TestAuxiliaryWindowService();
-	using firstStorage = new BrowserStorageService({ ownerWindow: firstDom.window as unknown as Window, applicationId: 'editor-parts-test', workspaceId: 'workspace', flushInterval: 0 });
+	using firstStorage = new BrowserStorageService({ ownerWindow: firstDom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
 	using firstParts = new EditorParts(firstMain, firstWindows, container => createAuxiliaryPart(container, registry), accessibility, firstStorage);
 	await firstParts.restoreSavedState(true);
 	const mainInput: EditorInput = { resource: URI.parse('file:///C:/project/main.txt') };
@@ -1864,7 +1864,7 @@ test('EditorParts restores main and auxiliary editor windows with their active p
 	const restoredDom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
 	const restoredMain = createEditorPart(restoredDom.window.document.body, { registry });
 	using restoredWindows = new TestAuxiliaryWindowService();
-	using restoredStorage = new BrowserStorageService({ ownerWindow: restoredDom.window as unknown as Window, applicationId: 'editor-parts-test', workspaceId: 'workspace', flushInterval: 0 });
+	using restoredStorage = new BrowserStorageService({ ownerWindow: restoredDom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
 	using restoredParts = new EditorParts(restoredMain, restoredWindows, container => createAuxiliaryPart(container, registry), accessibility, restoredStorage);
 	restoredStorage.store('editorparts.state', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	await restoredParts.restoreSavedState(true);
@@ -1884,7 +1884,7 @@ test('EditorParts replaces an untitled resource in every group and window', asyn
 	registry.registerEditorPane(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
 	const main = createEditorPart(dom.window.document.body, { registry });
 	using windows = new TestAuxiliaryWindowService();
-	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'editor-parts-test', workspaceId: 'workspace', flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
 	const editorParts = new EditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
 		onDidChangeScreenReaderOptimized: Event.None,
 		isScreenReaderOptimized: () => false,
@@ -1925,7 +1925,7 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	const services = new InstantiationService();
 	const themes = new TestThemeService(lightColorTheme);
 	services.registerInstance(IThemeService, themes);
-	const storage = new BrowserStorageService({ ownerWindow: opener.window as unknown as Window, applicationId: 'ash-test', workspaceId: 'workspace', backend: opener.window.localStorage, flushInterval: 0 });
+	const storage = new BrowserStorageService({ ownerWindow: opener.window as unknown as Window, workspaceId: 'workspace', backend: opener.window.localStorage, flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
 	const service = services.createInstance(BrowserAuxiliaryWindowService, opener.window as unknown as Window, root);
 	const auxiliary = await service.open({ title: "Detached Editor", width: 640, height: 480 });

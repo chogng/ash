@@ -28,7 +28,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 	try {
 		await mkdir(workspace);
 		await mkdir(join(userData, 'profile'), { recursive: true });
-		await writeFile(settingsPath, JSON.stringify({ 'update.policy': 'never', 'editor.fontSize': 17, 'workbench.mode': 'code' }));
+		await writeFile(settingsPath, JSON.stringify({ 'update.policy': 'never', 'editor.fontSize': 17 }));
 		await writeFile(file, 'const release = 1;\n');
 		if (previousArchive) {
 			await install(resolve(previousArchive), installation);

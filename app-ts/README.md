@@ -73,7 +73,7 @@ Electron 将当前可执行文件提供给后端的 JavaScript LSP 启动器，�
 
 ## Browser Workbench
 
-Browser 和 Electron 各使用一个 `workbench.html` 入口。`web.factory.ts` 管理 Web 自动启动与页面释放，`web.api.ts` 定义嵌入方输入；`ash-workbench-mode` URL 参数选择初始模式。
+Browser 和 Electron 各使用一个 `workbench.html` 入口。`web.factory.ts` 管理 Web 自动启动与页面释放，`web.api.ts` 定义嵌入方输入；产品入口直接提供标题；存储服务按 application、profile、workspace 作用域管理状态，不读取工作台模式参数。
 
 完整 Web 模式通过认证 WebSocket 直接连接 App Server。一次性票据在当前页签兑换会话后从 URL 移除，刷新复用 `sessionStorage` 中的会话。启动器仍运行时，后端重启会重新认证和连接，不重发旧写请求。授权过期或被撤销后需打开新的认证链接；当前入口仅用于本机单用户，未提供公网认证和 TLS。
 

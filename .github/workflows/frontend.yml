@@ -135,7 +135,7 @@ jobs:
         run: pnpm --dir app-ts exec playwright test --project=electron-academic-ui
       - name: Test connected Academic document editing
         if: matrix.surface == 'electron'
-        run: ASH_WORKBENCH_MODE=academic pnpm --dir app-ts exec node test/smoke/run.ts electron-editor-app-server
+        run: pnpm --dir app-ts exec node test/smoke/run.ts electron-editor-app-server
       - name: Upload test diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

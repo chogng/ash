@@ -27,7 +27,15 @@ export class StorageMainService extends Disposable {
 			throw error;
 		}
 		const data: unknown = JSON.parse(source);
-		if (!isRecord(data) || data.version !== 1 || !Array.isArray(data.storages)) { throw new TypeError('Invalid Desktop storage file'); }
+		if (!isRecord(data) || (data.version !== 1 && data.version !== 2) || !Array.isArray(data.storages)) { throw new TypeError('Invalid Desktop storage file'); }
+		if (data.version === 1) {
+			const migrated = migrateStorage(data.storages);
+			// The original document is an archive, never a second runtime storage source.
+			await writeFile(`${this.filePath}.v1`, source, 'utf8');
+			await this.write(migrated);
+			for (const [key, snapshot] of migrated) { this.storages.set(key, snapshot); }
+			return;
+		}
 		for (const candidate of data.storages) {
 			const snapshot = validateStorageSnapshot(candidate);
 			const key = storageIdentityKey(snapshot.identity);
@@ -48,38 +56,6 @@ export class StorageMainService extends Disposable {
 			const snapshot: IStorageSnapshot = { identity, revision: 0, isNew: true, entries: legacy ?? validateStorageEntries({}) };
 			await this.persist(key, snapshot);
 			return snapshot;
-		});
-	}
-
-	/** Moves retired application state by key, preserving conflicting target and source entries. */
-	public migrateApplicationStorage(sourceApplicationId: string, targetApplicationId: string): Promise<readonly string[]> {
-		return this.run(async () => {
-			const next = new Map(this.storages);
-			const conflicts: string[] = [];
-			for (const [sourceKey, source] of this.storages) {
-				if (source.identity.applicationId !== sourceApplicationId) { continue; }
-				const identity = { ...source.identity, applicationId: targetApplicationId };
-				const targetKey = storageIdentityKey(identity);
-				const target = next.get(targetKey);
-				const entries = { ...target?.entries };
-				const remaining: Record<string, IStorageEntry> = {};
-				for (const [key, entry] of Object.entries(source.entries)) {
-					const existing = entries[key];
-					if (existing && (existing.value !== entry.value || existing.target !== entry.target)) {
-						remaining[key] = entry;
-						conflicts.push(`${source.identity.scope}/${source.identity.id}/${key}`);
-					} else { entries[key] = entry; }
-				}
-				next.set(targetKey, { identity, entries, revision: (target?.revision ?? 0) + 1, isNew: false });
-				if (Object.keys(remaining).length > 0) { next.set(sourceKey, { ...source, entries: remaining }); }
-				else { next.delete(sourceKey); }
-			}
-			if ([...this.storages.values()].some(storage => storage.identity.applicationId === sourceApplicationId)) {
-				await this.write(next);
-				this.storages.clear();
-				for (const [key, snapshot] of next) { this.storages.set(key, snapshot); }
-			}
-			return conflicts;
 		});
 	}
 
@@ -147,9 +123,38 @@ export class StorageMainService extends Disposable {
 
 	private async write(storages: ReadonlyMap<string, IStorageSnapshot>): Promise<void> {
 		const temporary = `${this.filePath}.${process.pid}.tmp`;
-		await writeFile(temporary, JSON.stringify({ version: 1, storages: [...storages.values()].map(snapshot => ({ ...snapshot, isNew: false })) }), 'utf8');
+		await writeFile(temporary, JSON.stringify({ version: 2, storages: [...storages.values()].map(snapshot => ({ ...snapshot, isNew: false })) }), 'utf8');
 		await rename(temporary, this.filePath);
 	}
+}
+
+/** Retires the old product dimension; Code wins collisions regardless of file order. */
+function migrateStorage(candidates: readonly unknown[]): ReadonlyMap<string, IStorageSnapshot> {
+	const sources = new Map<string, { applicationId: string; snapshot: IStorageSnapshot }>();
+	for (const candidate of candidates) {
+		if (!isRecord(candidate) || !isRecord(candidate.identity) || !['code', 'academic'].includes(candidate.identity.applicationId as string)) {
+			throw new TypeError('Invalid legacy Desktop storage identity');
+		}
+		const snapshot = validateStorageSnapshot(candidate);
+		const key = JSON.stringify([candidate.identity.applicationId, snapshot.identity.scope, snapshot.identity.id]);
+		if (sources.has(key)) { throw new TypeError('Duplicate Desktop storage identity'); }
+		sources.set(key, { applicationId: candidate.identity.applicationId as string, snapshot });
+	}
+	const storages = new Map<string, IStorageSnapshot>();
+	for (const applicationId of ['code', 'academic']) {
+		for (const { applicationId: sourceApplicationId, snapshot: source } of sources.values()) {
+			if (sourceApplicationId !== applicationId) { continue; }
+			const key = storageIdentityKey(source.identity);
+			const target = storages.get(key);
+			storages.set(key, {
+				...source,
+				isNew: false,
+				revision: target ? Math.max(target.revision, source.revision) + 1 : source.revision,
+				entries: Object.assign(Object.create(null), source.entries, target?.entries),
+			});
+		}
+	}
+	return storages;
 }
 
 function sameEntries(left: Readonly<Record<string, IStorageEntry>>, right: Readonly<Record<string, IStorageEntry>>): boolean {

@@ -5,8 +5,7 @@ import type { ElectronApplication } from '@playwright/test';
 interface URLRuleSmokeState { readonly urls: string[]; restore(): void; }
 type URLRuleSmokeGlobal = typeof globalThis & { urlRuleSmoke: URLRuleSmokeState };
 
-test('Graphical URL opening rules support suggestions, validation, persistence and Chinese labels', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.workbenchMode !== 'code', 'Requires Code Settings.');
+test('Graphical URL opening rules support suggestions, validation, persistence and Chinese labels', async ({ workbench, restartWorkbench }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = workbench.settingsEditor.element;
@@ -101,7 +100,7 @@ test('External URL opener rules accept unregistered IDs and persist after reopen
 });
 
 test('URL opener settings suggest built-in IDs and their names', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires the product JSON language declarations.');
+	test.skip(target.appServerMode !== 'required', 'Requires the product JSON language declarations.');
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	const group = workbench.editors.groupAt(0);
 	await group.editor.input.press('ControlOrMeta+A');
@@ -123,7 +122,7 @@ test('URL opener settings suggest built-in IDs and their names', async ({ target
 });
 
 test('URL rules open editor links in the Ash browser and default links in the system browser', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the desktop browser provider.');
+	test.skip(target.kind !== 'electron', 'Requires the desktop browser provider.');
 	const server = createServer((_request, response) => {
 		response.setHeader('Content-Type', 'text/html');
 		response.end('<title>Configured URL page</title><h1>Opened through URL rules</h1>');
@@ -198,7 +197,7 @@ test('URL rules open editor links in the Ash browser and default links in the sy
 });
 
 test('terminal URL rules support mouse, keyboard selection and Chinese command text', async ({ application, target, workbench, restartWorkbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires a running desktop terminal.');
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a running desktop terminal.');
 	const server = createServer((_request, response) => { response.end('<title>Terminal URL page</title>'); });
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 	const address = server.address();

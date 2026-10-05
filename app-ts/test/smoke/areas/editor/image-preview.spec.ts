@@ -9,7 +9,7 @@ declare global {
 }
 
 test('Image preview opens workspace images, zooms, exposes metadata and releases resources', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop workspace files require App Server.');
+	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop workspace files require App Server.');
 	const page = workbench.page;
 	const images = await page.evaluate(() => {
 		const canvas = document.createElement('canvas');

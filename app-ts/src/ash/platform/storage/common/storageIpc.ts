@@ -2,7 +2,6 @@ import { isRecord } from '../../../base/common/types.js';
 import { StorageScope, StorageTarget } from './storage.js';
 
 export interface IStorageIdentity {
-	readonly applicationId: string;
 	readonly scope: StorageScope;
 	readonly id: string;
 }
@@ -23,12 +22,10 @@ export function validateStorageIdentity(value: unknown): IStorageIdentity {
 	if (!isRecord(value) || ![StorageScope.APPLICATION, StorageScope.PROFILE, StorageScope.WORKSPACE].includes(value.scope as StorageScope)) {
 		throw new TypeError('Invalid storage identity');
 	}
-	for (const key of ['applicationId', 'id']) {
-		if (typeof value[key] !== 'string' || !value[key].trim() || value[key].length > 1024) {
-			throw new TypeError('Invalid storage identity');
-		}
+	if (typeof value.id !== 'string' || !value.id.trim() || value.id.length > 1024) {
+		throw new TypeError('Invalid storage identity');
 	}
-	return { applicationId: value.applicationId as string, scope: value.scope as StorageScope, id: value.id as string };
+	return { scope: value.scope as StorageScope, id: value.id };
 }
 
 export function validateStorageEntries(value: unknown): Record<string, IStorageEntry> {
@@ -51,5 +48,5 @@ export function validateStorageSnapshot(value: unknown): IStorageSnapshot {
 }
 
 export function storageIdentityKey(identity: IStorageIdentity): string {
-	return JSON.stringify([identity.applicationId, identity.scope, identity.id]);
+	return JSON.stringify([identity.scope, identity.id]);
 }
