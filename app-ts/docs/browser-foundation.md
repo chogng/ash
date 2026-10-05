@@ -323,6 +323,12 @@ do not affect matching. Pattern paths are kept literal rather than resolving
 dot segments. Settings retain unavailable provider IDs so provider registration
 does not rewrite user preferences.
 
+Settings > Application > Links exposes the same rules as editable pattern/opener
+rows. Opener suggestions come from the registered JSON schema and show built-in
+and ready extension IDs with their names. Arrow keys and Enter select a suggestion;
+arbitrary IDs remain editable. Adding, editing, and deleting rows writes the profile's
+`settings.json` through the existing configuration service and complete-value validator.
+
 Editor Markdown messages and rich document links use this same service. Rich
 links preserve ordinary editing clicks; Ctrl/Command+click and Ctrl/Command+Enter
 open the link. A focused link also opens with Enter. Product `window.open`

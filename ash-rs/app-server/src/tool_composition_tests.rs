@@ -1206,3 +1206,269 @@ fn code_mode_catalog_excludes_direct_model_only_tools_after_reloadable_compositi
             .any(|tool| tool.name == name)
     );
 }
+
+#[test]
+fn code_mode_only_keeps_model_tools_stable_across_third_party_catalog_changes() {
+    use ash_async_utils::CancellationSource;
+    use ash_core::CreateThreadRequest;
+    use ash_core::InMemoryThreadStore;
+    use ash_core::StartTurnRequest;
+    use ash_core::ThreadController;
+    use ash_core::TurnExecutor;
+    use ash_protocol::AgentId;
+    use ash_protocol::CommandId;
+    use ash_protocol::ModelRequest;
+    use ash_protocol::ModelResponse;
+    use ash_protocol::ResponseItem;
+    use ash_protocol::SessionId;
+    use ash_protocol::StopReason;
+    use ash_protocol::ThreadId;
+    use ash_protocol::ThreadItem;
+    use ash_protocol::ToolCallId;
+    use ash_protocol::ToolMode;
+    use ash_protocol::TurnStatus;
+    use core_api::ModelSelection;
+    use core_api::ModelService;
+    use core_api::SequenceExpectation;
+    use serde_json::json;
+    use std::sync::Mutex;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    struct CatalogPolicy;
+
+    impl ActionPolicyService for CatalogPolicy {
+        fn revision(&self) -> String {
+            "catalog-test-policy".into()
+        }
+
+        fn decide(
+            &self,
+            _: &ActionReviewRequest,
+            _: &CancellationToken,
+        ) -> Result<ExecutionDecision, CoreError> {
+            Ok(ExecutionDecision::RunUnsandboxed {
+                grant_id: GrantId::new("catalog-test"),
+            })
+        }
+    }
+
+    struct CatalogModel {
+        requests: Mutex<Vec<ModelRequest>>,
+    }
+
+    impl ModelService for CatalogModel {
+        fn invoke(
+            &self,
+            _: ModelSelection<'_>,
+            request: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            let mut requests = self.requests.lock().unwrap();
+            let index = requests.len();
+            requests.push(request.clone());
+            let (output, stop_reason) = if index % 2 == 0 {
+                (
+                    vec![ResponseItem::ToolCall(ToolCall {
+                        id: ToolCallId::new(format!("catalog-cell-{index}")).unwrap(),
+                        name: ToolName::new("exec").unwrap(),
+                        arguments: json!({"source": r#"
+                            const entries = ALL_TOOLS
+                                .filter(entry => entry.toolName.startsWith('catalog_'))
+                                .sort((left, right) => left.toolName.localeCompare(right.toolName));
+                            const results = [];
+                            for (const entry of entries) {
+                                const version = entry.inputSchema.properties?.version;
+                                const args = version ? {version: version.const} : {};
+                                results.push({
+                                    name: entry.toolName,
+                                    schema: entry.inputSchema,
+                                    result: await tools[entry.name](args)
+                                });
+                            }
+                            text(results);
+                        "#}),
+                    })],
+                    StopReason::ToolUse,
+                )
+            } else {
+                (
+                    vec![ResponseItem::Text("done".into())],
+                    StopReason::Completed,
+                )
+            };
+            Ok(ModelResponse {
+                output,
+                usage: None,
+                billing: None,
+                stop_reason,
+            })
+        }
+    }
+
+    let dynamic_schema = json!({"type": "object"});
+    let mcp_schema = |version: &str| {
+        json!({
+            "type": "object",
+            "properties": {"version": {"type": "string", "const": version}},
+            "required": ["version"]
+        })
+    };
+    let catalog = |generation, mcp: Option<(&str, &'static str)>, dynamic, result| {
+        let policy: Arc<dyn ActionPolicyService> = Arc::new(CatalogPolicy);
+        let mut ports = vec![
+            // Code Mode control requests use the built-in policy; nested calls retain
+            // their MCP or dynamic source policy through the real composition path.
+            ToolPort::local(Arc::new(ash_core::NoTools), Arc::clone(&policy)),
+            ToolPort::dynamic(
+                Arc::new(FakeTools::new(dynamic, ActionSource::DynamicTool, result)),
+                Arc::clone(&policy),
+            ),
+        ];
+        if let Some((version, result)) = mcp {
+            let mut tools = FakeTools::new("catalog_status", ActionSource::McpServer, result);
+            tools.definitions[0].parameters = mcp_schema(version);
+            tools.definitions[0].description = format!("MCP status {version}");
+            ports.push(ToolPort::mcp(Arc::new(tools), policy));
+        }
+        combine_tool_ports_at_generation(ports, ash_tools::ToolRegistryGeneration::new(generation))
+            .unwrap()
+    };
+    let ports = ReloadableToolPorts::new(catalog(
+        1,
+        Some(("v1", "mcp-v1")),
+        "catalog_removed",
+        "dynamic-removed",
+    ));
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let thread_id = ThreadId::new("catalog-thread").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            execution_target: None,
+            agent_id: AgentId::new("catalog-agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: SessionId::new("catalog-session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "third-party catalog changes".into(),
+        })
+        .unwrap();
+    let model = Arc::new(CatalogModel {
+        requests: Mutex::new(Vec::new()),
+    });
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model.clone(),
+        ports.tools(),
+        ports.policy(),
+    );
+    let expected = [
+        json!([
+            {"name": "catalog_removed", "schema": dynamic_schema, "result": "dynamic-removed"},
+            {"name": "catalog_status", "schema": mcp_schema("v1"), "result": "mcp-v1"}
+        ]),
+        json!([
+            {"name": "catalog_added", "schema": dynamic_schema, "result": "dynamic-added"},
+            {"name": "catalog_status", "schema": mcp_schema("v2"), "result": "mcp-v2"}
+        ]),
+        json!([
+            {"name": "catalog_added", "schema": dynamic_schema, "result": "dynamic-added"}
+        ]),
+    ];
+    let replacements = [
+        None,
+        Some(catalog(
+            2,
+            Some(("v2", "mcp-v2")),
+            "catalog_added",
+            "dynamic-added",
+        )),
+        Some(catalog(3, None, "catalog_added", "dynamic-added")),
+    ];
+    for (stage, (replacement, expected)) in replacements.into_iter().zip(expected).enumerate() {
+        if let Some(replacement) = replacement {
+            ports.replace(replacement);
+        }
+        let turn = threads
+            .start_turn(
+                &thread_id,
+                StartTurnRequest {
+                    mode: Default::default(),
+                    advisor: None,
+                    command_id: CommandId::new(format!("catalog-turn-{stage}")).unwrap(),
+                    expected_sequence: SequenceExpectation::Any,
+                    model: None,
+                    reasoning_effort: None,
+                    kind: ash_protocol::TurnKind::Coding,
+                    instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                    policy_revision: ports.policy().revision(),
+                    approval_mode: ash_protocol::ApprovalMode::Manual,
+                    tool_mode: ToolMode::CodeModeOnly,
+                    tool_profile: None,
+                    activated_skills: Vec::new(),
+                    input: vec![ash_protocol::UserInput::Text {
+                        text: "discover and call current third-party tools".into(),
+                    }],
+                },
+            )
+            .unwrap();
+        executor.start(&thread_id, &turn.turn_id).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let cancellation = CancellationSource::new().token();
+        let snapshot = loop {
+            let changed = threads.thread_changed(&thread_id).unwrap();
+            let snapshot = threads.read_thread(&thread_id).unwrap();
+            assert_ne!(
+                snapshot.turns[stage].status,
+                TurnStatus::Failed,
+                "catalog stage {stage}: {:?}",
+                snapshot.items
+            );
+            if snapshot.turns[stage].status == TurnStatus::Completed {
+                break snapshot;
+            }
+            assert!(Instant::now() < deadline, "catalog stage {stage} timed out");
+            pollster::block_on(ash_async_utils::wait_until(
+                changed,
+                deadline,
+                &cancellation,
+            ))
+            .unwrap();
+        };
+        let cell_id = ToolCallId::new(format!("catalog-cell-{}", stage * 2)).unwrap();
+        let result = snapshot.items.iter().find_map(|item| match item {
+            ThreadItem::ToolResult {
+                tool_call_id,
+                text,
+                is_error: false,
+                ..
+            } if tool_call_id == &cell_id => Some(text),
+            _ => None,
+        });
+        let result =
+            result.unwrap_or_else(|| panic!("catalog stage {stage}: {:?}", snapshot.items));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(result).unwrap(),
+            expected
+        );
+    }
+
+    let requests = model.requests.lock().unwrap();
+    assert_eq!(requests.len(), 6);
+    assert_eq!(
+        requests[0]
+            .tools
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["exec", "wait"]
+    );
+    let initial_tools = serde_json::to_value(&requests[0].tools).unwrap();
+    for request in requests.iter().skip(1) {
+        // Compare complete definitions so a schema or description leak cannot hide
+        // behind an unchanged pair of control-tool names.
+        assert_eq!(serde_json::to_value(&request.tools).unwrap(), initial_tools);
+    }
+}

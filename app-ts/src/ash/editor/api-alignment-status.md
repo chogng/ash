@@ -2467,3 +2467,5 @@ Standalone 通用 Worker 续批：`editor.createWebWorker` 从窗口模型服务
 2026-10-04：URL 打开规则续接。MessageController 的 Markdown 外链使用构造器注入的 IOpenerService，并显式允许用户规则；富文本文档通过该服务处理修饰键点击和键盘打开。产品窗口的 window.open 请求从 Main 返回所属窗口的 opener；辅助窗口复用所属 Workbench。原有仅 Ash 的富文本与窗口 IPC 归属沿用已授权职责，未新增平行选择服务。
 
 扩展 URL 打开方式位于上游对应路径 `workbench/api/browser/mainThreadUriOpeners.ts`，由 Code 和 Sessions 入口加载，使用已有 Ash 扩展协议读取注册与调用。配置补全更新接口位于上游对应 `externalUriOpener/common/configuration.ts` 的 `updateContributedOpeners`。这里保留 Ash 可执行扩展的代次、权限和取消约定；不计为 VS Code JavaScript Extension API、惰性 URL 激活或持久化扩展建议的完整对齐。
+
+URL 规则的图形设置入口：用户在 Application > Links 增删规则，经同路径 `preferences/browser/settingsLayout.ts` 和 `settingsWidgets.ts` 进入现有 Configuration Service，仍由 `externalUriOpener/common/configuration.ts` 拥有键、默认值、校验和建议。沿用已授权的 Ash Settings 元数据契约；未新增设置状态或存储。字符串映射控件复用原建议列表的焦点、键盘和释放机制，从 schema 读取打开方式 ID 与名称。保留手动填写和不可用扩展 ID；实际保存继续写用户 settings.json。

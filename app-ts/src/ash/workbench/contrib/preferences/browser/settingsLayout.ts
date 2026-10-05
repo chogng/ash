@@ -69,6 +69,12 @@ export const SettingsNavigation = [
 						settings: ['git.autofetch', 'git.autofetchPeriod', 'scm.diffDecorationsIgnoreTrimWhitespace'],
 					},
 					{
+						id: 'url-opening',
+						get label() { return localize('externalUriOpener.settings.group', 'Links'); },
+						get description() { return localize('externalUriOpener.settings.groupDescription', 'Choose where website links open.'); },
+						settings: ['workbench.externalUriOpeners'],
+					},
+					{
 						id: 'accessibility',
 						label: 'Accessibility',
 						description: 'Adjust screen-reader behavior, motion, transparency, and link visibility.',

@@ -5,6 +5,80 @@ import type { ElectronApplication } from '@playwright/test';
 interface URLRuleSmokeState { readonly urls: string[]; restore(): void; }
 type URLRuleSmokeGlobal = typeof globalThis & { urlRuleSmoke: URLRuleSmokeState };
 
+test('Graphical URL opening rules support suggestions, validation, persistence and Chinese labels', async ({ target, workbench, restartWorkbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires Code Settings.');
+	const page = workbench.page;
+	await workbench.settingsEditor.openUserSettingsUI();
+	const settings = workbench.settingsEditor.element;
+	await settings.getByRole('searchbox').fill('workbench.externalUriOpeners');
+	let rules = page.locator('[data-configuration-key="workbench.externalUriOpeners"]');
+	await expect(rules).toContainText('URL opening rules');
+	await rules.getByRole('button', { name: 'Add rule', exact: true }).click();
+	let row = rules.locator('.ash-string-map-row').last();
+	await row.getByRole('textbox', { name: 'URL pattern 1', exact: true }).fill('localhost:*');
+	await row.getByRole('textbox').press('Tab');
+	let opener = row.getByRole('combobox', { name: 'Open with 1', exact: true });
+	await expect(opener).toBeFocused();
+	await expect(opener).toHaveAttribute('aria-expanded', 'true');
+	const ashBrowser = page.getByRole('option', { name: 'ash.browser.open Open in Ash browser', exact: true });
+	await opener.press('ArrowDown');
+	await expect(ashBrowser).toHaveAttribute('aria-selected', 'true');
+	await expect(ashBrowser).toHaveCSS('outline-style', 'solid');
+	await opener.press('Enter');
+	await expect(opener).toHaveValue('ash.browser.open');
+	await expect(rules.locator('.ash-settings-indicators')).toBeHidden();
+	await expect(opener).toBeFocused();
+
+	await rules.getByRole('button', { name: 'Add rule', exact: true }).click();
+	row = rules.locator('.ash-string-map-row').last();
+	await row.getByRole('textbox').fill('localhost:*');
+	await row.getByRole('textbox').press('Tab');
+	await page.getByRole('option', { name: 'default Open in default browser', exact: true }).click();
+	await expect(settings).toContainText('Each URL pattern must be unique.');
+	await expect(row.getByRole('textbox')).toHaveAttribute('aria-invalid', 'true');
+	await row.getByRole('textbox').fill('*');
+	await row.getByRole('textbox').press('Tab');
+	await expect(rules.locator('.ash-settings-indicators')).toBeHidden();
+
+	await rules.getByRole('button', { name: 'Add rule', exact: true }).click();
+	row = rules.locator('.ash-string-map-row').last();
+	await row.getByRole('textbox').fill('example.test');
+	opener = row.getByRole('combobox');
+	await opener.fill('uninstalled.viewer');
+	await opener.press('Tab');
+	await expect(rules.locator('.ash-settings-indicators')).toBeHidden();
+	await row.getByRole('button', { name: 'Remove rule 3', exact: true }).click();
+	await expect(rules.locator('.ash-string-map-row')).toHaveCount(2);
+	await expect(rules.locator('.ash-settings-indicators')).toBeHidden();
+	await settings.locator('.ash-modal-editor-close').click();
+	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(source => JSON.stringify(JSON.parse(source)['workbench.externalUriOpeners']) === JSON.stringify({ 'localhost:*': 'ash.browser.open', '*': 'default' }));
+
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
+	await picker.getByRole('combobox').fill('简体中文');
+	await picker.getByRole('combobox').press('Enter');
+	({ workbench } = await restartWorkbench());
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectCategory('general');
+	rules = workbench.page.locator('[data-configuration-key="workbench.externalUriOpeners"]');
+	await expect(rules).toContainText('网址打开规则');
+	await expect(rules).toContainText('用方向键选择打开方式，再按 Enter 确认');
+	await expect.poll(() => rules.locator('[data-pattern-part="key"]').evaluateAll(elements => elements.map(element => (element as HTMLInputElement).value))).toEqual(['localhost:*', '*']);
+	await expect.poll(() => rules.locator('[data-pattern-part="value"]').evaluateAll(elements => elements.map(element => (element as HTMLInputElement).value))).toEqual(['ash.browser.open', 'default']);
+	await rules.getByRole('button', { name: '添加规则', exact: true }).click();
+	row = rules.locator('.ash-string-map-row').last();
+	await row.getByRole('textbox', { name: '网址模式 3', exact: true }).fill('example.test');
+	opener = row.getByRole('combobox', { name: '打开方式 3', exact: true });
+	await opener.focus();
+	await opener.press('Escape');
+	await expect(workbench.settingsEditor.element).toBeVisible();
+	await expect(opener).toBeFocused();
+	await opener.press('ArrowUp');
+	await expect(workbench.page.getByRole('option', { name: 'default 在默认浏览器中打开', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await opener.press('Escape');
+});
+
 test('External URL opener rules accept unregistered IDs and persist after reopening', async ({ workbench, reloadWorkbench }) => {
 	const rules = { '*.example.test/docs/*': 'example.viewer', '*': 'default' };
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
@@ -65,17 +139,19 @@ test('URL rules open editor links in the Ash browser and default links in the sy
 		shell.openExternal = async url => { (globalThis as URLRuleSmokeGlobal).urlRuleSmoke.urls.push(url); };
 	});
 	try {
-		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectCategory('general');
+		const rules = workbench.page.locator('[data-configuration-key="workbench.externalUriOpeners"]');
+		for (const [pattern, id] of [[`${root}/internal`, 'ash.browser.open'], ['*', 'default']]) {
+			await rules.getByRole('button', { name: 'Add rule', exact: true }).click();
+			const row = rules.locator('.ash-string-map-row').last();
+			await row.getByRole('textbox').fill(pattern);
+			await row.getByRole('textbox').press('Tab');
+			await workbench.page.getByRole('option', { name: new RegExp(`^${id.replaceAll('.', '\\.') } `, 'u') }).click();
+			await expect(rules.locator('.ash-settings-indicators')).toBeHidden();
+		}
+		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
 		const group = workbench.editors.groupAt(0);
-		await group.editor.input.press('ControlOrMeta+A');
-		await group.editor.input.evaluate((element, source) => {
-			const clipboardData = new DataTransfer();
-			clipboardData.setData('text/plain', source);
-			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
-		}, JSON.stringify({ 'workbench.externalUriOpeners': { [`${root}/internal`]: 'ash.browser.open', '*': 'default' } }));
-		await group.editor.waitForEditorContents(source => JSON.parse(source)['workbench.externalUriOpeners']['*'] === 'default');
-		await workbench.quickaccess.runCommand('workbench.action.files.save');
-		await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 		await expect(group.tabs.filter({ hasText: 'Untitled-1' })).toHaveAttribute('aria-selected', 'true');
 		await group.editor.input.focus();

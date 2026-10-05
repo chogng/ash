@@ -130,6 +130,7 @@ const { StartupEditorConfigurationKey } = await import('../../../welcomeGettingS
 await import('../../../welcomeGettingStarted/browser/gettingStarted.contribution.js');
 await import('../../../../browser/workbench.contribution.js');
 await import('../../../../electron-browser/desktop.contribution.js');
+await import('../../../externalUriOpener/common/externalUriOpener.contribution.js');
 
 const localizationService: ILocalizationService = {
 	whenReady: Promise.resolve(),
@@ -177,6 +178,43 @@ test('DefaultSettings projects only Configuration Registry metadata', () => {
 	assert.deepEqual(defaults.all.map(setting => setting.id), ['editor.test.enabled', 'editor.test.patterns']);
 	assert.equal(defaults.get(visible).valueType, 'boolean');
 	assert.equal(defaults.get('editor.test.patterns').valueType, 'stringMap');
+});
+
+test('URL rule suggestions follow extension registration without changing saved IDs', async () => {
+	using resources = new DisposableStore();
+	const { createSettingWidget } = await import('../../browser/settingsWidgets.js');
+	const { updateContributedOpeners } = await import('../../../externalUriOpener/common/configuration.js');
+	const configuration = resources.add(new WorkbenchConfigurationService());
+	await configuration.updateValue('workbench.externalUriOpeners', { '*': 'extension:test:viewer' });
+	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.replaceChildren(root);
+	resources.add(toDisposable(() => { updateContributedOpeners([], []); root.remove(); }));
+	const contextView = resources.add(new BrowserContextViewService(root));
+	const widget = resources.add(createSettingWidget(root, new DefaultSettings().get('workbench.externalUriOpeners'), {
+		configurationService: configuration,
+		contextViewProvider: contextView,
+		clipboardService: {
+			readText: async () => '', writeText: async () => {},
+			readResources: async () => ({ resources: [], operation: 'copy' }),
+			writeResources: async () => {}, hasResources: async () => false,
+		},
+		contextMenuProvider: { showContextMenu() {} },
+		onStatus: () => {},
+	}));
+	root.append(widget.domNode);
+	const opener = widget.domNode.querySelector<HTMLInputElement>('[data-pattern-part="value"]')!;
+	opener.focus();
+	assert.equal(root.querySelectorAll('[role="option"]').length, 0);
+	updateContributedOpeners(['extension:test:viewer'], ['Test website viewer']);
+	opener.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.equal(root.querySelector('[role="option"]')?.textContent, 'extension:test:viewerTest website viewer');
+	opener.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
+	assert.equal(root.querySelector('[role="option"]')?.getAttribute('aria-selected'), 'true');
+	updateContributedOpeners([], []);
+	opener.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.equal(opener.getAttribute('aria-expanded'), 'false');
+	assert.equal(opener.value, 'extension:test:viewer');
+	assert.deepEqual(configuration.getValue('workbench.externalUriOpeners'), { '*': 'extension:test:viewer' });
 });
 
 test('Activity Bar badges expose a translated profile setting with strict boolean validation', () => {
@@ -260,6 +298,8 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.deepEqual(model.settings.map(setting => setting.id), defaults.all.map(setting => setting.id));
 	assert.equal(findSettingCategory(layout, AccessibilityConfiguration.underlineLinks), 'general');
 	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'general');
+	assert.equal(findSettingCategory(layout, 'workbench.externalUriOpeners'), 'general');
+	assert.equal(defaults.get('workbench.externalUriOpeners').valueType, 'stringMap');
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');

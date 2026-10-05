@@ -447,7 +447,7 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 let objectKeySuggestionsId = 0;
 
 /** Suggestions stay in the input's focus path; ContextView owns popup placement and dismissal. */
-class ObjectKeySuggestions extends Disposable {
+class StringMapSuggestions extends Disposable {
 	private readonly list: HTMLDivElement;
 	private candidates: readonly [string, JsonSchema][] = [];
 	private activeIndex = -1;
@@ -653,7 +653,7 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 		row.append(keyInput, valueInput);
 		const rowDisposables = this.rowDisposables.add(new DisposableStore());
 		if (this.descriptor.configuration.schema?.properties) {
-			rowDisposables.add(new ObjectKeySuggestions(keyInput, this.contextViewProvider, () => {
+			rowDisposables.add(new StringMapSuggestions(keyInput, this.contextViewProvider, () => {
 				const used = [...this.rows.querySelectorAll<HTMLInputElement>('[data-pattern-part="key"]')]
 					.filter(input => input !== keyInput).map(input => input.value.trim());
 				return Object.fromEntries(Object.entries(this.descriptor.configuration.schema!.properties!).filter(([key]) => !used.includes(key)));
@@ -661,6 +661,18 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 				keyInput.value = key;
 				valueInput.focus();
 				if (valueInput.value.trim()) { this.acceptRows(); }
+			}));
+		}
+		const valueSuggestions = (): Readonly<Record<string, JsonSchema>> => {
+			const schema = this.descriptor.configuration.schema?.additionalProperties;
+			if (typeof schema !== 'object') { return {}; }
+			return Object.fromEntries([schema, ...schema.anyOf ?? [], ...schema.oneOf ?? []].flatMap(alternative =>
+				(alternative.enum ?? []).flatMap((value, index) => typeof value === 'string' ? [[value, { description: alternative.enumDescriptions?.[index] ?? '' }]] : [])));
+		};
+		if (Object.keys(valueSuggestions()).length) {
+			rowDisposables.add(new StringMapSuggestions(valueInput, this.contextViewProvider, valueSuggestions, value => {
+				valueInput.value = value;
+				this.acceptRows();
 			}));
 		}
 		rowDisposables.add(addDisposableListener(keyInput, 'change', () => this.acceptRows()));
@@ -727,6 +739,7 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 			this.reportStatus('', false);
 			return;
 		}
+		this.renderedValue = value;
 		void this.updateSetting(value);
 	}
 }
