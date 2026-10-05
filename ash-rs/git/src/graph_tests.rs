@@ -24,6 +24,7 @@ async fn graph_includes_local_and_fetched_remote_refs() {
         "https://github.com/example/ash.git",
     ]);
     repository.git(&["update-ref", "refs/remotes/origin/topic", &topic_oid]);
+    repository.git(&["branch", "-D", "topic"]);
 
     let client = GitClient::system();
     let opened = client
@@ -96,13 +97,100 @@ async fn graph_pages_commits_and_reports_more() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn graph_excludes_stash_and_private_ref_commits() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "base\n");
+    repository.commit_all("base");
+    let base = repository.git(&["rev-parse", "HEAD"]);
+
+    repository.write("tracked.txt", "staged\n");
+    repository.git(&["add", "tracked.txt"]);
+    repository.write("tracked.txt", "unstaged\n");
+    repository.write("untracked.txt", "untracked\n");
+    repository.git(&["stash", "push", "--include-untracked", "-m", "saved work"]);
+    let stash = repository.git(&["rev-parse", "refs/stash"]);
+    let stash_parents = repository.git(&["rev-list", "--parents", "-n1", &stash]);
+    assert_eq!(stash_parents.split_whitespace().count(), 4);
+
+    repository.git(&["switch", "--detach"]);
+    repository.write("tracked.txt", "snapshot\n");
+    repository.commit_all("private snapshot");
+    let snapshot = repository.git(&["rev-parse", "HEAD"]);
+    repository.git(&["update-ref", "refs/ash/test-snapshot", &snapshot]);
+    repository.git(&["switch", "main"]);
+    repository.write("tracked.txt", "latest\n");
+    repository.commit_all("latest");
+    let latest = repository.git(&["rev-parse", "HEAD"]);
+
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let mut cursor = client.start_graph(&opened).await.unwrap();
+    let first = cursor.page(NonZeroUsize::new(1).unwrap()).await.unwrap();
+    let second = cursor.page(NonZeroUsize::new(1).unwrap()).await.unwrap();
+
+    assert_eq!(first.commits()[0].object_id(), latest);
+    assert!(first.has_more());
+    assert_eq!(second.commits()[0].object_id(), base);
+    assert!(!second.has_more());
+    assert_eq!(repository.git(&["rev-parse", "refs/stash"]), stash);
+    assert_eq!(
+        repository.git(&["rev-parse", "refs/ash/test-snapshot"]),
+        snapshot
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn graph_includes_only_current_detached_head_commits() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "base\n");
+    repository.commit_all("base");
+    let other_worktree = tempfile::tempdir().unwrap();
+    let other_root = other_worktree.path().join("other");
+    let other_path = other_root.to_str().unwrap();
+    repository.git(&["worktree", "add", "--detach", other_path]);
+    std::fs::write(other_root.join("tracked.txt"), "other worktree\n").unwrap();
+    repository.git(&["-C", other_path, "add", "tracked.txt"]);
+    repository.git(&["-C", other_path, "commit", "-m", "other worktree commit"]);
+    repository.git(&["switch", "--detach"]);
+    repository.write("tracked.txt", "detached\n");
+    repository.commit_all("detached commit");
+    let head = repository.git(&["rev-parse", "HEAD"]);
+
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let mut cursor = client.start_graph(&opened).await.unwrap();
+    let graph = cursor.page(NonZeroUsize::new(20).unwrap()).await.unwrap();
+
+    assert_eq!(graph.commits().len(), 2);
+    assert_eq!(graph.commits()[0].object_id(), head);
+    assert!(!graph.has_more());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn graph_is_empty_for_unborn_repository() {
+    let repository = TestRepository::init();
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let mut cursor = client.start_graph(&opened).await.unwrap();
+    let graph = cursor.page(NonZeroUsize::new(20).unwrap()).await.unwrap();
+
+    assert!(graph.commits().is_empty());
+    assert!(graph.references().is_empty());
+    assert!(!graph.has_more());
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn graph_tags_point_to_commits_for_lightweight_and_annotated_tags() {
     let repository = TestRepository::init();
     repository.write("file.txt", "base\n");
     repository.commit_all("base");
+    repository.git(&["switch", "--detach"]);
+    repository.write("file.txt", "tagged\n");
+    repository.commit_all("tagged commit");
     let head = repository.git(&["rev-parse", "HEAD"]);
     repository.git(&["tag", "lightweight"]);
     repository.git(&["tag", "-a", "annotated", "-m", "reviewed"]);
+    repository.git(&["switch", "main"]);
     let client = GitClient::system();
     let opened = client.open_repository(repository.root()).await.unwrap();
     let refs = client.references(&opened).await.unwrap();
@@ -115,4 +203,9 @@ async fn graph_tags_point_to_commits_for_lightweight_and_annotated_tags() {
         tags.iter()
             .all(|tag| tag.object_id() == head && !tag.is_current() && tag.remote_name().is_none())
     );
+    let mut cursor = client.start_graph(&opened).await.unwrap();
+    let graph = cursor.page(NonZeroUsize::new(20).unwrap()).await.unwrap();
+    assert_eq!(graph.commits().len(), 2);
+    assert_eq!(graph.commits()[0].object_id(), head);
+    assert!(!graph.has_more());
 }

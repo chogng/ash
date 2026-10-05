@@ -172,11 +172,19 @@ impl GitClient {
     pub async fn start_graph(&self, repository: &GitRepository) -> GitResult<GitGraphCursor> {
         let references = self.references(repository).await?;
         let remotes = self.remotes(repository).await?;
+        // --all includes detached HEAD and accepts unborn repositories. Exclude its refs before
+        // adding public namespaces so stash/private snapshots and other worktree HEADs stay out.
+        // Git clears --exclude at the next ref selector, so this order is part of the contract.
         let stream = self.start_query_stream(
             repository.worktree_root(),
             [
                 OsString::from("log"),
+                OsString::from("--single-worktree"),
+                OsString::from("--exclude=refs/*"),
                 OsString::from("--all"),
+                OsString::from("--branches"),
+                OsString::from("--remotes"),
+                OsString::from("--tags"),
                 OsString::from("--topo-order"),
                 OsString::from("-z"),
                 OsString::from("--format=%H%x00%P%x00%ct%x00%s"),

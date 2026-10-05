@@ -54,7 +54,7 @@ Git 查询和修改使用不同 capability：
 | 标签与远端配置 | `git.createTag`、`git.deleteTag`、`git.addRemote`、`git.removeRemote` | 清单不返回远端 URL 或凭据；删除标签和移除远端前确认 |
 | 修改或撤销提交 | `git.commitAmend` 提交当前 index；`git.undoCommit` 撤销最后提交并保留 index 和工作树 | 明确提示改写历史；撤销使用确认时的 HEAD 做原子比较，拒绝已变化的 HEAD；不撤销根提交 |
 | 部分暂存 | `git.stageHunk`、`git.unstageHunk` 选择文件与更改块；`git.stageSelectedRanges`、`git.unstageSelectedRanges` 使用编辑器选区 | Rust 重新计算 diff，检查两侧内容并持有 Git index 锁后更新 index；不修改工作文件；冲突、重命名、子模块、二进制和非 UTF-8 文件不支持部分操作 |
-| 查看 history graph | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，首屏读取一页，后续随列表渲染范围追加页面，按 lane 分配颜色并显示 local/remote refs；列表按视口虚拟化；history item 可展开 `git/commitChanges` 文件列表，点击文本文件再按需读取 `git/commitFile` 并挂到 Editor | 只包含本地已存在的 refs；自动 fetch 需主动开启；binary 或超限文件不作为文本 editor 打开 |
+| 查看 history graph | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，首屏读取一页，后续随列表渲染范围追加页面，按 lane 分配颜色并显示 local/remote refs；列表按视口虚拟化；history item 可展开 `git/commitChanges` 文件列表，点击文本文件再按需读取 `git/commitFile` 并挂到 Editor | 从本地分支、已 fetch 的远端分支、标签和当前 HEAD 遍历；stash、内部引用及其他工作树的 detached HEAD 不作为起点；自动 fetch 需主动开启；binary 或超限文件不作为文本 editor 打开 |
 | 自动获取远端更新 | App Server 读取共享 `[git]` 配置并逐仓库调度；`autofetch` 默认为 `"off"`，`"default"` 获取默认远端，`"all"` 获取全部远端；`autofetchPeriod` 默认 180 秒 | 三端共用配置，不提供仓库级覆盖；只对有修改授权的仓库执行，各仓库独立定时获取；只更新远端引用，不执行 pull |
 | 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
 | 提交和推送 | 使用系统 Git 的当前仓库配置 | 尚无凭据提示和进度 UI |
@@ -251,8 +251,9 @@ tree 指纹。事务 journal 位于 Git common directory，进程重启后可以
 - `git/textDiff` 返回 repository-scoped status、受限 UTF-8 HEAD/worktree 文本与增删行统计；
 - `git/branch/list` 返回现有本地分支，`git/branch/switch` 只接受 branch name，并在 host 重新解析为
   当前仓库真实分支后执行切换；
-- `git/graph` 首次接受有界 `limit`，后续使用不透明 `cursor` 继续同一次 `git log --all --topo-order`
-  traversal；游标启动时读取一次 local/remote/tag refs 和 configured remote identity，并通过 `hasMore` 与
+- `git/graph` 首次接受有界 `limit`，后续使用不透明 `cursor` 继续同一次 `git log --topo-order`
+  traversal；起点为 local/remote/tag refs 和当前工作树 HEAD，排除仅由 stash、内部引用或其他工作树
+  detached HEAD 保留的提交；游标启动时读取一次 refs 和 configured remote identity，并通过 `hasMore` 与
   `nextCursor` 表示是否还有下一页。remote identity 只保留 provider、host、owner、repository，原始
   URL、token 和 `gh` 登录配置不会进入协议；状态变化、mutation 或连接关闭会使游标失效；
 - `git/fetch` 接受 `mode: "default" | "all"`；省略时沿用 all-remotes prune，默认远端模式执行 `git fetch --prune`。手动 Fetch 仍获取全部远端。`git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
@@ -301,7 +302,7 @@ stderr 和非 UTF-8 path 不进入 Renderer；工作树的绝对目录路径是�
 - 当前 registry 来自已授权目录集合，不接受客户端提交任意 repository root；
 - 工作树 change row 尚未接入 editor diff/open workflow；history changed-file row 已支持打开
   commit/parent 文本 Diff。
-- `git/graph` 展示的是本地 repository 中已经存在的 refs；当前不会读取 `~/.config/gh/hosts.yml`，
+- `git/graph` 展示本地分支、已 fetch 的远端分支、标签和当前 HEAD 可达的提交；当前不会读取 `~/.config/gh/hosts.yml`，
   也不会调用 GitHub API，因此尚未提供 PR、Checks、review 或实时远端分支状态；这些属于独立的
   provider connector/权限能力，不能由 SCM graph 猜测；
 

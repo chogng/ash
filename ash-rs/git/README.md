@@ -50,7 +50,7 @@ Git domain owner 下，而不是建立平级的 `ash-git-utils`：
 | `src/operations.rs` | 封闭 Git 操作、标签/储藏清单、Git 持久化整合状态和提交撤销 CAS | `GitCommand`、`GitCommandOutcome`、`GitCatalog`、`GitIntegration` |
 | `src/index_edit.rs` | 基于真实比较的块/行暂存，持有 Git index 锁后原子替换 index，保留工作文件 | `GitIndexDiff`、`GitIndexEdit`、`GitIndexSelection` |
 | `src/info.rs` | local branches、fetch/push remote URLs、credential-free remote identity、bounded recent history | `GitBranch`、`GitRemote`、`GitRemoteIdentity`、`GitRemoteProvider`、`GitCommitSummary` |
-| `src/graph.rs` | local/remote-tracking refs 与单次 `git log --all` traversal 的分页 graph page | `GitGraph`、`GitGraphCursor`、`GitReference`、`GitReferenceKind`、private `parse_references` |
+| `src/graph.rs` | local/remote/tag refs 与当前 HEAD 的单次分页 commit traversal | `GitGraph`、`GitGraphCursor`、`GitReference`、`GitReferenceKind`、private `parse_references` |
 | `src/mutation.rs` | path set/commit request validation 与常用 index/worktree/branch/remote mutation | `GitPathspecSet`、`GitCommitRequest`、`GitCommitResult`、`GitClient::switch_branch` |
 | `src/patch.rs` | patch request/result、stdin apply、path extraction 和 diagnostics 分类 | `GitPatchRequest`、`GitPatchResult`、private `parse_apply_diagnostics` |
 | `src/fsmonitor.rs` | effective config 与 built-in daemon capability 探测 | private `detect_fsmonitor_override` |
@@ -114,8 +114,8 @@ GitClient::local_branches / remotes / recent_commits
 
 GitClient::start_graph → GitGraphCursor::page
 ├─ GitClient::references
-│  └─ git for-each-ref refs/heads refs/remotes
-├─ one streaming git log --all --topo-order -z process
+│  └─ git for-each-ref refs/heads refs/remotes refs/tags
+├─ one streaming git log --single-worktree --exclude=refs/* --all --branches --remotes --tags --topo-order -z process
 └─ GitClient::remotes
    └─ credential-free GitRemoteIdentity projection at the App Server boundary
 
@@ -171,12 +171,15 @@ revision；该 revision 仍不是 mutation CAS token。
 
 ## Graph 与 remote identity 契约
 
-`GitClient::start_graph` 启动一次 bounded traversal：它读取 `refs/heads` 与 `refs/remotes`，跳过
-symbolic remote ref（例如 `origin/HEAD`），再从所有本地可见 refs 启动单个流式 `git log --all`。
+`GitClient::start_graph` 启动一次 bounded traversal：它读取 `refs/heads`、`refs/remotes` 与
+`refs/tags`，跳过 symbolic remote ref（例如 `origin/HEAD`），再从这些引用和当前工作树的 HEAD
+启动单个流式 `git log --topo-order`。遍历不以 `refs/stash`、内部快照引用或其他工作树的 detached
+HEAD 为起点；若这些提交已被正式分支或标签引用，仍按正常提交展示。当前 detached HEAD 保留
+在历史中，unborn 仓库返回空页。
 `GitGraphCursor::page` 从该进程继续读取一页并额外读取一条记录计算 `GitGraph::has_more`，因此
 不会为后续页重复 refs/remotes 查询或使用 `--skip` 重新扫描历史。remote branch 只有在本地已经
 fetch 后才会进入 graph；graph 不执行 fetch，也不调用 GitHub API。`GitReference` 保留 branch/ref
-名、object ID、local/remote kind、remote name 和当前分支标记。
+名、object ID、local/remote/tag kind、remote name 和当前分支标记。
 
 `GitRemote::identity` 从 fetch/push URL 解析 provider-neutral 的 host、owner 和 repository，并
 丢弃 URL 中的 credential。App Server 只投影该 identity 和 remote name；raw URL、`gh` hosts 配置、
@@ -314,6 +317,7 @@ policy/approval。它们都不能复制本 crate 的 command/parsing 实现。
 - `content_tests.rs`：HEAD/index 内容与 missing path；
 - `text_diff_tests.rs`：modified/deleted/untracked 汇总、replacement 统计及 binary/size skip；
 - `info_tests.rs`：branch、remote fetch/push URL、history limit；
+- `graph_tests.rs`：分页、local/remote/tag refs、当前 detached HEAD、unborn，以及 stash/内部引用/其他工作树 HEAD 的排除；
 - `operations_tests.rs`：初始化、分支与远端管理、储藏、标签、整合冲突与继续/中止、amend 与撤销提交；
 - `index_edit_tests.rs`：按行/块编辑 index、过期比较拒绝、新增与删除文件的部分暂存；
 - `worktree_tests.rs`：raw NUL fixture、detached/异常 record、primary/linked inventory、locked reason 与 prunable checkout；
