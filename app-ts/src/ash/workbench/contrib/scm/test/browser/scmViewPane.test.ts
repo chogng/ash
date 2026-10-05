@@ -22,6 +22,8 @@ import { noFileIconTheme } from '../../../../../platform/theme/common/themeServi
 import assert from "node:assert/strict";
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
+import { observableValue } from '../../../../../base/common/observable.js';
+import type { ISCMHistoryProvider } from '../../common/history.js';
 import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
 import { suite, test } from "mocha";
@@ -318,7 +320,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		assert.equal(pane.element.querySelector<HTMLElement>(".ash-scm-graph-label.remote")?.dataset.icon, "cloud");
 		assert.equal(pane.element.querySelector<HTMLElement>('.ash-scm-graph-label[aria-label="reviewed"]')?.dataset.icon, 'tag');
 		assert.equal(pane.element.querySelector('.ash-scm-graph-remotes'), null);
-		assert.equal(pane.element.querySelector('.ash-scm-graph')?.firstElementChild?.className, 'ash-scm-graph-list');
+		assert.ok(pane.element.querySelector('.ash-scm-graph > .ash-scm-graph-viewport .ash-list'));
 		assert.equal(hoverOptions.length, 4);
 		assert.ok(hoverOptions.every((options) => options.target.classList.contains("ash-scm-graph-commit")));
 		assert.ok(hoverOptions.every((options) => options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal));
@@ -416,6 +418,85 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 	}
 });
 
+test('SCM history title operations keep refresh and busy state with their starting repository', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const installedGlobals = installDomGlobals(browser);
+	try {
+		const { SCMHistoryViewPane } = await import('../../browser/scmHistoryViewPane.js');
+		const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
+		const { MenuService } = await import('../../../../../platform/actions/common/menuService.js');
+		using context = new ContextKeyService();
+		using services = new InstantiationService();
+		const menus = new MenuService(new CommandService(services), context);
+		using scm = new SCMService();
+		using view = new SCMViewService(scm);
+		const refreshed: string[] = [];
+		const loaded: string[] = [];
+		const provider = (id: string): ISCMHistoryProvider => ({
+			onDidChange: Event.None,
+			historyItemRef: observableValue('historyRef', undefined),
+			refresh: () => { refreshed.push(id); },
+			provideHistoryItems: async () => { loaded.push(id); return []; },
+			resolveHistoryItemDetails: async () => { throw new Error('Unexpected details request'); },
+			provideHistoryItemChanges: async () => [],
+			resolveHistoryItemChangeContents: async () => { throw new Error('Unexpected content request'); },
+			resolveHistoryItemChatContext: async () => undefined,
+			resolveHistoryItemChangeRangeChatContext: async () => undefined,
+		});
+		using first = scm.registerSCMProvider(testSCMProvider('first', 'First', provider('first')));
+		using second = scm.registerSCMProvider(testSCMProvider('second', 'Second', provider('second')));
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.operation.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
+			setupDelayedHover: () => testManagedHover(),
+			setupHover: () => testManagedHover(),
+			showHover: () => testManagedHover(),
+			hideHover() {},
+		}, testEditorService(), testResourceLabelService(), {
+			show: () => false,
+			getOpenAriaHint: () => undefined,
+			disableHint: async () => {},
+			showAccessibleViewHelp: () => {},
+			dispose() {},
+			[Symbol.dispose]() {},
+		}, { container: browser.window.document.body, show: () => true, hide() {}, layout() {} });
+		await waitFor(() => pane.element.querySelector('.ash-scm-empty') !== null);
+		const firstOperation = new DeferredPromise<void>();
+		const firstResult = pane.runTitleOperation(() => firstOperation.p);
+		assert.equal(context.getValue('scmHistoryBusy'), true);
+		view.selectRepository(second.id);
+		assert.equal(context.getValue('scmHistoryBusy'), false);
+		await waitFor(() => loaded.includes('second'));
+		const secondOperation = new DeferredPromise<void>();
+		const secondResult = pane.runTitleOperation(() => secondOperation.p);
+		await firstOperation.complete();
+		await firstResult;
+		assert.deepEqual(refreshed, [], 'The retired operation does not refresh the newly selected repository');
+		assert.equal(context.getValue('scmHistoryBusy'), true, 'The retired operation cannot enable another repository’s actions');
+		await secondOperation.complete();
+		await secondResult;
+		assert.deepEqual({ refreshed, loaded, busy: context.getValue('scmHistoryBusy') }, {
+			refreshed: ['second'], loaded: ['first', 'second', 'second'], busy: false,
+		});
+		const retiredOperation = new DeferredPromise<void>();
+		const retiredResult = pane.runTitleOperation(() => retiredOperation.p);
+		view.selectRepository(first.id);
+		view.selectRepository(second.id);
+		await retiredOperation.complete();
+		await retiredResult;
+		assert.deepEqual(refreshed, ['second'], 'Switching back does not revive an operation retired by a repository switch');
+		await assert.rejects(pane.runTitleOperation(async () => { throw new Error('Fetch failed'); }), /Fetch failed/);
+		assert.equal(context.getValue('scmHistoryBusy'), false, 'A failed operation releases its own busy state');
+		const disposedOperation = new DeferredPromise<void>();
+		const disposedResult = pane.runTitleOperation(() => disposedOperation.p);
+		pane.dispose();
+		await disposedOperation.complete();
+		await disposedResult;
+		assert.deepEqual(refreshed, ['second'], 'A disposed pane no longer refreshes its provider');
+	} finally {
+		browser.window.close();
+		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+	}
+});
+
 test("SCMHistoryViewPane loads another history page only on demand", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
@@ -475,31 +556,32 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
 		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.pagination.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} }, { container: browser.window.document.body, show: () => true, hide() {}, layout() {} });
+		pane.setVisible(true);
 		browser.window.document.body.append(pane.element);
-		await waitFor(() => pane.element.querySelector(".ash-scm-graph-list") !== null);
-		const list = pane.element.querySelector(".ash-scm-graph-list");
+		await waitFor(() => pane.element.querySelector('.ash-scm-graph .ash-list') !== null);
+		const list = pane.element.querySelector('.ash-scm-graph .ash-list');
 		const graph = pane.element.querySelector<HTMLElement>('.ash-scm-graph')!;
+		const viewport = graph.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
 		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
 		const first = list!.querySelector('.ash-scm-graph-commit');
 		assert.equal(first?.getAttribute('aria-setsize'), '50');
 		assert.deepEqual(graphRequests, [{ limit: 50 }, { limit: 50, cursor: '50' }]);
-		assert.equal(pane.element.querySelector('.ash-scm-graph-list'), list);
+		assert.equal(pane.element.querySelector('.ash-scm-graph .ash-list'), list);
 
-		pane.element.querySelector<HTMLButtonElement>('.ash-scm-graph-load-more button')!.click();
-		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
+		viewport.scrollTop = 1100;
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graphRequests.length === 3);
 		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '100');
 		assert.deepEqual(graphRequests, [{ limit: 50 }, { limit: 50, cursor: '50' }, { limit: 50, cursor: '100' }]);
-		assert.ok(pane.element.querySelector('.ash-scm-graph-load-more'));
+		assert.equal(list!.querySelectorAll('.ash-scm-graph-commit').length < 100, true);
 
-		Object.defineProperty(graph, 'clientHeight', { configurable: true, value: 22 });
-		Object.defineProperty(graph, 'scrollHeight', { configurable: true, value: 2200 });
-		graph.scrollTop = 2178;
-		graph.dispatchEvent(new browser.window.Event('scroll'));
-		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
+		viewport.scrollTop = 2178;
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
+		await waitFor(() => list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize') === '101');
 		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '101');
 		assert.equal(pane.element.querySelector('.ash-scm-graph-load-more'), null);
 		assert.equal(graphRequests.length, 3);
-		assert.equal(pane.element.querySelector('.ash-scm-graph-list'), list);
+		assert.equal(pane.element.querySelector('.ash-scm-graph .ash-list'), list);
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -553,12 +635,21 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		graph: async (_query: GraphQuery) => ({ commits, references: [], remotes: [], hasMore: false, nextCursor: undefined }),
 	} as unknown as IGitService;
 	const hoverTargets: HTMLElement[] = [];
+	const hoverHandles = new Map<HTMLElement, IManagedHover>();
 	const disposedHoverTargets = new Set<HTMLElement>();
+	const hiddenHoverTargets = new Set<HTMLElement>();
 	const hoverService: IHoverService = {
 		setupDelayedHover: () => testManagedHover(),
 		setupHover: options => {
 			hoverTargets.push(options.target);
-			return Object.assign(toDisposable(() => disposedHoverTargets.add(options.target)), { visible: false, show() {}, hide() {}, update() {} });
+			const handle = Object.assign(toDisposable(() => disposedHoverTargets.add(options.target)), {
+				visible: false,
+				show() { this.visible = true; },
+				hide() { this.visible = false; hiddenHoverTargets.add(options.target); },
+				update() {},
+			});
+			hoverHandles.set(options.target, handle);
+			return handle;
 		},
 		showHover: () => testManagedHover(),
 		hideHover() {},
@@ -568,24 +659,28 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
 		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.virtualized.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} }, { container: browser.window.document.body, show: () => true, hide() {}, layout() {} });
+		pane.setVisible(true);
 		const graph = pane.element.querySelector<HTMLElement>(".ash-scm-graph");
 		assert.ok(graph);
 		Object.defineProperty(graph, "clientHeight", { configurable: true, value: 100 });
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelectorAll(".ash-scm-graph-commit").length > 0);
-		pane.element.querySelector<HTMLButtonElement>('.ash-scm-graph-load-more button')!.click();
-		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
+		const viewport = graph.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		viewport.scrollTop = 1100;
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graph.querySelector<HTMLElement>('.ash-list')?.style.height === `${commits.length * 22}px`);
+		viewport.scrollTop = 0;
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
 
 		const initialRows = pane.element.querySelectorAll(".ash-scm-graph-commit").length;
 		assert.ok(initialRows < commits.length);
-		assert.equal(pane.element.querySelectorAll(".ash-scm-graph-spacer").length, 2);
-		assert.equal(pane.element.querySelectorAll<HTMLElement>(".ash-scm-graph-spacer")[1].style.height, `${(commits.length - initialRows) * 22}px`);
+		assert.equal(graph.querySelector<HTMLElement>('.ash-list')!.style.height, `${commits.length * 22}px`);
 
 		const firstCommit = pane.element.querySelector<HTMLElement>('.ash-scm-graph-commit')!;
 		const firstToolbar = firstCommit.querySelector('.ash-scm-graph-actions')!;
 		const hoverCount = hoverTargets.length;
 		firstCommit.focus();
-		graph.dispatchEvent(new browser.window.Event('scroll'));
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		assert.equal(pane.element.querySelector('.ash-scm-graph-commit'), firstCommit, 'Scrolling within the same range retains the row');
 		assert.equal(hoverTargets.length, hoverCount, 'Unchanged rows do not create more hover handles');
 		assert.ok(!disposedHoverTargets.has(firstCommit));
@@ -597,27 +692,30 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		assert.equal(pane.element.querySelector('.ash-scm-graph-commit'), firstCommit, 'Growing the viewport keeps existing rows');
 		assert.equal(firstCommit.querySelector('.ash-scm-graph-actions'), firstToolbar);
 		assert.equal(browser.window.document.activeElement, firstCommit);
-		graph.scrollTop = 220;
-		graph.dispatchEvent(new browser.window.Event('scroll'));
+		hoverHandles.get(firstCommit)!.show();
+		viewport.scrollTop = 264;
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		assert.ok(!firstCommit.isConnected, 'Leaving the overscan range removes the row');
-		assert.ok(disposedHoverTargets.has(firstCommit), 'Removed rows dispose their hover handles');
+		assert.ok(hiddenHoverTargets.has(firstCommit), 'Leaving the viewport hides the details card');
+		assert.ok(!disposedHoverTargets.has(firstCommit), 'The bounded row cache retains the hover for reuse');
 		const overlapping = [...pane.element.querySelectorAll<HTMLElement>('.ash-scm-graph-commit')].find(element => element.textContent?.includes('Commit 12'))!;
 		overlapping.focus();
-		graph.scrollTop = 242;
-		graph.dispatchEvent(new browser.window.Event('scroll'));
+		viewport.scrollTop = 286;
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		assert.ok(overlapping.isConnected, 'An overlapping visible row remains connected');
 		assert.equal(browser.window.document.activeElement, overlapping);
 
-		const list = pane.element.querySelector<HTMLElement>(".ash-scm-graph-list");
+		const list = graph.querySelector<HTMLElement>('.ash-list');
 		assert.ok(list);
-		Object.defineProperty(graph, "offsetParent", { configurable: true, value: browser.window.document.body });
-		Object.defineProperty(list, "offsetParent", { configurable: true, value: browser.window.document.body });
-		Object.defineProperty(graph, "offsetTop", { configurable: true, value: 450 });
-		Object.defineProperty(list, "offsetTop", { configurable: true, value: 478 });
-		Object.defineProperty(graph, "scrollTop", { configurable: true, writable: true, value: 1_000 });
-		graph.dispatchEvent(new browser.window.Event("scroll"));
+		viewport.scrollTop = 1000;
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		assert.ok([...pane.element.querySelectorAll(".ash-scm-graph-subject")].some((element) => element.textContent === "Commit 45"));
 		assert.ok(pane.element.querySelectorAll(".ash-scm-graph-commit").length < commits.length);
+		viewport.scrollTop = 0;
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
+		assert.equal(pane.element.querySelector('.ash-scm-graph-commit'), firstCommit, 'Returning reuses the cached commit');
+		pane.dispose();
+		assert.equal(disposedHoverTargets.size, hoverTargets.length, 'Disposal releases visible and cached rows');
 	} finally {
 		Reflect.deleteProperty(globalThis, "ResizeObserver");
 		browser.window.close();
@@ -1494,7 +1592,7 @@ function testWorkspaceContext(): IWorkspaceContextService {
 	};
 }
 
-function testSCMProvider(id: string, label: string, historyProvider?: GitHistoryProvider): ISCMProvider {
+function testSCMProvider(id: string, label: string, historyProvider?: ISCMHistoryProvider): ISCMProvider {
 	return {
 		id, providerId: 'git', label, historyProvider,
 		groups: [], onDidChangeResources: Event.None,
@@ -1518,6 +1616,28 @@ function noEvent(): { dispose(): void; [Symbol.dispose](): void } {
 }
 
 function installDomGlobals(browser: JSDOM): readonly string[] {
+	// jsdom has no layout. Model the shared list's viewport and content dimensions, not the pane's outer scroll.
+	Object.defineProperties(browser.window.HTMLElement.prototype, {
+		clientHeight: {
+			configurable: true,
+			get(this: HTMLElement): number {
+				if (this.classList.contains('ash-scm-graph')) return 600;
+				return this.classList.contains('ash-scrollbar-viewport') ? this.closest<HTMLElement>('.ash-scm-graph')?.clientHeight ?? 0 : 0;
+			},
+		},
+		clientWidth: {
+			configurable: true,
+			get(this: HTMLElement): number {
+				return this.classList.contains('ash-scrollbar-viewport') ? 320 : 0;
+			},
+		},
+		scrollHeight: {
+			configurable: true,
+			get(this: HTMLElement): number {
+				return this.classList.contains('ash-scrollbar-viewport') ? Number.parseFloat(this.querySelector<HTMLElement>('.ash-list')?.style.height ?? '0') : 0;
+			},
+		},
+	});
 	class TestResizeObserver {
 		public observe(): void {}
 		public unobserve(): void {}

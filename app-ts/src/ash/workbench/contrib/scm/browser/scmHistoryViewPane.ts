@@ -129,6 +129,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private head: ISCMHistoryItemRef | undefined;
 	private generation = 0;
 	private loading = false;
+	private titleOperation: object | undefined;
 	private moreError: string | undefined;
 	private rows: readonly ISCMHistoryItemViewModel[] = [];
 	private list: PagedList<ISCMHistoryItemViewModel> | undefined;
@@ -165,13 +166,19 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	public async runTitleOperation(operation?: () => Promise<unknown>): Promise<void> {
+		const owner = {};
+		this.titleOperation = owner;
 		this.busyContext.set(true);
 		try {
 			await operation?.();
+			if (this.isDisposed || this.titleOperation !== owner) return;
 			this.provider?.refresh();
 			await this.refresh();
 		} finally {
-			this.busyContext.set(false);
+			if (!this.isDisposed && this.titleOperation === owner) {
+				this.titleOperation = undefined;
+				this.busyContext.set(false);
+			}
 		}
 	}
 
@@ -180,6 +187,11 @@ export class SCMHistoryViewPane extends ViewPane {
 		const repository = this.scmViewService.activeRepository;
 		this.providerIdContext.set(repository?.provider.providerId ?? '');
 		const provider = repository?.provider.historyProvider;
+		if (repository?.id !== this.graphRepositoryId || provider !== this.provider) {
+			// A completed operation belongs to the repository where it started, even after switching back.
+			this.titleOperation = undefined;
+			this.busyContext.set(false);
+		}
 		this.provider = provider;
 		this.providerListener.value = provider?.onDidChange(() => void this.refresh());
 		this.graphRepositoryId = repository?.id;
