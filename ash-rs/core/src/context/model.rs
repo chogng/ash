@@ -35,6 +35,7 @@ pub(crate) struct InstructionSource {
     kind: String,
     identity: String,
     revision: String,
+    item_count: Option<u64>,
 }
 
 impl InstructionSource {
@@ -47,7 +48,12 @@ impl InstructionSource {
             kind: kind.into(),
             identity: identity.into(),
             revision: revision.into(),
+            item_count: None,
         }
+    }
+
+    pub(crate) fn item_count(&self) -> Option<u64> {
+        self.item_count
     }
 
     pub(crate) fn kind(&self) -> &str {
@@ -79,6 +85,7 @@ impl TryFrom<&ash_extension_api::PromptFragmentSource> for InstructionSource {
             kind: source.kind().to_owned(),
             identity: source.identity().to_owned(),
             revision: source.revision().to_owned(),
+            item_count: source.item_count(),
         })
     }
 }

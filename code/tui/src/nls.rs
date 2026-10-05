@@ -2791,12 +2791,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "{0} / {1} jetons ({2})",
     ),
     translation(
-        "Estimated usage by category",
-        "カテゴリ別の推定使用量",
-        "分类估算用量",
-        "Utilisation estimée par catégorie",
-    ),
-    translation(
         "System prompt",
         "システムプロンプト",
         "系统提示词",
@@ -4013,6 +4007,30 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Saisissez la clé API de votre offre Z.AI",
     ),
     translation("Skills", "スキル", "技能", "Compétences"),
+    translation(
+        "Skills ({0})",
+        "スキル（{0} 件）",
+        "技能（{0} 个）",
+        "Compétences ({0})",
+    ),
+    translation(
+        "{0} skill",
+        "スキル {0} 件",
+        "共 {0} 个技能",
+        "{0} compétence",
+    ),
+    translation(
+        "{0} skills",
+        "スキル {0} 件",
+        "共 {0} 个技能",
+        "{0} compétences",
+    ),
+    translation(
+        "{0} · {1} tokens",
+        "{0} · {1} トークン",
+        "{0} · {1} tokens",
+        "{0} · {1} jetons",
+    ),
     translation(
         "Start a task below, or continue a previous session.",
         "下でタスクを開始するか、以前のセッションを続けます。",

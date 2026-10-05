@@ -31,7 +31,8 @@ impl ash_extension_api::TurnInputContributor for SkillCatalog {
     ) -> Result<Vec<ash_extension_api::PromptFragment>, ash_extension_api::ExtensionError> {
         assert!(context.activated_skills().is_empty());
         Ok(vec![ash_extension_api::PromptFragment::new(
-            ash_extension_api::PromptFragmentSource::new("skill-catalog", "available", "1"),
+            ash_extension_api::PromptFragmentSource::new("skill-catalog", "available", "1")
+                .with_item_count(41),
             ash_extension_api::PromptFragmentLayer::Skill,
             ash_extension_api::PromptFragmentRetention::BestEffort,
             "loaded skill metadata",
@@ -111,6 +112,12 @@ fn context_inspection_counts_loaded_categories_before_a_request_without_executio
             | ModelContextCategory::Skills => assert!(category.tokens > 0, "{category:?}"),
         }
     }
+    let skills = environment
+        .categories
+        .iter()
+        .find(|category| category.category == ModelContextCategory::Skills)
+        .unwrap();
+    assert_eq!(skills.sources[0].item_count, Some(41));
     let allocation = environment.allocation.as_ref().unwrap();
     assert_eq!(
         (

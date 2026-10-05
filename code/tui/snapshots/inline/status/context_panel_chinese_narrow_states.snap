@@ -3,34 +3,34 @@ source: code/tui/src/app/status_tests.rs
 expression: text
 ---
 Before first request
+  Ash Code v0.1.0                       
 ─ 上下文 ───────────────────────────────
                                         
-  Test model                            
-  12.3k / 100k tokens（12.3%）          
+  Test m… 12.3k / 100k tokens（12.3%）  
                                         
-  分类估算用量                          
                                         
 > ■ 系统提示词           1.5k (1.5%)    
   ■ 工具定义               5k (5.0%)    
   ■ 记忆／指令文件        300 (0.3%)    
-  ■ 技能                 1.5k (1.5%)    
+  ■ 技能（41 个）        1.5k (1.5%)    
   ■ 对话／工具             4k (4.0%)    
   ■ 剩余空间           77.7k (77.7%)    
   ■ 自动压缩 buffer        7k (7.0%)    
+  自动压缩阈值           90k (90.0%)    
                                         
   ↑/↓ 选择 · Esc 关闭                   
 
 Before first request · allocation scrolled
+  Ash Code v0.1.0                       
 ─ 上下文 ───────────────────────────────
                                         
-  Test model                            
-  12.3k / 100k tokens（12.3%）          
+  Test m… 12.3k / 100k tokens（12.3%）  
                                         
-  分类估算用量                          
                                         
-> ■ 工具定义               5k (5.0%)    
+> ■ 系统提示词           1.5k (1.5%)    
+  ■ 工具定义               5k (5.0%)    
   ■ 记忆／指令文件        300 (0.3%)    
-  ■ 技能                 1.5k (1.5%)    
+  ■ 技能（41 个）        1.5k (1.5%)    
   ■ 对话／工具             4k (4.0%)    
   ■ 剩余空间           77.7k (77.7%)    
   ■ 自动压缩 buffer        7k (7.0%)    
@@ -41,31 +41,31 @@ Before first request · allocation scrolled
 Over compact threshold
 ─ 上下文 ───────────────────────────────
                                         
-  Test model                            
-  99k / 100k tokens（99.0%）            
+  Test mod… 99k / 100k tokens（99.0%）  
                                         
-  分类估算用量                          
                                         
 > ■ 系统提示词           1.5k (1.5%)    
   ■ 工具定义               5k (5.0%)    
   ■ 记忆／指令文件        300 (0.3%)    
-  ■ 技能                 1.5k (1.5%)    
+  ■ 技能（41 个）        1.5k (1.5%)    
   ■ 对话／工具         90.7k (90.7%)    
   ■ 剩余空间                0 (0.0%)    
   ■ 自动压缩 buffer        7k (7.0%)    
+  自动压缩阈值           90k (90.0%)    
+  超过自动压缩阈值         9k (9.0%)    
                                         
   ↑/↓ 选择 · Esc 关闭                   
 
 Over compact threshold · allocation scrolled
 ─ 上下文 ───────────────────────────────
                                         
-  Test model                            
-  99k / 100k tokens（99.0%）            
+  Test mod… 99k / 100k tokens（99.0%）  
                                         
-  分类估算用量                          
                                         
-> ■ 记忆／指令文件        300 (0.3%)    
-  ■ 技能                 1.5k (1.5%)    
+> ■ 系统提示词           1.5k (1.5%)    
+  ■ 工具定义               5k (5.0%)    
+  ■ 记忆／指令文件        300 (0.3%)    
+  ■ 技能（41 个）        1.5k (1.5%)    
   ■ 对话／工具         90.7k (90.7%)    
   ■ 剩余空间                0 (0.0%)    
   ■ 自动压缩 buffer        7k (7.0%)    
@@ -77,31 +77,31 @@ Over compact threshold · allocation scrolled
 Over full window
 ─ 上下文 ───────────────────────────────
                                         
-  Test model                            
-  120k / 100k tokens（120.0%）          
+  Test m… 120k / 100k tokens（120.0%）  
                                         
-  分类估算用量                          
                                         
 > ■ 系统提示词           1.5k (1.5%)    
   ■ 工具定义               5k (5.0%)    
   ■ 记忆／指令文件        300 (0.3%)    
-  ■ 技能                 1.5k (1.5%)    
+  ■ 技能（41 个）        1.5k (1.5%)    
   ■ 对话／工具       111.7k (111.7%)    
   ■ 剩余空间                0 (0.0%)    
   ■ 自动压缩 buffer        7k (7.0%)    
+  自动压缩阈值           90k (90.0%)    
+  超过自动压缩阈值       30k (30.0%)    
                                         
   ↑/↓ 选择 · Esc 关闭                   
 
 Over full window · allocation scrolled
 ─ 上下文 ───────────────────────────────
                                         
-  Test model                            
-  120k / 100k tokens（120.0%）          
+  Test m… 120k / 100k tokens（120.0%）  
                                         
-  分类估算用量                          
                                         
-> ■ 记忆／指令文件        300 (0.3%)    
-  ■ 技能                 1.5k (1.5%)    
+> ■ 系统提示词           1.5k (1.5%)    
+  ■ 工具定义               5k (5.0%)    
+  ■ 记忆／指令文件        300 (0.3%)    
+  ■ 技能（41 个）        1.5k (1.5%)    
   ■ 对话／工具       111.7k (111.7%)    
   ■ 剩余空间                0 (0.0%)    
   ■ 自动压缩 buffer        7k (7.0%)    
@@ -111,36 +111,36 @@ Over full window · allocation scrolled
   ↑/↓ 选择 · Esc 关闭                   
 
 Unknown capacity
+                                        
   Ash Code v0.1.0                       
   Automatic model                       
+  .                                     
 ─ 上下文 ───────────────────────────────
                                         
-  Test model                            
-  已用 12k tokens                       
-  分类估算用量                          
+  Test model           已用 12k tokens  
                                         
 > ■ 系统提示词                  1.5k    
   ■ 工具定义                      5k    
   ■ 记忆／指令文件               300    
-  ■ 技能                        1.5k    
+  ■ 技能（41 个）               1.5k    
   ■ 对话／工具                  3.7k    
   上下文窗口                  未提供    
                                         
   ↑/↓ 选择 · Esc 关闭                   
 
 Unknown capacity · allocation scrolled
+                                        
   Ash Code v0.1.0                       
   Automatic model                       
+  .                                     
 ─ 上下文 ───────────────────────────────
                                         
-  Test model                            
-  已用 12k tokens                       
-  分类估算用量                          
+  Test model           已用 12k tokens  
                                         
 > ■ 系统提示词                  1.5k    
   ■ 工具定义                      5k    
   ■ 记忆／指令文件               300    
-  ■ 技能                        1.5k    
+  ■ 技能（41 个）               1.5k    
   ■ 对话／工具                  3.7k    
   上下文窗口                  未提供    
                                         

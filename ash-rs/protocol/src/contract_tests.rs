@@ -1286,3 +1286,23 @@ fn detailed_tool_activity_roundtrips_literal_targets_and_argv() {
         }
     }
 }
+
+#[test]
+fn context_source_catalog_count_round_trips_without_changing_identity() {
+    for item_count in [None, Some(0), Some(41)] {
+        let source = crate::ModelContextSourceUsage {
+            name: "available".into(),
+            item_count,
+            tokens: 245,
+        };
+        let encoded = serde_json::to_value(&source).unwrap();
+        assert_eq!(
+            encoded,
+            json!({ "name": "available", "itemCount": item_count, "tokens": 245 })
+        );
+        assert_eq!(
+            serde_json::from_value::<crate::ModelContextSourceUsage>(encoded).unwrap(),
+            source
+        );
+    }
+}

@@ -620,6 +620,10 @@ pub struct ModelContextCategoryUsage {
 #[serde(rename_all = "camelCase")]
 pub struct ModelContextSourceUsage {
     pub name: String,
+    /// Catalog entry count, including metadata omitted by the prompt byte limit.
+    /// Individual instruction and tool sources have no catalog count.
+    #[ts(type = "number | null")]
+    pub item_count: Option<u64>,
     #[ts(type = "number")]
     pub tokens: u64,
 }

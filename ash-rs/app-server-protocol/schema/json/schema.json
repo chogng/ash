@@ -34836,6 +34836,15 @@
     },
     "ModelContextSourceUsage": {
       "properties": {
+        "itemCount": {
+          "description": "Catalog entry count, including metadata omitted by the prompt byte limit.\nIndividual instruction and tool sources have no catalog count.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "name": {
           "type": "string"
         },

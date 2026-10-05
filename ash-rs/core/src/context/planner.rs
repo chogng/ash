@@ -71,6 +71,7 @@ impl ContextPlanner {
             categories[index].tokens += tokens;
             categories[index].sources.push(ModelContextSourceUsage {
                 name: fragment.source().identity().to_owned(),
+                item_count: fragment.source().item_count(),
                 tokens,
             });
         }
@@ -79,6 +80,7 @@ impl ContextPlanner {
             categories[0].tokens += environment_tokens;
             categories[0].sources.push(ModelContextSourceUsage {
                 name: "environment".into(),
+                item_count: None,
                 tokens: environment_tokens,
             });
         }
@@ -87,6 +89,7 @@ impl ContextPlanner {
             categories[1].tokens += tokens;
             categories[1].sources.push(ModelContextSourceUsage {
                 name: tool.name.to_string(),
+                item_count: None,
                 tokens,
             });
         }

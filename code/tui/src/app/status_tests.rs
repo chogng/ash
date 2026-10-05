@@ -36,6 +36,7 @@ fn exercise_panel(mode: ScreenMode) -> String {
         overview.contains("12.3k / 100k tokens (12.3%)"),
         "{overview}"
     );
+    assert!(overview.contains("Skills (41)"), "{overview}");
     assert!(overview.contains("Autocompact buffer"));
     assert!(overview.contains("Test model"));
     assert!(!overview.contains("test/model"));
@@ -66,16 +67,23 @@ fn exercise_panel(mode: ScreenMode) -> String {
         .lines()
         .position(|line| line.contains("tokens (12.3%)"))
         .unwrap() as u16;
-    assert_eq!(buffer[(marker_x + 2, used_y)].symbol(), "1");
     assert!(
-        buffer[(marker_x + 2, used_y)]
-            .modifier
-            .contains(Modifier::BOLD)
+        overview
+            .lines()
+            .nth(used_y as usize)
+            .unwrap()
+            .contains("Test model")
     );
+    assert!(!overview.contains("Estimated usage by category"));
+    let used_x = (0..80)
+        .find(|x| buffer[(*x, used_y)].symbol() == "1")
+        .unwrap();
+    assert!(buffer[(used_x, used_y)].modifier.contains(Modifier::BOLD));
     let gauge_y = used_y + 1;
     let gauge_end = (0..80)
         .rfind(|x| buffer[(*x, gauge_y)].bg == app.render_context().muted())
         .unwrap();
+    assert_eq!(buffer[(gauge_end, used_y)].symbol(), ")");
     assert_eq!(
         gauge_end,
         match mode {
@@ -175,7 +183,7 @@ fn exercise_narrow_states(mode: ScreenMode) -> String {
         )));
         let (buffer, text) = frame(&app, 40, 16);
         assert!(text.contains("上下文"), "{text}");
-        assert!(text.contains("分类估算用量"));
+        assert!(!text.contains("分类估算用量"));
         assert!(text.contains("系统提示词"));
         assert!(!text.contains("等待首次请求"));
         if capacity.is_some() {
@@ -183,7 +191,19 @@ fn exercise_narrow_states(mode: ScreenMode) -> String {
                 .lines()
                 .position(|line| line.contains("tokens（"))
                 .unwrap() as u16;
+            let model_x = (0..40)
+                .find(|x| buffer[(*x, used_y)].symbol() == "T")
+                .unwrap();
+            assert_eq!(
+                buffer[(model_x, used_y)].fg,
+                app.render_context().foreground()
+            );
+            assert!(buffer[(model_x, used_y)].modifier.contains(Modifier::BOLD));
             assert!((0..40).any(|x| buffer[(x, used_y + 1)].bg == app.render_context().muted()));
+            let gauge_end = (0..40)
+                .rfind(|x| buffer[(*x, used_y + 1)].bg == app.render_context().muted())
+                .unwrap();
+            assert_eq!(buffer[(gauge_end - 1, used_y)].symbol(), "）");
             let expected_color = if tokens > 90_000 {
                 app.render_context().warning()
             } else {
@@ -490,6 +510,7 @@ fn inspection(tokens: u64, capacity: Option<u64>) -> ModelContextInspection {
         tokens,
         sources: vec![ModelContextSourceUsage {
             name: name.into(),
+            item_count: (category == ModelContextCategory::Skills).then_some(41),
             tokens,
         }],
     })
@@ -612,13 +633,21 @@ fn exercise_context_diagnostics(mode: ScreenMode, language: Language) -> String 
         Some("system/prompt · 1.5k tokens"),
         None,
         Some("AGENTS.md · 300 tokens"),
-        Some("available · 1.5k tokens"),
+        Some(if language == Language::Chinese {
+            "共 41 个技能 · 1.5k tokens"
+        } else {
+            "41 skills · 1.5k tokens"
+        }),
         Some("history · 4k tokens"),
     ] {
         if let Some(source) = source {
             key(&mut app, KeyCode::Enter);
             let expanded = frame(&app, 100, 44).1;
             assert!(expanded.contains(source), "{expanded}");
+            if source.contains("skills") || source.contains("个技能") {
+                assert!(!expanded.contains("available"));
+                frames.push(format!("Expanded skill count\n{expanded}"));
+            }
             if source.starts_with("AGENTS.md") {
                 frames.push(format!("Expanded memory source\n{expanded}"));
             }
@@ -657,6 +686,64 @@ fn exercise_context_diagnostics(mode: ScreenMode, language: Language) -> String 
         frame(&app, 100, 44).1
     ));
     frames.join("\n\n")
+}
+
+#[test]
+fn context_skill_count_counts_catalog_entries_once_in_both_languages() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        for language in [Language::Chinese, Language::English] {
+            for count in [0, 1, 41] {
+                let mut app = app(mode, language);
+                let mut context = inspection(12_345, Some(90_000));
+                let skills = context
+                    .categories
+                    .iter_mut()
+                    .find(|category| {
+                        category.category == ash_protocol::ModelContextCategory::Skills
+                    })
+                    .unwrap();
+                if count == 0 {
+                    skills.sources.clear();
+                    skills.tokens = 0;
+                } else {
+                    skills.sources[0].item_count = Some(count);
+                    skills.sources.push(ash_protocol::ModelContextSourceUsage {
+                        name: "built-in:review".into(),
+                        item_count: None,
+                        tokens: 100,
+                    });
+                    skills.tokens += 100;
+                }
+                app.update(crate::context::Event::Opened(
+                    crate::context::diagnostics_panel(context, vec![], &context_catalog()),
+                ));
+                let title = if language == Language::Chinese {
+                    format!("技能（{count} 个）")
+                } else {
+                    format!("Skills ({count})")
+                };
+                assert!(frame(&app, 100, 44).1.contains(&title));
+                for _ in 0..3 {
+                    key(&mut app, KeyCode::Down);
+                }
+                key(&mut app, KeyCode::Enter);
+                let text = frame(&app, 100, 44).1;
+                assert!(text.contains(&title), "{text}");
+                if count > 0 {
+                    let detail = if language == Language::Chinese {
+                        format!("共 {count} 个技能 · 1.5k tokens")
+                    } else if count == 1 {
+                        "1 skill · 1.5k tokens".into()
+                    } else {
+                        format!("{count} skills · 1.5k tokens")
+                    };
+                    assert!(text.contains(&detail), "{text}");
+                    assert!(text.contains("built-in:review · 100 tokens"));
+                    assert!(!text.contains("available"));
+                }
+            }
+        }
+    }
 }
 
 #[test]

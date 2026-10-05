@@ -22,6 +22,7 @@ pub struct PromptFragmentSource {
     kind: String,
     identity: String,
     revision: String,
+    item_count: Option<u64>,
 }
 
 impl PromptFragmentSource {
@@ -34,7 +35,19 @@ impl PromptFragmentSource {
             kind: kind.into(),
             identity: identity.into(),
             revision: revision.into(),
+            item_count: None,
         }
+    }
+
+    /// Number of entries represented by a catalog, including entries omitted by its byte limit.
+    /// This is diagnostic metadata and does not change the fragment's stable identity.
+    pub fn with_item_count(mut self, item_count: u64) -> Self {
+        self.item_count = Some(item_count);
+        self
+    }
+
+    pub fn item_count(&self) -> Option<u64> {
+        self.item_count
     }
 
     pub fn kind(&self) -> &str {

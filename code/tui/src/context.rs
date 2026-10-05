@@ -140,14 +140,11 @@ impl Panel {
     ) {
         let [summary, list] = self.context_areas(area);
         let mut lines = self.context_lines(summary.width);
-        let gauge_y = summary.y
-            + crate::render::wrapped_height(&lines[..2], summary.width)
-                .min(usize::from(summary.height)) as u16;
+        let gauge_y = summary.y + 1;
         if self.inspection.allocation.is_some() {
-            // The summary may wrap, but a space-filled gauge must stay on one fixed row.
-            lines[2] = Line::default();
+            lines[1] = Line::default();
         }
-        if let Some(line) = lines.get_mut(1) {
+        if let Some(line) = lines.first_mut() {
             line.style = Style::default().add_modifier(Modifier::BOLD);
             if self
                 .inspection
@@ -157,14 +154,8 @@ impl Panel {
                     self.inspection.estimated_tokens > allocation.auto_compact_at
                 })
             {
-                line.style = line.style.fg(context.warning());
+                line.spans.last_mut().unwrap().style = Style::default().fg(context.warning());
             }
-        }
-        if let Some(line) = lines.first_mut() {
-            line.style = Style::default().add_modifier(Modifier::BOLD);
-        }
-        if let Some(line) = lines.last_mut() {
-            line.style = Style::default().fg(context.muted());
         }
         frame.render_widget(
             Paragraph::new(lines)
@@ -229,17 +220,23 @@ impl Panel {
         };
         let mut headline = headline;
         headline.localize(self.language);
-        let mut lines = vec![
-            Line::raw(self.model.to_string()),
-            Line::raw(headline.to_string()),
-        ];
+        let width = usize::from(width);
+        let headline = crate::render::truncate_with_ellipsis(&headline.to_string(), width);
+        let headline_width = crate::render::display_width(&headline);
+        // Keep usage on the right at every width; the model uses the remaining cells.
+        let model = crate::render::truncate_with_ellipsis(
+            &self.model.to_string(),
+            width.saturating_sub(headline_width + 1),
+        );
+        let gap = width - crate::render::display_width(&model) - headline_width;
+        let mut lines = vec![Line::from(vec![
+            Span::raw(model),
+            Span::raw(" ".repeat(gap)),
+            Span::raw(headline),
+        ])];
         if self.inspection.allocation.is_some() {
-            lines.push(Line::raw("─".repeat(usize::from(width))));
+            lines.push(Line::raw("─".repeat(width)));
         }
-        lines.push(Line::raw(crate::nls::localize_owned(
-            self.language,
-            "Estimated usage by category",
-        )));
         lines
     }
 
@@ -369,6 +366,17 @@ fn category_label(category: ModelContextCategory) -> &'static str {
     }
 }
 
+fn skill_count_text(count: u64) -> Text {
+    Text::template(
+        if count == 1 {
+            "{0} skill"
+        } else {
+            "{0} skills"
+        },
+        vec![Text::literal(count.to_string())],
+    )
+}
+
 pub(crate) fn panel(inspection: ModelContextInspection, catalog: &ModelListResult) -> Panel {
     build_panel(inspection, ContextReadDetail::Usage, Vec::new(), catalog)
 }
@@ -408,32 +416,51 @@ fn build_panel(
         .categories
         .iter()
         .map(|category| {
-            let mut item = ListSelectionItem::new(category_label(category.category))
+            let label = if category.category == ModelContextCategory::Skills {
+                let count = category
+                    .sources
+                    .iter()
+                    .filter_map(|source| source.item_count)
+                    .sum::<u64>();
+                Text::template("Skills ({0})", vec![Text::literal(count.to_string())])
+            } else {
+                Text::from(category_label(category.category))
+            };
+            let mut item = ListSelectionItem::new(label.clone())
                 .with_id(ListSelectionItemId::new(format!(
                     "category-{}",
                     category_index(category.category)
                 )))
                 .with_identity_swatch(category_index(category.category))
-                .with_columns(
-                    category_label(category.category),
-                    "",
-                    value(category.tokens),
-                );
+                .with_columns(label.to_string(), "", value(category.tokens));
             // Source identities belong to diagnostics; the ordinary view reports category totals.
             if detail == ContextReadDetail::Diagnostics
                 && category.category != ModelContextCategory::SystemTools
                 && !category.sources.is_empty()
             {
-                item = item.with_details(Text::literal(
-                    category
-                        .sources
-                        .iter()
-                        .map(|source| {
-                            format!("{} · {} tokens", source.name, compact_tokens(source.tokens))
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                ));
+                let lines = category
+                    .sources
+                    .iter()
+                    .map(|source| match (category.category, source.item_count) {
+                        (ModelContextCategory::Skills, Some(count)) => Text::template(
+                            "{0} · {1} tokens",
+                            vec![
+                                skill_count_text(count),
+                                Text::literal(compact_tokens(source.tokens)),
+                            ],
+                        ),
+                        _ => Text::literal(format!(
+                            "{} · {} tokens",
+                            source.name,
+                            compact_tokens(source.tokens)
+                        )),
+                    })
+                    .collect::<Vec<_>>();
+                let template = (0..lines.len())
+                    .map(|index| format!("{{{index}}}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                item = item.with_details(Text::template(&template, lines));
             }
             item
         })

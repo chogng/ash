@@ -252,6 +252,7 @@ fn catalog_prompt_is_metadata_only_bounded_and_filters_disabled_skills() {
         .unwrap();
 
     assert_eq!(fragments.len(), 1);
+    assert_eq!(fragments[0].source().item_count(), Some(41));
     assert!(fragments[0].body().len() <= crate::catalog_prompt::MAX_SKILL_CATALOG_PROMPT_BYTES);
     assert!(fragments[0].body().contains("name=\"enabled\""));
     assert!(!fragments[0].body().contains("name=\"disabled\""));

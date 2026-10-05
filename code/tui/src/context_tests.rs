@@ -115,6 +115,7 @@ fn context_summary_categories_are_read_only_for_keyboard_and_pointer_input() {
                     tokens: 500,
                     sources: vec![ash_protocol::ModelContextSourceUsage {
                         name: format!("source-{index}"),
+                        item_count: None,
                         tokens: 500,
                     }],
                 },
@@ -190,7 +191,10 @@ fn context_loads_the_inspected_models_display_name_from_its_provider() {
         });
         let panel = load_panel(&mut client, None, detail).unwrap();
         assert_eq!(&*panel.model, "GLM-5.3 Flash");
-        assert_eq!(panel.context_lines(80)[0].to_string(), "GLM-5.3 Flash");
-        assert_eq!(panel.context_lines(80)[1].to_string(), "400 tokens used");
+        let lines = panel.context_lines(80);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].width(), 80);
+        assert!(lines[0].to_string().starts_with("GLM-5.3 Flash"));
+        assert!(lines[0].to_string().ends_with("400 tokens used"));
     }
 }

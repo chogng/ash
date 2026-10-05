@@ -63,7 +63,8 @@ pub(crate) fn catalog_prompt(snapshot: &SkillRuntimeSnapshot) -> Option<PromptFr
             "skill-catalog",
             "available",
             snapshot.generation.to_string(),
-        ),
+        )
+        .with_item_count(entries.len() as u64),
         PromptFragmentLayer::Skill,
         PromptFragmentRetention::BestEffort,
         body,
