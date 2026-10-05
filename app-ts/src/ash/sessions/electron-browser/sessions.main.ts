@@ -18,6 +18,11 @@ import { DirectoryPermissionDialog } from '../../workbench/electron-browser/part
 import { createElectronWorkbenchContextMenuService } from "../../workbench/services/contextmenu/electron-browser/contextMenuService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { Workbench } from "../browser/workbench.js";
+import { isMacintosh } from '../../base/common/platform.js';
+import { IMenuService } from '../../platform/actions/common/actions.js';
+import { NativeMenubarControl } from '../../workbench/electron-browser/parts/titlebar/menubarControl.js';
+import { Menus } from '../browser/menus.js';
+import { TitlebarPart } from '../browser/parts/titlebar/titlebarPart.js';
 import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
 import { RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../common/windowNavigation.js';
@@ -148,6 +153,13 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
 			void colors.initialize().catch(onUnexpectedError);
 			return colors;
+		},
+		createTitlebarPart: (titlebarContainer, services) => {
+			if (isMacintosh) {
+				// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
+				sessions.add(new NativeMenubarControl(services.get(IMenuService), api.nativeMenubar, Menus.MenubarMainMenu));
+			}
+			return services.createInstance(TitlebarPart, titlebarContainer, isMacintosh ? 'actions-only' : 'application-menu');
 		},
 		container,
 	}));

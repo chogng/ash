@@ -43,10 +43,11 @@ export class NativeMenubarControl extends Disposable
 	constructor(
 		menuService: IMenuService,
 		api: INativeMenubarApi,
+		applicationMenuId: MenuId = MenuId.MenubarMainMenu,
 	) {
 		super();
 		this.api = api;
-		this.menu = this._register(menuService.createMenu(MenuId.MenubarMainMenu));
+		this.menu = this._register(menuService.createMenu(applicationMenuId));
 		this._register(this.menu.onDidChange(() => this.synchronize()));
 		if (isMacintosh) {
 			this.touchBarMenu = this._register(menuService.createMenu(MenuId.TouchBarContext));

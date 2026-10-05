@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
-import { Event } from '../../../base/common/event.js';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlobals.js';
 import { MenuId, MenusRegistry } from '../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
@@ -12,6 +13,8 @@ import type { IContextMenuService } from '../../../platform/contextview/browser/
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { BrowserMenubarControl } from '../../../workbench/browser/parts/titlebar/menubarControl.js';
+import { NativeMenubarControl } from '../../../workbench/electron-browser/parts/titlebar/menubarControl.js';
+import type { INativeMenubarData, INativeMenubarSelection } from '../../../platform/menubar/common/nativeMenubar.js';
 import { Menus } from '../../browser/menus.js';
 import { RETURN_TO_WORKBENCH_COMMAND_ID } from '../../common/windowNavigation.js';
 
@@ -70,6 +73,23 @@ test('Sessions and Workbench menus keep product commands separate while sharing 
 		menubar.setTrailingActions([{ id: 'test.sessions.menubar.toggle', label: 'Toggle', tooltip: 'Toggle', enabled: true, checked: true, run() {} }]);
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'false');
 		assert.deepEqual([...menubar.domNode.querySelectorAll('button')].map(button => [button.getAttribute('aria-label'), button.getAttribute('aria-pressed')]), [['Application menu', null], ['Toggle', 'true']]);
+		using selections = new Emitter<INativeMenubarSelection>();
+		using resources = new DisposableStore();
+		const published = new Promise<INativeMenubarData>(resolve => {
+			resources.add(new NativeMenubarControl(menus, {
+				async update(data) { resolve(data); },
+				onDidSelect: listener => selections.event(listener),
+			}, Menus.MenubarMainMenu));
+		});
+		const data = await published;
+		const items = data.menus.find(menu => menu.label === 'File')!.items;
+		assert.deepEqual(items.filter(item => item.type === 'action').map(item => item.label), ['Return to Workbench', 'Selected command']);
+		const selected = items.find(item => item.type === 'action' && item.label === 'Selected command')!;
+		assert.ok(selected.type === 'action');
+		selections.fire({ revision: data.revision, id: selected.id });
+		assert.equal(commandRuns, 3);
+		resources.dispose();
+		assert.equal(selections.hasListeners(), false);
 	} finally {
 		menubar.dispose();
 		browser.window.close();

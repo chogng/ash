@@ -202,7 +202,7 @@ import { PaneCompositePartService } from '../../workbench/browser/parts/paneComp
 import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
 import { SessionsPart, type SessionsPartOptions } from "./parts/sessionsPart.js";
 import { SidebarPart } from "./parts/sidebarPart.js";
-import { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
+import type { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
 
 export interface IWorkbenchOptions {
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
@@ -224,6 +224,7 @@ export interface IWorkbenchOptions {
 	readonly createUserDataFileSystemProvider: () => Promise<IFileSystemProvider & IDisposable>;
 	readonly createContextMenuService: ContextMenuServiceFactory;
 	readonly createHostColorSchemeService: (services: IInstantiationService) => IHostColorSchemeService & IDisposable;
+	readonly createTitlebarPart: (container: HTMLElement, services: IInstantiationService) => TitlebarPart;
 	readonly container: HTMLElement;
 }
 
@@ -490,7 +491,7 @@ export class Workbench extends Disposable {
 		const accountMenu = this._register(new SessionsAccountMenu(accountService, contextMenus, preferences, options.returnToWorkbench));
 
 		let auxiliarybar: AuxiliaryBarPart | undefined;
-		const titlebar = this._register(new TitlebarPart(this.domNode, menus, contextMenus));
+		const titlebar = this._register(options.createTitlebarPart(this.domNode, services));
 		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		services.registerSingleton(IDesignEditorService, () => services.createInstance(DesignEditorService));

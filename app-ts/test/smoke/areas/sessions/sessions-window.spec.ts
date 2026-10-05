@@ -2906,6 +2906,8 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 	const chat = navigation.getByRole('button', { name: 'Chat' });
 	const library = navigation.getByRole('button', { name: 'Library' });
 	const menu = page.getByRole('button', { name: 'Application menu', exact: true });
+	const hasWindowMenu = target.kind === 'browser' || process.platform !== 'darwin';
+	if (!hasWindowMenu) { await expect(menu).toHaveCount(0); }
 	for (const colorScheme of ['light', 'dark'] as const) {
 		await workbench.setAppearance(application, colorScheme, page);
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', `ash-${colorScheme}`);
@@ -2914,11 +2916,13 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		const selectedBackground = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
 		expect(selectedBackground).not.toBe('rgba(0, 0, 0, 0)');
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect.poll(() => page.locator('.ash-sessions-titlebar-actions button').evaluateAll(buttons => buttons.map(button => getComputedStyle(button).borderRadius))).toEqual(['8px', '8px', '8px', '8px', '8px', '8px']);
+		await expect.poll(() => page.locator('.ash-sessions-titlebar-actions button').evaluateAll(buttons => buttons.map(button => getComputedStyle(button).borderRadius))).toEqual(Array(hasWindowMenu ? 6 : 5).fill('8px'));
 		await library.hover();
 		await expect(library).not.toHaveCSS('background-color', selectedBackground);
-		await menu.hover();
-		await expect(menu).toHaveCSS('background-color', selectedBackground);
+		if (hasWindowMenu) {
+			await menu.hover();
+			await expect(menu).toHaveCSS('background-color', selectedBackground);
+		}
 		await toggle.hover();
 		await expect(toggle).toHaveCSS('background-color', selectedBackground);
 		await expect(page.getByRole('tooltip')).toHaveText('Hide sidebar');
@@ -2950,18 +2954,20 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect(toggle).toHaveCSS('border-radius', '8px');
 		await expect(toggle.locator('svg[data-ash-icon-id="layout-sidebar-left-2"]')).toBeVisible();
-		await page.keyboard.press('ArrowLeft');
-		await expect(menu).toBeFocused();
-		await page.keyboard.press('ArrowDown');
-		await expect(menu).toHaveAttribute('aria-expanded', 'true');
-		await expect(menu).toHaveCSS('background-color', selectedBackground);
-		await page.keyboard.press('Escape');
-		await expect(menu).toHaveAttribute('aria-expanded', 'false');
-		await expect(menu).toBeFocused();
-		await page.mouse.move(400, 180);
-		await expect(menu).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await page.keyboard.press('ArrowRight');
-		await expect(toggle).toBeFocused();
+		if (hasWindowMenu) {
+			await page.keyboard.press('ArrowLeft');
+			await expect(menu).toBeFocused();
+			await page.keyboard.press('ArrowDown');
+			await expect(menu).toHaveAttribute('aria-expanded', 'true');
+			await expect(menu).toHaveCSS('background-color', selectedBackground);
+			await page.keyboard.press('Escape');
+			await expect(menu).toHaveAttribute('aria-expanded', 'false');
+			await expect(menu).toBeFocused();
+			await page.mouse.move(400, 180);
+			await expect(menu).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await page.keyboard.press('ArrowRight');
+			await expect(toggle).toBeFocused();
+		}
 	}
 	if (target.kind === 'electron') {
 		await expect(workbenchToggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
@@ -3025,16 +3031,43 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 	}
 });
 
-test('Browser Sessions application menu uses Sessions actions', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser');
-	await workbench.page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	const menu = workbench.page.getByRole('button', { name: 'Application menu' });
-	await menu.click();
-	await workbench.page.getByRole('menuitem', { name: 'File' }).hover();
-	await expect(workbench.page.getByRole('menuitem', { name: 'Return to Workbench' })).toBeVisible();
-	await expect(workbench.page.getByRole('menuitem', { name: 'New Session' })).toHaveCount(0);
-	await workbench.page.getByRole('menuitem', { name: 'Return to Workbench' }).click();
-	await expect(workbench.page).toHaveURL(/\/workbench\/workbench\.html$/u);
+test('Sessions application menu follows its host and uses Sessions actions', async ({ application, target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const menu = page.getByRole('button', { name: 'Application menu', exact: true });
+	if (target.kind === 'electron' && process.platform === 'darwin') {
+		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+		await expect(menu).toHaveCount(0);
+		const fileItems = (): Promise<string[]> => application.evaluate(({ Menu }) => Menu.getApplicationMenu()!.items.find(item => item.label === 'File')!.submenu!.items.map(item => item.label));
+		await expect.poll(fileItems).toContain('Return to Workbench');
+		expect(await fileItems()).not.toContain('New Session');
+		const mainWindow = await application.browserWindow(workbench.page);
+		const sessionsWindow = await application.browserWindow(page);
+		await mainWindow.evaluate(window => window.focus());
+		await expect.poll(fileItems).not.toContain('Return to Workbench');
+		await sessionsWindow.evaluate(window => window.focus());
+		await expect.poll(fileItems).toContain('Return to Workbench');
+		const closed = page.waitForEvent('close');
+		await application.evaluate(({ Menu, BrowserWindow }) => {
+			const item = Menu.getApplicationMenu()!.items.find(item => item.label === 'File')!.submenu!.items.find(item => item.label === 'Return to Workbench')!;
+			item.click(item, BrowserWindow.getFocusedWindow()!, { shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, triggeredByAccelerator: false });
+		});
+		await closed;
+		await expect.poll(fileItems).not.toContain('Return to Workbench');
+		await mainWindow.dispose();
+		await sessionsWindow.dispose();
+	} else {
+		await menu.focus();
+		await menu.press('ArrowDown');
+		await expect(menu).toHaveAttribute('aria-expanded', 'true');
+		await page.keyboard.press('Escape');
+		await expect(menu).toBeFocused();
+		const fileItems = await new Menus(page).inspect(application, () => menu.click(), ['File']);
+		expect(fileItems.map(item => item.label)).toContain('Return to Workbench');
+		expect(fileItems.map(item => item.label)).not.toContain('New Session');
+		await new Menus(page).select(application, () => menu.click(), ['File', 'Return to Workbench']);
+		if (target.kind === 'browser') { await expect(page).toHaveURL(/\/workbench\/workbench\.html$/u); }
+	}
+	await expect(workbench.page.locator('.ash-workbench')).toBeVisible();
 });
 
 test('Sessions Activity Bar tooltips follow side, top and bottom placement without replacing buttons', async ({ application, target, workbench }) => {

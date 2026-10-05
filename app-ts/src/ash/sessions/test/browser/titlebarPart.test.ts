@@ -9,9 +9,9 @@ import { Dimension } from '../../../base/browser/dom.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlobals.js';
-import { MenusRegistry } from '../../../platform/actions/common/actions.js';
+import { IMenuService, MenusRegistry } from '../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
-import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
@@ -79,7 +79,9 @@ test('Sessions titlebar initializes localized actions and closes the application
 		if (key === 'sessions.navigation.hideSidebar') { return '隐藏侧栏'; }
 		return fallback;
 	});
-	const titlebar = new TitlebarPart(browser.window.document.body, menus, contextMenus);
+	services.registerInstance(IMenuService, menus);
+	services.registerInstance(IContextMenuService, contextMenus);
+	const titlebar = services.createInstance(TitlebarPart, browser.window.document.body, 'application-menu');
 	const parts = new Map<SessionsPartId, WorkbenchPart>(sessionsPartIds.map(id => [id, id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id))]));
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	using actions = registerLayoutActions(layout, sessions, contextKeys);
@@ -101,6 +103,12 @@ test('Sessions titlebar initializes localized actions and closes the application
 		assert.equal(titlebar.domNode.querySelector('[role="toolbar"]')?.getAttribute('aria-label'), '标题栏左侧操作');
 		titlebar.dispose();
 		assert.equal(closedMenus, 2);
+		using systemMenuTitlebar = services.createInstance(TitlebarPart, browser.window.document.body, 'actions-only');
+		assert.deepEqual([...systemMenuTitlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['隐藏侧栏', 'Back', 'Forward', 'Toggle Code panel']);
+		const sidebarToggle = systemMenuTitlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.sessions.toggleSidebar"] button')!;
+		sidebarToggle.click();
+		assert.equal(systemMenuTitlebar.domNode.querySelector('[data-action-id="ash.sessions.toggleSidebar"] button')!.getAttribute('aria-pressed'), 'false');
+		systemMenuTitlebar.dispose();
 		actions.dispose();
 		assert.equal(changed.hasListeners(), false);
 		layout.dispose();

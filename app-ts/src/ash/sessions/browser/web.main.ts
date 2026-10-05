@@ -26,6 +26,7 @@ import { workspaceFromIdentifier } from '../../platform/workspace/common/workspa
 import { showStartupError } from '../../workbench/browser/startupError.js';
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { Workbench } from "./workbench.js";
+import { TitlebarPart } from './parts/titlebar/titlebarPart.js';
 import { BrowserStorageService } from '../../workbench/services/storage/browser/storageService.js';
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
@@ -99,6 +100,7 @@ async function mountBrowserSessions(profile: SessionsProfile, connectedHost?: ID
 			},
 			createContextMenuService: createBrowserContextMenuService,
 			createHostColorSchemeService: () => new BrowserHostColorSchemeService(ownerWindow),
+			createTitlebarPart: (titlebarContainer, services) => services.createInstance(TitlebarPart, titlebarContainer, 'application-menu'),
 			container,
 		}));
 		sessions.add(addDisposableListener(window, "pagehide", () => {

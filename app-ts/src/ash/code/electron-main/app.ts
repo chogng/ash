@@ -1655,6 +1655,10 @@ export class AshApplication extends Disposable {
 					await watchProfileFiles(this.profileRoot, window, windowDisposables);
 					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 					ipcRoutes.push(...nativeContextMenuIpcRoutes(systemContextMenu));
+					if (this.nativeMenubar) {
+						windowDisposables.add(this.nativeMenubar.registerWindow(window));
+						ipcRoutes.push(...nativeMenubarIpcRoutes(this.nativeMenubar, window));
+					}
 					windowDisposables.add(this.trustedIpcRouter.register(
 						{
 							webContents: window.webContents,
