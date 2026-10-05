@@ -165,6 +165,7 @@ pub struct GitHubPullRequest {
     pub merged_at: Option<String>,
     pub head_commit: String,
     pub head_branch: String,
+    pub head_repository: Option<String>,
     pub base_branch: String,
     pub auto_merge: bool,
 }
@@ -281,6 +282,28 @@ pub struct GitHubChecksParams {
     pub repository: IssueRepository,
     pub commit: String,
     pub page: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubCommitParams {
+    pub operation_id: String,
+    pub repository: IssueRepository,
+    pub sha: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubCommit {
+    pub sha: String,
+    pub url: String,
+    pub message: String,
+    pub author: String,
+    pub committed_at: String,
+    #[ts(type = "number")]
+    pub additions: u64,
+    #[ts(type = "number")]
+    pub deletions: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

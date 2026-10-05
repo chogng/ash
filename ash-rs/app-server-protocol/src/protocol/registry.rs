@@ -1067,6 +1067,10 @@ use crate::protocol::github::GitHubRepositoryParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubChecksParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCommit;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCommitParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubMergeResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubPullRequestFilesResult;
@@ -4038,6 +4042,7 @@ client_methods! {
         cancellation: "operationId",
     },
     GitHubRepositoryRead => "github/repository/read" { params: GitHubRepositoryParams, response: GitHubRepositoryResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubCommitRead => "github/commit/read" { params: GitHubCommitParams, response: GitHubCommit, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubIssueList => "github/issue/list" { params: GitHubIssueListParams, response: GitHubIssueListResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubIssueRead => "github/issue/read" { params: GitHubNumberParams, response: IssueReadResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubIssueCreate => "github/issue/create" { params: GitHubIssueCreateParams, response: GitHubIssue, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
@@ -4775,6 +4780,8 @@ typescript_bindings! {
     crate::protocol::github::GitHubPullRequestMergeParams,
     crate::protocol::github::GitHubMergeResult,
     crate::protocol::github::GitHubChecksParams,
+    crate::protocol::github::GitHubCommitParams,
+    crate::protocol::github::GitHubCommit,
     crate::protocol::github::GitHubCommitStatus,
     crate::protocol::github::GitHubCheckRun,
     crate::protocol::github::GitHubChecksResult,

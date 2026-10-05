@@ -205,10 +205,43 @@ pub struct RepositoryInfo {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Commit {
+    pub sha: String,
+    pub html_url: String,
+    pub commit: CommitDetails,
+    pub stats: CommitStats,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommitDetails {
+    pub message: String,
+    pub author: CommitAuthor,
+    pub committer: CommitAuthor,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommitAuthor {
+    pub name: String,
+    pub date: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommitStats {
+    pub additions: u64,
+    pub deletions: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PullRequestBranch {
     pub sha: String,
     #[serde(rename = "ref")]
     pub name: String,
+    pub repo: Option<PullRequestRepository>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PullRequestRepository {
+    pub full_name: String,
 }
 
 pub struct CreatePullRequest<'a> {
@@ -228,6 +261,33 @@ pub struct GitHub {
 }
 
 impl GitHub {
+    /// Reads an immutable commit identity, never a movable branch or tag.
+    pub async fn commit(&self, repository: &Repository, sha: &str) -> Result<Commit> {
+        if !(7..=40).contains(&sha.len()) || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(Error::InvalidInput("Use a hexadecimal commit SHA".into()));
+        }
+        let commit: Commit = self
+            .api(
+                repository,
+                HttpMethod::Get,
+                &repository.endpoint(&format!("commits/{sha}")),
+                None,
+            )
+            .await?;
+        if commit.sha.len() != 40
+            || !commit.sha.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || !commit
+                .sha
+                .to_ascii_lowercase()
+                .starts_with(&sha.to_ascii_lowercase())
+        {
+            return Err(Error::InvalidResponse(
+                "GitHub returned a different commit".into(),
+            ));
+        }
+        Ok(commit)
+    }
+
     pub fn for_account(
         credentials: Arc<dyn GitHubCredentialProvider>,
         http: Arc<dyn HttpClient>,

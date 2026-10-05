@@ -6,13 +6,17 @@ import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
 import type { AppServerMethod, MethodParams, MethodResult } from '../../app-server/common/generated/index.js';
 import { GitHubError, GitHubErrorCode } from '../common/githubService.js';
-import type { IGitHubService, GitHubRepository, GitHubRepositoryInfo, GitHubIssueState, GitHubIssuePage, GitHubIssueDetails, GitHubCreateIssue, GitHubUpdateIssue, GitHubIssue, GitHubComment, GitHubPage, GitHubPullRequest, GitHubCreatePullRequest, GitHubUpdatePullRequest, GitHubPullRequestFiles, GitHubPullRequestReview, GitHubReview, GitHubMerge, GitHubMergeResult, GitHubChecks, GitHubLabel } from '../common/githubService.js';
+import type { IGitHubService, GitHubCommit, GitHubRepository, GitHubRepositoryInfo, GitHubIssueState, GitHubIssuePage, GitHubIssueDetails, GitHubCreateIssue, GitHubUpdateIssue, GitHubIssue, GitHubComment, GitHubPage, GitHubPullRequest, GitHubCreatePullRequest, GitHubUpdatePullRequest, GitHubPullRequestFiles, GitHubPullRequestReview, GitHubReview, GitHubMerge, GitHubMergeResult, GitHubChecks, GitHubLabel } from '../common/githubService.js';
 
 type GitHubMethod = Exclude<Extract<AppServerMethod, `github/${string}`>, 'github/cancel'>;
 enum RequestKind { Read, Write }
 
 export class AppServerGitHubService implements IGitHubService {
 	constructor(private readonly connection: AppServerProtocolClient) { }
+
+	public async readCommit(repository: GitHubRepository, sha: string, token?: CancellationToken): Promise<GitHubCommit> {
+		return { ...await this.request('github/commit/read', { repository, sha }, RequestKind.Read, token) };
+	}
 
 	public async readRepository(repository: GitHubRepository, token?: CancellationToken): Promise<GitHubRepositoryInfo> {
 		return { ...await this.request('github/repository/read', { repository }, RequestKind.Read, token) };
@@ -119,6 +123,7 @@ export class AppServerGitHubService implements IGitHubService {
 export function createDisconnectedGitHubService(): IGitHubService {
 	const unavailable = async (): Promise<never> => { throw new GitHubError(GitHubErrorCode.Unavailable); };
 	return {
+		readCommit: unavailable,
 		readRepository: unavailable, listIssues: unavailable, readIssue: unavailable, createIssue: unavailable, updateIssue: unavailable,
 		listComments: unavailable, createComment: unavailable, updateComment: unavailable, deleteComment: unavailable,
 		listPullRequests: unavailable, readPullRequest: unavailable, createPullRequest: unavailable, updatePullRequest: unavailable,

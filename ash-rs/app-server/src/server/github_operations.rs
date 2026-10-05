@@ -16,6 +16,8 @@ use ash_app_server_protocol::protocol::github::GitHubCommentCreateParams;
 use ash_app_server_protocol::protocol::github::GitHubCommentDeleteParams;
 use ash_app_server_protocol::protocol::github::GitHubCommentListResult;
 use ash_app_server_protocol::protocol::github::GitHubCommentUpdateParams;
+use ash_app_server_protocol::protocol::github::GitHubCommit;
+use ash_app_server_protocol::protocol::github::GitHubCommitParams;
 use ash_app_server_protocol::protocol::github::GitHubCommitStatus;
 use ash_app_server_protocol::protocol::github::GitHubIssue;
 use ash_app_server_protocol::protocol::github::GitHubIssueCreateParams;
@@ -121,6 +123,18 @@ impl AppServer {
             }};
         }
         match method {
+            ClientMethod::GitHubCommitRead => operation!(GitHubCommitParams, |p, repository| {
+                let commit = client.commit(&repository, &p.sha).await?;
+                Ok::<_, github::Error>(GitHubCommit {
+                    sha: commit.sha,
+                    url: commit.html_url,
+                    message: commit.commit.message,
+                    author: commit.commit.author.name,
+                    committed_at: commit.commit.committer.date,
+                    additions: commit.stats.additions,
+                    deletions: commit.stats.deletions,
+                })
+            }),
             ClientMethod::GitHubRepositoryRead => {
                 operation!(GitHubRepositoryParams, |p, repository| {
                     let repository = client.repository(&repository).await?;
@@ -471,6 +485,7 @@ fn pull_request(value: github::PullRequest) -> GitHubPullRequest {
         merged_at: value.merged_at,
         head_commit: value.head.sha,
         head_branch: value.head.name,
+        head_repository: value.head.repo.map(|repository| repository.full_name),
         base_branch: value.base.name,
         auto_merge: value.auto_merge.is_some(),
     }

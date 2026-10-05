@@ -30,9 +30,11 @@ fn context_inspection_uses_environment_or_session_read_serialization() {
 fn github_admission_uses_case_insensitive_hosted_repository_identity_and_connection_operations() {
     let params = serde_json::json!({"operationId":"operation", "repository":{"host":"GitHub.com", "owner":"Team", "name":"Repo"}});
     let read = super::client_method_definition("github/pullRequest/read").unwrap();
+    let commit_read = super::client_method_definition("github/commit/read").unwrap();
     let write = super::client_method_definition("github/pullRequest/merge").unwrap();
     for (method, access) in [
         (read, SerializationAccess::SharedRead),
+        (commit_read, SerializationAccess::SharedRead),
         (write, SerializationAccess::Exclusive),
     ] {
         assert_eq!(

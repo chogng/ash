@@ -3,6 +3,7 @@ import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export const enum AccessibleViewProviderId {
+	GitHub = 'github',
 	Editor = 'editor',
 	ColorPicker = 'colorPicker',
 	BulkEditPreview = 'bulkEditPreview',
@@ -49,6 +50,7 @@ export const enum AccessibleViewType {
 }
 
 export const enum AccessibilityVerbositySettingId {
+	GitHub = 'accessibility.verbosity.github',
 	Editor = 'accessibility.verbosity.editor',
 	ColorPicker = 'accessibility.verbosity.colorPicker',
 	BulkEditPreview = 'accessibility.verbosity.bulkEditPreview',

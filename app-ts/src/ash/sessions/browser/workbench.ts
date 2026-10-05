@@ -161,6 +161,9 @@ import { IChatContextPickService } from "../../workbench/services/chat/common/ch
 import { WorkbenchWindow } from "../../workbench/browser/window.js";
 import { AccessibleViewService } from '../../workbench/contrib/accessibility/browser/accessibleView.js';
 import { IAccountService } from '../../platform/accounts/common/accountService.js';
+import { IGitHubService } from '../../platform/github/common/githubService.js';
+import { GitHubConnectionService } from '../../workbench/services/accounts/browser/gitHubConnectionService.js';
+import { IGitHubConnectionService } from '../../workbench/services/accounts/common/gitHubConnectionService.js';
 import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { INativeHostService } from '../../workbench/common/services.js';
 import { ActivityBarPosition } from '../../workbench/common/configuration.js';
@@ -381,6 +384,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IRemoteAgentService, this._register(new AppServerRemoteAgentService({ api: options.api.appServer, remoteApi: options.api.remote })));
 		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
 		services.registerInstance(IAccountService, accountService);
+		services.registerInstance(IGitHubService, options.api.github);
 		services.registerInstance(IChatTipService, this._register(services.createInstance(ChatTipService)));
 		this.lifecycleService = this._register(options.createLifecycleService(services));
 		services.registerInstance(ILifecycleService, this.lifecycleService);
@@ -431,6 +435,7 @@ export class Workbench extends Disposable {
 			contextKeyService: contextKeys,
 			configurationService,
 		})));
+		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
 		const notificationsCenter = this._register(new NotificationsCenter(this.domNode, feedbackHost, notificationService, undefined, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({

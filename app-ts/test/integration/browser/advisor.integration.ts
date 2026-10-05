@@ -1,4 +1,5 @@
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
 import { chatTranscriptListItems, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListItems.js';
 import type { ThreadTranscriptEntry } from '../../../src/ash/workbench/services/chat/common/chatService.js';
@@ -14,6 +15,7 @@ if (locale) {
 const container = document.createElement('main');
 document.body.append(container);
 const services = createTestEditorServices();
+registerCodeEditorServices(services);
 const widget = services.createInstance(ChatListWidget, container, {});
 window.addEventListener('pagehide', () => { widget.dispose(); services.dispose(); }, { once: true });
 widget.element.style.height = '160px';

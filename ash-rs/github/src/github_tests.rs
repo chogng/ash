@@ -65,6 +65,43 @@ pub(super) fn repository() -> Repository {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn commit_reads_validate_identity_and_do_not_accept_branch_names() {
+    let http = Arc::new(FakeHttp::default());
+    let sha = "abcdef0123456789abcdef0123456789abcdef01";
+    http.push(200, json!({
+        "sha": sha, "html_url": format!("https://github.com/team/repo/commit/{sha}"),
+        "commit": { "message": "Fix links\n\nDetails", "author": { "name": "Ada", "date": "2026-01-01T00:00:00Z" }, "committer": { "name": "Ada", "date": "2026-01-02T00:00:00Z" } },
+        "stats": { "additions": 4, "deletions": 2 }
+    }));
+    let client = github(http.clone());
+    let commit = client.commit(&repository(), "abcdef0").await.unwrap();
+    assert_eq!(
+        (
+            commit.sha.as_str(),
+            commit.stats.additions,
+            commit.stats.deletions
+        ),
+        (sha, 4, 2)
+    );
+    for input in ["main", "abcdef", "../main", "abcdefg", &"a".repeat(41)] {
+        assert!(matches!(
+            client.commit(&repository(), input).await,
+            Err(Error::InvalidInput(_))
+        ));
+    }
+    assert_eq!(http.requests.lock().unwrap().len(), 1);
+    http.push(200, json!({
+        "sha": "1111111111111111111111111111111111111111", "html_url": "https://github.com/team/repo/commit/1111111",
+        "commit": { "message": "Wrong identity", "author": { "name": "Ada", "date": "now" }, "committer": { "name": "Ada", "date": "now" } },
+        "stats": { "additions": 0, "deletions": 0 }
+    }));
+    assert!(matches!(
+        client.commit(&repository(), "abcdef0").await,
+        Err(Error::InvalidResponse(_))
+    ));
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn pr_files_report_the_remote_limit_instead_of_claiming_a_complete_diff() {
     let http = Arc::new(FakeHttp::default());
     http.push(200, json!((0..100).map(|i| json!({"filename":format!("file-{i}.rs"),"status":"modified","additions":1,"deletions":0,"changes":1})).collect::<Vec<_>>()));
@@ -99,10 +136,16 @@ pub(super) fn pull_request() -> PullRequest {
         head: PullRequestBranch {
             name: "feature".into(),
             sha: "a".repeat(40),
+            repo: Some(PullRequestRepository {
+                full_name: "contributor/fork".into(),
+            }),
         },
         base: PullRequestBranch {
             name: "main".into(),
             sha: "b".repeat(40),
+            repo: Some(PullRequestRepository {
+                full_name: "team/repo".into(),
+            }),
         },
     }
 }

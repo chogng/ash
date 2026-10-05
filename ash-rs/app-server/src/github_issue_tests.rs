@@ -294,6 +294,7 @@ fn github_stream_cancellation_keeps_the_domains_final_write_outcome() {
             Some("GitHubSubmissionUncertain"),
         ),
         ("github/labels/list", false, Some("RequestCancelled")),
+        ("github/commit/read", false, Some("RequestCancelled")),
     ] {
         let (entered, started) = std::sync::mpsc::channel();
         let backend = Arc::new(
@@ -313,6 +314,8 @@ fn github_stream_cancellation_keeps_the_domains_final_write_outcome() {
         client.initialize();
         client.send(2, method, if method == "github/comment/create" {
             json!({"operationId":"cancelled","repository":{"host":"github.com","owner":"team","name":"repo"},"number":7,"body":"Comment"})
+        } else if method == "github/commit/read" {
+            json!({"operationId":"cancelled","repository":{"host":"github.com","owner":"team","name":"repo"},"sha":"a".repeat(40)})
         } else {
             json!({"operationId":"cancelled","repository":{"host":"github.com","owner":"team","name":"repo"}})
         });
@@ -372,6 +375,15 @@ fn github_repository_rpc_supports_issue_and_pr_management_without_a_local_checko
     let repository = json!({"node_id":"repo1","default_branch":"main","full_name":"team/repo","allow_merge_commit":true,"allow_squash_merge":true,"allow_rebase_merge":false,"allow_auto_merge":true});
     let cases = vec![
         ("github/repository/read", json!({}), vec![repository]),
+        (
+            "github/commit/read",
+            json!({"sha":&commit[..7]}),
+            vec![json!({
+                "sha":commit, "html_url":format!("https://github.com/team/repo/commit/{commit}"),
+                "commit": { "message":"Fix links\n\nDetails", "author":{"name":"Ada","date":"2026-10-03T00:00:00Z"}, "committer":{"name":"Alex","date":"2026-10-04T00:00:00Z"} },
+                "stats":{"additions":12,"deletions":3}
+            })],
+        ),
         (
             "github/issue/list",
             json!({"state":"open","query":"","page":1}),
@@ -498,6 +510,16 @@ fn github_repository_rpc_supports_issue_and_pr_management_without_a_local_checko
         let response =
             repository_request(&server, &mut connection, index as u32 + 2, method, params);
         assert!(response.get("result").is_some(), "{method}: {response}");
+        if method == "github/commit/read" {
+            assert_eq!(
+                response["result"],
+                json!({
+                    "sha":commit, "url":format!("https://github.com/team/repo/commit/{commit}"),
+                    "message":"Fix links\n\nDetails", "author":"Ada", "committedAt":"2026-10-04T00:00:00Z",
+                    "additions":12, "deletions":3
+                })
+            );
+        }
         assert!(
             http.replies.lock().unwrap().is_empty(),
             "{method} left unread responses"

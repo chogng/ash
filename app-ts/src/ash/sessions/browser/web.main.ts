@@ -69,7 +69,7 @@ async function mountBrowserSessions(profile: SessionsProfile, connectedHost?: ID
 				const editing = services.get(IChatEditingService);
 				return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
 			} : undefined,
-			contributionIds: ['chat.edits.editorOverlay', 'workbench.contrib.dataChannels'],
+			contributionIds: ['chat.edits.editorOverlay', 'workbench.contrib.dataChannels', 'workbench.contrib.githubLinkPresentations'],
 			createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
 			createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 			profile,

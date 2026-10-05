@@ -477,6 +477,8 @@ export type { GitHubCommentCreateParams } from './GitHubCommentCreateParams.js';
 export type { GitHubCommentDeleteParams } from './GitHubCommentDeleteParams.js';
 export type { GitHubCommentListResult } from './GitHubCommentListResult.js';
 export type { GitHubCommentUpdateParams } from './GitHubCommentUpdateParams.js';
+export type { GitHubCommit } from './GitHubCommit.js';
+export type { GitHubCommitParams } from './GitHubCommitParams.js';
 export type { GitHubCommitStatus } from './GitHubCommitStatus.js';
 export type { GitHubIssue } from './GitHubIssue.js';
 export type { GitHubIssueCreateParams } from './GitHubIssueCreateParams.js';

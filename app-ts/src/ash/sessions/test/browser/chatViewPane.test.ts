@@ -77,7 +77,7 @@ import { ILifecycleService } from '../../../workbench/services/lifecycle/common/
 const inputResources = new DisposableStore();
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService): InstantiationService {
-	const services = inputResources.add(createTestEditorServices());
+	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
 	services.registerInstance(IContextViewService, contextView);
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
@@ -88,7 +88,7 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	return services;
 }
 function createChatListWidget(container: HTMLElement, options: ConstructorParameters<typeof ChatListWidget>[1] = {}): InstanceType<typeof ChatListWidget> {
-	const services = inputResources.add(createTestEditorServices());
+	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
 	return services.createInstance(ChatListWidget, container, options);
 }
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");

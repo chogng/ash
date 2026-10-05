@@ -221,6 +221,8 @@ import type { GitHubCommentCreateParams } from './types/GitHubCommentCreateParam
 import type { GitHubCommentDeleteParams } from './types/GitHubCommentDeleteParams.js';
 import type { GitHubCommentListResult } from './types/GitHubCommentListResult.js';
 import type { GitHubCommentUpdateParams } from './types/GitHubCommentUpdateParams.js';
+import type { GitHubCommit } from './types/GitHubCommit.js';
+import type { GitHubCommitParams } from './types/GitHubCommitParams.js';
 import type { GitHubIssue } from './types/GitHubIssue.js';
 import type { GitHubIssueCreateParams } from './types/GitHubIssueCreateParams.js';
 import type { GitHubIssueListParams } from './types/GitHubIssueListParams.js';
@@ -819,6 +821,7 @@ export interface AppServerRequestMap {
   "issue/list": { params: IssueListParams; response: IssueListResult };
   "issue/read": { params: IssueReadParams; response: IssueReadResult };
   "github/repository/read": { params: GitHubRepositoryParams; response: GitHubRepositoryResult };
+  "github/commit/read": { params: GitHubCommitParams; response: GitHubCommit };
   "github/issue/list": { params: GitHubIssueListParams; response: GitHubIssueListResult };
   "github/issue/read": { params: GitHubNumberParams; response: IssueReadResult };
   "github/issue/create": { params: GitHubIssueCreateParams; response: GitHubIssue };
@@ -1213,6 +1216,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "issue/list": { method: "issue/list" },
   "issue/read": { method: "issue/read" },
   "github/repository/read": { method: "github/repository/read" },
+  "github/commit/read": { method: "github/commit/read" },
   "github/issue/list": { method: "github/issue/list" },
   "github/issue/read": { method: "github/issue/read" },
   "github/issue/create": { method: "github/issue/create" },

@@ -59,6 +59,7 @@ export interface GitHubPullRequest {
 	readonly mergedAt: string | null;
 	readonly headCommit: string;
 	readonly headBranch: string;
+	readonly headRepository: string | null;
 	readonly baseBranch: string;
 	readonly autoMerge: boolean;
 }
@@ -80,12 +81,22 @@ export interface GitHubReview { readonly commit: string; readonly event: GitHubR
 export interface GitHubMerge { readonly commit: string; readonly method: GitHubMergeMethod; }
 export interface GitHubMergeResult { readonly commit: string; readonly merged: boolean; readonly message: string; }
 export interface GitHubCommitStatus { readonly context: string; readonly state: string; readonly description: string | null; readonly targetUrl: string | null; }
+export interface GitHubCommit {
+	readonly sha: string;
+	readonly url: string;
+	readonly message: string;
+	readonly author: string;
+	readonly committedAt: string;
+	readonly additions: number;
+	readonly deletions: number;
+}
 export interface GitHubCheckRun { readonly id: number; readonly name: string; readonly status: string; readonly conclusion: string | null; readonly detailsUrl: string | null; }
 export interface GitHubChecks { readonly state: string; readonly statuses: readonly GitHubCommitStatus[]; readonly checks: readonly GitHubCheckRun[]; readonly nextPage: number | null; }
 export interface GitHubLabel { readonly name: string; readonly color: string; }
 
 /** GitHub business operations use the account grant owned by the backend login service. */
 export interface IGitHubService {
+	readCommit(repository: GitHubRepository, sha: string, token?: CancellationToken): Promise<GitHubCommit>;
 	readRepository(repository: GitHubRepository, token?: CancellationToken): Promise<GitHubRepositoryInfo>;
 	listIssues(repository: GitHubRepository, state: GitHubIssueState, query: string, page: number, token?: CancellationToken): Promise<GitHubIssuePage>;
 	readIssue(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubIssueDetails>;

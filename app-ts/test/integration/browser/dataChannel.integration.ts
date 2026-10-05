@@ -89,7 +89,7 @@ opened.setAttribute('aria-label', 'Opened target');
 api.delivery.setAttribute('aria-label', 'Extension channel delivery');
 api.uriDelivery.setAttribute('aria-label', 'Extension URL delivery');
 document.body.append(container, opened, api.delivery, api.uriDelivery);
-const widget = resources.add(services.createInstance(ChatListWidget, container, { onDidRequestLink: (target: string) => { opened.textContent = target; void opener.open(target, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true }); } }));
+const widget = resources.add(editorServices.createInstance(ChatListWidget, container, { onDidRequestLink: (target: string) => { opened.textContent = target; void opener.open(target, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true }); } }));
 opener.setDefaultExternalOpener({ openExternal: async href => { api.uriDelivery.textContent = `default:${href}`; return true; } });
 widget.setVisible(true);
 widget.render([{ id: 'message', type: 'agentMessage', text: '[Original issue](https://example.com/issues/1) and [Plain link](https://example.org/)', transient: false }]);

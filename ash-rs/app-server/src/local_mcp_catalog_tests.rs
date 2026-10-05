@@ -372,6 +372,7 @@ fn mcp_notifications_refresh_code_mode_catalog_without_changing_model_tools() {
             .start_turn(
                 &thread_id,
                 StartTurnRequest {
+                    context_policy: Default::default(),
                     mode: Default::default(),
                     advisor: None,
                     command_id: CommandId::new(format!("catalog-turn-{stage}")).unwrap(),

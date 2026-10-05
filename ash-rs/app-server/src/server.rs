@@ -2396,6 +2396,7 @@ impl AppServer {
             }
             Some(
                 method @ (ClientMethod::GitHubRepositoryRead
+                | ClientMethod::GitHubCommitRead
                 | ClientMethod::GitHubIssueList
                 | ClientMethod::GitHubIssueRead
                 | ClientMethod::GitHubIssueCreate

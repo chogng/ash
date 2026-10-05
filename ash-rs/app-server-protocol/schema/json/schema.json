@@ -9357,6 +9357,22 @@
         {
           "properties": {
             "method": {
+              "const": "github/commit/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubCommitParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "github/issue/list",
               "type": "string"
             },
@@ -15462,6 +15478,22 @@
             },
             "result": {
               "$ref": "#/$defs/GitHubRepositoryResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/commit/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubCommit"
             }
           },
           "required": [
@@ -25610,6 +25642,66 @@
       ],
       "type": "object"
     },
+    "GitHubCommit": {
+      "additionalProperties": false,
+      "properties": {
+        "additions": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "author": {
+          "type": "string"
+        },
+        "committedAt": {
+          "type": "string"
+        },
+        "deletions": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        },
+        "sha": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha",
+        "url",
+        "message",
+        "author",
+        "committedAt",
+        "additions",
+        "deletions"
+      ],
+      "type": "object"
+    },
+    "GitHubCommitParams": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        },
+        "sha": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "sha"
+      ],
+      "type": "object"
+    },
     "GitHubCommitStatus": {
       "additionalProperties": false,
       "properties": {
@@ -25964,6 +26056,12 @@
         },
         "headCommit": {
           "type": "string"
+        },
+        "headRepository": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "mergedAt": {
           "type": [

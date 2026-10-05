@@ -1,6 +1,29 @@
 use super::*;
 
 #[test]
+fn github_pull_request_branches_keep_fork_identity_and_deleted_sources() {
+    for (head_repository, expected) in [
+        (
+            serde_json::json!({ "full_name": "contributor/fork" }),
+            Some("contributor/fork"),
+        ),
+        (serde_json::Value::Null, None),
+    ] {
+        let response: github::PullRequest = serde_json::from_value(serde_json::json!({
+            "number": 7, "node_id": "PR_7", "title": "Fix links", "body": "Details",
+            "html_url": "https://github.com/team/repo/pull/7", "state": "open", "draft": false,
+            "merged_at": null, "auto_merge": null,
+            "head": { "sha": "a".repeat(40), "ref": "feature/links", "repo": head_repository },
+            "base": { "sha": "b".repeat(40), "ref": "main", "repo": { "full_name": "team/repo" } }
+        }))
+        .unwrap();
+        let result = pull_request(response);
+        assert_eq!(result.head_repository.as_deref(), expected);
+        assert_eq!(result.head_branch, "feature/links");
+    }
+}
+
+#[test]
 fn github_error_categories_are_independent_of_product_reporter_errors() {
     for (error, name, code) in [
         (
