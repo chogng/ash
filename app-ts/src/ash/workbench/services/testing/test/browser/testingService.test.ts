@@ -11,7 +11,6 @@ import { Emitter } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../../services/tasks/common/taskService.js";
 import { TestingService } from "../../browser/testingService.js";
-import type { ITerminalInstance } from '../../../terminal/common/terminal.js';
 
 test("TestingService exposes only test tasks and projects passed and failed runs", async () => {
 	using tasks = new FakeTaskService([
@@ -100,12 +99,7 @@ class FakeTaskService extends Disposable implements ITaskService {
 class FakeTaskRun extends Disposable implements ITaskRun {
 	private readonly emitter = this._register(new Emitter<TaskRunStatus>());
 	readonly onDidChangeStatus = this.emitter.event;
-	readonly terminal = this._register(Object.assign(toDisposable(() => undefined), {
-		id: 'task-terminal', dirId: 'folder', title: 'Task', profile: { profileId: 'test', title: 'Test', isDefault: true },
-		state: 'running' as const, exitCode: undefined,
-		onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
-		write() {}, resize() {}, close: async () => undefined,
-	} satisfies Omit<ITerminalInstance, keyof ReturnType<typeof toDisposable>>));
+	readonly terminalId = 'task-terminal';
 	status: TaskRunStatus = "running";
 	exitCode: number | undefined;
 	constructor(readonly task: IWorkspaceTask) { super(); }

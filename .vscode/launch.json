@@ -59,15 +59,34 @@
 		},
 		{
 			"name": "Ash Web (Chrome, UI Only)",
-			"type": "chrome",
+			"type": "node",
 			"request": "launch",
-			"url": "http://127.0.0.1:5173/",
-			"webRoot": "${workspaceFolder}",
-			"preLaunchTask": "Run Ash Web (UI Only)",
+			"program": "${workspaceFolder}/app-ts/node_modules/vite/bin/vite.js",
+			"args": ["--config", "../build/app_ts/vite/vite.config.ts", "--mode", "web"],
+			"cwd": "${workspaceFolder}/app-ts",
+			"env": { "ASH_WEB_APP_SERVER": "0" },
+			"preLaunchTask": "Prepare Ash Web",
+			"console": "internalConsole",
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5173/)",
+				"action": "startDebugging",
+				"name": "Ash Web Browser (Chrome)",
+				"killOnServerStop": true
+			},
 			"presentation": {
 				"group": "1_ash_desktop",
 				"order": 3
 			}
+		},
+		{
+			"name": "Ash Web Browser (Chrome)",
+			"type": "chrome",
+			"request": "launch",
+			"url": "http://127.0.0.1:5173/",
+			"webRoot": "${workspaceFolder}",
+			"cascadeTerminateToConfigurations": ["Ash Web (Chrome, UI Only)"],
+			"presentation": { "hidden": true }
 		},
 		{
 			"name": "Ash App (Rust)",
