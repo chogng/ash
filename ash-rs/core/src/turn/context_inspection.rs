@@ -28,13 +28,20 @@ pub enum ContextInspectionScope<'a> {
     Thread(&'a ThreadId),
 }
 
+/// Usage and the exact tool catalog sampled together, so diagnostics cannot drift from counts.
+#[derive(Debug, PartialEq)]
+pub struct ContextInspection {
+    pub context: ModelContextInspection,
+    pub tool_definitions: Vec<ash_protocol::ToolDefinition>,
+}
+
 impl TurnExecutor {
     /// Reads the same host context, tool catalog and extension contributions used by execution.
     /// It performs no model I/O, evidence retrieval, compaction or durable mutation.
     pub fn inspect_context(
         &self,
         request: ContextInspectionRequest<'_>,
-    ) -> Result<ModelContextInspection, CoreError> {
+    ) -> Result<ContextInspection, CoreError> {
         let snapshot = match request.scope {
             ContextInspectionScope::Environment => None,
             ContextInspectionScope::Thread(thread_id) => Some(self.threads.read_thread(thread_id)?),
@@ -205,7 +212,7 @@ impl TurnExecutor {
                 unreachable!("calibration preserves budget ownership")
             }
         };
-        Ok(ModelContextInspection {
+        let context = ModelContextInspection {
             model: request.model.clone(),
             estimated_tokens: categories.iter().map(|category| category.tokens).sum(),
             estimator_revision: CONTEXT_ESTIMATOR_REVISION.into(),
@@ -214,6 +221,10 @@ impl TurnExecutor {
             latest_request: latest
                 .filter(|turn| turn.model == request.model)
                 .and_then(|turn| turn.context_usage.clone()),
+        };
+        Ok(ContextInspection {
+            context,
+            tool_definitions: tools,
         })
     }
 }

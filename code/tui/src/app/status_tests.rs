@@ -111,8 +111,17 @@ fn exercise_panel(mode: ScreenMode) -> String {
     key(&mut app, KeyCode::Enter);
     key(&mut app, KeyCode::Down);
     key(&mut app, KeyCode::Enter);
-    assert!(frame(&app, 80, 26).1.contains("read_file · 5k tokens"));
-    key(&mut app, KeyCode::Enter);
+    let tools = frame(&app, 80, 26).1;
+    assert!(tools.contains("Tool definitions"));
+    assert!(!tools.contains("read_file"));
+    let tools_row = tools
+        .lines()
+        .find(|line| line.contains("Tool definitions"))
+        .unwrap();
+    assert!(!tools_row.contains('+') && !tools_row.contains('-'));
+    frames.push(format!("Tool definitions summary\n{tools}"));
+    key(&mut app, KeyCode::Right);
+    assert!(!frame(&app, 80, 26).1.contains("read_file"));
     key(&mut app, KeyCode::Down);
     key(&mut app, KeyCode::Enter);
     let memory = frame(&app, 80, 26).1;
@@ -201,9 +210,13 @@ fn context_status_and_usage_commands_have_distinct_titles_in_both_modes() {
     for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
         for (command, title) in [
             ("/context", "Context"),
+            ("/debug-context", "Developer: Context diagnostics"),
             ("/status", "Session status"),
             ("/usage", "Usage"),
-        ] {
+        ]
+        .into_iter()
+        .filter(|(command, _)| *command != "/debug-context" || cfg!(debug_assertions))
+        {
             let mut app = app(mode, Language::Chinese);
             app.insert_text(command);
             let Some(AppCommand::Thread(crate::thread::Command::ExecuteProductCommand(invocation))) =
@@ -506,4 +519,95 @@ fn frame(app: &App, width: u16, height: u16) -> (Buffer, String) {
         .collect::<Vec<_>>()
         .join("\n");
     (buffer, text)
+}
+
+#[test]
+fn context_diagnostics_fullscreen_flow() {
+    let text = exercise_context_diagnostics(ScreenMode::Fullscreen, Language::English);
+    crate::tui_assert_snapshot!(mode = ScreenMode::Fullscreen; "context_diagnostics_flow", text);
+}
+
+#[test]
+fn context_diagnostics_inline_chinese_flow() {
+    let text = exercise_context_diagnostics(ScreenMode::Inline, Language::Chinese);
+    crate::tui_assert_snapshot!(mode = ScreenMode::Inline; "context_diagnostics_chinese_flow", text);
+}
+
+fn exercise_context_diagnostics(mode: ScreenMode, language: Language) -> String {
+    let mut app = app(mode, language);
+    app.insert_text("diagnostic draft");
+    let tool = ash_app_server_protocol::protocol::model::ContextToolDefinition {
+        name: "read_file".into(),
+        description: "Read a workspace file".into(),
+        parameters: serde_json::json!({"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}),
+        strict: true,
+        tokens: 5_000,
+    };
+    app.update(crate::context::Event::Opened(
+        crate::context::diagnostics_panel(inspection(12_345, Some(90_000)), vec![tool]),
+    ));
+    let title = if language == Language::Chinese {
+        "开发者：上下文诊断"
+    } else {
+        "Developer: Context diagnostics"
+    };
+    let overview = frame(&app, 100, 44).1;
+    assert!(overview.contains(title), "{overview}");
+    assert!(overview.contains("read_file"));
+    assert!(!overview.contains("Read a workspace file"));
+    let mut frames = vec![format!("Diagnostics overview\n{overview}")];
+    // Section dividers are skipped by keyboard selection; the sixth selectable row is the tool.
+    for _ in 0..5 {
+        key(&mut app, KeyCode::Down);
+    }
+    key(&mut app, KeyCode::Enter);
+    let expanded = frame(&app, 100, 44).1;
+    assert!(expanded.contains("Read a workspace file"), "{expanded}");
+    assert!(expanded.contains("parameters"));
+    assert!(expanded.contains("required"));
+    assert!(expanded.contains("strict"));
+    frames.push(format!("Expanded tool definition\n{expanded}"));
+    let other_mode = if mode == ScreenMode::Inline {
+        ScreenMode::Fullscreen
+    } else {
+        ScreenMode::Inline
+    };
+    settings(&mut app, other_mode, language);
+    assert!(frame(&app, 100, 44).1.contains("Read a workspace file"));
+    settings(&mut app, mode, language);
+    key(&mut app, KeyCode::Esc);
+    assert!(app.command_panel().is_none());
+    assert_eq!(app.input(), "diagnostic draft");
+    app.update(crate::context::Event::Opened(panel(12_345, Some(90_000))));
+    assert!(!frame(&app, 100, 44).1.contains("read_file"));
+    key(&mut app, KeyCode::Esc);
+    frames.push(format!(
+        "Closed · draft restored\n{}",
+        frame(&app, 100, 44).1
+    ));
+    frames.join("\n\n")
+}
+
+#[test]
+fn debug_context_submission_follows_build_registration_in_both_modes() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = app(mode, Language::English);
+        app.insert_text("/debug-context");
+        let command = key(&mut app, KeyCode::Enter);
+        if cfg!(debug_assertions) {
+            let Some(AppCommand::Thread(crate::thread::Command::ExecuteProductCommand(invocation))) =
+                command
+            else {
+                panic!("development build must dispatch the registered diagnostic command");
+            };
+            assert_eq!(invocation.command.name, "debug-context");
+        } else {
+            assert_eq!(command, None);
+            assert_eq!(
+                app.messages().last().unwrap().text(),
+                "Unknown command: /debug-context."
+            );
+            assert!(app.command_panel().is_none());
+        }
+    }
 }

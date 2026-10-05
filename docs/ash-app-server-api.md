@@ -41,7 +41,7 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 
 ### 上下文用量
 
-`context/read` 按 `scope.type = environment` 读取当前环境，或按 `thread` 携带 `sessionId` 和 `threadId` 读取所属线程。首次请求前也可调用；不会创建回合、调用模型、检索查询证据或触发压缩。线程选择会校验 Session membership。
+`context/read` 按 `scope.type = environment` 读取当前环境，或按 `thread` 携带 `sessionId` 和 `threadId` 读取所属线程。`detail` 必须明确为 `usage` 或 `diagnostics`：前者的 `toolDefinitions` 为空，后者返回与估算同次采样的工具名称、说明、参数结构、strict 标志及逐项 token 数。首次请求前也可调用；不会创建回合、调用模型、检索查询证据或触发压缩。线程选择会校验 Session membership。
 
 结果的分类及总量共用 Core 执行时的本地估算器，区分系统提示词（含环境与时间）、实际暴露的工具定义、已加载记忆／指令文件、技能目录与已激活正文、对话和工具结果。已被 checkpoint 覆盖的历史不重复计入，未加载的文件和技能正文不计入。分类来源只返回身份与估算数量，不返回正文。
 

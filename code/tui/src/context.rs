@@ -16,8 +16,10 @@ use crate::widgets::navigation::Navigation;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
+use ash_app_server_protocol::protocol::model::ContextReadDetail;
 use ash_app_server_protocol::protocol::model::ContextReadParams;
 use ash_app_server_protocol::protocol::model::ContextReadScope;
+use ash_app_server_protocol::protocol::model::ContextToolDefinition;
 use ash_protocol::ModelContextCategory;
 use ash_protocol::ModelContextInspection;
 use ash_protocol::ModelContextUsageSource;
@@ -104,6 +106,10 @@ impl Panel {
             self.context_areas(body)[1],
             position,
         )
+        .filter(|target| {
+            !matches!(target,
+            ListSelectionPointerTarget::Item(id) if *id == ListSelectionItemId::new("category-1"))
+        })
     }
     pub(crate) fn handle_click(
         &mut self,
@@ -163,7 +169,15 @@ impl Panel {
         list_selection::draw_body_with_pointer(frame, list, &self.pages, hovered, pressed, context);
     }
     pub(crate) fn key_hints(&self) -> &'static KeyHints {
-        &bindings::CONTEXT_HINTS
+        if self
+            .pages
+            .selected_item()
+            .is_some_and(ListSelectionItem::has_expandable_details)
+        {
+            &bindings::CONTEXT_HINTS
+        } else {
+            &bindings::CONTEXT_SUMMARY_HINTS
+        }
     }
     fn context_areas(&self, area: Rect) -> [Rect; 2] {
         let width = area.width;
@@ -273,7 +287,7 @@ fn category_index(category: ModelContextCategory) -> usize {
 fn category_label(category: ModelContextCategory) -> &'static str {
     match category {
         ModelContextCategory::SystemPrompt => "System prompt",
-        ModelContextCategory::SystemTools => "System tools",
+        ModelContextCategory::SystemTools => "Tool definitions",
         ModelContextCategory::MemoryFiles => "Memory / instruction files",
         ModelContextCategory::Skills => "Skills",
         ModelContextCategory::Conversation => "Conversation and tool results",
@@ -281,6 +295,21 @@ fn category_label(category: ModelContextCategory) -> &'static str {
 }
 
 pub(crate) fn panel(inspection: ModelContextInspection) -> Panel {
+    build_panel(inspection, ContextReadDetail::Usage, Vec::new())
+}
+
+pub(crate) fn diagnostics_panel(
+    inspection: ModelContextInspection,
+    tool_definitions: Vec<ContextToolDefinition>,
+) -> Panel {
+    build_panel(inspection, ContextReadDetail::Diagnostics, tool_definitions)
+}
+
+fn build_panel(
+    inspection: ModelContextInspection,
+    detail: ContextReadDetail,
+    tool_definitions: Vec<ContextToolDefinition>,
+) -> Panel {
     let capacity = inspection
         .allocation
         .as_ref()
@@ -314,12 +343,36 @@ pub(crate) fn panel(inspection: ModelContextInspection) -> Panel {
                     "",
                     value(category.tokens),
                 );
-            if !details.is_empty() {
+            // Internal tool identities belong to the explicit diagnostic view, never this summary.
+            if category.category != ModelContextCategory::SystemTools && !details.is_empty() {
                 item = item.with_details(Text::literal(details));
             }
             item
         })
         .collect::<Vec<_>>();
+    if detail == ContextReadDetail::Diagnostics {
+        items.push(ListSelectionItem::new("Tool definition details").as_section_divider());
+        for tool in tool_definitions {
+            let mut definition = serde_json::json!({
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.parameters,
+                "strict": tool.strict,
+            });
+            // Cargo feature unification can enable preserve_order; keep diagnostic output stable.
+            definition.sort_all_objects();
+            items.push(
+                ListSelectionItem::new(Text::literal(tool.name.clone()))
+                    .with_id(ListSelectionItemId::new(format!("tool-{}", tool.name)))
+                    .with_columns(tool.name, "", value(tool.tokens))
+                    .with_details(Text::literal(
+                        serde_json::to_string_pretty(&definition)
+                            .expect("a tool definition is valid JSON"),
+                    )),
+            );
+        }
+        items.push(ListSelectionItem::new("Context allocation").as_section_divider());
+    }
     if let Some(allocation) = &inspection.allocation {
         for (symbol, label, tokens) in [
             (
@@ -380,7 +433,11 @@ pub(crate) fn panel(inspection: ModelContextInspection) -> Panel {
             format!("{} tokens", compact_tokens(usage.used_tokens)),
         ));
     }
-    let pages = ListSelectionModel::new("Context", vec![ListSelectionGroup::new("Context", items)])
+    let title = match detail {
+        ContextReadDetail::Usage => "Context",
+        ContextReadDetail::Diagnostics => "Developer: Context diagnostics",
+    };
+    let pages = ListSelectionModel::new(title, vec![ListSelectionGroup::new(title, items)])
         .with_expandable_descriptions()
         .without_scroll_counts()
         .without_tab_bar();
@@ -416,6 +473,7 @@ pub(crate) struct RequestScope<'a> {
 pub(crate) fn load_panel<T>(
     client: &mut AppServerClient<T>,
     scope: Option<RequestScope<'_>>,
+    detail: ContextReadDetail,
 ) -> Result<Panel, ClientError>
 where
     T: JsonRpcTransport,
@@ -427,9 +485,13 @@ where
         },
         None => ContextReadScope::Environment,
     };
-    Ok(panel(
-        client.read_context(ContextReadParams { scope })?.context,
-    ))
+    let result = client.read_context(ContextReadParams { scope, detail })?;
+    Ok(match detail {
+        ContextReadDetail::Usage => panel(result.context),
+        ContextReadDetail::Diagnostics => {
+            diagnostics_panel(result.context, result.tool_definitions)
+        }
+    })
 }
 
 #[cfg(test)]

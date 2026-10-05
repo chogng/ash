@@ -105,10 +105,13 @@ fn builtins_follow_enum_presentation_order() {
                 "lsp",
             ];
             names.push("voice");
+            if cfg!(debug_assertions) {
+                names.push("debug-context");
+            }
             names
         }
     );
-    assert_eq!(definitions.len(), 37);
+    assert_eq!(definitions.len(), 37 + usize::from(cfg!(debug_assertions)));
 }
 
 #[test]
@@ -261,4 +264,20 @@ fn builtins_declare_argument_hints() {
             .as_deref(),
         None
     );
+}
+
+#[test]
+fn context_diagnostics_registration_and_parsing_follow_build_availability() {
+    let catalog =
+        SlashCommandCatalog::with_local_and_server(built_in_slash_command_definitions(), [])
+            .unwrap();
+    assert_eq!(
+        catalog.command_named("debug-context").is_some(),
+        cfg!(debug_assertions)
+    );
+    assert_eq!(
+        "debug-context".parse::<TuiSlashCommandAction>().is_ok(),
+        cfg!(debug_assertions)
+    );
+    assert!(catalog.command_named("context").is_some());
 }

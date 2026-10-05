@@ -1431,10 +1431,14 @@ use crate::protocol::memory::MemorySearchParams;
 use crate::protocol::memory::MemoryUpdateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ContextReadDetail;
 use crate::protocol::model::ContextReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ContextReadResult;
 use crate::protocol::model::ContextReadScope;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ContextToolDefinition;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogEntry;
 #[cfg(any(test, feature = "export"))]
@@ -5232,6 +5236,8 @@ typescript_bindings! {
     AdvisorConfig,
     AdvisorSelection,
     AdvisorConfigureResult,
+    ContextReadDetail,
+    ContextToolDefinition,
     ContextReadParams,
     ContextReadResult,
     ContextReadScope,

@@ -16,7 +16,7 @@ Overview
   Estimated usage by category                                                   
                                                                                 
 > ■ System prompt                                                1.5k (1.5%) +  
-  ■ System tools                                                   5k (5.0%) +  
+  ■ Tool definitions                                               5k (5.0%)    
   ■ Memory / instruction files                                    300 (0.3%) +  
   ■ Skills                                                       1.5k (1.5%) +  
   ■ Conversation and tool results                                  4k (4.0%) +  
@@ -44,7 +44,7 @@ Expanded system prompt
                                                                                 
 > ■ System prompt                                                1.5k (1.5%) -  
     system/prompt · 1.5k tokens                                                 
-  ■ System tools                                                   5k (5.0%) +  
+  ■ Tool definitions                                               5k (5.0%)    
   ■ Memory / instruction files                                    300 (0.3%) +  
   ■ Skills                                                       1.5k (1.5%) +  
   ■ Conversation and tool results                                  4k (4.0%) +  
@@ -57,6 +57,34 @@ Expanded system prompt
   Latest request · provider reported                              25k tokens    
                                                                                 
   ↑/↓ select · Enter details · Esc close                                        
+
+Tool definitions summary
+    ▄  ▄     Ash Code v0.1.0                                                    
+  ▗█▛██▜█▖   Automatic model                                                    
+  ▝▜████▛▘   .                                                                  
+    ▝  ▘                                                                        
+                                                                                
+─ Context ──────────────────────────────────────────────────────────────────────
+                                                                                
+  ~12.3k / 100k tokens (12.3%)                                                  
+  test/model                                                                    
+  █████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░▤▤▧▒▒▒▒▒  
+  Estimated usage by category                                                   
+                                                                                
+  ■ System prompt                                                1.5k (1.5%) +  
+> ■ Tool definitions                                               5k (5.0%)    
+  ■ Memory / instruction files                                    300 (0.3%) +  
+  ■ Skills                                                       1.5k (1.5%) +  
+  ■ Conversation and tool results                                  4k (4.0%) +  
+  ░ Free space                                                 77.7k (77.7%)    
+  ▤ Output reserve                                                 2k (2.0%)    
+  ▧ Safety margin                                                  1k (1.0%)    
+  ▒ Autocompact buffer                                             7k (7.0%)    
+  Auto-compact window                                             93k tokens    
+  Auto-compact threshold                                          90k tokens    
+  Latest request · provider reported                              25k tokens    
+                                                                                
+  ↑/↓ select · Esc close                                                        
 
 Expanded memory file
                                                                                 
@@ -71,7 +99,7 @@ Expanded memory file
   Estimated usage by category                                                   
                                                                                 
   ■ System prompt                                                1.5k (1.5%) +  
-  ■ System tools                                                   5k (5.0%) +  
+  ■ Tool definitions                                               5k (5.0%)    
 > ■ Memory / instruction files                                    300 (0.3%) -  
     AGENTS.md · 300 tokens                                                      
   ■ Skills                                                       1.5k (1.5%) +  

@@ -782,6 +782,11 @@ pub(crate) static STATUS_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
         .with_compact_action("↑/↓", "scroll")
         .with_compact_action("Esc", "close")
 });
+pub(crate) static CONTEXT_SUMMARY_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
+    KeyHints::compact()
+        .with_compact_action("↑/↓", "select")
+        .with_compact_action("Esc", "close")
+});
 pub(crate) static CONTEXT_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     KeyHints::compact()
         .with_compact_action("↑/↓", "select")

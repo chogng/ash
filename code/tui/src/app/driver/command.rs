@@ -368,9 +368,13 @@ impl AppDriver {
                                 thread_id,
                             }
                         });
-                        crate::context::load_panel(&mut client, scope)
-                            .map(crate::context::Event::Opened)
-                            .map_err(|error| error.to_string())
+                        crate::context::load_panel(
+                            &mut client,
+                            scope,
+                            ash_app_server_protocol::protocol::model::ContextReadDetail::Usage,
+                        )
+                        .map(crate::context::Event::Opened)
+                        .map_err(|error| error.to_string())
                     },
                     &mut self.app,
                     origin,

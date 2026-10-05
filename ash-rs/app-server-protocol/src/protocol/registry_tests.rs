@@ -8,13 +8,15 @@ fn context_inspection_uses_environment_or_session_read_serialization() {
     let method = super::client_method_definition("context/read").unwrap();
     assert_eq!(
         method
-            .serialization_scope(&serde_json::json!({"scope":{"type":"environment"}}))
+            .serialization_scope(
+                &serde_json::json!({"detail":"usage","scope":{"type":"environment"}})
+            )
             .unwrap(),
         Some(ClientRequestSerializationScope::Global {
             access: SerializationAccess::SharedRead
         })
     );
-    assert_eq!(method.serialization_scope(&serde_json::json!({"scope":{"type":"thread","sessionId":"session","threadId":"thread"}})).unwrap(), Some(ClientRequestSerializationScope::Session { session_id: "session".into(), access: SerializationAccess::SharedRead }));
+    assert_eq!(method.serialization_scope(&serde_json::json!({"detail":"diagnostics","scope":{"type":"thread","sessionId":"session","threadId":"thread"}})).unwrap(), Some(ClientRequestSerializationScope::Session { session_id: "session".into(), access: SerializationAccess::SharedRead }));
     assert!(
         method
             .serialization_scope(

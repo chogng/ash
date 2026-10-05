@@ -336,8 +336,12 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
 
     for command in [
         TuiSlashCommandAction::Context,
+        TuiSlashCommandAction::DebugContext,
         TuiSlashCommandAction::Status,
-    ] {
+    ]
+    .into_iter()
+    .filter(|command| *command != TuiSlashCommandAction::DebugContext || cfg!(debug_assertions))
+    {
         execute(
             &mut conversation,
             &mut client,
@@ -347,11 +351,20 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
         assert!(matches!(
             (command, app.command_panel()),
             (
-                TuiSlashCommandAction::Context,
+                TuiSlashCommandAction::Context | TuiSlashCommandAction::DebugContext,
                 Some(CommandPanel::Context(_))
             ) | (TuiSlashCommandAction::Status, Some(CommandPanel::Status(_)))
         ));
         assert!(app.overlay().is_none());
+        if command == TuiSlashCommandAction::DebugContext {
+            assert_eq!(
+                app.command_panel()
+                    .unwrap()
+                    .body()
+                    .title(crate::nls::Language::English),
+                "Developer: Context diagnostics"
+            );
+        }
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     }
 

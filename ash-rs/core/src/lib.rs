@@ -121,6 +121,7 @@ pub use thread_reducer::ToolExecutionStartSnapshot;
 pub use thread_reducer::TurnSnapshot;
 pub use thread_reducer::reduce_thread_event;
 pub use thread_worktree::NoThreadWorktreeBinder;
+pub use turn::ContextInspection;
 pub use turn::ContextInspectionRequest;
 pub use turn::ContextInspectionScope;
 pub use turn::TurnExecutionBackend;

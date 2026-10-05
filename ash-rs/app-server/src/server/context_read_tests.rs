@@ -1,16 +1,20 @@
 use crate::tests::call;
 use crate::tests::initialize;
 use crate::tests::server;
+use ash_core::ToolService;
 
 #[test]
 fn context_read_routes_initial_and_thread_inspections_and_checks_session_membership() {
-    let server = server();
+    let server = server().with_tool_service(
+        std::sync::Arc::new(InspectionTools),
+        std::sync::Arc::new(InspectionPolicy),
+    );
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let read = call(
         &server,
         &mut connection,
-        serde_json::json!({ "jsonrpc": "2.0", "id": 2, "method": "context/read", "params": { "scope": { "type": "environment" } } }),
+        serde_json::json!({ "jsonrpc": "2.0", "id": 2, "method": "context/read", "params": { "detail": "usage", "scope": { "type": "environment" } } }),
     );
     assert!(read.get("error").is_none(), "{read}");
     let inspected: ash_protocol::ModelContextInspection =
@@ -18,6 +22,41 @@ fn context_read_routes_initial_and_thread_inspections_and_checks_session_members
     assert!(inspected.estimated_tokens > 0);
     assert_eq!(inspected.categories.len(), 5);
     assert_eq!(inspected.latest_request, None);
+    assert_eq!(read["result"]["toolDefinitions"], serde_json::json!([]));
+    let diagnostics = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc": "2.0", "id": 20, "method": "context/read", "params": {"detail": "diagnostics", "scope": {"type": "environment"}}}),
+    );
+    assert!(diagnostics.get("error").is_none(), "{diagnostics}");
+    assert_eq!(diagnostics["result"]["context"], read["result"]["context"]);
+    let definitions: Vec<ash_app_server_protocol::protocol::model::ContextToolDefinition> =
+        serde_json::from_value(diagnostics["result"]["toolDefinitions"].clone()).unwrap();
+    let sources = &inspected
+        .categories
+        .iter()
+        .find(|category| category.category == ash_protocol::ModelContextCategory::SystemTools)
+        .unwrap()
+        .sources;
+    assert_eq!(definitions.len(), 1);
+    assert_eq!(definitions.len(), sources.len());
+    assert_eq!(definitions[0].description, "Read a workspace file");
+    assert_eq!(
+        definitions[0].parameters,
+        InspectionTools.definitions()[0].parameters
+    );
+    assert!(definitions[0].strict);
+    for definition in &definitions {
+        assert_eq!(
+            definition.tokens,
+            sources
+                .iter()
+                .find(|source| source.name == definition.name)
+                .unwrap()
+                .tokens
+        );
+        assert!(definition.parameters.is_object());
+    }
     assert!(server.threads.list_threads().unwrap().is_empty());
     let thread_id = ash_protocol::ThreadId::new("context-thread").unwrap();
     let session_id = ash_protocol::SessionId::new("context-session").unwrap();
@@ -41,7 +80,7 @@ fn context_read_routes_initial_and_thread_inspections_and_checks_session_members
         let read = call(
             &server,
             &mut connection,
-            serde_json::json!({ "jsonrpc": "2.0", "id": id, "method": "context/read", "params": { "scope": { "type": "thread", "sessionId": session, "threadId": thread_id } } }),
+            serde_json::json!({ "jsonrpc": "2.0", "id": id, "method": "context/read", "params": { "detail": "usage", "scope": { "type": "thread", "sessionId": session, "threadId": thread_id } } }),
         );
         assert_eq!(read.get("error").is_none(), succeeds, "{read}");
     }
@@ -82,7 +121,7 @@ fn context_read_routes_initial_and_thread_inspections_and_checks_session_members
     let read = call(
         &server,
         &mut connection,
-        serde_json::json!({ "jsonrpc": "2.0", "id": 5, "method": "context/read", "params": { "scope": { "type": "thread", "sessionId": session_id, "threadId": thread_id } } }),
+        serde_json::json!({ "jsonrpc": "2.0", "id": 5, "method": "context/read", "params": { "detail": "usage", "scope": { "type": "thread", "sessionId": session_id, "threadId": thread_id } } }),
     );
     assert!(read.get("error").is_none(), "{read}");
     let inspected: ash_protocol::ModelContextInspection =
@@ -98,4 +137,43 @@ fn context_read_routes_initial_and_thread_inspections_and_checks_session_members
         before.sequence,
         server.threads.read_thread(&thread_id).unwrap().sequence
     );
+}
+
+struct InspectionTools;
+impl ToolService for InspectionTools {
+    fn definitions(&self) -> Vec<ash_protocol::ToolDefinition> {
+        vec![ash_protocol::ToolDefinition {
+            name: ash_protocol::ToolName::new("read_file").unwrap(),
+            description: "Read a workspace file".into(),
+            parameters: serde_json::json!({"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}),
+            strict: true,
+        }]
+    }
+    fn prepare(
+        &self,
+        _: &ash_protocol::ToolCall,
+    ) -> Result<ash_action_policy::ActionReviewRequest, core_api::CoreError> {
+        panic!("inspection must not prepare an action")
+    }
+    fn execute(
+        &self,
+        _: &ash_protocol::ToolCall,
+        _: &ash_core::ToolAuthorization,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<ash_protocol::ToolExecutionOutput, core_api::CoreError> {
+        panic!("inspection must not execute a tool")
+    }
+}
+struct InspectionPolicy;
+impl core_api::ActionPolicyService for InspectionPolicy {
+    fn revision(&self) -> String {
+        "inspection".into()
+    }
+    fn decide(
+        &self,
+        _: &ash_action_policy::ActionReviewRequest,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<ash_action_policy::ExecutionDecision, core_api::CoreError> {
+        panic!("inspection must not request action authorization")
+    }
 }

@@ -9,6 +9,7 @@ mod tool_execution;
 mod tool_scheduler;
 
 pub use backend::TurnExecutionBackend;
+pub use context_inspection::ContextInspection;
 pub use context_inspection::ContextInspectionRequest;
 pub use context_inspection::ContextInspectionScope;
 pub use executor::TurnExecutionOutcome;

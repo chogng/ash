@@ -216,7 +216,7 @@ impl AppServer {
                 ash_core::ContextInspectionScope::Thread(thread_id)
             }
         };
-        let context = self
+        let inspection = self
             .turn_executor_snapshot()
             .inspect_context(ash_core::ContextInspectionRequest {
                 scope,
@@ -226,7 +226,42 @@ impl AppServer {
                 tool_mode: latest.map(|turn| turn.tool_mode).unwrap_or_default(),
             })
             .map_err(core_error)?;
-        result(&ContextReadResult { context })
+        let tool_definitions = match params.detail {
+            ash_app_server_protocol::protocol::model::ContextReadDetail::Usage => Vec::new(),
+            ash_app_server_protocol::protocol::model::ContextReadDetail::Diagnostics => {
+                let sources = &inspection
+                    .context
+                    .categories
+                    .iter()
+                    .find(|category| {
+                        category.category == ash_protocol::ModelContextCategory::SystemTools
+                    })
+                    .expect("inspection always includes the tool category")
+                    .sources;
+                inspection
+                    .tool_definitions
+                    .into_iter()
+                    .map(|tool| {
+                        let tokens = sources
+                            .iter()
+                            .find(|source| source.name == tool.name.as_str())
+                            .expect("each inspected tool has an estimate from the same catalog")
+                            .tokens;
+                        ash_app_server_protocol::protocol::model::ContextToolDefinition {
+                            name: tool.name.to_string(),
+                            description: tool.description,
+                            parameters: tool.parameters,
+                            strict: tool.strict,
+                            tokens,
+                        }
+                    })
+                    .collect()
+            }
+        };
+        result(&ContextReadResult {
+            context: inspection.context,
+            tool_definitions,
+        })
     }
 
     pub(super) fn initialize(

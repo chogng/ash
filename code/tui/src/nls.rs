@@ -2761,6 +2761,30 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("Context", "コンテキスト", "上下文", "Contexte"),
     translation(
+        "Developer: Context diagnostics",
+        "開発者: コンテキスト診断",
+        "开发者：上下文诊断",
+        "Développeur : diagnostic du contexte",
+    ),
+    translation(
+        "Tool definition details",
+        "ツール定義の詳細",
+        "工具定义明细",
+        "Détails des définitions des outils",
+    ),
+    translation(
+        "Context allocation",
+        "コンテキストの割り当て",
+        "上下文空间分配",
+        "Allocation du contexte",
+    ),
+    translation(
+        "Developer: inspect context tool estimates and full definitions",
+        "開発者: ツールの推定使用量と完全な定義を確認",
+        "开发者：查看工具占用估算和完整定义",
+        "Développeur : examiner les estimations et les définitions complètes des outils",
+    ),
+    translation(
         "{0} / {1} tokens ({2})",
         "{0} / {1} トークン（{2}）",
         "{0} / {1} tokens（{2}）",
@@ -2779,10 +2803,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Instructions système",
     ),
     translation(
-        "System tools",
-        "システムツール",
-        "系统工具",
-        "Outils système",
+        "Tool definitions",
+        "ツール定義",
+        "工具定义",
+        "Définitions des outils",
     ),
     translation(
         "Memory / instruction files",

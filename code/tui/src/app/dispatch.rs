@@ -92,7 +92,7 @@ where
                 .into(),
             );
         }
-        TuiSlashCommandAction::Context => {
+        TuiSlashCommandAction::Context | TuiSlashCommandAction::DebugContext => {
             output.events.push(
                 crate::context::Event::Opened(crate::context::load_panel(
                     client,
@@ -102,6 +102,11 @@ where
                             session_id: conversation.session_id(),
                             thread_id: conversation.thread_id(),
                         }),
+                    if command == TuiSlashCommandAction::DebugContext {
+                        ash_app_server_protocol::protocol::model::ContextReadDetail::Diagnostics
+                    } else {
+                        ash_app_server_protocol::protocol::model::ContextReadDetail::Usage
+                    },
                 )?)
                 .into(),
             );

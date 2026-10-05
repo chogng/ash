@@ -23,17 +23,40 @@ pub enum ContextReadScope {
     },
 }
 
+/// Selects whether this read includes internal definitions for explicit developer inspection.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ContextReadDetail {
+    Usage,
+    Diagnostics,
+}
+
 /// Inspect loaded context without starting a Turn or invoking a model.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextReadParams {
     pub scope: ContextReadScope,
+    pub detail: ContextReadDetail,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextReadResult {
     pub context: ash_protocol::ModelContextInspection,
+    /// Populated only for diagnostics; definitions and counts come from the same catalog sample.
+    pub tool_definitions: Vec<ContextToolDefinition>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextToolDefinition {
+    pub name: String,
+    pub description: String,
+    #[ts(type = "unknown")]
+    pub parameters: serde_json::Value,
+    pub strict: bool,
+    #[ts(type = "number")]
+    pub tokens: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

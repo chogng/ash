@@ -69,6 +69,7 @@ impl AppCommand {
                     TuiSlashCommandAction::Hooks => Some("Hooks"),
                     TuiSlashCommandAction::Connectors => Some("Connectors"),
                     TuiSlashCommandAction::Context => Some("Context"),
+                    TuiSlashCommandAction::DebugContext => Some("Developer: Context diagnostics"),
                     TuiSlashCommandAction::Status => Some("Session status"),
                     TuiSlashCommandAction::Usage => Some("Usage"),
                     TuiSlashCommandAction::Rewind => Some("Rewind"),

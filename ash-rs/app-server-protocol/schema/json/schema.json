@@ -19361,15 +19361,27 @@
       ],
       "type": "string"
     },
+    "ContextReadDetail": {
+      "description": "Selects whether this read includes internal definitions for explicit developer inspection.",
+      "enum": [
+        "usage",
+        "diagnostics"
+      ],
+      "type": "string"
+    },
     "ContextReadParams": {
       "description": "Inspect loaded context without starting a Turn or invoking a model.",
       "properties": {
+        "detail": {
+          "$ref": "#/$defs/ContextReadDetail"
+        },
         "scope": {
           "$ref": "#/$defs/ContextReadScope"
         }
       },
       "required": [
-        "scope"
+        "scope",
+        "detail"
       ],
       "type": "object"
     },
@@ -19377,10 +19389,18 @@
       "properties": {
         "context": {
           "$ref": "#/$defs/ModelContextInspection"
+        },
+        "toolDefinitions": {
+          "description": "Populated only for diagnostics; definitions and counts come from the same catalog sample.",
+          "items": {
+            "$ref": "#/$defs/ContextToolDefinition"
+          },
+          "type": "array"
         }
       },
       "required": [
-        "context"
+        "context",
+        "toolDefinitions"
       ],
       "type": "object"
     },
@@ -19441,6 +19461,33 @@
       "required": [
         "startSequence",
         "endSequence"
+      ],
+      "type": "object"
+    },
+    "ContextToolDefinition": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parameters": true,
+        "strict": {
+          "type": "boolean"
+        },
+        "tokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "parameters",
+        "strict",
+        "tokens"
       ],
       "type": "object"
     },

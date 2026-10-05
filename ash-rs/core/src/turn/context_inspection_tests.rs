@@ -71,7 +71,13 @@ fn context_inspection_counts_loaded_categories_before_a_request_without_executio
             })
             .unwrap()
     };
-    let environment = read(ContextInspectionScope::Environment);
+    let environment_inspection = read(ContextInspectionScope::Environment);
+    assert_eq!(environment_inspection.tool_definitions.len(), 1);
+    assert_eq!(
+        environment_inspection.tool_definitions[0].name.as_str(),
+        "weather"
+    );
+    let environment = &environment_inspection.context;
     assert_eq!(environment.latest_request, None);
     assert_eq!(
         environment.estimated_tokens,
@@ -124,7 +130,7 @@ fn context_inspection_counts_loaded_categories_before_a_request_without_executio
         .unwrap();
     let before = threads.read_thread(&thread_id).unwrap();
     let inspected = read(ContextInspectionScope::Thread(&thread_id));
-    assert_eq!(environment, inspected);
+    assert_eq!(environment_inspection, inspected);
     let after = threads.read_thread(&thread_id).unwrap();
     assert_eq!(before.sequence, after.sequence);
     assert!(after.turns.is_empty());
@@ -146,6 +152,7 @@ fn context_inspection_reads_existing_history_without_mutating_or_compacting_it()
         .unwrap();
     assert!(
         inspected
+            .context
             .categories
             .iter()
             .find(|category| category.category == ModelContextCategory::Conversation)
@@ -153,7 +160,7 @@ fn context_inspection_reads_existing_history_without_mutating_or_compacting_it()
             .tokens
             > 0
     );
-    assert!(inspected.allocation.is_none());
+    assert!(inspected.context.allocation.is_none());
     let after = threads.read_thread(&thread_id).unwrap();
     assert_eq!(before.sequence, after.sequence);
     assert_eq!(before.items, after.items);

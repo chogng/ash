@@ -104,3 +104,36 @@ fn model_preferences_request_is_strict_and_accepts_targeted_updates() {
     invalid["config"] = serde_json::json!({});
     assert!(serde_json::from_value::<ModelPreferencesUpdateParams>(invalid).is_err());
 }
+
+#[test]
+fn context_read_requires_an_explicit_detail_and_preserves_tool_schemas() {
+    for detail in [ContextReadDetail::Usage, ContextReadDetail::Diagnostics] {
+        let params = ContextReadParams {
+            scope: ContextReadScope::Environment,
+            detail,
+        };
+        assert_eq!(
+            serde_json::from_value::<ContextReadParams>(serde_json::to_value(&params).unwrap())
+                .unwrap(),
+            params
+        );
+    }
+    assert!(
+        serde_json::from_value::<ContextReadParams>(
+            serde_json::json!({"scope": {"type": "environment"}})
+        )
+        .is_err()
+    );
+    let definition = ContextToolDefinition {
+        name: "read_file".into(),
+        description: "Read a file".into(),
+        strict: true,
+        tokens: 229,
+        parameters: serde_json::json!({"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}),
+    };
+    assert_eq!(
+        serde_json::from_value::<ContextToolDefinition>(serde_json::to_value(&definition).unwrap())
+            .unwrap(),
+        definition
+    );
+}

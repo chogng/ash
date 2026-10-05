@@ -56,9 +56,15 @@ pub(crate) enum TuiSlashCommandAction {
     Plugins,
     Lsp,
     Voice,
+    DebugContext,
 }
 
 impl TuiSlashCommandAction {
+    // Command discovery and dispatch must agree; a hidden internal command cannot be typed manually.
+    fn is_available(self) -> bool {
+        self != Self::DebugContext || cfg!(debug_assertions)
+    }
+
     pub(crate) fn completion(
         self,
         arguments: &[ChatInputItem],
@@ -87,6 +93,7 @@ impl TuiSlashCommandAction {
             Self::Issue => "select issues to develop together",
             Self::Status => "show session state and thread totals",
             Self::Context => "show context usage and available input capacity",
+            Self::DebugContext => "Developer: inspect context tool estimates and full definitions",
             Self::Usage => "show account quotas, balances, and reset times",
             Self::StatusLine => "choose the items shown in the status line",
             Self::Dashboard => "open Dashboard",
@@ -177,6 +184,7 @@ impl std::str::FromStr for TuiSlashCommandAction {
 
     fn from_str(name: &str) -> Result<Self, Self::Err> {
         Self::iter()
+            .filter(|action| action.is_available())
             .find(|action| action.definition().name == name)
             .ok_or(())
     }
@@ -184,6 +192,7 @@ impl std::str::FromStr for TuiSlashCommandAction {
 
 pub(crate) fn built_in_slash_command_definitions() -> Vec<SlashCommandDefinition> {
     TuiSlashCommandAction::iter()
+        .filter(|action| action.is_available())
         .map(TuiSlashCommandAction::definition)
         .collect()
 }

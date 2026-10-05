@@ -11,7 +11,7 @@ Before first request
   分类估算用量                          
                                         
 > ■ 系统提示词           1.5k (1.5%) +  
-  ■ 系统工具               5k (5.0%) +  
+  ■ 工具定义               5k (5.0%)    
   ■ 记忆／指令文件        300 (0.3%) +  
   ■ 技能                 1.5k (1.5%) +  
   ■ 对话／工具             4k (4.0%) +  
@@ -30,7 +30,7 @@ Before first request · expanded source
                                         
 > ■ 系统提示词           1.5k (1.5%) -  
     system/prompt · 1.5k tokens         
-  ■ 系统工具               5k (5.0%) +  
+  ■ 工具定义               5k (5.0%)    
   ■ 记忆／指令文件        300 (0.3%) +  
   ■ 技能                 1.5k (1.5%) +  
   ■ 对话／工具             4k (4.0%) +  
@@ -65,7 +65,7 @@ Over compact threshold
   分类估算用量                          
                                         
 > ■ 系统提示词           1.5k (1.5%) +  
-  ■ 系统工具               5k (5.0%) +  
+  ■ 工具定义               5k (5.0%)    
   ■ 记忆／指令文件        300 (0.3%) +  
   ■ 技能                 1.5k (1.5%) +  
   ■ 对话／工具         90.7k (90.7%) +  
@@ -84,7 +84,7 @@ Over compact threshold · expanded source
                                         
 > ■ 系统提示词           1.5k (1.5%) -  
     system/prompt · 1.5k tokens         
-  ■ 系统工具               5k (5.0%) +  
+  ■ 工具定义               5k (5.0%)    
   ■ 记忆／指令文件        300 (0.3%) +  
   ■ 技能                 1.5k (1.5%) +  
   ■ 对话／工具         90.7k (90.7%) +  
@@ -108,7 +108,7 @@ Over compact threshold · allocation scrolled
   自动压缩阈值            90k tokens    
   超过自动压缩阈值         9k (9.0%)    
                                         
-  ↑/↓ 选择 · Enter 详情 · Esc 关闭      
+  ↑/↓ 选择 · Esc 关闭                   
 
 Over full window
 ─ 上下文 ───────────────────────────────
@@ -119,7 +119,7 @@ Over full window
   分类估算用量                          
                                         
 > ■ 系统提示词           1.5k (1.5%) +  
-  ■ 系统工具               5k (5.0%) +  
+  ■ 工具定义               5k (5.0%)    
   ■ 记忆／指令文件        300 (0.3%) +  
   ■ 技能                 1.5k (1.5%) +  
   ■ 对话／工具       111.7k (111.7%) +  
@@ -138,7 +138,7 @@ Over full window · expanded source
                                         
 > ■ 系统提示词           1.5k (1.5%) -  
     system/prompt · 1.5k tokens         
-  ■ 系统工具               5k (5.0%) +  
+  ■ 工具定义               5k (5.0%)    
   ■ 记忆／指令文件        300 (0.3%) +  
   ■ 技能                 1.5k (1.5%) +  
   ■ 对话／工具       111.7k (111.7%) +  
@@ -162,7 +162,7 @@ Over full window · allocation scrolled
   自动压缩阈值            90k tokens    
   超过自动压缩阈值       30k (30.0%)    
                                         
-  ↑/↓ 选择 · Enter 详情 · Esc 关闭      
+  ↑/↓ 选择 · Esc 关闭                   
 
 Unknown capacity
   Ash Code v0.1.0                       
@@ -174,7 +174,7 @@ Unknown capacity
   分类估算用量                          
                                         
 > ■ 系统提示词                  1.5k +  
-  ■ 系统工具                      5k +  
+  ■ 工具定义                      5k    
   ■ 记忆／指令文件               300 +  
   ■ 技能                        1.5k +  
   ■ 对话／工具                  3.7k +  
@@ -192,7 +192,7 @@ Unknown capacity · expanded source
                                         
 > ■ 系统提示词                  1.5k -  
     system/prompt · 1.5k tokens         
-  ■ 系统工具                      5k +  
+  ■ 工具定义                      5k    
   ■ 记忆／指令文件               300 +  
   ■ 技能                        1.5k +  
   ■ 对话／工具                  3.7k +  
@@ -210,7 +210,7 @@ Unknown capacity · allocation scrolled
                                         
 > ■ 系统提示词                  1.5k -  
     system/prompt · 1.5k tokens         
-  ■ 系统工具                      5k +  
+  ■ 工具定义                      5k    
   ■ 记忆／指令文件               300 +  
   ■ 技能                        1.5k +  
   ■ 对话／工具                  3.7k +  
