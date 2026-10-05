@@ -1,17 +1,16 @@
-import { timeout } from "../../../../base/common/async.js";
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
-import { ITerminalProcessService, ProcessPropertyType, type IShellLaunchConfig, type ITerminalChildProcess, type ITerminalProcessCommandStatusEvent, type ITerminalProcessOutputChunk, type ITerminalProcessReady, type TerminalProcessConnectionPersistence, type TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminal.js";
+import { ITerminalProcessService, ProcessPropertyType, type IShellLaunchConfig, type ITerminalChildProcess, type IProcessDataEvent, type ITerminalProcessReady, type TerminalProcessConnectionPersistence, type TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminal.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ITerminalCommandStatusEvent, ITerminalCreateOptions, ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalService, TerminalInstanceState } from "./terminal.js";
+import { TerminalProcessManager } from "./terminalProcessManager.js";
 
-const POLL_DELAY_MILLIS = 35;
 const INPUT_BATCH_DELAY_MILLIS = 8;
 const INPUT_BATCH_CHARACTERS = 16_384;
 const MAX_INPUT_BATCH_BYTES = 60 * 1024;
-const MAX_READ_CHUNKS = 128;
 
 interface CustomTerminalProcessOptions {
 	readonly create: NonNullable<IShellLaunchConfig['customPtyImplementation']>;
@@ -39,7 +38,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 	readonly onDidChangeInstances: Event<void> = this._onDidChangeInstances.event;
 	readonly onDidChangeActiveInstance: Event<ITerminalInstance | undefined> = this._onDidChangeActiveInstance.event;
 
-	constructor(@ITerminalProcessService processService: ITerminalProcessService, @IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService) {
+	constructor(@ITerminalProcessService processService: ITerminalProcessService, @IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService, @IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
 		this.processService = processService;
 		this._register(processService.onConnectionState((state) => {
@@ -86,7 +85,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		if (options.config) {
 			const instanceNumber = this.nextInstanceId++;
 			const name = options.title ?? options.config.name ?? '';
-			const instance = new TerminalInstance(
+			const instance = this.instantiationService.createInstance(TerminalInstance,
 				`terminal-instance-${instanceNumber}`,
 				'',
 				undefined,
@@ -96,7 +95,6 @@ export class TerminalService extends Disposable implements ITerminalService {
 				{ profileId: `embedder-${instanceNumber}`, title: name, isDefault: false },
 				'connectionOwned',
 				name,
-				this.processService,
 				() => this.connectionState,
 				() => this.removeInstance(instance),
 				{
@@ -139,7 +137,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 			throw new CancellationError();
 		}
 		const instanceNumber = this.nextInstanceId++;
-		const instance = new TerminalInstance(
+		const instance = this.instantiationService.createInstance(TerminalInstance,
 			`terminal-instance-${instanceNumber}`,
 			workspaceFolder.id,
 			processWorkspaceFolderId,
@@ -149,9 +147,9 @@ export class TerminalService extends Disposable implements ITerminalService {
 			created.profile,
 			created.connectionPersistence,
 			options.title,
-			this.processService,
 			() => this.connectionState,
 			() => this.removeInstance(instance),
+			undefined,
 		);
 		this.ownedInstances.set(instance.id, instance);
 		this._instances.push(instance);
@@ -256,13 +254,14 @@ export class TerminalService extends Disposable implements ITerminalService {
 }
 
 class TerminalInstance extends Disposable implements ITerminalInstance {
-	private readonly pendingOutput: Uint8Array[] = [];
+	private readonly pendingOutput: IProcessDataEvent[] = [];
+	private readonly shellLifetime = this._register(new MutableDisposable<DisposableStore>());
+	private shellProcessManager: TerminalProcessManager | undefined;
 	private pendingExit: { readonly code: number | undefined } | undefined;
 	private readonly customLifetime = this._register(new MutableDisposable<DisposableStore>());
 	private customProcess: ITerminalChildProcess | undefined;
-	private readonly processService: ITerminalProcessService;
 	private readonly onClosed: () => void;
-	private readonly _onDidWriteData = this._register(new Emitter<Uint8Array>({
+	private readonly _onDidWriteData = this._register(new Emitter<IProcessDataEvent>({
 		onDidAddFirstListener: () => queueMicrotask(() => {
 			while (!this.isDisposed && this._onDidWriteData.hasListeners() && this.pendingOutput.length > 0) {
 				this._onDidWriteData.fire(this.pendingOutput.shift()!);
@@ -282,8 +281,6 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 	private readonly _onDidChangeState = this._register(new Emitter<TerminalInstanceState>());
 	private _state: TerminalInstanceState = "running";
 	private _exitCode: number | undefined;
-	private nextSequence = 0;
-	private nextCommandSequence = 0;
 	private closed = false;
 	private closeTask: Promise<void> | undefined;
 	private processCloseTask: Promise<void> | undefined;
@@ -298,7 +295,7 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 	private _title: string;
 	private pollGeneration = 0;
 
-	readonly onDidWriteData: Event<Uint8Array> = this._onDidWriteData.event;
+	readonly onDidWriteData: Event<IProcessDataEvent> = this._onDidWriteData.event;
 	readonly onDidChangeCommandStatus: Event<ITerminalCommandStatusEvent> = this._onDidChangeCommandStatus.event;
 	readonly onDidExit: Event<number | undefined> = this._onDidExit.event;
 	readonly onDidChangeState: Event<TerminalInstanceState> = this._onDidChangeState.event;
@@ -313,16 +310,16 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 		profile: ITerminalProfile,
 		private readonly connectionPersistence: TerminalProcessConnectionPersistence,
 		readonly customTitle: string | undefined,
-		processService: ITerminalProcessService,
 		private readonly getConnectionState: () => TerminalProcessConnectionState,
 		onClosed: () => void,
-		private readonly custom?: CustomTerminalProcessOptions,
+		private readonly custom: CustomTerminalProcessOptions | undefined,
+		@ITerminalProcessService private readonly processService: ITerminalProcessService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		this.serverTerminalId = serverTerminalId;
 		this._profile = profile;
 		this._title = title;
-		this.processService = processService;
 		this.onClosed = onClosed;
 	}
 
@@ -402,12 +399,12 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 		this.customLifetime.value = lifetime;
 		lifetime.add(process);
 		lifetime.add(process.onProcessData(data => {
-			const bytes = VSBuffer.fromString(data).buffer;
+			const event: IProcessDataEvent = { data: VSBuffer.fromString(data).buffer, trackCommit: false };
 			// The PTY can write inside open(), before the view owns its xterm widget.
 			if (!this._onDidWriteData.hasListeners() || this.pendingOutput.length > 0) {
-				this.pendingOutput.push(bytes);
+				this.pendingOutput.push(event);
 			} else {
-				this._onDidWriteData.fire(bytes);
+				this._onDidWriteData.fire(event);
 			}
 		}));
 		lifetime.add(process.onProcessReady(ready => { this.processReady = ready; }));
@@ -488,6 +485,7 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 		this.clearPendingInput();
 		this.pendingDimensions = undefined;
 		this.pollGeneration += 1;
+		this.shellProcessManager?.stop();
 		this.closeTask = this.releaseProcess().finally(() => this.dispose());
 		// IDisposable starts release without an async error channel. close() retains
 		// the original promise, so explicit callers can await and observe failures.
@@ -527,16 +525,17 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		if (this.closed || this._state === "exited" || this._state === "disconnected") return;
 		this.pollGeneration += 1;
+		this.shellProcessManager?.stop();
 		this.clearPendingInput();
 		if (this.connectionPersistence === "reconnectable") {
 			if (this._state !== "reconnecting") {
 				this.setState("reconnecting");
-				this._onDidWriteData.fire(VSBuffer.fromString("\r\n[terminal reconnecting]\r\n").buffer);
+				this._onDidWriteData.fire({ data: VSBuffer.fromString("\r\n[terminal reconnecting]\r\n").buffer, trackCommit: false });
 			}
 			return;
 		}
 		this.setState("disconnected");
-		this._onDidWriteData.fire(VSBuffer.fromString("\r\n[terminal connection lost; process was not preserved]\r\n").buffer);
+		this._onDidWriteData.fire({ data: VSBuffer.fromString("\r\n[terminal connection lost; process was not preserved]\r\n").buffer, trackCommit: false });
 	}
 
 	restoreConnection(): void {
@@ -592,10 +591,10 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 			this.processReady = created.ready;
 			this.processCloseTask = undefined;
 			this._profile = created.profile;
-			this.nextSequence = 0;
-			this.nextCommandSequence = 0;
+			this.shellLifetime.clear();
+			this.shellProcessManager = undefined;
 			this._exitCode = undefined;
-			this._onDidWriteData.fire(VSBuffer.fromString("\r\n[terminal relaunched]\r\n").buffer);
+			this._onDidWriteData.fire({ data: VSBuffer.fromString("\r\n[terminal relaunched]\r\n").buffer, trackCommit: false });
 			this.setState("running");
 			this.start();
 		} catch (error) {
@@ -636,46 +635,37 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 
 	private async poll(generation: number, initialState: "running" | "reconnecting" = "running"): Promise<void> {
-		let recoveryPending = initialState === "reconnecting";
-		while (!this.closed && generation === this.pollGeneration && (this._state === "running" || (recoveryPending && this._state === "reconnecting"))) {
-			try {
-				const result = await this.processService.read({
-					...processWorkspaceFolder(this.processWorkspaceFolderId),
-					terminalId: this.serverTerminalId,
-					afterSequence: this.nextSequence,
-					afterCommandSequence: this.nextCommandSequence,
-					maxChunks: MAX_READ_CHUNKS,
-				});
-				if (this.closed || generation !== this.pollGeneration) return;
-				if (recoveryPending) {
-					if (this._state !== "reconnecting") return;
-					this._onDidWriteData.fire(VSBuffer.fromString("\r\n[terminal reconnected]\r\n").buffer);
-					this.setState("running");
-					recoveryPending = false;
-				} else if (this._state !== "running") {
-					return;
+		if (!this.shellProcessManager) {
+			const lifetime = new DisposableStore();
+			this.shellLifetime.value = lifetime;
+			const manager = this.instantiationService.createInstance(TerminalProcessManager, {
+				...processWorkspaceFolder(this.processWorkspaceFolderId),
+				terminalId: this.serverTerminalId,
+			});
+			this.shellProcessManager = lifetime.add(manager);
+			lifetime.add(manager.onProcessData(event => this._onDidWriteData.fire(event)));
+			lifetime.add(manager.onDidChangeCommandStatus(event => this._onDidChangeCommandStatus.fire(event)));
+			lifetime.add(manager.onOutputGap(() => {
+				this._onDidWriteData.fire({ data: VSBuffer.fromString("\r\n[terminal output truncated]\r\n").buffer, trackCommit: false });
+			}));
+			lifetime.add(manager.onPtyReconnect(() => {
+				this._onDidWriteData.fire({ data: VSBuffer.fromString("\r\n[terminal reconnected]\r\n").buffer, trackCommit: false });
+				this.setState("running");
+			}));
+			lifetime.add(manager.onProcessExit(code => {
+				this._exitCode = code;
+				this.setState("exited");
+				this._onDidExit.fire(code);
+			}));
+		}
+		try {
+			await this.shellProcessManager.start(initialState === "reconnecting");
+		} catch (error) {
+			if (!isCancellationError(error) && !this.closed && generation === this.pollGeneration) {
+				if (this._state === "reconnecting") {
+					this._onDidWriteData.fire({ data: VSBuffer.fromString("\r\n[terminal recovery failed; relaunch required]\r\n").buffer, trackCommit: false });
 				}
-				if (result.outputGap) {
-					this._onDidWriteData.fire(VSBuffer.fromString("\r\n[terminal output truncated]\r\n").buffer);
-				}
-				this.emitReadResult(result.chunks, result.commandEvents);
-				this.nextSequence = result.nextSequence;
-				this.nextCommandSequence = result.nextCommandSequence;
-				if (result.exited) {
-					this._exitCode = result.exitCode;
-					this.setState("exited");
-					this._onDidExit.fire(this._exitCode);
-					return;
-				}
-				if (result.chunks.length === 0) await timeout(POLL_DELAY_MILLIS);
-			} catch {
-				if (!this.closed && generation === this.pollGeneration) {
-					if (recoveryPending && this._state === "reconnecting") {
-						this._onDidWriteData.fire(VSBuffer.fromString("\r\n[terminal recovery failed; relaunch required]\r\n").buffer);
-					}
-					this.setState("error");
-				}
-				return;
+				this.setState("error");
 			}
 		}
 	}
@@ -688,32 +678,12 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 		this.pendingInput = "";
 	}
 
-	private emitReadResult(chunks: readonly ITerminalProcessOutputChunk[], commandEvents: readonly ITerminalProcessCommandStatusEvent[]): void {
-		let outputSequence = this.nextSequence;
-		let eventIndex = 0;
-		const emitEventsThrough = (sequence: number): void => {
-			while (eventIndex < commandEvents.length && commandEvents[eventIndex]!.afterOutputSequence <= sequence) {
-				const event = commandEvents[eventIndex++]!;
-				this._onDidChangeCommandStatus.fire({
-					commandId: event.commandId,
-					status: event.status,
-					exitCode: event.exitCode,
-				});
-			}
-		};
-		emitEventsThrough(outputSequence);
-		for (const chunk of chunks) {
-			emitEventsThrough(chunk.sequence - 1);
-			this._onDidWriteData.fire(chunk.data);
-			outputSequence = chunk.sequence;
-			emitEventsThrough(outputSequence);
-		}
-		emitEventsThrough(Number.POSITIVE_INFINITY);
-	}
-
 	private setState(state: TerminalInstanceState): void {
 		if (this._state === state || this.closed) return;
 		this._state = state;
+		if (state === 'error') {
+			this.shellProcessManager?.stop();
+		}
 		this._onDidChangeState.fire(state);
 	}
 }

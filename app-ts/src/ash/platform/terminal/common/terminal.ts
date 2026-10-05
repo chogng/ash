@@ -117,6 +117,14 @@ export interface IProcessReadyEvent {
 	readonly cwd: string;
 }
 
+/** Ash preserves PTY bytes so xterm can parse UTF-8 split across output chunks. */
+export interface IProcessDataEvent {
+	readonly data: Uint8Array;
+	readonly trackCommit: boolean;
+	/** The screen assigns this synchronously, resolving only after xterm parses the write. */
+	writePromise?: Promise<void>;
+}
+
 export enum ProcessPropertyType {
 	Title = 'title',
 }

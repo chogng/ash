@@ -755,7 +755,8 @@ Ctrl/Cmd+Alt+V 启动，再按该快捷键结束，
 
 Terminal 的实例契约与实例管理位于 `workbench/contrib/terminal/browser/terminal.ts` 和
 `terminalService.ts`。Tasks、Debug 的执行编排由各自 contribution 消费该契约。输入
-batching、resize coalescing 和 polling 由 `TerminalService` 负责；process contract 位于
+batching、resize coalescing 与进程创建/关闭由 `TerminalService` 负责；增量读取、两个游标、
+命令事件排序和解析等待由每个 Shell 的 `terminalProcessManager.ts` 负责。process contract 位于
 platform layer 的 `ITerminalProcessService`。`IRendererHost` 直接提供该领域契约；Electron、
 Vite development 和 disconnected runtime 分别实现它，wire DTO 只出现在对应 runtime
 implementation 内。Contribution 和 xterm view 都不直接调用 `IRendererHost`：
@@ -778,7 +779,12 @@ Web 宿主的 `window.createTerminal` 通过 `IEmbedderTerminalService` 接收�
 实例保留界面订阅前的同步输出与退出，标题跟随宿主改名；xterm 按只读终端运行。
 这条链路不创建 Rust Shell，不要求 Workspace folder，也不依赖后端连接状态。
 宿主的打开、关闭及监听释放沿窗口与实例生命周期处理；当前只补齐宿主输出所需的进程事件契约，
-完整标准 child process 的输入、属性和解析后数据确认仍未完成。
+Shell 输出已通过 `IProcessDataEvent.writePromise` 等待 xterm 的真实解析回调，再续读、发布命令完成
+和退出；完整标准 child process 的输入、属性及服务器 flow control 仍未完成。
+已有 Shell 首次输出会加载解析器，即使实例隐藏也可完成后台 Tasks；不显示隐藏面板、不改变焦点。
+进程管理器在关闭或断线时取消读取等待，恢复同一 Shell 时保留原屏幕写入和字节游标；
+Relaunch 使用新管理器，旧回调不影响新进程。OS PTY drainer 与 bounded ring 仍由 Rust 拥有，
+Renderer 的解析确认不等于服务器输出背压。
 
 SCM 同样通过 `IGitService → GitService → IGitApi` 访问仓库，并由 Service 把 status notification
 和 reconnect lifecycle 投影成前端事件；Search 通过

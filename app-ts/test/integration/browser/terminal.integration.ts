@@ -1,3 +1,4 @@
+import type { IProcessDataEvent } from '../../../src/ash/platform/terminal/common/terminal.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import '../../../src/ash/workbench/contrib/terminalContrib/voice/browser/terminal.voice.contribution.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
@@ -26,7 +27,7 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 }
 
 const store = new DisposableStore();
-const output = store.add(new Emitter<Uint8Array>());
+const output = store.add(new Emitter<IProcessDataEvent>());
 const exit = store.add(new Emitter<number | undefined>());
 const writes: string[] = [];
 const binaryWrites: number[][] = [];
@@ -60,7 +61,7 @@ window.ashTerminalIntegration = {
 	binaryWrites,
 	resizes,
 	fit: () => widget.fit(),
-	write: text => output.fire(new TextEncoder().encode(text)),
+	write: text => output.fire({ data: new TextEncoder().encode(text), trackCommit: false }),
 	exit: () => exit.fire(0),
 	start: () => {
 		completion = widget.initialize();
@@ -250,7 +251,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 		const exits: Promise<number | undefined>[] = [];
 		for (const service of services) {
 			resources.add(service.onDidCreateInstance(terminal => {
-				resources.add(terminal.onDidWriteData(data => output.push(new TextDecoder().decode(data))));
+				resources.add(terminal.onDidWriteData(data => output.push(new TextDecoder().decode(data.data))));
 				exits.push(new Promise(resolve => resources.add(terminal.onDidExit(resolve))));
 			}));
 			const terminal = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
@@ -349,6 +350,74 @@ declare global {
 			status(): { opens: number; closes: number; backendCalls: string[]; title?: string; state?: string; readOnly?: boolean; remaining: number };
 			close(): Promise<void>;
 			dispose(): void;
+		};
+	}
+}
+
+if (new URLSearchParams(location.search).has('stream')) {
+	widget.dispose();
+	await import('../../../src/ash/workbench/contrib/terminal/browser/terminal.contribution.js');
+	const [{ ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { WorkspaceContextService }, { installWorkbenchServiceContributions }] = await Promise.all([
+		import('../../../src/ash/platform/instantiation/common/serviceCollection.js'),
+		import('../../../src/ash/platform/terminal/common/terminal.js'),
+		import('../../../src/ash/platform/workspace/common/workspace.js'),
+		import('../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js'),
+		import('../../../src/ash/workbench/browser/workbenchServiceContributions.js'),
+	]);
+	const reads: number[] = [];
+	const events: string[] = [];
+	let closes = 0;
+	const bytes = new TextEncoder().encode('中文🙂\r\n');
+	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
+	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
+		listProfiles: async () => [profile],
+		create: async () => ({ terminalId: 'stream-shell', ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
+		write: async () => {},
+		resize: async () => {},
+		close: async () => { closes++; },
+		getConnectionState: async () => 'ready',
+		onConnectionState: Event.None,
+		read: async options => {
+			reads.push(options.afterSequence);
+			const first = options.afterSequence === 0;
+			return {
+				terminalId: options.terminalId,
+				chunks: [{ sequence: first ? 1 : 2, data: first ? bytes.slice(0, 2) : bytes.slice(2) }],
+				nextSequence: first ? 1 : 2,
+				outputGap: false,
+				commandEvents: first ? [{ sequence: 1, commandId: 'command', status: 'succeeded', exitCode: 0, afterOutputSequence: 2 }] : [],
+				nextCommandSequence: 1,
+				commandEventGap: false,
+				exited: !first,
+				exitCode: first ? undefined : 0,
+			};
+		},
+	};
+	const workspace = store.add(new WorkspaceContextService({ id: 'stream', uri: URI.file('/workspace') }));
+	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => {} });
+	const terminals = services.get(ITerminalService);
+	let screen!: TerminalInstanceWidget;
+	store.add(terminals.onDidCreateInstance(instance => {
+		screen = store.add(services.createInstance(TerminalInstanceWidget, document.querySelector<HTMLElement>('#terminal')!, instance));
+		screen.setVisible(!new URLSearchParams(location.search).has('hidden'));
+		store.add(instance.onDidChangeCommandStatus(event => events.push(event.status)));
+		store.add(instance.onDidExit(() => events.push('exit')));
+	}));
+	const terminal = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	window.ashTerminalStreamIntegration = {
+		status: () => ({ reads, events, closes, state: terminal.state, remaining: terminals.instances.length }),
+		start: async () => { await screen.initialize(); screen.focus(); },
+		close: async () => { await terminal.close(); store.dispose(); },
+	};
+}
+
+declare global {
+	interface Window {
+		ashTerminalStreamIntegration: {
+			status(): { reads: number[]; events: string[]; closes: number; state: string; remaining: number };
+			start(): Promise<void>;
+			close(): Promise<void>;
 		};
 	}
 }

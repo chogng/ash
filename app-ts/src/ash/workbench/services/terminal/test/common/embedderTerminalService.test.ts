@@ -43,7 +43,7 @@ suite('Embedder terminal creation', () => {
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Early', pty: host });
 		const instance = terminals.instances[0];
 		const events: (string | number | undefined)[] = [];
-		store.add(instance.onDidWriteData(data => events.push(new TextDecoder().decode(data))));
+		store.add(instance.onDidWriteData(data => events.push(new TextDecoder().decode(data.data))));
 		store.add(instance.onDidExit(code => events.push(code)));
 		await Promise.resolve();
 		assert.deepEqual(events, ['first line', 0]);
@@ -60,7 +60,7 @@ suite('Embedder terminal creation', () => {
 		const output: string[] = [];
 		const exited: (number | undefined)[] = [];
 		store.add(terminals.onDidCreateInstance(instance => {
-			store.add(instance.onDidWriteData(data => output.push(new TextDecoder().decode(data))));
+			store.add(instance.onDidWriteData(data => output.push(new TextDecoder().decode(data.data))));
 			store.add(instance.onDidExit(code => exited.push(code)));
 		}));
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Host output', pty: host });

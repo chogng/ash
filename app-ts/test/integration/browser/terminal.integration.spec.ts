@@ -287,3 +287,52 @@ test('legacy mouse reports deliver their raw high bytes through xterm onBinary',
 	expect(await page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual([]);
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });
+
+test('Shell output waits for xterm loading and preserves split UTF-8 before completion and exit', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	let release!: () => void;
+	const gate = new Promise<void>(resolve => { release = resolve; });
+	await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => { await gate; await route.continue(); });
+	try {
+		await page.goto('/terminal.html?stream');
+		await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status())).toEqual({ reads: [0], events: [], closes: 0, state: 'running', remaining: 1 });
+		await expect(page.locator('.xterm')).toHaveCount(0);
+	} finally {
+		release();
+	}
+	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status())).toEqual({ reads: [0, 1], events: ['succeeded', 'exit'], closes: 0, state: 'exited', remaining: 1 });
+	await expect(page.locator('.xterm-rows')).toHaveText(/中文🙂.*process exited with code 0/su);
+	await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+	await expect(page.locator('.ash-terminal-instance')).toHaveCount(0);
+	expect(errors).toEqual([]);
+});
+
+test('closing a Shell while xterm loads stops reading and releases the process', async ({ page }) => {
+	let release!: () => void;
+	const gate = new Promise<void>(resolve => { release = resolve; });
+	await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => { await gate; await route.continue(); });
+	try {
+		await page.goto('/terminal.html?stream');
+		await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().reads)).toEqual([0]);
+		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+	} finally {
+		release();
+	}
+	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status())).toMatchObject({ reads: [0], events: [], closes: 1, remaining: 0 });
+	await expect(page.locator('.ash-terminal-instance')).toHaveCount(0);
+});
+
+test('an existing hidden Shell parses and completes without revealing the panel or taking focus', async ({ page }) => {
+	await page.goto('/terminal.html?stream&hidden');
+	await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+	await page.locator('#outside').focus();
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status())).toEqual({ reads: [0, 1], events: ['succeeded', 'exit'], closes: 0, state: 'exited', remaining: 1 });
+	await expect(page.locator('.ash-terminal-instance')).toBeHidden();
+	await expect(page.locator('#outside')).toBeFocused();
+	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+});

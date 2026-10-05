@@ -73,7 +73,7 @@ test("TerminalService exposes event-driven instances over the process service", 
 	let createdInstance: ITerminalInstance | undefined;
 	service.onDidCreateInstance((instance) => {
 		createdInstance = instance;
-		instance.onDidWriteData((data) => output.push(data));
+		instance.onDidWriteData((event) => output.push(event.data));
 		instance.onDidChangeCommandStatus((event) => commandStatuses.push(event.status));
 	});
 
@@ -163,7 +163,12 @@ test("TerminalService keeps multiple instances and safely relaunches after a cra
 
 test("TerminalService resumes reconnectable terminals from their existing output cursors", async () => {
 	const processService = new TestTerminalProcessService([
-		readResult({ nextSequence: 4, nextCommandSequence: 2 }),
+		readResult({
+			chunks: [{ sequence: 4, data: new TextEncoder().encode('initial output') }],
+			nextSequence: 4,
+			commandEvents: [{ sequence: 2, commandId: 'initial', status: 'completed', exitCode: undefined, afterOutputSequence: 4 }],
+			nextCommandSequence: 2,
+		}),
 	], "reconnectable");
 	using services = terminalServices(processService, folderWorkspaceContext());
 	const service = services.get(ITerminalService);
@@ -172,8 +177,10 @@ test("TerminalService resumes reconnectable terminals from their existing output
 		profile: { type: "default" },
 	});
 	const output: string[] = [];
-	instance.onDidWriteData(data => output.push(new TextDecoder().decode(data)));
-	await waitFor(() => processService.readCursors.length === 1);
+	instance.onDidWriteData(data => output.push(new TextDecoder().decode(data.data)));
+	let initialReadConsumed = false;
+	using commandListener = instance.onDidChangeCommandStatus(() => { initialReadConsumed = true; });
+	await waitFor(() => initialReadConsumed);
 
 	processService.emitConnectionState("crashed");
 	await waitFor(() => instance.state === "reconnecting");
@@ -211,7 +218,7 @@ test("TerminalService exposes failed reconnectable recovery as a relaunchable er
 		profile: { type: "default" },
 	});
 	const output: string[] = [];
-	instance.onDidWriteData(data => output.push(new TextDecoder().decode(data)));
+	instance.onDidWriteData(data => output.push(new TextDecoder().decode(data.data)));
 	await waitFor(() => processService.readCursors.length === 1);
 
 	processService.emitConnectionState("stopping");
@@ -460,7 +467,7 @@ suite('TerminalService lifecycle', () => {
 			const service = services.get(ITerminalService);
 			const outputs: string[] = [];
 			using listeners = new DisposableStore();
-			listeners.add(service.onDidCreateInstance(instance => listeners.add(instance.onDidWriteData(data => outputs.push(new TextDecoder().decode(data))))));
+			listeners.add(service.onDidCreateInstance(instance => listeners.add(instance.onDidWriteData(data => outputs.push(new TextDecoder().decode(data.data))))));
 			const pending = service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 			processService.emitConnectionState('crashed');
 			creation.resolve();
@@ -588,7 +595,7 @@ suite('TerminalService lifecycle', () => {
 		const service = services.get(ITerminalService);
 		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 		const output: Uint8Array[] = [];
-		using listener = instance.onDidWriteData(data => output.push(data));
+		using listener = instance.onDidWriteData(event => output.push(event.data));
 		instance.write('queued');
 		instance.resize({ rows: 30, cols: 100 });
 		instance.dispose();
@@ -734,7 +741,7 @@ suite('TerminalService lifecycle', () => {
 		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 		await waitFor(() => instance.state === 'exited');
 		const output: Uint8Array[] = [];
-		using listener = instance.onDidWriteData(data => output.push(data));
+		using listener = instance.onDidWriteData(event => output.push(event.data));
 		processService.creationGates.push(creation.promise);
 		const cancelled = assert.rejects(service.relaunchTerminal(instance, { rows: 30, cols: 100 }), isCancellationError);
 		await waitFor(() => processService.createCalls.length === 2);
@@ -768,5 +775,201 @@ suite('TerminalService lifecycle', () => {
 		creation.resolve();
 		await cancelled;
 		assert.deepEqual(processService.closeOptions, [{ dirId: 'second', terminalId: 'terminal-1' }]);
+	});
+});
+
+
+suite('TerminalService output parsing', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('waits for screen parsing before command completion, another read and exit', async () => {
+		const parsed = deferred<void>();
+		const processes = new TestTerminalProcessService([
+			readResult({
+				chunks: [{ sequence: 1, data: new TextEncoder().encode('first') }],
+				nextSequence: 1,
+				commandEvents: [
+					{ sequence: 1, commandId: 'command', status: 'running', exitCode: undefined, afterOutputSequence: 0 },
+					{ sequence: 2, commandId: 'command', status: 'succeeded', exitCode: 0, afterOutputSequence: 1 },
+				],
+				nextCommandSequence: 2,
+			}),
+			readResult({ nextSequence: 1, nextCommandSequence: 2, exited: true, exitCode: 0 }),
+		]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using listeners = new DisposableStore();
+		const terminals = services.get(ITerminalService);
+		const events: string[] = [];
+		listeners.add(terminals.onDidCreateInstance(instance => {
+			listeners.add(instance.onDidWriteData(event => {
+				events.push(new TextDecoder().decode(event.data));
+				event.writePromise = parsed.promise;
+			}));
+			listeners.add(instance.onDidChangeCommandStatus(event => events.push(event.status)));
+			listeners.add(instance.onDidExit(() => events.push('exit')));
+		}));
+		const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		await waitFor(() => events.includes('first'));
+		assert.deepEqual({ events, reads: processes.readCursors, state: instance.state }, { events: ['running', 'first'], reads: [0], state: 'running' });
+		parsed.resolve();
+		await waitFor(() => instance.state === 'exited');
+		assert.deepEqual({ events, reads: processes.readCursors }, { events: ['running', 'first', 'succeeded', 'exit'], reads: [0, 1] });
+	});
+
+	test('drains an exited process beyond one page and holds commands positioned after future output', async () => {
+		const processes = new TestTerminalProcessService([
+			readResult({
+				chunks: Array.from({ length: 128 }, (_, index) => ({ sequence: index + 1, data: new TextEncoder().encode(`line-${index + 1}`) })),
+				nextSequence: 128,
+				commandEvents: [{ sequence: 1, commandId: 'command', status: 'succeeded', exitCode: 0, afterOutputSequence: 129 }],
+				nextCommandSequence: 1,
+				exited: true,
+				exitCode: 0,
+			}),
+			readResult({ chunks: [{ sequence: 129, data: new TextEncoder().encode('tail') }], nextSequence: 129, nextCommandSequence: 1, exited: true, exitCode: 0 }),
+		]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using listeners = new DisposableStore();
+		const terminals = services.get(ITerminalService);
+		const events: string[] = [];
+		listeners.add(terminals.onDidCreateInstance(instance => {
+			listeners.add(instance.onDidWriteData(event => {
+				events.push(new TextDecoder().decode(event.data));
+				event.writePromise = Promise.resolve();
+			}));
+			listeners.add(instance.onDidChangeCommandStatus(event => events.push(event.status)));
+			listeners.add(instance.onDidExit(() => events.push('exit')));
+		}));
+		const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		await waitFor(() => instance.state === 'exited');
+		assert.deepEqual({ count: events.length, tail: events.slice(-3), reads: processes.readCursors, commands: processes.commandReadCursors }, {
+			count: 131, tail: ['tail', 'succeeded', 'exit'], reads: [0, 128], commands: [0, 1],
+		});
+	});
+
+	test('drains the last command page before reporting process exit', async () => {
+		const command = { commandId: 'command', status: 'completed', exitCode: undefined, afterOutputSequence: 0 } as const;
+		const processes = new TestTerminalProcessService([
+			readResult({ commandEvents: Array.from({ length: 128 }, (_, index) => ({ ...command, sequence: index + 1 })), nextCommandSequence: 128, exited: true }),
+			readResult({ commandEvents: [{ ...command, sequence: 129 }], nextCommandSequence: 129, exited: true }),
+		]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using listeners = new DisposableStore();
+		const terminals = services.get(ITerminalService);
+		const events: string[] = [];
+		listeners.add(terminals.onDidCreateInstance(instance => {
+			listeners.add(instance.onDidChangeCommandStatus(event => events.push(event.status)));
+			listeners.add(instance.onDidExit(() => events.push('exit')));
+		}));
+		const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		await waitFor(() => instance.state === 'exited');
+		assert.deepEqual({ count: events.length, last: events.at(-1), cursors: processes.commandReadCursors }, { count: 130, last: 'exit', cursors: [0, 128] });
+	});
+
+	test('closing cancels an unfinished screen write without waiting for its callback', async () => {
+		const parsed = deferred<void>();
+		const processes = new TestTerminalProcessService([readResult({ chunks: [{ sequence: 1, data: new Uint8Array([65]) }], nextSequence: 1 })]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using listeners = new DisposableStore();
+		const terminals = services.get(ITerminalService);
+		let delivered = false;
+		listeners.add(terminals.onDidCreateInstance(instance => listeners.add(instance.onDidWriteData(event => {
+			delivered = true;
+			event.writePromise = parsed.promise;
+		}))));
+		const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		await waitFor(() => delivered);
+		await instance.close();
+		parsed.resolve();
+		await Promise.resolve();
+		assert.deepEqual({ reads: processes.readCursors, closes: processes.closeCalls, remaining: terminals.instances.length }, { reads: [0], closes: ['terminal-1'], remaining: 0 });
+	});
+
+	test('transport recovery waits for the existing screen write and never replays it', async () => {
+		const parsed = deferred<void>();
+		const processes = new TestTerminalProcessService([
+			readResult({ chunks: [{ sequence: 1, data: new TextEncoder().encode('once') }], nextSequence: 1 }),
+			readResult({ nextSequence: 1, exited: true, exitCode: 0 }),
+		], 'reconnectable');
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using listeners = new DisposableStore();
+		const terminals = services.get(ITerminalService);
+		const output: string[] = [];
+		listeners.add(terminals.onDidCreateInstance(instance => listeners.add(instance.onDidWriteData(event => {
+			output.push(new TextDecoder().decode(event.data));
+			if (event.trackCommit) {
+				event.writePromise = parsed.promise;
+			}
+		}))));
+		const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		await waitFor(() => output.includes('once'));
+		processes.emitConnectionState('crashed');
+		processes.emitConnectionState('ready');
+		await Promise.resolve();
+		assert.deepEqual({ reads: processes.readCursors, state: instance.state }, { reads: [0], state: 'reconnecting' });
+		parsed.resolve();
+		await waitFor(() => instance.state === 'exited');
+		assert.deepEqual({ reads: processes.readCursors, output: output.filter(value => value === 'once') }, { reads: [0, 1], output: ['once'] });
+	});
+});
+
+suite('TerminalService parser failure and replacement', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('a failed screen write stops the stream and exposes a closable error', async () => {
+		const parsed = deferred<void>();
+		const processes = new TestTerminalProcessService([readResult({ chunks: [{ sequence: 1, data: new Uint8Array([65]) }], nextSequence: 1 })]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using listeners = new DisposableStore();
+		const terminals = services.get(ITerminalService);
+		let delivered = false;
+		listeners.add(terminals.onDidCreateInstance(instance => listeners.add(instance.onDidWriteData(event => {
+			delivered = true;
+			event.writePromise = parsed.promise;
+		}))));
+		const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		await waitFor(() => delivered);
+		parsed.reject(new Error('Screen could not parse output'));
+		await waitFor(() => instance.state === 'error');
+		await instance.close();
+		assert.deepEqual({ reads: processes.readCursors, closes: processes.closeCalls }, { reads: [0], closes: ['terminal-1'] });
+	});
+
+	test('an old parse callback cannot hold or advance a replacement Shell', async () => {
+		const parsed = deferred<void>();
+		const processes = new TestTerminalProcessService([
+			readResult({ chunks: [{ sequence: 1, data: new TextEncoder().encode('old') }], nextSequence: 1 }),
+			readResult({ terminalId: 'terminal-2', chunks: [{ sequence: 1, data: new TextEncoder().encode('new') }], nextSequence: 1, exited: true, exitCode: 0 }),
+		]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using listeners = new DisposableStore();
+		const terminals = services.get(ITerminalService);
+		const output: string[] = [];
+		listeners.add(terminals.onDidCreateInstance(instance => listeners.add(instance.onDidWriteData(event => {
+			const text = new TextDecoder().decode(event.data);
+			output.push(text);
+			if (event.trackCommit) {
+				event.writePromise = text === 'old' ? parsed.promise : Promise.resolve();
+			}
+		}))));
+		const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		await waitFor(() => output.includes('old'));
+		processes.emitConnectionState('crashed');
+		processes.emitConnectionState('ready');
+		await terminals.relaunchTerminal(instance, { rows: 24, cols: 80 });
+		await waitFor(() => instance.state === 'exited');
+		parsed.resolve();
+		await Promise.resolve();
+		await instance.close();
+		assert.deepEqual({ reads: processes.readCursors, output: output.filter(text => text === 'old' || text === 'new'), closes: processes.closeCalls }, {
+			reads: [0, 0], output: ['old', 'new'], closes: ['terminal-1', 'terminal-2'],
+		});
 	});
 });

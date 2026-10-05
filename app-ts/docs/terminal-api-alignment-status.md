@@ -1,13 +1,13 @@
 # Terminal API 对齐状态
 
-终端基座的文件归属与 DI 接线已迁移：平台契约位于 `platform/terminal/common/terminal.ts`，实例契约与实例管理位于 `workbench/contrib/terminal/browser/terminal.ts`、`terminalService.ts`。Workbench 与 Sessions 注册所选进程能力，由共同的 Terminal contribution 创建窗口实例服务。SSH 宿主直接选择完整适配器；本地和 SSH 的字节、退出码转换已收回协议边界。完整 VS Code Terminal API、SSH backend 契约及 terminalContrib 尚未完成。
+终端基座的文件归属与 DI 接线已迁移：平台契约位于 `platform/terminal/common/terminal.ts`，实例契约与实例管理位于 `workbench/contrib/terminal/browser/terminal.ts`、`terminalService.ts`。Shell 的 `terminalProcessManager.ts` 已接管读取游标、命令排序、分页排空与 xterm 解析等待。Workbench 与 Sessions 注册所选进程能力，由共同的 Terminal contribution 创建窗口实例服务。SSH 宿主直接选择完整适配器；本地和 SSH 的字节、退出码转换已收回协议边界。完整 VS Code Terminal API、SSH backend 契约及 terminalContrib 尚未完成。
 
 ## 职责与调用链
 
 | Owner | 当前职责与状态 |
 | --- | --- |
 | [platform/terminal](../src/ash/platform/terminal/README.md) | 前端进程契约与 DI 标识；现有 Rust 协议适配、SSH 租约管理继续接入同一后端 |
-| [contrib/terminal](../src/ash/workbench/contrib/terminal/README.md) | 唯一实例集合、活动项、输入队列、输出与命令游标；View 和 xterm 拥有屏幕、焦点、主题及布局 |
+| [contrib/terminal](../src/ash/workbench/contrib/terminal/README.md) | 唯一实例集合、活动项和输入队列；进程管理器拥有读取游标、命令排序和解析等待；View 和 xterm 拥有屏幕、焦点、主题及布局 |
 | [services/terminal](../src/ash/workbench/services/terminal/README.md) | 宿主输出 PTY 创建通知与生命周期已接入 Web API 和 Terminal contribution；不保存 Shell 实例服务 |
 | `contrib/tasks/browser/taskService.ts` | 任务发现、执行与终端命令状态；稳定依赖经构造 DI 注入，注册仍由 Code 模式选择 |
 | `contrib/debug/browser/debugService.ts` | Debug 执行编排与 DAP `runInTerminal`；稳定依赖经构造 DI 注入，工厂源仍指向同一个共享 registry |
@@ -54,10 +54,10 @@
 | --- | ---: | ---: | ---: | ---: | ---: |
 | `platform/terminal` | 4 | 46 | 1 | 3 | 45 |
 | `workbench/services/terminal` | 1 | 1 | 1 | 0 | 0 |
-| `workbench/contrib/terminal` | 14 | 89 | 7 | 7 | 82 |
+| `workbench/contrib/terminal` | 15 | 89 | 8 | 7 | 81 |
 | `workbench/contrib/terminalContrib` | 4 | 170 | 3 | 1 | 167 |
 
-新增同路径 owner 承接已有 Ash 调用契约。公开名称与参数仍有差异：平台继续使用进程 ID、分页读取和命令游标；完整事件型 child process/backend、process manager、profile/configuration、分组、编辑区终端和扩展自供 PTY 尚未对齐。本批不把文件迁移或 DI 标识计为完整公开 API 对齐。
+新增同路径 owner 承接已有 Ash 调用契约。公开名称与参数仍有差异：平台继续使用进程 ID、分页读取和命令游标；进程管理器已接入 Shell 输出事件与解析等待；完整事件型 child process/backend、process manager 的其他公开能力、profile/configuration、分组、编辑区终端和扩展自供 PTY 尚未对齐。本批不把文件迁移或 DI 标识计为完整公开 API 对齐。
 
 ## 后续归属与能力
 
@@ -173,6 +173,18 @@ Terminal 专属无障碍帮助、输出 Accessible View、verbosity、Find、历
 宿主契约与上游同样只提供 open/close、输出和可选退出/改名，不提供输入、signal 或尺寸回调。已退出实例保留屏幕，退出码 0 原样保留；宿主 PID 为 -1、cwd 为空，不能用来代替真实 Shell 身份。平台新增的 `ITerminalChildProcess` 当前仅覆盖此输出链的事件和生命周期，公开成员仍是完整上游契约的子集；完整 Shell child process/backend、属性与解析后 ACK 尚未完成。本批没有通过空方法制造这些能力。
 
 第六批验证：新增回归先复现了宿主同步输出与退出在界面订阅前丢失的问题，修复后通过真实 DI 与 contribution 观察早到事件。正常 `test:unit` 入口的 Embedder、Terminal、Tasks、DAP terminal 和服务装配五个文件共 46 项通过，runner 自测 4 项通过；新增的 8 项 Embedder 用例启用 disposable tracker。Chromium Terminal Playwright 19 项通过，其中新增 2 项验证真实 xterm 的只读宿主输出、焦点与释放；既有中文动作、文本/二进制输入和语音场景保持通过。生产 `pnpm --dir app-ts build`、automation 编译、`prepare:backend` 与真实 Electron + App Server Terminal 3 项通过。后端构建无 warning；stylelint 为 0 错误、1 条未修改 Sessions CSS 的建议，Playwright 有既有颜色环境提示。未修改 Rust 或协议，未运行 Rust 单测；未验证 Windows/Linux 和真实 SSH transport 的产品场景。
+
+### 第七批准入：Shell 输出管理与解析确认
+
+用户继续要求补基座。生产链路：Terminal View/Tasks 创建 Shell → TerminalService 公布实例 → 新增同路径 TerminalProcessManager 增量读取 → 实例输出事件 → 现有 TerminalInstanceWidget 的 xterm write 回调 → 解析 promise → 下一批读取及命令完成/退出。进程管理器唯一拥有读取游标、尚未发出的命令事件与读取取消；实例仍拥有成员身份、输入、连接状态和创建/关闭，widget 仍拥有屏幕。实现来自 Ash 的字节 DTO、双游标和窗口生命周期，不复制上游进程后端或屏幕实现。
+
+准确范围：`app-ts/src/ash/platform/terminal/common/terminal.ts`（双方都有，增加 data/trackCommit/writePromise 事件，data 保留 Ash 原始字节）；`app-ts/src/ash/workbench/contrib/terminal/browser/terminalProcessManager.ts`（仅 VS Code，原路径补读取、分页排空、事件排序、解析等待与取消）；同目录 `terminalService.ts`、`terminal.ts`（双方都有，迁移读取 owner 与输出事件消费者）；已确认屏幕 owner `browser/instance/terminalInstanceWidget.ts`（仅接解析完成回调，无 DOM/CSS/交互调整）；既有 `test/browser/terminalService.test.ts`、`workbench/services/terminal/test/common/embedderTerminalService.test.ts`、`test/integration/browser/terminal.integration.ts` 及 `.spec.ts`（同步事件与真实入口回归）；三个 Terminal README、本台账和 `docs/ash-desktop-architecture.md`（同步职责与限制）。其余文件只读，无删除或移动。
+
+验证须观察慢解析期间停止续读、完成状态/退出在最后字节解析之后、已退出进程超过一页仍读取尾部、未来输出对应的命令事件不提前发出、关闭/断线取消等待且旧回调不污染新进程、真实 xterm 分块 UTF-8 与早到数据。已有 Shell 首次输出加载解析器，隐藏实例也能完成后台任务，不显示面板或改变焦点；没有进程的隐藏面板仍保持延迟加载。Rust bounded ring 继续拥有后端历史上限；本批解析确认约束 Renderer 读取，不增加虚假的服务器 ACK，也不声称阻塞 OS PTY 读取。完整 Shell child process 属性与跨窗口恢复仍待补。
+
+第七批验证：正常单测入口的 Terminal、Embedder、Tasks、DAP terminal 与服务装配五个文件共 53 项通过，runner 自测 4 项通过。新增 7 项实例回归均启用 disposable tracker，覆盖解析完成/失败、分页尾部、未来命令、关闭、同一 Shell 恢复及旧回调与替换进程隔离。既有重连测试改为等待初始命令事件已消费，避免用“请求已发出”推断游标已更新，仍断言两次恢复的精确游标。
+
+Chromium Terminal Playwright 22 项通过，新增 3 项经过生产服务注册与真实 xterm，覆盖加载期间停止续读、分块中文/emoji、完成与退出、关闭取消和隐藏解析不抢焦点。生产 `pnpm --dir app-ts build`、`typecheck:renderer`、automation 编译通过；当前产物的真实 Electron + App Server Terminal 3 项通过。构建无 warning/error；stylelint 为 0 错误、1 条未修改 Sessions CSS 的建议，Playwright 保留既有颜色环境提示。目录审计仅增加上游同路径进程管理器，旧实例读取 owner 已退出；46 个文档相对目标及 `git diff --check` 通过。未修改 Rust 或生成协议，未运行 Rust 单测；Windows/Linux 和真实 SSH transport 产品场景未验证。
 
 ## 验证
 

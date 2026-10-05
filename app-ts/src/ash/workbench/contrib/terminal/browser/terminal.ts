@@ -1,7 +1,7 @@
 import type { Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
+import type { IProcessDataEvent, IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 
 /** Character-cell dimensions used by Workbench terminal callers. */
 export interface ITerminalDimensions {
@@ -55,7 +55,7 @@ export interface ITerminalInstance extends IDisposable {
 	readonly profile: ITerminalProfile;
 	readonly state: TerminalInstanceState;
 	readonly exitCode: number | undefined;
-	readonly onDidWriteData: Event<Uint8Array>;
+	readonly onDidWriteData: Event<IProcessDataEvent>;
 	readonly onDidChangeCommandStatus: Event<ITerminalCommandStatusEvent>;
 	readonly onDidExit: Event<number | undefined>;
 	readonly onDidChangeState: Event<TerminalInstanceState>;

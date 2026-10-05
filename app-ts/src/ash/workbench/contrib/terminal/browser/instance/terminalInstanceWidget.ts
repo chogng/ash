@@ -36,7 +36,20 @@ export class TerminalInstanceWidget extends Disposable {
 			this.pendingWrites.length = 0;
 			this.element.remove();
 		}));
-		this._register(instance.onDidWriteData((data) => this.writeWhenReady(terminal => terminal.write(data))));
+		this._register(instance.onDidWriteData(event => {
+			if (event.trackCommit) {
+				event.writePromise = new Promise((resolve, reject) => {
+					this.writeWhenReady(terminal => terminal.write(event.data, resolve));
+					// Existing background Shells must parse without waiting for panel visibility,
+					// otherwise Tasks cannot receive completion while the panel is hidden.
+					if (!this.terminal) {
+						void this.initialize().catch(reject);
+					}
+				});
+			} else {
+				this.writeWhenReady(terminal => terminal.write(event.data));
+			}
+		}));
 		this._register(instance.onDidChangeCommandStatus((event) => this.writeWhenReady(terminal => this.renderCommandStatus(terminal, event))));
 		this._register(instance.onDidExit((exitCode) => {
 			this.writeWhenReady(terminal => {
