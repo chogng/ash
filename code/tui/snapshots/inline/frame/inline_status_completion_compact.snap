@@ -50,13 +50,13 @@ expression: text(&completion)
                                                                                 
                                                                                 
                                                                                 
-                                                                                
-                                                                                
-  ─────────────────────────────────────────────────────────────────────── 1/4   
+  ─────────────────────────────────────────────────────────────────────── 1/5   
   /status                    show session state and thread totals               
   /statusline                choose the items shown in the status line          
   /shortcuts                 browse and customize terminal shortcuts            
   /pr                        ask the Agent to create or inspect a pull request  
+  /debug-context             Developer: inspect context tool estimates and      
+                             full definitions                                   
 ────────────────────────────────────────────────────────────────────────────────
 > /status                                                                       
 ────────────────────────────────────────────────────────────────────────────────

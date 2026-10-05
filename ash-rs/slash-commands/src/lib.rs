@@ -1,16 +1,16 @@
 //! Headless Slash Commands catalog, input grammar, and interaction state.
 
 mod catalog;
+mod definition;
 mod input;
 mod state;
 
-pub use ash_app_server_protocol::protocol::slash_commands::{
-    ProductSlashCommand, SlashCommandArgumentModeDto as SlashCommandArgumentMode,
-    SlashCommandDefinition,
-};
 pub use catalog::{
     SlashCommandCatalog, SlashCommandCatalogError, SlashCommandOrigin, matched_character_indices,
 };
+pub use definition::ProductSlashCommand;
+pub use definition::SlashCommandArgumentMode;
+pub use definition::SlashCommandDefinition;
 pub use input::{
     SlashCommandCompletion, SlashCommandInput, SlashCommandInvocation, SlashCommandQuery,
 };

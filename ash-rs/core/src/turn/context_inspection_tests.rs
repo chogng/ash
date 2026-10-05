@@ -80,6 +80,20 @@ fn context_inspection_counts_loaded_categories_before_a_request_without_executio
     let environment = &environment_inspection.context;
     assert_eq!(environment.latest_request, None);
     assert_eq!(
+        environment
+            .categories
+            .iter()
+            .map(|usage| usage.category)
+            .collect::<Vec<_>>(),
+        [
+            ModelContextCategory::SystemPrompt,
+            ModelContextCategory::SystemTools,
+            ModelContextCategory::MemoryFiles,
+            ModelContextCategory::Skills,
+            ModelContextCategory::Conversation,
+        ]
+    );
+    assert_eq!(
         environment.estimated_tokens,
         environment
             .categories

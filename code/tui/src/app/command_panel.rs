@@ -1,7 +1,6 @@
 use crate::config::ConfigChoices;
 use crate::config::ConfigEditor;
 use crate::config::ConfigEditorOutcome;
-use crate::config::ConfigEditorPage;
 use crate::connectors::ConnectorChoices;
 use crate::connectors::ConnectorSelectionAction;
 use crate::dirs::DirAddTarget;
@@ -18,7 +17,6 @@ use crate::keymap::KeyEvent;
 use crate::keymap_setup::KeymapChoices;
 use crate::keymap_setup::KeymapEditor;
 use crate::keymap_setup::KeymapEditorOutcome;
-use crate::keymap_setup::KeymapEditorPage;
 use crate::mcp::McpChoices;
 use crate::mcp::McpSelectionAction;
 use crate::models::ModelChoices;
@@ -54,7 +52,7 @@ use ratatui::layout::Rect;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug)]
-pub(super) enum CommandPanelBody<'a> {
+pub(crate) enum CommandPanelBody<'a> {
     Selection(&'a ListSelectionState),
     Effort(&'a crate::models::EffortSelector),
     Details {
@@ -92,6 +90,55 @@ impl CommandPanelBody<'_> {
             Self::Memories(panel) => panel.allows_backdrop_dismiss(),
             Self::Prompt(_) | Self::Provider(_) | Self::KeyCapture(_) | Self::Dialog(_) => false,
         }
+    }
+}
+
+/// Presentation contract implemented by each feature editor.
+///
+/// Features choose their current body, editable list, hints and parent navigation. The App
+/// retains the closed command/outcome enums and owns placement, lifetime and request identity;
+/// feature refresh operations are deliberately outside this interface.
+pub(crate) trait PanelContent {
+    fn body(&self) -> CommandPanelBody<'_>;
+    fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints;
+
+    fn selection(&self) -> Option<&ListSelectionState> {
+        match self.body() {
+            CommandPanelBody::Selection(selection) => Some(selection),
+            CommandPanelBody::Details { actions, .. } => Some(actions),
+            _ => None,
+        }
+    }
+    fn selection_mut(&mut self) -> Option<&mut ListSelectionState> {
+        None
+    }
+    fn handle_paste(&mut self, _pasted: String) {}
+    fn localize(&mut self, language: crate::nls::Language) {
+        if let Some(selection) = self.selection_mut() {
+            selection.localize(language);
+        }
+    }
+    fn parent_title(&self) -> Option<&str> {
+        None
+    }
+    fn return_to_parent(&mut self) {}
+    fn allows_backdrop_dismiss(&self) -> bool {
+        self.body().allows_backdrop_dismiss()
+    }
+}
+
+impl<A: Clone> PanelContent for ListSelection<A> {
+    fn body(&self) -> CommandPanelBody<'_> {
+        CommandPanelBody::Selection(self.state())
+    }
+    fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
+        self.key_hints()
+    }
+    fn selection_mut(&mut self) -> Option<&mut ListSelectionState> {
+        Some(self.state_mut())
+    }
+    fn handle_paste(&mut self, pasted: String) {
+        self.handle_paste(pasted);
     }
 }
 
@@ -155,6 +202,70 @@ pub(crate) enum CommandPanelOutcome {
 }
 
 impl CommandPanel {
+    fn content(&self) -> &dyn PanelContent {
+        match self {
+            Self::Loading(content) => content,
+            Self::Help(content) => content,
+            Self::Shortcuts(content) => content,
+            Self::Dirs(content) => content,
+            Self::GitBranches(content) => content,
+            Self::GitWorktrees(content) => content,
+            Self::Config(content) => content,
+            Self::Connectors(content) => content,
+            Self::Keymap(content) => content,
+            Self::Marketplace(content) => content,
+            Self::Lsp(content) => content,
+            Self::Mcp(content) => content,
+            Self::Hooks(content) => content,
+            Self::Memories(content) => content,
+            Self::Guardian(content) => content,
+            Self::Model(content) => content,
+            Self::Effort(content) => content,
+            Self::ComposerOptions(content) => content,
+            Self::ProjectRoots(content) => content,
+            Self::Rewind(content) => content,
+            Self::Sessions(content) => content,
+            Self::Skills(content) => content,
+            Self::Usage(content) => content,
+            Self::Status(content) => content,
+            Self::Context(content) => content,
+            Self::StatusLine(content) => content,
+            Self::Theme(content) => content,
+        }
+    }
+
+    fn content_mut(&mut self) -> &mut dyn PanelContent {
+        match self {
+            Self::Loading(content) => content,
+            Self::Help(content) => content,
+            Self::Shortcuts(content) => content,
+            Self::Dirs(content) => content,
+            Self::GitBranches(content) => content,
+            Self::GitWorktrees(content) => content,
+            Self::Config(content) => content,
+            Self::Connectors(content) => content,
+            Self::Keymap(content) => content,
+            Self::Marketplace(content) => content,
+            Self::Lsp(content) => content,
+            Self::Mcp(content) => content,
+            Self::Hooks(content) => content,
+            Self::Memories(content) => content,
+            Self::Guardian(content) => content,
+            Self::Model(content) => content,
+            Self::Effort(content) => content,
+            Self::ComposerOptions(content) => content,
+            Self::ProjectRoots(content) => content,
+            Self::Rewind(content) => content,
+            Self::Sessions(content) => content,
+            Self::Skills(content) => content,
+            Self::Usage(content) => content,
+            Self::Status(content) => content,
+            Self::Context(content) => content,
+            Self::StatusLine(content) => content,
+            Self::Theme(content) => content,
+        }
+    }
+
     pub(super) fn loading(title: &str, message: &str) -> Self {
         Self::Loading(ListSelection::new(
             list_selection::ListSelectionModel::new(
@@ -168,14 +279,7 @@ impl CommandPanel {
     }
 
     pub(super) fn parent_title(&self) -> Option<&str> {
-        match self {
-            Self::Config(editor) => editor.parent_title(),
-            Self::GitBranches(panel) => panel.parent_title(),
-            Self::GitWorktrees(panel) => panel.parent_title(),
-            Self::Memories(panel) => panel.parent_title(),
-            Self::Hooks(panel) => panel.parent_title(),
-            _ => None,
-        }
+        self.content().parent_title()
     }
 
     pub(super) fn navigation_title(&self, language: crate::nls::Language) -> String {
@@ -187,24 +291,7 @@ impl CommandPanel {
     }
 
     pub(super) fn return_to_parent(&mut self) {
-        if let Self::Config(editor) = self {
-            editor.return_to_parent();
-        }
-        if let Self::GitBranches(panel) = self {
-            panel.return_to_parent();
-        }
-        if let Self::GitWorktrees(panel) = self {
-            panel.return_to_parent();
-        }
-        if let Self::Memories(panel) = self {
-            panel.handle_key(KeyEvent::new(
-                crossterm::event::KeyCode::Esc,
-                crossterm::event::KeyModifiers::NONE,
-            ));
-        }
-        if let Self::Hooks(panel) = self {
-            panel.return_to_parent();
-        }
+        self.content_mut().return_to_parent();
     }
 
     pub(super) fn pointer_target_at(
@@ -280,13 +367,7 @@ impl CommandPanel {
     }
 
     pub(crate) fn allows_backdrop_dismiss(&self) -> bool {
-        if let Self::GitBranches(panel) = self {
-            return !panel.is_subpage();
-        }
-        if let Self::GitWorktrees(panel) = self {
-            return !panel.is_subpage();
-        }
-        self.body().allows_backdrop_dismiss()
+        self.content().allows_backdrop_dismiss()
     }
 
     pub(crate) fn help(model: crate::widgets::list_selection::ListSelectionModel) -> Self {
@@ -465,132 +546,19 @@ impl CommandPanel {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
-        match self {
-            Self::Help(content) | Self::Loading(content) | Self::Usage(content) => {
-                content.handle_paste(pasted)
-            }
-            Self::Dirs(content) => content.handle_paste(pasted),
-            Self::GitBranches(content) => content.handle_paste(pasted),
-            Self::GitWorktrees(content) => content.handle_paste(pasted),
-            Self::Config(content) => content.handle_paste(pasted),
-            Self::Connectors(content) => content.handle_paste(pasted),
-            Self::Keymap(content) => content.handle_paste(pasted),
-            Self::Memories(content) => content.paste(pasted),
-            Self::Guardian(content) => content.paste(pasted),
-            Self::Marketplace(content) => content.handle_paste(pasted),
-            Self::Lsp(content) => content.handle_paste(pasted),
-            Self::Mcp(content) => content.handle_paste(pasted),
-            Self::Hooks(content) => content.handle_paste(pasted),
-            Self::ComposerOptions(content) => content.handle_paste(pasted),
-            Self::Model(content) => content.handle_paste(pasted),
-            Self::ProjectRoots(content) => content.handle_paste(pasted),
-            Self::Rewind(content) => content.handle_paste(pasted),
-            Self::Sessions(content) => content.handle_paste(pasted),
-            Self::Skills(content) => content.handle_paste(pasted),
-            Self::Context(_) | Self::Status(_) | Self::Effort(_) | Self::Shortcuts(_) => {}
-            Self::StatusLine(content) => content.handle_paste(pasted),
-            Self::Theme(content) => content.handle_paste(pasted),
-        }
+        self.content_mut().handle_paste(pasted);
     }
 
     pub(crate) fn localize(&mut self, language: crate::nls::Language) {
-        match self {
-            Self::Help(content) | Self::Loading(content) | Self::Usage(content) => {
-                content.state_mut().localize(language);
-            }
-            Self::GitBranches(content) => content.localize(language),
-            Self::GitWorktrees(content) => content.localize(language),
-            Self::Connectors(content) => content.state_mut().localize(language),
-            Self::Marketplace(content) => content.localize(language),
-            Self::Lsp(content) => content.localize(language),
-            Self::Mcp(content) => content.state_mut().localize(language),
-            Self::Hooks(content) => content.localize(language),
-            Self::ComposerOptions(content) => content.state_mut().localize(language),
-            Self::Model(content) => content.state_mut().localize(language),
-            Self::ProjectRoots(content) => content.state_mut().localize(language),
-            Self::Rewind(content) => content.state_mut().localize(language),
-            Self::Sessions(content) => content.state_mut().localize(language),
-            Self::Skills(content) => content.state_mut().localize(language),
-            Self::StatusLine(content) => content.state_mut().localize(language),
-            Self::Dirs(content) => content.localize(language),
-            Self::Config(content) => {
-                if let Some(selection) = content.selection_mut() {
-                    selection.localize(language);
-                }
-            }
-            Self::Keymap(content) => {
-                if let Some(selection) = content.selection_mut() {
-                    selection.localize(language);
-                }
-            }
-            Self::Guardian(content) => content.localize(language),
-            Self::Memories(content) => {
-                content.localize(language);
-            }
-            Self::Effort(_) => {}
-            Self::Shortcuts(panel) => panel.localize(language),
-            Self::Context(content) => content.localize(language),
-            Self::Status(content) => content.localize(language),
-            Self::Theme(content) => content.selection_mut().localize(language),
-        }
+        self.content_mut().localize(language);
     }
 
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
-        match self {
-            Self::Help(selection) | Self::Loading(selection) | Self::Usage(selection) => {
-                Some(selection.state())
-            }
-            Self::Dirs(selection) => Some(selection.state()),
-            Self::GitBranches(selection) => Some(selection.state()),
-            Self::GitWorktrees(selection) => Some(selection.state()),
-            Self::Config(editor) => editor.selection(),
-            Self::Connectors(selection) => Some(selection.state()),
-            Self::Keymap(editor) => editor.selection(),
-            Self::Guardian(selection) => Some(selection.state()),
-            Self::Memories(_) => None,
-            Self::Marketplace(selection) => Some(selection.state()),
-            Self::Lsp(selection) => Some(selection.state()),
-            Self::Mcp(selection) => Some(selection.state()),
-            Self::Hooks(panel) => Some(panel.page()),
-            Self::ComposerOptions(selection) => Some(selection.state()),
-            Self::Model(selection) => Some(selection.state()),
-            Self::ProjectRoots(selection) => Some(selection.state()),
-            Self::Rewind(selection) => Some(selection.state()),
-            Self::Sessions(selection) => Some(selection.state()),
-            Self::Skills(selection) => Some(selection.state()),
-            Self::Context(_) | Self::Status(_) | Self::Effort(_) | Self::Shortcuts(_) => None,
-            Self::StatusLine(selection) => Some(selection.state()),
-            Self::Theme(picker) => Some(picker.selection()),
-        }
+        self.content().selection()
     }
 
     pub(super) fn list_selection_mut(&mut self) -> Option<&mut ListSelectionState> {
-        match self {
-            Self::Help(selection) | Self::Loading(selection) | Self::Usage(selection) => {
-                Some(selection.state_mut())
-            }
-            Self::Dirs(selection) => selection.selection_mut(),
-            Self::GitBranches(selection) => Some(selection.state_mut()),
-            Self::GitWorktrees(selection) => Some(selection.state_mut()),
-            Self::Config(editor) => editor.selection_mut(),
-            Self::Connectors(selection) => Some(selection.state_mut()),
-            Self::Keymap(editor) => editor.selection_mut(),
-            Self::Guardian(selection) => Some(selection.state_mut()),
-            Self::Memories(_) => None,
-            Self::Marketplace(selection) => Some(selection.state_mut()),
-            Self::Lsp(selection) => Some(selection.state_mut()),
-            Self::Mcp(selection) => Some(selection.state_mut()),
-            Self::Hooks(panel) => panel.selection_mut(),
-            Self::ComposerOptions(selection) => Some(selection.state_mut()),
-            Self::Model(selection) => Some(selection.state_mut()),
-            Self::ProjectRoots(selection) => Some(selection.state_mut()),
-            Self::Rewind(selection) => Some(selection.state_mut()),
-            Self::Sessions(selection) => Some(selection.state_mut()),
-            Self::Skills(selection) => Some(selection.state_mut()),
-            Self::StatusLine(selection) => Some(selection.state_mut()),
-            Self::Theme(picker) => Some(picker.selection_mut()),
-            Self::Context(_) | Self::Status(_) | Self::Effort(_) | Self::Shortcuts(_) => None,
-        }
+        self.content_mut().selection_mut()
     }
 
     pub(super) fn handle_click(
@@ -658,50 +626,7 @@ impl CommandPanel {
     }
 
     pub(super) fn body(&self) -> CommandPanelBody<'_> {
-        match self {
-            Self::Help(selection) | Self::Loading(selection) | Self::Usage(selection) => {
-                CommandPanelBody::Selection(selection.state())
-            }
-            Self::Dirs(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::GitBranches(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::GitWorktrees(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Config(editor) => match editor.page() {
-                ConfigEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
-                ConfigEditorPage::Prompt(prompt) => CommandPanelBody::Prompt(prompt),
-                ConfigEditorPage::Provider(panel) => CommandPanelBody::Provider(panel),
-                ConfigEditorPage::Dialog(dialog) => CommandPanelBody::Dialog(dialog),
-            },
-            Self::Connectors(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Keymap(editor) => match editor.page() {
-                KeymapEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
-                KeymapEditorPage::Capture(capture) => CommandPanelBody::KeyCapture(capture),
-            },
-            Self::Guardian(panel) => CommandPanelBody::Selection(panel.state()),
-            Self::Memories(panel) => CommandPanelBody::Memories(panel),
-            Self::Marketplace(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Lsp(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Mcp(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Hooks(panel) => match panel.detail() {
-                Some((detail, scroll)) => CommandPanelBody::Details {
-                    detail,
-                    scroll,
-                    actions: panel.page(),
-                },
-                None => CommandPanelBody::Selection(panel.page()),
-            },
-            Self::ComposerOptions(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Effort(selector) => CommandPanelBody::Effort(selector),
-            Self::Model(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::ProjectRoots(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Rewind(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Sessions(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Skills(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Context(panel) => CommandPanelBody::Context(panel),
-            Self::Status(panel) => CommandPanelBody::Status(panel),
-            Self::Shortcuts(panel) => CommandPanelBody::Shortcuts(panel),
-            Self::StatusLine(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Theme(picker) => CommandPanelBody::Selection(picker.selection()),
-        }
+        self.content().body()
     }
 
     pub(super) fn draw_content(
@@ -729,33 +654,8 @@ impl CommandPanel {
 
     pub(crate) fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
         match self {
-            Self::Help(content) | Self::Loading(content) | Self::Usage(content) => {
-                content.key_hints()
-            }
-            Self::Dirs(content) => content.key_hints(),
-            Self::GitBranches(content) => content.key_hints(),
-            Self::GitWorktrees(content) => content.key_hints(),
-            Self::Config(content) => content.key_hints(),
-            Self::Connectors(content) => content.key_hints(),
-            Self::Keymap(content) => content.key_hints(),
-            Self::Memories(panel) => panel.key_hints(),
-            Self::Guardian(panel) => panel.key_hints(),
-            Self::Marketplace(content) => content.key_hints(),
-            Self::Lsp(content) => content.key_hints(),
-            Self::Mcp(content) => content.key_hints(),
-            Self::Hooks(content) => content.key_hints(),
-            Self::ComposerOptions(content) => content.key_hints(),
-            Self::Effort(content) => content.key_hints(),
             Self::Model(content) => content.model_key_hints(),
-            Self::ProjectRoots(content) => content.key_hints(),
-            Self::Rewind(content) => content.key_hints(),
-            Self::Sessions(content) => content.key_hints(),
-            Self::Skills(content) => content.key_hints(),
-            Self::Context(content) => content.key_hints(),
-            Self::Status(content) => content.key_hints(),
-            Self::Shortcuts(content) => content.key_hints(),
-            Self::StatusLine(content) => content.key_hints(),
-            Self::Theme(content) => content.key_hints(),
+            _ => self.content().key_hints(),
         }
     }
 

@@ -597,3 +597,25 @@ fn is_cancel(key: KeyEvent) -> bool {
 #[cfg(test)]
 #[path = "keymap_setup/editor_tests.rs"]
 mod tests;
+
+impl crate::app::command_panel::PanelContent for KeymapEditor {
+    fn body(&self) -> crate::app::command_panel::CommandPanelBody<'_> {
+        use crate::app::command_panel::CommandPanelBody;
+        match self.page() {
+            KeymapEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
+            KeymapEditorPage::Capture(capture) => CommandPanelBody::KeyCapture(capture),
+        }
+    }
+    fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
+        self.key_hints()
+    }
+    fn selection(&self) -> Option<&crate::widgets::list_selection::ListSelectionState> {
+        self.selection()
+    }
+    fn selection_mut(&mut self) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
+        self.selection_mut()
+    }
+    fn handle_paste(&mut self, pasted: String) {
+        self.handle_paste(pasted);
+    }
+}

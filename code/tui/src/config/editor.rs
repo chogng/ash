@@ -1807,3 +1807,33 @@ fn provider_item(
 #[cfg(test)]
 #[path = "editor_tests.rs"]
 mod tests;
+
+impl crate::app::command_panel::PanelContent for ConfigEditor {
+    fn body(&self) -> crate::app::command_panel::CommandPanelBody<'_> {
+        use crate::app::command_panel::CommandPanelBody;
+        match self.page() {
+            ConfigEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
+            ConfigEditorPage::Prompt(prompt) => CommandPanelBody::Prompt(prompt),
+            ConfigEditorPage::Provider(panel) => CommandPanelBody::Provider(panel),
+            ConfigEditorPage::Dialog(dialog) => CommandPanelBody::Dialog(dialog),
+        }
+    }
+    fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
+        self.key_hints()
+    }
+    fn selection(&self) -> Option<&crate::widgets::list_selection::ListSelectionState> {
+        self.selection()
+    }
+    fn selection_mut(&mut self) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
+        self.selection_mut()
+    }
+    fn handle_paste(&mut self, pasted: String) {
+        self.handle_paste(pasted);
+    }
+    fn parent_title(&self) -> Option<&str> {
+        self.parent_title()
+    }
+    fn return_to_parent(&mut self) {
+        self.return_to_parent();
+    }
+}

@@ -20,8 +20,9 @@
 | `SlashCommandsState` 的匹配、选择与 dismiss 状态 | Ratatui、WGPU、DOM 或各宿主 renderer 的绘制与滚动几何 |
 | 与 model 分离的 server/local contribution kind | Skill selector、App Server 初始化、IPC 或 Renderer lifecycle |
 
-本 crate 依赖 `ash-app-server-protocol` 以直接复用 canonical wire definition。App Server、TUI 和
-native 可以依赖本 crate；本 crate 禁止反向依赖这些消费者。
+本 crate 拥有命令定义、参数模式和产品管理命令，不依赖 App Server 协议或任何 UI。协议层引用
+这份定义，并通过 `json-schema` / `export` feature 生成 schema 和 TypeScript；传输字段名称保持不变。
+匹配复用 `ash-utils-fuzzy-match`，由本 crate 保留命令名优先、前缀优先与单字符查询规则。
 
 ## 2. 公共契约
 
@@ -29,7 +30,7 @@ native 可以依赖本 crate；本 crate 禁止反向依赖这些消费者。
 - `SlashCommandCatalog::default` 构造包含 `/advisor`、`/compact`、`/init`、`/team` 与 `/develop` 的服务端快照；`/advisor` 无参数打开配置，`/advisor <provider/model|off|clear>` 调整配置，其他参数作为直接咨询的问题；
   前者由产品 adapter 绑定到 typed context-compaction request，后两者分别冻结细分 Instruction 与 `ASH.md` 的创建提示；
 - `SlashCommandCatalog::with_local_and_server` 按 local、server 顺序合并并拒绝任何重名；
-- `SlashCommandCatalog::matching` 先对命令名按完整、前缀、连字符后词首、连续片段、有序字符排序，再按描述的词首、连续片段、有序字符排序；空查询保留 catalog 顺序，单字符查询只匹配名称前缀，同分保留 catalog 顺序。候选匹配忽略 ASCII 大小写，提交解析仍要求完整的规范命令名；
+- `SlashCommandCatalog::matching` 先对命令名按完整、前缀、连字符后词首、连续片段、有序字符排序，再按描述的词首、连续片段、有序字符排序；空查询保留 catalog 顺序，单字符查询只匹配名称前缀，同分保留 catalog 顺序。候选匹配忽略大小写，提交解析仍要求完整的规范命令名；
 - `SlashCommandInput` 对同一 catalog 提供 query、completion、invocation、argument hint 与 command element range；
   - `argument_hint(self)`：当输入命令有效、紧随空格、参数文本为空且光标停留在空格末尾时返回 `Some(&'c str)`；开始输入参数或光标离开末尾时返回 `None`；
 - `SlashCommandsState` 保存当前输入对应的匹配、选择与 dismiss 状态；只有名称前缀命中会默认选中，其他命中等待显式选择；暴露 `argument_hint(&self)` 供输入组件呈现行内提示；viewport、可见范围与滚动由各 renderer 保存；

@@ -5,20 +5,45 @@ use ash_app_server_protocol::protocol::model::ContextReadResult;
 struct ContextTransport {
     expected_scope: ContextReadScope,
     expected_detail: ContextReadDetail,
+    model: Option<ash_protocol::ModelRef>,
+    catalog: ModelListResult,
 }
 impl JsonRpcTransport for ContextTransport {
     fn round_trip(&mut self, request: &str) -> Result<String, ClientError> {
         let request: serde_json::Value = serde_json::from_str(request).unwrap();
-        assert_eq!(request["method"], "context/read");
-        assert_eq!(
-            request["params"]["detail"],
-            serde_json::to_value(self.expected_detail).unwrap()
-        );
-        assert_eq!(
-            request["params"]["scope"],
-            serde_json::to_value(&self.expected_scope).unwrap()
-        );
-        Ok(serde_json::json!({ "jsonrpc": "2.0", "id": request["id"], "result": ContextReadResult { tool_definitions: vec![], context: ModelContextInspection { model: None, estimated_tokens: 400, estimator_revision: "test".into(), categories: vec![], allocation: None, latest_request: None } } }).to_string())
+        let result = match request["method"].as_str().unwrap() {
+            "context/read" => {
+                assert_eq!(
+                    request["params"]["detail"],
+                    serde_json::to_value(self.expected_detail).unwrap()
+                );
+                assert_eq!(
+                    request["params"]["scope"],
+                    serde_json::to_value(&self.expected_scope).unwrap()
+                );
+                serde_json::to_value(ContextReadResult {
+                    tool_definitions: vec![],
+                    context: ModelContextInspection {
+                        model: self.model.clone(),
+                        estimated_tokens: 400,
+                        estimator_revision: "test".into(),
+                        categories: vec![],
+                        allocation: None,
+                        latest_request: None,
+                    },
+                })
+                .unwrap()
+            }
+            "model/list" => {
+                assert!(self.model.is_some());
+                serde_json::to_value(&self.catalog).unwrap()
+            }
+            method => panic!("unexpected method: {method}"),
+        };
+        Ok(
+            serde_json::json!({ "jsonrpc": "2.0", "id": request["id"], "result": result })
+                .to_string(),
+        )
     }
 }
 
@@ -43,6 +68,8 @@ fn context_panel_reads_environment_before_any_request_and_preserves_thread_scope
         let mut client = AppServerClient::new(ContextTransport {
             expected_scope,
             expected_detail: ContextReadDetail::Usage,
+            model: None,
+            catalog: ModelListResult { models: vec![] },
         });
         let panel = load_panel(&mut client, scope, ContextReadDetail::Usage).unwrap();
         assert_eq!(panel.inspection.estimated_tokens, 400);
@@ -55,6 +82,8 @@ fn context_diagnostics_explicitly_requests_definitions() {
     let mut client = AppServerClient::new(ContextTransport {
         expected_scope: ContextReadScope::Environment,
         expected_detail: ContextReadDetail::Diagnostics,
+        model: None,
+        catalog: ModelListResult { models: vec![] },
     });
     let panel = load_panel(&mut client, None, ContextReadDetail::Diagnostics).unwrap();
     assert_eq!(panel.title(), "Developer: Context diagnostics");
@@ -62,33 +91,36 @@ fn context_diagnostics_explicitly_requests_definitions() {
 
 #[test]
 fn context_summary_categories_are_read_only_for_keyboard_and_pointer_input() {
-    let mut panel = panel(ModelContextInspection {
-        model: None,
-        estimated_tokens: 2_500,
-        estimator_revision: "test".into(),
-        allocation: None,
-        latest_request: None,
-        categories: [
-            ModelContextCategory::SystemPrompt,
-            ModelContextCategory::SystemTools,
-            ModelContextCategory::MemoryFiles,
-            ModelContextCategory::Skills,
-            ModelContextCategory::Conversation,
-        ]
-        .into_iter()
-        .enumerate()
-        .map(
-            |(index, category)| ash_protocol::ModelContextCategoryUsage {
-                category,
-                tokens: 500,
-                sources: vec![ash_protocol::ModelContextSourceUsage {
-                    name: format!("source-{index}"),
+    let mut panel = panel(
+        ModelContextInspection {
+            model: None,
+            estimated_tokens: 2_500,
+            estimator_revision: "test".into(),
+            allocation: None,
+            latest_request: None,
+            categories: [
+                ModelContextCategory::SystemPrompt,
+                ModelContextCategory::SystemTools,
+                ModelContextCategory::MemoryFiles,
+                ModelContextCategory::Skills,
+                ModelContextCategory::Conversation,
+            ]
+            .into_iter()
+            .enumerate()
+            .map(
+                |(index, category)| ash_protocol::ModelContextCategoryUsage {
+                    category,
                     tokens: 500,
-                }],
-            },
-        )
-        .collect(),
-    });
+                    sources: vec![ash_protocol::ModelContextSourceUsage {
+                        name: format!("source-{index}"),
+                        tokens: 500,
+                    }],
+                },
+            )
+            .collect(),
+        },
+        &ModelListResult { models: vec![] },
+    );
     let body = Rect::new(0, 0, 80, 24);
     let list = panel.context_areas(body)[1];
     for index in 0..5 {
@@ -122,5 +154,41 @@ fn context_summary_categories_are_read_only_for_keyboard_and_pointer_input() {
             ),
             body,
         );
+    }
+}
+
+#[test]
+fn context_loads_the_inspected_models_display_name_from_its_provider() {
+    use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
+    use ash_protocol::ModelId;
+    use ash_protocol::ModelInfo;
+    use ash_protocol::ModelRef;
+    use ash_protocol::ProviderId;
+
+    let model = ModelRef::new(
+        ProviderId::new("glm").unwrap(),
+        ModelId::new("glm-5.3-flash").unwrap(),
+    );
+    let other = ModelRef::new(ProviderId::new("other").unwrap(), model.model.clone());
+    let catalog = ModelListResult {
+        models: vec![
+            ModelCatalogEntry::from_info(other.clone(), &ModelInfo::new(other.model, "Other name")),
+            ModelCatalogEntry::from_info(
+                model.clone(),
+                &ModelInfo::new(model.model.clone(), "GLM-5.3 Flash"),
+            ),
+        ],
+    };
+    for detail in [ContextReadDetail::Usage, ContextReadDetail::Diagnostics] {
+        let mut client = AppServerClient::new(ContextTransport {
+            expected_scope: ContextReadScope::Environment,
+            expected_detail: detail,
+            model: Some(model.clone()),
+            catalog: catalog.clone(),
+        });
+        let panel = load_panel(&mut client, None, detail).unwrap();
+        assert_eq!(&*panel.model, "GLM-5.3 Flash");
+        assert_eq!(panel.context_lines(80)[0].to_string(), "GLM-5.3 Flash");
+        assert_eq!(panel.context_lines(80)[1].to_string(), "400 tokens used");
     }
 }

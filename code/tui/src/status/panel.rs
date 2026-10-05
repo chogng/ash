@@ -342,3 +342,16 @@ pub(crate) fn format_token_count(tokens: u64) -> String {
 #[cfg(test)]
 #[path = "panel_tests.rs"]
 mod tests;
+
+impl crate::app::command_panel::PanelContent for StatusPanel {
+    fn body(&self) -> crate::app::command_panel::CommandPanelBody<'_> {
+        use crate::app::command_panel::CommandPanelBody;
+        CommandPanelBody::Status(self)
+    }
+    fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
+        self.key_hints()
+    }
+    fn localize(&mut self, language: crate::nls::Language) {
+        self.localize(language);
+    }
+}

@@ -1183,6 +1183,7 @@ impl ListSelectionState {
                 .map(|(index, _)| index)
                 .collect();
         }
+        let mut matcher = fuzzy_match::FuzzyMatcher::new(&normalized_query);
         let mut matches = self
             .active_tab()
             .items
@@ -1192,8 +1193,13 @@ impl ListSelectionState {
                 if item.section_heading() || item.expandable_group {
                     return None;
                 }
-                selection_match_score(item.label(), item.description(), &normalized_query)
-                    .map(|score| (index, score))
+                selection_match_score(
+                    item.label(),
+                    item.description(),
+                    &normalized_query,
+                    &mut matcher,
+                )
+                .map(|score| (index, score))
             })
             .collect::<Vec<_>>();
         matches.sort_by_key(|(_, score)| *score);

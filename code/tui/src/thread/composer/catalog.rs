@@ -8,7 +8,7 @@ use ash_app_server_protocol::protocol::plugins::PluginPackageDto;
 use ash_app_server_protocol::protocol::skills::SkillCompatibilityDto;
 use ash_app_server_protocol::protocol::skills::SkillEnablementDto;
 use ash_app_server_protocol::protocol::skills::SkillListResult;
-use ash_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
+use ash_slash_commands::SlashCommandDefinition;
 use ash_protocol::SkillRef;
 use std::collections::BTreeMap;
 

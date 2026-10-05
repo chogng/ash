@@ -9,14 +9,14 @@ expression: rendered
                                                                                 
                                                                                 
                                                                                 
-                                                                                
-  ───────────────────────────────────────────────────────────────────── 37/37   
-  /issue                     select issues to develop together                 │
+  ───────────────────────────────────────────────────────────────────── 38/38   
   /pr                        ask the Agent to create or inspect a pull request │
   /marketplace               find and install Marketplace packages             │
   /plugins                   manage installed packages and exact versions      │
   /lsp                       manage language servers and find packages         │
-  /voice                     dictate into the current draft; run again to stop ┃
+  /voice                     dictate into the current draft; run again to stop │
+  /debug-context             Developer: inspect context tool estimates and     │
+                             full definitions                                  ┃
   ────────────────────────────────────────────────────────────────────────────  
   > /                                                                           
   ─────────────────────────────────────────────────────────── Automatic model   

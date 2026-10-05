@@ -33,10 +33,15 @@ fn exercise_panel(mode: ScreenMode) -> String {
     let mut frames = Vec::new();
     let (buffer, overview) = frame(&app, 80, 26);
     assert!(
-        overview.contains("~12.3k / 100k tokens (12.3%)"),
+        overview.contains("12.3k / 100k tokens (12.3%)"),
         "{overview}"
     );
     assert!(overview.contains("Autocompact buffer"));
+    assert!(overview.contains("Test model"));
+    assert!(!overview.contains("test/model"));
+    assert!(!overview.contains("~12.3k"));
+    assert!(overview.contains("90k (90.0%)"));
+    assert!(overview.find("Test model").unwrap() < overview.find("12.3k / 100k").unwrap());
     assert!(overview.contains("Latest request · provider reported"));
     assert!(overview.contains("25k tokens"));
     assert!(!overview.contains("Capacity details"));
@@ -56,17 +61,15 @@ fn exercise_panel(mode: ScreenMode) -> String {
         .lines()
         .position(|line| line.contains("tokens (12.3%)"))
         .unwrap() as u16;
-    assert_eq!(buffer[(marker_x + 2, used_y)].symbol(), "~");
+    assert_eq!(buffer[(marker_x + 2, used_y)].symbol(), "1");
     assert!(
         buffer[(marker_x + 2, used_y)]
             .modifier
             .contains(Modifier::BOLD)
     );
-    let gauge_y = (0..26)
-        .find(|y| (0..80).any(|x| buffer[(x, *y)].symbol() == "▒"))
-        .unwrap();
+    let gauge_y = used_y + 1;
     let gauge_end = (0..80)
-        .rfind(|x| buffer[(*x, gauge_y)].symbol() == "▒")
+        .rfind(|x| buffer[(*x, gauge_y)].bg == app.render_context().muted())
         .unwrap();
     assert_eq!(
         gauge_end,
@@ -77,17 +80,19 @@ fn exercise_panel(mode: ScreenMode) -> String {
         "{overview}"
     );
     assert_eq!(
-        buffer[(gauge_end, gauge_y)].fg,
-        app.render_context().accent()
+        buffer[(gauge_end, gauge_y)].bg,
+        app.render_context().muted()
     );
-    let gauge_colors = (0..80)
-        .filter(|x| buffer[(*x, gauge_y)].symbol() == "█")
-        .map(|x| buffer[(x, gauge_y)].fg)
-        .collect::<std::collections::HashSet<_>>();
-    assert!(
-        gauge_colors.len() >= 3,
-        "used categories must have distinct colors"
-    );
+    let colors = app.render_context().identity_colors();
+    let mut gauge_colors = (0..80)
+        .map(|x| buffer[(x, gauge_y)].bg)
+        .filter(|color| colors.contains(color))
+        .collect::<Vec<_>>();
+    gauge_colors.dedup();
+    assert_eq!(gauge_colors, colors);
+    for x in marker_x + 2..=gauge_end {
+        assert_eq!(buffer[(x, gauge_y)].symbol(), " ");
+    }
     frames.push(format!("Overview\n{overview}"));
     for _ in 0..5 {
         let before = frame(&app, 80, 26).1;
@@ -161,16 +166,35 @@ fn exercise_narrow_states(mode: ScreenMode) -> String {
         inspection.latest_request = None;
         app.update(crate::context::Event::Opened(crate::context::panel(
             inspection,
+            &context_catalog(),
         )));
-        let (_, text) = frame(&app, 40, 16);
+        let (buffer, text) = frame(&app, 40, 16);
         assert!(text.contains("上下文"), "{text}");
         assert!(text.contains("分类估算用量"));
         assert!(text.contains("系统提示词"));
         assert!(!text.contains("等待首次请求"));
         if capacity.is_some() {
-            assert!(text.contains("▒"));
+            let used_y = text
+                .lines()
+                .position(|line| line.contains("tokens（"))
+                .unwrap() as u16;
+            assert!((0..40).any(|x| buffer[(x, used_y + 1)].bg == app.render_context().muted()));
+            let expected_color = if tokens > 90_000 {
+                app.render_context().warning()
+            } else {
+                app.render_context().foreground()
+            };
+            assert!(
+                (0..40).any(|x| {
+                    let cell = &buffer[(x, used_y)];
+                    cell.fg == expected_color
+                        && cell.modifier.contains(Modifier::BOLD)
+                        && cell.symbol() == tokens.to_string().chars().next().unwrap().to_string()
+                }),
+                "{text}"
+            );
         } else {
-            assert!(text.contains("已用 ~12k tokens"));
+            assert!(text.contains("已用 12k tokens"));
         }
         frames.push(format!("{name}\n{text}"));
         key(&mut app, KeyCode::Enter);
@@ -228,7 +252,11 @@ fn context_status_and_usage_commands_have_distinct_titles_in_both_modes() {
 fn context_diagnostics_source_mouse_target_follows_the_summary_and_toggles_details() {
     let mut app = app(ScreenMode::Fullscreen, Language::English);
     app.update(crate::context::Event::Opened(
-        crate::context::diagnostics_panel(inspection(12_345, Some(90_000)), vec![]),
+        crate::context::diagnostics_panel(
+            inspection(12_345, Some(90_000)),
+            vec![],
+            &context_catalog(),
+        ),
     ));
     let area = ratatui::layout::Rect::new(0, 0, 80, 24);
     for (row_offset, expected_expanded) in [(2, false), (0, true), (0, false)] {
@@ -421,7 +449,19 @@ fn context_late_results_do_not_reopen_a_closed_or_replace_a_newer_panel() {
 }
 
 fn panel(tokens: u64, capacity: Option<u64>) -> crate::context::Panel {
-    crate::context::panel(inspection(tokens, capacity))
+    crate::context::panel(inspection(tokens, capacity), &context_catalog())
+}
+
+fn context_catalog() -> ash_app_server_protocol::protocol::model::ModelListResult {
+    let model = inspection(12_345, None).model.unwrap();
+    ash_app_server_protocol::protocol::model::ModelListResult {
+        models: vec![
+            ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                model.clone(),
+                &ash_protocol::ModelInfo::new(model.model, "Test model"),
+            ),
+        ],
+    }
 }
 
 fn inspection(tokens: u64, capacity: Option<u64>) -> ModelContextInspection {
@@ -538,7 +578,11 @@ fn exercise_context_diagnostics(mode: ScreenMode, language: Language) -> String 
         tokens: 5_000,
     };
     app.update(crate::context::Event::Opened(
-        crate::context::diagnostics_panel(inspection(12_345, Some(90_000)), vec![tool]),
+        crate::context::diagnostics_panel(
+            inspection(12_345, Some(90_000)),
+            vec![tool],
+            &context_catalog(),
+        ),
     ));
     let title = if language == Language::Chinese {
         "开发者：上下文诊断"
@@ -623,4 +667,108 @@ fn debug_context_submission_follows_build_registration_in_both_modes() {
             assert!(app.command_panel().is_none());
         }
     }
+}
+
+#[test]
+fn context_panel_fullscreen_low_usage_order() {
+    let text = exercise_low_usage_order(ScreenMode::Fullscreen);
+    crate::tui_assert_snapshot!(mode = ScreenMode::Fullscreen; "context_panel_low_usage_order", text);
+}
+
+#[test]
+fn context_panel_inline_low_usage_order() {
+    let text = exercise_low_usage_order(ScreenMode::Inline);
+    crate::tui_assert_snapshot!(mode = ScreenMode::Inline; "context_panel_low_usage_order", text);
+}
+
+fn exercise_low_usage_order(mode: ScreenMode) -> String {
+    let mut app = app(mode, Language::Chinese);
+    let mut inspection = inspection(10_242, None);
+    for (category, tokens) in inspection
+        .categories
+        .iter_mut()
+        .zip([1_400, 7_700, 897, 245, 0])
+    {
+        category.tokens = tokens;
+    }
+    inspection.latest_request = None;
+    inspection.allocation = Some(ash_protocol::ModelContextAllocation {
+        context_window: 1_000_000,
+        auto_compact_window: 900_000,
+        auto_compact_at: 894_904,
+        auto_compact_buffer: 100_000,
+        reserved_output: 4_096,
+        safety_margin: 1_000,
+    });
+    app.update(crate::context::Event::Opened(crate::context::panel(
+        inspection,
+        &context_catalog(),
+    )));
+    let (buffer, text) = frame(&app, 100, 26);
+    let gauge_y = text
+        .lines()
+        .position(|line| line.contains("10.2k / 1m"))
+        .unwrap() as u16
+        + 1;
+    let context = app.render_context();
+    let colors = context.identity_colors();
+    let gauge = (0..100)
+        .filter(|x| {
+            let background = buffer[(*x, gauge_y)].bg;
+            colors.contains(&background)
+                || background == context.segmented_inactive()
+                || background == context.muted()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        gauge.last().unwrap() - gauge.first().unwrap() + 1,
+        gauge.len() as u16
+    );
+    let mut segment_colors = Vec::new();
+    for x in &gauge {
+        let cell = &buffer[(*x, gauge_y)];
+        // Solid backgrounds fill every cell and cannot acquire the gaps of patterned glyphs.
+        assert_eq!(cell.symbol(), " ");
+        assert!(!cell.modifier.contains(Modifier::REVERSED));
+        if segment_colors.last() != Some(&cell.bg) {
+            segment_colors.push(cell.bg);
+        }
+    }
+    assert_eq!(
+        segment_colors,
+        [
+            colors[0],
+            colors[1],
+            colors[2],
+            colors[3],
+            context.segmented_inactive(),
+            context.muted(),
+        ]
+    );
+    let reserve_cells = gauge
+        .iter()
+        .filter(|x| buffer[(**x, gauge_y)].bg == context.muted())
+        .count();
+    assert!(reserve_cells.abs_diff(gauge.len() / 10) <= 2);
+    assert!(!segment_colors.contains(&colors[4]));
+    for glyph in ['░', '▒', '▓', '▚', '▤', '▧'] {
+        assert!(!text.contains(glyph));
+    }
+    let labels = [
+        "系统提示词",
+        "工具定义",
+        "记忆／指令文件",
+        "技能",
+        "对话／工具",
+        "剩余空间",
+        "输出预留",
+        "安全余量",
+        "自动压缩 buffer",
+    ];
+    let positions = labels.map(|label| text.find(label).unwrap());
+    assert!(positions.windows(2).all(|pair| pair[0] < pair[1]), "{text}");
+    assert!(text.contains("10.2k / 1m tokens（1.0%）"), "{text}");
+    assert!(text.contains("894.9k (89.5%)"), "{text}");
+    assert!(text.contains("900k (90.0%)"), "{text}");
+    text
 }

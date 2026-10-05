@@ -33,7 +33,7 @@ use crate::thread::interaction::approval::Approval;
 use crate::thread::interaction::query::Query;
 use crate::thread::read_thread_history;
 use ash_app_server_client::AppServerRequestHandle;
-use ash_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
+use ash_slash_commands::SlashCommandDefinition;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 

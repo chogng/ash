@@ -242,3 +242,19 @@ fn diff_preview(palette: ThemePreviewPalette) -> Vec<Line<'static>> {
 #[cfg(test)]
 #[path = "picker_tests.rs"]
 mod tests;
+
+impl crate::app::command_panel::PanelContent for ThemePicker {
+    fn body(&self) -> crate::app::command_panel::CommandPanelBody<'_> {
+        use crate::app::command_panel::CommandPanelBody;
+        CommandPanelBody::Selection(self.selection())
+    }
+    fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
+        self.key_hints()
+    }
+    fn selection_mut(&mut self) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
+        Some(self.selection_mut())
+    }
+    fn handle_paste(&mut self, pasted: String) {
+        self.handle_paste(pasted);
+    }
+}

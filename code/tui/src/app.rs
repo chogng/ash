@@ -7,7 +7,7 @@ mod chat_view;
 #[path = "app/collaboration_modes_tests.rs"]
 mod collaboration_modes_tests;
 mod command;
-mod command_panel;
+pub(crate) mod command_panel;
 mod completion;
 #[cfg(all(test, feature = "in-process-tests"))]
 #[path = "app/conversation_flow_tests.rs"]

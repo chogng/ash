@@ -171,6 +171,7 @@ members = [
     "ash-rs/utils/cargo-bin",
     "ash-rs/utils/cli",
     "ash-rs/utils/elapsed",
+    "ash-rs/utils/fuzzy-match",
     "ash-rs/utils/home-dir",
     "ash-rs/utils/image",
     "ash-rs/utils/json-to-toml",
@@ -375,6 +376,7 @@ hf-chat-template = { version = "1.0.0", features = ["strftime"] }
 # Recursive workspace watches must use FSEvents on macOS; kqueue holds one file
 # descriptor per watched entry and exhausts the process limit on large workspaces.
 notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
+nucleo-matcher = { git = "https://github.com/helix-editor/nucleo.git", rev = "4253de9faabb4e5c6d81d946a5e35a90f87347ee" }
 nucleo = { git = "https://github.com/helix-editor/nucleo.git", rev = "4253de9faabb4e5c6d81d946a5e35a90f87347ee" }
 pollster = "1.0.1"
 open = "5.4.1"
@@ -605,6 +607,7 @@ ash-workbench = { path = "app-rs/workbench" }
 ash-utils-absolute-path = { path = "ash-rs/utils/absolute-path" }
 ash-utils-cache = { path = "ash-rs/utils/cache" }
 ash-utils-elapsed = { path = "ash-rs/utils/elapsed" }
+fuzzy-match = { package = "ash-utils-fuzzy-match", path = "ash-rs/utils/fuzzy-match" }
 ash-utils-home-dir = { path = "ash-rs/utils/home-dir" }
 ash-utils-image = { path = "ash-rs/utils/image" }
 ash-utils-json-to-toml = { path = "ash-rs/utils/json-to-toml" }

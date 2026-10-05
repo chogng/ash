@@ -777,6 +777,7 @@ dependencies = [
  "ash-protocol",
  "ash-queue",
  "ash-response-debug-context",
+ "ash-slash-commands",
  "ash-thread-transcript",
  "ash-utils-cargo-bin",
  "ash-utils-path-uri",
@@ -2713,9 +2714,11 @@ dependencies = [
 name = "ash-slash-commands"
 version = "0.1.0"
 dependencies = [
- "ash-app-server-protocol",
+ "ash-utils-fuzzy-match",
+ "schemars",
  "serde",
  "serde_json",
+ "ts-rs",
 ]
 
 [[package]]
@@ -2997,6 +3000,7 @@ dependencies = [
  "ash-terminal-detection",
  "ash-utils-absolute-path",
  "ash-utils-elapsed",
+ "ash-utils-fuzzy-match",
  "ash-utils-home-dir",
  "ash-utils-image",
  "ash-utils-path",
@@ -3150,6 +3154,13 @@ dependencies = [
 [[package]]
 name = "ash-utils-elapsed"
 version = "0.1.0"
+
+[[package]]
+name = "ash-utils-fuzzy-match"
+version = "0.1.0"
+dependencies = [
+ "nucleo-matcher",
+]
 
 [[package]]
 name = "ash-utils-home-dir"

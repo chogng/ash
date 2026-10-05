@@ -44,6 +44,8 @@ impl ContextPlanner {
         use ash_protocol::ModelContextCategory;
         use ash_protocol::ModelContextCategoryUsage;
         use ash_protocol::ModelContextSourceUsage;
+        // This is the context/read display order. Consumers use the same sequence for
+        // category rows and the stacked gauge, regardless of relative token counts.
         let mut categories = [
             ModelContextCategory::SystemPrompt,
             ModelContextCategory::SystemTools,

@@ -20,6 +20,7 @@ use ash_app_server_protocol::protocol::model::ContextReadDetail;
 use ash_app_server_protocol::protocol::model::ContextReadParams;
 use ash_app_server_protocol::protocol::model::ContextReadScope;
 use ash_app_server_protocol::protocol::model::ContextToolDefinition;
+use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_protocol::ModelContextCategory;
 use ash_protocol::ModelContextInspection;
 use ash_protocol::ModelContextUsageSource;
@@ -139,10 +140,14 @@ impl Panel {
     ) {
         let [summary, list] = self.context_areas(area);
         let mut lines = self.context_lines(summary.width);
+        let gauge_y = summary.y
+            + crate::render::wrapped_height(&lines[..2], summary.width)
+                .min(usize::from(summary.height)) as u16;
         if self.inspection.allocation.is_some() {
-            lines[2] = self.gauge_line(summary.width, context);
+            // The summary may wrap, but a space-filled gauge must stay on one fixed row.
+            lines[2] = Line::default();
         }
-        if let Some(line) = lines.first_mut() {
+        if let Some(line) = lines.get_mut(1) {
             line.style = Style::default().add_modifier(Modifier::BOLD);
             if self
                 .inspection
@@ -155,8 +160,8 @@ impl Panel {
                 line.style = line.style.fg(context.warning());
             }
         }
-        if let Some(line) = lines.get_mut(1) {
-            line.style = Style::default().fg(context.muted());
+        if let Some(line) = lines.first_mut() {
+            line.style = Style::default().add_modifier(Modifier::BOLD);
         }
         if let Some(line) = lines.last_mut() {
             line.style = Style::default().fg(context.muted());
@@ -167,6 +172,12 @@ impl Panel {
                 .style(Style::default().fg(context.foreground())),
             summary,
         );
+        if self.inspection.allocation.is_some() && gauge_y < summary.bottom() {
+            frame.render_widget(
+                Paragraph::new(self.gauge_line(summary.width, context)),
+                Rect::new(summary.x, gauge_y, summary.width, 1),
+            );
+        }
         list_selection::draw_body_with_pointer(frame, list, &self.pages, hovered, pressed, context);
     }
     pub(crate) fn key_hints(&self) -> &'static KeyHints {
@@ -201,7 +212,7 @@ impl Panel {
     }
 
     fn context_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let used = format!("~{}", compact_tokens(self.inspection.estimated_tokens));
+        let used = compact_tokens(self.inspection.estimated_tokens);
         let headline = match &self.inspection.allocation {
             Some(allocation) => Text::template(
                 "{0} / {1} tokens ({2})",
@@ -219,8 +230,8 @@ impl Panel {
         let mut headline = headline;
         headline.localize(self.language);
         let mut lines = vec![
-            Line::raw(headline.to_string()),
             Line::raw(self.model.to_string()),
+            Line::raw(headline.to_string()),
         ];
         if self.inspection.allocation.is_some() {
             lines.push(Line::raw("─".repeat(usize::from(width))));
@@ -236,35 +247,98 @@ impl Panel {
         let allocation = self.inspection.allocation.as_ref().unwrap();
         let capacity = allocation.context_window;
         let colors = context.identity_colors();
-        // Each cell samples one position in the complete window. The buffer is anchored to
-        // the right edge and reservations never become part of the used-context total.
-        let buffer_start = capacity - allocation.auto_compact_buffer;
-        let safety_start = buffer_start - allocation.safety_margin;
-        let output_start = safety_start - allocation.reserved_output;
-        let mut spans = Vec::with_capacity(usize::from(width));
-        for cell in 0..width {
-            let position =
-                u128::from(capacity) * (u128::from(cell) * 2 + 1) / (u128::from(width) * 2);
-            let (symbol, color) = if position >= u128::from(buffer_start) {
-                ("▒", context.accent())
-            } else if position >= u128::from(safety_start) {
-                ("▧", context.warning())
-            } else if position >= u128::from(output_start) {
-                ("▤", context.muted())
-            } else {
-                let mut end = 0u128;
-                match self.inspection.categories.iter().find(|category| {
-                    end += u128::from(category.tokens);
-                    position < end
-                }) {
-                    Some(category) => ("█", colors[category_index(category.category)]),
-                    None => ("░", context.disabled_foreground()),
-                }
-            };
-            spans.push(Span::styled(symbol, Style::default().fg(color)));
-        }
+        // The list and gauge share category order. Clip used context at the compaction
+        // threshold so output, safety and compaction reservations stay visible on overflow.
+        let mut available = allocation.auto_compact_at;
+        let mut segments = self
+            .inspection
+            .categories
+            .iter()
+            .map(|category| {
+                let tokens = category.tokens.min(available);
+                available -= tokens;
+                (tokens, colors[category_index(category.category)])
+            })
+            .collect::<Vec<_>>();
+        // Cell backgrounds make every segment a continuous solid band, independent of
+        // font glyph shapes. Reservations share a neutral color; only overuse is a warning.
+        segments.extend([
+            (available, context.segmented_inactive()),
+            (allocation.reserved_output, context.muted()),
+            (allocation.safety_margin, context.muted()),
+            (allocation.auto_compact_buffer, context.muted()),
+        ]);
+        let widths = gauge_widths(
+            &segments
+                .iter()
+                .map(|(tokens, _)| *tokens)
+                .collect::<Vec<_>>(),
+            capacity,
+            width,
+        );
+        let spans = segments
+            .into_iter()
+            .zip(widths)
+            .filter(|(_, cells)| *cells > 0)
+            .map(|((_, color), cells)| {
+                Span::styled(" ".repeat(usize::from(cells)), Style::default().bg(color))
+            })
+            .collect::<Vec<_>>();
         Line::from(spans)
     }
+}
+
+/// Quantize proportional widths while keeping nonempty segments visible whenever they fit.
+/// One cell is the terminal's minimum; the legend remains the quantitative source of truth.
+fn gauge_widths(tokens: &[u64], capacity: u64, width: u16) -> Vec<u16> {
+    if capacity == 0 {
+        return vec![0; tokens.len()];
+    }
+    let mut remaining_tokens = capacity;
+    let mut remaining_width = width;
+    let mut cells = vec![0; tokens.len()];
+    let mut fixed = tokens.iter().map(|tokens| *tokens == 0).collect::<Vec<_>>();
+    if tokens.iter().filter(|tokens| **tokens > 0).count() <= usize::from(width) {
+        // Allocate sub-cell segments first, then proportionally divide the remaining
+        // space. This keeps large reservations close to their actual window fraction.
+        loop {
+            let mut changed = false;
+            for index in 0..tokens.len() {
+                if !fixed[index]
+                    && u128::from(tokens[index]) * u128::from(remaining_width)
+                        < u128::from(remaining_tokens)
+                {
+                    cells[index] = 1;
+                    fixed[index] = true;
+                    remaining_tokens -= tokens[index];
+                    remaining_width -= 1;
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+    }
+    for index in 0..tokens.len() {
+        if !fixed[index] {
+            cells[index] = (u128::from(tokens[index]) * u128::from(remaining_width)
+                / u128::from(remaining_tokens)) as u16;
+        }
+    }
+    let mut total = cells.iter().map(|cells| u32::from(*cells)).sum::<u32>();
+    while total < u32::from(width) {
+        let index = (0..tokens.len())
+            .filter(|index| !fixed[*index])
+            .max_by_key(|index| {
+                i128::from(tokens[*index]) * i128::from(remaining_width)
+                    - i128::from(cells[*index]) * i128::from(remaining_tokens)
+            })
+            .expect("nonzero capacity has allocatable gauge cells");
+        cells[index] += 1;
+        total += 1;
+    }
+    cells
 }
 
 fn percentage(tokens: u64, capacity: u64) -> String {
@@ -295,21 +369,28 @@ fn category_label(category: ModelContextCategory) -> &'static str {
     }
 }
 
-pub(crate) fn panel(inspection: ModelContextInspection) -> Panel {
-    build_panel(inspection, ContextReadDetail::Usage, Vec::new())
+pub(crate) fn panel(inspection: ModelContextInspection, catalog: &ModelListResult) -> Panel {
+    build_panel(inspection, ContextReadDetail::Usage, Vec::new(), catalog)
 }
 
 pub(crate) fn diagnostics_panel(
     inspection: ModelContextInspection,
     tool_definitions: Vec<ContextToolDefinition>,
+    catalog: &ModelListResult,
 ) -> Panel {
-    build_panel(inspection, ContextReadDetail::Diagnostics, tool_definitions)
+    build_panel(
+        inspection,
+        ContextReadDetail::Diagnostics,
+        tool_definitions,
+        catalog,
+    )
 }
 
 fn build_panel(
     inspection: ModelContextInspection,
     detail: ContextReadDetail,
     tool_definitions: Vec<ContextToolDefinition>,
+    catalog: &ModelListResult,
 ) -> Panel {
     let capacity = inspection
         .allocation
@@ -381,22 +462,21 @@ fn build_panel(
         items.push(ListSelectionItem::new("Context allocation").as_section_divider());
     }
     if let Some(allocation) = &inspection.allocation {
-        for (symbol, label, tokens) in [
+        for (label, tokens) in [
             (
-                "░",
                 "Free space",
                 allocation
                     .auto_compact_at
                     .saturating_sub(inspection.estimated_tokens),
             ),
-            ("▤", "Output reserve", allocation.reserved_output),
-            ("▧", "Safety margin", allocation.safety_margin),
-            ("▒", "Autocompact buffer", allocation.auto_compact_buffer),
+            ("Output reserve", allocation.reserved_output),
+            ("Safety margin", allocation.safety_margin),
+            ("Autocompact buffer", allocation.auto_compact_buffer),
         ] {
             items.push(
                 ListSelectionItem::new(Text::template(
                     "{0} {1}",
-                    vec![Text::literal(symbol), Text::from(label)],
+                    vec![Text::literal("■"), Text::from(label)],
                 ))
                 .with_columns(label, "", value(tokens)),
             );
@@ -404,13 +484,13 @@ fn build_panel(
         items.push(ListSelectionItem::new("Auto-compact window").with_columns(
             "Auto-compact window",
             "",
-            format!("{} tokens", compact_tokens(allocation.auto_compact_window)),
+            value(allocation.auto_compact_window),
         ));
         items.push(
             ListSelectionItem::new("Auto-compact threshold").with_columns(
                 "Auto-compact threshold",
                 "",
-                format!("{} tokens", compact_tokens(allocation.auto_compact_at)),
+                value(allocation.auto_compact_at),
             ),
         );
         if inspection.estimated_tokens > allocation.auto_compact_at {
@@ -450,11 +530,15 @@ fn build_panel(
         .without_tab_bar();
     Panel {
         pages: ListSelectionState::new(pages),
-        model: inspection
-            .model
-            .as_ref()
-            .map(|model| Text::literal(format!("{}/{}", model.provider, model.model)))
-            .unwrap_or_else(|| Text::from("Automatic model")),
+        model: match &inspection.model {
+            Some(model) => catalog
+                .models
+                .iter()
+                .find(|entry| &entry.model == model)
+                .map(|entry| Text::literal(entry.display_name.clone()))
+                .unwrap_or_else(|| Text::from("Not reported")),
+            None => Text::from("Automatic model"),
+        },
         inspection,
         language: crate::nls::Language::English,
     }
@@ -493,10 +577,15 @@ where
         None => ContextReadScope::Environment,
     };
     let result = client.read_context(ContextReadParams { scope, detail })?;
+    let catalog = if result.context.model.is_some() {
+        client.list_models()?
+    } else {
+        ModelListResult { models: Vec::new() }
+    };
     Ok(match detail {
-        ContextReadDetail::Usage => panel(result.context),
+        ContextReadDetail::Usage => panel(result.context, &catalog),
         ContextReadDetail::Diagnostics => {
-            diagnostics_panel(result.context, result.tool_definitions)
+            diagnostics_panel(result.context, result.tool_definitions, &catalog)
         }
     })
 }
@@ -504,3 +593,16 @@ where
 #[cfg(test)]
 #[path = "context_tests.rs"]
 mod tests;
+
+impl crate::app::command_panel::PanelContent for Panel {
+    fn body(&self) -> crate::app::command_panel::CommandPanelBody<'_> {
+        use crate::app::command_panel::CommandPanelBody;
+        CommandPanelBody::Context(self)
+    }
+    fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
+        self.key_hints()
+    }
+    fn localize(&mut self, language: crate::nls::Language) {
+        self.localize(language);
+    }
+}

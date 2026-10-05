@@ -453,3 +453,13 @@ struct LevelLayout {
 #[cfg(test)]
 #[path = "effort_selector_tests.rs"]
 mod tests;
+
+impl crate::app::command_panel::PanelContent for EffortSelector {
+    fn body(&self) -> crate::app::command_panel::CommandPanelBody<'_> {
+        use crate::app::command_panel::CommandPanelBody;
+        CommandPanelBody::Effort(self)
+    }
+    fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
+        self.key_hints()
+    }
+}

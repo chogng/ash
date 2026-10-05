@@ -10,11 +10,17 @@ doctest = false
 name = "ash_slash_commands"
 path = "src/lib.rs"
 
+[features]
+json-schema = ["dep:schemars"]
+export = ["json-schema", "dep:ts-rs"]
+
 [dependencies]
-ash-app-server-protocol = { workspace = true }
+fuzzy-match = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+schemars = { workspace = true, optional = true }
+ts-rs = { workspace = true, features = ["no-serde-warnings"], optional = true }
 
 [dev-dependencies]
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
 [lints]

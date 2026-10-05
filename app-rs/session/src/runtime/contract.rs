@@ -9,7 +9,7 @@ use std::time::Duration;
 use ash_app_server_client::AppServerRequestHandle;
 use ash_app_server_client::ServerNotification;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
-use ash_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
+use ash_slash_commands::SlashCommandDefinition;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 use ash_protocol::ApprovalMode;
