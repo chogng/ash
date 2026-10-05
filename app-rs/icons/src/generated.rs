@@ -104,6 +104,7 @@ mod artwork {
     pub(crate) const EYE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/eye.svg"));
     pub(crate) const EYE_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/eye-filled.svg"));
     pub(crate) const FILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/file.svg"));
+    pub(crate) const FILE_CODE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/file-code.svg"));
     pub(crate) const FILE_DOWNLOADED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/file-downloaded.svg"));
     pub(crate) const FILE_TEXT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/file-text.svg"));
     pub(crate) const FILES: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/files.svg"));
@@ -351,6 +352,7 @@ pub mod icons {
     pub const EYE: Icon = Icon::new(IconId::new("eye"), artwork::EYE);
     pub const EYE_FILLED: Icon = Icon::new(IconId::new("eye-filled"), artwork::EYE_FILLED);
     pub const FILE: Icon = Icon::new(IconId::new("file"), artwork::FILE);
+    pub const FILE_CODE: Icon = Icon::new(IconId::new("file-code"), artwork::FILE_CODE);
     pub const FILE_DOWNLOADED: Icon = Icon::new(IconId::new("file-downloaded"), artwork::FILE_DOWNLOADED);
     pub const FILE_TEXT: Icon = Icon::new(IconId::new("file-text"), artwork::FILE_TEXT);
     pub const FILES: Icon = Icon::new(IconId::new("files"), artwork::FILES);
@@ -594,6 +596,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::EYE,
     icons::EYE_FILLED,
     icons::FILE,
+    icons::FILE_CODE,
     icons::FILE_DOWNLOADED,
     icons::FILE_TEXT,
     icons::FILES,
@@ -838,6 +841,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("eye", artwork::EYE),
     ("eye-filled", artwork::EYE_FILLED),
     ("file", artwork::FILE),
+    ("file-code", artwork::FILE_CODE),
     ("file-downloaded", artwork::FILE_DOWNLOADED),
     ("file-text", artwork::FILE_TEXT),
     ("files", artwork::FILES),

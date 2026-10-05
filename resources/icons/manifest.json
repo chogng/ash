@@ -482,6 +482,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "file-code",
+      "file": "file-code.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "file-downloaded",
       "file": "file-downloaded.svg",
       "rendering": "symbolic"
