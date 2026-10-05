@@ -696,6 +696,7 @@ impl MultiAgentCoordinator {
             &seed.parent_turn_id,
             &spawned.thread_id,
             StartTurnRequest {
+                context_policy: parent.context_policy(&seed.parent_turn_id),
                 advisor: None,
                 command_id: initial_turn_command_id(&seed.delegation_id)?,
                 expected_sequence: SequenceExpectation::Any,

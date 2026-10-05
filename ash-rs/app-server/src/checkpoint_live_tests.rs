@@ -104,6 +104,7 @@ fn manual_compaction_persists_before_restart_and_preserves_the_next_request() {
             .start_turn(
                 &thread,
                 ash_core::StartTurnRequest {
+                    context_policy: Default::default(),
                     mode: Default::default(),
                     advisor: None,
                     command_id: CommandId::new(key).unwrap(),
@@ -295,6 +296,7 @@ fn run(
         .start_turn(
             thread,
             ash_core::StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 command_id: CommandId::new(label).unwrap(),

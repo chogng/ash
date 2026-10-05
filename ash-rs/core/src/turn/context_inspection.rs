@@ -10,35 +10,14 @@ use crate::context::ResolvedContextBudget;
 use crate::context::calibrated_budget;
 use ash_protocol::ModelContextAllocation;
 use ash_protocol::ModelContextInspection;
-use ash_protocol::ModelRef;
-use ash_protocol::ThreadId;
-use ash_protocol::TurnInstructions;
-
-/// Resolved product inputs for a read-only inspection; no execution identity is created.
-pub struct ContextInspectionRequest<'a> {
-    pub scope: ContextInspectionScope<'a>,
-    pub model: Option<ModelRef>,
-    pub instructions: TurnInstructions,
-    pub approval_mode: ash_protocol::ApprovalMode,
-    pub tool_mode: ash_protocol::ToolMode,
-}
-
-pub enum ContextInspectionScope<'a> {
-    Environment,
-    Thread(&'a ThreadId),
-}
-
-/// Usage and the exact tool catalog sampled together, so diagnostics cannot drift from counts.
-#[derive(Debug, PartialEq)]
-pub struct ContextInspection {
-    pub context: ModelContextInspection,
-    pub tool_definitions: Vec<ash_protocol::ToolDefinition>,
-}
+use core_api::ContextInspection;
+use core_api::ContextInspectionRequest;
+use core_api::ContextInspectionScope;
 
 impl TurnExecutor {
     /// Reads the same host context, tool catalog and extension contributions used by execution.
     /// It performs no model I/O, evidence retrieval, compaction or durable mutation.
-    pub fn inspect_context(
+    pub(crate) fn inspect_context(
         &self,
         request: ContextInspectionRequest<'_>,
     ) -> Result<ContextInspection, CoreError> {
@@ -47,6 +26,10 @@ impl TurnExecutor {
             ContextInspectionScope::Thread(thread_id) => Some(self.threads.read_thread(thread_id)?),
         };
         let latest = snapshot.as_ref().and_then(|snapshot| snapshot.turns.last());
+        let context_policy = match (snapshot.as_ref(), latest) {
+            (Some(snapshot), Some(turn)) => snapshot.context_policy(&turn.turn_id),
+            _ => request.context_policy,
+        };
         let read_paths = match (snapshot.as_ref(), latest) {
             (Some(snapshot), Some(turn)) => {
                 crate::services::read_paths_for_turn(snapshot, &turn.turn_id)
@@ -139,6 +122,12 @@ impl TurnExecutor {
         });
         let budget = calibrated_budget(configured, calibration)
             .map_err(|error| CoreError::Context(error.to_string()))?;
+        let budget = match context_policy {
+            ash_protocol::ContextCompactionPolicy::Handoff { buffer_tokens, .. } => {
+                budget.with_input_buffer(crate::ContextTokenCount::new(buffer_tokens))
+            }
+            ash_protocol::ContextCompactionPolicy::Summary { .. } => budget,
+        };
         let mut environment = harness
             .environment()
             .map(|environment| environment.render())
@@ -162,6 +151,7 @@ impl TurnExecutor {
                     tools.clone(),
                     budget,
                 )
+                .with_policy(context_policy.clone())
                 .with_rendered_environment(&environment)
                 .with_time_references(&snapshot.user_time_contexts)?,
             ),
@@ -213,6 +203,7 @@ impl TurnExecutor {
             }
         };
         let context = ModelContextInspection {
+            compaction_policy: context_policy,
             model: request.model.clone(),
             estimated_tokens: categories.iter().map(|category| category.tokens).sum(),
             estimator_revision: CONTEXT_ESTIMATOR_REVISION.into(),

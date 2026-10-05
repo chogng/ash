@@ -36,6 +36,7 @@ impl Fixture {
             .start_turn(
                 &thread,
                 StartTurnRequest {
+                    context_policy: Default::default(),
                     command_id: CommandId::new("mode-start").unwrap(),
                     expected_sequence: SequenceExpectation::Any,
                     model: None,

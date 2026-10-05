@@ -129,6 +129,21 @@ pub(crate) struct ForkImportSnapshot {
 }
 
 impl ThreadSnapshot {
+    /// Returns the policy frozen by admission, including for resumed and delegated execution.
+    pub fn context_policy(&self, turn_id: &TurnId) -> ash_protocol::ContextCompactionPolicy {
+        self.commands
+            .iter()
+            .find_map(
+                |command| match (&command.receipt.command, &command.result) {
+                    (
+                        ThreadCommand::StartTurn { context_policy, .. },
+                        ThreadCommandResult::TurnAccepted { turn_id: accepted },
+                    ) if accepted == turn_id => Some(context_policy.clone()),
+                    _ => None,
+                },
+            )
+            .unwrap_or_default()
+    }
     /// Returns the single configuration selected when this Thread was created.
     pub fn agent_configuration(&self) -> Option<&ash_protocol::AgentConfiguration> {
         self.agent_context_seed

@@ -230,6 +230,7 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
             .start_turn(
                 &parent.thread_id,
                 StartTurnRequest {
+                    context_policy: Default::default(),
                     mode,
                     command_id: CommandId::new("intent-turn").unwrap(),
                     expected_sequence: SequenceExpectation::Exact(1),
@@ -419,6 +420,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
         .start_turn(
             &parent.thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: protocol::TurnKind::Coding,

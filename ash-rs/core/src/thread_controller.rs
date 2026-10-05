@@ -110,6 +110,7 @@ pub(crate) enum TurnInterruption {
 }
 
 pub struct StartTurnRequest {
+    pub context_policy: ash_protocol::ContextCompactionPolicy,
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub model: Option<ModelRef>,
@@ -133,6 +134,7 @@ pub struct StartTurnRequest {
 /// model-invocation boundary, so the continuation is durable without manufacturing a user
 /// message that was never sent.
 pub struct StartGoalTurnRequest {
+    pub context_policy: ash_protocol::ContextCompactionPolicy,
     pub mode: ash_protocol::CollaborationMode,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub command_id: CommandId,
@@ -930,6 +932,10 @@ impl ThreadController {
     ) -> Result<StartTurnResult, CoreError> {
         self.store.execution_binding(thread_id)?.require_bound()?;
         validate_command_id(&request.command_id)?;
+        request
+            .context_policy
+            .validate()
+            .map_err(|message| CoreError::InvalidInput(message.into()))?;
         if let Some(advisor) = &request.advisor {
             advisor
                 .validate()
@@ -1058,6 +1064,7 @@ impl ThreadController {
         }
         let validated_input = user_input::validate(&normalized_input, &activated_skills)?;
         let command = ThreadCommand::StartTurn {
+            context_policy: request.context_policy.clone(),
             kind: request.kind,
             mode: request.mode,
             instructions: Some(request.instructions.clone()),
@@ -1162,6 +1169,10 @@ impl ThreadController {
         thread_id: &ThreadId,
         request: StartGoalTurnRequest,
     ) -> Result<Option<StartTurnResult>, CoreError> {
+        request
+            .context_policy
+            .validate()
+            .map_err(|message| CoreError::InvalidInput(message.into()))?;
         validate_command_id(&request.command_id)?;
         validate_policy_revision(&request.policy_revision)?;
         request
@@ -1169,6 +1180,7 @@ impl ThreadController {
             .validate()
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
         let command = ThreadCommand::StartTurn {
+            context_policy: request.context_policy.clone(),
             kind: TurnKind::Coding,
             mode: request.mode,
             instructions: Some(request.instructions.clone()),

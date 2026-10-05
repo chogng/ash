@@ -125,6 +125,7 @@ pub(super) fn update<T: JsonRpcTransport>(
         }
     };
     client.update_config(ConfigUpdateParams {
+        context: ash_protocol::Patch::Missing,
         advisor: Default::default(),
         time_context: Default::default(),
         features: Default::default(),

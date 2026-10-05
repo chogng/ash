@@ -218,6 +218,7 @@ impl AppServer {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    context: params.context,
                     time_context: params
                         .time_context
                         .map(|config| ash_config::TimeContextConfig {
@@ -268,6 +269,7 @@ impl AppServer {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    context: Patch::Missing,
                     time_context: ash_protocol::Patch::Missing,
                     features: Default::default(),
                     model: Patch::Missing,
@@ -677,6 +679,7 @@ fn config_read_result(
         embedding_status: tool_search_status_dto(tool_search_status),
     };
     ConfigReadResult {
+        context: snapshot.values.context.clone(),
         time_context: ash_app_server_protocol::protocol::config::TimeContextConfigDto {
             mode: snapshot.values.time_context.mode,
             time_zone: snapshot.values.time_context.time_zone.clone(),

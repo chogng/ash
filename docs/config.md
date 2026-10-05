@@ -113,6 +113,38 @@ Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不
 重新保存旧连接可以补齐缺失选择；目录顺序后续变化不会改写已经保存的模型。
 订阅登录使用 `EnsureProvider` 仅登记内置提供商，不按 API 模型生成默认选择；用户随后可在 `/model` 中选择订阅模型。
 
+## 上下文压缩
+
+`[agent.context]` 是共享后端的开发调试配置，所有客户端共用。正式界面不展示或提供压缩模式选择；
+开发构建可通过 `/debug-context` 查看生效模式与内部预算。默认分层摘要：
+
+```toml
+[agent.context]
+mode = "summary"
+summaryTokens = 8192
+recentTokens = 16384
+```
+
+长任务可以选择保存进度后换窗口：
+
+```toml
+[agent.context]
+mode = "handoff"
+bufferTokens = 16384
+stateTokens = 8192
+```
+
+两种 mode 的字段不能混用；token 数必须在 1–1,000,000 之间，`stateTokens` 不得超过
+`bufferTokens`。具体模型窗口仍会进一步限制摘要、交接输出和近期原文的容量。窗口太小，或用户输入
+本身已超过预算时明确报错，不借缓冲继续普通任务。
+
+`config/read.context` 返回当前配置，`config/update.context` 整体替换该策略；`null` 恢复默认。
+配置只作用于新接受的 Turn。子任务和 Goal 自动续跑继承父执行的冻结策略。目录配置不能覆盖它。
+模型输出预留用于一次输出，安全余量用于计数误差；交接缓冲用于保存进度，三者不会变成“到 90% 后
+还能继续到 95%”的弹性开关。实际阈值以 `/context` 返回的 token 数及百分比为准。
+
+策略取舍、边界和失败语义见[上下文系统](core-context.md#两种自动压缩方式)。
+
 ## 目录配置
 
 `DirConfigStore` 严格读取一个目录中的 `.ash/config.toml`。Host 在文档之外提供 `DirId` 与内容
@@ -179,6 +211,7 @@ BuiltInDefaults
 | --- | --- | --- |
 | Agent model | User、Dir、Session、launch | 只影响下一次模型安全点 |
 | Tool Mode | User、StartTurn override | Turn 接受时冻结 |
+| Context compaction | User | Turn command receipt 冻结，子任务和 Goal 续跑继承 |
 | Provider endpoint | User、Host | Dir 不能替换认证或网络边界 |
 | MCP / Skill / Plugin / Hook | User、Dir | Dir 只提供待处理意图；领域管理器决定实际状态 |
 | Execution policy | Host、Organization、User、Dir | Dir 只能保持或收紧 |

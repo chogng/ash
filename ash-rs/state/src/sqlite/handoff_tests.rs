@@ -34,6 +34,7 @@ fn thread(
 
 fn turn_request() -> ash_core::StartTurnRequest {
     ash_core::StartTurnRequest {
+        context_policy: Default::default(),
         mode: Default::default(),
         advisor: None,
         command_id: CommandId::new("turn").unwrap(),

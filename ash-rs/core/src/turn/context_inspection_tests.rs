@@ -1,7 +1,7 @@
 use super::*;
-use crate::ContextInspectionRequest;
-use crate::ContextInspectionScope;
 use ash_protocol::ModelContextCategory;
+use core_api::ContextInspectionRequest;
+use core_api::ContextInspectionScope;
 
 struct InspectionModel;
 impl ModelService for InspectionModel {
@@ -60,6 +60,7 @@ fn context_inspection_counts_loaded_categories_before_a_request_without_executio
     let read = |scope| {
         executor
             .inspect_context(ContextInspectionRequest {
+                context_policy: Default::default(),
                 scope,
                 model: Some(ModelRef::new(
                     ProviderId::new("test").unwrap(),
@@ -157,6 +158,7 @@ fn context_inspection_reads_existing_history_without_mutating_or_compacting_it()
     let executor = TurnExecutor::without_tools(threads.clone(), Arc::new(InspectionModel));
     let inspected = executor
         .inspect_context(ContextInspectionRequest {
+            context_policy: Default::default(),
             scope: ContextInspectionScope::Thread(&thread_id),
             model: None,
             instructions: crate::test_turn_instructions(),

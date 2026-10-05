@@ -855,3 +855,196 @@ fn audio_budget_uses_duration_instead_of_encoded_byte_size() {
         Ok(ContextPreparation::Ready(_))
     ));
 }
+
+fn active_tool_history() -> (ThreadSnapshot, TurnId) {
+    let current = id::<TurnId>("current");
+    let mut items = vec![user_item(
+        "user",
+        current.clone(),
+        "do the task; preserve this correction",
+    )];
+    for index in 0..3 {
+        let call_id = id::<ToolCallId>(&format!("call-{index}"));
+        items.push(ThreadItem::ToolCall {
+            item_id: id(&format!("call-item-{index}")),
+            turn_id: current.clone(),
+            tool_call_id: call_id.clone(),
+            name: ToolName::new("shell-command").unwrap(),
+            arguments_json: "{}".into(),
+            binding: None,
+        });
+        items.push(ThreadItem::ToolResult {
+            item_id: id(&format!("result-{index}")),
+            turn_id: current.clone(),
+            tool_call_id: call_id,
+            text: "work completed\n".repeat(300),
+            content: None,
+            is_error: false,
+        });
+    }
+    (snapshot(current.clone(), items), current)
+}
+
+#[test]
+fn one_running_turn_can_compact_closed_tool_exchanges_without_losing_user_intent() {
+    let (mut state, current) = active_tool_history();
+    let input = ContextInput::new(
+        &state,
+        current.clone(),
+        Vec::new(),
+        Vec::new(),
+        budget(3_000),
+    );
+    let ContextPreparation::NeedsCompaction(plan) = ContextPlanner::prepare(&input).unwrap() else {
+        panic!("one Turn must compact")
+    };
+    assert!(matches!(
+        plan.source_items.last(),
+        Some(ThreadItem::ToolResult { .. })
+    ));
+    assert!(
+        plan.source_items
+            .iter()
+            .any(|item| matches!(item, ThreadItem::ToolCall { .. }))
+    );
+    state.context_checkpoints.push(ContextCheckpoint {
+        checkpoint_id: ContextCheckpointId::new("checkpoint").unwrap(),
+        source_thread_id: state.thread_id.clone(),
+        covered: plan.covered,
+        referenced_items: plan
+            .source_items
+            .iter()
+            .map(|item| item.item_id().clone())
+            .collect(),
+        source_digest: ContextSourceDigest::new(format!("sha256:{}", "a".repeat(64))).unwrap(),
+        summary: "Completed the first command; continue with remaining work.".into(),
+        schema_revision: "context-checkpoint-v1".into(),
+        prompt_revision: "test".into(),
+        context_policy_revision: "test".into(),
+        generator_model: None,
+        created_at_unix_ms: 1,
+        verification: ContextCheckpointVerification::Verified,
+    });
+    let prepared = ContextPlanner::prepare(&ContextInput::new(
+        &state,
+        current,
+        Vec::new(),
+        Vec::new(),
+        budget(3_000),
+    ))
+    .unwrap();
+    let ContextPreparation::Ready(plan) = prepared else {
+        panic!("checkpoint and recent exchanges fit")
+    };
+    assert!(
+        plan.selected_items()
+            .iter()
+            .any(|item| item.item_id() == &id::<ItemId>("user"))
+    );
+    let calls = plan
+        .selected_items()
+        .iter()
+        .filter(|item| matches!(item, ThreadItem::ToolCall { .. }))
+        .count();
+    let results = plan
+        .selected_items()
+        .iter()
+        .filter(|item| matches!(item, ThreadItem::ToolResult { .. }))
+        .count();
+    assert_eq!(calls, results);
+}
+
+#[test]
+fn handoff_uses_working_context_with_no_task_tools_and_a_bounded_output() {
+    let (state, current) = active_tool_history();
+    let budget = ContextBudget::core_managed(
+        ContextTokenCount::new(8_000),
+        ContextTokenCount::new(500),
+        ContextTokenCount::new(100),
+        ContextCompactionLimit::ContextWindow,
+    );
+    let input = ContextInput::new(&state, current, Vec::new(), Vec::new(), budget).with_policy(
+        ash_protocol::ContextCompactionPolicy::Handoff {
+            buffer_tokens: 4_000,
+            state_tokens: 200,
+        },
+    );
+    let ContextPreparation::NeedsCompaction(plan) = ContextPlanner::prepare(&input).unwrap() else {
+        panic!("handoff boundary reached")
+    };
+    let request = plan.handoff_request.unwrap();
+    assert!(request.tools.is_empty());
+    assert_eq!(request.tool_choice, ash_protocol::ToolChoice::None);
+    assert_eq!(request.max_output_tokens, Some(200));
+    assert!(request.input.iter().any(|item| matches!(item, ash_protocol::InputItem::Message(message)
+        if message.content.iter().any(|part| matches!(part, ash_protocol::ContentPart::Text(text) if text.contains("preserve this correction"))))));
+    assert!(plan.handoff_input_tokens.get() + 200 + 100 <= 8_000);
+}
+
+#[test]
+fn old_read_results_are_removed_before_requesting_a_summary() {
+    let (mut state, current) = active_tool_history();
+    for item in &mut state.items {
+        if let ThreadItem::ToolCall { name, .. } = item {
+            *name = ToolName::new("read_file").unwrap();
+        }
+    }
+    let input = ContextInput::new(&state, current, Vec::new(), Vec::new(), budget(3_000))
+        .with_policy(ash_protocol::ContextCompactionPolicy::Summary {
+            summary_tokens: 200,
+            recent_tokens: 1_500,
+        });
+    let ContextPreparation::Ready(plan) = ContextPlanner::prepare(&input).unwrap() else {
+        panic!("old read removal should suffice")
+    };
+    assert!(plan.selected_items().iter().any(
+        |item| matches!(item, ThreadItem::ToolResult { text, .. } if text.contains("durable item"))
+    ));
+    assert!(state.items.iter().all(|item| !matches!(item, ThreadItem::ToolResult { text, .. } if text.contains("output removed"))));
+}
+
+#[test]
+fn a_lower_pressure_limit_can_recompact_an_existing_checkpoint_without_new_history() {
+    let old = id::<TurnId>("old");
+    let current = id::<TurnId>("current");
+    let mut state = snapshot(
+        current.clone(),
+        vec![
+            user_item("old-item", old, "old"),
+            user_item("current-item", current.clone(), "now"),
+        ],
+    );
+    state.context_checkpoints.push(ContextCheckpoint {
+        checkpoint_id: ContextCheckpointId::new("existing").unwrap(),
+        source_thread_id: state.thread_id.clone(),
+        covered: ContextSourceRange {
+            start_sequence: 1,
+            end_sequence: 2,
+        },
+        referenced_items: vec![id("old-item")],
+        source_digest: ContextSourceDigest::new(format!("sha256:{}", "a".repeat(64))).unwrap(),
+        summary: "previous checkpoint facts ".repeat(180),
+        schema_revision: "context-checkpoint-v1".into(),
+        prompt_revision: "test".into(),
+        context_policy_revision: "test".into(),
+        generator_model: None,
+        created_at_unix_ms: 1,
+        verification: ContextCheckpointVerification::Verified,
+    });
+    let budget = ContextBudget::core_managed(
+        ContextTokenCount::new(6_000),
+        ContextTokenCount::new(200),
+        ContextTokenCount::ZERO,
+        ContextCompactionLimit::Tokens(ContextTokenCount::new(800)),
+    );
+    let input = ContextInput::new(&state, current, Vec::new(), Vec::new(), budget);
+    let ContextPreparation::NeedsCompaction(plan) = ContextPlanner::prepare(&input).unwrap() else {
+        panic!("the older checkpoint needs a smaller summary")
+    };
+    assert!(plan.source_items.is_empty());
+    assert_eq!(plan.covered, state.context_checkpoints[0].covered);
+    assert!(
+        plan.target_tokens.get()
+            < super::estimate_checkpoint(Some(&state.context_checkpoints[0])).get()
+    );
+}

@@ -27,3 +27,7 @@ just test ash-config
 ## Agent 时间策略
 
 `[agent.timeContext]` 保存 `mode = "off" | "date" | "time"` 与可选的 IANA `timeZone`，默认 `date` 且使用宿主时区。策略仅属于 profile；目录不能替用户选择时区。完整行为与参照冻结规则见 [Agent 时间与等待](../docs/agent-wait.md)。
+
+## Agent 上下文策略
+
+`[agent.context]` 选择默认 `summary` 或 `handoff`，通过 `config/update.context` 整体替换或用 `null` 恢复默认。参数、生效点和示例见[上下文压缩](../../docs/config.md#上下文压缩)。策略随 Turn 接受记录冻结，Config 不负责摘要生成或窗口切换。

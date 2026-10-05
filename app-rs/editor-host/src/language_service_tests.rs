@@ -46,6 +46,7 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
         },
     );
     let configuration = ConfigReadResult {
+        context: Default::default(),
         connections: Default::default(),
         active_connections: Default::default(),
         advisor: None,
@@ -104,6 +105,7 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
 #[test]
 fn desktop_configuration_does_not_start_unconfigured_language_servers() {
     let configuration = ConfigReadResult {
+        context: Default::default(),
         connections: Default::default(),
         active_connections: Default::default(),
         advisor: None,

@@ -95,6 +95,7 @@ fn start(
     threads.start_turn(
         thread,
         ash_core::StartTurnRequest {
+            context_policy: Default::default(),
             mode: Default::default(),
             advisor: None,
             command_id: CommandId::new("turn").unwrap(),

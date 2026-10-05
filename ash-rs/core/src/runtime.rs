@@ -26,6 +26,8 @@ use ash_protocol::TurnStatus;
 use core_api::AcceptedCommand;
 use core_api::AgentRuntime;
 use core_api::CompactThreadRequest;
+use core_api::ContextInspection;
+use core_api::ContextInspectionRequest;
 use core_api::CoreError;
 use core_api::CreateBranchRequest;
 use core_api::ForkThreadRequest;
@@ -114,6 +116,7 @@ impl<'a> Runtime<'a> {
         let start = admit(
             thread_id,
             crate::StartTurnRequest {
+                context_policy: request.context_policy,
                 command_id: request.command_id,
                 expected_sequence: request.expected_sequence,
                 model: request.model,
@@ -201,6 +204,13 @@ impl<'a> Runtime<'a> {
 }
 
 impl AgentRuntime for Runtime<'_> {
+    fn inspect_context(
+        &self,
+        request: ContextInspectionRequest<'_>,
+    ) -> Result<ContextInspection, CoreError> {
+        self.executor.inspect_context(request)
+    }
+
     fn submit_turn(
         &self,
         thread_id: &ThreadId,

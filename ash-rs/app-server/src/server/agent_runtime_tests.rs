@@ -142,6 +142,7 @@ fn recovered_spawn_with_document_context(documents: bool) {
         .start_turn(
             &parent.thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,

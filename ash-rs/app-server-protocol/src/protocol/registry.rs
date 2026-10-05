@@ -1970,6 +1970,8 @@ use ash_protocol::ContextCheckpointId;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ContextCheckpointVerification;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ContextCompactionPolicy;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ContextSeedDigest;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ContextSourceDigest;
@@ -5269,6 +5271,7 @@ typescript_bindings! {
     ContextReadResult,
     ContextReadScope,
     ModelContextInspection,
+    ContextCompactionPolicy,
     ModelContextCategory,
     ModelContextCategoryUsage,
     ModelContextSourceUsage,

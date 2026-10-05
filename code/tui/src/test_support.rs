@@ -79,6 +79,7 @@ pub(crate) fn hook_catalog(
 
 pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
     ConfigReadResult {
+        context: Default::default(),
         connections: Default::default(),
         active_connections: Default::default(),
         advisor: None,

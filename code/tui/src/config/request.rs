@@ -160,6 +160,7 @@ fn set_advisor<T: JsonRpcTransport>(
 > {
     let config = client.read_config()?;
     client.update_config(ConfigUpdateParams {
+        context: ash_protocol::Patch::Missing,
         command_id: new_command_id("advisor-config"),
         expected_revision: config.revision,
         advisor: advisor.map(Patch::Value).unwrap_or(Patch::Null),
@@ -203,6 +204,7 @@ fn set_memories<T: JsonRpcTransport>(
         .map(|state| (state.feature, state.enabled))
         .collect();
     client.update_config(ConfigUpdateParams {
+        context: ash_protocol::Patch::Missing,
         advisor: Default::default(),
         features: Patch::Value(overrides),
         command_id: new_command_id("memories-config"),
@@ -257,6 +259,7 @@ fn set_git_settings<T: JsonRpcTransport>(
     edit: ConfigEdit,
 ) -> Result<ConfigEditResult, ConfigCommandError> {
     client.update_config(ConfigUpdateParams {
+        context: ash_protocol::Patch::Missing,
         advisor: Patch::Missing,
         time_context: Patch::Missing,
         features: Patch::Missing,
@@ -429,6 +432,7 @@ where
     let tui = edit.status_line.write_to_tui(&tui);
     super::TuiSettings::from_tui(&tui).map_err(ConfigCommandError)?;
     client.update_config(ConfigUpdateParams {
+        context: ash_protocol::Patch::Missing,
         advisor: Default::default(),
         time_context: Default::default(),
         features: Default::default(),

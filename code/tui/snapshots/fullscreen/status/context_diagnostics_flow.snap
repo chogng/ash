@@ -28,6 +28,7 @@ Diagnostics overview
             │  read_file                                                  5k (5.0%) + │             
             │                                                                         │             
             │  Context allocation ─────────────────────────────────────────────────── │             
+            │  Compaction mode                                      Layered summary   │             
             │  ■ Free space                                           77.7k (77.7%)   │             
             │  ■ Output reserve                                           2k (2.0%)   │             
             │  ■ Safety margin                                            1k (1.0%)   │             
@@ -41,7 +42,6 @@ Diagnostics overview
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
   ────────────────────────────────────────────────────────────────────────────────────────────────  
   > diagnostic draft                                                                                
   ─────────────────────────────────────────────────────────────────────────────── Automatic model   
@@ -50,7 +50,6 @@ Diagnostics overview
 
 Expanded memory source
   .                                                                                    [Dashboard]  
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -75,6 +74,7 @@ Expanded memory source
             │  read_file                                                  5k (5.0%) + │             
             │                                                                         │             
             │  Context allocation ─────────────────────────────────────────────────── │             
+            │  Compaction mode                                      Layered summary   │             
             │  ■ Free space                                           77.7k (77.7%)   │             
             │  ■ Output reserve                                           2k (2.0%)   │             
             │  ■ Safety margin                                            1k (1.0%)   │             
@@ -129,13 +129,13 @@ Expanded tool definition
             │    }                                                                    │             
             │                                                                         │             
             │  Context allocation ─────────────────────────────────────────────────── │             
+            │  Compaction mode                                      Layered summary   │             
             │  ■ Free space                                           77.7k (77.7%)   │             
             │  ■ Output reserve                                           2k (2.0%)   │             
             │  ■ Safety margin                                            1k (1.0%)   │             
             │  ■ Autocompact buffer                                       7k (7.0%)   │             
-            │  Auto-compact window                                      93k (93.0%)   │             
-  ──────────│  Auto-compact threshold                                   90k (90.0%)   │───────────  
-  > diagnost│  Latest request · provider reported                        25k tokens   │             
+  ──────────│  Auto-compact window                                      93k (93.0%)   │───────────  
+  > diagnost│  Auto-compact threshold                                   90k (90.0%)   │             
   ──────────└─────────────────────────────────────────────────────────────────────────┘atic model   
                                                                                                     
   ↑/↓ select · Enter details · Esc close                                                            

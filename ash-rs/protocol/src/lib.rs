@@ -5,6 +5,7 @@ mod attachment;
 mod automation;
 mod collaboration_mode;
 mod config;
+mod context_policy;
 mod error;
 #[path = "thread/history.rs"]
 mod history;
@@ -18,6 +19,7 @@ mod session;
 mod skill;
 mod stream;
 mod time_context;
+pub use context_policy::ContextCompactionPolicy;
 pub use time_context::TimeContext;
 pub use time_context::TimeContextMode;
 pub use time_context::TimeZoneOrigin;

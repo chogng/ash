@@ -14,6 +14,7 @@ pub use agent::TURN_INTERRUPTED_PROMPT;
 pub use artifact::PromptArtifact;
 pub use artifact::RenderedPrompt;
 pub use compact::COMPACTION_PROMPT;
+pub use compact::HANDOFF_PROMPT;
 pub use compact::checkpoint_prompt;
 pub use compact::checkpoint_prompt_overhead;
 pub use compact::checkpoint_summary_bytes;

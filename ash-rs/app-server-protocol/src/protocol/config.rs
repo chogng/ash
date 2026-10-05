@@ -579,6 +579,7 @@ pub struct FrontendConfigDto(
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigReadResult {
+    pub context: ash_protocol::ContextCompactionPolicy,
     pub time_context: TimeContextConfigDto,
     pub features: Vec<features::FeatureState>,
     pub issues: crate::protocol::issues::IssueConfigDto,
@@ -721,6 +722,10 @@ pub enum ConfigCommandDispositionDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfigUpdateParams {
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<ash_protocol::ContextCompactionPolicy>")]
+    #[ts(as = "Option<ash_protocol::ContextCompactionPolicy>", optional = nullable)]
+    pub context: Patch<ash_protocol::ContextCompactionPolicy>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<TimeContextConfigDto>")]
     #[ts(as = "Option<TimeContextConfigDto>", optional = nullable)]

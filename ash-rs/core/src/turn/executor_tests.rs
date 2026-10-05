@@ -98,6 +98,8 @@ use std::time::Instant;
 
 #[path = "activity_tests.rs"]
 mod activity_tests;
+#[path = "context_compaction_tests.rs"]
+mod context_compaction_tests;
 #[path = "context_inspection_tests.rs"]
 mod context_inspection_tests;
 
@@ -172,6 +174,7 @@ fn turn_reasoning_effort_overrides_the_model_default() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 command_id: CommandId::new("override-effort").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
@@ -436,6 +439,7 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -485,6 +489,7 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -682,6 +687,7 @@ fn manual_context_compaction_batches_a_prefix_that_exceeds_the_model_window() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -1127,6 +1133,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
             .start_turn(
                 &thread_id,
                 StartTurnRequest {
+                    context_policy: Default::default(),
                     mode: Default::default(),
                     advisor: None,
                     kind: ash_protocol::TurnKind::Coding,
@@ -1155,6 +1162,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -1221,6 +1229,7 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -1253,7 +1262,7 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
         .unwrap();
 
     assert!(matches!(outcome, TurnExecutionOutcome::Completed(_)));
-    assert_eq!(model.measurements.load(Ordering::Relaxed), 2);
+    assert_eq!(model.measurements.load(Ordering::Relaxed), 3);
     assert_eq!(
         threads
             .read_thread(&thread_id)
@@ -1305,6 +1314,7 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -1871,6 +1881,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -1898,6 +1909,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -2062,6 +2074,7 @@ fn model_usage_and_goal_projection_are_identical_after_recovery() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -2282,6 +2295,7 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
         .start_turn(
             &fast_thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -3000,7 +3014,13 @@ impl ModelService for PreflightCompactingModel {
         _: &CancellationToken,
     ) -> Result<ContextTokenMeasurementOutcome, CoreError> {
         self.measurements.fetch_add(1, Ordering::Relaxed);
-        let count = if request_contains(request, "measured checkpoint") {
+        let count = if request
+            .instructions
+            .as_deref()
+            .is_some_and(|instructions| instructions.contains("durable context checkpoint"))
+        {
+            9_000
+        } else if request_contains(request, "measured checkpoint") {
             1_000
         } else {
             12_000
@@ -3874,6 +3894,7 @@ fn started_turn_with_store(
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -3906,6 +3927,7 @@ fn started_turn_with_history() -> (Arc<ThreadController>, ThreadId, TurnId) {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -4379,6 +4401,7 @@ fn code_mode_thread_values_survive_turn_completion_and_new_turn_authority() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -4469,6 +4492,7 @@ fn encrypted_reasoning_survives_tool_results_and_reloading_thread_history() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -4563,6 +4587,7 @@ fn connection_selection_is_frozen_at_turn_start_and_released_for_the_next_turn()
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,

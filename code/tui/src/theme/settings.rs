@@ -21,6 +21,7 @@ where
     let tui = FrontendConfigDto(tui);
     crate::config::TuiSettings::from_tui(&tui).map_err(ThemeSettingsError)?;
     client.update_config(ConfigUpdateParams {
+        context: ash_protocol::Patch::Missing,
         advisor: Default::default(),
         time_context: Default::default(),
         features: Default::default(),

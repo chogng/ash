@@ -69,6 +69,7 @@ impl Fixture {
             .start_turn(
                 &thread,
                 StartTurnRequest {
+                    context_policy: Default::default(),
                     mode: from,
                     advisor: None,
                     kind: ash_protocol::TurnKind::Coding,

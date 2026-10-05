@@ -24,6 +24,13 @@ use ts_rs::TS;
 )]
 pub enum ThreadCommand {
     StartTurn {
+        /// Frozen in the command receipt; older journals use the summary policy.
+        #[serde(
+            default,
+            skip_serializing_if = "crate::ContextCompactionPolicy::is_default"
+        )]
+        #[ts(as = "Option<crate::ContextCompactionPolicy>", optional)]
+        context_policy: crate::ContextCompactionPolicy,
         #[serde(default)]
         kind: TurnKind,
         #[serde(default, skip_serializing_if = "crate::CollaborationMode::is_agent")]

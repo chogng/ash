@@ -211,14 +211,22 @@ impl AppServer {
             }
         };
         let scope = match &params.scope {
-            ContextReadScope::Environment => ash_core::ContextInspectionScope::Environment,
+            ContextReadScope::Environment => core_api::ContextInspectionScope::Environment,
             ContextReadScope::Thread { thread_id, .. } => {
-                ash_core::ContextInspectionScope::Thread(thread_id)
+                core_api::ContextInspectionScope::Thread(thread_id)
             }
         };
         let inspection = self
-            .turn_executor_snapshot()
-            .inspect_context(ash_core::ContextInspectionRequest {
+            .agent_runtime()
+            .inspect_context(core_api::ContextInspectionRequest {
+                context_policy: self
+                    .config
+                    .as_ref()
+                    .map(|config| config.read_snapshot())
+                    .transpose()
+                    .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+                    .map(|snapshot| snapshot.values.context)
+                    .unwrap_or_default(),
                 scope,
                 model,
                 instructions,
@@ -1522,6 +1530,14 @@ impl AppServer {
             crate::client_host::TextDocumentMode::Client
         };
         let request = core_api::SubmitTurnRequest {
+            context_policy: self
+                .config
+                .as_ref()
+                .map(|config| config.read_snapshot())
+                .transpose()
+                .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+                .map(|snapshot| snapshot.values.context)
+                .unwrap_or_default(),
             mode,
             command_id: mutation.command_id,
             expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),

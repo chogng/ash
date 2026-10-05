@@ -73,6 +73,50 @@ impl ContextBudget {
         Self::ProviderManaged
     }
 
+    /// Keeps an extra input buffer between ordinary work and the hard request boundary.
+    pub const fn with_input_buffer(self, buffer: ContextTokenCount) -> Self {
+        match self {
+            Self::ProviderManaged => self,
+            Self::CoreManaged {
+                context_window,
+                reserved_output,
+                safety_margin,
+                compaction_limit,
+            } => {
+                let limit = context_window.saturating_sub(buffer);
+                let limit = match compaction_limit {
+                    ContextCompactionLimit::Tokens(existing) if existing.get() < limit.get() => {
+                        existing
+                    }
+                    _ => limit,
+                };
+                Self::core_managed(
+                    context_window,
+                    reserved_output,
+                    safety_margin,
+                    ContextCompactionLimit::Tokens(limit),
+                )
+            }
+        }
+    }
+
+    /// Uses the hard window for one bounded checkpoint-writing request.
+    pub const fn for_checkpoint(self, output: ContextTokenCount) -> Self {
+        match self {
+            Self::ProviderManaged => self,
+            Self::CoreManaged {
+                context_window,
+                safety_margin,
+                ..
+            } => Self::core_managed(
+                context_window,
+                output,
+                safety_margin,
+                ContextCompactionLimit::ContextWindow,
+            ),
+        }
+    }
+
     /// Conservatively reduces the planned input capacity by a measured estimator error.
     ///
     /// Both the ordinary pressure window and hard model window are reduced. Provider-managed

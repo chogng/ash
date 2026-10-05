@@ -367,6 +367,7 @@ impl Serialize for StoredThreadCommand<'_> {
         }
         match self.0 {
             ThreadCommand::StartTurn {
+                context_policy: _,
                 kind,
                 mode,
                 instructions,

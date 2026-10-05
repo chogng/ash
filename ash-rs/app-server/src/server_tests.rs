@@ -5008,6 +5008,7 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -5371,6 +5372,7 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -5465,6 +5467,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -5582,6 +5585,7 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -7064,6 +7068,7 @@ fn message_restore_interrupts_the_source_and_replays_without_interrupting_later_
             .start_turn(
                 &source,
                 StartTurnRequest {
+                    context_policy: Default::default(),
                     mode: Default::default(),
                     advisor: None,
                     command_id: ash_protocol::CommandId::new(command).unwrap(),

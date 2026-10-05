@@ -978,6 +978,12 @@ impl TurnExecutor {
                 .and_then(|model| snapshot.context_calibration(model, CONTEXT_ESTIMATOR_REVISION));
             let base_budget = calibrated_budget(configured_budget, calibration)
                 .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
+            let base_budget = match snapshot.context_policy(turn_id) {
+                ash_protocol::ContextCompactionPolicy::Handoff { buffer_tokens, .. } => {
+                    base_budget.with_input_buffer(crate::ContextTokenCount::new(buffer_tokens))
+                }
+                ash_protocol::ContextCompactionPolicy::Summary { .. } => base_budget,
+            };
             let budget = measurement_policy.adjusted_budget(base_budget);
             let read_paths = crate::services::read_paths_for_turn(&snapshot, turn_id);
             let harness_context = self

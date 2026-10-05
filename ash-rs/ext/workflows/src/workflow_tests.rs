@@ -74,6 +74,7 @@ impl Fixture {
     }
     fn request(&self, id: &str, text: &str) -> StartTurnRequest {
         StartTurnRequest {
+            context_policy: Default::default(),
             mode: Default::default(),
             command_id: CommandId::new(id).unwrap(),
             expected_sequence: SequenceExpectation::Exact(

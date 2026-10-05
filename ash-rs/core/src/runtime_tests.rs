@@ -27,6 +27,8 @@ use ash_protocol::UserInput;
 use ash_protocol::UserInputAnswer;
 use ash_protocol::UserInputQuestion;
 use core_api::AgentRuntime;
+use core_api::ContextInspectionRequest;
+use core_api::ContextInspectionScope;
 use core_api::CoreError;
 use core_api::ModelSelection;
 use core_api::ModelService;
@@ -152,6 +154,7 @@ impl Fixture {
     }
     fn submit(&self, text: &str) -> SubmitTurnRequest {
         SubmitTurnRequest {
+            context_policy: Default::default(),
             mode: Default::default(),
             advisor: None,
             command_id: CommandId::new("start").unwrap(),
@@ -176,6 +179,46 @@ impl Fixture {
             }],
         }
     }
+}
+
+#[test]
+fn context_inspection_preserves_thread_history_without_execution_or_updates() {
+    let fixture = Fixture::new(Failure::None);
+    let runtime: &dyn AgentRuntime = &fixture.runtime();
+    let turn = runtime
+        .submit_turn(&fixture.thread_id, fixture.submit("inspect this history"))
+        .unwrap();
+    let before = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    fixture.updates.0.lock().unwrap().clear();
+    let inspected = runtime
+        .inspect_context(ContextInspectionRequest {
+            context_policy: Default::default(),
+            scope: ContextInspectionScope::Thread(&fixture.thread_id),
+            model: None,
+            instructions: crate::test_turn_instructions(),
+            approval_mode: ApprovalMode::Manual,
+            tool_mode: ToolMode::Direct,
+        })
+        .unwrap();
+    assert!(
+        inspected
+            .context
+            .categories
+            .iter()
+            .find(|category| category.category == ash_protocol::ModelContextCategory::Conversation)
+            .unwrap()
+            .tokens
+            > 0
+    );
+    let after = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    assert_eq!(before.sequence, after.sequence);
+    assert_eq!(before.items, after.items);
+    assert_eq!(before.context_checkpoints, after.context_checkpoints);
+    assert_eq!(after.turns.last().unwrap().turn_id, turn.turn_id);
+    assert_eq!(fixture.backend.starts.load(Ordering::SeqCst), 1);
+    assert_eq!(fixture.backend.resumes.load(Ordering::SeqCst), 0);
+    assert_eq!(fixture.backend.steers.load(Ordering::SeqCst), 0);
+    assert!(fixture.updates.0.lock().unwrap().is_empty());
 }
 
 #[test]

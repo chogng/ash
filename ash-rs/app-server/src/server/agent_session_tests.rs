@@ -563,6 +563,7 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
         .start_turn(
             &thread_id,
             ash_core::StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 command_id: CommandId::new("copy-turn").unwrap(),

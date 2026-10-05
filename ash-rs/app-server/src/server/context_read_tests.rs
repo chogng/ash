@@ -5,18 +5,37 @@ use ash_core::ToolService;
 
 #[test]
 fn context_read_routes_initial_and_thread_inspections_and_checks_session_membership() {
-    let server = server().with_tool_service(
-        std::sync::Arc::new(InspectionTools),
-        std::sync::Arc::new(InspectionPolicy),
-    );
+    let profile = tempfile::tempdir().unwrap();
+    let server = server()
+        .with_tool_service(
+            std::sync::Arc::new(InspectionTools),
+            std::sync::Arc::new(InspectionPolicy),
+        )
+        .with_config_store(std::sync::Arc::new(
+            ash_config::ConfigStore::open(&profile.path().join("config.sqlite3")).unwrap(),
+        ));
     let mut connection = server.connection();
     initialize(&server, &mut connection);
+    let policy = serde_json::json!({"mode": "handoff", "bufferTokens": 16384, "stateTokens": 8192});
+    let updated = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc": "2.0", "id": 21, "method": "config/update", "params": {"commandId": "handoff", "expectedRevision": 0, "context": policy}}),
+    );
+    assert_eq!(updated["result"]["revision"], 1, "{updated}");
+    let config = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc": "2.0", "id": 22, "method": "config/read", "params": {}}),
+    );
+    assert_eq!(config["result"]["context"], policy);
     let read = call(
         &server,
         &mut connection,
         serde_json::json!({ "jsonrpc": "2.0", "id": 2, "method": "context/read", "params": { "detail": "usage", "scope": { "type": "environment" } } }),
     );
     assert!(read.get("error").is_none(), "{read}");
+    assert_eq!(read["result"]["context"]["compactionPolicy"], policy);
     let inspected: ash_protocol::ModelContextInspection =
         serde_json::from_value(read["result"]["context"].clone()).unwrap();
     assert!(inspected.estimated_tokens > 0);
@@ -92,6 +111,7 @@ fn context_read_routes_initial_and_thread_inspections_and_checks_session_members
         .start_turn(
             &thread_id,
             ash_core::StartTurnRequest {
+                context_policy: serde_json::from_value(policy.clone()).unwrap(),
                 command_id: ash_protocol::CommandId::new("context-turn").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Any,
                 model: None,
@@ -117,6 +137,21 @@ fn context_read_routes_initial_and_thread_inspections_and_checks_session_members
             },
         )
         .unwrap();
+    let reset = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc": "2.0", "id": 23, "method": "config/update", "params": {"commandId": "summary", "expectedRevision": 1, "context": null}}),
+    );
+    assert_eq!(reset["result"]["revision"], 2, "{reset}");
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc": "2.0", "id": 24, "method": "context/read", "params": {"detail": "usage", "scope": {"type": "environment"}}}),
+    );
+    assert_eq!(
+        read["result"]["context"]["compactionPolicy"]["mode"],
+        "summary"
+    );
     let before = server.threads.read_thread(&thread_id).unwrap();
     let read = call(
         &server,
@@ -124,6 +159,7 @@ fn context_read_routes_initial_and_thread_inspections_and_checks_session_members
         serde_json::json!({ "jsonrpc": "2.0", "id": 5, "method": "context/read", "params": { "detail": "usage", "scope": { "type": "thread", "sessionId": session_id, "threadId": thread_id } } }),
     );
     assert!(read.get("error").is_none(), "{read}");
+    assert_eq!(read["result"]["context"]["compactionPolicy"], policy);
     let inspected: ash_protocol::ModelContextInspection =
         serde_json::from_value(read["result"]["context"].clone()).unwrap();
     assert!(

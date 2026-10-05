@@ -63,6 +63,7 @@ impl Fixture {
             .start_turn(
                 &self.thread,
                 StartTurnRequest {
+                    context_policy: Default::default(),
                     mode: Default::default(),
                     advisor: None,
                     command_id: CommandId::new(key).unwrap(),
@@ -302,6 +303,7 @@ fn frozen_mode_is_present_in_model_input_after_reload() {
         .start_turn(
             &fixture.thread,
             StartTurnRequest {
+                context_policy: Default::default(),
                 command_id: CommandId::new("ask-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 mode: ash_protocol::CollaborationMode::Ask,

@@ -701,6 +701,7 @@ fn agent_commands_and_sessions_use_the_selected_repository_through_the_tool_port
         .start_turn(
             &thread_id,
             ash_core::StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,

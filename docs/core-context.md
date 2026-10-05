@@ -27,6 +27,7 @@
 | 多个 Thread 会共享上下文吗？ | 不会；每个 Thread 有独立的 `ContextManager`、窗口和压缩检查点 | [为什么不放进 Session](#2-为什么不放进-session) |
 | 一次模型调用使用什么？ | 使用不可变的 `ContextPlan`，再由 `ContextAssembler` 组装请求 | [数据模型](#4-数据模型) |
 | 超出模型预算或供应商实际窗口怎么办？ | 已知预算先规划压缩；供应商仍报溢出时持久化压缩旧历史并只重试一次 | [上下文预算](#7-上下文预算)、[压缩](#8-压缩) |
+| 自动压缩可以选择什么方式？ | 默认分层摘要，长任务可选择预留缓冲、保存进度后换窗口 | [两种自动压缩方式](#两种自动压缩方式) |
 | 模型或配置变化会污染旧窗口吗？ | 不会静默复用；相关 revision 变化会使派生状态失效并重建 | [供应商变更](#9-上下文窗口与供应商变更) |
 
 ## 1. 结论
@@ -113,6 +114,7 @@ Core 内部拥有。live Config、provider client 和 mutable manager 都不会�
 
 ```rust
 struct ContextInput {
+    policy: ContextCompactionPolicy,
     source_thread_sequence: u64,
     current_turn_id: TurnId,
     instructions: Vec<InstructionFragment>,
@@ -151,7 +153,7 @@ ContextPlan 必须可诊断：
 - token 预算如何分配；
 - 使用了哪个 checkpoint。
 
-模型选择冻结在同一次 `ModelInvocationSnapshot`；策略版本和 Skill 激活来源冻结在 durable Turn，
+模型选择冻结在同一次 `ModelInvocationSnapshot`；压缩策略冻结在该 Turn 的 `StartTurn` command receipt，审批策略版本和 Skill 激活来源冻结在 durable Turn，
 不复制进 `ContextPlan`。
 
 Skill 的发现、启用、模型选择和入口解析不属于上下文系统。外部 runtime 根据 durable activation
@@ -404,7 +406,7 @@ usage 维护 Thread/Turn 聚合，再按 Thread 内的模型与 estimator revisi
 
 ### 8.1 持久化压缩摘要
 
-本节的 `ContextCheckpoint` 是模型输入摘要。用户选择消息节点回到过去使用 `MessageCheckpoint`，其历史和文件边界见 [`protocol.md`](protocol.md#6-消息恢复点与共享历史)。共享历史前缀可在一个绑定事件内覆盖多个 Turn；压缩必须按 `referenced_items` 选择完整 Turn，摘要 digest 同时覆盖事件来源和实际 Items。后续摘要不能覆盖倒退或不连续的内容。
+本节的 `ContextCheckpoint` 是模型输入摘要。用户选择消息节点回到过去使用 `MessageCheckpoint`，其历史和文件边界见 [`protocol.md`](protocol.md#6-消息恢复点与共享历史)。共享历史前缀可在一个绑定事件内覆盖多个 Turn；压缩必须按 `referenced_items` 选择连续前缀，边界只能落在已结束 Turn 或本轮已完成的工具调用组之后，摘要 digest 同时覆盖事件来源和实际 Items。后续摘要不能覆盖倒退或不连续的内容。
 
 恢复分支只读取选定消息边界之前的原记录；在该位置之后产生的摘要不会继承。压缩保留原始消息和文件恢复证据。
 
@@ -440,6 +442,44 @@ ContextManager detects pressure
 
 Summary model I/O 不持有 Thread writer。只有 checkpoint durable commit 后，后续 invocation 才能
 依赖它。
+
+### 两种自动压缩方式
+
+`[agent.context]` 提供以下策略。它由 Config 保存，App Server 接受 Turn 时冻结到 command receipt；
+Core 从持久记录规划执行，子 Agent、Goal 续跑和进程恢复继承同一策略。修改配置不改变正在执行的 Turn。
+
+具体模式和交接术语属于开发诊断。TUI 的普通 `/context` 只报告用量、剩余容量、压缩预留和触发阈值；
+模式及内部预算通过开发构建的 `/debug-context` 查看，正式构建不注册或执行该命令。
+
+| 方式 | 达到压力线后的行为 | 适合的情况 |
+| --- | --- | --- |
+| `summary`（默认） | 先移除近期保留范围之外的大段成功只读工具结果；仍超预算时摘要最老连续前缀，保留近期交互 | 日常对话、需要近期原文的编辑与调试 |
+| `handoff` | 当前模型携带工作上下文生成交接记录，持久化后切换为记录、用户指令和未覆盖尾部 | 长时间自主任务、多个上下文窗口内持续执行 |
+
+只读清理只处理 `read_file`、读操作的 `file-system`、`grep` 和 `glob` 的旧纯文本成功结果。
+调用参数、错误、结构化结果和近期内容仍保留；被移除正文在模型输入中带 durable item 引用与重读提示。
+清理不改变持久历史，摘要源使用逐项有界的原始结果，而不是清理标记。
+
+两种方式都可在同一 Turn 中多次产生 checkpoint。当前 Turn 的全部用户输入始终保留；并行 Tool
+Calls 及其 Results 不能拆开，未解决调用不能被覆盖。已被 checkpoint 覆盖的用户输入继续出现在
+模型请求中，但 source 引用不会重复追加。新 checkpoint 的来源和摘要必须通过验证，提交之后
+才重建模型输入。取消、生成失败或序列冲突不清空窗口，也不自动重复已完成的工具动作。
+
+摘要目标由 `summaryTokens`、输出预留和剩余容量共同约束，不再固定最多 2048 tokens。
+`recentTokens` 是近期原文保留目标；小窗口按实际剩余容量收紧，不能挤掉用户指令或摘要 framing。
+源材料超过硬窗口时分批处理，每批必须缩短已保留的内容。
+
+交接策略把普通压力线限制为原压力线与“硬输入上限减 `bufferTokens`”中的较小值。
+已有自动压缩预留足够时不重复扣除；`stateTokens` 限定交接记录输出。专用交接请求关闭任务工具，
+保留工作指令、已有 checkpoint 和当前工作历史，只要求保存目标、纠正、已完成行动、证据、待办与下一步。
+缓冲不会允许普通任务继续越过压力线。该请求独立检查硬容量，并在支持时计数实际请求；没有容量
+就明确失败，不发送越过已知硬上限的请求。交接记录采用独立 prompt/policy revision，继续通过同一
+checkpoint digest 和持久化链路恢复。
+
+这两种策略借鉴分层摘要与交接缓冲的思路。Ash 的 `handoff` 是“当前模型专用交接调用后切换”，
+不是 Codex 特定模型的 notes 工具自主收尾，也不宣称复刻 Claude Code 的内部实现。由上游持有
+远端历史的订阅后端仍由上游控制压缩；这些本地策略用于 Ash Core 执行的模型请求。
+配置示例和范围见[上下文压缩配置](config.md#上下文压缩)。
 
 ### 8.3 供应商溢出恢复
 

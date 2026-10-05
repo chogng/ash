@@ -90,3 +90,44 @@ fn provider_managed_budget_ignores_local_capacity_reduction() {
         ContextBudget::ProviderManaged
     );
 }
+
+#[test]
+fn checkpoint_buffer_respects_existing_pressure_and_preserves_hard_capacity() {
+    let budget = ContextBudget::core_managed(
+        ContextTokenCount::new(100_000),
+        ContextTokenCount::new(4_000),
+        ContextTokenCount::new(1_000),
+        ContextCompactionLimit::Tokens(ContextTokenCount::new(90_000)),
+    );
+    let ResolvedContextBudget::CoreManaged(small) = budget
+        .with_input_buffer(ContextTokenCount::new(8_000))
+        .resolve()
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(small.maximum_input().get(), 85_000);
+    let ResolvedContextBudget::CoreManaged(large) = budget
+        .with_input_buffer(ContextTokenCount::new(16_000))
+        .resolve()
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(large.maximum_input().get(), 79_000);
+    assert_eq!(large.hard_maximum_input().get(), 95_000);
+    let ResolvedContextBudget::CoreManaged(checkpoint) = budget
+        .for_checkpoint(ContextTokenCount::new(8_000))
+        .resolve()
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(checkpoint.maximum_input().get(), 91_000);
+    assert!(
+        budget
+            .with_input_buffer(ContextTokenCount::new(99_000))
+            .resolve()
+            .is_err()
+    );
+}

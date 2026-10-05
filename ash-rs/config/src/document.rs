@@ -193,6 +193,8 @@ impl NetworkConfig {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentConfig {
     #[serde(default)]
+    pub context: ash_protocol::ContextCompactionPolicy,
+    #[serde(default)]
     pub time_context: crate::TimeContextConfig,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<ModelRef>,
@@ -271,6 +273,10 @@ impl UserConfigDocument {
             git.validate()?;
         }
         self.agent.time_context.validate()?;
+        self.agent
+            .context
+            .validate()
+            .map_err(|message| ConfigError(message.into()))?;
         self.network.validate()?;
         if let Some(advisor) = &self.agent.advisor {
             advisor
@@ -403,6 +409,7 @@ impl UserConfigDocument {
 /// type without exposing file or authority implementation details to runtime consumers.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ResolvedConfig {
+    pub context: ash_protocol::ContextCompactionPolicy,
     pub time_context: crate::TimeContextConfig,
     pub features: features::FeatureOverrides,
     pub issues: crate::IssueConfig,
@@ -592,6 +599,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             .collect();
         Self {
             time_context: document.agent.time_context.clone(),
+            context: document.agent.context.clone(),
             features: document.features.clone(),
             issues: document.issues.clone(),
             git: document.git.unwrap_or_default(),

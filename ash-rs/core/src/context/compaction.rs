@@ -21,7 +21,7 @@ use ash_protocol::ToolChoice;
 use std::sync::Arc;
 
 const CHECKPOINT_SCHEMA_REVISION: &str = "context-checkpoint-v1";
-const CONTEXT_POLICY_REVISION: &str = "context-policy-v2";
+const CONTEXT_POLICY_REVISION: &str = "context-policy-v3";
 pub(crate) const CHECKPOINT_ID_PREFIX: &str = "context-checkpoint";
 // ThreadController appends a u128 timestamp and a u64 ordinal as fixed-width hex fields.
 pub(crate) const CHECKPOINT_ID_BYTES: usize = CHECKPOINT_ID_PREFIX.len() + 1 + 32 + 1 + 16;
@@ -31,6 +31,9 @@ const UNTRUSTED_SOURCE_PREAMBLE: &str =
 /// Immutable source material for one context checkpoint generation attempt.
 #[derive(Clone, Debug)]
 pub struct ContextCompactionRequest {
+    input_limit: Option<ContextTokenCount>,
+    handoff_request: Option<ModelRequest>,
+    handoff_input_tokens: ContextTokenCount,
     source_thread_sequence: u64,
     covered: ContextSourceRange,
     previous_checkpoint: Option<ContextCheckpoint>,
@@ -43,6 +46,20 @@ pub struct ContextCompactionRequest {
 impl ContextCompactionRequest {
     pub(crate) fn from_plan(plan: &CompactionPlan, model: &FrozenModelSelection) -> Self {
         Self {
+            input_limit: match &plan.budget {
+                super::ContextBudgetReport::ProviderManaged { .. } => None,
+                super::ContextBudgetReport::CoreManaged {
+                    context_window,
+                    safety_margin,
+                    ..
+                } => Some(
+                    context_window
+                        .saturating_sub(*safety_margin)
+                        .saturating_sub(plan.target_tokens),
+                ),
+            },
+            handoff_request: plan.handoff_request.clone(),
+            handoff_input_tokens: plan.handoff_input_tokens,
             source_thread_sequence: plan.source_thread_sequence,
             covered: plan.covered,
             previous_checkpoint: plan.previous_checkpoint.clone(),
@@ -102,7 +119,16 @@ impl ContextCompactionRequest {
         self.retention_prompt.as_deref()
     }
 
+    /// A handoff uses the working model input with task tools disabled. Custom compactors
+    /// must preserve this input and output limit rather than summarize only `source_items`.
+    pub fn handoff_request(&self) -> Option<&ModelRequest> {
+        self.handoff_request.as_ref()
+    }
+
     pub(crate) fn estimated_input_tokens(&self) -> Result<ContextTokenCount, CoreError> {
+        if self.handoff_request.is_some() {
+            return Ok(self.handoff_input_tokens);
+        }
         estimate_compaction_input(
             self.covered,
             self.previous_checkpoint.as_ref(),
@@ -197,18 +223,24 @@ impl ContextCompactionService for ModelContextCompactionService {
         cancellation: &CancellationToken,
         record_model_usage: &mut dyn FnMut(Option<ModelUsage>) -> Result<(), CoreError>,
     ) -> Result<ContextCompactionResult, CoreError> {
-        let input = encode_compaction_input(
-            request.covered,
-            request.previous_checkpoint.as_ref(),
-            &request.source_items,
-            request.retention_prompt.as_deref(),
-        )
-        .map_err(|error| {
-            CoreError::Context(format!("failed to encode compaction source: {error}"))
-        })?;
-        let response = self.model.invoke(
-            request.model_selection(),
-            &ModelRequest {
+        let prompt = if request.handoff_request.is_some() {
+            ash_prompts::HANDOFF_PROMPT
+        } else {
+            COMPACTION_PROMPT
+        };
+        let model_request = if let Some(handoff) = request.handoff_request() {
+            handoff.clone()
+        } else {
+            let input = encode_compaction_input(
+                request.covered,
+                request.previous_checkpoint.as_ref(),
+                &request.source_items,
+                request.retention_prompt.as_deref(),
+            )
+            .map_err(|error| {
+                CoreError::Context(format!("failed to encode compaction source: {error}"))
+            })?;
+            ModelRequest {
                 instructions: Some(COMPACTION_PROMPT.body().into()),
                 input: vec![InputItem::Message(Message {
                     role: MessageRole::User,
@@ -224,9 +256,43 @@ impl ContextCompactionService for ModelContextCompactionService {
                 temperature: None,
                 prompt_cache_key: None,
                 prompt_cache_prefix_end: None,
-            },
-            cancellation,
-        )?;
+            }
+        };
+        let model_selection = request.model_selection();
+        let budget = self
+            .model
+            .context_budget(model_selection)?
+            .for_checkpoint(request.target_tokens);
+        let estimated = request.estimated_input_tokens()?;
+        if let ash_context_engine::ResolvedContextBudget::CoreManaged(limits) = budget
+            .resolve()
+            .map_err(|error| CoreError::Context(error.to_string()))?
+        {
+            // Count the actual checkpoint request when supported. It uses a different input
+            // shape from ordinary work, so ordinary-request calibration cannot prove it fits.
+            let measured =
+                match self
+                    .model
+                    .measure_input(model_selection, &model_request, cancellation)?
+                {
+                    ash_context_engine::ContextTokenMeasurementOutcome::Measured(measurement) => {
+                        measurement.accounted_input()
+                    }
+                    ash_context_engine::ContextTokenMeasurementOutcome::Unavailable => estimated,
+                };
+            if measured
+                > request.input_limit.map_or(limits.maximum_input(), |limit| {
+                    limit.min(limits.maximum_input())
+                })
+            {
+                return Err(CoreError::Context(
+                    "checkpoint request exceeds the hard context window".into(),
+                ));
+            }
+        }
+        let response = self
+            .model
+            .invoke(model_selection, &model_request, cancellation)?;
         record_model_usage(response.usage.clone())?;
         if response.tool_calls().next().is_some() {
             return Err(CoreError::Context(
@@ -265,8 +331,12 @@ impl ContextCompactionService for ModelContextCompactionService {
         Ok(ContextCompactionResult::new(
             summary,
             CHECKPOINT_SCHEMA_REVISION,
-            COMPACTION_PROMPT.revision(),
-            CONTEXT_POLICY_REVISION,
+            prompt.revision(),
+            if request.handoff_request.is_some() {
+                "context-handoff-policy-v1"
+            } else {
+                CONTEXT_POLICY_REVISION
+            },
         ))
     }
 }

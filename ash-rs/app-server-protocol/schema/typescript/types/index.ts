@@ -249,6 +249,7 @@ export type { ContentSearchStartResult } from './ContentSearchStartResult.js';
 export type { ContextCheckpoint } from './ContextCheckpoint.js';
 export type { ContextCheckpointId } from './ContextCheckpointId.js';
 export type { ContextCheckpointVerification } from './ContextCheckpointVerification.js';
+export type { ContextCompactionPolicy } from './ContextCompactionPolicy.js';
 export type { ContextReadDetail } from './ContextReadDetail.js';
 export type { ContextReadParams } from './ContextReadParams.js';
 export type { ContextReadResult } from './ContextReadResult.js';

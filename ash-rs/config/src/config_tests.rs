@@ -554,6 +554,7 @@ fn update_preferences(
         command_id: CommandId::new(command_id).unwrap(),
         expected_revision: ConfigRevision::new(revision),
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            context: Patch::Missing,
             advisor: Default::default(),
             time_context: ash_protocol::Patch::Missing,
             features: Default::default(),
@@ -841,6 +842,7 @@ fn frontend_section_patch_is_durable_and_null_clears_the_section() {
             command_id: CommandId::new("configure-gui").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                context: Patch::Missing,
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 gui: Patch::Value(configured.clone()),
@@ -855,6 +857,7 @@ fn frontend_section_patch_is_durable_and_null_clears_the_section() {
             command_id: CommandId::new("reset-gui").unwrap(),
             expected_revision: ConfigRevision::new(1),
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                context: Patch::Missing,
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 gui: Patch::Null,
@@ -896,6 +899,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
             command_id: CommandId::new("select-code-mode-only").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                context: Patch::Missing,
                 advisor: Default::default(),
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
@@ -936,6 +940,7 @@ fn tui_section_is_persisted_in_the_tui_table() {
             command_id: CommandId::new("select-tui-theme").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                context: Patch::Missing,
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 tui: Patch::Value(BTreeMap::from([(
@@ -967,6 +972,7 @@ fn tui_section_values_are_not_interpreted_by_the_backend() {
             command_id: CommandId::new("select-frontend-owned-theme").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                context: Patch::Missing,
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 tui: Patch::Value(BTreeMap::from([(
@@ -1434,6 +1440,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command_id: CommandId::new("select-review-model").unwrap(),
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                context: Patch::Missing,
                 advisor: Default::default(),
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
@@ -2436,6 +2443,7 @@ fn time_context_policy_validates_persists_and_resets_without_changing_model_pref
     };
     let update = |value| {
         UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            context: Patch::Missing,
             time_context: value,
             ..PreferencesUpdate::default()
         })
@@ -2531,6 +2539,7 @@ fn advisor_default_validates_provider_and_survives_reopening() {
             command_id: CommandId::new("advisor-default").unwrap(),
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                context: Patch::Missing,
                 advisor: Patch::Value(advisor.clone()),
                 ..Default::default()
             }),
@@ -2552,6 +2561,7 @@ fn advisor_default_validates_provider_and_survives_reopening() {
             command_id: CommandId::new("disable-advisor").unwrap(),
             expected_revision: selected.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                context: Patch::Missing,
                 advisor: Patch::Value(disabled.clone()),
                 ..Default::default()
             }),
@@ -2574,6 +2584,7 @@ fn advisor_default_validates_provider_and_survives_reopening() {
                 command_id: CommandId::new("invalid-advisor").unwrap(),
                 expected_revision: disabled_result.revision,
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    context: Patch::Missing,
                     advisor: Patch::Value(invalid),
                     ..Default::default()
                 })
@@ -2585,6 +2596,7 @@ fn advisor_default_validates_provider_and_survives_reopening() {
             command_id: CommandId::new("clear-advisor").unwrap(),
             expected_revision: disabled_result.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                context: Patch::Missing,
                 advisor: Patch::Null,
                 ..Default::default()
             }),
@@ -2777,4 +2789,66 @@ fn http_compatibility_mode_persists_preserves_host_policy_and_rejects_stale_writ
                 .is_err()
         );
     }
+}
+
+#[test]
+fn context_compaction_policy_persists_and_rejects_invalid_updates_atomically() {
+    let path = config_path("context-compaction");
+    let store = ConfigStore::open(&path).unwrap();
+    let policy = ash_protocol::ContextCompactionPolicy::Handoff {
+        buffer_tokens: 16_384,
+        state_tokens: 8_192,
+    };
+    let update = |context| {
+        UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            context,
+            ..Default::default()
+        })
+    };
+    let saved = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("save-context-policy").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: update(Patch::Value(policy.clone())),
+        })
+        .unwrap();
+    assert_eq!(store.read_snapshot().unwrap().values.context, policy);
+    assert!(persisted_config_document(&path).contains("[agent.context]"));
+    assert!(
+        store
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new("invalid-context-policy").unwrap(),
+                expected_revision: saved.revision,
+                command: update(Patch::Value(
+                    ash_protocol::ContextCompactionPolicy::Handoff {
+                        buffer_tokens: 4,
+                        state_tokens: 8
+                    }
+                )),
+            })
+            .is_err()
+    );
+    assert_eq!(store.read_snapshot().unwrap().revision, saved.revision);
+    drop(store);
+    let store = ConfigStore::open(&path).unwrap();
+    assert_eq!(store.read_snapshot().unwrap().values.context, policy);
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("reset-context-policy").unwrap(),
+            expected_revision: saved.revision,
+            command: update(Patch::Null),
+        })
+        .unwrap();
+    assert_eq!(
+        store.read_snapshot().unwrap().values.context,
+        Default::default()
+    );
+    assert!(
+        serde_json::from_value::<ash_protocol::ContextCompactionPolicy>(
+            serde_json::json!({"mode":"summary","bufferTokens":20})
+        )
+        .is_err()
+    );
+    drop(store);
+    remove_config_files(&path);
 }

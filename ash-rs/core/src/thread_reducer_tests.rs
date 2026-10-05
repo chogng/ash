@@ -20,6 +20,7 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
             command_id: CommandId::new(format!("command_{sequence}"))
                 .expect("test ID is non-empty"),
             command: ThreadCommand::StartTurn {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
@@ -382,6 +383,7 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
     accepted.command = Some(ThreadCommandReceipt {
         command_id: CommandId::new("command_2").unwrap(),
         command: ThreadCommand::StartTurn {
+            context_policy: Default::default(),
             mode: Default::default(),
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
@@ -1061,6 +1063,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
     accepted.command = Some(ThreadCommandReceipt {
         command_id: CommandId::new("command_1").expect("test ID is non-empty"),
         command: ThreadCommand::StartTurn {
+            context_policy: Default::default(),
             mode: Default::default(),
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,

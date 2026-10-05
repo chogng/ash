@@ -184,9 +184,12 @@ impl ContextPlan {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub(crate) struct CompactionPlan {
+    pub(crate) handoff_request: Option<ash_protocol::ModelRequest>,
+    pub(crate) handoff_input_tokens: ContextTokenCount,
     pub(crate) source_thread_sequence: u64,
+    #[cfg(test)]
     pub(crate) covered_turns: Vec<TurnId>,
     pub(crate) covered: ContextSourceRange,
     pub(crate) previous_checkpoint: Option<ContextCheckpoint>,

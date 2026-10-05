@@ -4,6 +4,14 @@ use ash_protocol::ContextCheckpoint;
 
 const COMPACTION_PROMPT_TEXT: &str = include_str!("../templates/compact/summary.md");
 
+/// Captures execution state using the working model before switching its context window.
+pub const HANDOFF_PROMPT: PromptArtifact = PromptArtifact::new(
+    "prompts",
+    "context/handoff",
+    "context-handoff-v1",
+    include_str!("../templates/compact/handoff.md"),
+);
+
 /// Shared instructions used to produce a durable continuation checkpoint.
 pub const COMPACTION_PROMPT: PromptArtifact = PromptArtifact::new(
     "prompts",

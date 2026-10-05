@@ -20,12 +20,14 @@ use ash_protocol::CommandId;
 use ash_protocol::FrozenSkillActivation;
 use ash_protocol::InteractionCancelReason;
 use ash_protocol::MessageCheckpoint;
+use ash_protocol::ModelContextInspection;
 use ash_protocol::ModelRef;
 use ash_protocol::RequestId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadArchiveReason;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadUpdateEnvelope;
+use ash_protocol::ToolDefinition;
 use ash_protocol::ToolMode;
 use ash_protocol::ToolProfileSnapshot;
 use ash_protocol::TurnId;
@@ -33,8 +35,32 @@ use ash_protocol::TurnInstructions;
 use ash_protocol::TurnKind;
 use ash_protocol::UserInput;
 
+/// Resolved product inputs for a read-only inspection; no execution identity is created.
+pub struct ContextInspectionRequest<'a> {
+    pub context_policy: ash_protocol::ContextCompactionPolicy,
+    pub scope: ContextInspectionScope<'a>,
+    pub model: Option<ModelRef>,
+    pub instructions: TurnInstructions,
+    pub approval_mode: ApprovalMode,
+    pub tool_mode: ToolMode,
+}
+
+/// The host environment or a Thread whose loaded context is being inspected.
+pub enum ContextInspectionScope<'a> {
+    Environment,
+    Thread(&'a ThreadId),
+}
+
+/// Usage and the exact tool catalog sampled together, so diagnostics cannot drift from counts.
+#[derive(Debug, PartialEq)]
+pub struct ContextInspection {
+    pub context: ModelContextInspection,
+    pub tool_definitions: Vec<ToolDefinition>,
+}
+
 /// A user submission after product input, model and instruction selection have been resolved.
 pub struct SubmitTurnRequest {
+    pub context_policy: ash_protocol::ContextCompactionPolicy,
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub model: Option<ModelRef>,
@@ -104,6 +130,12 @@ pub enum AcceptedCommand<'a> {
 /// separately or inspect internal command receipts. Read-only command queries may avoid repeated
 /// product input resolution; submission operations must enforce replay safety independently.
 pub trait AgentRuntime {
+    /// Reads the execution context without model I/O, retrieval, compaction or durable mutation.
+    fn inspect_context(
+        &self,
+        request: ContextInspectionRequest<'_>,
+    ) -> Result<ContextInspection, CoreError>;
+
     fn read_thread(&self, thread_id: &ThreadId) -> Result<ThreadView, CoreError>;
     fn read_started_thread(&self, command_id: &CommandId) -> Result<Option<ThreadView>, CoreError>;
     fn read_session(&self, session_id: &SessionId) -> Result<SessionView, CoreError>;

@@ -40,7 +40,12 @@ fn exercise_panel(mode: ScreenMode) -> String {
     assert!(overview.contains("Test model"));
     assert!(!overview.contains("test/model"));
     assert!(!overview.contains("~12.3k"));
+    assert!(!overview.contains("Compaction mode"));
+    assert!(!overview.contains("Layered summary"));
     assert!(overview.contains("90k (90.0%)"));
+    assert!(!overview.contains("Output reserve"));
+    assert!(!overview.contains("Safety margin"));
+    assert!(!overview.contains("Auto-compact window"));
     assert!(overview.find("Test model").unwrap() < overview.find("12.3k / 100k").unwrap());
     assert!(overview.contains("Latest request · provider reported"));
     assert!(overview.contains("25k tokens"));
@@ -206,7 +211,7 @@ fn exercise_narrow_states(mode: ScreenMode) -> String {
         );
         let bottom = frame(&app, 40, 16).1;
         if capacity.is_some() {
-            assert!(bottom.contains("自动压缩窗口"), "{bottom}");
+            assert!(bottom.contains("自动压缩阈值"), "{bottom}");
             assert!(bottom.contains("自动压缩 buffer"), "{bottom}");
             if tokens > 90_000 {
                 assert!(bottom.contains("超过自动压缩阈值"));
@@ -490,6 +495,7 @@ fn inspection(tokens: u64, capacity: Option<u64>) -> ModelContextInspection {
     })
     .collect();
     ModelContextInspection {
+        compaction_policy: Default::default(),
         model: Some(ash_protocol::ModelRef::new(
             ash_protocol::ProviderId::new("test").unwrap(),
             ash_protocol::ModelId::new("model").unwrap(),
@@ -591,6 +597,14 @@ fn exercise_context_diagnostics(mode: ScreenMode, language: Language) -> String 
     };
     let overview = frame(&app, 100, 44).1;
     assert!(overview.contains(title), "{overview}");
+    assert!(
+        overview.contains(if language == Language::Chinese {
+            "分层摘要"
+        } else {
+            "Layered summary"
+        }),
+        "{overview}"
+    );
     assert!(overview.contains("read_file"));
     assert!(!overview.contains("Read a workspace file"));
     let mut frames = vec![format!("Diagnostics overview\n{overview}")];
@@ -761,14 +775,82 @@ fn exercise_low_usage_order(mode: ScreenMode) -> String {
         "技能",
         "对话／工具",
         "剩余空间",
-        "输出预留",
-        "安全余量",
         "自动压缩 buffer",
     ];
     let positions = labels.map(|label| text.find(label).unwrap());
     assert!(positions.windows(2).all(|pair| pair[0] < pair[1]), "{text}");
     assert!(text.contains("10.2k / 1m tokens（1.0%）"), "{text}");
     assert!(text.contains("894.9k (89.5%)"), "{text}");
-    assert!(text.contains("900k (90.0%)"), "{text}");
+    assert!(!text.contains("压缩方式"), "{text}");
+    assert!(!text.contains("分层摘要"), "{text}");
+    assert!(!text.contains("输出预留"), "{text}");
+    assert!(!text.contains("安全余量"), "{text}");
     text
+}
+
+#[test]
+fn context_panel_fullscreen_handoff() {
+    let text = exercise_handoff_panel(ScreenMode::Fullscreen);
+    crate::tui_assert_snapshot!(mode = ScreenMode::Fullscreen; "context_panel_handoff", text);
+}
+
+#[test]
+fn context_panel_inline_handoff() {
+    let text = exercise_handoff_panel(ScreenMode::Inline);
+    crate::tui_assert_snapshot!(mode = ScreenMode::Inline; "context_panel_handoff", text);
+}
+
+fn exercise_handoff_panel(mode: ScreenMode) -> String {
+    let mut app = app(mode, Language::Chinese);
+    app.insert_text("继续当前任务");
+    let mut context = inspection(12_345, Some(79_000));
+    context.compaction_policy = ash_protocol::ContextCompactionPolicy::Handoff {
+        buffer_tokens: 16_000,
+        state_tokens: 8_000,
+    };
+    let allocation = context.allocation.as_mut().unwrap();
+    allocation.auto_compact_buffer = 18_000;
+    allocation.auto_compact_window = 82_000;
+    app.update(crate::context::Event::Opened(crate::context::panel(
+        context.clone(),
+        &context_catalog(),
+    )));
+    let (buffer, text) = frame(&app, 100, 26);
+    assert!(!text.contains("压缩方式"), "{text}");
+    assert!(!text.contains("保存进度后换窗口"), "{text}");
+    assert!(!text.contains("交接预留"), "{text}");
+    assert!(text.contains("自动压缩 buffer"), "{text}");
+    assert!(text.contains("18k (18.0%)"), "{text}");
+    assert!(text.contains("79k (79.0%)"), "{text}");
+    assert!(!text.contains("安全余量"));
+    assert!(!text.contains("输出预留"));
+    assert!(!text.contains("自动压缩窗口"));
+    let gauge_y = text
+        .lines()
+        .position(|line| line.contains("12.3k / 100k"))
+        .unwrap() as u16
+        + 1;
+    let colors = app.render_context().identity_colors();
+    for cell in (0..100).map(|x| &buffer[(x, gauge_y)]).filter(|cell| {
+        colors.contains(&cell.bg)
+            || cell.bg == app.render_context().segmented_inactive()
+            || cell.bg == app.render_context().muted()
+    }) {
+        assert_eq!(cell.symbol(), " ");
+    }
+    key(&mut app, KeyCode::Esc);
+    assert!(app.command_panel().is_none());
+    assert_eq!(app.input(), "继续当前任务");
+    app.update(crate::context::Event::Opened(
+        crate::context::diagnostics_panel(context, Vec::new(), &context_catalog()),
+    ));
+    let diagnostics = frame(&app, 100, 36).1;
+    assert!(diagnostics.contains("开发者：上下文诊断"), "{diagnostics}");
+    assert!(diagnostics.contains("压缩方式"), "{diagnostics}");
+    assert!(diagnostics.contains("保存进度后换窗口"), "{diagnostics}");
+    assert!(diagnostics.contains("交接预留"), "{diagnostics}");
+    assert!(diagnostics.contains("18k (18.0%)"), "{diagnostics}");
+    key(&mut app, KeyCode::Esc);
+    assert_eq!(app.input(), "继续当前任务");
+    format!("Context usage\n{text}\n\nDeveloper diagnostics\n{diagnostics}")
 }

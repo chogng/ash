@@ -587,6 +587,7 @@ pub enum ModelContextUsageSource {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelContextInspection {
+    pub compaction_policy: crate::ContextCompactionPolicy,
     pub model: Option<crate::ModelRef>,
     #[ts(type = "number")]
     pub estimated_tokens: u64,

@@ -18139,6 +18139,9 @@
           },
           "type": "object"
         },
+        "context": {
+          "$ref": "#/$defs/ContextCompactionPolicy"
+        },
         "execPolicyRules": {
           "items": {
             "$ref": "#/$defs/ExecPolicyRuleDto"
@@ -18246,6 +18249,7 @@
         }
       },
       "required": [
+        "context",
         "timeContext",
         "features",
         "issues",
@@ -18304,6 +18308,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContextCompactionPolicy"
             },
             {
               "type": "null"
@@ -19457,6 +19471,65 @@
         "verified"
       ],
       "type": "string"
+    },
+    "ContextCompactionPolicy": {
+      "description": "How a Thread preserves working state when ordinary input reaches its pressure boundary.\nBoth strategies keep the durable source history; a checkpoint only changes model input.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "summary",
+              "type": "string"
+            },
+            "recentTokens": {
+              "default": 16384,
+              "format": "uint32",
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "summaryTokens": {
+              "default": 8192,
+              "format": "uint32",
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bufferTokens": {
+              "default": 16384,
+              "format": "uint32",
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "mode": {
+              "const": "handoff",
+              "type": "string"
+            },
+            "stateTokens": {
+              "default": 8192,
+              "format": "uint32",
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "ContextReadDetail": {
       "description": "Selects whether this read includes internal definitions for explicit developer inspection.",
@@ -34721,6 +34794,9 @@
           },
           "type": "array"
         },
+        "compactionPolicy": {
+          "$ref": "#/$defs/ContextCompactionPolicy"
+        },
         "estimatedTokens": {
           "format": "uint64",
           "minimum": 0,
@@ -34751,6 +34827,7 @@
         }
       },
       "required": [
+        "compactionPolicy",
         "estimatedTokens",
         "estimatorRevision",
         "categories"

@@ -252,6 +252,7 @@ fn recovered_active_goal_resumes_a_running_hidden_turn() {
         .start_goal_turn(
             &thread_id,
             StartGoalTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -356,6 +357,7 @@ fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode: Default::default(),
                 advisor: None,
                 kind: protocol::TurnKind::Review,
@@ -403,6 +405,7 @@ fn started_turn_with_options(
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode,
                 advisor: None,
                 kind: protocol::TurnKind::Coding,

@@ -24,6 +24,7 @@ impl JsonRpcTransport for ContextTransport {
                 serde_json::to_value(ContextReadResult {
                     tool_definitions: vec![],
                     context: ModelContextInspection {
+                        compaction_policy: Default::default(),
                         model: self.model.clone(),
                         estimated_tokens: 400,
                         estimator_revision: "test".into(),
@@ -93,6 +94,7 @@ fn context_diagnostics_explicitly_requests_definitions() {
 fn context_summary_categories_are_read_only_for_keyboard_and_pointer_input() {
     let mut panel = panel(
         ModelContextInspection {
+            compaction_policy: Default::default(),
             model: None,
             estimated_tokens: 2_500,
             estimator_revision: "test".into(),

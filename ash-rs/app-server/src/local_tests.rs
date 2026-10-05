@@ -2564,6 +2564,7 @@ fn missing_context_blocks_execution_until_the_exact_model_is_configured() {
             .start_turn(
                 &thread_id,
                 ash_core::StartTurnRequest {
+                    context_policy: Default::default(),
                     mode: Default::default(),
                     advisor: None,
                     kind: ash_protocol::TurnKind::Coding,
@@ -2761,6 +2762,7 @@ fn select_model(
             expected_revision: revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 advisor: Default::default(),
+                context: Patch::Missing,
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 model: Patch::Value(model_ref(model)),

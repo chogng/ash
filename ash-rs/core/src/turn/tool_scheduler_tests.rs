@@ -2070,6 +2070,7 @@ fn fixture_with_modes(
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                context_policy: Default::default(),
                 mode,
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,

@@ -469,6 +469,7 @@ pub(super) fn set_model(client: &mut AppServerRequestHandle, model: ModelRef) ->
     let config = client.read_config().map_err(client_error)?;
     client
         .update_config(ConfigUpdateParams {
+            context: ash_protocol::Patch::Missing,
             advisor: Default::default(),
             time_context: Default::default(),
             features: Default::default(),

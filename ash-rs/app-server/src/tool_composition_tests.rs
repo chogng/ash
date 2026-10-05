@@ -1395,6 +1395,7 @@ fn code_mode_only_keeps_model_tools_stable_across_third_party_catalog_changes() 
             .start_turn(
                 &thread_id,
                 StartTurnRequest {
+                    context_policy: Default::default(),
                     mode: Default::default(),
                     advisor: None,
                     command_id: CommandId::new(format!("catalog-turn-{stage}")).unwrap(),

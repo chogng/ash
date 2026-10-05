@@ -27,6 +27,8 @@ use std::path::PathBuf;
 #[serde(rename_all = "camelCase")]
 pub struct PreferencesUpdate {
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    pub context: Patch<ash_protocol::ContextCompactionPolicy>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub time_context: Patch<crate::TimeContextConfig>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub features: Patch<features::FeatureOverrides>,

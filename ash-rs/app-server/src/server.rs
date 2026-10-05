@@ -1782,6 +1782,7 @@ impl AppServer {
             thread,
             command,
             ash_core::StartTurnRequest {
+                context_policy: request.context_policy,
                 mode: request.mode,
                 command_id: request.command_id,
                 expected_sequence: request.expected_sequence,

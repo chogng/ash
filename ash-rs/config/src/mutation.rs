@@ -265,6 +265,11 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Null => document.agent.time_context = crate::TimeContextConfig::default(),
         Patch::Value(config) => document.agent.time_context = config.clone(),
     }
+    match &update.context {
+        Patch::Missing => {}
+        Patch::Null => document.agent.context = Default::default(),
+        Patch::Value(policy) => document.agent.context = policy.clone(),
+    }
     match &update.gui {
         Patch::Missing => {}
         Patch::Null => document.gui.clear(),

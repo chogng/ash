@@ -2822,6 +2822,30 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("Free space", "空き容量", "剩余空间", "Espace libre"),
     translation(
+        "Compaction mode",
+        "圧縮方式",
+        "压缩方式",
+        "Mode de compression",
+    ),
+    translation(
+        "Layered summary",
+        "段階的な要約",
+        "分层摘要",
+        "Résumé par étapes",
+    ),
+    translation(
+        "Save progress and switch window",
+        "進捗保存後にウィンドウ切替",
+        "保存进度后换窗口",
+        "Sauvegarder et changer de fenêtre",
+    ),
+    translation(
+        "Handoff reserve",
+        "引き継ぎ予約",
+        "交接预留",
+        "Réserve de transmission",
+    ),
+    translation(
         "Output reserve",
         "出力予約",
         "输出预留",

@@ -10,6 +10,7 @@ import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../../services/tasks/common/taskService.js";
+import type { ITerminalInstance } from "../../../../contrib/terminal/browser/terminal.js";
 import { TestingService } from "../../browser/testingService.js";
 
 test("TestingService exposes only test tasks and projects passed and failed runs", async () => {
@@ -100,6 +101,7 @@ class FakeTaskRun extends Disposable implements ITaskRun {
 	private readonly emitter = this._register(new Emitter<TaskRunStatus>());
 	readonly onDidChangeStatus = this.emitter.event;
 	readonly terminalId = 'task-terminal';
+	get terminal(): ITerminalInstance { throw new Error('TestingService must observe task status without accessing its terminal'); }
 	status: TaskRunStatus = "running";
 	exitCode: number | undefined;
 	constructor(readonly task: IWorkspaceTask) { super(); }

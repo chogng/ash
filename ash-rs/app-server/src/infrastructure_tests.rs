@@ -1417,6 +1417,7 @@ fn queue_steering_rejects_a_different_mode_without_changing_the_active_turn() {
         .start_turn(
             &thread_id,
             ash_core::StartTurnRequest {
+                context_policy: Default::default(),
                 mode: ash_protocol::CollaborationMode::Plan,
                 command_id: ash_protocol::CommandId::new("active-plan").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Any,

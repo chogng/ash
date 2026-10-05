@@ -191,6 +191,7 @@ impl Submission {
             sequence,
             policy: request.policy_revision,
             command: protocol::ThreadCommand::StartTurn {
+                context_policy: request.context_policy,
                 kind: request.kind,
                 mode: request.mode,
                 instructions: Some(request.instructions),
@@ -208,6 +209,7 @@ impl Submission {
     }
     pub fn request(&self) -> ash_core::StartTurnRequest {
         let protocol::ThreadCommand::StartTurn {
+            context_policy,
             kind,
             mode,
             instructions,
@@ -225,6 +227,7 @@ impl Submission {
             unreachable!("workflow submissions only start control Turns")
         };
         ash_core::StartTurnRequest {
+            context_policy: context_policy.clone(),
             command_id: self.command_id.clone(),
             expected_sequence: core_api::SequenceExpectation::Exact(self.sequence),
             model: model.clone(),

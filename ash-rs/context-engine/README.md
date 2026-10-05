@@ -31,6 +31,7 @@ provider 协调层提取执行 trait，预算引擎仍只消费计量结果。
 - `ContextBudget::CoreManaged` 分别接收模型窗口、输出预留、安全余量和压缩阈值。
 - `ContextBudget::resolve` 生成 `ContextBudgetLimits`：`maximum_input` 是普通请求触发压缩的压力线，
   `hard_maximum_input` 是扣除输出预留与安全余量后的硬上限。
+- `with_input_buffer` 在普通压力线与硬输入上限之间保留空间，既有预留足够时不重复扣除。`for_checkpoint` 用独立输出目标解析硬窗口；两者只计算预算，不选择压缩策略或调用模型。
 - `ContextBudget::ProviderManaged` 表示没有可信模型上限。它不是“无限窗口”，调用方不得把它报告为
   已验证可装入。
 - 任何没有留下正数输入容量的 Core-managed 配置都返回 `ContextBudgetError`，不会依靠减法饱和后

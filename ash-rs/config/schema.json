@@ -71,6 +71,14 @@
             }
           ]
         },
+        "context": {
+          "$ref": "#/$defs/ContextCompactionPolicy",
+          "default": {
+            "mode": "summary",
+            "recentTokens": 16384,
+            "summaryTokens": 8192
+          }
+        },
         "model": {
           "anyOf": [
             {
@@ -108,6 +116,7 @@
       "description": "User-selected model source for automatic approval review.\n\n`Automatic` follows the active Agent model's provider and delegates the exact model choice to\nthat provider's definition. `Explicit` binds review to one configured provider/model without\nchanging the main Agent model.",
       "oneOf": [
         {
+          "additionalProperties": false,
           "properties": {
             "type": {
               "const": "automatic",
@@ -120,9 +129,30 @@
           "type": "object"
         },
         {
+          "additionalProperties": false,
           "properties": {
+            "connection": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelConnectionId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "model": {
               "$ref": "#/$defs/ModelRef"
+            },
+            "reasoningEffort": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ReasoningEffort"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "type": {
               "const": "explicit",
@@ -218,6 +248,65 @@
         "provider"
       ],
       "type": "object"
+    },
+    "ContextCompactionPolicy": {
+      "description": "How a Thread preserves working state when ordinary input reaches its pressure boundary.\nBoth strategies keep the durable source history; a checkpoint only changes model input.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "summary",
+              "type": "string"
+            },
+            "recentTokens": {
+              "default": 16384,
+              "format": "uint32",
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "summaryTokens": {
+              "default": 8192,
+              "format": "uint32",
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bufferTokens": {
+              "default": 16384,
+              "format": "uint32",
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "mode": {
+              "const": "handoff",
+              "type": "string"
+            },
+            "stateTokens": {
+              "default": 8192,
+              "format": "uint32",
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "CustomProviderConfig": {
       "additionalProperties": false,
@@ -1446,6 +1535,11 @@
       "default": {
         "approvalReviewModel": {
           "type": "automatic"
+        },
+        "context": {
+          "mode": "summary",
+          "recentTokens": 16384,
+          "summaryTokens": 8192
         },
         "timeContext": {
           "mode": "date"

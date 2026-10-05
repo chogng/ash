@@ -462,6 +462,19 @@ fn build_panel(
         items.push(ListSelectionItem::new("Context allocation").as_section_divider());
     }
     if let Some(allocation) = &inspection.allocation {
+        // Ordinary usage describes capacity; execution strategy belongs to developer diagnostics.
+        if detail == ContextReadDetail::Diagnostics {
+            items.push(ListSelectionItem::new("Compaction mode").with_columns(
+                "Compaction mode",
+                "",
+                match inspection.compaction_policy {
+                    ash_protocol::ContextCompactionPolicy::Summary { .. } => "Layered summary",
+                    ash_protocol::ContextCompactionPolicy::Handoff { .. } => {
+                        "Save progress and switch window"
+                    }
+                },
+            ));
+        }
         for (label, tokens) in [
             (
                 "Free space",
@@ -473,6 +486,21 @@ fn build_panel(
             ("Safety margin", allocation.safety_margin),
             ("Autocompact buffer", allocation.auto_compact_buffer),
         ] {
+            if detail == ContextReadDetail::Usage
+                && matches!(label, "Output reserve" | "Safety margin")
+            {
+                continue;
+            }
+            let label = if label == "Autocompact buffer"
+                && detail == ContextReadDetail::Diagnostics
+                && matches!(
+                    inspection.compaction_policy,
+                    ash_protocol::ContextCompactionPolicy::Handoff { .. }
+                ) {
+                "Handoff reserve"
+            } else {
+                label
+            };
             items.push(
                 ListSelectionItem::new(Text::template(
                     "{0} {1}",
@@ -481,11 +509,13 @@ fn build_panel(
                 .with_columns(label, "", value(tokens)),
             );
         }
-        items.push(ListSelectionItem::new("Auto-compact window").with_columns(
-            "Auto-compact window",
-            "",
-            value(allocation.auto_compact_window),
-        ));
+        if detail == ContextReadDetail::Diagnostics {
+            items.push(ListSelectionItem::new("Auto-compact window").with_columns(
+                "Auto-compact window",
+                "",
+                value(allocation.auto_compact_window),
+            ));
+        }
         items.push(
             ListSelectionItem::new("Auto-compact threshold").with_columns(
                 "Auto-compact threshold",

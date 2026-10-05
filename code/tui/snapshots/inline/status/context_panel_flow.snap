@@ -3,10 +3,12 @@ source: code/tui/src/app/status_tests.rs
 expression: text
 ---
 Overview
+                                                                                
     ▄  ▄     Ash Code v0.1.0                                                    
   ▗█▛██▜█▖   Automatic model                                                    
   ▝▜████▛▘   .                                                                  
     ▝  ▘                                                                        
+                                                                                
                                                                                 
 ─ Context ──────────────────────────────────────────────────────────────────────
                                                                                 
@@ -20,21 +22,21 @@ Overview
   ■ Memory / instruction files                                    300 (0.3%)    
   ■ Skills                                                       1.5k (1.5%)    
   ■ Conversation and tool results                                  4k (4.0%)    
+  Compaction mode                                            Layered summary    
   ■ Free space                                                 77.7k (77.7%)    
-  ■ Output reserve                                                 2k (2.0%)    
-  ■ Safety margin                                                  1k (1.0%)    
   ■ Autocompact buffer                                             7k (7.0%)    
-  Auto-compact window                                            93k (93.0%)    
   Auto-compact threshold                                         90k (90.0%)    
   Latest request · provider reported                              25k tokens    
                                                                                 
   ↑/↓ select · Esc close                                                        
 
 Categories remain collapsed
+                                                                                
     ▄  ▄     Ash Code v0.1.0                                                    
   ▗█▛██▜█▖   Automatic model                                                    
   ▝▜████▛▘   .                                                                  
     ▝  ▘                                                                        
+                                                                                
                                                                                 
 ─ Context ──────────────────────────────────────────────────────────────────────
                                                                                 
@@ -48,11 +50,9 @@ Categories remain collapsed
   ■ Memory / instruction files                                    300 (0.3%)    
   ■ Skills                                                       1.5k (1.5%)    
 > ■ Conversation and tool results                                  4k (4.0%)    
+  Compaction mode                                            Layered summary    
   ■ Free space                                                 77.7k (77.7%)    
-  ■ Output reserve                                                 2k (2.0%)    
-  ■ Safety margin                                                  1k (1.0%)    
   ■ Autocompact buffer                                             7k (7.0%)    
-  Auto-compact window                                            93k (93.0%)    
   Auto-compact threshold                                         90k (90.0%)    
   Latest request · provider reported                              25k tokens    
                                                                                 
