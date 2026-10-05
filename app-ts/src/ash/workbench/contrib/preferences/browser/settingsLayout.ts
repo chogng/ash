@@ -148,7 +148,7 @@ export const SettingsNavigation = [
 					id: 'layout',
 					get label() { return localize('settings.workbench.layout.group.label', 'Workbench layout'); },
 					get description() { return localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'); },
-					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.badges', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'window.title', 'window.titleSeparator', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'workbench.tree.*'],
+					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.badges', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'window.title', 'window.titleSeparator', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'workbench.tree.*', 'workbench.list.smoothScrolling'],
 				}],
 			},
 			{
@@ -186,7 +186,7 @@ export const SettingsNavigation = [
 				id: 'selection',
 				label: 'Editor selection',
 				description: 'Choose which editor opens for new documents.',
-				settings: ['workbench.editor.*'],
+				settings: ['workbench.editor.*', 'workbench.experimental.modernUIEditorTabStyle'],
 			},
 			{
 				id: 'typography',

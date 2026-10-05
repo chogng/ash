@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { h } from "../../browser/dom.js";
+import { toDisposable } from "../../common/lifecycle.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -63,6 +64,87 @@ test("ScrollableElement exposes a persistent directional content container", () 
 	scrollable.dispose();
 	dom.window.close();
 });
+
+test('ScrollableElement animates wheel targets cumulatively and lets direct input interrupt them', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using clock = animationClock(dom);
+	using scrollable = new ScrollableElement(dom.window.document.body, { direction: 'vertical' });
+	const viewport = scrollable.scrollableElement;
+	installMetrics(viewport, { width: 100, height: 100, scrollWidth: 100, scrollHeight: 1_000 });
+	scrollable.layout();
+	viewport.dispatchEvent(wheelEvent(dom.window, { deltaY: 120 }));
+	assert.equal(scrollable.state.top, 120);
+	scrollable.scrollTo(0, 0);
+	scrollable.updateOptions({ mouseWheelSmoothScroll: true });
+	for (let index = 0; index < 2; index += 1) viewport.dispatchEvent(wheelEvent(dom.window, { deltaY: 120 }));
+	assert.equal(scrollable.state.top, 0);
+	clock.frame(40);
+	assert.ok(scrollable.state.top > 0 && scrollable.state.top < 240);
+	// The viewport's asynchronous acknowledgement must not cancel its own animation.
+	viewport.dispatchEvent(new dom.window.Event('scroll'));
+	clock.frame(150);
+	assert.equal(scrollable.state.top, 240);
+	viewport.dispatchEvent(wheelEvent(dom.window, { deltaY: 120 }));
+	clock.frame(20);
+	scrollable.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Home' }));
+	clock.frame(150);
+	assert.equal(scrollable.state.top, 0);
+	viewport.dispatchEvent(wheelEvent(dom.window, { deltaY: 120 }));
+	scrollable.updateOptions({ mouseWheelSmoothScroll: false });
+	clock.frame(150);
+	assert.equal(scrollable.state.top, 0);
+	scrollable.updateOptions({ mouseWheelSmoothScroll: true });
+	viewport.dispatchEvent(wheelEvent(dom.window, { deltaY: 8 }));
+	assert.equal(scrollable.state.top, 8);
+	dom.window.close();
+});
+
+test('ScrollableElement stops wheel animations on changed dimensions, reduced motion and disposal', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using clock = animationClock(dom);
+	using scrollable = new ScrollableElement(dom.window.document.body, { direction: 'vertical', mouseWheelSmoothScroll: true });
+	const viewport = scrollable.scrollableElement;
+	installMetrics(viewport, { width: 100, height: 100, scrollWidth: 100, scrollHeight: 1_000 });
+	scrollable.layout();
+	viewport.dispatchEvent(wheelEvent(dom.window, { deltaY: 120 }));
+	installMetrics(viewport, { width: 100, height: 100, scrollWidth: 100, scrollHeight: 200 });
+	scrollable.layout();
+	clock.frame(150);
+	assert.equal(scrollable.state.top, 0);
+	scrollable.element.classList.add('ash-reduce-motion');
+	viewport.dispatchEvent(wheelEvent(dom.window, { deltaY: 120 }));
+	assert.equal(scrollable.state.top, 100);
+	scrollable.scrollTo(0, 0);
+	scrollable.element.classList.remove('ash-reduce-motion');
+	viewport.dispatchEvent(wheelEvent(dom.window, { deltaY: 120 }));
+	clock.frame(20);
+	const interrupted = scrollable.state.top;
+	scrollable.element.classList.add('ash-reduce-motion');
+	clock.frame(150);
+	assert.equal(scrollable.state.top, interrupted);
+	scrollable.element.classList.remove('ash-reduce-motion');
+	viewport.dispatchEvent(wheelEvent(dom.window, { deltaY: -120 }));
+	scrollable.dispose();
+	clock.frame(150);
+	assert.equal(scrollable.state.top, interrupted);
+	dom.window.close();
+});
+
+function animationClock(dom: JSDOM) {
+	let now = 1_000;
+	let callbacks: FrameRequestCallback[] = [];
+	const previous = Date.now;
+	Date.now = () => now;
+	dom.window.requestAnimationFrame = callback => callbacks.push(callback);
+	return Object.assign(toDisposable(() => { Date.now = previous; }), {
+		frame(elapsed: number): void {
+			now += elapsed;
+			const pending = callbacks;
+			callbacks = [];
+			for (const callback of pending) callback(now);
+		},
+	});
+}
 
 test("ScrollableElement reveals a descendant at the nearest horizontal edge", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");

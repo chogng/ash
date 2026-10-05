@@ -11,6 +11,7 @@ export interface ListOptions<T> {
 	readonly ariaLabel?: string;
 	readonly role?: "listbox" | "tree";
 	readonly scrolling?: ListScrolling;
+	readonly smoothScrolling?: boolean;
 	readonly loopNavigation?: boolean;
 	readonly keyboardNavigation?: boolean;
 	readonly multipleSelectionSupport?: boolean;
@@ -82,6 +83,7 @@ export class List<T> extends Disposable {
 			ariaLabel: options.ariaLabel,
 			role: options.role,
 			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
 			domFocusable: options.domFocusable,
 			getId: options.getId,
 			getHeight: options.getHeight,
@@ -118,6 +120,8 @@ export class List<T> extends Disposable {
 		this._register(addDisposableListener(this.element, "dblclick", (event: MouseEvent) => this.onDoubleClick(event)));
 		if (options.keyboardNavigation === true) this._register(addDisposableListener(this.element, "keydown", (event: KeyboardEvent) => this.onKeyDown(event)));
 	}
+
+	updateOptions(options: Pick<ListOptions<T>, "smoothScrolling">): void { this.view.updateOptions(options); }
 
 	get items(): readonly T[] { return this.view.items; }
 	clearRetainedRows(): void { this.view.clearRetainedRows(); }
@@ -213,6 +217,8 @@ export class List<T> extends Disposable {
 		else if (event.key === "End") index = this.items.length > 0 ? this.items.length - 1 : undefined;
 		if (index === undefined) return;
 		stopEvent(event);
+		// Wheel scrolling may hide the focused row without changing its logical index.
+		if (index === this._activeIndex) this.view.reveal(index);
 		this.selectFromInput(index, event);
 		this.setActiveIndex(index, event);
 	}

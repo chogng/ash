@@ -1,7 +1,8 @@
 import './scrollbar.css';
 import { localize } from '../../../../nls.js';
 import { RunOnceScheduler } from '../../../common/async.js';
-import { Scrollable, ScrollbarVisibility as ScrollbarVisibilityOption, type INewScrollPosition } from '../../../common/scrollable.js';
+import { Scrollable, SmoothScrollingOperation, ScrollbarVisibility as ScrollbarVisibilityOption, type INewScrollPosition } from '../../../common/scrollable.js';
+import { isReducedMotion } from '../animations/animations.js';
 import type { IMouseWheelEvent } from '../../mouseEvent.js';
 import type { ScrollableElementCreationOptions, ScrollableElementChangeOptions } from './scrollableElementOptions.js';
 import { addDisposableListener, h } from "../../dom.js";
@@ -91,6 +92,9 @@ export class ScrollableElement extends Disposable {
 	private _state = initialState;
 	private pendingReveal: Element | undefined;
 	private readonly scrollActivityTimeout = this._register(new MutableDisposable<IDisposable>());
+	private readonly smoothScroll = this._register(new MutableDisposable<IDisposable>());
+	private smoothScrolling: SmoothScrollingOperation | undefined;
+	private readonly wheelClassifier = new WheelInputClassifier();
 
 	constructor(container: HTMLElement, options: ScrollableElementOptions = {}) {
 		super();
@@ -183,6 +187,11 @@ export class ScrollableElement extends Disposable {
 		this._register(addDisposableListener(element, "keydown", (event: KeyboardEvent) =>
 			this.handleContainerKeydown(event),
 		));
+		// Direct manipulation and focus navigation interrupt an outstanding wheel gesture.
+		for (const type of ['pointerdown', 'keydown']) {
+			this._register(addDisposableListener(element, type, () => this.smoothScroll.clear(), true));
+		}
+		this._register(addDisposableListener(ownerWindow(element), 'blur', () => this.smoothScroll.clear()));
 
 		this._register(observeResize([element, content], () => this.layout()));
 		this.layout();
@@ -202,6 +211,7 @@ export class ScrollableElement extends Disposable {
 			horizontal: direction === 'vertical' ? 'hidden' : resolved.horizontal,
 			vertical: direction === 'horizontal' ? 'hidden' : resolved.vertical,
 		};
+		if (!this.options.mouseWheelSmoothScroll) this.smoothScroll.clear();
 		this.element.style.setProperty('--ash-scrollbar-size', `${this.options.scrollbarSize}px`);
 		this.horizontal.setVisibility(scrollbarVisibility(this.options.horizontal));
 		this.vertical.setVisibility(scrollbarVisibility(this.options.vertical));
@@ -233,6 +243,9 @@ export class ScrollableElement extends Disposable {
 			: Math.max(height, this.scrollableElement.scrollHeight);
 		const maximumLeft = Math.max(0, scrollWidth - width);
 		const maximumTop = Math.max(0, scrollHeight - height);
+		if (width !== this._state.width || height !== this._state.height || scrollWidth !== this._state.scrollWidth || scrollHeight !== this._state.scrollHeight) {
+			this.smoothScroll.clear();
+		}
 		const left = clampScrollbarPosition(
 			this.scrollableElement.scrollLeft,
 			maximumLeft,
@@ -322,6 +335,7 @@ export class ScrollableElement extends Disposable {
 
 	private handleNativeScroll(): void {
 		const previous = this._state;
+		if (this.scrollableElement.scrollLeft !== previous.left || this.scrollableElement.scrollTop !== previous.top) this.smoothScroll.clear();
 		this.layout();
 		if (
 			previous.left === this._state.left &&
@@ -335,6 +349,7 @@ export class ScrollableElement extends Disposable {
 			pageWidth: this._state.width,
 			pageHeight: this._state.height,
 		});
+		const smooth = this.options.mouseWheelSmoothScroll && !this.wheelClassifier.isContinuousWheel(wheel) && !isReducedMotion(this.element);
 		let deltaX = wheel.deltaX;
 		let deltaY = wheel.deltaY;
 		if (
@@ -362,10 +377,10 @@ export class ScrollableElement extends Disposable {
 		const sensitivity = this.options.wheel.sensitivity * (
 			wheel.altKey ? this.options.wheel.fastSensitivity : 1
 		);
-		const changed = this.setScrollPosition(
-			this._state.left + deltaX * sensitivity,
-			this._state.top + deltaY * sensitivity,
-		);
+		const previous = smooth ? this.smoothScrolling?.to : undefined;
+		const left = (previous?.scrollLeft ?? this._state.left) + deltaX * sensitivity;
+		const top = (previous?.scrollTop ?? this._state.top) + deltaY * sensitivity;
+		const changed = smooth ? this.setScrollPositionSmooth(left, top) : this.setScrollPosition(left, top);
 		if (
 			changed ||
 			this.options.wheel.consume === "always"
@@ -434,12 +449,52 @@ export class ScrollableElement extends Disposable {
 	}
 
 	private setScrollPosition(left: number, top: number): boolean {
+		this.smoothScroll.clear();
+		return this.applyScrollPosition(left, top);
+	}
+
+	private setScrollPositionSmooth(left: number, top: number): boolean {
+		left = clampScrollbarPosition(left, this._state.maximumLeft);
+		top = clampScrollbarPosition(top, this._state.maximumTop);
+		const previous = this.smoothScrolling?.to;
+		if (left === (previous?.scrollLeft ?? this._state.left) && top === (previous?.scrollTop ?? this._state.top)) return false;
+		this.smoothScroll.clear();
+		const dimensions = { width: this._state.width, height: this._state.height };
+		const operation = SmoothScrollingOperation.start(
+			{ ...dimensions, scrollLeft: this._state.left, scrollTop: this._state.top },
+			{ ...dimensions, scrollLeft: left, scrollTop: top },
+			125,
+		);
+		this.smoothScrolling = operation;
+		this.smoothScroll.value = toDisposable(() => {
+			operation.dispose();
+			this.smoothScrolling = undefined;
+		});
+		const tick = (): void => {
+			operation.animationFrameDisposable = null;
+			if (isReducedMotion(this.element)) {
+				this.smoothScroll.clear();
+				return;
+			}
+			const update = operation.tick();
+			this.applyScrollPosition(update.scrollLeft, update.scrollTop);
+			// Scroll listeners may reveal a row or resize the content during this frame.
+			if (this.smoothScrolling !== operation) return;
+			if (update.isDone) this.smoothScroll.clear();
+			else operation.animationFrameDisposable = scheduleAtNextAnimationFrame(ownerWindow(this.element), tick);
+		};
+		operation.animationFrameDisposable = scheduleAtNextAnimationFrame(ownerWindow(this.element), tick);
+		return true;
+	}
+
+	private applyScrollPosition(left: number, top: number): boolean {
 		left = clampScrollbarPosition(left, this._state.maximumLeft);
 		top = clampScrollbarPosition(top, this._state.maximumTop);
 		if (left === this._state.left && top === this._state.top) return false;
 		this.scrollableElement.scrollLeft = left;
 		this.scrollableElement.scrollTop = top;
-		this.commitState({ ...this._state, left, top });
+		// Read the viewport's rounded position so its later scroll event acknowledges this frame.
+		this.commitState({ ...this._state, left: this.scrollableElement.scrollLeft, top: this.scrollableElement.scrollTop });
 		this.showScrollbars();
 		return true;
 	}
@@ -571,6 +626,49 @@ function ownerWindow(element: HTMLElement): Window {
 	return targetWindow;
 }
 
+/** Device evidence is shared by viewport-owned and caller-owned scroll containers. */
+class WheelInputClassifier {
+	private wheelInput: {
+		magnitude: number;
+		horizontal: boolean;
+		quantum: number;
+		discreteCount: number;
+		continuousTime: number;
+	} | undefined;
+
+	isContinuousWheel(event: IMouseWheelEvent): boolean {
+		if (event.browserEvent.deltaMode !== 0) {
+			this.wheelInput = undefined;
+			return false;
+		}
+		// Classify before sensitivity and axis mapping. Keep CSS pixels for
+		// scrolling; only the device evidence uses conventional 40px steps.
+		const magnitude = Math.max(Math.abs(event.deltaX), Math.abs(event.deltaY)) / 40;
+		if (magnitude === 0) return false;
+		const horizontal = event.deltaX !== 0;
+		const previous = this.wheelInput;
+		const repeated = previous !== undefined && previous.horizontal === horizontal
+			&& magnitude >= 1 && Math.abs(previous.magnitude - magnitude) < 0.00001;
+		let quantum = previous?.quantum ?? 0;
+		if (repeated) quantum = quantum > 0 ? Math.min(quantum, magnitude) : magnitude;
+		const wholeStep = Math.abs(magnitude - Math.round(magnitude)) < 0.00001;
+		const learnedStep = quantum > 0 && Math.abs(magnitude / quantum - Math.round(magnitude / quantum)) < 0.00001;
+		const discreteCount = wholeStep || learnedStep ? (previous?.discreteCount ?? 0) + 1 : 0;
+		const now = event.browserEvent.timeStamp;
+		const continuousTime = previous?.continuousTime ?? -Infinity;
+		const continuous = (event.deltaX !== 0 && event.deltaY !== 0) || discreteCount === 0
+			|| (now - continuousTime <= 100 && discreteCount < 2 && !repeated);
+		this.wheelInput = {
+			magnitude,
+			horizontal,
+			quantum: continuous ? 0 : quantum,
+			discreteCount,
+			continuousTime: continuous ? now : continuousTime,
+		};
+		return continuous;
+	}
+}
+
 export interface IOverviewRulerLayoutInfo {
 	parent: HTMLElement;
 	insertBefore: HTMLElement;
@@ -592,13 +690,7 @@ export class SmoothScrollableElement extends Disposable {
 	private readonly inertia = this._register(new MutableDisposable<IDisposable>());
 	private applyingInertia = false;
 	private readonly wheelEvents = new WeakSet<WheelEvent>();
-	private wheelInput: {
-		magnitude: number;
-		horizontal: boolean;
-		quantum: number;
-		discreteCount: number;
-		continuousTime: number;
-	} | undefined;
+	private readonly wheelClassifier = new WheelInputClassifier();
 	private options: ScrollableElementCreationOptions;
 
 	constructor(element: HTMLElement, options: ScrollableElementCreationOptions, private readonly scrollable: Scrollable) {
@@ -756,7 +848,7 @@ export class SmoothScrollableElement extends Disposable {
 		}
 		this.wheelEvents.add(event.browserEvent);
 		this.inertia.clear();
-		const continuous = this.isContinuousWheel(event);
+		const continuous = this.wheelClassifier.isContinuousWheel(event);
 		let { deltaX, deltaY } = event;
 		if (event.shiftKey && deltaX === 0) {
 			deltaX = deltaY;
@@ -786,42 +878,6 @@ export class SmoothScrollableElement extends Disposable {
 			}
 		}
 		if (changed || this.options.alwaysConsumeMouseWheel) event.preventDefault();
-	}
-
-	private isContinuousWheel(event: IMouseWheelEvent): boolean {
-		if (event.browserEvent.deltaMode !== 0) {
-			this.wheelInput = undefined;
-			return false;
-		}
-		// Classify before sensitivity and axis mapping. Keep CSS pixels for
-		// scrolling; only the device evidence uses conventional 40px steps.
-		const magnitude = Math.max(Math.abs(event.deltaX), Math.abs(event.deltaY)) / 40;
-		if (magnitude === 0) {
-			return false;
-		}
-		const horizontal = event.deltaX !== 0;
-		const previous = this.wheelInput;
-		const repeated = previous !== undefined && previous.horizontal === horizontal
-			&& magnitude >= 1 && Math.abs(previous.magnitude - magnitude) < 0.00001;
-		let quantum = previous?.quantum ?? 0;
-		if (repeated) {
-			quantum = quantum > 0 ? Math.min(quantum, magnitude) : magnitude;
-		}
-		const wholeStep = Math.abs(magnitude - Math.round(magnitude)) < 0.00001;
-		const learnedStep = quantum > 0 && Math.abs(magnitude / quantum - Math.round(magnitude / quantum)) < 0.00001;
-		const discreteCount = wholeStep || learnedStep ? (previous?.discreteCount ?? 0) + 1 : 0;
-		const now = event.browserEvent.timeStamp;
-		const continuousTime = previous?.continuousTime ?? -Infinity;
-		const continuous = (event.deltaX !== 0 && event.deltaY !== 0) || discreteCount === 0
-			|| (now - continuousTime <= 100 && discreteCount < 2 && !repeated);
-		this.wheelInput = {
-			magnitude,
-			horizontal,
-			quantum: continuous ? 0 : quantum,
-			discreteCount,
-			continuousTime: continuous ? now : continuousTime,
-		};
-		return continuous;
 	}
 
 	private continueInertia(deltaX: number, deltaY: number): void {

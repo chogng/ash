@@ -202,6 +202,96 @@ test('Explorer scrollbar stays at the pane edge while rows remain inset', async 
 	await settings.locator('.ash-modal-editor-close').click();
 });
 
+test('Explorer smooth scrolling accumulates wheel input, keeps touchpad input immediate and honors reduced motion', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires the Code Explorer');
+	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
+	const names = Array.from({ length: 100 }, (_, index) => `smooth-${String(index).padStart(3, '0')}.txt`);
+	if (target.appServerMode === 'required') await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
+	const page = workbench.page;
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
+		await page.evaluate(async names => {
+			const root = await navigator.storage.getDirectory();
+			const workspace = await root.getDirectoryHandle(`smooth-scroll-${crypto.randomUUID()}`, { create: true });
+			for (const name of names) await workspace.getFileHandle(name, { create: true });
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
+		}, names);
+		await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+	}
+	const explorer = page.locator('.ash-explorer');
+	const tree = explorer.getByRole('tree');
+	const viewport = explorer.locator('.ash-scrollbar-viewport');
+	await expect(tree.getByRole('treeitem', { name: names[0], exact: true })).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-group-id="workbench"]').click();
+	await settings.locator('[data-settings-category-id="layout"]').click();
+	const smoothScrolling = settings.getByRole('switch', { name: 'Smooth scrolling in lists', exact: true });
+	await expect(smoothScrolling).not.toBeChecked();
+	await smoothScrolling.focus();
+	await smoothScrolling.press('Space');
+	await expect(smoothScrolling).toBeChecked();
+	await expect(smoothScrolling).not.toHaveAttribute('aria-busy', 'true');
+	await settings.locator('.ash-modal-editor-close').click();
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	await tree.focus();
+	await tree.press('Home');
+	await viewport.hover();
+	// Sample rendered positions through the actual wheel handler, including its synchronous result.
+	await viewport.evaluate(element => {
+		const state = window as typeof window & { scrollSamples: Promise<number[]> };
+		state.scrollSamples = new Promise(resolve => {
+			element.addEventListener('wheel', () => {
+				const values = [element.scrollTop];
+				const started = performance.now();
+				const sample = () => {
+					values.push(element.scrollTop);
+					if (performance.now() - started >= 250) resolve(values);
+					else requestAnimationFrame(sample);
+				};
+				requestAnimationFrame(sample);
+			}, { once: true });
+		});
+	});
+	await page.mouse.wheel(0, 120);
+	await page.mouse.wheel(0, 120);
+	const samples = await page.evaluate(() => (window as typeof window & { scrollSamples: Promise<number[]> }).scrollSamples);
+	expect(samples[0]).toBe(0);
+	expect(samples.at(-1)).toBe(240);
+	expect(new Set(samples.filter(value => value > 0 && value < 240)).size).toBeGreaterThan(1);
+	await tree.press('Home');
+	await viewport.evaluate(element => {
+		element.addEventListener('wheel', () => { (window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition = element.scrollTop; }, { once: true });
+	});
+	await page.mouse.wheel(0, 8);
+	expect(await page.evaluate(() => (window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition)).toBe(8);
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await expect(page.locator('.ash-workbench')).toHaveClass(/ash-reduce-motion/u);
+	for (let index = 0; index < 2; index += 1) {
+		await tree.press('Home');
+		await viewport.evaluate(element => {
+			element.addEventListener('wheel', () => { (window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition = element.scrollTop; }, { once: true });
+		});
+		await page.mouse.wheel(0, 120);
+		expect(await page.evaluate(() => (window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition)).toBe(120);
+	}
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	await tree.press('Home');
+	await page.mouse.wheel(0, 120);
+	await tree.press('End');
+	const end = await viewport.evaluate(element => element.scrollTop);
+	await expect(tree.getByRole('treeitem', { name: names.at(-1), exact: true })).toBeVisible();
+	await viewport.evaluate(() => new Promise<void>(resolve => {
+		const started = performance.now();
+		const sample = () => performance.now() - started > 200 ? resolve() : requestAnimationFrame(sample);
+		requestAnimationFrame(sample);
+	}));
+	expect(await viewport.evaluate(element => element.scrollTop)).toBe(end);
+	await tree.press('Home');
+	await expect(tree.getByRole('treeitem', { name: names[0], exact: true })).toBeVisible();
+});
+
 test('Explorer keeps logical row focus when scrolling removes the focused row from the DOM', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
 	const names = Array.from({ length: 100 }, (_, index) => `focus-${String(index).padStart(3, '0')}.txt`);
@@ -417,4 +507,37 @@ test('Tree settings controls persist their values across a window reload', async
 	await expect(indent).toHaveValue('16');
 	await search.fill('@id:workbench.tree.renderIndentGuides');
 	await expect(mode).toHaveText('Always');
+});
+
+test('List smooth scrolling settings persist and display their Chinese translation', async ({ target, workbench, restartWorkbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Settings reload is covered by the standalone UI projects');
+	let page = workbench.page;
+	const openSetting = async (dialogName: string, title: string) => {
+		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		const settings = page.getByRole('dialog', { name: dialogName });
+		await settings.locator('[data-settings-group-id="workbench"]').click();
+		await settings.locator('[data-settings-category-id="layout"]').click();
+		return { settings, control: settings.getByRole('switch', { name: title, exact: true }) };
+	};
+	let setting = await openSetting('Ash Settings', 'Smooth scrolling in lists');
+	await expect(setting.control).not.toBeChecked();
+	await setting.control.focus();
+	await setting.control.press('Space');
+	await expect(setting.control).toBeChecked();
+	await expect(setting.control).not.toHaveAttribute('aria-busy', 'true');
+	await setting.settings.locator('.ash-modal-editor-close').click();
+	await page.reload();
+	await workbench.waitForReady();
+	setting = await openSetting('Ash Settings', 'Smooth scrolling in lists');
+	await expect(setting.control).toBeChecked();
+	await setting.settings.locator('.ash-modal-editor-close').click();
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
+	await picker.getByRole('combobox').fill('简体中文');
+	await picker.getByRole('combobox').press('Enter');
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
+	setting = await openSetting('Ash 设置', '列表平滑滚动');
+	await expect(setting.control).toBeChecked();
+	await expect(setting.settings.locator('[data-settings-item-id="workbench.list.smoothScrolling"]')).toContainText('控制列表和树形列表是否使用短动画滚动。');
 });

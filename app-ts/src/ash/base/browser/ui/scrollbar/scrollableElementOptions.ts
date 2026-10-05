@@ -25,6 +25,7 @@ interface ScrollableElementBaseOptions {
 	readonly minimumThumbSize?: number;
 	readonly trackClickBehavior?: "jump" | "page";
 	readonly wheel?: ScrollbarWheelOptions;
+	readonly mouseWheelSmoothScroll?: boolean;
 	readonly onScroll?: (
 		position: { readonly left: number; readonly top: number },
 	) => void;
@@ -52,6 +53,7 @@ export type ScrollableElementOptions = ScrollableElementBaseOptions & (
 );
 
 export interface ResolvedScrollableElementOptions {
+	readonly mouseWheelSmoothScroll: boolean;
 	readonly direction: ScrollDirection;
 	readonly horizontal: ScrollbarVisibility;
 	readonly vertical: ScrollbarVisibility;
@@ -67,8 +69,9 @@ export interface ResolvedScrollableElementOptions {
 	};
 }
 
-/** Runtime presentation changes preserve the viewport and its scroll position. */
+/** Runtime input and presentation changes preserve the viewport and its current position. */
 export interface ScrollableElementUpdateOptions {
+	readonly mouseWheelSmoothScroll?: boolean;
 	readonly horizontal?: ScrollbarVisibility;
 	readonly vertical?: ScrollbarVisibility;
 	readonly scrollbarSize?: number;
@@ -79,6 +82,7 @@ export function resolveScrollableElementOptions(
 ): ResolvedScrollableElementOptions {
 	const direction = options.direction ?? "both";
 	return {
+		mouseWheelSmoothScroll: options.mouseWheelSmoothScroll ?? false,
 		direction,
 		horizontal: direction === "vertical"
 			? "hidden"

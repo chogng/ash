@@ -38,10 +38,12 @@ export class WorkbenchObjectTree<T> extends ObjectTree<T> {
 		const { configurationService, openOnSingleClick, ...treeOptions } = options;
 		super(container, {
 			...treeOptions,
+			smoothScrolling: treeOptions.smoothScrolling ?? configurationService.getValue<boolean>(ListConfiguration.smoothScrolling),
 			indent: treeOptions.indent ?? configurationService.getValue<number>(ListConfiguration.treeIndent),
 			indentGuides: treeOptions.indentGuides ?? configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
 		});
 		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(ListConfiguration.smoothScrolling) && options.smoothScrolling === undefined) this.updateOptions({ smoothScrolling: configurationService.getValue<boolean>(ListConfiguration.smoothScrolling) });
 			if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined) this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
 			if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined) this.updateOptions({ indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides) });
 		}));
@@ -62,10 +64,12 @@ export class WorkbenchAsyncDataTree<TInput, T> extends AsyncDataTree<TInput, T> 
 		const { configurationService, openOnSingleClick, ...treeOptions } = options;
 		super(container, dataSource, {
 			...treeOptions,
+			smoothScrolling: treeOptions.smoothScrolling ?? configurationService.getValue<boolean>(ListConfiguration.smoothScrolling),
 			indent: treeOptions.indent ?? configurationService.getValue<number>(ListConfiguration.treeIndent),
 			indentGuides: treeOptions.indentGuides ?? configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
 		});
 		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(ListConfiguration.smoothScrolling) && options.smoothScrolling === undefined) this.updateOptions({ smoothScrolling: configurationService.getValue<boolean>(ListConfiguration.smoothScrolling) });
 			if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined) this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
 			if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined) this.updateOptions({ indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides) });
 		}));
@@ -132,6 +136,21 @@ function isKeyboardEvent(event: UIEvent | undefined): event is KeyboardEvent {
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
 export const ListConfiguration = Object.freeze({
+	smoothScrolling: configurationRegistry.registerConfiguration<boolean>({
+		key: "workbench.list.smoothScrolling",
+		defaultValue: false,
+		scope: ConfigurationScope.WINDOW,
+		schema: { type: 'boolean' },
+		parse(value: unknown): boolean {
+			if (typeof value !== "boolean") throw new TypeError(localize('list.smoothScrollingInvalid', 'List smooth scrolling must be a boolean'));
+			return value;
+		},
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize('list.smoothScrollingTitle', 'Smooth scrolling in lists'); },
+			get description() { return localize('list.smoothScrollingDescription', 'Controls whether lists and trees scroll with a short animation.'); },
+		},
+	}),
 	treeIndent: configurationRegistry.registerConfiguration<number>({
 		key: "workbench.tree.indent",
 		defaultValue: 8,

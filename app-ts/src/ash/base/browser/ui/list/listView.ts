@@ -15,6 +15,7 @@ export interface ListViewOptions<T> {
 	readonly ariaLabel?: string;
 	readonly role?: "listbox" | "tree" | "rowgroup";
 	readonly scrolling?: ListScrolling;
+	readonly smoothScrolling?: boolean;
 	readonly domFocusable?: boolean;
 	readonly getId?: (item: T) => string;
 	/** A fixed height enables viewport virtualization for managed scrolling; omit it for content-sized rows. */
@@ -60,7 +61,7 @@ export class ListView<T> extends Disposable {
 		this.element.style.overflow = options.scrolling === "external" || options.scrolling === "managed" ? "visible" : "auto";
 		if (options.scrolling === "managed") {
 			if (options.getHeight) this.element.style.position = "relative";
-			this.scrollable = this._register(new ScrollableElement(container, { direction: "vertical", tabIndex: -1 }));
+			this.scrollable = this._register(new ScrollableElement(container, { direction: "vertical", tabIndex: -1, mouseWheelSmoothScroll: options.smoothScrolling }));
 			this.scrollable.setContent(this.element);
 			this.domNode = this.scrollable.element;
 			this.domNode.classList.add("ash-list-scrollable");
@@ -75,15 +76,19 @@ export class ListView<T> extends Disposable {
 			this.clearRetainedRows();
 		}));
 		if (this.scrollable) this._register(this.scrollable.onDidScroll(event => {
-			if (this.isVirtualized) this.renderRows();
+			if (this.isVirtualized) this.renderRows("viewport");
 			this._onDidScroll.fire(event.current.top);
 		}));
 		else this._register(addDisposableListener(this.element, "scroll", () => this._onDidScroll.fire(this.element.scrollTop)));
 		if (this.scrollable) this._register(observeResize([this.domNode], () => {
 			this.scrollable?.layout();
-			this.renderRows();
+			this.renderRows("viewport");
 		}));
 		if (options.dnd) this._register(new ListViewDragAndDrop(this, options.dnd, options.getDragElements ?? ((item) => [item])));
+	}
+
+	updateOptions(options: Pick<ListViewOptions<T>, "smoothScrolling">): void {
+		if (options.smoothScrolling !== undefined) this.scrollable?.updateOptions({ mouseWheelSmoothScroll: options.smoothScrolling });
 	}
 
 	get items(): readonly T[] { return this._items; }
@@ -174,7 +179,7 @@ export class ListView<T> extends Disposable {
 		this.element.insertBefore(replacement, next);
 	}
 
-	private renderRows(): void {
+	private renderRows(reason: "content" | "viewport" = "content"): void {
 		const range = this.renderRange();
 		const rows: HTMLDivElement[] = [];
 		const retainedIds = new Set<string>();
@@ -185,6 +190,11 @@ export class ListView<T> extends Disposable {
 			const retained = this.retainedRows.get(itemId);
 			if (retained) this.retainedRows.delete(itemId);
 			const previous = this.renderedRows.get(itemId) ?? retained;
+			// Scroll and resize change row visibility, not the content or state of attached rows.
+			if (reason === "viewport" && !retained && previous?.item === item && previous.index === index) {
+				rows.push(previous.row);
+				continue;
+			}
 			const existing = previous;
 			let row: HTMLDivElement;
 			if (existing?.item === item) {
@@ -215,7 +225,8 @@ export class ListView<T> extends Disposable {
 			if (this.options.reuseRows && this.options.getId) this.retainRenderedRow(itemId, rendered);
 			else this.removeRenderedRow(itemId, rendered.row);
 		}
-		this.element.style.height = this.isVirtualized ? `${this.itemOffsets.at(-1) ?? 0}px` : "";
+		const contentHeight = this.isVirtualized ? `${this.itemOffsets.at(-1) ?? 0}px` : "";
+		if (this.element.style.height !== contentHeight) this.element.style.height = contentHeight;
 		let previous: HTMLDivElement | undefined;
 		for (const row of rows) {
 			const next = previous ? previous.nextSibling : this.element.firstChild;

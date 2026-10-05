@@ -32,6 +32,11 @@ test("Platform List owns and validates its shared interaction configuration", ()
 	const guides = configurationRegistry.getConfiguration(ListConfiguration.treeRenderIndentGuides)!;
 	assert.equal(guides.defaultValue, "onHover");
 	assert.throws(() => guides.parse("hover"), /Unknown tree indent guide mode/);
+	const smoothScrolling = configurationRegistry.getConfiguration(ListConfiguration.smoothScrolling)!;
+	assert.equal(smoothScrolling.defaultValue, false);
+	assert.equal(smoothScrolling.parse(true), true);
+	assert.equal(smoothScrolling.parse(false), false);
+	for (const invalid of [0, 1, 'true', null]) assert.throws(() => smoothScrolling.parse(invalid), /must be a boolean/);
 });
 
 test("Workbench tree settings update retained rows and highlight only the selected branch", async () => {
@@ -64,6 +69,37 @@ test("Workbench tree settings update retained rows and highlight only the select
 	assert.equal(tree.domNode.querySelectorAll('.ash-tree-indent-guide.active').length, 2);
 	tree.collapse("second");
 	assert.deepEqual([...tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-indent-guide.active')].map(guide => guide.dataset.treeParentId), ["first"]);
+	dom.window.close();
+});
+
+test('Workbench trees apply smooth scrolling at creation and on setting changes while respecting a widget override', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using configuration = new InMemoryConfigurationService();
+	await configuration.updateValue(ListConfiguration.smoothScrolling, true);
+	const options = {
+		configurationService: configuration,
+		scrolling: 'managed' as const,
+		getHeight: () => 22,
+		modelOptions: { identityProvider: { getId: (item: TestItem) => item.id } },
+		renderElement: (item: TestItem) => { const label = h(dom.window.document, 'span'); label.textContent = item.id; return label; },
+	};
+	using configured = new WorkbenchObjectTree<TestItem>(dom.window.document.body, options);
+	using overridden = new WorkbenchObjectTree<TestItem>(dom.window.document.body, { ...options, smoothScrolling: false });
+	const viewports = [configured, overridden].map(tree => {
+		const viewport = tree.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		Object.defineProperties(viewport, { clientWidth: { value: 100 }, clientHeight: { value: 100 }, scrollHeight: { value: 2_200 } });
+		tree.setChildren(Array.from({ length: 100 }, (_, index) => ({ element: { id: String(index) } })));
+		return viewport;
+	});
+	const wheel = () => new dom.window.WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 });
+	for (const viewport of viewports) viewport.dispatchEvent(wheel());
+	assert.deepEqual(viewports.map(viewport => viewport.scrollTop), [0, 120]);
+	await configuration.updateValue(ListConfiguration.smoothScrolling, false);
+	for (const viewport of viewports) viewport.dispatchEvent(wheel());
+	assert.deepEqual(viewports.map(viewport => viewport.scrollTop), [120, 240]);
+	await configuration.updateValue(ListConfiguration.smoothScrolling, true);
+	for (const viewport of viewports) viewport.dispatchEvent(wheel());
+	assert.deepEqual(viewports.map(viewport => viewport.scrollTop), [120, 360]);
 	dom.window.close();
 });
 

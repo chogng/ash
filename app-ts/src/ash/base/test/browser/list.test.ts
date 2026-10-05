@@ -267,6 +267,50 @@ test("ListView renders only the managed viewport while preserving logical positi
 	dom.window.close();
 });
 
+test("ListView leaves attached rows untouched during scrolling but refreshes changed and returning rows", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	try {
+		let updates = 0;
+		using view = new ListView<{ id: string; expanded: boolean }>(dom.window.document.body, {
+			scrolling: "managed",
+			getId: item => item.id,
+			getHeight: () => 22,
+			reuseRows: true,
+			accessibilityProvider: { isExpanded: item => item.expanded },
+			renderItem: item => h(dom.window.document, "span", undefined, item.id),
+			updateItem: () => { updates += 1; },
+		});
+		const viewport = view.scrollElement;
+		Object.defineProperties(viewport, {
+			clientWidth: { value: 100 },
+			clientHeight: { value: 44 },
+			scrollHeight: { value: 2_200 },
+		});
+		const items = Array.from({ length: 100 }, (_, index) => ({ id: String(index), expanded: false }));
+		view.items = items;
+		const first = view.row(0)!;
+		const observer = new dom.window.MutationObserver(() => undefined);
+		observer.observe(first, { attributes: true, childList: true, subtree: true });
+		try {
+			view.scrollBy(8);
+			assert.deepEqual({ mutations: observer.takeRecords().length, updates, row: view.row(0) }, { mutations: 0, updates: 0, row: first });
+			items[0]!.expanded = true;
+			view.rerender(0);
+			assert.equal(first.getAttribute("aria-expanded"), "true");
+			view.splice(0, 0, [{ id: "inserted", expanded: false }]);
+			assert.equal(view.row(1), first);
+			assert.equal(first.dataset.index, "1");
+			assert.equal(first.style.top, "22px");
+			view.scrollBy(1_100);
+			assert.equal(view.row(1), undefined);
+			items[0]!.expanded = false;
+			view.scrollBy(-1_100);
+			assert.equal(view.row(1), first);
+			assert.equal(first.getAttribute("aria-expanded"), "false");
+		} finally { observer.disconnect(); }
+	} finally { dom.window.close(); }
+});
+
 test("ListView mounts no rows while its managed viewport is hidden and restores visible rows on layout", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const view = new ListView<string>(dom.window.document.body, {
@@ -332,6 +376,29 @@ test("List restores its active descendant when a hidden managed viewport becomes
 	list.layout(0);
 	assert.equal(list.element.hasAttribute("aria-activedescendant"), false);
 	list.dispose();
+	dom.window.close();
+});
+
+test('List Home and End reveal the focused row even when its focus and selection have not changed', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using list = new List<string>(dom.window.document.body, {
+		scrolling: 'managed', keyboardNavigation: true, loopNavigation: false,
+		getId: item => item, getHeight: () => 22,
+		renderItem: item => { const label = h(dom.window.document, 'span'); label.textContent = item; return label; },
+	});
+	const viewport = list.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+	Object.defineProperties(viewport, { clientWidth: { value: 100 }, clientHeight: { value: 44 }, scrollHeight: { value: 2_200 } });
+	list.items = Array.from({ length: 100 }, (_, index) => String(index));
+	for (const [key, index, scrollTop] of [['Home', 0, 0], ['End', 99, 2_156]] as const) {
+		list.setActiveIndex(index);
+		list.setSelection([index]);
+		viewport.scrollTop = key === 'Home' ? 1_100 : 0;
+		viewport.dispatchEvent(new dom.window.Event('scroll'));
+		assert.equal(list.row(index), undefined);
+		list.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key }));
+		assert.deepEqual({ index: list.activeIndex, selection: list.selection, scrollTop: list.scrollTop }, { index, selection: [String(index)], scrollTop });
+		assert.ok(list.row(index));
+	}
 	dom.window.close();
 });
 
