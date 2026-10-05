@@ -17,6 +17,7 @@ import { type EditorViewTextUpdateEvent } from "../../view/viewController.js";
 import { type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type IViewModel } from '../../../common/viewModel.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import { isFirefox } from '../../../../base/browser/browser.js';
 import { createClipboardCopyEvent, createClipboardPasteEvent, type IClipboardCopyEvent, type IClipboardPasteEvent } from "./clipboardUtils.js";
 
@@ -354,6 +355,9 @@ export abstract class AbstractEditContext extends ViewPart {
 			event.altKey ||
 			event.metaKey
 		) return;
+		if (this._context.configuration.options.get(EditorOption.tabFocusMode)) {
+			return;
+		}
 		if (viewController.hasExpandedSelections) return;
 		event.stop();
 		// Tab is a keyboard command, not a browser text-input transaction. Keep it

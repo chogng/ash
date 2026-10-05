@@ -912,7 +912,10 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		services.registerInstance(IContextMenuService, testContextMenuProvider);
 		services.registerInstance(IWorkspaceContextService, testWorkspaceContext());
 		services.registerInstance(IConfigurationService, configuration);
+		const { registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
+		registerCodeEditorServices(services);
 		using pane = services.createInstance(ScmViewPane, browser.window.document.body, { id: 'scm-folding', title: 'Changes' });
+		assert.match(pane.element.querySelector('.ash-scm-input .stanza-editor-input')!.getAttribute('aria-label')!, /^提交信息/u);
 		const tree = pane.element.querySelector<HTMLElement>('[role="tree"]')!;
 		const group = (): HTMLElement => tree.querySelector<HTMLElement>('[role="treeitem"][aria-level="1"]')!;
 		const key = (value: string): void => { tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: value, bubbles: true })); };
@@ -993,6 +996,42 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		resetNlsResolver();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
 		browser.window.close();
+	}
+});
+
+test('SCM input keeps repository drafts, updates help verbosity and releases its editor', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const installedGlobals = installDomGlobals(browser);
+	try {
+		const { registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
+		const { ICodeEditorService } = await import('../../../../../editor/browser/services/codeEditorService.js');
+		const { SCMInputWidget } = await import('../../browser/scmInput.js');
+		await import('../../../accessibility/browser/accessibilityConfiguration.js');
+		using configuration = new InMemoryConfigurationService();
+		using services = new InstantiationService();
+		services.registerInstance(IConfigurationService, configuration);
+		registerCodeEditorServices(services);
+		using input = services.createInstance(SCMInputWidget, browser.window.document.body);
+		const first = { ...testSCMProvider('first', 'First').input, enabled: true, value: 'First draft' };
+		const second = { ...testSCMProvider('second', 'Second').input, enabled: true, value: 'Second draft' };
+		const editors = services.get(ICodeEditorService);
+		const editor = editors.listCodeEditors()[0];
+		input.input = first;
+		editor.getModel()!.setValue('Edited first draft');
+		input.input = second;
+		editor.getModel()!.setValue('Edited second draft');
+		input.input = first;
+		assert.deepEqual([first.value, second.value, editor.getModel()!.getValue()], ['Edited first draft', 'Edited second draft', 'Edited first draft']);
+		const editorInput = input.domNode.querySelector('.stanza-editor-input')!;
+		assert.match(editorInput.getAttribute('aria-label')!, /Alt\+F1/u);
+		await configuration.updateValue('accessibility.verbosity.scmInput', false);
+		assert.equal(editorInput.getAttribute('aria-label'), 'Commit message');
+		await assert.rejects(configuration.updateValue('accessibility.verbosity.scmInput', 'false'), /must be a boolean/u);
+		input.dispose();
+		assert.equal(editors.listCodeEditors().length, 0);
+	} finally {
+		browser.window.close();
+		for (const name of installedGlobals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -1119,10 +1158,13 @@ test("ScmViewPane groups App Server Git status", async () => {
 			dialogService: { ...testDialogs, confirm: async () => ({ confirmed: false }) },
 		}), decorationServices.get(IDecorationsService));
 		using configuration = new InMemoryConfigurationService();
+		services.registerInstance(IConfigurationService, configuration);
+		const { registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
+		registerCodeEditorServices(services);
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git",
 			title: "Changes",
-		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, testWorkspaceContext(), configuration, testFileIconThemeService());
+		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, testWorkspaceContext(), configuration, testFileIconThemeService(), services);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "4 changed files");
 
@@ -1243,7 +1285,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		completeStage();
 		await waitFor(() => pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage src/working.ts"]')?.disabled === false);
 
-		const message = pane.element.querySelector<HTMLTextAreaElement>('[aria-label="Commit message"]');
+		const message = pane.element.querySelector<HTMLElement>('.ash-scm-input .stanza-editor-input');
 		const commit = pane.element.querySelector<HTMLButtonElement>(".ash-scm-commit");
 		assert.ok(message);
 		assert.ok(commit);
@@ -1252,7 +1294,8 @@ test("ScmViewPane groups App Server Git status", async () => {
 		assert.equal(commit.textContent, "Commit");
 		assert.ok(commit.querySelector(".ash-icon"));
 		await waitFor(() => !commit.disabled);
-		message.value = "ship scm";
+		const { ICodeEditorService } = await import('../../../../../editor/browser/services/codeEditorService.js');
+		services.get(ICodeEditorService).listCodeEditors()[0].getModel()!.setValue('ship scm');
 		commit.click();
 		await waitFor(() => committedMessage !== undefined);
 		assert.equal(committedMessage, "ship scm");
@@ -1343,10 +1386,14 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		using provider = new GitSCMProvider(gitService, gitService.repositories[0], {} as GitHistoryProvider, testGitProviderServices());
 		using repository = scmService.registerSCMProvider(provider);
 		using configuration = new InMemoryConfigurationService();
+		using editorServices = new InstantiationService();
+		editorServices.registerInstance(IConfigurationService, configuration);
+		const { registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
+		registerCodeEditorServices(editorServices);
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git.restart",
 			title: "Changes",
-		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, testWorkspaceContext(), configuration, testFileIconThemeService());
+		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, testWorkspaceContext(), configuration, testFileIconThemeService(), editorServices);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);
 		assert.equal(pane.element.querySelector(".ash-scm-branch"), null);
@@ -1468,12 +1515,22 @@ function noEvent(): { dispose(): void; [Symbol.dispose](): void } {
 }
 
 function installDomGlobals(browser: JSDOM): readonly string[] {
+	class TestResizeObserver {
+		public observe(): void {}
+		public unobserve(): void {}
+		public disconnect(): void {}
+	}
+	browser.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const globals = {
 		window: browser.window,
 		document: browser.window.document,
 		Node: browser.window.Node,
 		Element: browser.window.Element,
 		HTMLElement: browser.window.HTMLElement,
+		HTMLCanvasElement: browser.window.HTMLCanvasElement,
+		NodeFilter: browser.window.NodeFilter,
+		InputEvent: browser.window.InputEvent,
+		ResizeObserver: TestResizeObserver,
 		Event: browser.window.Event,
 		MouseEvent: browser.window.MouseEvent,
 		KeyboardEvent: browser.window.KeyboardEvent,
@@ -1525,6 +1582,7 @@ suite('SCM badge and decorations', () => {
 		using contribution = services.createInstance(GitSCMContribution, git, scm, view, testGitProviderServices());
 		using controller = services.createInstance(SCMActiveRepositoryController);
 		await waitFor(() => activityCount === 1);
+		assert.match(scm.getRepository('repo')!.provider.input.placeholder, /to commit on "main"/u);
 		assert.deepEqual(scm.getRepository('repo')!.provider.groups.map(group => [group.id, group.resources[0]!.decorations.badge]), [['staged', 'A'], ['changes', 'M']]);
 		const resource = URI.file('/workspace/src/both.ts');
 		using modified = decorations.getDecoration(resource, false)!;

@@ -14,6 +14,8 @@ import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.j
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
 import { IResourceIconRenderer, IResourceLabelService, type ResourceLabels } from '../../../browser/labels.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { SCMInputWidget } from './scmInput.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ISCMService, ISCMViewService, type ISCMProvider, type ISCMResource, type ISCMResourceGroup } from '../common/scm.js';
 
@@ -25,7 +27,8 @@ type TreeElement =
 
 /** Displays resources and actions from the selected SCM provider. */
 export class ScmViewPane extends ViewPane {
-	private readonly commitInput: HTMLTextAreaElement;
+	private readonly commitInput: SCMInputWidget;
+	private readonly commitForm: HTMLFormElement;
 	private readonly commitButton: Button;
 	private readonly statusElement: HTMLDivElement;
 	private readonly tree: WorkbenchObjectTree<TreeElement>;
@@ -47,18 +50,16 @@ export class ScmViewPane extends ViewPane {
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IResourceIconRenderer resourceIconRenderer: IResourceIconRenderer,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super(container, options);
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.contentElement.classList.add('ash-scm');
 		const document = container.ownerDocument;
 		const commitForm = h(document, 'form');
+		this.commitForm = commitForm;
 		commitForm.className = 'ash-scm-commit-form';
-		this.commitInput = h(document, 'textarea');
-		this.commitInput.className = 'ash-scm-commit-input';
-		this.commitInput.name = 'commitMessage';
-		this.commitInput.rows = 2;
-		this.commitInput.setAttribute('aria-label', 'Commit message');
+		this.commitInput = this._register(instantiationService.createInstance(SCMInputWidget, commitForm));
 		const commitButton = this._register(new Button(commitForm, {
 			label: 'Commit',
 			icon: Lxicon.check,
@@ -68,7 +69,6 @@ export class ScmViewPane extends ViewPane {
 		}));
 		commitButton.toggleClassName('ash-scm-commit', true);
 		this.commitButton = commitButton;
-		commitForm.append(this.commitInput, commitButton.domNode);
 		this.statusElement = h(document, 'div');
 		this.statusElement.className = 'ash-scm-status ash-aria-live';
 		this.statusElement.setAttribute('role', 'status');
@@ -109,17 +109,15 @@ export class ScmViewPane extends ViewPane {
 			}
 		}));
 		this._register(addDisposableListener(commitForm, 'submit', event => { event.preventDefault(); void this.commit(); }));
-		this._register(addDisposableListener(this.commitInput, 'input', () => {
-			const provider = this.provider;
-			if (provider) provider.input.value = this.commitInput.value;
-		}));
-		this._register(addDisposableListener(this.commitInput, 'keydown', event => {
+		// Capture acceptance before the editor handles Enter; plain Enter remains a message line break.
+		this._register(addDisposableListener(commitForm, 'keydown', event => {
 			const keyboardEvent = event as KeyboardEvent;
-			if (keyboardEvent.key === 'Enter' && (keyboardEvent.ctrlKey || keyboardEvent.metaKey)) {
+			if (!keyboardEvent.isComposing && !keyboardEvent.altKey && !keyboardEvent.shiftKey && keyboardEvent.key === 'Enter' && (keyboardEvent.ctrlKey || keyboardEvent.metaKey)) {
 				event.preventDefault();
+				event.stopPropagation();
 				void this.commit();
 			}
-		}));
+		}, { capture: true }));
 		this._register(scmService.onDidAddRepository(() => this.render()));
 		this._register(scmService.onDidRemoveRepository(() => this.render()));
 		this._register(scmViewService.onDidChangeActiveRepository(() => this.bindProvider()));
@@ -142,10 +140,8 @@ export class ScmViewPane extends ViewPane {
 	private async commit(): Promise<void> {
 		const provider = this.provider;
 		if (!provider || provider.isBusy) return;
-		provider.input.value = this.commitInput.value;
 		await provider.input.accept();
 		if (!this.isDisposed && this.provider === provider) {
-			this.commitInput.value = provider.input.value;
 			if (provider.statusMessage === 'Enter a commit message.') this.commitInput.focus();
 			this.render();
 		}
@@ -155,9 +151,9 @@ export class ScmViewPane extends ViewPane {
 		if (this.isDisposed) return;
 		const active = this.scmViewService.activeRepository;
 		const provider = active?.provider;
-		this.commitInput.placeholder = provider?.input.placeholder ?? '';
-		if (provider && this.commitInput.value !== provider.input.value) this.commitInput.value = provider.input.value;
-		this.commitInput.disabled = !provider?.input.enabled;
+		this.commitForm.hidden = !provider;
+		this.commitForm.classList.toggle('hidden', !provider);
+		this.commitInput.input = provider?.input;
 		const buttonLabel = provider?.input.buttonLabel ?? 'Commit';
 		if (this.commitButton.label !== buttonLabel) this.commitButton.label = buttonLabel;
 		const buttonTooltip = provider?.input.buttonTooltip ?? 'Commit';
@@ -166,9 +162,11 @@ export class ScmViewPane extends ViewPane {
 			this.commitButton.setTitle(buttonTooltip);
 		}
 		this.commitButton.enabled = provider?.isBusy !== true && provider?.input.enabled === true && provider.input.canAccept;
+		this.statusElement.classList.toggle('ash-aria-live', !!provider);
+		this.statusElement.classList.toggle('ash-scm-empty', !provider);
 		this.statusElement.textContent = provider?.statusMessage ?? (this.workspaceContext.getWorkbenchState() === WorkbenchState.EMPTY
-			? 'Open a folder to use source control.'
-			: 'No source control repository found in the open folder.');
+			? localize('scm.emptyWindow', 'Open a folder to use source control.')
+			: localize('scm.noRepository', 'No source control repository found in the open folder.'));
 		const groups = provider?.groups;
 		if (provider !== this.renderedProvider || groups !== this.renderedGroups) {
 			this.renderedProvider = provider;

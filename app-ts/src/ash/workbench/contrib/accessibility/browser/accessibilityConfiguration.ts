@@ -9,6 +9,22 @@ export const accessibleViewIsShown = new RawContextKey<boolean>('accessibleViewI
 export const accessibleViewVerbosityEnabled = new RawContextKey<boolean>('accessibleViewVerbosityEnabled', false);
 export const accessibleViewCurrentProviderId = new RawContextKey<string>('accessibleViewCurrentProviderId', '');
 
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.ScmInput,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') {
+			throw new TypeError(localize('scm.input.verbosityInvalid', 'Source control input accessibility verbosity must be a boolean.'));
+		}
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('scm.input.verbosityTitle', 'Source control input accessibility help'); },
+		get description() { return localize('scm.input.verbosityDescription', 'Announce how to open accessibility help when the commit message receives focus.'); },
+	},
+});
+
 export const enum AccessibilityWorkbenchSettingId {
 	DimUnfocusedEnabled = 'accessibility.dimUnfocused.enabled',
 	DimUnfocusedOpacity = 'accessibility.dimUnfocused.opacity',

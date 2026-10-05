@@ -41,6 +41,20 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { FocusedViewContext } from '../../../common/contextkeys.js';
 import { REPOSITORIES_VIEW_PANE_ID, SCMRepositoriesViewPane } from './scmRepositoriesViewPane.js';
 
+AccessibleViewRegistry.register({
+	type: AccessibleViewType.Help,
+	priority: 110,
+	name: 'scmInput',
+	when: ContextKeyExpr.has('scmInputIsFocused'),
+	getProvider: accessor => {
+		const document = accessor.get(ILayoutService).mainContainer.ownerDocument;
+		const focused = document.activeElement as HTMLElement;
+		return new AccessibleContentProvider(AccessibleViewProviderId.ScmInput, { type: AccessibleViewType.Help },
+			() => localize('scm.input.help', 'Type a commit message. Enter inserts a new line. Ctrl+Enter on Windows and Linux, or Command+Enter on macOS, commits staged changes. Tab moves to the Commit button; Shift+Tab moves to the previous control. Use the editor shortcuts to select, copy, paste, undo and redo. The input grows with its content up to ten lines and then scrolls. Each repository keeps its own draft. Escape closes this help and returns to the commit message.'),
+			() => restoreFocus(focused), AccessibilityVerbositySettingId.ScmInput);
+	},
+});
+
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({
 		type,

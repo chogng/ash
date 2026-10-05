@@ -32,6 +32,7 @@ export class DOMLineBreaksComputerFactory implements ILineBreaksComputerFactory 
 		if (!Number.isSafeInteger(wrappingColumn) || wrappingColumn < -1) throw new RangeError('DOM line-break wrapping column must be -1 or a non-negative safe integer');
 		if (!isWrappingIndent(wrappingIndent)) throw new TypeError('Unknown editor wrapping indent mode');
 		const requests: number[] = [];
+		const measure = createTextMeasurement(this.targetWindow, this.textMeasurer, fontInfo, tabSize);
 		return {
 			addRequest(lineNumber): void {
 				if (!Number.isSafeInteger(lineNumber) || lineNumber < 1) throw new RangeError('DOM line-break line number must be a positive safe integer');
@@ -45,8 +46,7 @@ export class DOMLineBreaksComputerFactory implements ILineBreaksComputerFactory 
 				wrappingColumn,
 				wrappingIndent,
 				wordBreak,
-				this.targetWindow,
-				this.textMeasurer,
+				measure,
 			)),
 		};
 	}
@@ -60,13 +60,11 @@ function computeLineBreaks(
 	wrappingColumn: number,
 	wrappingIndent: WrappingIndent,
 	wordBreak: 'normal' | 'keepAll',
-	targetWindow: WeakRef<Window>,
-	textMeasurer: TextMeasurer | undefined,
+	measure: (text: string) => number,
 ): ModelLineProjectionData | null {
 	const injectedTexts = context.getLineInjectedText(lineNumber);
 	const text = LineInjectedText.applyInjectedText(context.getLineContent(lineNumber), injectedTexts);
 	if (wrappingColumn === -1) return injectedTexts ? createProjectionData(text, injectedTexts, [text.length], tabSize, 0) : null;
-	const measure = (value: string): number => measureText(targetWindow, textMeasurer, value, fontInfo, tabSize);
 	const wrapWidth = wrappingColumn * fontInfo.typicalHalfwidthCharacterWidth;
 	const wrappedTextIndentLength = computeWrappedTextIndentLength(text, wrappingColumn, wrappingIndent, tabSize);
 	const wrappedTextIndentWidth = wrappedTextIndentLength * fontInfo.spaceWidth;
@@ -143,29 +141,36 @@ function computeWrappedTextIndentLength(text: string, wrappingColumn: number, wr
 	return visibleColumn + 2 > wrappingColumn ? 0 : visibleColumn;
 }
 
-function measureWithCanvas(targetWindow: Window | undefined, text: string, fontInfo: FontInfo, tabSize: number): number {
+function createCanvasMeasurement(targetWindow: Window | undefined, fontInfo: FontInfo, tabSize: number): (text: string) => number {
 	if (!targetWindow) throw new ReferenceError('DOM line-break factory target window is no longer available');
 	const canvas = h(targetWindow.document, 'canvas');
 	const context = canvas.getContext('2d');
 	if (!context) throw new Error('DOM line-break measurement requires a 2D canvas context');
 	context.font = `${fontInfo.fontWeight} ${fontInfo.fontSize}px ${fontInfo.getMassagedFontFamily()}`;
-	let width = 0;
-	const segments = text.split('\t');
-	for (const segment of segments.entries()) {
-		const [index, value] = segment;
-		width += context.measureText(value).width + [...value].length * fontInfo.letterSpacing;
-		if (index + 1 < segments.length) {
-			const tabStopWidth = fontInfo.spaceWidth * tabSize;
-			width = (Math.floor(width / tabStopWidth) + 1) * tabStopWidth;
+	return text => {
+		let width = 0;
+		const segments = text.split('\t');
+		for (const segment of segments.entries()) {
+			const [index, value] = segment;
+			width += context.measureText(value).width + [...value].length * fontInfo.letterSpacing;
+			if (index + 1 < segments.length) {
+				const tabStopWidth = fontInfo.spaceWidth * tabSize;
+				width = (Math.floor(width / tabStopWidth) + 1) * tabStopWidth;
+			}
 		}
-	}
-	return width;
+		return width;
+	};
 }
 
-function measureText(targetWindow: WeakRef<Window>, textMeasurer: TextMeasurer | undefined, text: string, fontInfo: FontInfo, tabSize: number): number {
-	const width = textMeasurer
-		? textMeasurer.measureLineWidth(text)
-		: measureWithCanvas(targetWindow.deref(), text, fontInfo, tabSize);
-	if (!isFiniteNumber(width) || width < 0) throw new RangeError('DOM line-break measurement must be finite and non-negative');
-	return width;
+function createTextMeasurement(targetWindow: WeakRef<Window>, textMeasurer: TextMeasurer | undefined, fontInfo: FontInfo, tabSize: number): (text: string) => number {
+	// One wrapping batch measures many prefixes. Reuse its canvas rather than allocating one per grapheme.
+	// Create it on the first measurement so requests with wrapping disabled need no browser context.
+	let canvasMeasurement: ((text: string) => number) | undefined;
+	return text => {
+		const width = textMeasurer
+			? textMeasurer.measureLineWidth(text)
+			: (canvasMeasurement ??= createCanvasMeasurement(targetWindow.deref(), fontInfo, tabSize))(text);
+		if (!isFiniteNumber(width) || width < 0) throw new RangeError('DOM line-break measurement must be finite and non-negative');
+		return width;
+	};
 }

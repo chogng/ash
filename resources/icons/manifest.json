@@ -547,6 +547,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "go-to-file",
+      "file": "go-to-file.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "h1",
       "file": "h1.svg",
       "rendering": "symbolic"
@@ -734,6 +739,26 @@
     {
       "id": "list-unordered",
       "file": "list-unordered.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "map",
+      "file": "map.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "map-filled",
+      "file": "map-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "map-vertical",
+      "file": "map-vertical.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "map-vertical-filled",
+      "file": "map-vertical-filled.svg",
       "rendering": "symbolic"
     },
     {
@@ -954,6 +979,16 @@
     {
       "id": "skill",
       "file": "skill.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "sparkle",
+      "file": "sparkle.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "sparkle-filled",
+      "file": "sparkle-filled.svg",
       "rendering": "symbolic"
     },
     {

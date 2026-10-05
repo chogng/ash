@@ -5,6 +5,7 @@ import { Disposable, DisposableMap, DisposableStore } from '../../../../base/com
 import { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
+import { isMacintosh } from '../../../../base/common/platform.js';
 import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
 import { foreground } from '../../../../platform/theme/common/colors/baseColors.js';
 import { IDecorationsService, type IDecorationData, type IDecorationsProvider } from '../../../services/decorations/common/decorations.js';
@@ -75,7 +76,13 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 		const provider = this;
 		this.input = {
 			value: '',
-			placeholder: 'Message (Ctrl+Enter to commit)',
+			get placeholder() {
+				const shortcut = isMacintosh ? '⌘Enter' : 'Ctrl+Enter';
+				const branch = provider.status?.head;
+				return branch && branch.type !== 'detached'
+					? localize('git.commitMessageOnBranch', 'Message ({0} to commit on "{1}")', shortcut, branch.name)
+					: localize('git.commitMessage', 'Message ({0} to commit)', shortcut);
+			},
 			get enabled() { return provider.status !== undefined && !provider.busy; },
 			get canAccept() { return provider.status?.changes.some(change => !change.conflicted && change.indexStatus !== 'unmodified') === true; },
 			buttonLabel: 'Commit',

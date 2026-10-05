@@ -117,6 +117,7 @@ mod artwork {
     pub(crate) const GIT_BRANCH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-branch.svg"));
     pub(crate) const GIT_COMMIT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-commit.svg"));
     pub(crate) const GITHUB: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/github.svg"));
+    pub(crate) const GO_TO_FILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/go-to-file.svg"));
     pub(crate) const H1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/h1.svg"));
     pub(crate) const H2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/h2.svg"));
     pub(crate) const H3: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/h3.svg"));
@@ -155,6 +156,10 @@ mod artwork {
     pub(crate) const LINK_EXTERNAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/link-external.svg"));
     pub(crate) const LIST_FILTER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/list-filter.svg"));
     pub(crate) const LIST_UNORDERED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/list-unordered.svg"));
+    pub(crate) const MAP: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/map.svg"));
+    pub(crate) const MAP_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/map-filled.svg"));
+    pub(crate) const MAP_VERTICAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/map-vertical.svg"));
+    pub(crate) const MAP_VERTICAL_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/map-vertical-filled.svg"));
     pub(crate) const MENU: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/menu.svg"));
     pub(crate) const MIC: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/mic.svg"));
     pub(crate) const MIC_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/mic-filled.svg"));
@@ -199,6 +204,8 @@ mod artwork {
     pub(crate) const SEARCH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/search.svg"));
     pub(crate) const SETTINGS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/settings.svg"));
     pub(crate) const SKILL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/skill.svg"));
+    pub(crate) const SPARKLE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/sparkle.svg"));
+    pub(crate) const SPARKLE_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/sparkle-filled.svg"));
     pub(crate) const SPLIT_HORIZONTAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/split-horizontal.svg"));
     pub(crate) const SPLIT_PAGE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/split-page.svg"));
     pub(crate) const SPLIT_VERTICAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/split-vertical.svg"));
@@ -356,6 +363,7 @@ pub mod icons {
     pub const GIT_BRANCH: Icon = Icon::new(IconId::new("git-branch"), artwork::GIT_BRANCH);
     pub const GIT_COMMIT: Icon = Icon::new(IconId::new("git-commit"), artwork::GIT_COMMIT);
     pub const GITHUB: Icon = Icon::new(IconId::new("github"), artwork::GITHUB);
+    pub const GO_TO_FILE: Icon = Icon::new(IconId::new("go-to-file"), artwork::GO_TO_FILE);
     pub const H1: Icon = Icon::new(IconId::new("h1"), artwork::H1);
     pub const H2: Icon = Icon::new(IconId::new("h2"), artwork::H2);
     pub const H3: Icon = Icon::new(IconId::new("h3"), artwork::H3);
@@ -394,6 +402,10 @@ pub mod icons {
     pub const LINK_EXTERNAL: Icon = Icon::new(IconId::new("link-external"), artwork::LINK_EXTERNAL);
     pub const LIST_FILTER: Icon = Icon::new(IconId::new("list-filter"), artwork::LIST_FILTER);
     pub const LIST_UNORDERED: Icon = Icon::new(IconId::new("list-unordered"), artwork::LIST_UNORDERED);
+    pub const MAP: Icon = Icon::new(IconId::new("map"), artwork::MAP);
+    pub const MAP_FILLED: Icon = Icon::new(IconId::new("map-filled"), artwork::MAP_FILLED);
+    pub const MAP_VERTICAL: Icon = Icon::new(IconId::new("map-vertical"), artwork::MAP_VERTICAL);
+    pub const MAP_VERTICAL_FILLED: Icon = Icon::new(IconId::new("map-vertical-filled"), artwork::MAP_VERTICAL_FILLED);
     pub const MENU: Icon = Icon::new(IconId::new("menu"), artwork::MENU);
     pub const MIC: Icon = Icon::new(IconId::new("mic"), artwork::MIC);
     pub const MIC_FILLED: Icon = Icon::new(IconId::new("mic-filled"), artwork::MIC_FILLED);
@@ -438,6 +450,8 @@ pub mod icons {
     pub const SEARCH: Icon = Icon::new(IconId::new("search"), artwork::SEARCH);
     pub const SETTINGS: Icon = Icon::new(IconId::new("settings"), artwork::SETTINGS);
     pub const SKILL: Icon = Icon::new(IconId::new("skill"), artwork::SKILL);
+    pub const SPARKLE: Icon = Icon::new(IconId::new("sparkle"), artwork::SPARKLE);
+    pub const SPARKLE_FILLED: Icon = Icon::new(IconId::new("sparkle-filled"), artwork::SPARKLE_FILLED);
     pub const SPLIT_HORIZONTAL: Icon = Icon::new(IconId::new("split-horizontal"), artwork::SPLIT_HORIZONTAL);
     pub const SPLIT_PAGE: Icon = Icon::new(IconId::new("split-page"), artwork::SPLIT_PAGE);
     pub const SPLIT_VERTICAL: Icon = Icon::new(IconId::new("split-vertical"), artwork::SPLIT_VERTICAL);
@@ -591,6 +605,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::GIT_BRANCH,
     icons::GIT_COMMIT,
     icons::GITHUB,
+    icons::GO_TO_FILE,
     icons::H1,
     icons::H2,
     icons::H3,
@@ -629,6 +644,10 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::LINK_EXTERNAL,
     icons::LIST_FILTER,
     icons::LIST_UNORDERED,
+    icons::MAP,
+    icons::MAP_FILLED,
+    icons::MAP_VERTICAL,
+    icons::MAP_VERTICAL_FILLED,
     icons::MENU,
     icons::MIC,
     icons::MIC_FILLED,
@@ -673,6 +692,8 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::SEARCH,
     icons::SETTINGS,
     icons::SKILL,
+    icons::SPARKLE,
+    icons::SPARKLE_FILLED,
     icons::SPLIT_HORIZONTAL,
     icons::SPLIT_PAGE,
     icons::SPLIT_VERTICAL,
@@ -827,6 +848,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("git-branch", artwork::GIT_BRANCH),
     ("git-commit", artwork::GIT_COMMIT),
     ("github", artwork::GITHUB),
+    ("go-to-file", artwork::GO_TO_FILE),
     ("h1", artwork::H1),
     ("h2", artwork::H2),
     ("h3", artwork::H3),
@@ -865,6 +887,10 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("link-external", artwork::LINK_EXTERNAL),
     ("list-filter", artwork::LIST_FILTER),
     ("list-unordered", artwork::LIST_UNORDERED),
+    ("map", artwork::MAP),
+    ("map-filled", artwork::MAP_FILLED),
+    ("map-vertical", artwork::MAP_VERTICAL),
+    ("map-vertical-filled", artwork::MAP_VERTICAL_FILLED),
     ("menu", artwork::MENU),
     ("mic", artwork::MIC),
     ("mic-filled", artwork::MIC_FILLED),
@@ -909,6 +935,8 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("search", artwork::SEARCH),
     ("settings", artwork::SETTINGS),
     ("skill", artwork::SKILL),
+    ("sparkle", artwork::SPARKLE),
+    ("sparkle-filled", artwork::SPARKLE_FILLED),
     ("split-horizontal", artwork::SPLIT_HORIZONTAL),
     ("split-page", artwork::SPLIT_PAGE),
     ("split-vertical", artwork::SPLIT_VERTICAL),

@@ -53,6 +53,29 @@ function delay(targetWindow: Pick<Window, 'setTimeout'>, duration: number): Prom
 	return new Promise(resolve => targetWindow.setTimeout(resolve, duration));
 }
 
+test('Tab edits text normally and leaves focus navigation to the browser in tab focus mode', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using cleanup = toDisposable(() => dom.window.close());
+	using model = new TextModel('');
+	model.updateOptions({ insertSpaces: false });
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
+	editor.layout({ width: 200, height: 100 });
+	editor.focus();
+	const outcomes = [];
+	for (const tabFocusMode of [false, true]) {
+		editor.updateOptions({ tabFocusMode });
+		model.setValue('');
+		const event = new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+		editor.controller.element.dispatchEvent(event);
+		outcomes.push({ tabFocusMode, text: model.getText(), prevented: event.defaultPrevented });
+	}
+	assert.deepEqual(outcomes, [
+		{ tabFocusMode: false, text: '\t', prevented: true },
+		{ tabFocusMode: true, text: '', prevented: false },
+	]);
+});
+
 test('editor line-number width follows edits, undo, and model replacement before content events', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

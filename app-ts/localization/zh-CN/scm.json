@@ -1,5 +1,15 @@
 {
 	"ash": {
+		"scm.input.label": "提交信息",
+		"scm.input.helpHint": "{0}。按 Alt+F1 查看源代码管理输入框帮助。",
+		"scm.input.help": "输入提交信息。Enter 插入新行。Windows 和 Linux 使用 Ctrl+Enter，macOS 使用 Command+Enter 提交暂存的更改。Tab 移动到提交按钮；Shift+Tab 移动到上一个控件。使用编辑器快捷键选择、复制、粘贴、撤销和重做。输入框随内容增高，最多显示十行，然后滚动。每个仓库保留各自的草稿。Escape 关闭帮助并返回提交信息。",
+		"scm.input.verbosityInvalid": "源代码管理输入框的无障碍详细提示必须是布尔值。",
+		"scm.input.verbosityTitle": "源代码管理输入框无障碍帮助",
+		"scm.input.verbosityDescription": "提交信息获得焦点时，提示如何打开无障碍帮助。",
+		"scm.emptyWindow": "打开文件夹以使用源代码管理。",
+		"scm.noRepository": "打开的文件夹中未找到源代码管理仓库。",
+		"git.commitMessage": "提交信息（按 {0} 提交）",
+		"git.commitMessageOnBranch": "提交信息（按 {0} 提交到“{1}”）",
 		"scm.resourceCount": "{0} 个更改",
 		"scm.activity.oneChange": "1 个已更改文件",
 		"scm.activity.changes": "{0} 个已更改文件",

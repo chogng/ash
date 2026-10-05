@@ -428,18 +428,28 @@
   padding: 0 0 var(--ash-spacing-size120);
 }
 
-.ash-scm-commit-input {
-  min-width: 0;
-  resize: vertical;
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-corner-radius-small);
-  padding: 6px 8px;
-  color: var(--ash-input-foreground);
-  background: var(--ash-input-background);
-  font: inherit;
+.ash-scm-commit-form.hidden {
+  display: none;
 }
 
-.ash-scm-commit-input:focus {
+.ash-scm-input {
+  --ash-editor-background: var(--ash-input-background);
+  --ash-editor-foreground: var(--ash-input-foreground);
+  box-sizing: border-box;
+  min-width: 0;
+  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+  border-radius: var(--ash-corner-radius-small);
+  padding: 0 var(--ash-spacing-size60);
+  color: var(--ash-input-foreground);
+  background: var(--ash-input-background);
+}
+
+.ash-scm-input-editor {
+  position: relative;
+  min-width: 0;
+}
+
+.ash-scm-input.focused {
   outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
+import { JSDOM } from 'jsdom';
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import { EditorLineWrapping, WrappingIndent } from "../../common/config/editorOptions.js";
 import { FontInfo } from "../../common/config/fontInfo.js";
@@ -10,6 +11,28 @@ import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { PositionAffinity } from "../../common/model.js";
 import { type TextMeasurer } from '../../common/viewModel.js';
+
+test('DOM wrapping reuses one canvas for a batch of long lines and preserves word boundaries', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	let contexts = 0;
+	dom.window.HTMLCanvasElement.prototype.getContext = (() => {
+		contexts += 1;
+		return { font: '', measureText: (text: string) => ({ width: [...text].length * 10 }) };
+	}) as unknown as typeof dom.window.HTMLCanvasElement.prototype.getContext;
+	using model = new TextModel(`abc defgh\n${'abc '.repeat(250)}`);
+	const factory = DOMLineBreaksComputerFactory.create(dom.window as unknown as Window);
+	const computer = factory.createLineBreaksComputer({
+		getLineContent: line => model.getLineContent(line),
+		getLineInjectedText: () => null,
+	}, new FontInfo(TEST_FONT_INFO, true), 4, 6, WrappingIndent.None, 'normal', false);
+	computer.addRequest(1, null);
+	computer.addRequest(2, null);
+	const breaks = computer.finalize();
+	assert.deepEqual(breaks[0]!.breakOffsets, [4, 9]);
+	assert.equal(breaks[1]!.breakOffsets.at(-1), 1000);
+	assert.equal(contexts, 1);
+});
 
 test("browser visual-line projection wraps at grapheme boundaries and rebuilds after edits", () => {
 	using model = new TextModel("ab😀cd\nxyz");

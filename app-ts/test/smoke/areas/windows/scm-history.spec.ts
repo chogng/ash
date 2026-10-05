@@ -377,7 +377,7 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	}
 	await hover.locator('.ash-scm-graph-hover-message').hover();
 	await expect(hover).toBeVisible();
-	await page.getByRole('textbox', { name: 'Commit message', exact: true }).click();
+	await page.getByRole('textbox', { name: /^Commit message/u }).click();
 	await expect(hover).toHaveCount(0);
 	await commit.locator('.ash-scm-graph-subject').hover();
 	await expect(hover.locator('.ash-scm-graph-hover-message')).toHaveText(body);
@@ -705,6 +705,8 @@ test('SCM history pane opens without a connected repository', async ({ target, w
 	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	const changes = page.locator('[data-view-id="ash.gitView"]');
 	await expect(changes.locator('.ash-scm-status')).toContainText('source control');
+	await expect(changes.locator('.ash-scm-status')).toBeVisible();
+	await expect(changes.locator('.ash-scm-commit-form')).toBeHidden();
 	await expect(changes.getByRole('tree', { name: 'Source control changes' })).toHaveCount(1);
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await expect(history).toBeVisible();
@@ -752,7 +754,7 @@ test.describe('SCM folding', () => {
 		await expect(working.locator('.ash-tree-twistie .ash-icon')).toHaveCSS('width', '16px');
 		await expect(working.locator('.ash-tree-twistie .ash-icon')).toHaveAttribute('aria-hidden', 'true');
 		const actions = workingRow.locator('.ash-scm-change-actions');
-		await page.getByRole('textbox', { name: 'Commit message', exact: true }).hover();
+		await page.getByRole('textbox', { name: /^Commit message/u }).hover();
 		await expect(actions).toHaveCSS('visibility', 'hidden');
 		const beforeHover = await workingFile.boundingBox();
 		await workingRow.hover();
