@@ -52,8 +52,10 @@ export class BrowserHostService extends Disposable implements IHostService {
 
 	public async openWindow(options: IOpenEmptyWindowOptions = {}): Promise<void> {
 		if (options.remoteAuthority !== undefined) throw new Error('This browser host cannot open a Remote window');
+		const url = new URL(this.ownerWindow.location.href);
+		url.searchParams.delete('folder');
 		if (!options.forceReuseWindow) {
-			this.ownerWindow.open(this.ownerWindow.location.href, '_blank');
+			this.ownerWindow.open(url.href, '_blank');
 			return;
 		}
 		try {
@@ -63,6 +65,6 @@ export class BrowserHostService extends Disposable implements IHostService {
 			throw error;
 		}
 		this.ownerWindow.sessionStorage.setItem(EMPTY_WORKSPACE_ID_KEY, `empty-window-${crypto.randomUUID()}`);
-		this.ownerWindow.location.reload();
+		this.ownerWindow.location.assign(url.href);
 	}
 }

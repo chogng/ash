@@ -35,6 +35,8 @@ import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSys
 import { BrowserLifecycleService } from '../services/lifecycle/browser/lifecycleService.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { EMPTY_WORKSPACE_ID_KEY } from '../services/host/browser/browserHostService.js';
+import { URI } from '../../base/common/uri.js';
+import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
@@ -59,12 +61,30 @@ export async function createWebWorkbench(
 		api: options.api,
 		webWorkspaceClient: options.webWorkspaceClient,
 		browserFileSystemProvider: options.browserFileSystemProvider,
+		createWindow: options.browserFileSystemProvider ? services => services.get(IWorkspaceContextService).onDidChangeWorkspace(({ workspace }) => {
+			const url = new URL(ownerWindow.location.href);
+			const folder = workspace.folders[0];
+			if (folder) {
+				url.searchParams.set('folder', folder.uri.toString());
+			} else {
+				url.searchParams.delete('folder');
+			}
+			ownerWindow.history.replaceState(ownerWindow.history.state, '', url);
+		}) : undefined,
 		container: options.container,
 		createLifecycleService: services => services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
-		workspace: workspaceFromIdentifier(options.workspace ?? getEmptyWorkspaceIdentifier()),
+		workspace: workspaceFromIdentifier(options.workspace ?? (options.browserFileSystemProvider ? getBrowserWorkspaceIdentifier(ownerWindow) : getEmptyWorkspaceIdentifier())),
 		createContextMenuService: createBrowserContextMenuService,
 		createTitlebarPart: createBrowserTitlebarPart,
 	});
+}
+
+function getBrowserWorkspaceIdentifier(ownerWindow: Window): IAnyWorkspaceIdentifier {
+	const folder = new URL(ownerWindow.location.href).searchParams.get('folder');
+	if (!folder) { return getEmptyWorkspaceIdentifier(); }
+	const uri = URI.parse(folder);
+	// The URL carries identity only; the file provider checks the stored handle and permission on access.
+	return { id: uri.toString(), uri };
 }
 
 function getEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {

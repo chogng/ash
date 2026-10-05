@@ -1,7 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
 const browserServerMode = process.env.ASH_PLAYWRIGHT_SERVER;
-const browserProjects = browserServerMode === "disconnected"
+const browserUi = browserServerMode === "disconnected" || browserServerMode === "development";
+const browserProjects = browserUi
 	? [{ name: "browser-ui", use: { baseURL: `http://127.0.0.1:${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}` } }]
 	: browserServerMode === "full"
 		? [{ name: "browser-app-server" }]
@@ -32,10 +33,13 @@ export default defineConfig({
 		})),
 		{ name: 'electron-release', testMatch: '**/release-package.spec.ts', testIgnore: '', timeout: 600_000 },
 	],
-	webServer: browserServerMode === "disconnected"
+	webServer: browserUi
 		? {
 				// The browser smoke preparation script builds the renderer before Playwright starts.
-				command: `node ../build/app_ts/launch/web.ts ../.build/app-ts/renderer/ash ${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}`,
+				command: browserServerMode === "development"
+					? `pnpm run dev:web --port ${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}`
+					: `node ../build/app_ts/launch/web.ts ../.build/app-ts/web/ash ${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}`,
+				env: { ASH_WEB_APP_SERVER: '0' },
 				url: `http://127.0.0.1:${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}/`,
 				reuseExistingServer: false,
 				timeout: 120_000,

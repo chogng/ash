@@ -40,8 +40,16 @@ export class HTMLFileSystemProvider extends Disposable implements IFileService {
 		if (await (handle as PermissionedDirectoryHandle).requestPermission({ mode: 'readwrite' }) !== 'granted') {
 			throw new Error(localize({ bundle: 'ash', key: 'workbench.browserFolderPermission' }, 'Browser folder permission is required'));
 		}
-		const saved: SavedDirectory = { id: crypto.randomUUID(), name: handle.name, handle };
 		const database = await this.database;
+		const registered = await idbRequest<SavedDirectory[]>(database.transaction(STORE_NAME).objectStore(STORE_NAME).getAll());
+		// A folder keeps its resource and workspace identity across picker calls and page reloads.
+		for (const saved of registered) {
+			if (await saved.handle.isSameEntry(handle)) {
+				this.directories.set(saved.id, saved);
+				return rootUri(saved);
+			}
+		}
+		const saved: SavedDirectory = { id: crypto.randomUUID(), name: handle.name, handle };
 		await transaction(database, 'readwrite', store => store.put(saved));
 		this.directories.set(saved.id, saved);
 		return rootUri(saved);

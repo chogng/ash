@@ -11,6 +11,7 @@ if (!projects.includes(project)) {
 	throw new Error(`Usage: node test/smoke/run.ts <${projects.join('|')}>`);
 }
 const connected = project !== 'browser-ui';
+const browserMode = process.env.ASH_PLAYWRIGHT_SERVER === 'development' ? 'development' : 'disconnected';
 const fixtureDirectory = connected ? await mkdtemp(join(tmpdir(), 'ash-language-server-')) : undefined;
 try {
 	let languageServer: string | undefined;
@@ -25,7 +26,7 @@ try {
 		...process.argv.slice(3),
 	], {
 		...process.env,
-		ASH_PLAYWRIGHT_SERVER: project === 'browser-ui' ? 'disconnected' : project === 'browser-app-server' ? 'full' : undefined,
+		ASH_PLAYWRIGHT_SERVER: project === 'browser-ui' ? browserMode : project === 'browser-app-server' ? 'full' : undefined,
 		...(languageServer ? { ASH_PLAYWRIGHT_LANGUAGE_SERVER: languageServer } : {}),
 	});
 } finally {

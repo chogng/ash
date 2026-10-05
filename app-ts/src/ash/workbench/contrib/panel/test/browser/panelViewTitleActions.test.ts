@@ -12,7 +12,7 @@ import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import type { ITaskService } from "../../../../../workbench/services/tasks/common/taskService.js";
-import type { ITerminalService } from "../../../terminal/browser/terminal.js";
+import type { ITerminalService } from "../../../../services/terminal/common/terminal.js";
 import type { IViewsService } from "../../../../../workbench/services/views/common/viewsService.js";
 
 test("Output projects channel selection and active-channel clearing into the Panel title", async () => {

@@ -27,7 +27,8 @@ export function workbenchEntryPlugin(): AshWorkbenchEntryPlugin {
 
         response.statusCode = 302;
         response.setHeader("Cache-Control", "no-store");
-        response.setHeader("Location", "/browser/workbench/workbench.html");
+        const query = request.url?.indexOf('?') ?? -1;
+        response.setHeader("Location", `/browser/workbench/workbench.html${query >= 0 ? request.url!.slice(query) : ''}`);
         response.end();
       });
     },

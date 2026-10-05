@@ -29,7 +29,7 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
       }
     }
   `);
-  await writeFile(join(root, 'build/node_modules/vite/bin/vite.js'), "require('node:fs').appendFileSync('operations.log', 'bundle\\n');");
+  await writeFile(join(root, 'build/node_modules/vite/bin/vite.js'), "require('node:fs').appendFileSync('operations.log', (process.argv.includes('web') ? 'bundle-web' : 'bundle') + '\\n');");
   for (const [failure, expected] of [
     ['tsconfig.main.json', ['localization', 'tsconfig.main.json']],
     ['preload-import', ['localization', 'tsconfig.main.json', 'tsconfig.preload.json']],
@@ -48,6 +48,7 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
   for (const [command, expected] of [
     ['host', ['localization', 'tsconfig.main.json', 'tsconfig.preload.json']],
     ['renderer', ['localization', 'tsconfig.renderer.json', 'bundle']],
+    ['web', ['localization', 'tsconfig.renderer.json', 'bundle-web']],
     ['prepare', []],
   ] as const) {
     await writeFile(join(root, 'app-ts/operations.log'), '');

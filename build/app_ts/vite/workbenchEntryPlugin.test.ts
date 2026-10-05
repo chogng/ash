@@ -12,7 +12,7 @@ test("Workbench entry redirects root requests to the shared Workbench", () => {
     ended: true,
     headers: {
       "Cache-Control": "no-store",
-      Location: "/browser/workbench/workbench.html",
+      Location: "/browser/workbench/workbench.html?theme=dark",
     },
     nextCalled: false,
     statusCode: 302,

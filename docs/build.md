@@ -175,6 +175,7 @@ bazelisk test //app-rs:app_ci --test_output=errors --test_env=PATH
 | `.build/cargo/` | 默认 Cargo 输出，可由 `CARGO_TARGET_DIR` 覆盖 |
 | `.build/code/dev/<digest>/` | Code 源码运行所需程序 |
 | `.build/app-ts/` | Electron、Renderer、生成的测试程序和 Playwright 报告 |
+| `.build/app-ts/web/ash/` | 独立 Web 构建，包含浏览器 Workbench 与 Sessions 页面 |
 | `.build/runtime/dev/` | 完整后端开发包和选用记录 |
 | `.build/build-health/` | 构建测量日志与报告 |
 | `.build/ash-playwright-mcp/` | 临时 UI 场景与验证证据 |

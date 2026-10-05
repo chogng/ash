@@ -189,7 +189,8 @@ import { ISessionsService, SessionsService } from "../services/sessions/browser/
 import { registerLayoutActions } from './layoutActions.js';
 import { DesktopLayoutController } from '../contrib/layout/browser/desktopLayoutController.js';
 import { PanelPart } from './parts/panelPart.js';
-import { ITerminalProcessService } from '../../platform/terminal/common/terminal.js';
+import { TerminalService } from '../../workbench/services/terminal/browser/terminalService.js';
+import { ITerminalService } from '../../workbench/services/terminal/common/terminal.js';
 import { installWorkbenchServiceContributions } from '../../workbench/browser/workbenchServiceContributions.js';
 import { AuxiliaryBarPart } from "./parts/auxiliarybar/auxiliaryBarPart.js";
 import { disposableWindowTimeout } from '../../base/browser/scheduler.js';
@@ -611,7 +612,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IEditorGroupsService, editors);
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
 		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode));
-		services.registerInstance(ITerminalProcessService, options.api.terminal);
+		services.registerInstance(ITerminalService, this._register(new TerminalService(options.api.terminal, services.get(IWorkspaceContextService))));
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		const panel = this._register(services.createInstance(PanelPart, this.domNode));
 		const panes = this._register(services.createInstance(PaneCompositePartService, new Map<ViewContainerLocation, PaneCompositePart>([

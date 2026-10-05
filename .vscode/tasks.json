@@ -2,6 +2,16 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "Watch Ash Web Types",
+			"type": "shell",
+			"command": "pnpm typecheck:web:watch",
+			"options": { "cwd": "${workspaceFolder}" },
+			"isBackground": true,
+			"problemMatcher": "$tsc-watch",
+			"presentation": { "panel": "dedicated", "group": "ash-browser-ui" },
+			"runOptions": { "instanceLimit": 1 }
+		},
+		{
 			"label": "Prepare Ash Backend",
 			"type": "shell",
 			"command": "pnpm --dir app-ts prepare:backend",

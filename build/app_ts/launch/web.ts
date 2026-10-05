@@ -4,7 +4,7 @@ import sirv from 'sirv';
 import { authenticatedWebUrl, startWeb } from '../web.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
-const root = resolve(process.argv[2] ?? resolve(repositoryRoot, '.build/app-ts/renderer/ash'));
+const root = resolve(process.argv[2] ?? resolve(repositoryRoot, '.build/app-ts/web/ash'));
 const port = Number(process.argv[3] ?? 5173);
 if (!Number.isInteger(port) || port < 1 || port > 65535) { throw new Error('Invalid Web server port'); }
 
@@ -18,7 +18,12 @@ if (process.env.ASH_WEB_APP_SERVER === '1') {
 } else {
 	const serve = sirv(root, { etag: true });
 	const server = createServer((request, response) => {
-		if (request.url === '/') { response.writeHead(302, { Location: '/browser/workbench/workbench.html' }); response.end(); return; }
+		if ((request.method === 'GET' || request.method === 'HEAD') && (request.url === '/' || request.url?.startsWith('/?'))) {
+			const query = request.url.indexOf('?');
+			response.writeHead(302, { Location: `/browser/workbench/workbench.html${query >= 0 ? request.url.slice(query) : ''}` });
+			response.end();
+			return;
+		}
 		serve(request, response);
 	});
 	server.on('upgrade', (_request, socket) => socket.destroy());

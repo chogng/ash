@@ -62,7 +62,7 @@
 			"type": "chrome",
 			"request": "launch",
 			"url": "http://127.0.0.1:5173/",
-			"webRoot": "${workspaceFolder}/app-ts/src/ash/code",
+			"webRoot": "${workspaceFolder}",
 			"preLaunchTask": "Run Ash Web (UI Only)",
 			"presentation": {
 				"group": "1_ash_desktop",

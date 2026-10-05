@@ -11,21 +11,31 @@ import { productIconsPlugin } from "./productIconsPlugin.ts";
 import { webAppServerVitePlugin } from "./webAppServerPlugin.ts";
 import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
   const desktopRoot = resolve(import.meta.dirname, "../../../app-ts");
   const repositoryRoot = resolve(desktopRoot, "..");
   const webAppServerEnabled = process.env.ASH_WEB_APP_SERVER === "1";
+  const webOnly = mode === "web";
   const developmentPort = webAppServerEnabled ? 5174 : 5173;
   const sourceRoot = resolve(desktopRoot, "src/ash/code");
   const browserEntry = "browser/workbench/workbench";
   const electronEntry = "electron-browser/workbench/workbench";
-  const developmentEntries = [browserEntry, electronEntry, `browser/sessions/${AshSessionsRendererEntry}`, `electron-browser/sessions/${AshSessionsRendererEntry}`];
+  const browserInputs = {
+    [browserEntry]: resolve(sourceRoot, `${browserEntry}.html`),
+    [`browser/sessions/${AshSessionsRendererEntry}`]: resolve(sourceRoot, `browser/sessions/${AshSessionsRendererEntry}.html`),
+  };
   const sessionsInputs = {
     [`browser/sessions/${AshSessionsRendererEntry}`]: resolve(sourceRoot, `browser/sessions/${AshSessionsRendererEntry}.html`),
     [`electron-browser/sessions/${AshSessionsRendererEntry}`]: resolve(sourceRoot, `electron-browser/sessions/${AshSessionsRendererEntry}.html`),
   };
   const remoteRuntimeInstallInput = {
     "electron-browser/remote-runtime-install/remoteRuntimeInstall": resolve(sourceRoot, "electron-browser/remote-runtime-install/remoteRuntimeInstall.html"),
+  };
+  const inputs = webOnly ? browserInputs : {
+    ...browserInputs,
+    [electronEntry]: resolve(sourceRoot, `${electronEntry}.html`),
+    ...sessionsInputs,
+    ...remoteRuntimeInstallInput,
   };
 
   return {
@@ -66,19 +76,14 @@ export default defineConfig(() => {
       port: developmentPort,
       strictPort: true,
       // Transform the product entry graphs while the host starts, before its first navigation.
-      warmup: { clientFiles: developmentEntries.map(entry => resolve(sourceRoot, `${entry}.html`)) },
+      warmup: { clientFiles: Object.entries(inputs).filter(([entry]) => !entry.startsWith('electron-browser/remote-runtime-install/')).map(([, path]) => path) },
     },
     build: {
-      outDir: appTsBuildPath(repositoryRoot, "renderer", AshRendererDirectory),
+      outDir: appTsBuildPath(repositoryRoot, webOnly ? "web" : "renderer", AshRendererDirectory),
       emptyOutDir: true,
       rolldownOptions: {
 		output: rendererOutput,
-        input: {
-          [browserEntry]: resolve(sourceRoot, `${browserEntry}.html`),
-          [electronEntry]: resolve(sourceRoot, `${electronEntry}.html`),
-          ...sessionsInputs,
-          ...remoteRuntimeInstallInput,
-        },
+        input: inputs,
       },
     },
   };

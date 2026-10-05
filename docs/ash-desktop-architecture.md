@@ -672,12 +672,13 @@ waitingForApproval 或 waitingForUserInput 时，普通文本 Send 调用 `sessi
 当前尚未实现 session/thread picker、附件和图片输入、fork/history 导航、动态工具执行器。
 由于 session 列表当前没有最近活动时间，启动时只能按服务端顺序选择首个活动 thread；
 Browser 入口没有 App Server 连接时会明确显示不可用状态。`dev:web` 是不构建 Rust 的独立
-前端开发入口，使用同一 disconnected API 保持 UI 可检查，但不声称拥有后端能力。当前本地
-`dev:web:full` 与 `build:web` / `start:web` 使用受管理 Rust App Server 的认证
+前端开发入口，本地文件夹由浏览器授权的 `HTMLFileSystemProvider` 直接读写；其他后端操作仍使用 disconnected API。
+`build:web` / `start:web` 提供同一独立 Web 模式。当前本地
+`dev:web:full` 与 `build:web:full` / `start:web:full` 使用受管理 Rust App Server 的认证
 HTTP/WebSocket 浏览器入口。每个浏览器页签独立交换 JSON-RPC，服务仍由 profile registry 管理。
 `build/app_ts/web.ts` 只持有启动租约、读取启动信息和收尾；不转发业务消息。
 Vite 提供开发资源，发布资源由 Rust HTTP 入口读取可信配置中的目录。
-普通 `build:renderer` 保留 disconnected 模式；`build:web` 显式启用后端连接。
+Web 构建输出 `.build/app-ts/web/ash`，仅包含浏览器入口；普通 `build:renderer` 保留 Desktop 入口与 disconnected 模式。`build:web:full` 显式启用后端连接。
 可信启动入口绑定工作区和允许的 Origin；一次性票据兑换后，浏览器通过会话凭证连接，
 不声明目录授权宿主，也不调用 `env/dirs/set` 扩大权限。具体契约和验证见
 [前端连接与浏览器能力](../app-ts/docs/design/app-server-connection.md)。

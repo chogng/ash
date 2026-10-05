@@ -44,7 +44,7 @@ export async function launchWeb(workspaceDirectory: string, productServices: { r
 		if (languageServer) {
 			await writeFile(join(profileDirectory, 'config.toml'), `[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServer)}\n`);
 		}
-		launch = await startWeb({ port: 0, assets: join(root, '.build/app-ts/renderer/ash'), environment });
+		launch = await startWeb({ port: 0, assets: join(root, '.build/app-ts/web/ash'), environment });
 		const { endpoint, ticket } = launch.info;
 		const response = await fetch(new URL('/ash/session', endpoint), { method: 'POST', headers: { Origin: new URL(endpoint).origin }, body: ticket, signal: AbortSignal.timeout(10_000) });
 		if (!response.ok) { throw new Error(`Web test authentication failed: ${response.status}`); }

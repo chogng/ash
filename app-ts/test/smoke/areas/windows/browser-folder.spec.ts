@@ -3,6 +3,78 @@ import { readFile } from 'node:fs/promises';
 
 test.use({ openWorkspace: false });
 
+test('browser reload restores its folder, dirty editor and stable directory identity', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled');
+	const page = workbench.page;
+	const folderName = await page.evaluate(async () => {
+		const root = await navigator.storage.getDirectory();
+		const folder = await root.getDirectoryHandle(`ash-reload-%中-${crypto.randomUUID()}`, { create: true });
+		const file = await folder.getFileHandle('main.txt', { create: true });
+		const writer = await file.createWritable();
+		await writer.write('saved content');
+		await writer.close();
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		return folder.name;
+	});
+	await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+	const file = page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.txt', exact: true });
+	await expect(file).toBeVisible();
+	const folderUri = new URL(page.url()).searchParams.get('folder');
+	expect(folderUri).toContain('/@browser/');
+	await file.dblclick();
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await editor.input.press('ControlOrMeta+A');
+	await editor.waitForTypeInEditor('draft survives reload');
+	await expect.poll(() => page.evaluate(async () => {
+		const database = await new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open('ash-working-copy-backups', 1);
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+		try {
+			return await new Promise<boolean>((resolve, reject) => {
+				const request = database.transaction('backups').objectStore('backups').getAll();
+				request.onsuccess = () => resolve(request.result.some(record => record.content === 'draft survives reload'));
+				request.onerror = () => reject(request.error);
+			});
+		} finally { database.close(); }
+	})).toBe(true);
+	await page.reload();
+	await expect(workbench.element).toBeVisible();
+	await expect(file).toBeVisible();
+	await expect(page.getByRole('tab', { name: 'Explorer, 1 unsaved file' })).toBeVisible();
+	await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toHaveText('draft survives reload');
+	expect(new URL(page.url()).searchParams.get('folder')).toBe(folderUri);
+	await editor.input.focus();
+	await editor.input.press('ControlOrMeta+S');
+	await expect.poll(() => page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		return (await (await folder.getFileHandle('main.txt')).getFile()).text();
+	}, folderName)).toBe('draft survives reload');
+	await page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+	}, folderName);
+	await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+	expect(new URL(page.url()).searchParams.get('folder')).toBe(folderUri);
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.txt' })).toHaveCount(1);
+	const rootUrl = new URL('/', page.url());
+	rootUrl.searchParams.set('folder', folderUri!);
+	const redirect = await page.request.get(rootUrl.href, { maxRedirects: 0 });
+	expect(redirect.status()).toBe(302);
+	expect(new URL(redirect.headers().location!, rootUrl).searchParams.get('folder')).toBe(folderUri);
+	await page.goto(rootUrl.href);
+	await expect(file).toBeVisible();
+	await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toHaveText('draft survives reload');
+	await workbench.quickaccess.runCommand('workbench.action.closeFolder');
+	await expect(workbench.element).toHaveAttribute('data-workbench-state', 'empty');
+	expect(new URL(page.url()).searchParams.has('folder')).toBe(false);
+	await page.reload();
+	await expect(workbench.element).toHaveAttribute('data-workbench-state', 'empty');
+	await expect(file).toHaveCount(0);
+});
+
 test('Explorer selection stays beneath its scrollbar', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
 	const page = workbench.page;

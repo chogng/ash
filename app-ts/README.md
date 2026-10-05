@@ -1,4 +1,4 @@
-# `ash` Electron Desktop
+# Ash TypeScript 前端
 
 `app-ts` 提供 Electron 桌面端和 Browser Workbench，包含 Renderer、Preload 和 Electron Main，通过 App Server 使用 Rust 后端。本 README 说明前端开发、启动和验证；环境安装、仓库通用命令及清理见 [构建指南](../docs/build.md#构建入口)。产品关系见 [产品线](../docs/product-lines.md)。
 
@@ -12,13 +12,25 @@
 | 直接开发 Agents 窗口，监听前后端变化 | `pnpm --dir app-ts dev:agents` | `Ash (Electron, Agents)` |
 | 完整 Electron 桌面端，仅监听前端和 Electron 宿主变化 | `pnpm --dir app-ts dev:ui:connected` | `Ash (Electron, Frontend Watch Only)` |
 | Electron 界面，不构建或启动后端 | `pnpm dev:desktop:ui` | — |
-| 浏览器前端，不构建或启动后端 | `pnpm dev:web` | `Ash Web (Chrome, UI Only)` |
+| 浏览器工作台、本地文件编辑，不构建或启动后端 | `pnpm dev:web` | `Ash Web (Chrome, UI Only)` |
 | 浏览器与真实 App Server | `pnpm dev:web:full` | — |
 | 独立 Stanza 编辑器 | `pnpm dev:stanza` | `Stanza Editor - Standalone` |
 
-`Frontend Watch Only` 仍连接 Rust 后端，只是不监听后端源码变化。两种仅 UI 模式中的聊天、文件、Git、终端和搜索等后端操作不可用；选择文件夹只更新界面的工作区上下文。
+`Frontend Watch Only` 仍连接 Rust 后端，只是不监听后端源码变化。Web 模式可通过浏览器授权直接打开本地文件夹，使用 Explorer、编辑器、新建文件和保存；聊天、Git、终端、后端搜索及语言服务需要 App Server。Electron 仅 UI 模式的文件操作也需要后端。
 
 浏览器仅前端模式打开 `http://127.0.0.1:5173/`。完整 Web 模式使用 5174 端口，须打开终端输出的认证链接。Stanza 页面为 `http://127.0.0.1:5199/`，仅启动编辑器，可通过 `globalThis.stanza.editor` 检查模型和编辑器。
+
+### 日常 Web 开发
+
+1. 执行 `pnpm dev:web`，打开 5173；也可用 F5 的 `Ash Web (Chrome, UI Only)` 启动和调试。
+2. 通过 File → Open Folder 选择并授权项目目录。浏览器文件服务直接读写目录，页面 URL 的 `folder` 参数保存工作区身份；刷新恢复目录、编辑器和已持久化的未保存内容。再次选择同一目录会复用身份，Close Folder 清除当前目录。
+3. 保存 TypeScript 或 CSS 后由 Vite 更新。另开终端运行 `pnpm typecheck:web:watch`，持续检查类型；`pnpm typecheck:web` 执行一次完整检查。
+4. 开发过程中执行 `pnpm test:web:dev --grep '<场景标题>'`，通过现有 Playwright Browser UI 项目直接验证 Vite 开发入口。
+5. 提交前执行 `pnpm build:web` 和 `pnpm test:web --grep '<场景标题>'`，验证生产资源。已有构建时用 `pnpm --dir app-ts test:smoke:browser:no-compile`；`pnpm start:web` 启动生产资源预览。
+
+Web 构建只包含浏览器 Workbench 与 Sessions 页面，输出到 `.build/app-ts/web/ash`，不会覆盖 Electron 的 `.build/app-ts/renderer/ash`。本地文件夹能力依赖 Chrome/Edge 等浏览器提供的 File System Access API 和安全上下文；本机回环地址满足该要求。测试使用真实浏览器文件句柄，文件选择器由场景提供授权目录。浏览器撤销授权后，需要再次通过 Open Folder 授权。
+
+后端集成使用 `pnpm dev:web:full`，生产构建与启动分别使用 `pnpm build:web:full`、`pnpm start:web:full`。两种 Web 构建使用同一输出目录，预览和测试应匹配最后一次构建模式。
 
 F5 配置见 [launch.json](../.vscode/launch.json)。macOS 的 Electron 入口通过 `uv run --python 3.12` 选择 Python；手动运行命令时，按 [macOS 环境要求](../docs/build.md#macos-与-linux-开发环境) 配置。
 
@@ -116,7 +128,8 @@ iframe 仅通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来
 | `pnpm --dir app-ts typecheck:renderer` | Renderer 类型检查 |
 | `pnpm --dir app-ts test:main` | 构建工具和前端单测 |
 | `pnpm test:integration` | 浏览器集成测试 |
-| `pnpm test:desktop:smoke:browser` | 浏览器 UI，无 App Server |
+| `pnpm test:web` | 浏览器生产资源与本地文件操作，无 App Server |
+| `pnpm test:web:dev` | 同一 Browser UI 项目，运行 Vite 开发资源 |
 | `pnpm test:web-integration` | 浏览器与真实 App Server |
 | `pnpm test:desktop:smoke:ui` | Electron UI，无 App Server |
 | `pnpm run smoketest` | 准备并运行 Electron 与真实 App Server 冒烟测试 |
