@@ -221,3 +221,38 @@ test('terminal dictation writes phrases without executing and cancels when the p
 	await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('late', true));
 	expect(await page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual(['echo hello ']);
 });
+
+test('Terminal contribution assembles independent window scopes and rejects a missing process registration', async ({ page }) => {
+	await page.goto('/terminal.html?assembly');
+	await page.waitForFunction(() => Boolean(window.ashTerminalAssemblyIntegration));
+	const result = await page.evaluate(() => window.ashTerminalAssemblyIntegration());
+	expect(result.isolated).toBe(true);
+	expect(result.output).toEqual(['scope-output', 'scope-output']);
+	expect(result.calls.filter(call => call.startsWith('write:'))).toEqual(['write:backend-1:input', 'write:backend-2:input']);
+	expect(result.calls.filter(call => call.startsWith('resize:'))).toEqual(['resize:backend-1:30x90', 'resize:backend-2:30x90']);
+	expect(result.calls.filter(call => call.startsWith('close:'))).toEqual(['close:backend-1', 'close:backend-2']);
+	expect(result.remaining).toEqual([0, 0]);
+	expect(result.missingDependency).toContain('terminalService <- terminalProcessService');
+});
+
+
+test('legacy mouse reports deliver their raw high bytes through xterm onBinary', async ({ page }) => {
+	await page.setViewportSize({ width: 1500, height: 600 });
+	await page.goto('/terminal.html');
+	await page.waitForFunction(() => Boolean(window.ashTerminalIntegration));
+	await page.evaluate(async () => {
+		document.querySelector<HTMLElement>('#terminal')!.style.width = '1400px';
+		window.ashTerminalIntegration.start();
+		await window.ashTerminalIntegration.ready();
+		window.ashTerminalIntegration.fit();
+		window.ashTerminalIntegration.write('\x1b[?1000h');
+	});
+	const screen = page.locator('.xterm-screen');
+	await expect(screen).toBeVisible();
+	await expect.poll(async () => {
+		await screen.click({ position: { x: 1100, y: 20 } });
+		return page.evaluate(() => window.ashTerminalIntegration.binaryWrites.flat().some(byte => byte >= 0x80));
+	}).toBe(true);
+	expect(await page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual([]);
+	await page.evaluate(() => window.ashTerminalIntegration.dispose());
+});

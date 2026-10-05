@@ -1,16 +1,21 @@
-import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalCloseParams, type TerminalCreateParams, type TerminalReadParams, type TerminalReadResult, type TerminalReconnectLease, type TerminalResizeParams, type TerminalWriteParams } from "../../app-server/common/generated/index.js";
+import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalReconnectLease } from "../../app-server/common/generated/index.js";
 import { timeout } from "../../../base/common/async.js";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
-import type { ITerminalProcessCreation } from "../common/terminalProcessService.js";
+import type {
+	ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation,
+	ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult,
+	ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions,
+	TerminalProcessConnectionState,
+} from "../common/terminal.js";
+import { decodeTerminalProcessReadResult, encodeTerminalProcessInput } from "./appServerTerminalProcessService.js";
 
 const MAX_RECONNECT_GRACE_PERIOD_MILLIS = 5 * 60 * 1_000;
 const INITIAL_RECONNECT_DELAY_MILLIS = 50;
 const MAX_RECONNECT_DELAY_MILLIS = 1_000;
 
 export interface ReconnectableTerminalProcessServiceOptions {
-	readonly supervisor: Pick<AppServerProtocolClient, "request" | "state" | "generation" | "onStateChange">;
 	readonly now?: () => number;
 	readonly wait?: (milliseconds: number) => Promise<void>;
 	readonly reportError?: (message: string, error: unknown) => void;
@@ -29,18 +34,16 @@ interface TerminalRecord {
 	closing: boolean;
 }
 
-/** Keeps Remote PTY bearer leases in the renderer and reattaches them after App Server replacement. */
-export class ReconnectableTerminalProcessService extends Disposable {
-	private readonly supervisor: Pick<AppServerProtocolClient, "request" | "state" | "generation" | "onStateChange">;
+/** Keeps Remote PTY leases in the renderer; only a new connection to the same backend can reattach them. */
+export class ReconnectableTerminalProcessService extends Disposable implements ITerminalProcessService {
 	private readonly now: () => number;
 	private readonly wait: (milliseconds: number) => Promise<void>;
 	private readonly reportError: (message: string, error: unknown) => void;
 	private readonly terminals = new Map<string, TerminalRecord>();
 	private previousState: AppServerConnectionState;
 
-	constructor(options: ReconnectableTerminalProcessServiceOptions) {
+	constructor(private readonly supervisor: AppServerProtocolClient, options: ReconnectableTerminalProcessServiceOptions = {}) {
 		super();
-		this.supervisor = options.supervisor;
 		this.now = options.now ?? (() => performance.now());
 		this.wait = options.wait ?? timeout;
 		this.reportError = options.reportError ?? defaultReportError;
@@ -51,7 +54,20 @@ export class ReconnectableTerminalProcessService extends Disposable {
 		}));
 	}
 
-	async create(params: TerminalCreateParams): Promise<ITerminalProcessCreation> {
+	async listProfiles(): Promise<readonly ITerminalProcessProfile[]> {
+		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/profile/list"], {});
+		return result.profiles;
+	}
+
+	getConnectionState(): Promise<TerminalProcessConnectionState> {
+		return Promise.resolve(this.supervisor.state);
+	}
+
+	onConnectionState(listener: (state: TerminalProcessConnectionState) => void): IDisposable {
+		return this.supervisor.onStateChange(listener);
+	}
+
+	async create(params: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/create"], {
 			...params,
 			lifecycle: { type: "reconnectable" },
@@ -79,18 +95,24 @@ export class ReconnectableTerminalProcessService extends Disposable {
 			closing: false,
 		});
 		return {
+			ready: result.ready,
 			terminalId: result.terminalId,
 			profile: result.profile,
 			connectionPersistence: "reconnectable",
 		};
 	}
 
-	async write(params: TerminalWriteParams): Promise<void> {
+	async write(params: ITerminalProcessWriteOptions): Promise<void> {
 		await this.ensureAttached(params.terminalId);
-		await this.supervisor.request(APP_SERVER_METHODS["terminal/write"], params);
+		const { data, ...identity } = params;
+		if (typeof data === 'string') {
+			await this.supervisor.request(APP_SERVER_METHODS['terminal/write'], { ...identity, data });
+		} else {
+			await this.supervisor.request(APP_SERVER_METHODS['terminal/writeBinary'], { ...identity, dataBase64: encodeTerminalProcessInput(data) });
+		}
 	}
 
-	async resize(params: TerminalResizeParams): Promise<void> {
+	async resize(params: ITerminalProcessResizeOptions): Promise<void> {
 		const record = this.requireTerminal(params.terminalId);
 		record.rows = params.rows;
 		record.cols = params.cols;
@@ -98,12 +120,13 @@ export class ReconnectableTerminalProcessService extends Disposable {
 		await this.supervisor.request(APP_SERVER_METHODS["terminal/resize"], params);
 	}
 
-	async read(params: TerminalReadParams): Promise<TerminalReadResult> {
+	async read(params: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {
 		await this.ensureAttached(params.terminalId);
-		return this.supervisor.request(APP_SERVER_METHODS["terminal/read"], params);
+		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/read"], params);
+		return decodeTerminalProcessReadResult(result);
 	}
 
-	async close(params: TerminalCloseParams): Promise<void> {
+	async close(params: ITerminalProcessCloseOptions): Promise<void> {
 		const record = this.terminals.get(params.terminalId);
 		if (!record) {
 			await this.supervisor.request(APP_SERVER_METHODS["terminal/close"], params);

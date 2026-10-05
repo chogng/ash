@@ -92,12 +92,24 @@ file-system 实施；编辑器的未保存内容和外部变更冲突仍由前�
 
 ## PTY 边界
 
-- `terminal::TerminalService` 承接原 terminal-service 的完整桌面 PTY 生命周期。
+- `terminal::TerminalService` 拥有桌面交互式 PTY、连接所有权、输出缓存和短期重连租约；不承担前端屏幕与窗口恢复。
 - TCP 进程接口支持管道与受限 PTY；`processStart.input` 选择 `terminal` 并提供行列数，后续可写入、调整尺寸、中断或取消。
 - 宿主通过 `MxcSandbox::with_pty_helper` 提供内部启动器；App Server 嵌入方使用 `AppServerOptions::with_pty_helper`。未配置时拒绝受限 PTY。
 - PTY 由执行宿主分配，内部启动器继承终端后交给 MXC；目录、网络及文件身份约束保持有效。
 - PTY 标准错误合并到标准输出；半关闭输入不适用于 PTY，调用方应发送终端 EOF 字符或取消进程。
 - 桌面 Terminal API 继续通过目录授权调用；不将桌面交互式终端作为远程沙箱命令的替代执行路径。
+
+交互式 Terminal 创建与 attach 返回同一实际 OS PID 和启动目录。`process_info` 查询 root shell
+当前目录和最后一次成功应用的尺寸；macOS/Linux 通过 OS 查询，其他平台或退出后目录为 None，
+不使用启动目录替代。成功 resize/attach 后才更新服务持有的尺寸。
+
+`write_binary` 接收 1–65536 个原始字节，走文本输入同一有界 writer channel，不参与命令文本检测。
+`send_signal(Interrupt)` 在 Unix PTY 中断当前前台进程组；Windows 返回 Unsupported，
+不把键盘输入伪装成进程信号。查询、输入与控制均验证当前 connection owner 和目录授权。
+
+解析后 ACK、完整属性集合、显式 detach、跨窗口进程发现与屏幕重播尚未实现。连接关闭时的
+30 秒租约仅在同一个存活的服务进程内允许持有 bearer token 的客户端重新 attach；
+服务进程退出不会恢复原 PTY。前端窗口恢复不能从这项租约推断为已经可用。
 
 协议、大小限制及错误见 [exec-server-protocol](../exec-server-protocol/README.md)。
 

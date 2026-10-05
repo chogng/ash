@@ -109,6 +109,7 @@ type ResizeFn = Box<dyn FnMut(TerminalSize) -> anyhow::Result<()> + Send>;
 
 /// Handle for driving an interactive process (PTY or pipe).
 pub struct ProcessHandle {
+    process_id: Option<u32>,
     writer_tx: StdMutex<Option<mpsc::Sender<Vec<u8>>>>,
     killer: StdMutex<Option<Box<dyn ChildTerminator>>>,
     reader_handle: StdMutex<Option<JoinHandle<()>>>,
@@ -140,6 +141,7 @@ impl fmt::Debug for ProcessHandle {
 impl ProcessHandle {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
+        process_id: Option<u32>,
         writer_tx: mpsc::Sender<Vec<u8>>,
         killer: Box<dyn ChildTerminator>,
         reader_handle: JoinHandle<()>,
@@ -152,6 +154,7 @@ impl ProcessHandle {
         resizer: Option<ResizeFn>,
     ) -> Self {
         Self {
+            process_id,
             writer_tx: StdMutex::new(Some(writer_tx)),
             killer: StdMutex::new(Some(killer)),
             reader_handle: StdMutex::new(Some(reader_handle)),
@@ -163,6 +166,24 @@ impl ProcessHandle {
             _pty_handles: StdMutex::new(pty_handles),
             resizer: StdMutex::new(resizer),
         }
+    }
+
+    /// OS identity captured at spawn, before the child is moved into its reaper.
+    /// Driver-backed processes do not have a local OS identity.
+    pub fn process_id(&self) -> Option<u32> {
+        self.process_id
+    }
+
+    /// Queries the root child's current directory, without substituting its launch directory.
+    /// A platform without a process-directory API, or an exited child, returns `None`.
+    pub fn current_working_directory(&self) -> io::Result<Option<std::path::PathBuf>> {
+        if self.has_exited() {
+            return Ok(None);
+        }
+        let Some(process_id) = self.process_id else {
+            return Ok(None);
+        };
+        process_working_directory(process_id)
     }
 
     /// Returns a channel sender for writing raw bytes to the child stdin.
@@ -253,6 +274,34 @@ impl ProcessHandle {
     }
 
     pub fn signal(&self, signal: ProcessSignal) -> io::Result<()> {
+        #[cfg(unix)]
+        {
+            let handles = self
+                ._pty_handles
+                .lock()
+                .map_err(|_| io::Error::other("PTY handle lock poisoned"))?;
+            if let Some(handles) = handles.as_ref() {
+                let fd = match &handles._master {
+                    PtyMasterHandle::Resizable(master) => master
+                        .as_raw_fd()
+                        .ok_or_else(|| unsupported_signal(signal))?,
+                    PtyMasterHandle::Opaque { raw_fd, .. } => *raw_fd,
+                };
+                // Interactive shells move each foreground job to a separate group. The
+                // PTY, rather than the shell's cached group, identifies the current target.
+                let group = unsafe { libc::tcgetpgrp(fd) };
+                if group <= 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                let number = match signal {
+                    ProcessSignal::Interrupt => libc::SIGINT,
+                };
+                if unsafe { libc::kill(-group, number) } == -1 {
+                    return Err(io::Error::last_os_error());
+                }
+                return Ok(());
+            }
+        }
         let Ok(mut killer_opt) = self.killer.lock() else {
             return Ok(());
         };
@@ -298,6 +347,46 @@ impl Drop for ProcessHandle {
     fn drop(&mut self) {
         self.terminate();
     }
+}
+
+#[cfg(target_os = "linux")]
+fn process_working_directory(process_id: u32) -> io::Result<Option<std::path::PathBuf>> {
+    std::fs::read_link(format!("/proc/{process_id}/cwd")).map(Some)
+}
+
+#[cfg(target_os = "macos")]
+fn process_working_directory(process_id: u32) -> io::Result<Option<std::path::PathBuf>> {
+    use std::os::unix::ffi::OsStringExt;
+    let mut info = std::mem::MaybeUninit::<libc::proc_vnodepathinfo>::uninit();
+    let size = std::mem::size_of::<libc::proc_vnodepathinfo>();
+    // proc_pidinfo writes this fixed-size structure only on a complete successful query.
+    let written = unsafe {
+        libc::proc_pidinfo(
+            process_id as i32,
+            libc::PROC_PIDVNODEPATHINFO,
+            0,
+            info.as_mut_ptr().cast(),
+            size as i32,
+        )
+    };
+    if written != size as i32 {
+        return Err(io::Error::last_os_error());
+    }
+    let info = unsafe { info.assume_init() };
+    let bytes = info
+        .pvi_cdir
+        .vip_path
+        .into_iter()
+        .flatten()
+        .take_while(|byte| *byte != 0)
+        .map(|byte| byte as u8)
+        .collect();
+    Ok(Some(std::ffi::OsString::from_vec(bytes).into()))
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn process_working_directory(_process_id: u32) -> io::Result<Option<std::path::PathBuf>> {
+    Ok(None)
 }
 
 /// Adapts a closure into a `ChildTerminator` implementation.
@@ -462,6 +551,7 @@ pub fn spawn_from_driver(driver: ProcessDriver) -> SpawnedProcess {
     });
 
     let handle = ProcessHandle::new(
+        None,
         writer_tx,
         Box::new(ClosureTerminator { inner: terminator }),
         reader_handle,

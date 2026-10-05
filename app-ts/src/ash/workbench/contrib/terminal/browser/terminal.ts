@@ -45,6 +45,8 @@ export interface ITerminalCreateOptions {
 export interface ITerminalInstance extends IDisposable {
 	readonly id: string;
 	readonly dirId: string;
+	readonly processId: number;
+	readonly initialCwd: string;
 	readonly title: string;
 	readonly profile: ITerminalProfile;
 	readonly state: TerminalInstanceState;
@@ -55,6 +57,7 @@ export interface ITerminalInstance extends IDisposable {
 	readonly onDidChangeState: Event<TerminalInstanceState>;
 
 	write(data: string): void;
+	processBinary(data: string): Promise<void>;
 	resize(dimensions: ITerminalDimensions): void;
 	close(): Promise<void>;
 }
@@ -65,6 +68,7 @@ export interface ITerminalService extends IDisposable {
 	readonly activeInstance: ITerminalInstance | undefined;
 	readonly onDidCreateInstance: Event<ITerminalInstance>;
 	readonly onDidDisposeInstance: Event<ITerminalInstance>;
+	/** Fires after membership or order changes, with titles and active instance updated. */
 	readonly onDidChangeInstances: Event<void>;
 	readonly onDidChangeActiveInstance: Event<ITerminalInstance | undefined>;
 

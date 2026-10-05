@@ -192,9 +192,8 @@ import {
 import { PaneCompositePartService } from "./parts/paneCompositePartService.js";
 import { IPaneCompositePartService } from "../services/panecomposite/browser/panecomposite.js";
 import { WorkbenchWindow } from "./window.js";
-import { TerminalService } from "../services/terminal/browser/terminalService.js";
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from "../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
-import { ITerminalService } from "../services/terminal/common/terminal.js";
+import { ITerminalProcessService } from "../../platform/terminal/common/terminal.js";
 import { ITextFileService, TextFileService } from "../services/textfile/common/textFileService.js";
 import { ITextMateService } from "../services/textMate/common/textMateService.js";
 import { BrowserTextMateService } from "../services/textMate/browser/browserTextMateService.js";
@@ -475,7 +474,6 @@ export class Workbench extends Disposable {
 		performance.mark('ash.workbench.constructor-start');
 		this._register(themes);
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
-		const mode = WorkbenchModeRegistry.get(modeId);
 		const serviceCollection = new ServiceCollection();
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
 			serviceCollection.set(id, descriptor);
@@ -500,7 +498,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);
-		if (api.debugAdapter) services.registerInstance(IDebugAdapterProcessService, api.debugAdapter);
+		services.registerInstance(IDebugAdapterProcessService, api.debugAdapter);
 		services.registerInstance(IAssetService, api.assets);
 		services.registerInstance(ITestExecutionService, api.testing);
 		if (api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, api.approvalEnvironment); }
@@ -663,8 +661,7 @@ export class Workbench extends Disposable {
 			IContentSearchService,
 			new BrowserContentSearchService(api.contentSearch, workspaceContext),
 		);
-		const terminalService = this._register(new TerminalService(api.terminal, workspaceContext));
-		services.registerInstance(ITerminalService, terminalService);
+		services.registerInstance(ITerminalProcessService, api.terminal);
 		const gitService = this._register(services.createInstance(GitService, { api: api.git, appServerApi: api.appServer, eventApi: api.events, workspaceContext, canCloneRepository: nativeHostApi !== undefined }));
 		services.registerInstance(IGitService, gitService);
 		services.registerInstance(ICodebaseService, new AppServerCodebaseService(api.codebase));

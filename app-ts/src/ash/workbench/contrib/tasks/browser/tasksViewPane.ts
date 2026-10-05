@@ -6,7 +6,7 @@ import { type ITaskRun, ITaskService, type IWorkspaceTask } from "../../../servi
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { TERMINAL_VIEW_ID } from "../../terminal/common/terminal.js";
 import { IViewsService } from "../../../services/views/common/viewsService.js";
-import { ITerminalService } from "../../../services/terminal/common/terminal.js";
+import { ITerminalService } from "../../terminal/browser/terminal.js";
 
 /** Code-owned task catalog and execution status view. */
 export class TasksViewPane extends ViewPane {
@@ -120,7 +120,7 @@ export class TasksViewPane extends ViewPane {
 		const button = h(this.element.ownerDocument, "button");
 		button.type = "button";
 		button.className = "ash-task-run-button";
-		button.dataset.terminalId = run.terminal.id;
+		button.dataset.terminalId = run.terminalId;
 		button.textContent = `Last: ${run.task.label} — ${run.status}${run.exitCode === undefined ? "" : ` (${run.exitCode})`}`;
 		item.append(button);
 		return item;

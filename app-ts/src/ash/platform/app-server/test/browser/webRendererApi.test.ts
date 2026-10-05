@@ -11,9 +11,57 @@ import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SE
 import { AppServerProtocolClient } from "../../../../platform/app-server/browser/appServerProtocolClient.js";
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod } from '../../../github/common/githubService.js';
+import type { BrowserCreateParams } from '../../common/generated/index.js';
 
 const githubRepository = { host: 'github.com', owner: 'team', name: 'repo' };
 const githubIssue = { number: 7, title: 'Issue', url: 'https://github.com/team/repo/issues/7', updatedAt: '2026-10-04', state: 'open', labels: ['bug'], assignees: ['owner'] };
+
+test('Terminal host adapts raw bytes and command exit codes at the protocol boundary', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const terminal = connected.api.terminal;
+	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
+	const profiles = terminal.listProfiles();
+	transport.respondAt(-1, { profiles: [profile] });
+	assert.deepEqual(await profiles, [profile]);
+	const creation = terminal.create({ dirId: 'workspace-folder', rows: 24, cols: 80, profile: { type: 'default' } });
+	const createRequest = transport.requests.at(-1)!;
+	assert.deepEqual({ method: createRequest.method, params: createRequest.params }, {
+		method: 'terminal/create',
+		params: { dirId: 'workspace-folder', rows: 24, cols: 80, profile: { type: 'default' }, lifecycle: { type: 'connectionOwned' } },
+	});
+	transport.respondAt(-1, { ready: { pid: 1234, cwd: '/backend/workspace' }, terminalId: 'terminal-1', profile, reconnect: null });
+	assert.deepEqual(await creation, { ready: { pid: 1234, cwd: '/backend/workspace' }, terminalId: 'terminal-1', profile, connectionPersistence: 'connectionOwned' });
+	const binary = terminal.write({ dirId: 'workspace-folder', terminalId: 'terminal-1', data: new Uint8Array([0, 0x80, 0xff]) });
+	assert.deepEqual(transport.requests.at(-1)?.params, { dirId: 'workspace-folder', terminalId: 'terminal-1', dataBase64: 'AID/' });
+	assert.equal(transport.requests.at(-1)?.method, 'terminal/writeBinary');
+	transport.respondAt(-1, null);
+	await binary;
+	const read = terminal.read({ dirId: 'workspace-folder', terminalId: 'terminal-1', afterSequence: 0, afterCommandSequence: 0, maxChunks: 128 });
+	const bytes = Buffer.from([0xe4, 0xb8, 0xad, 0xff, 0x1b]);
+	transport.respondAt(-1, {
+		terminalId: 'terminal-1', chunks: [{ sequence: 1, dataBase64: bytes.toString('base64') }],
+		nextSequence: 1, outputGap: true,
+		commandEvents: [
+			{ sequence: 1, commandId: 'command-1', status: 'running', exitCode: null, afterOutputSequence: 0 },
+			{ sequence: 2, commandId: 'command-1', status: 'failed', exitCode: 17, afterOutputSequence: 1 },
+		],
+		nextCommandSequence: 2, commandEventGap: true, exited: true, exitCode: 17,
+	});
+	assert.deepEqual(await read, {
+		terminalId: 'terminal-1', chunks: [{ sequence: 1, data: new Uint8Array(bytes) }],
+		nextSequence: 1, outputGap: true,
+		commandEvents: [
+			{ sequence: 1, commandId: 'command-1', status: 'running', exitCode: undefined, afterOutputSequence: 0 },
+			{ sequence: 2, commandId: 'command-1', status: 'failed', exitCode: 17, afterOutputSequence: 1 },
+		],
+		nextCommandSequence: 2, commandEventGap: true, exited: true, exitCode: 17,
+	});
+	const close = terminal.close({ dirId: 'workspace-folder', terminalId: 'terminal-1' });
+	transport.respondAt(-1, null);
+	await close;
+});
 
 test('GitHub domain service is assembled on the shared connection and maps issue details', async () => {
 	const transport = new FakeTransport();
@@ -521,6 +569,7 @@ test("keeps the language failure when completion wins the cancel race", async ()
 test('renderer dispatches host requests and rejects late results after disconnect', async () => {
 	const hot = new FakeTransport();
 	const client = new AppServerProtocolClient(hot);
+	using cleanup = toDisposable(() => client.dispose());
 	let signal: AbortSignal | undefined;
 	let finish!: (value: { targetId: string }) => void;
 	const handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
@@ -528,7 +577,8 @@ test('renderer dispatches host requests and rejects late results after disconnec
 		return new Promise(resolve => { finish = resolve; });
 	});
 	await client.connect();
-	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'host-1', method: 'browser/create', params: { url: 'https://example.test' } }) });
+	const params: BrowserCreateParams = { threadId: '00000000-0000-4000-8000-000000000001', url: 'https://example.test' };
+	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'host-1', method: 'browser/create', params }) });
 	await Promise.resolve();
 	assert.equal(signal?.aborted, false);
 	client.disconnect();

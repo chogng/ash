@@ -1,5 +1,7 @@
 {
 	"ash": {
+		"tasks.terminalUnavailable": "终端不可用，任务尚未启动。请重新运行任务。",
+		"debug.terminalUnavailable": "终端不可用，调试命令尚未执行。请重新启动调试。",
 		"integrity.failed": "Ash 无法验证桌面运行环境，请查看日志了解详情。",
 		"integrity.modified": "Ash 的安装文件已被修改或缺失，请重新安装 Ash 以恢复发布时的文件。",
 		"window.title.title": "窗口标题",

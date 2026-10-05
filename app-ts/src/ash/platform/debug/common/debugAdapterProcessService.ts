@@ -33,4 +33,5 @@ export interface IDebugAdapterProcessService {
 	onConnectionState(listener: (state: AppServerConnectionState) => void): IDisposable;
 }
 
-export const IDebugAdapterProcessService = createServiceIdentifier<IDebugAdapterProcessService>("debugAdapterProcessService");
+/** Debug composition registers its selected capability; undefined means the host cannot launch DAP processes. */
+export const IDebugAdapterProcessService = createServiceIdentifier<IDebugAdapterProcessService | undefined>("debugAdapterProcessService");

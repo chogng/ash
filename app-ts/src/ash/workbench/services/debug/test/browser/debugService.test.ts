@@ -1,17 +1,23 @@
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { ITaskService } from '../../../../services/tasks/common/taskService.js';
+import { IDebugAdapterFactorySource } from '../../common/debugAdapterFactory.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter, Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { type AppServerConnectionState } from "../../../../../platform/app-server/common/appServerApi.js";
-import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService } from "../../../../../platform/debug/common/debugAdapterProcessService.js";
-import { FileKind, FileNotFoundError, type IFileBytes, type IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
-import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from "../../../../../platform/storage/common/storage.js";
-import { type IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
-import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration } from "../../../../services/tasks/common/taskService.js";
-import { type ITerminalService } from "../../../../services/terminal/common/terminal.js";
+import { type IDebugAdapterProcessReadResult, IDebugAdapterProcessService } from "../../../../../platform/debug/common/debugAdapterProcessService.js";
+import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
+import { IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from "../../../../../platform/storage/common/storage.js";
+import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
+import { type ITaskRun, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration } from "../../../../services/tasks/common/taskService.js";
+import { ITerminalService } from "../../../../contrib/terminal/browser/terminal.js";
 import { DebugAdapterFactoryRegistry, createStaticDebugAdapterFactory } from "../../common/debugAdapterFactory.js";
-import { DebugService } from "../../browser/debugService.js";
+import { DebugService } from "../../../../contrib/debug/browser/debugService.js";
 
 const launchJson = `{
   "version": "0.2.0",
@@ -27,25 +33,27 @@ test("DebugService persists workspace breakpoints and watch expressions", async 
 	const root = URI.parse('file:///C:/project');
 	const resource = URI.parse('file:///C:/project/main.ts');
 	const workspace = workspaceService(root);
+	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
 	using adapters = new DebugAdapterFactoryRegistry();
-	using first = new DebugService(new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
+	using first = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
 	first.toggleBreakpoint(resource, 7);
 	first.addWatchExpression("value + 1");
 	await storage.flush();
 
-	using second = new DebugService(new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
+	using second = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
 	assert.deepEqual(second.breakpoints.map(breakpoint => [breakpoint.resource.toString(), breakpoint.lineNumber]), [[resource.toString(), 7]]);
 	assert.deepEqual(second.watchExpressions, ["value + 1"]);
 });
 
 test("DebugService starts compounds, runs launch lifecycle tasks, and owns multiple sessions", async () => {
 	const root = URI.file("C:\\project");
+	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
 	using adapters = new DebugAdapterFactoryRegistry();
-	using service = new DebugService(new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	await service.refresh();
 	const sessions = await service.startCompound(service.compounds[0]!);
 
@@ -63,11 +71,12 @@ test("DebugService starts compounds, runs launch lifecycle tasks, and owns multi
 test("DebugService resolves adapter executables from the canonical factory source", async () => {
 	const root = URI.file("C:\\project");
 	const document = `{"version":"0.2.0","configurations":[{"name":"Contributed","type":"contributed","request":"launch"}]}`;
+	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
 	using adapters = new DebugAdapterFactoryRegistry();
 	using registration = adapters.registerFactories([createStaticDebugAdapterFactory("contributed", "Contributed", "extension:demo", { program: "demo-adapter", arguments: ["--stdio"] })]);
-	using service = new DebugService(new FakeFileService(root, document), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	using service = createDebugService(resources, new FakeFileService(root, document), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 
 	await service.refresh();
 
@@ -76,10 +85,11 @@ test("DebugService resolves adapter executables from the canonical factory sourc
 
 test('DebugService launches and restarts supplied test configurations without launch.json entries', async () => {
 	const root = URI.file('C:\\project');
+	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
 	using adapters = new DebugAdapterFactoryRegistry();
-	using service = new DebugService(new FakeFileService(root, '{"version":"0.2.0","configurations":[]}'), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	using service = createDebugService(resources, new FakeFileService(root, '{"version":"0.2.0","configurations":[]}'), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	await service.refresh();
 	const configuration = { id: 'test-launch', dirId: 'workspace', name: 'Debug test', type: 'lldb-dap', request: 'launch' as const, adapter: { program: 'lldb-dap', arguments: [] }, arguments: { program: 'test-binary', args: ['--exact', 'generated_case'], cwd: root.fsPath } };
 	const session = await service.startDebugging(configuration);
@@ -121,7 +131,7 @@ class FakeTaskService extends Disposable implements ITaskService {
 	registerTaskProvider(_provider: TaskProvider) { return toDisposable(() => undefined); }
 	registerTaskProviders(_providers: readonly TaskProvider[]): TaskProviderRegistration { const registration = toDisposable(() => undefined) as TaskProviderRegistration; registration.replace = () => undefined; return registration; }
 	async refresh() { return this.tasks; }
-	async run(taskValue: IWorkspaceTask): Promise<ITaskRun> { this.ran.push(taskValue.label); const run = { task: taskValue, terminal: {} as ITaskRun["terminal"], status: "succeeded" as const, exitCode: 0, onDidChangeStatus: Event.None }; this.lastRun = run; return run; }
+	async run(taskValue: IWorkspaceTask): Promise<ITaskRun> { this.ran.push(taskValue.label); const run = { task: taskValue, terminalId: "task-terminal", status: "succeeded" as const, exitCode: 0, onDidChangeStatus: Event.None }; this.lastRun = run; return run; }
 	async terminate() {}
 }
 
@@ -181,3 +191,31 @@ function workspaceService(root: URI): IWorkspaceContextService {
 	};
 }
 function task(label: string): IWorkspaceTask { return Object.freeze({ id: `vscode:${label}`, label, command: label, source: "vscode", group: "other" }); }
+
+function createDebugService(owner: DisposableStore, files: IFileService, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: DebugAdapterFactoryRegistry): DebugService {
+	const services = owner.add(new InstantiationService(new ServiceCollection(
+		[IFileService, files],
+		[IWorkspaceContextService, workspace],
+		[IDebugAdapterProcessService, processes],
+		[ITerminalService, terminals],
+		[IStorageService, storage],
+		[ITaskService, tasks],
+		[IDebugAdapterFactorySource, adapters],
+		[ILogService, new NullLoggerService()],
+	)));
+	return services.createInstance(DebugService);
+}
+
+test('DebugService rejects missing process registration and reports an explicitly unavailable host before launch', async () => {
+	using resources = new DisposableStore();
+	const root = URI.file('/workspace');
+	const files = new FakeFileService(root);
+	const workspace = workspaceService(root);
+	using tasks = new FakeTaskService();
+	using adapters = new DebugAdapterFactoryRegistry();
+	using missing = new InstantiationService(new ServiceCollection([IFileService, files], [IWorkspaceContextService, workspace]));
+	assert.throws(() => missing.createInstance(DebugService), /Unknown service: debugAdapterProcessService/);
+	using service = createDebugService(resources, files, workspace, undefined, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	await assert.rejects(service.startDebugging({ id: 'unavailable', name: 'Unavailable', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: {} }), /This host does not provide the Code debug adapter capability/);
+	assert.deepEqual(tasks.ran, []);
+});

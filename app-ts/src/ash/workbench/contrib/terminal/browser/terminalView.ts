@@ -10,7 +10,7 @@ import { AppServerRemoteError } from "../../../../platform/app-server/common/app
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
-import { type ITerminalDimensions, type ITerminalInstance, ITerminalService } from "../../../services/terminal/common/terminal.js";
+import { type ITerminalDimensions, type ITerminalInstance, ITerminalService } from "./terminal.js";
 import { TerminalInstanceWidget } from "./instance/terminalInstanceWidget.js";
 import { TerminalTabsLayout } from "./view/terminalTabsLayout.js";
 import { terminalProfileIcon } from "./view/terminalProfileIcon.js";

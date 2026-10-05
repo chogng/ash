@@ -10,6 +10,11 @@ process-tree cleanup。Windows 子进程在运行前必须加入 Job；失败直
 它不拥有 Tool authorization、sandbox policy、command allow-list、timeout、output persistence 或
 Agent execution lifecycle。
 
+`ProcessHandle::process_id` 返回 child 在交给回收任务前捕获的 OS 身份；外部 driver 没有本地身份时返回 None。
+`current_working_directory` 在 macOS/Linux 查询该 root child 的实际目录；退出或平台无法查询时返回 None。
+PTY 的 Unix Interrupt 从终端查询当前前台进程组，避免只中断仍在等待命令的 shell group；
+pipe 的进程组信号与强制终止整棵子进程树的语义保持不变。
+
 ## 来源边界
 
 PTY integration 基于 `NOTICE` 中固定的 OpenAI Codex revision 并在 Ash 内适配，Apache-2.0。
@@ -195,9 +200,10 @@ terminate / Drop
 └─ child waiter 继续回收并报告 exit；driver waiter 取消转发
 ```
 
-`signal(Interrupt)` 是 cooperative signal；`terminate` 是 hard cleanup。Killer 已被
-`request_terminate` 消费后，后续 signal/terminate 是 best effort no-op。Caller 需要 graceful
-deadline 时应先 signal，再等待 `exit_rx`，最后 terminate；本 crate 不提供 timer。
+`signal(Interrupt)` 是 cooperative signal；`terminate` 是 hard cleanup。Unix PTY 的 signal 查询当前
+前台进程组；pipe/driver 通过各自 killer 发送，killer 被消费后不再发送。重复 terminate 不会再次
+执行 hard kill。Caller 需要 graceful deadline 时应先 signal，再等待 `exit_rx`，最后 terminate；
+本 crate 不提供 timer。
 
 ## 方向偏差检查
 

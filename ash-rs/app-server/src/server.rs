@@ -2999,6 +2999,15 @@ impl AppServer {
             }
             Some(ClientMethod::TerminalAttach) => self.terminal_attach(connection, &request.params),
             Some(ClientMethod::TerminalWrite) => self.terminal_write(connection, &request.params),
+            Some(ClientMethod::TerminalWriteBinary) => {
+                self.terminal_write_binary(connection, &request.params)
+            }
+            Some(ClientMethod::TerminalProcessInfo) => {
+                self.terminal_process_info(connection, &request.params)
+            }
+            Some(ClientMethod::TerminalSendSignal) => {
+                self.terminal_send_signal(connection, &request.params)
+            }
             Some(ClientMethod::TerminalResize) => self.terminal_resize(connection, &request.params),
             Some(ClientMethod::TerminalRead) => self.terminal_read(connection, &request.params),
             Some(ClientMethod::TerminalClose) => self.terminal_close(connection, &request.params),

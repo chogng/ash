@@ -787,12 +787,13 @@ Terminal title actions 通过 `MenuId.TerminalTitle`、Context Key 与
 `MenuWorkbenchToolBar` 接入 MenuService；profile selector 仍由 Terminal 自定义 action view
 item 呈现。Command/Menu/Toolbar 的分层以 [`menu-system.md`](menu-system.md) 为准。
 
-当前输出采用 `terminal/read` bounded polling，而不是 `terminal/output` notification；这是 Terminal
-protocol 的显式流控选择，不再是 JSONL request loop 的串行限制。前端 service 将 pull 转成
-`onDidWriteData` 事件，因此 future transport 支持主动、有背压的 stream 后，Workbench caller
-不需要改变。Renderer 对输入做 8 ms
-batch，对 resize 做 microtask coalescing；Rust 仍重新校验输入 byte limit、rows/cols、owner 和
-output cursor。
+当前输出采用 `terminal/read` 有界分页读取；后端缓存满时报告输出缺口。前端字节事件表示已交给监听者，
+尚未形成 xterm 解析完成后的 ACK 或有背压的主动输出协议，不能据此宣称完整标准数据流已对齐。
+Renderer 对文本输入做 8 ms batch，对 resize 做微任务合并；xterm onBinary 的原始字节
+与文本共用实例发送队列。Rust 重新校验输入字节上限、rows/cols、owner 和输出游标。
+创建和 attach 返回实际 OS PID、启动目录；Relaunch 后实例更新该身份，DAP 成功回复带 shellProcessId。
+Rust 的 processInfo 查询实际 cwd（macOS/Linux）和最后一次成功应用的尺寸；不支持查询的平台或退出后 cwd 为 null。
+Unix 显式中断针对 PTY 当前前台进程组，Windows 返回结构化不支持错误；这两项 Rust 出口尚未等同完整前端属性与信号契约。
 
 Terminal 服务要求已打开的 Workspace folder；多根窗口把选定 `dirId` 绑定到该实例，空窗口明确拒绝
 进程操作。Remote 多根工作区尚未实现。PTY 不跨后端进程重启恢复。每个实例拥有独立 xterm widget，Tab 切换或 Panel 隐藏不会丢失

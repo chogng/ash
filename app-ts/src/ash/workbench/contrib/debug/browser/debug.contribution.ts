@@ -10,6 +10,7 @@ import { DebugConsoleViewPane } from "./debugConsoleViewPane.js";
 import { BreakpointEditorContribution } from "./breakpointEditorContribution.js";
 import { EditorContributionInstantiation, registerEditorContribution } from "../../../../editor/browser/editorExtensions.js";
 import "./debugActions.js";
+import './debugService.js';
 import "./media/debug.css";
 
 export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistry): void {

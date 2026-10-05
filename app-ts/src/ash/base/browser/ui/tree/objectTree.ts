@@ -9,6 +9,7 @@ import { flattenTreeNodes, mapTreeDragData, type TreeDragAndDrop, type TreeFindM
 export interface ObjectTreeOptions<TNode> {
 	readonly ariaLabel?: string;
 	readonly scrolling?: ListScrolling;
+	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly twistieAdditionalCssClass?: (element: TNode) => string | undefined;
@@ -102,7 +103,7 @@ export class ObjectTree<TNode> extends Disposable {
 	readonly onDidActivate: Event<ObjectTreeActivateEvent<TNode>> = this._onDidActivate.event;
 	readonly onDidChangeFind: Event<ObjectTreeFindResult<TNode>> = this._onDidChangeFind.event;
 
-	public updateOptions(options: Pick<ObjectTreeOptions<TNode>, "indent" | "indentGuides" | "twistieAdditionalCssClass">): void {
+	public updateOptions(options: Pick<ObjectTreeOptions<TNode>, "indent" | "indentGuides" | "twistieAdditionalCssClass" | "smoothScrolling">): void {
 		this.tree.updateOptions({ ...options, twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined });
 	}
 
@@ -114,6 +115,7 @@ export class ObjectTree<TNode> extends Disposable {
 		this.tree = this._register(new AbstractTree(container, {
 			ariaLabel: options.ariaLabel,
 			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined,
@@ -273,6 +275,7 @@ export interface CompressibleKeyboardNavigationLabelProvider<T> {
 export interface CompressibleObjectTreeOptions<T> {
 	readonly ariaLabel?: string;
 	readonly scrolling?: ListScrolling;
+	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly twistieAdditionalCssClass?: (elements: readonly T[]) => string | undefined;
@@ -337,7 +340,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 	readonly onDidChangeSelection: Event<CompressibleTreeSelectionChangeEvent<T>> = this._onDidChangeSelection.event;
 	readonly onDidChangeCollapseState: Event<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined }> = this._onDidChangeCollapseState.event;
 
-	public updateOptions(options: Pick<CompressibleObjectTreeOptions<T>, "indent" | "indentGuides" | "twistieAdditionalCssClass">): void {
+	public updateOptions(options: Pick<CompressibleObjectTreeOptions<T>, "indent" | "indentGuides" | "twistieAdditionalCssClass" | "smoothScrolling">): void {
 		this.tree.updateOptions({ ...options, twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element.elements) : undefined });
 	}
 
@@ -348,6 +351,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 		this.tree = this._register(new AbstractTree(container, {
 			ariaLabel: options.ariaLabel,
 			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element.elements) : undefined,

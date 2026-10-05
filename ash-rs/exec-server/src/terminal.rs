@@ -10,6 +10,7 @@ use crate::terminal::profiles::TerminalProfileCatalog;
 use ash_file_access::Authorization;
 use ash_file_access::Permission;
 use ash_utils_pty::ProcessHandle;
+use ash_utils_pty::ProcessSignal;
 use ash_utils_pty::SpawnedProcess;
 use ash_utils_pty::TerminalSize;
 use ash_utils_pty::spawn_pty_process;
@@ -22,12 +23,16 @@ pub use exec_server_protocol::terminal::TerminalCreateRequest;
 pub use exec_server_protocol::terminal::TerminalCreateResult;
 pub use exec_server_protocol::terminal::TerminalLifecycle;
 pub use exec_server_protocol::terminal::TerminalOutputChunk;
+pub use exec_server_protocol::terminal::TerminalProcessInfo;
+pub use exec_server_protocol::terminal::TerminalProcessReady;
 pub use exec_server_protocol::terminal::TerminalProfile;
 pub use exec_server_protocol::terminal::TerminalProfileSelection;
 pub use exec_server_protocol::terminal::TerminalReadRequest;
 pub use exec_server_protocol::terminal::TerminalReadResult;
 pub use exec_server_protocol::terminal::TerminalReconnectLease;
 pub use exec_server_protocol::terminal::TerminalResizeRequest;
+pub use exec_server_protocol::terminal::TerminalSignal;
+pub use exec_server_protocol::terminal::TerminalWriteBinaryRequest;
 pub use exec_server_protocol::terminal::TerminalWriteRequest;
 use getrandom::getrandom;
 use std::collections::HashMap;
@@ -146,6 +151,16 @@ impl TerminalService {
                 &[],
             ))
             .map_err(|_| TerminalError::OperationFailed)?;
+        let ready = TerminalProcessReady {
+            pid: spawned
+                .session
+                .process_id()
+                .ok_or(TerminalError::OperationFailed)?,
+            cwd: dir_root
+                .to_str()
+                .ok_or(TerminalError::InvalidInput)?
+                .to_owned(),
+        };
         let terminal_id = format!(
             "terminal-{:x}",
             self.next_terminal_id.fetch_add(1, Ordering::Relaxed)
@@ -161,12 +176,18 @@ impl TerminalService {
                 reconnect_token: reconnect
                     .as_ref()
                     .map(|lease| lease.reconnect_token.clone()),
+                ready: ready.clone(),
+                size: TerminalSize {
+                    rows: params.rows,
+                    cols: params.cols,
+                },
                 process,
                 state,
                 authorization,
             },
         );
         Ok(TerminalCreateResult {
+            ready,
             terminal_id,
             profile: profile.profile(),
             reconnect,
@@ -204,9 +225,14 @@ impl TerminalService {
                 cols: params.cols,
             })
             .map_err(|_| TerminalError::OperationFailed)?;
+        session.size = TerminalSize {
+            rows: params.rows,
+            cols: params.cols,
+        };
         session.owner = TerminalOwner::Attached(owner_connection_id);
         session.reconnect_token = Some(reconnect.reconnect_token.clone());
         Ok(TerminalAttachResult {
+            ready: session.ready.clone(),
             terminal_id: params.terminal_id,
             reconnect,
         })
@@ -240,6 +266,77 @@ impl TerminalService {
             .map_err(|_| TerminalError::OperationFailed)
     }
 
+    /// Raw input shares the PTY's bounded writer channel but never becomes shell command text.
+    pub fn write_binary(
+        &self,
+        owner_connection_id: u64,
+        params: TerminalWriteBinaryRequest,
+    ) -> Result<(), TerminalError> {
+        self.ensure_active()?;
+        if params.data.is_empty() || params.data.len() > MAX_INPUT_BYTES {
+            return Err(TerminalError::InvalidInput);
+        }
+        let sessions = self.owned_sessions(owner_connection_id, &params.terminal_id)?;
+        let writer = sessions
+            .get(&params.terminal_id)
+            .expect("terminal ownership was just validated")
+            .process
+            .writer_sender();
+        drop(sessions);
+        self.runtime
+            .block_on(writer.send(params.data))
+            .map_err(|_| TerminalError::OperationFailed)
+    }
+
+    pub fn send_signal(
+        &self,
+        owner_connection_id: u64,
+        terminal_id: &str,
+        signal: TerminalSignal,
+    ) -> Result<(), TerminalError> {
+        self.ensure_active()?;
+        let sessions = self.owned_sessions(owner_connection_id, terminal_id)?;
+        let process = &sessions
+            .get(terminal_id)
+            .expect("terminal ownership was just validated")
+            .process;
+        if process.has_exited() {
+            return Err(TerminalError::OperationFailed);
+        }
+        let signal = match signal {
+            TerminalSignal::Interrupt => ProcessSignal::Interrupt,
+        };
+        process.signal(signal).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::Unsupported {
+                TerminalError::Unsupported
+            } else {
+                TerminalError::OperationFailed
+            }
+        })
+    }
+
+    pub fn process_info(
+        &self,
+        owner_connection_id: u64,
+        terminal_id: &str,
+    ) -> Result<TerminalProcessInfo, TerminalError> {
+        self.ensure_active()?;
+        let sessions = self.owned_sessions(owner_connection_id, terminal_id)?;
+        let session = sessions
+            .get(terminal_id)
+            .expect("terminal ownership was just validated");
+        let cwd = session
+            .process
+            .current_working_directory()
+            .map_err(|_| TerminalError::OperationFailed)?;
+        Ok(TerminalProcessInfo {
+            ready: session.ready.clone(),
+            cwd: cwd.map(|path| path.to_string_lossy().into_owned()),
+            rows: session.size.rows,
+            cols: session.size.cols,
+        })
+    }
+
     pub fn resize(
         &self,
         owner_connection_id: u64,
@@ -247,16 +344,20 @@ impl TerminalService {
     ) -> Result<(), TerminalError> {
         self.ensure_active()?;
         validate_size(params.rows, params.cols)?;
-        let sessions = self.owned_sessions(owner_connection_id, &params.terminal_id)?;
-        sessions
-            .get(&params.terminal_id)
-            .expect("terminal ownership was just validated")
+        let mut sessions = self.owned_sessions(owner_connection_id, &params.terminal_id)?;
+        let session = sessions
+            .get_mut(&params.terminal_id)
+            .expect("terminal ownership was just validated");
+        let size = TerminalSize {
+            rows: params.rows,
+            cols: params.cols,
+        };
+        session
             .process
-            .resize(TerminalSize {
-                rows: params.rows,
-                cols: params.cols,
-            })
-            .map_err(|_| TerminalError::OperationFailed)
+            .resize(size)
+            .map_err(|_| TerminalError::OperationFailed)?;
+        session.size = size;
+        Ok(())
     }
 
     pub fn read(
@@ -390,6 +491,8 @@ fn validate_authorization(authorization: &Authorization) -> Result<(), TerminalE
 }
 
 struct TerminalSession {
+    ready: TerminalProcessReady,
+    size: TerminalSize,
     owner: TerminalOwner,
     reconnect_token: Option<String>,
     process: Arc<ProcessHandle>,
@@ -625,6 +728,7 @@ pub enum TerminalError {
     AttachRejected,
     Busy,
     OperationFailed,
+    Unsupported,
 }
 
 #[cfg(test)]

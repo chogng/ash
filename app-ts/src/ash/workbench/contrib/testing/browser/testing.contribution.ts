@@ -11,6 +11,7 @@ import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContain
 import { TESTING_VIEW_ID } from "../common/testing.js";
 import { TestingViewPane } from "./testingViewPane.js";
 import "./testingActions.js";
+import '../../../services/testing/browser/testingServiceRegistration.js';
 import "./media/testing.css";
 
 export function registerTestingView(registry: WorkbenchViewRegistry = ViewsRegistry): void {

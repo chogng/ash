@@ -12,6 +12,7 @@ import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapse
 export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
 	readonly ariaLabel?: string;
 	readonly scrolling?: ListScrolling;
+	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly twistieAdditionalCssClass?: (element: TNode) => string | undefined;
@@ -83,6 +84,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 			ariaLabel: options.ariaLabel,
 			role: "tree",
 			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
 			loopNavigation: false,
 			keyboardNavigation: true,
 			multipleSelectionSupport: options.multipleSelectionSupport,
@@ -135,7 +137,8 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	}
 
 	get items(): readonly TNode[] { return this.list.items; }
-	public updateOptions(options: Pick<AbstractTreeOptions<T, TNode>, "indent" | "indentGuides" | "twistieAdditionalCssClass">): void {
+	public updateOptions(options: Pick<AbstractTreeOptions<T, TNode>, "indent" | "indentGuides" | "twistieAdditionalCssClass" | "smoothScrolling">): void {
+		if (options.smoothScrolling !== undefined) { this.list.updateOptions({ smoothScrolling: options.smoothScrolling }); }
 		validateIndent(options.indent);
 		if (options.indent !== undefined) this.element.style.setProperty("--ash-tree-indent", `${options.indent}px`);
 		if (options.indentGuides !== undefined) {

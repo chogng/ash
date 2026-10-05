@@ -1,15 +1,23 @@
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../output/common/output.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { resetNlsResolver } from '../../../../../nls.js';
+import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
+import { TerminalService } from '../../../../contrib/terminal/browser/terminalService.js';
+import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
 import { Emitter, Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { FileKind, FileNotFoundError, type IFileBytes, type IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
-import { type IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
-import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, type ITerminalService, type TerminalInstanceState } from "../../../../services/terminal/common/terminal.js";
-import { TaskService } from "../../browser/taskService.js";
+import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
+import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
+import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, type TerminalInstanceState } from "../../../../contrib/terminal/browser/terminal.js";
+import { TaskService } from "../../../../contrib/tasks/browser/taskService.js";
 
 test("TaskService discovers tasks, writes one terminal command, and tracks its exit", async () => {
 	const root = URI.file("C:\\project");
@@ -27,14 +35,16 @@ test("TaskService discovers tasks, writes one terminal command, and tracks its e
 	};
 	using terminals = new FakeTerminalService();
 	using outputResources = new DisposableStore();
-	const output = workbenchInstantiationService(outputResources).get(IOutputService);
-	using service = new TaskService(files, workspace, terminals, output);
+	const services = taskServices(outputResources, files, workspace, terminals);
+	const output = services.get(IOutputService);
+	using service = services.createInstance(TaskService);
 	const tasks = await service.refresh();
 	assert.deepEqual(tasks.map(task => task.id), ["cargo:build", "cargo:check", "vscode:0:lint", "cargo:test", "pnpm:test", "cargo:run"]);
 
 	const task = tasks.find(candidate => candidate.id === "vscode:0:lint")!;
 	const run = await service.run(task);
 	const terminal = terminals.instances[0] as FakeTerminalInstance;
+	assert.equal(run.terminalId, terminal.id);
 	assert.equal(terminal.title, "Task: Lint");
 	assert.deepEqual(terminal.writes, ["cargo lint\r"]);
 	assert.equal(run.status, "running");
@@ -63,7 +73,8 @@ test("TaskService atomically owns dynamic providers and merges their tasks on re
 		getWorkspaceFolder: () => null,
 	};
 	using terminals = new FakeTerminalService();
-	using service = new TaskService(files, workspace, terminals);
+	using resources = new DisposableStore();
+	using service = taskServices(resources, files, workspace, terminals).createInstance(TaskService);
 	const registration = service.registerTaskProviders([{ id: "demo.provider", provideTasks: () => [{ id: "verify", label: "Verify", command: "demo --verify", group: "test" }] }]);
 
 	assert.deepEqual((await service.refresh()).map(task => [task.id, task.source]), [["vscode:0:build", "vscode"], ["extension:demo.provider:verify", "extension"]]);
@@ -93,7 +104,8 @@ test("TaskService retains the last good task set when a provider refresh fails",
 		getWorkspaceFolder: () => null,
 	};
 	using terminals = new FakeTerminalService();
-	using service = new TaskService(new FakeFileService(root, {}), workspace, terminals);
+	using resources = new DisposableStore();
+	using service = taskServices(resources, new FakeFileService(root, {}), workspace, terminals).createInstance(TaskService);
 	let fail = false;
 	using registration = service.registerTaskProvider({ id: "stable", provideTasks: () => { if (fail) throw new Error("provider failed"); return [{ id: "test", label: "Test", command: "test", group: "test" }]; } });
 	await service.refresh();
@@ -140,6 +152,9 @@ class FakeTerminalService extends Disposable implements ITerminalService {
 }
 
 class FakeTerminalInstance extends Disposable implements ITerminalInstance {
+	readonly processId = 1234;
+	readonly initialCwd = '/backend/workspace';
+	async processBinary(): Promise<void> { throw new Error('Binary input is not used in task tests'); }
 	readonly profile = { profileId: "command-prompt", title: "Command Prompt", isDefault: true };
 	readonly writes: string[] = [];
 	state: TerminalInstanceState = "running";
@@ -155,3 +170,66 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	async close(): Promise<void> { this.state = "exited"; }
 	command(event: ITerminalCommandStatusEvent): void { this.commandEmitter.fire(event); }
 }
+
+function taskServices(owner: DisposableStore, files: IFileService, workspace: IWorkspaceContextService, terminals: ITerminalService): InstantiationService {
+	return workbenchInstantiationService(owner).createChild(new ServiceCollection([IFileService, files], [IWorkspaceContextService, workspace], [ITerminalService, terminals], [ILogService, new NullLoggerService()]), owner);
+}
+
+test('TaskService rejects a missing terminal registration before opening its Output channel', () => {
+	using resources = new DisposableStore();
+	const parent = workbenchInstantiationService(resources);
+	const services = parent.createChild(new ServiceCollection([IFileService, new FakeFileService(URI.file('/workspace'), {})], [ILogService, new NullLoggerService()]), resources);
+	assert.throws(() => services.createInstance(TaskService), /Unknown service: terminalService/);
+	assert.equal(parent.get(IOutputService).getChannel('tasks'), undefined);
+});
+
+suite('TaskService terminal availability', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const persistence of ['connectionOwned', 'reconnectable'] as const) {
+		test(`rejects a ${persistence} terminal that cannot accept the task command`, async () => {
+			using localization = toDisposable(resetNlsResolver);
+			initializeTestLocalization(persistence === 'reconnectable' ? 'zh-CN' : 'en');
+			using resources = new DisposableStore();
+			const root = URI.file('/workspace');
+			const calls: string[] = [];
+			const processes: ITerminalProcessService = {
+				getConnectionState: async () => 'crashed',
+				onConnectionState: () => Disposable.None,
+				listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
+				create: async () => ({ ready: { pid: 1234, cwd: '/backend/workspace' }, terminalId: 'task-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: persistence }),
+				read: async () => { throw new Error('Disconnected terminal must not poll'); },
+				write: async () => { calls.push('write'); },
+				resize: async () => {},
+				close: async options => { calls.push(`close:${options.terminalId}`); },
+			};
+			const workspace: IWorkspaceContextService = {
+				onDidChangeWorkspace: Event.None,
+				getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }),
+				getWorkbenchState: () => 2,
+				getWorkspaceFolder: () => null,
+			};
+			const output = { createChannel: () => ({ ...Disposable.None, appendLine: () => {} }) } as unknown as IOutputService;
+			const services = resources.add(new InstantiationService(new ServiceCollection(
+				[IFileService, new FakeFileService(root, {})],
+				[IWorkspaceContextService, workspace],
+				[ITerminalProcessService, processes],
+				[IOutputService, output],
+				[ILogService, new NullLoggerService()],
+			)));
+			const terminals = resources.add(services.createInstance(TerminalService));
+			services.registerInstance(ITerminalService, terminals);
+			const tasks = resources.add(services.createInstance(TaskService));
+			resources.add(tasks.registerTaskProvider({ id: 'test', provideTasks: () => [{ id: 'check', label: 'Check', command: 'check', group: 'build' }] }));
+			await tasks.refresh();
+			let starts = 0;
+			resources.add(tasks.onDidStartTask(() => { starts++; }));
+			await assert.rejects(tasks.run(tasks.tasks[0]), {
+				message: persistence === 'reconnectable' ? '终端不可用，任务尚未启动。请重新运行任务。' : 'The terminal is unavailable. The task was not started. Run the task again.',
+			});
+			assert.deepEqual({ calls, starts, active: tasks.activeRuns, last: tasks.lastRun, terminals: terminals.instances }, {
+				calls: ['close:task-process'], starts: 0, active: [], last: undefined, terminals: [],
+			});
+		});
+	}
+});

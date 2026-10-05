@@ -128,3 +128,34 @@ fn file_ranges_and_upload_states_round_trip_without_extra_authority() {
         assert_eq!(serde_json::to_value(decoded).unwrap(), value);
     }
 }
+
+#[test]
+fn terminal_ready_and_binary_contract_preserve_process_identity_and_bytes() {
+    let created = crate::terminal::TerminalCreateResult {
+        terminal_id: "terminal-1".into(),
+        ready: crate::terminal::TerminalProcessReady {
+            pid: 42,
+            cwd: "/workspace".into(),
+        },
+        profile: crate::terminal::TerminalProfile {
+            profile_id: "sh".into(),
+            title: "Shell".into(),
+            is_default: true,
+        },
+        reconnect: None,
+    };
+    let value = serde_json::to_value(&created).unwrap();
+    assert_eq!(
+        serde_json::from_value::<crate::terminal::TerminalCreateResult>(value).unwrap(),
+        created
+    );
+    let request = crate::terminal::TerminalWriteBinaryRequest {
+        terminal_id: created.terminal_id,
+        data: vec![0, 0x80, 0xff],
+    };
+    let value = serde_json::to_value(&request).unwrap();
+    assert_eq!(
+        serde_json::from_value::<crate::terminal::TerminalWriteBinaryRequest>(value).unwrap(),
+        request
+    );
+}

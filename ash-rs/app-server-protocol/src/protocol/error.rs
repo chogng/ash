@@ -136,6 +136,7 @@ pub enum AppServerErrorName {
     TerminalAttachRejected,
     TerminalBusy,
     TerminalOperationFailed,
+    TerminalUnsupported,
     DebugAdapterUnavailable,
     DebugAdapterNotFound,
     DebugAdapterNotOwner,

@@ -13,6 +13,7 @@ export interface AsyncTreeTwistieState extends TreeTwistieState {
 interface AsyncDataTreeCommonOptions<T> {
 	readonly ariaLabel?: string;
 	readonly scrolling?: ListScrolling;
+	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly twistieAdditionalCssClass?: (element: T) => string | undefined;
@@ -94,7 +95,7 @@ interface AsyncTreeCollapseEvent<T> {
 }
 
 interface AsyncTreeView<T> extends IDisposable {
-	updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, "indent" | "indentGuides" | "twistieAdditionalCssClass">): void;
+	updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, "indent" | "indentGuides" | "twistieAdditionalCssClass" | "smoothScrolling">): void;
 	readonly element: HTMLDivElement;
 	readonly domNode: HTMLDivElement;
 	readonly onPointer: Event<AsyncTreePointerEvent<T>>;
@@ -173,7 +174,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	protected abstract createTree(container: HTMLElement, options: TOptions): AsyncTreeView<T>;
 
 	getInput(): TInput | undefined { return this.input; }
-	public updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, "indent" | "indentGuides" | "twistieAdditionalCssClass">): void {
+	public updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, "indent" | "indentGuides" | "twistieAdditionalCssClass" | "smoothScrolling">): void {
 		this.tree.updateOptions(options);
 	}
 	get focus(): T | undefined { return this.tree.focus; }
@@ -339,6 +340,7 @@ export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, A
 		const tree = new ObjectTree<T>(container, {
 			ariaLabel: options.ariaLabel,
 			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			twistieAdditionalCssClass: options.twistieAdditionalCssClass,
@@ -379,6 +381,7 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 		const tree = new CompressibleObjectTree<T>(container, {
 			ariaLabel: options.ariaLabel,
 			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? elements => options.twistieAdditionalCssClass!(last(elements)) : undefined,

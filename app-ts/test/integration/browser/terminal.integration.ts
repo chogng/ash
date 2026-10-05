@@ -1,8 +1,9 @@
+import { URI } from '../../../src/ash/base/common/uri.js';
 import '../../../src/ash/workbench/contrib/terminalContrib/voice/browser/terminal.voice.contribution.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
-import { ITerminalService } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
+import { ITerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
@@ -15,7 +16,7 @@ import { extUri } from '../../../src/ash/base/common/resources.js';
 import { BrowserLayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { createCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { TerminalInstanceWidget } from '../../../src/ash/workbench/contrib/terminal/browser/instance/terminalInstanceWidget.js';
-import type { ITerminalDimensions, ITerminalInstance } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
+import type { ITerminalDimensions, ITerminalInstance } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
@@ -28,11 +29,14 @@ const store = new DisposableStore();
 const output = store.add(new Emitter<Uint8Array>());
 const exit = store.add(new Emitter<number | undefined>());
 const writes: string[] = [];
+const binaryWrites: number[][] = [];
 const resizes: ITerminalDimensions[] = [];
 const instance: ITerminalInstance = {
 	...Disposable.None,
 	id: 'test-terminal',
 	dirId: 'workspace',
+	processId: 1234,
+	initialCwd: '/backend/workspace',
 	title: 'Shell',
 	profile: { profileId: 'shell', title: 'Shell', isDefault: true },
 	state: new URLSearchParams(location.search).has('exited') ? 'exited' : 'running',
@@ -42,6 +46,7 @@ const instance: ITerminalInstance = {
 	onDidChangeCommandStatus: Event.None,
 	onDidChangeState: Event.None,
 	write: data => { writes.push(data); },
+	processBinary: async data => { binaryWrites.push(Array.from(data, character => character.charCodeAt(0))); },
 	resize: dimensions => { resizes.push(dimensions); },
 	close: async () => {},
 };
@@ -52,6 +57,7 @@ let completion: Promise<void> | undefined;
 
 window.ashTerminalIntegration = {
 	writes,
+	binaryWrites,
 	resizes,
 	fit: () => widget.fit(),
 	write: text => output.fire(new TextEncoder().encode(text)),
@@ -69,6 +75,7 @@ declare global {
 	interface Window {
 		ashTerminalIntegration: {
 			readonly writes: readonly string[];
+			readonly binaryWrites: readonly number[][];
 			readonly resizes: readonly ITerminalDimensions[];
 			fit(): void;
 			write(text: string): void;
@@ -188,5 +195,81 @@ declare global {
 			hold(): void;
 			release(): void;
 		};
+	}
+}
+
+if (new URLSearchParams(location.search).has('assembly')) {
+	await import('../../../src/ash/workbench/contrib/terminal/browser/terminal.contribution.js');
+	const [{ InstantiationService }, { ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { WorkspaceContextService }, { installWorkbenchServiceContributions }] = await Promise.all([
+		import('../../../src/ash/platform/instantiation/common/instantiationService.js'),
+		import('../../../src/ash/platform/instantiation/common/serviceCollection.js'),
+		import('../../../src/ash/platform/terminal/common/terminal.js'),
+		import('../../../src/ash/platform/workspace/common/workspace.js'),
+		import('../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js'),
+		import('../../../src/ash/workbench/browser/workbenchServiceContributions.js'),
+	]);
+	window.ashTerminalAssemblyIntegration = async () => {
+		using resources = new DisposableStore();
+		const workspace = resources.add(new WorkspaceContextService({ id: 'assembly', uri: URI.file('/workspace') }));
+		const calls: string[] = [];
+		const written = new Set<string>();
+		let nextProcess = 1;
+		const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
+			getConnectionState: async () => 'ready',
+			onConnectionState: () => Disposable.None,
+			listProfiles: async () => [instance.profile],
+			create: async () => {
+				const terminalId = `backend-${nextProcess++}`;
+				calls.push(`create:${terminalId}`);
+				return { ready: { pid: 1234, cwd: '/backend/workspace' }, terminalId, profile: instance.profile, connectionPersistence: 'connectionOwned' };
+			},
+			write: async options => { calls.push(`write:${options.terminalId}:${options.data}`); written.add(options.terminalId); },
+			resize: async options => { calls.push(`resize:${options.terminalId}:${options.rows}x${options.cols}`); },
+			close: async options => { calls.push(`close:${options.terminalId}`); },
+			read: async options => ({
+				terminalId: options.terminalId,
+				chunks: written.has(options.terminalId) ? [{ sequence: 1, data: new TextEncoder().encode('scope-output') }] : [],
+				nextSequence: written.has(options.terminalId) ? 1 : 0,
+				outputGap: false,
+				commandEvents: [],
+				nextCommandSequence: 0,
+				commandEventGap: false,
+				exited: written.has(options.terminalId),
+				exitCode: written.has(options.terminalId) ? 0 : undefined,
+			}),
+		};
+		const install = (container: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService): void => {
+			installWorkbenchServiceContributions({ container, register: value => resources.add(value), blockRestorationUntil: () => {} });
+		};
+		const services = [0, 1].map(() => {
+			const container = resources.add(new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+			install(container);
+			return container.get(ITerminalService);
+		});
+		const output: string[] = [];
+		const exits: Promise<number | undefined>[] = [];
+		for (const service of services) {
+			resources.add(service.onDidCreateInstance(terminal => {
+				resources.add(terminal.onDidWriteData(data => output.push(new TextDecoder().decode(data))));
+				exits.push(new Promise(resolve => resources.add(terminal.onDidExit(resolve))));
+			}));
+			const terminal = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+			terminal.write('input');
+			terminal.resize({ rows: 30, cols: 90 });
+		}
+		await Promise.all(exits);
+		const isolated = services[0].instances[0] !== services[1].instances[0];
+		for (const service of services) { await service.closeTerminal(service.instances[0]); }
+		let missingDependency = '';
+		const missing = resources.add(new InstantiationService(new ServiceCollection([IWorkspaceContextService, workspace])));
+		try { install(missing); }
+		catch (error) { missingDependency = String(error); }
+		return { isolated, output, calls, missingDependency, remaining: services.map(service => service.instances.length) };
+	};
+}
+
+declare global {
+	interface Window {
+		ashTerminalAssemblyIntegration(): Promise<{ isolated: boolean; output: string[]; calls: string[]; missingDependency: string; remaining: number[] }>;
 	}
 }

@@ -1,8 +1,14 @@
 # Workbench tasks service
 
-`workbench/services/tasks` owns task discovery and execution state for the Code
-product. The user-facing contribution lives in `workbench/contrib/tasks`; the
-Terminal remains the sole process and output owner.
+`workbench/services/tasks` owns the shared task contract and configuration parsing.
+`workbench/contrib/tasks/browser/taskService.ts` owns discovery, run state, and
+Terminal execution, and installs the service through the Code-selected service
+registry. Its stable dependencies use constructor DI. The Terminal remains the
+sole frontend instance and output owner; Rust owns PTY processes.
+
+`ITaskRun.terminalId` identifies the UI instance without importing the Terminal
+contribution into a shared service contract. Tasks and Testing views resolve this
+identity through the Terminal service.
 
 ## Current contract
 
@@ -33,6 +39,11 @@ creation. Terminal success, failure, cancellation, disconnection, and exit are
 projected into `ITaskRun`; terminating a run closes its terminal. Completed
 terminal instances remain visible until the user closes them so output is not
 discarded.
+
+After creation, a task requires a running terminal before publishing its run or
+writing the command. If the terminal is already disconnected, reconnecting,
+exited, or in error, the task closes the instance it created and rejects startup.
+No command is retained for connection recovery; the user can run the task again.
 
 Current limitations are deliberate: there is no dependency graph,
 background-task readiness matcher, problem matcher, custom environment, or

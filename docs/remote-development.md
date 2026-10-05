@@ -55,8 +55,8 @@ Terminal、Search、Codebase 和语言协议。前端不会为每个领域复制
 | 用 `ash code` 打开 SSH TUI | CLI host 从共享命名 catalog 或直接 host/Workspace 构造 target，优先使用显式 runtime、已验证 active runtime 或远端 `ash`；managed runtime 缺失或 schema 不兼容时，从签名产品 metadata 绑定或显式 catalog+摘要选择、下载/校验、安装并重试一次。完成 executable probe 和 initialize/schema handshake 后才持久激活精确路径，并把已连接的 App Server session 交给原有 TUI | `ash remote connect --name work`，或传 `--host`/`--workspace`；开发态可传本地 catalog+SHA-256；诊断可追加 `--check` 只验证完整链路而不打开 TUI |
 | 用 `app` 打开 SSH Workspace | Native host 可在图形管理面板新增、编辑、删除无凭据 target；从现有窗口连接时，面板监督新进程并展示检查、下载、校验、平台探测、上传、提交和失败状态。新进程仍独立读取已验证 runtime，完成 availability + initialize/schema preflight，并在需要时物化、安装和激活新一代 | 点击底部 `Local/Remote` 打开 Native picker；等待期间关闭面板可取消，失败后可直接重试；也可使用 `app remote save/connect` 或直接传 `--remote/--workspace`；需要回退时追加 `--rollback-runtime` |
 | 浏览、编辑、语言功能、搜索和运行终端 | 请求由远端 App Server 在受限 Workspace root 内执行；`app` 的诊断、Hover、Completion 和位置跳转使用独立 language connection，远端路径不会交给本机 LSP | 无需配置领域专属 Remote provider |
-| App Server 断线 | `ash code` CLI host 和 `app` Agent 都在 30 秒窗口内按 250ms 到 2s 的退避重连并重读 durable Session/Thread snapshot。ash code TUI 先交还纯 durable identity，丢弃本代 pending request 与 queued action，再由 CLI 重建 SSH；app 断线期命令明确失败而不延迟回放，旧 generation 的语言请求立即失效，重连后重新同步打开的文档。`app` 与 Desktop Remote Terminal 都在 30 秒 bearer lease 内重新连接同一共享后端并 attach 原 PTY；Desktop Main 保管 token，Renderer 只在首次续读成功后显示已恢复。Desktop 自动重试耗尽后可在原窗口发起受信 stop/start | 短暂断线无需操作；Desktop 显示 Disconnected 后可执行 `Remote: Reconnect to SSH Host`。超过 Terminal lease 或远端主机/daemon 重启后需 Relaunch 终端 |
-| 回退 Desktop Remote runtime | 命令面板的 `Remote: Roll Back Remote Runtime` 请求 Main 验证 previous runtime；验证成功并原子切换 profile 后，Main 立即关闭或放弃旧后端 lease，再替换 Remote backend，不会把必然失败的 attach 重试到 30 秒超时。Renderer 将这些终端标成可 Relaunch 的 error | 确认回滚；验证失败时现有连接和终端保持不变，成功后按需 Relaunch 原终端实例 |
+| App Server 断线 | `ash code` CLI host 和 `app` Agent 都在 30 秒窗口内按 250ms 到 2s 的退避重连并重读 durable Session/Thread snapshot。ash code TUI 先交还纯 durable identity，丢弃本代 pending request 与 queued action，再由 CLI 重建 SSH；app 断线期命令明确失败而不延迟回放，旧 generation 的语言请求立即失效，重连后重新同步打开的文档。`app` 与 Desktop Remote Terminal 都在 30 秒 bearer lease 内重新连接同一共享后端并 attach 原 PTY；Desktop Renderer 的终端进程适配层保管 token，实例服务只在首次续读成功后显示已恢复。Desktop 自动重试耗尽后可在原窗口发起受信 stop/start | 短暂断线无需操作；Desktop 显示 Disconnected 后可执行 `Remote: Reconnect to SSH Host`。超过 Terminal lease 或远端主机/daemon 重启后需 Relaunch 终端 |
+| 回退 Desktop Remote runtime | 命令面板的 `Remote: Roll Back Remote Runtime` 请求 Main 验证 previous runtime；验证成功并原子切换 profile 后，Main 通知 Renderer 关闭或放弃旧后端 lease，再替换 Remote backend，不会把必然失败的 attach 重试到 30 秒超时。Renderer 将这些终端标成可 Relaunch 的 error | 确认回滚；验证失败时现有连接和终端保持不变，成功后按需 Relaunch 原终端实例 |
 | 从 Remote 窗口打开本地文件夹 | 当前 Remote 窗口保持原 Workspace，Main 为本地文件夹打开独立窗口；目标已打开时聚焦已有窗口 | 使用普通 Open Folder 动作，无需重启产品 |
 | 在 Desktop Remote Browser 打开远端本机服务 | Browser 与 App Server Browser Automation 仍接收 `http(s)://localhost/127.0.0.1/[::1]:port`；Electron Main 自动为该远端端口建立 Tunnel，只把分配后的本机 URL 交给 WebContents，并继续向 Renderer/Agent 报告用户请求的原 URL | 照常输入远端服务的 loopback URL；同一 Browser target 的同源导航和历史记录复用 lease，关闭 target 后自动关闭其 Tunnel |
 | 端口转发 | `ash-remote-host` 提供可复用的 loopback-only Tunnel 生命周期、稳定 listener gate、同端口有界恢复和 typed events；Electron Main 与 app Native Host 各自把它接入窗口级 coordinator。Desktop 的 Ports 面板直接投影 Main-owned Tunnel catalog，可新增、Stop、Stop All 并显示 Open/Recovering/Failed；Remote app 窗口可从 location picker 或可绑定命令 `workbench.action.manageRemoteTunnels` 打开管理面板；`app remote tunnel <name> --remote-port <port>` 仍提供前台 CLI | 图形入口可关闭面板而保留 Tunnel，再次打开可查看或 Stop；首次启动失败立即报告，CLI 需保持前台运行。readiness 只证明本地 forward，不证明远端应用协议已 ready；Debug stdio adapter 已直接在 Remote App Server 执行而不需要 Tunnel，socket/server adapter 与统一 Remote Explorer 连接树仍未接入 |
@@ -167,7 +167,8 @@ flowchart LR
 | --- | --- | --- |
 | 远端 Remote Server / App Server | 按用户 profile 共享进程；每条连接独立授权目录，运行文件、Git、PTY、搜索、索引、语言服务和扩展；PTY lease 与过期回收。选择新的 runtime 后端更换整个 profile 代次 | Desktop/app 状态栏和本机 SSH 凭证 |
 | Desktop 本地共享 Rust 后端 | 校验连接的 SSH host、可选目录和精确 runtime，持有每条连接的 SSH 子进程；健康检查与远端可用性分离，连接关闭只释放对应 carrier | text model、dirty buffer、窗口 UI |
-| Electron Main / app 产品宿主 | Desktop 启动本地 connector 并透明转发；app 继续持有自身 SSH 连接。各自负责 runtime 准备、schema gate、窗口连接生命周期和 Remote Terminal lease；Desktop 消费签名产品包 catalog binding | 编辑器展示状态；不把 SSH 凭据或 Terminal bearer token 放进 Renderer |
+| Electron Main / app 产品宿主 | Desktop 启动本地 connector 并透明转发；app 继续持有自身 SSH 连接。各自负责 runtime 准备与窗口连接生命周期；Desktop 消费签名产品包 catalog binding | 编辑器展示状态、Desktop Terminal token；SSH 凭据不进入 Renderer |
+| Desktop Renderer 终端进程适配层 | 宿主直接选择完整 SSH 进程适配器；复用 Renderer protocol client，保存并旋转 Remote Terminal lease、按连接代次 attach 原 PTY，转换原始输出字节与前端退出码 | SSH 凭据、连接建立、后端进程与屏幕网格 |
 | `ash code` CLI host | `ash remote connect` 的 target 解析、OpenSSH child、产品包 catalog binding 选择、managed runtime 自动准备、schema gate、profile activation、TUI session composition，以及运行中 transport loss 的 30 秒精确 runtime 重连 | TUI transport ownership、远端凭据存储、替换显式 `--runtime`、回放不确定请求、把 runtime/schema/server rejection 当作可重试 transport |
 | Electron Main named-connection adapter | 通过本机 `ash remote connections list/get/save/update/remove` 消费共享 Rust catalog；管理时严格校验无凭据 name/host/Workspace，连接时只接受 Renderer 选择的规范名称并重新读取记录，再请求窗口 registry 打开或聚焦目标 | SSH 凭据、任意 SSH options、Renderer 直接读写 catalog 文件 |
 | Electron Main Remote runtime coordinator | 通过本机 `ash remote profile` 读取/激活共享 profile；探测远端 target，从签名产品 binding 选择本地 catalog 或调用 `ash remote fetch-runtime`；只对 runtime 缺失或 typed schema mismatch 安装，消费下载/安装结构化进度、复核精确路径并重新握手；显式回滚先验证 previous，再替换 App Server connection | 发布频道/签名策略、Renderer 文件路径、静默降级 |
@@ -236,9 +237,9 @@ SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。
 5. Renderer/Native UI 继续使用原有 App Server API；只有资源 URI 或 Native workspace target 的
    authority 不同。`app` terminal 以 `reconnectable` lifecycle 创建 PTY，并通过
    `terminal/create|attach|read|write|resize|close` 复用远端 PTY；连接关闭时 daemon 保留 PTY 30 秒，
-   attach 成功后旋转一次性 token。Desktop Renderer 只能提交 `connectionOwned` intent；Remote 窗口的
-   Main terminal service 会把 create 升级为 `reconnectable`，独占 bearer token，并在新的 App Server
-   generation ready 后用最后尺寸 attach。Renderer 只收到无凭据的 persistence 分类，保持原 output 与
+   attach 成功后旋转一次性 token。Desktop Remote 窗口的 Renderer 进程适配层把 create
+   设为 `reconnectable`，保存 bearer token，并在新的 App Server connection generation ready 后
+   用最后尺寸 attach。Workbench 实例只收到无凭据的 persistence 分类，保持原 output 与
    command cursor；第一次续读成功前维持 `reconnecting`，连续 transport generation 会取消旧轮询。
    本地 Desktop 和 Vite development terminal 仍是 `connectionOwned`。
    app Agent 的 event stream 或请求若返回 transport loss，则进入独立 30 秒 recovery window；
@@ -278,7 +279,7 @@ SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。
 8. Desktop 回滚命令只向 Main 发送无参数 intent。Main 显示确认框，调用
    `ash remote profile rollback` 在独立 SSH connection 上验证 previous runtime 的 availability、
    initialize/schema compatibility 和 profile generation；验证失败时不关闭当前连接。条件交换成功后，
-   `RemoteConnectionRecoveryCoordinator` 先通知 Main-owned Terminal lease service 关闭并丢弃旧后端
+   `RemoteConnectionRecoveryCoordinator` 通过窗口通知 Renderer-owned Terminal lease service 关闭并丢弃旧后端
    generation 的 lease，再串行 stop/start 当前 Supervisor；这些终端不会进入必然失败的有界 attach
    重试，新 connection 首次读取时立即进入带 Relaunch 提示的 error。SSH launcher 只接受 CLI 返回的
    canonical exact runtime。Renderer 收到的回滚结果只有 `rolledBack` 或 `cancelled`，不接触 runtime 路径。
@@ -495,9 +496,10 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - Remote URI 与 authority：`app-ts/src/ash/platform/remote/common/remote.ts`
 - Remote carrier 装配：`app-ts/src/ash/platform/remote/electron-main/remoteAppServerProcessLauncher.ts`
 - Desktop Remote Terminal lease owner：
-  `app-ts/src/ash/platform/terminal/electron-main/reconnectableTerminalMainService.ts`
-- Desktop Terminal 恢复投影：
-  `app-ts/src/ash/workbench/services/terminal/browser/terminalService.ts`
+  `app-ts/src/ash/platform/terminal/browser/reconnectableTerminalProcessService.ts`
+- Desktop Terminal 职责与对齐台账：[Terminal API 对齐状态](../app-ts/docs/terminal-api-alignment-status.md)
+- Desktop Terminal 恢复状态：
+  `app-ts/src/ash/workbench/contrib/terminal/browser/terminalService.ts`
 - Desktop runtime probe：`app-ts/src/ash/platform/remote/electron-main/remoteAppServerProcessLauncher.ts`
 - Desktop install adapter：`app-ts/src/ash/platform/remote/electron-main/ashCliRemoteRuntimeInstaller.ts`
 - Desktop signed catalog binding/fetch/provisioner：`app-ts/src/ash/platform/remote/electron-main/packagedRemoteRuntimeCatalog.ts`、
@@ -533,7 +535,7 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - Workbench service：`app-ts/src/ash/workbench/services/remote/common/remoteAgentService.ts`
 - Remote contribution：`app-ts/src/ash/workbench/contrib/remote/browser/remote.contribution.ts`
 - Desktop Remote Debug Workspace/源码 authority：
-  `app-ts/src/ash/workbench/services/debug/browser/debugService.ts`、
+  `app-ts/src/ash/workbench/contrib/debug/browser/debugService.ts`、
   `app-ts/src/ash/workbench/services/debug/browser/debugAdapterSession.ts`、
   `app-ts/src/ash/workbench/contrib/debug/browser/debugViewPane.ts`
 - Shared Rust Remote identity/SSH/Tunnel primitives：`ash-rs/remote`、`ash-rs/remote-connections`、

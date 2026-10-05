@@ -5,7 +5,7 @@ import { Disposable, MutableDisposable, DisposableStore } from '../../../../../b
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
-import { ITerminalService, type ITerminalInstance } from '../../../../services/terminal/common/terminal.js';
+import { ITerminalService, type ITerminalInstance } from '../../../terminal/browser/terminal.js';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
 import { DictationSession, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationSession.js';

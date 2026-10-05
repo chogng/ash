@@ -1,14 +1,16 @@
+import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
+import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { getErrorMessage } from "../../../../base/common/errors.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
-import { FileKind, FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
-import type { ILogService } from "../../../../platform/log/common/log.js";
-import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalService } from "../../terminal/common/terminal.js";
-import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, type TaskRunStatus } from "../common/taskService.js";
-import type { IOutputChannel, IOutputService, OutputEntrySeverity } from "../../output/common/output.js";
-import { cargoWorkspaceTasks, parsePackageTasks, parseWorkspaceTasks } from "../common/workspaceTasks.js";
+import { FileKind, FileNotFoundError, IFileService } from "../../../../platform/files/common/files.js";
+import { ILogService } from "../../../../platform/log/common/log.js";
+import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { type ITerminalCommandStatusEvent, type ITerminalInstance, ITerminalService } from "../../terminal/browser/terminal.js";
+import { type ITaskRun, ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, type TaskRunStatus } from "../../../services/tasks/common/taskService.js";
+import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from "../../../services/output/common/output.js";
+import { cargoWorkspaceTasks, parsePackageTasks, parseWorkspaceTasks } from "../../../services/tasks/common/workspaceTasks.js";
 
 const TASK_TERMINAL_DIMENSIONS = Object.freeze({ rows: 24, cols: 80 });
 
@@ -29,15 +31,21 @@ export class TaskService extends Disposable implements ITaskService {
 	private refreshGeneration = 0;
 	private loaded = false;
 	private _lastRun: TaskRun | undefined;
-	private readonly output: IOutputChannel | undefined;
+	private readonly output: IOutputChannel;
 
 	readonly onDidChangeTasks: Event<readonly IWorkspaceTask[]> = this.changeTasksEmitter.event;
 	readonly onDidStartTask: Event<ITaskRun> = this.startTaskEmitter.event;
 	readonly onDidChangeTaskRun: Event<ITaskRun> = this.changeTaskRunEmitter.event;
 
-	constructor(private readonly fileService: IFileService, private readonly workspace: IWorkspaceContextService, private readonly terminalService: ITerminalService, outputService?: IOutputService, private readonly logService?: ILogService) {
+	constructor(
+		@IFileService private readonly fileService: IFileService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@ITerminalService private readonly terminalService: ITerminalService,
+		@IOutputService outputService: IOutputService,
+		@ILogService private readonly logService: ILogService,
+	) {
 		super();
-		this.output = outputService ? this._register(outputService.createChannel({ id: "tasks", label: "Tasks", kind: "log", source: "core" })) : undefined;
+		this.output = this._register(outputService.createChannel({ id: "tasks", label: "Tasks", kind: "log", source: "core" }));
 		this._register(fileService.onDidChangeFiles(event => {
 			if (this.loaded && affectsTaskConfiguration(event.resources)) void this.refresh().catch(error => this.reportError(error));
 		}));
@@ -129,8 +137,16 @@ export class TaskService extends Disposable implements ITaskService {
 		if (!workspaceFolder) throw new Error(`Task '${currentTask.label}' has no available workspace folder`);
 		this.log("information", "execution", `Starting task '${currentTask.label}' (${currentTask.id}).`);
 		let terminal: ITerminalInstance;
-		try { terminal = await this.terminalService.createTerminal({ dirId: workspaceFolder.id, dimensions: TASK_TERMINAL_DIMENSIONS, profile: { type: "default" }, title: `Task: ${currentTask.label}` }); }
-		catch (error) { this.log("error", "execution", `Could not create a terminal for task '${currentTask.label}': ${errorMessage(error)}`); throw error; }
+		try {
+			terminal = await this.terminalService.createTerminal({ dirId: workspaceFolder.id, dimensions: TASK_TERMINAL_DIMENSIONS, profile: { type: 'default' }, title: `Task: ${currentTask.label}` });
+			if (terminal.state !== 'running') {
+				await this.terminalService.closeTerminal(terminal);
+				throw new Error(localize('tasks.terminalUnavailable', 'The terminal is unavailable. The task was not started. Run the task again.'));
+			}
+		} catch (error) {
+			this.log('error', 'execution', `Could not create a terminal for task '${currentTask.label}': ${errorMessage(error)}`);
+			throw error;
+		}
 		const run = this._register(new TaskRun(currentTask, terminal, current => {
 			const exit = current.exitCode === undefined ? "" : ` (exit code ${current.exitCode})`;
 			this.log(current.status === "failed" ? "error" : current.status === "canceled" ? "warning" : "information", "execution", `Task '${current.task.label}' ${current.status}${exit}.`);
@@ -150,7 +166,7 @@ export class TaskService extends Disposable implements ITaskService {
 		if (!this.runs.has(run as TaskRun)) return;
 		this.log("warning", "execution", `Terminating task '${run.task.label}'.`);
 		(run as TaskRun).cancel();
-		await this.terminalService.closeTerminal(run.terminal);
+		await this.terminalService.closeTerminal((run as TaskRun).terminal);
 	}
 
 	private setTasks(tasks: readonly IWorkspaceTask[]): void {
@@ -214,16 +230,16 @@ export class TaskService extends Disposable implements ITaskService {
 
 
 	private log(severity: OutputEntrySeverity, category: string, text: string): void {
-		this.output?.appendLine({ severity, category, text });
+		this.output.appendLine({ severity, category, text });
 		const logCategory = `tasks.${category}`;
-		if (severity === "error") this.logService?.error(logCategory, text);
-		else if (severity === "warning") this.logService?.warn(logCategory, text);
-		else if (severity === "debug") this.logService?.debug(logCategory, text);
-		else this.logService?.info(logCategory, text);
+		if (severity === "error") this.logService.error(logCategory, text);
+		else if (severity === "warning") this.logService.warn(logCategory, text);
+		else if (severity === "debug") this.logService.debug(logCategory, text);
+		else this.logService.info(logCategory, text);
 	}
 
 	private reportError(error: unknown): void {
-		this.logService?.error("tasks.discovery", "Could not refresh workspace tasks", error);
+		this.logService.error("tasks.discovery", "Could not refresh workspace tasks", error);
 	}
 
 	private async packageManager(root: URI): Promise<"npm" | "pnpm" | "yarn"> {
@@ -279,6 +295,7 @@ class TaskRun extends Disposable implements ITaskRun {
 		}));
 	}
 
+	get terminalId(): string { return this.terminal.id; }
 	get status(): TaskRunStatus { return this._status; }
 	get exitCode(): number | undefined { return this._exitCode; }
 
@@ -376,3 +393,9 @@ function taskTerminalCommand(command: string, profileId: string): string {
 function errorMessage(error: unknown): string {
 	return getErrorMessage(error).slice(0, 4096);
 }
+
+registerWorkbenchServiceContribution({
+	service: ITaskService,
+	dependencies: [IFileService, IWorkspaceContextService, ITerminalService, IOutputService, ILogService],
+	install: context => context.register(context.container.createInstance(TaskService)),
+});

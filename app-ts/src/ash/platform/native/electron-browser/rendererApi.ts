@@ -130,14 +130,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			}
 			if (client.capabilities?.contracts.automation?.version === 1) { backend = { ...backend, automation: resources.add(new AppServerAutomationService(client)) }; }
 			if (remoteConnection.kind === 'ssh') {
-				const terminals = resources.add(new ReconnectableTerminalProcessService({ supervisor: client }));
-				const ordinary = backend.terminal;
-				backend = { ...backend, terminal: {
-					listProfiles: () => ordinary.listProfiles(),
-					create: options => terminals.create({ ...options, lifecycle: { type: 'connectionOwned' } }), write: options => terminals.write(options),
-					resize: options => terminals.resize(options), read: options => terminals.read(options), close: options => terminals.close(options),
-					getConnectionState: () => ordinary.getConnectionState(), onConnectionState: listener => ordinary.onConnectionState(listener),
-				} };
+				const terminals = resources.add(new ReconnectableTerminalProcessService(client));
+				backend = { ...backend, terminal: terminals };
 				const replacement = subscribe('ash:terminal:prepareReplacement', () => terminals.prepareForServerReplacement());
 				resources.add(toDisposable(() => replacement.dispose()));
 			}

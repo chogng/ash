@@ -1650,8 +1650,8 @@ fn terminal_rpc_drives_a_dir_rooted_pty_to_exit() {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":3,
-            "method":"terminal/write",
-            "params":{"terminalId":terminal_id,"data":input}
+            "method":"terminal/writeBinary",
+            "params":{"terminalId":terminal_id,"dataBase64":base64::engine::general_purpose::STANDARD.encode(input.as_bytes())}
         }),
     );
     assert!(written["error"].is_null());
@@ -1754,6 +1754,70 @@ fn terminal_rpc_enforces_connection_ownership_and_close() {
         }),
     );
     let terminal_id = created["result"]["terminalId"].as_str().unwrap();
+
+    assert!(created["result"]["ready"]["pid"].as_u64().unwrap() > 0);
+    assert_eq!(
+        created["result"]["ready"]["cwd"],
+        root.canonicalize().unwrap().to_str().unwrap()
+    );
+    for (index, (method, params)) in [
+        (
+            "terminal/processInfo",
+            serde_json::json!({"terminalId":terminal_id}),
+        ),
+        (
+            "terminal/writeBinary",
+            serde_json::json!({"terminalId":terminal_id,"dataBase64":"AP8="}),
+        ),
+        (
+            "terminal/sendSignal",
+            serde_json::json!({"terminalId":terminal_id,"signal":"interrupt"}),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let rejected = call(
+            &server,
+            &mut other,
+            serde_json::json!({"jsonrpc":"2.0","id":20 + index,"method":method,"params":params}),
+        );
+        assert_eq!(rejected["error"]["data"]["kind"], "TerminalNotOwner");
+    }
+    for (index, data) in [
+        "!invalid!".to_owned(),
+        "".to_owned(),
+        base64::engine::general_purpose::STANDARD.encode(vec![0; 65_537]),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let rejected = call(
+            &server,
+            &mut owner,
+            serde_json::json!({"jsonrpc":"2.0","id":30 + index,"method":"terminal/writeBinary","params":{"terminalId":terminal_id,"dataBase64":data}}),
+        );
+        assert_eq!(rejected["error"]["code"], -32602);
+    }
+    let invalid_signal = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":24,"method":"terminal/sendSignal","params":{"terminalId":terminal_id,"signal":"unknown"}}),
+    );
+    assert_eq!(invalid_signal["error"]["code"], -32602);
+    let properties = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":25,"method":"terminal/processInfo","params":{"terminalId":terminal_id}}),
+    );
+    assert_eq!(properties["result"]["ready"], created["result"]["ready"]);
+    assert_eq!(
+        (
+            properties["result"]["rows"].as_u64(),
+            properties["result"]["cols"].as_u64()
+        ),
+        (Some(24), Some(80))
+    );
 
     let rejected = call(
         &server,

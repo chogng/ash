@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
 test.beforeEach(async ({ target, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires workspace tasks and terminal execution.');
+	test.skip(target.appServerMode !== 'required', 'Requires workspace tasks and terminal execution.');
 	await mkdir(join(testWorkspace.directory, '.vscode'));
 	await writeFile(join(testWorkspace.directory, '.vscode', 'tasks.json'), JSON.stringify({ version: '2.0.0', tasks: [
 		{ label: 'Smoke build', type: 'shell', command: 'node smoke-task.cjs', group: 'build' },

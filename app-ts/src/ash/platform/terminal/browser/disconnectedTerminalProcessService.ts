@@ -1,7 +1,7 @@
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IAppServerApi } from "../../app-server/common/appServerApi.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation, ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult, ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions, TerminalProcessConnectionState } from "../common/terminalProcessService.js";
+import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation, ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult, ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions, TerminalProcessConnectionState } from "../common/terminal.js";
 
 /** Terminal process service used when no browser App Server host is available. */
 export class DisconnectedTerminalProcessService implements ITerminalProcessService {

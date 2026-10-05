@@ -149,3 +149,23 @@ owner 的版本迁移规则。无效会话、获准来源的读取失败或配�
 - 用户输入的 `ThreadItem.clientId` 等于提交该输入的 `session/request.commandId`；同一次发送的文字、上下文、图片和音频共享此 ID，持久历史和实时 transcript 更新均保留它。客户端按 ID 确认本地待发送消息，不按文字匹配；旧历史未包含该字段时不能确认新发送的消息。
 
 - `ThreadItem.reasoning.state` 保存带作用域的加密 Responses 项；重载历史和工具续轮保留完整项，切换账户、模型或端点后不再发送旧项。
+
+
+## 交互式终端进程
+
+`terminal/create` 和 `terminal/createInSessionDirectory` 返回实际启动信息 `ready: {pid, cwd}`；
+`terminal/attach` 返回同一进程的启动信息并旋转短期 bearer token。cwd 是启动时实际使用的目录，
+不是窗口 Workspace 的猜测，也不是当前目录。
+
+| Method | 当前协议语义 |
+| --- | --- |
+| `terminal/processInfo` | 按 terminalId/dirId 查询 ready、当前 cwd 和最后成功应用的 rows/cols；当前 cwd 在 macOS/Linux 查询，在无法查询的平台或退出后为 null。 |
+| `terminal/write` | 1–65536 字节 UTF-8 输入，保留现有命令状态检测。 |
+| `terminal/writeBinary` | base64 包装的 1–65536 个原始字节；编码长度最多 87384，不解码成文本，不推断命令。 |
+| `terminal/sendSignal` | signal 为 interrupt；Unix PTY 中断当前前台进程组，Windows 返回 TerminalUnsupported（-32066）。 |
+| `terminal/resize` | 成功应用字符尺寸后更新进程属性；非法尺寸不更新。 |
+
+以上查询与控制只允许当前附着 connection，并重新检查目录执行授权；错误连接返回 TerminalNotOwner。
+非法 base64、超大输入和未知 signal 返回 InvalidParams。decoder、method map 和 schema 从 Rust 定义生成。
+现有分页输出与连接租约没有提供解析后 ACK、进程列表、显式 detach 或跨窗口恢复；
+这些操作不能按名称存在或有限缓存推断为已实现。服务进程退出后无法 attach 已退出的 PTY。

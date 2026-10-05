@@ -53,9 +53,32 @@ impl fmt::Debug for TerminalReconnectLease {
     }
 }
 
+/// Spawn-confirmed OS identity and the directory actually passed to the shell.
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TerminalProcessReady {
+    pub pid: u32,
+    pub cwd: String,
+}
+
+/// Current backend-owned process properties; cwd is absent when unavailable or exited.
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TerminalProcessInfo {
+    pub ready: TerminalProcessReady,
+    pub cwd: Option<String>,
+    pub rows: u16,
+    pub cols: u16,
+}
+
+/// Sends the supported process-control signal rather than encoding it as terminal input.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminalSignal {
+    Interrupt,
+}
+
 /// Identity allocated for one interactive terminal.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TerminalCreateResult {
+    pub ready: TerminalProcessReady,
     pub terminal_id: String,
     pub profile: TerminalProfile,
     pub reconnect: Option<TerminalReconnectLease>,
@@ -85,6 +108,7 @@ impl fmt::Debug for TerminalAttachRequest {
 /// Confirms attachment and rotates the bearer token for the next disconnect.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TerminalAttachResult {
+    pub ready: TerminalProcessReady,
     pub terminal_id: String,
     pub reconnect: TerminalReconnectLease,
 }
@@ -94,6 +118,13 @@ pub struct TerminalAttachResult {
 pub struct TerminalWriteRequest {
     pub terminal_id: String,
     pub data: String,
+}
+
+/// Writes one bounded raw input batch without UTF-8 encoding or command inference.
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TerminalWriteBinaryRequest {
+    pub terminal_id: String,
+    pub data: Vec<u8>,
 }
 
 /// Changes the PTY character-cell dimensions.

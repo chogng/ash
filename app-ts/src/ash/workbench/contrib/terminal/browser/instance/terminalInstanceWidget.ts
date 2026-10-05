@@ -7,7 +7,7 @@ import { IQuickInputService, type IQuickPickItem } from "../../../../../platform
 import { computeLinks } from "../../../../../editor/common/languages/linkComputer.js";
 import { onUnexpectedError } from "../../../../../base/common/errors.js";
 import { localize } from "../../../../../nls.js";
-import type { ITerminalCommandStatusEvent, ITerminalDimensions, ITerminalInstance } from "../../../../services/terminal/common/terminal.js";
+import type { ITerminalCommandStatusEvent, ITerminalDimensions, ITerminalInstance } from "../terminal.js";
 import { terminalTheme } from "./terminalTheme.js";
 import { AlternateScrollMode } from "./alternateScroll.js";
 import { h } from "../../../../../base/browser/dom.js";
@@ -94,6 +94,8 @@ export class TerminalInstanceWidget extends Disposable {
 		}));
 		const input = terminal.onData(data => this.instance.write(data));
 		this._register(toDisposable(() => input.dispose()));
+		const binaryInput = terminal.onBinary(data => { void this.instance.processBinary(data).catch(onUnexpectedError); });
+		this._register(toDisposable(() => binaryInput.dispose()));
 		for (const write of this.pendingWrites) write(terminal);
 		this.pendingWrites.length = 0;
 		this.fit();

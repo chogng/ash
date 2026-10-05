@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
 test('terminal panel preserves focus, accepts input and retains instances when reopened', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
 	const page = workbench.page;
 	await expect(page.locator('.xterm')).toHaveCount(0);
 	await workbench.terminal.show();
@@ -29,7 +29,7 @@ test('terminal panel preserves focus, accepts input and retains instances when r
 });
 
 test('terminal instances keep output separate and start in the workspace', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
 	const terminal = workbench.terminal;
 	await terminal.show();
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'running');
@@ -56,7 +56,7 @@ test('terminal instances keep output separate and start in the workspace', async
 });
 
 test('terminal relaunches an exited shell and accepts new commands', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
 	const terminal = workbench.terminal;
 	await terminal.show();
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'running');

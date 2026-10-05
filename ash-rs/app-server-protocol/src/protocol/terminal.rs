@@ -94,10 +94,59 @@ impl fmt::Debug for TerminalReconnectLease {
     }
 }
 
+/// OS identity and the directory actually passed to the shell at spawn.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalProcessReady {
+    #[schemars(range(min = 1))]
+    pub pid: u32,
+    pub cwd: String,
+}
+
+/// Backend-owned properties. Current cwd is null when the OS cannot query it or the shell exited.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalProcessInfo {
+    pub ready: TerminalProcessReady,
+    pub cwd: Option<String>,
+    pub rows: u16,
+    pub cols: u16,
+}
+
+/// Queries process properties without confusing the launch directory with current cwd.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalProcessInfoParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[schemars(length(min = 1))]
+    pub terminal_id: String,
+}
+
+/// A process-control signal supported by the PTY backend, independent of input encoding.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum TerminalSignal {
+    Interrupt,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalSendSignalParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[schemars(length(min = 1))]
+    pub terminal_id: String,
+    pub signal: TerminalSignal,
+}
+
 /// Identity allocated for one interactive terminal.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalCreateResult {
+    pub ready: TerminalProcessReady,
     pub terminal_id: String,
     pub profile: TerminalProfile,
     pub reconnect: Option<TerminalReconnectLease>,
@@ -136,6 +185,7 @@ impl fmt::Debug for TerminalAttachParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalAttachResult {
+    pub ready: TerminalProcessReady,
     pub terminal_id: String,
     pub reconnect: TerminalReconnectLease,
 }
@@ -151,6 +201,19 @@ pub struct TerminalWriteParams {
     pub terminal_id: String,
     #[schemars(length(min = 1, max = 65536))]
     pub data: String,
+}
+
+/// Writes raw bytes such as xterm's legacy mouse reports, with a 64 KiB decoded limit.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalWriteBinaryParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[schemars(length(min = 1))]
+    pub terminal_id: String,
+    #[schemars(length(min = 4, max = 87384))]
+    pub data_base64: String,
 }
 
 /// Changes the PTY character-cell dimensions.

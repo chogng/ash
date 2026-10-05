@@ -8,7 +8,7 @@ export function registerTestDictationOnboarding(services: InstantiationService, 
 	if (!services.has(IStorageService)) {
 		const entries = new Map<string, string>();
 		services.registerSingleton(IStorageService, () => new BrowserStorageService({
-			ownerWindow: window, applicationId: 'dictation-test', workspaceId: 'test', flushInterval: 0, backend: {
+			ownerWindow: window, workspaceId: 'test', flushInterval: 0, backend: {
 				get length() { return entries.size; }, clear: () => entries.clear(), key: index => [...entries.keys()][index] ?? null,
 				getItem: key => entries.get(key) ?? null, setItem: (key, value) => { entries.set(key, value); }, removeItem: key => { entries.delete(key); },
 			}

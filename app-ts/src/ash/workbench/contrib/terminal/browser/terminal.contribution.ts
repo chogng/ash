@@ -8,6 +8,17 @@ import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegi
 import { IViewsService } from "../../../services/views/common/viewsService.js";
 import { TERMINAL_VIEW_ID } from "../common/terminal.js";
 import { TerminalViewPane } from "./terminalView.js";
+import { ITerminalProcessService } from '../../../../platform/terminal/common/terminal.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
+import { ITerminalService } from './terminal.js';
+import { TerminalService } from './terminalService.js';
+
+registerWorkbenchServiceContribution({
+	service: ITerminalService,
+	dependencies: [ITerminalProcessService, IWorkspaceContextService],
+	install: context => context.register(context.container.createInstance(TerminalService)),
+});
 
 export { TERMINAL_VIEW_ID } from "../common/terminal.js";
 

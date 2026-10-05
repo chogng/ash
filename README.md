@@ -79,8 +79,8 @@ product groups are `Ash Code (TUI)`, `Ash (Electron)`, and `Ash App (Rust)`.
 `Ash (Electron, Frontend Watch Only)` also runs the Rust backend but only watches frontend
 and Electron host changes. `Ash Web (Chrome, UI Only)` runs the browser frontend without a backend.
 
-The Desktop command is shared by both Workbench build modes. The default mode is `code`; build
-matrix checks can set `ASH_WORKBENCH_MODE=academic` without changing the command name.
+Desktop starts the Code Workbench and provides a separate Agents window. Academic documents
+open in the same Workbench; startup does not select a product mode.
 
 For a Linux Electron Desktop, Web, and Rust backend environment, open the repository in the
 [Dev Container](docs/build.md#dev-containerlinux-desktopweb-与后端).

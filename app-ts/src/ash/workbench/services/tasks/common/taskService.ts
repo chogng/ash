@@ -1,7 +1,6 @@
 import { type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import { type ITerminalInstance } from "../../terminal/common/terminal.js";
 
 export type WorkspaceTaskSource = "vscode" | "npm" | "pnpm" | "yarn" | "cargo" | "extension";
 export type WorkspaceTaskGroup = "build" | "test" | "run" | "other";
@@ -42,7 +41,7 @@ export type TaskRunStatus = "running" | "completed" | "succeeded" | "failed" | "
 /** One task execution projected through an integrated Terminal instance. */
 export interface ITaskRun {
 	readonly task: IWorkspaceTask;
-	readonly terminal: ITerminalInstance;
+	readonly terminalId: string;
 	readonly status: TaskRunStatus;
 	readonly exitCode: number | undefined;
 	readonly onDidChangeStatus: Event<TaskRunStatus>;

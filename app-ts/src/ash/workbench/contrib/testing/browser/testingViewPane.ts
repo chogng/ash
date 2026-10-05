@@ -13,7 +13,7 @@ import { WorkbenchObjectTree } from '../../../../platform/list/browser/listServi
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { type ITestCase, type ITestCaseResult, type ITestProfile, type ITestRun, ITestingService } from '../../../services/testing/common/testingService.js';
-import { ITerminalService } from '../../../services/terminal/common/terminal.js';
+import { ITerminalService } from '../../terminal/browser/terminal.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { TERMINAL_VIEW_ID } from '../../terminal/common/terminal.js';
@@ -221,7 +221,16 @@ export class TestingViewPane extends ViewPane {
 			row.append(label); this.scriptsDomNode.append(row);
 		}
 		for (const run of this.testing.runs.slice(-10).reverse()) {
-			this.scriptDisposables.add(new Button(this.scriptsDomNode, { label: `${run.profile.label} — ${run.status === 'completed' ? localize('testing.scriptCompleted', 'Completed') : testStateLabel(run.status === 'canceled' ? 'cancelled' : run.status)}`, size: 'small', onClick: () => { this.terminal.setActiveInstance(run.taskRun.terminal); void this.views.focusView(TERMINAL_VIEW_ID).catch(onUnexpectedError); } }));
+			this.scriptDisposables.add(new Button(this.scriptsDomNode, {
+				label: `${run.profile.label} — ${run.status === 'completed' ? localize('testing.scriptCompleted', 'Completed') : testStateLabel(run.status === 'canceled' ? 'cancelled' : run.status)}`,
+				size: 'small',
+				onClick: () => {
+					const instance = this.terminal.instances.find(instance => instance.id === run.taskRun.terminalId);
+					if (!instance) { return; }
+					this.terminal.setActiveInstance(instance);
+					void this.views.focusView(TERMINAL_VIEW_ID).catch(onUnexpectedError);
+				},
+			}));
 		}
 	}
 

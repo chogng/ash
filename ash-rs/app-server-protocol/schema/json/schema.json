@@ -2280,6 +2280,7 @@
         "TerminalAttachRejected",
         "TerminalBusy",
         "TerminalOperationFailed",
+        "TerminalUnsupported",
         "DebugAdapterUnavailable",
         "DebugAdapterNotFound",
         "DebugAdapterNotOwner",
@@ -10748,6 +10749,54 @@
         {
           "properties": {
             "method": {
+              "const": "terminal/writeBinary",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TerminalWriteBinaryParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "terminal/processInfo",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TerminalProcessInfoParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "terminal/sendSignal",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TerminalSendSignalParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "terminal/resize",
               "type": "string"
             },
@@ -16801,6 +16850,54 @@
           "properties": {
             "method": {
               "const": "terminal/write",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "terminal/writeBinary",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "terminal/processInfo",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TerminalProcessInfo"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "terminal/sendSignal",
               "type": "string"
             },
             "result": {
@@ -41867,6 +41964,9 @@
     "TerminalAttachResult": {
       "description": "Confirms attachment and rotates the bearer token for the next disconnect.",
       "properties": {
+        "ready": {
+          "$ref": "#/$defs/TerminalProcessReady"
+        },
         "reconnect": {
           "$ref": "#/$defs/TerminalReconnectLease"
         },
@@ -41875,6 +41975,7 @@
         }
       },
       "required": [
+        "ready",
         "terminalId",
         "reconnect"
       ],
@@ -42028,6 +42129,9 @@
         "profile": {
           "$ref": "#/$defs/TerminalProfile"
         },
+        "ready": {
+          "$ref": "#/$defs/TerminalProcessReady"
+        },
         "reconnect": {
           "anyOf": [
             {
@@ -42043,6 +42147,7 @@
         }
       },
       "required": [
+        "ready",
         "terminalId",
         "profile"
       ],
@@ -42094,6 +42199,76 @@
       "required": [
         "sequence",
         "dataBase64"
+      ],
+      "type": "object"
+    },
+    "TerminalProcessInfo": {
+      "description": "Backend-owned properties. Current cwd is null when the OS cannot query it or the shell exited.",
+      "properties": {
+        "cols": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cwd": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ready": {
+          "$ref": "#/$defs/TerminalProcessReady"
+        },
+        "rows": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ready",
+        "rows",
+        "cols"
+      ],
+      "type": "object"
+    },
+    "TerminalProcessInfoParams": {
+      "additionalProperties": false,
+      "description": "Queries process properties without confusing the launch directory with current cwd.",
+      "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminalId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "terminalId"
+      ],
+      "type": "object"
+    },
+    "TerminalProcessReady": {
+      "description": "OS identity and the directory actually passed to the shell at spawn.",
+      "properties": {
+        "cwd": {
+          "type": "string"
+        },
+        "pid": {
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pid",
+        "cwd"
       ],
       "type": "object"
     },
@@ -42315,6 +42490,62 @@
         "terminalId",
         "rows",
         "cols"
+      ],
+      "type": "object"
+    },
+    "TerminalSendSignalParams": {
+      "additionalProperties": false,
+      "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signal": {
+          "$ref": "#/$defs/TerminalSignal"
+        },
+        "terminalId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "terminalId",
+        "signal"
+      ],
+      "type": "object"
+    },
+    "TerminalSignal": {
+      "description": "A process-control signal supported by the PTY backend, independent of input encoding.",
+      "enum": [
+        "interrupt"
+      ],
+      "type": "string"
+    },
+    "TerminalWriteBinaryParams": {
+      "additionalProperties": false,
+      "description": "Writes raw bytes such as xterm's legacy mouse reports, with a 64 KiB decoded limit.",
+      "properties": {
+        "dataBase64": {
+          "maxLength": 87384,
+          "minLength": 4,
+          "type": "string"
+        },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminalId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "terminalId",
+        "dataBase64"
       ],
       "type": "object"
     },

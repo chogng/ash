@@ -41,6 +41,7 @@ impl AppServer {
             .create(connection.connection_id, create_request(params))
             .map_err(terminal_error)?;
         result(&wire::TerminalCreateResult {
+            ready: ready_to_dto(created.ready),
             terminal_id: created.terminal_id,
             profile: profile_to_dto(created.profile),
             reconnect: created.reconnect.map(lease_to_dto),
@@ -72,6 +73,7 @@ impl AppServer {
             )
             .map_err(terminal_error)?;
         result(&wire::TerminalCreateResult {
+            ready: ready_to_dto(created.ready),
             terminal_id: created.terminal_id,
             profile: profile_to_dto(created.profile),
             reconnect: created.reconnect.map(lease_to_dto),
@@ -96,6 +98,63 @@ impl AppServer {
         result(&())
     }
 
+    pub(super) fn terminal_write_binary(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: wire::TerminalWriteBinaryParams = decode(params)?;
+        if params.data_base64.len() > 87_384 {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let data = base64::engine::general_purpose::STANDARD
+            .decode(params.data_base64)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        self.terminal_service_for(params.dir_id.as_deref())?
+            .write_binary(
+                connection.connection_id,
+                exec_server::terminal::TerminalWriteBinaryRequest {
+                    terminal_id: params.terminal_id,
+                    data,
+                },
+            )
+            .map_err(terminal_error)?;
+        result(&())
+    }
+
+    pub(super) fn terminal_process_info(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: wire::TerminalProcessInfoParams = decode(params)?;
+        let info = self
+            .terminal_service_for(params.dir_id.as_deref())?
+            .process_info(connection.connection_id, &params.terminal_id)
+            .map_err(terminal_error)?;
+        result(&wire::TerminalProcessInfo {
+            ready: ready_to_dto(info.ready),
+            cwd: info.cwd,
+            rows: info.rows,
+            cols: info.cols,
+        })
+    }
+
+    pub(super) fn terminal_send_signal(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: wire::TerminalSendSignalParams = decode(params)?;
+        let signal = match params.signal {
+            wire::TerminalSignal::Interrupt => exec_server::terminal::TerminalSignal::Interrupt,
+        };
+        self.terminal_service_for(params.dir_id.as_deref())?
+            .send_signal(connection.connection_id, &params.terminal_id, signal)
+            .map_err(terminal_error)?;
+        result(&())
+    }
+
     pub(super) fn terminal_attach(
         &self,
         connection: &ConnectionState,
@@ -115,6 +174,7 @@ impl AppServer {
             )
             .map_err(terminal_error)?;
         result(&wire::TerminalAttachResult {
+            ready: ready_to_dto(attached.ready),
             terminal_id: attached.terminal_id,
             reconnect: lease_to_dto(attached.reconnect),
         })
@@ -183,6 +243,9 @@ fn terminal_error(error: exec_server::terminal::TerminalError) -> RpcError {
             RpcError::new(-32065, AppServerErrorName::TerminalAttachRejected)
         }
         TerminalError::Busy => RpcError::new(-32063, AppServerErrorName::TerminalBusy),
+        TerminalError::Unsupported => {
+            RpcError::new(-32066, AppServerErrorName::TerminalUnsupported)
+        }
         TerminalError::OperationFailed => {
             RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed)
         }
@@ -219,6 +282,13 @@ fn lifecycle(value: wire::TerminalLifecycle) -> exec_server::terminal::TerminalL
         wire::TerminalLifecycle::Reconnectable => {
             exec_server::terminal::TerminalLifecycle::Reconnectable
         }
+    }
+}
+
+fn ready_to_dto(value: exec_server::terminal::TerminalProcessReady) -> wire::TerminalProcessReady {
+    wire::TerminalProcessReady {
+        pid: value.pid,
+        cwd: value.cwd,
     }
 }
 

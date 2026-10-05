@@ -1715,6 +1715,12 @@ use crate::protocol::terminal::TerminalLifecycle;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalOutputChunk;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalProcessInfo;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalProcessInfoParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalProcessReady;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProfile;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProfileListResult;
@@ -1728,6 +1734,12 @@ use crate::protocol::terminal::TerminalReadResult;
 use crate::protocol::terminal::TerminalReconnectLease;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalResizeParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalSendSignalParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalSignal;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalWriteBinaryParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalWriteParams;
 #[cfg(any(test, feature = "export"))]
@@ -4334,6 +4346,21 @@ client_methods! {
         response: (),
         serialization: None,
     },
+    TerminalWriteBinary => "terminal/writeBinary" {
+        params: TerminalWriteBinaryParams,
+        response: (),
+        serialization: None,
+    },
+    TerminalProcessInfo => "terminal/processInfo" {
+        params: TerminalProcessInfoParams,
+        response: TerminalProcessInfo,
+        serialization: None,
+    },
+    TerminalSendSignal => "terminal/sendSignal" {
+        params: TerminalSendSignalParams,
+        response: (),
+        serialization: None,
+    },
     TerminalResize => "terminal/resize" {
         params: TerminalResizeParams,
         response: (),
@@ -5883,6 +5910,12 @@ typescript_bindings! {
     TerminalAttachParams,
     TerminalAttachResult,
     TerminalWriteParams,
+    TerminalWriteBinaryParams,
+    TerminalProcessReady,
+    TerminalProcessInfo,
+    TerminalProcessInfoParams,
+    TerminalSignal,
+    TerminalSendSignalParams,
     TerminalResizeParams,
     TerminalReadParams,
     TerminalOutputChunk,

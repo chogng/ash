@@ -1,4 +1,5 @@
 import type { IDisposable } from "../../../base/common/lifecycle.js";
+import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export type TerminalProcessConnectionState = "stopped" | "starting" | "initializing" | "ready" | "stopping" | "crashed" | "restarting";
 
@@ -22,7 +23,14 @@ export interface ITerminalProcessCreateOptions {
 /** Describes whether a terminal process survives replacement of its App Server connection. */
 export type TerminalProcessConnectionPersistence = "connectionOwned" | "reconnectable";
 
+/** Identity and directory confirmed by the backend when the shell was spawned. */
+export interface ITerminalProcessReady {
+	readonly pid: number;
+	readonly cwd: string;
+}
+
 export interface ITerminalProcessCreation {
+	readonly ready: ITerminalProcessReady;
 	readonly terminalId: string;
 	readonly profile: ITerminalProcessProfile;
 	readonly connectionPersistence: TerminalProcessConnectionPersistence;
@@ -31,7 +39,7 @@ export interface ITerminalProcessCreation {
 export interface ITerminalProcessWriteOptions {
 	readonly dirId?: string;
 	readonly terminalId: string;
-	readonly data: string;
+	readonly data: string | Uint8Array;
 }
 
 export interface ITerminalProcessResizeOptions {
@@ -51,7 +59,8 @@ export interface ITerminalProcessReadOptions {
 
 export interface ITerminalProcessOutputChunk {
 	readonly sequence: number;
-	readonly dataBase64: string;
+	/** JSON encoding is removed by the adapter; UTF-8 and ANSI parsing remain with the terminal screen. */
+	readonly data: Uint8Array;
 }
 
 export type TerminalProcessCommandStatus = "running" | "completed" | "succeeded" | "failed" | "canceled";
@@ -60,7 +69,7 @@ export interface ITerminalProcessCommandStatusEvent {
 	readonly sequence: number;
 	readonly commandId: string;
 	readonly status: TerminalProcessCommandStatus;
-	readonly exitCode: number | null;
+	readonly exitCode: number | undefined;
 	readonly afterOutputSequence: number;
 }
 
@@ -73,7 +82,7 @@ export interface ITerminalProcessReadResult {
 	readonly nextCommandSequence: number;
 	readonly commandEventGap: boolean;
 	readonly exited: boolean;
-	readonly exitCode: number | null;
+	readonly exitCode: number | undefined;
 }
 
 export interface ITerminalProcessCloseOptions {
@@ -92,3 +101,5 @@ export interface ITerminalProcessService {
 	getConnectionState(): Promise<TerminalProcessConnectionState>;
 	onConnectionState(listener: (state: TerminalProcessConnectionState) => void): IDisposable;
 }
+
+export const ITerminalProcessService = createServiceIdentifier<ITerminalProcessService>("terminalProcessService");

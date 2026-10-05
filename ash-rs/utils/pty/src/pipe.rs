@@ -208,6 +208,7 @@ async fn spawn_process_with_stdin_mode(
         }
     });
 
+    let process_id = child.id();
     let (exit_tx, exit_rx) = oneshot::channel::<i32>();
     let exit_status = Arc::new(AtomicBool::new(false));
     let wait_exit_status = Arc::clone(&exit_status);
@@ -236,6 +237,7 @@ async fn spawn_process_with_stdin_mode(
     });
 
     let handle = ProcessHandle::new(
+        process_id,
         writer_tx,
         Box::new(PipeChildTerminator {
             #[cfg(windows)]

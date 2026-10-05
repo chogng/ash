@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { Event } from "../../../../../base/common/event.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { ITerminalInstance } from "../../../../../workbench/services/terminal/common/terminal.js";
+import type { ITerminalInstance } from "../../browser/terminal.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({

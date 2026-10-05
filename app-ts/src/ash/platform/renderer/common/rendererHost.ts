@@ -19,7 +19,7 @@ import type { IContentSearchApi } from "../../search/common/searchApi.js";
 import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../../sessions/common/sessionApi.js";
 import type { ISkillService } from "../../skills/common/skillService.js";
 import type { ILanguageServerService } from "../../language/common/languageServerService.js";
-import type { ITerminalProcessService } from "../../terminal/common/terminalProcessService.js";
+import type { ITerminalProcessService } from "../../terminal/common/terminal.js";
 import type { ITypstApi } from "../../typst/common/typstApi.js";
 import type { IDocumentCollaborationApi } from "../../collaboration/common/documentCollaborationApi.js";
 import type { ICodebaseApi } from "../../codebase/common/codebaseApi.js";

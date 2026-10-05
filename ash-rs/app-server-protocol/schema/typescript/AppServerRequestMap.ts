@@ -503,10 +503,14 @@ import type { TerminalCloseParams } from './types/TerminalCloseParams.js';
 import type { TerminalCreateInSessionDirectoryParams } from './types/TerminalCreateInSessionDirectoryParams.js';
 import type { TerminalCreateParams } from './types/TerminalCreateParams.js';
 import type { TerminalCreateResult } from './types/TerminalCreateResult.js';
+import type { TerminalProcessInfo } from './types/TerminalProcessInfo.js';
+import type { TerminalProcessInfoParams } from './types/TerminalProcessInfoParams.js';
 import type { TerminalProfileListResult } from './types/TerminalProfileListResult.js';
 import type { TerminalReadParams } from './types/TerminalReadParams.js';
 import type { TerminalReadResult } from './types/TerminalReadResult.js';
 import type { TerminalResizeParams } from './types/TerminalResizeParams.js';
+import type { TerminalSendSignalParams } from './types/TerminalSendSignalParams.js';
+import type { TerminalWriteBinaryParams } from './types/TerminalWriteBinaryParams.js';
 import type { TerminalWriteParams } from './types/TerminalWriteParams.js';
 import type { TestingDiscoverParams } from './types/TestingDiscoverParams.js';
 import type { TestingOperationParams } from './types/TestingOperationParams.js';
@@ -902,6 +906,9 @@ export interface AppServerRequestMap {
   "terminal/createInSessionDirectory": { params: TerminalCreateInSessionDirectoryParams; response: TerminalCreateResult };
   "terminal/attach": { params: TerminalAttachParams; response: TerminalAttachResult };
   "terminal/write": { params: TerminalWriteParams; response: null };
+  "terminal/writeBinary": { params: TerminalWriteBinaryParams; response: null };
+  "terminal/processInfo": { params: TerminalProcessInfoParams; response: TerminalProcessInfo };
+  "terminal/sendSignal": { params: TerminalSendSignalParams; response: null };
   "terminal/resize": { params: TerminalResizeParams; response: null };
   "terminal/read": { params: TerminalReadParams; response: TerminalReadResult };
   "terminal/close": { params: TerminalCloseParams; response: null };
@@ -1293,6 +1300,9 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "terminal/createInSessionDirectory": { method: "terminal/createInSessionDirectory" },
   "terminal/attach": { method: "terminal/attach" },
   "terminal/write": { method: "terminal/write" },
+  "terminal/writeBinary": { method: "terminal/writeBinary" },
+  "terminal/processInfo": { method: "terminal/processInfo" },
+  "terminal/sendSignal": { method: "terminal/sendSignal" },
   "terminal/resize": { method: "terminal/resize" },
   "terminal/read": { method: "terminal/read" },
   "terminal/close": { method: "terminal/close" },

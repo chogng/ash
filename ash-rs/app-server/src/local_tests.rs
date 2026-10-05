@@ -1,4 +1,7 @@
 use super::*;
+
+#[path = "local_mcp_catalog_tests.rs"]
+mod mcp_catalog;
 use crate::ConnectionState;
 use ash_async_utils::CancellationSource;
 use ash_client::ClientError;

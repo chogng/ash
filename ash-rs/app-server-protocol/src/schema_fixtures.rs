@@ -643,6 +643,15 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("TerminalCommandStatus"));
     assert!(definitions.contains_key("TerminalCommandStatusEvent"));
     assert!(definitions.contains_key("TerminalReadResult"));
+    assert!(definitions.contains_key("TerminalProcessReady"));
+    assert!(definitions.contains_key("TerminalProcessInfo"));
+    assert!(definitions.contains_key("TerminalProcessInfoParams"));
+    assert!(definitions.contains_key("TerminalWriteBinaryParams"));
+    assert!(definitions.contains_key("TerminalSendSignalParams"));
+    assert_eq!(
+        definitions["TerminalProcessReady"]["properties"]["pid"]["minimum"],
+        1
+    );
     assert!(definitions.contains_key("GitStatusResult"));
     assert!(definitions.contains_key("GitPathsParams"));
     assert!(definitions.contains_key("GitCommitParams"));

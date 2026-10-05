@@ -1,5 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
 export interface DebugAdapterExecutable {
 	readonly program: string;
@@ -19,6 +20,8 @@ export interface DebugAdapterFactorySource {
 	readonly onDidChange: Event<readonly DebugAdapterFactory[]>;
 	get(type: string): DebugAdapterFactory | undefined;
 }
+
+export const IDebugAdapterFactorySource = createServiceIdentifier<DebugAdapterFactorySource>("debugAdapterFactorySource");
 
 /** One caller-owned factory set that can be atomically replaced. */
 export interface DebugAdapterFactoryRegistration extends IDisposable {
