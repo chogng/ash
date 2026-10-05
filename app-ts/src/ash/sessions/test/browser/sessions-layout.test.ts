@@ -115,8 +115,8 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 
 	assert.deepEqual(layout.getPartSize("titlebar"), new Dimension(1_200, WorkbenchWindowBarHeight));
 	assert.equal(layout.getPartSize('activitybar').width, 44);
-	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 260) <= 1, true);
-	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 200) <= 1, true);
+	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 240) <= 1, true);
+	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 240) <= 1, true);
 	assert.equal(layout.getPartSize("sessions").height, 800 - WorkbenchWindowBarHeight);
 	assert.equal(layout.getPartSize("sessions").width > 400, true);
 	assert.equal(layout.isPartVisible('editor'), false);

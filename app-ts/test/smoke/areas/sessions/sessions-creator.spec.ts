@@ -16,6 +16,10 @@ test('Sessions Creator opens seven workspaces and retains each canvas independen
 	await page.keyboard.press('Escape');
 	await expect(design).toBeFocused();
 	await design.press('Enter');
+	for (const part of ['sidebar', 'auxiliarybar']) {
+		await expect(page.locator(`[data-part="${part}"]`)).toBeVisible();
+		await expect.poll(() => page.locator(`[data-part="${part}"]`).evaluate(element => Math.round(element.parentElement!.getBoundingClientRect().width))).toBe(240);
+	}
 	let workspace = creator.locator('.ash-creator-workspace:visible');
 	let canvas = workspace.getByRole('region', { name: 'Design canvas' });
 	await canvas.press('r');
