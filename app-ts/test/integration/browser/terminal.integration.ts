@@ -273,3 +273,82 @@ declare global {
 		ashTerminalAssemblyIntegration(): Promise<{ isolated: boolean; output: string[]; calls: string[]; missingDependency: string; remaining: number[] }>;
 	}
 }
+
+if (new URLSearchParams(location.search).has('embedder')) {
+	widget.dispose();
+	await import('../../../src/ash/workbench/contrib/terminal/browser/terminal.contribution.js');
+	const [{ IEmbedderTerminalService }, { TerminalMainContribution }, { getSingletonServiceDescriptors }, { ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { WorkspaceContextService }, { installWorkbenchServiceContributions }, { WorkbenchContributionsRegistry, WorkbenchPhase }] = await Promise.all([
+		import('../../../src/ash/workbench/services/terminal/common/embedderTerminalService.js'),
+		import('../../../src/ash/workbench/contrib/terminal/browser/terminalMainContribution.js'),
+		import('../../../src/ash/platform/instantiation/common/extensions.js'),
+		import('../../../src/ash/platform/instantiation/common/serviceCollection.js'),
+		import('../../../src/ash/platform/terminal/common/terminal.js'),
+		import('../../../src/ash/platform/workspace/common/workspace.js'),
+		import('../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js'),
+		import('../../../src/ash/workbench/browser/workbenchServiceContributions.js'),
+		import('../../../src/ash/workbench/common/contributions.js'),
+	]);
+	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IEmbedderTerminalService)![1];
+	const workspace = store.add(new WorkspaceContextService({ id: 'host-output' }));
+	const backendCalls: string[] = [];
+	const rejectBackend = async (): Promise<never> => { backendCalls.push('unexpected'); throw new Error('Host output has no backend'); };
+	const services = store.add(widgetServices.createChild(new ServiceCollection(
+		[IEmbedderTerminalService, descriptor],
+		[IWorkspaceContextService, workspace],
+		[ITerminalProcessService, { listProfiles: rejectBackend, create: rejectBackend, write: rejectBackend, resize: rejectBackend, read: rejectBackend, close: rejectBackend, getConnectionState: async () => 'crashed', onConnectionState: Event.None }],
+	)));
+	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => {} });
+	const terminals = services.get(ITerminalService);
+	let hostWidget: TerminalInstanceWidget;
+	let hostReady: Promise<void> = Promise.resolve();
+	services.registerInstance(IViewsService, {
+		openView: async (_id: string) => {
+			if (!hostWidget) {
+				hostWidget = store.add(services.createInstance(TerminalInstanceWidget, document.querySelector<HTMLElement>('#terminal')!, terminals.activeInstance!));
+				hostWidget.setVisible(true);
+				hostReady = hostWidget.initialize();
+				await hostReady;
+			}
+			hostWidget.focus();
+			return null;
+		},
+	} as IViewsService);
+	const hostOutput = store.add(new Emitter<string>());
+	const hostExit = store.add(new Emitter<void | number>());
+	const hostName = store.add(new Emitter<string>());
+	let opens = 0;
+	let closes = 0;
+	services.get(IEmbedderTerminalService).createTerminal({
+		name: 'Host output',
+		pty: {
+			onDidWrite: hostOutput.event, onDidClose: hostExit.event, onDidChangeName: hostName.event,
+			open: () => { opens++; hostOutput.fire('synchronous host output\r\n'); },
+			close: () => { closes++; },
+		},
+	});
+	const contributions = store.add(WorkbenchContributionsRegistry.createHost(services, undefined, [TerminalMainContribution.ID]));
+	contributions.advance(WorkbenchPhase.BlockStartup);
+	window.ashEmbedderTerminalIntegration = {
+		ready: async () => { await Promise.resolve(); await Promise.resolve(); await hostReady; },
+		name: value => hostName.fire(value),
+		output: value => hostOutput.fire(value),
+		exit: code => hostExit.fire(code),
+		status: () => ({ opens, closes, backendCalls, title: terminals.activeInstance?.title, state: terminals.activeInstance?.state, readOnly: terminals.activeInstance?.isReadOnly, remaining: terminals.instances.length }),
+		close: async () => { await terminals.activeInstance!.close(); store.dispose(); },
+		dispose: () => store.dispose(),
+	};
+}
+
+declare global {
+	interface Window {
+		ashEmbedderTerminalIntegration: {
+			ready(): Promise<void>;
+			name(value: string): void;
+			output(value: string): void;
+			exit(code: number): void;
+			status(): { opens: number; closes: number; backendCalls: string[]; title?: string; state?: string; readOnly?: boolean; remaining: number };
+			close(): Promise<void>;
+			dispose(): void;
+		};
+	}
+}

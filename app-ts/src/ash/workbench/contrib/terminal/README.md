@@ -5,6 +5,7 @@
 | Owner | 职责 |
 | --- | --- |
 | `browser/terminal.contribution.ts` | Terminal 实例服务注册、View、聚焦命令，以及 links、voice 贡献的装载入口 |
+| `browser/terminalMainContribution.ts` | BlockStartup 时订阅宿主 PTY 创建通知，交给现有实例服务并显示 Terminal View |
 | `browser/terminal.ts` | `ITerminalService`、实例、profile、尺寸及前端事件契约 |
 | `browser/terminalService.ts` | 窗口实例列表、顺序、活动项；每实例输入队列、输出/命令游标、轮询代次和连接状态 |
 | `browser/terminalView.ts` | View 内容、实例 Tab、活动项呈现、profile 选择和实例 Widget 生命周期；隐藏 View 保留实例和 Widget |
@@ -17,7 +18,9 @@
 
 桌面链路是 Widget 的 onData/onBinary → `ITerminalInstance.write`/`processBinary` → `ITerminalProcessService.write` → Renderer protocol client → MessagePort → Main 透明 relay → App Server → `exec-server` → PTY。输出走相反方向，屏幕只有 xterm 一份 owner；Rust Desktop 的终端网格属于另一个产品，并不作为 Electron 屏幕的后端副本。
 
-实例从平台契约消费原始字节和前端退出码，不解析生成 DTO 或 base64。当前轮询与两个读取游标仍在实例内，尚未收敛到事件型进程契约；不能把协议转换收回平台视为这部分已经完成。
+Shell 实例从平台契约消费原始字节和前端退出码，不解析生成 DTO 或 base64。当前轮询与两个读取游标仍在实例内，尚未收敛到完整事件型进程契约；不能把协议转换收回平台视为这部分已经完成。
+
+宿主提供的输出 PTY 从 `services/terminal/common/embedderTerminalService.ts` 经 `TerminalMainContribution` 接入同一个实例列表。实例先登记、发布再打开 PTY，保留界面订阅前的输出和退出；标题直接跟随宿主改名，后端连接变化不影响宿主 PTY。xterm 禁止输入，语音输入不启动；关闭与 Relaunch 使用宿主的生命周期，不请求 Rust Shell，也不要求打开 Workspace folder。宿主 PTY 无 OS 子进程，PID 使用 `-1`，cwd 为空。
 
 当前已有多实例、输入、主题、Tab、标题动作、URL 与语音能力。终端专属 Accessible View、帮助、verbosity 设置、Find、命令历史、Quick Fix、Sticky Scroll、扩展提供 PTY、编辑区终端与真正的分组分屏尚未接通；不能根据 xterm 可用或上游文件名相同宣称完成这些贡献。后续每项贡献须先找到当前生产消费者、唯一状态 owner 与下层服务契约，再在对应路径实现，并通过键盘、焦点、非默认语言和真实 Playwright 状态断言验证。
 

@@ -10,6 +10,7 @@ import type { WorkbenchDefaultLayout } from "./layout.js";
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import type { IWebWorkspaceClient } from '../services/workspaces/browser/workspaceOpenService.js';
 import type { IConfigurationApi, IConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
+import type { IEmbedderTerminalOptions } from '../services/terminal/common/embedderTerminalService.js';
 
 /**
  * Capabilities and identity supplied by an embedding Web application.
@@ -43,6 +44,9 @@ export interface IWebWorkbenchConstructionOptions {
 
 /** Lifecycle facade returned to a Web Workbench embedder. */
 export interface IWebWorkbench extends IDisposable {
+	readonly window: {
+		createTerminal(options: IEmbedderTerminalOptions): Promise<void>;
+	};
 	/** Saved editors and dirty working copies are restored before startup completes. */
 	readonly whenRestored: Promise<void>;
 	shutdown(reason: ShutdownReason): Promise<void>;

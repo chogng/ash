@@ -72,6 +72,7 @@ export class TerminalInstanceWidget extends Disposable {
 		]);
 		if (this.isDisposed) return;
 		const terminal = new Terminal({
+			disableStdin: this.instance.isReadOnly === true,
 			allowProposedApi: true,
 			allowTransparency: false,
 			cursorBlink: true,

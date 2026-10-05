@@ -13,6 +13,11 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { ITerminalService } from './terminal.js';
 import { TerminalService } from './terminalService.js';
+import { TerminalMainContribution } from './terminalMainContribution.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
+
+registerWorkbenchContribution(TerminalMainContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(TerminalMainContribution));
 
 registerWorkbenchServiceContribution({
 	service: ITerminalService,

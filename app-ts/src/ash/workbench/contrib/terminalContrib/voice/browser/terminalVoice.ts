@@ -76,7 +76,7 @@ export class TerminalVoiceSession extends Disposable {
 		}, true));
 	}
 	public async start(): Promise<void> {
-		if (!this.isVisible() || this.terminals.activeInstance?.state !== 'running') { return; }
+		if (!this.isVisible() || this.terminals.activeInstance?.state !== 'running' || this.terminals.activeInstance.isReadOnly) { return; }
 		this.focus();
 		this.target = this.terminals.activeInstance;
 		const lifetime = new DisposableStore();

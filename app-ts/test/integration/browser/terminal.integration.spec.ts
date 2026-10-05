@@ -1,5 +1,36 @@
 import { expect, test } from '@playwright/test';
 
+test('host PTY created before the contribution preserves early output and remains read only', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html?embedder');
+	await page.waitForFunction(() => Boolean(window.ashEmbedderTerminalIntegration));
+	await page.evaluate(() => window.ashEmbedderTerminalIntegration.ready());
+	await expect(page.locator('.xterm-rows')).toHaveText(/synchronous host output/u);
+	await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+	await page.keyboard.type('ignored input');
+	await page.evaluate(() => {
+		window.ashEmbedderTerminalIntegration.name('Renamed host');
+		window.ashEmbedderTerminalIntegration.output('later output\r\n');
+		window.ashEmbedderTerminalIntegration.exit(0);
+	});
+	await expect(page.locator('.xterm-rows')).toHaveText(/synchronous host output.*later output.*process exited with code 0/su);
+	expect(await page.evaluate(() => window.ashEmbedderTerminalIntegration.status())).toEqual({ opens: 1, closes: 0, backendCalls: [], title: 'Renamed host', state: 'exited', readOnly: true, remaining: 1 });
+	await page.evaluate(() => window.ashEmbedderTerminalIntegration.close());
+	await expect(page.locator('.ash-terminal-instance')).toHaveCount(0);
+	expect(errors).toEqual([]);
+});
+
+test('disposing a window with a running host PTY closes it once', async ({ page }) => {
+	await page.goto('/terminal.html?embedder');
+	await page.waitForFunction(() => Boolean(window.ashEmbedderTerminalIntegration));
+	await page.evaluate(() => window.ashEmbedderTerminalIntegration.ready());
+	await expect(page.locator('.xterm')).toHaveCount(1);
+	await page.evaluate(() => window.ashEmbedderTerminalIntegration.dispose());
+	expect(await page.evaluate(() => window.ashEmbedderTerminalIntegration.status())).toEqual({ opens: 1, closes: 1, backendCalls: [], remaining: 0 });
+	await expect(page.locator('.ash-terminal-instance')).toHaveCount(0);
+});
+
 test('Chinese terminal actions create terminals while preserving shell names', async ({ page }) => {
 	await page.goto('/terminal.html?pane&locale=zh-CN');
 	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));

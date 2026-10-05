@@ -2,6 +2,8 @@
 
 此目录提供 Renderer 与交互式 PTY 后端之间的进程契约。Shell 进程、授权目录、输出缓冲和重连租约的最终判定由 Rust 后端拥有；这里不保存终端屏幕、Tab 或活动实例。
 
+`common/terminal.ts` 同时提供宿主输出 PTY 的启动配置、进程事件、标题属性和启动/关闭契约，供 `services/terminal/common/embedderTerminalService.ts` 与 Terminal contribution 共享。这部分只覆盖宿主输出生命周期；完整 VS Code child process 的输入、signal、通用属性和解析后数据确认仍待接入 Rust 能力，没有添加空操作实现。
+
 | 文件 | 职责与生产入口 |
 | --- | --- |
 | `common/terminal.ts` | 前端进程契约：profile、带真实 PID/启动目录的创建、文本或原始字节输入、尺寸、增量字节输出、关闭和连接状态；退出码使用 `undefined` 表达未知，由 `IRendererHost.terminal` 提供给 Workbench |

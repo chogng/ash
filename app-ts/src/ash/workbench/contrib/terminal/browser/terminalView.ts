@@ -154,7 +154,9 @@ export class TerminalViewPane extends ViewPane {
 		if (!this.isBodyVisible() || this.isDisposed || this.initializing) return;
 		if (!this.hasWorkspaceFolder()) {
 			this.titleActions.setProfiles([]);
-			this.setStatus("Open a folder to use the terminal.");
+			if (this.terminalService.instances.length === 0) {
+				this.setStatus("Open a folder to use the terminal.");
+			}
 			return;
 		}
 		this.initializing = true;

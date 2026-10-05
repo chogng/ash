@@ -1,4 +1,5 @@
 import type { IDisposable } from "../../../base/common/lifecycle.js";
+import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export type TerminalProcessConnectionState = "stopped" | "starting" | "initializing" | "ready" | "stopping" | "crashed" | "restarting";
@@ -103,3 +104,36 @@ export interface ITerminalProcessService {
 }
 
 export const ITerminalProcessService = createServiceIdentifier<ITerminalProcessService>("terminalProcessService");
+
+/** Launch information shared with providers that supply their own terminal output. */
+export interface IShellLaunchConfig {
+	readonly name?: string;
+	readonly isFeatureTerminal?: boolean;
+	readonly customPtyImplementation?: (terminalId: number, cols: number, rows: number) => ITerminalChildProcess;
+}
+
+export interface IProcessReadyEvent {
+	readonly pid: number;
+	readonly cwd: string;
+}
+
+export enum ProcessPropertyType {
+	Title = 'title',
+}
+
+export interface IProcessProperty {
+	readonly type: ProcessPropertyType.Title;
+	readonly value: string;
+}
+
+/** Output PTY lifecycle. Shell input, properties and flow control still use the Rust process contract. */
+export interface ITerminalChildProcess extends IDisposable {
+	readonly id: number;
+	readonly shouldPersist: boolean;
+	readonly onProcessData: Event<string>;
+	readonly onProcessReady: Event<IProcessReadyEvent>;
+	readonly onDidChangeProperty: Event<IProcessProperty>;
+	readonly onProcessExit: Event<number | undefined>;
+	start(): Promise<void>;
+	shutdown(immediate: boolean): void;
+}

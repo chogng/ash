@@ -773,6 +773,13 @@ TerminalViewPane / xterm
   → ash-utils-pty
 ```
 
+Web 宿主的 `window.createTerminal` 通过 `IEmbedderTerminalService` 接收自供输出 PTY，
+由 `TerminalMainContribution` 在 BlockStartup 接入同一个 `ITerminalService` 和 Terminal View。
+实例保留界面订阅前的同步输出与退出，标题跟随宿主改名；xterm 按只读终端运行。
+这条链路不创建 Rust Shell，不要求 Workspace folder，也不依赖后端连接状态。
+宿主的打开、关闭及监听释放沿窗口与实例生命周期处理；当前只补齐宿主输出所需的进程事件契约，
+完整标准 child process 的输入、属性和解析后数据确认仍未完成。
+
 SCM 同样通过 `IGitService → GitService → IGitApi` 访问仓库，并由 Service 把 status notification
 和 reconnect lifecycle 投影成前端事件；Search 通过
 `IContentSearchService → BrowserContentSearchService → IContentSearchApi` 消费有界批次。

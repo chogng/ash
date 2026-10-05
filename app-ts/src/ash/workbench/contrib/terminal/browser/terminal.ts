@@ -1,6 +1,7 @@
 import type { Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 
 /** Character-cell dimensions used by Workbench terminal callers. */
 export interface ITerminalDimensions {
@@ -34,15 +35,18 @@ export type ITerminalProfileSelection =
 	| { readonly type: "profile"; readonly profileId: string };
 
 /** Complete caller-facing input for creating one terminal. */
-export interface ITerminalCreateOptions {
+export type ITerminalCreateOptions = {
 	readonly dirId?: string;
 	readonly dimensions: ITerminalDimensions;
-	readonly profile: ITerminalProfileSelection;
 	readonly title?: string;
-}
+} & (
+	| { readonly profile: ITerminalProfileSelection; readonly config?: never }
+	| { readonly config: IShellLaunchConfig & Required<Pick<IShellLaunchConfig, 'customPtyImplementation'>>; readonly profile?: never }
+);
 
 /** One interactive terminal independently of its transport representation. */
 export interface ITerminalInstance extends IDisposable {
+	readonly isReadOnly?: boolean;
 	readonly id: string;
 	readonly dirId: string;
 	readonly processId: number;

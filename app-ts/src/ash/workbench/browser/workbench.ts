@@ -84,6 +84,7 @@ import "../../platform/layout/browser/zIndexRegistry.js";
 import { InstantiationService } from "../../platform/instantiation/common/instantiationService.js";
 import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
+import { IEmbedderTerminalService, type IEmbedderTerminalOptions } from '../services/terminal/common/embedderTerminalService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { NotificationService } from "../services/notification/common/notificationService.js";
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from "../../platform/accessibility/browser/accessibleView.js";
@@ -421,6 +422,9 @@ export async function startWorkbench({
 
 /** Owns the renderer workbench, its parts, commands, and runtime layout. */
 export class Workbench extends Disposable {
+	public readonly window: {
+		createTerminal(options: IEmbedderTerminalOptions): Promise<void>;
+	};
 	/** Resolves after dirty working copies are restored and AfterRestored contributions are active. */
 	readonly whenRestored: Promise<void>;
 	private readonly workspaceContext: WorkspaceContextService;
@@ -479,6 +483,13 @@ export class Workbench extends Disposable {
 			serviceCollection.set(id, descriptor);
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
+		const embedderTerminals = services.get(IEmbedderTerminalService);
+		this.window = {
+			createTerminal: async options => {
+				this.assertNotDisposed();
+				embedderTerminals.createTerminal(options);
+			},
+		};
 		// Editor contributions can resolve data-channel enablement while Parts are being constructed.
 		const contextKeys = this._register(new ContextKeyService());
 		services.registerInstance(IContextKeyService, contextKeys);

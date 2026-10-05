@@ -8,7 +8,7 @@
 | --- | --- |
 | [platform/terminal](../src/ash/platform/terminal/README.md) | 前端进程契约与 DI 标识；现有 Rust 协议适配、SSH 租约管理继续接入同一后端 |
 | [contrib/terminal](../src/ash/workbench/contrib/terminal/README.md) | 唯一实例集合、活动项、输入队列、输出与命令游标；View 和 xterm 拥有屏幕、焦点、主题及布局 |
-| [services/terminal](../src/ash/workbench/services/terminal/README.md) | 不再保存 Shell 实例服务；上游 embedder PTY 职责没有当前消费者，未创建占位实现 |
+| [services/terminal](../src/ash/workbench/services/terminal/README.md) | 宿主输出 PTY 创建通知与生命周期已接入 Web API 和 Terminal contribution；不保存 Shell 实例服务 |
 | `contrib/tasks/browser/taskService.ts` | 任务发现、执行与终端命令状态；稳定依赖经构造 DI 注入，注册仍由 Code 模式选择 |
 | `contrib/debug/browser/debugService.ts` | Debug 执行编排与 DAP `runInTerminal`；稳定依赖经构造 DI 注入，工厂源仍指向同一个共享 registry |
 | `services/tasks/common/taskService.ts` | 共享任务契约只公开 UI `terminalId`；Tasks/Testing View 自行定位当前终端实例，不向共享契约引入 contribution 类型 |
@@ -53,8 +53,8 @@
 | 目录 | Ash | VS Code | 双方都有 | 仅 Ash | 仅 VS Code |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | `platform/terminal` | 4 | 46 | 1 | 3 | 45 |
-| `workbench/services/terminal` | 0 | 1 | 0 | 0 | 1 |
-| `workbench/contrib/terminal` | 13 | 89 | 6 | 7 | 83 |
+| `workbench/services/terminal` | 1 | 1 | 1 | 0 | 0 |
+| `workbench/contrib/terminal` | 14 | 89 | 7 | 7 | 82 |
 | `workbench/contrib/terminalContrib` | 4 | 170 | 3 | 1 | 167 |
 
 新增同路径 owner 承接已有 Ash 调用契约。公开名称与参数仍有差异：平台继续使用进程 ID、分页读取和命令游标；完整事件型 child process/backend、process manager、profile/configuration、分组、编辑区终端和扩展自供 PTY 尚未对齐。本批不把文件迁移或 DI 标识计为完整公开 API 对齐。
@@ -148,6 +148,31 @@ Terminal 专属无障碍帮助、输出 Accessible View、verbosity、Find、历
 | `terminal/writeBinary` | App Server 检查 base64 编码上限并解码；exec-server 检查 64 KiB 原始字节上限与所有权；走与文本相同的有界 writer channel，不进行 UTF-8 转换或 command-status 文本推断。xterm onBinary 已沿两个 Renderer adapter 接入；实例按同一队列发送所有先前文本批次、二进制、随后文本。 |
 | `terminal/sendSignal` | exec-server 校验所有权及授权，再委托 utils-pty。Unix PTY 从 tcgetpgrp 找到前台 job，发送 SIGINT；pipe 保留原进程组语义，hard close 保留原 kill-tree 行为。Windows 显式报告不支持。尚未把这个 Rust 出口扩成无当前调用方的前端通用 signal facade。 |
 | 关闭与断线 | 沿用现有 connectionOwned / reconnectable 身份、token 旋转、租约过期及授权撤销清理；不改变 Main/Renderer 的连接拓扑，不重放输入。 |
+
+### 第六批：宿主输出 PTY 基座
+
+用户要求补齐基座文件，范围包含建立缺失的 Web 宿主创建入口及其下层契约。生产链路是 `IWebWorkbench.window.createTerminal` → `IEmbedderTerminalService.createTerminal` → `TerminalMainContribution` → `ITerminalService.createTerminal` → 宿主 PTY 打开、输出、改名、退出与释放 → 现有 Terminal View/xterm。服务拥有 contribution 就绪前的创建请求，实例拥有接入后的进程和早到事件；窗口仍只有一个实例列表和一份屏幕。
+
+| 准确路径（相对 `app-ts`） | 关系与本批动作 |
+| --- | --- |
+| `src/ash/platform/terminal/common/terminal.ts` | 双方都有；补宿主输出所需的 launch config、进程事件、标题属性和启动/关闭契约 |
+| `src/ash/workbench/services/terminal/common/embedderTerminalService.ts` | 仅 VS Code，原路径新增；宿主 PTY 契约、窗口级创建通知、启动请求队列与进程释放 |
+| `src/ash/workbench/contrib/terminal/browser/terminalMainContribution.ts` | 仅 VS Code，原路径新增；订阅创建通知、接入现有实例服务并显示 View |
+| `src/ash/workbench/contrib/terminal/browser/terminal.contribution.ts` | 双方都有；BlockStartup 注册宿主接入 contribution |
+| `src/ash/workbench/contrib/terminal/browser/terminal.ts` | 双方都有；创建选项区分 Shell profile 与自供 PTY，实例公开只读能力 |
+| `src/ash/workbench/contrib/terminal/browser/terminalService.ts` | 双方都有；现有实例 owner 接入宿主事件、保留界面订阅前的输出与退出、处理关闭和 Relaunch |
+| `src/ash/workbench/browser/web.api.ts`、`src/ash/workbench/browser/workbench.ts` | 双方都有；Web 返回接口与窗口实现提供 `window.createTerminal` |
+| `src/ash/workbench/contrib/terminal/browser/terminalView.ts` | 双方都有；无 folder 的宿主输出终端不显示 Shell 的打开目录提示 |
+| `src/ash/workbench/contrib/terminal/browser/instance/terminalInstanceWidget.ts` | 已记录的 Ash 屏幕 owner，本批只按实例只读能力禁止 xterm 输入，不移动或改写 DOM/CSS |
+| `src/ash/workbench/contrib/terminalContrib/voice/browser/terminalVoice.ts` | 双方都有；只读宿主实例不启动语音输入 |
+| `src/ash/workbench/services/terminal/test/common/embedderTerminalService.test.ts` | 宿主链路回归测试；从真实 DI 服务和 contribution 观察创建、输出、退出、改名、跨窗口隔离、失败与释放 |
+| `test/integration/browser/terminal.integration.ts`、`test/integration/browser/terminal.integration.spec.ts` | 现有 Playwright 入口增加宿主 PTY，验证生产注册、真实 xterm 的早到输出、只读、焦点与清理 |
+
+同步现有 `src/ash/platform/terminal/README.md`、`src/ash/workbench/services/terminal/README.md`、`src/ash/workbench/contrib/terminal/README.md`、本台账及仓库 `docs/ash-desktop-architecture.md`。没有删除、移动文件，没有修改 Rust 协议或生成 DTO，没有新增执行后端或屏幕 owner。
+
+宿主契约与上游同样只提供 open/close、输出和可选退出/改名，不提供输入、signal 或尺寸回调。已退出实例保留屏幕，退出码 0 原样保留；宿主 PID 为 -1、cwd 为空，不能用来代替真实 Shell 身份。平台新增的 `ITerminalChildProcess` 当前仅覆盖此输出链的事件和生命周期，公开成员仍是完整上游契约的子集；完整 Shell child process/backend、属性与解析后 ACK 尚未完成。本批没有通过空方法制造这些能力。
+
+第六批验证：新增回归先复现了宿主同步输出与退出在界面订阅前丢失的问题，修复后通过真实 DI 与 contribution 观察早到事件。正常 `test:unit` 入口的 Embedder、Terminal、Tasks、DAP terminal 和服务装配五个文件共 46 项通过，runner 自测 4 项通过；新增的 8 项 Embedder 用例启用 disposable tracker。Chromium Terminal Playwright 19 项通过，其中新增 2 项验证真实 xterm 的只读宿主输出、焦点与释放；既有中文动作、文本/二进制输入和语音场景保持通过。生产 `pnpm --dir app-ts build`、automation 编译、`prepare:backend` 与真实 Electron + App Server Terminal 3 项通过。后端构建无 warning；stylelint 为 0 错误、1 条未修改 Sessions CSS 的建议，Playwright 有既有颜色环境提示。未修改 Rust 或协议，未运行 Rust 单测；未验证 Windows/Linux 和真实 SSH transport 的产品场景。
 
 ## 验证
 
