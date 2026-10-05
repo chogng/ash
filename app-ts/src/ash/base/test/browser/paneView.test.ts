@@ -105,7 +105,7 @@ test("PaneView keeps minimum heights scrollable and supports header keyboard nav
 	view.addPane(first, 100);
 	view.addPane(second, 100);
 	view.layout(60, 280);
-	assert.equal(view.element.firstElementChild?.getAttribute("style"), "height: 152px;");
+	assert.equal(view.element.firstElementChild?.getAttribute("style"), "height: 296px;");
 	const firstHeader = first.element.querySelector<HTMLButtonElement>(".ash-pane-view-header-button")!;
 	const secondHeader = second.element.querySelector<HTMLButtonElement>(".ash-pane-view-header-button")!;
 	firstHeader.focus();
@@ -118,7 +118,7 @@ test("PaneView keeps minimum heights scrollable and supports header keyboard nav
 	first.setCollapsed(true);
 	assert.equal(view.element.firstElementChild?.getAttribute("style"), "height: 60px;");
 	first.setCollapsed(false);
-	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [76, 28]);
+	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [148, 28]);
 });
 
 test("PaneView double-click resets expanded panes across a collapsed pane", () => {

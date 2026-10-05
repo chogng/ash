@@ -2,6 +2,7 @@ import type { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../co
 import type { HoverContent, HoverPersistence, IDelayedHoverOptions, IHoverLifecycleOptions } from "./hover.js";
 import type { IDisposable } from "../../../common/lifecycle.js";
 import { toDisposable } from "../../../common/lifecycle.js";
+import { CancellationToken } from '../../../common/cancellation.js';
 
 /** Base-owned inputs understood by any managed Hover implementation. */
 export interface HoverDelegateSetupOptions {
@@ -13,6 +14,8 @@ export interface HoverDelegateSetupOptions {
 	readonly anchorAxisAlignment?: AnchorAxisAlignment;
 	readonly anchorPosition?: AnchorPosition;
 	readonly gap?: number;
+	readonly trapFocus?: boolean;
+	readonly onDidHide?: () => void;
 }
 
 /** Mutable handle shared by base controls and the Workbench Hover service. */
@@ -75,7 +78,7 @@ class NativeTitleHover implements IManagedHover {
 
 	update(content: HoverContent): void {
 		if (this.disposed) return;
-		const value = typeof content === "function" ? content() : content;
+		const value = typeof content === "function" ? content(CancellationToken.None) : content;
 		const title = typeof value === "string" ? value : value?.textContent;
 		if (title) {
 			this.target.setAttribute("title", title);

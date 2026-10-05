@@ -2,6 +2,28 @@ import type { DragAndDropData } from "../dnd/dnd.js";
 
 export type ListScrolling = "internal" | "external" | "managed";
 
+export interface IKeyboardNavigationLabelProvider<T> {
+	getKeyboardNavigationLabel(element: T): { toString(): string | undefined } | { toString(): string | undefined }[] | undefined;
+}
+
+export interface IListElementRenderDetails {
+	readonly height?: number;
+	readonly onScroll?: boolean;
+}
+
+export interface IListVirtualDelegate<T> {
+	getHeight(element: T): number;
+	getTemplateId(element: T): string;
+}
+
+export interface IListRenderer<T, TTemplateData> {
+	readonly templateId: string;
+	renderTemplate(container: HTMLElement): TTemplateData;
+	renderElement(element: T, index: number, templateData: TTemplateData, details?: IListElementRenderDetails): void;
+	disposeElement?(element: T, index: number, templateData: TTemplateData, details?: IListElementRenderDetails): void;
+	disposeTemplate(templateData: TTemplateData): void;
+}
+
 export interface ListAccessibilityProvider<T> {
 	readonly getRole?: (item: T) => "option" | "treeitem" | "row" | "presentation";
 	readonly getAriaLabel?: (item: T) => string | undefined;

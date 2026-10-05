@@ -1,14 +1,16 @@
 import { Emitter } from "../../../common/event.js";
+import { cancelOnDispose, type CancellationToken } from '../../../common/cancellation.js';
 import { Disposable, MutableDisposable, DisposableStore, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { addDisposableListener, getWindow, isHTMLElement, isNode, h } from "../../dom.js";
 import { disposableWindowTimeout } from "../../scheduler.js";
-import { restoreFocus } from '../../focus.js';
+import { restoreFocus, trapTabFocus } from '../../focus.js';
 import { getAriaAttribute, setAriaAttribute } from "../aria/aria.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
 import { HoverPosition } from './hoverWidget.js';
 
 export type HoverContentValue = string | HTMLElement | undefined;
-export type HoverContent = HoverContentValue | (() => HoverContentValue);
+/** A factory's token is cancelled when its content is replaced, hidden or disposed. */
+export type HoverContent = HoverContentValue | ((token: CancellationToken) => HoverContentValue);
 export type HoverDelay = number | (() => number);
 export type HoverPersistence = "transient" | "sticky";
 
@@ -45,6 +47,7 @@ export interface HoverOptions {
 	readonly gap?: number;
 	readonly contextViewProvider?: IContextViewProvider;
 	readonly setupKeyboardEvents?: boolean;
+	readonly trapFocus?: boolean;
 }
 
 let hoverId = 0;
@@ -56,6 +59,7 @@ export class Hover extends Disposable {
 	private readonly showTimer = this._register(new MutableDisposable<IDisposable>());
 	private readonly hideTimer = this._register(new MutableDisposable<IDisposable>());
 	private readonly tooltipListeners = this._register(new DisposableStore());
+	private readonly contentLifetime = this._register(new DisposableStore());
 	private readonly _onDidShow = this._register(new Emitter<void>());
 	private readonly _onDidHide = this._register(new Emitter<void>());
 	readonly onDidShow = this._onDidShow.event;
@@ -77,6 +81,7 @@ export class Hover extends Disposable {
 	private _visible = false;
 	private pointerDown = false;
 	private hoverFocused = false;
+	private readonly trapFocus: boolean;
 
 	constructor(options: HoverOptions) {
 		super();
@@ -84,6 +89,7 @@ export class Hover extends Disposable {
 		this.element = target;
 		this.content = options.content;
 		this.getHoverOptions = options.getHoverOptions;
+		this.trapFocus = options.trapFocus ?? false;
 		this.delayMs = options.delayMs ?? 300;
 		this.persistence = options.persistence ?? "transient";
 		this.enabled = options.enabled;
@@ -109,7 +115,6 @@ export class Hover extends Disposable {
 				target.setAttribute("title", this.previousTitle);
 			}
 		}));
-		this._register(toDisposable(() => this.hide()));
 
 		this._register(addDisposableListener(target, "pointerenter", () => {
 			this.hideTimer.clear();
@@ -159,10 +164,18 @@ export class Hover extends Disposable {
 		return this._visible;
 	}
 
+	protected override disposeCore(): void {
+		// Notify callers while subscriptions still exist, then release owned resources.
+		this.hide();
+		super.disposeCore();
+	}
+
 	show(): void {
 		this.showTimer.clear();
 		this.hideTimer.clear();
-		if (this.visible || this.enabled?.() === false) return;
+		if (this.visible || this.enabled?.() === false) {
+			return;
+		}
 		const ownerDocument = this.element.ownerDocument;
 		const tooltip = h(ownerDocument, "div");
 		hoverId += 1;
@@ -170,10 +183,60 @@ export class Hover extends Disposable {
 		tooltip.className = "ash-hover";
 		tooltip.setAttribute("role", "tooltip");
 		const hoverOptions = this.getHoverOptions?.();
-		if (!this.renderContent(tooltip, hoverOptions ? hoverOptions.content : this.content)) return;
+		if (!this.renderContent(tooltip, hoverOptions ? hoverOptions.content : this.content)) {
+			this.contentLifetime.clear();
+			return;
+		}
+		const { anchorAxisAlignment, anchorPosition } = this.resolvePosition(hoverOptions?.position?.hoverPosition);
+		this.bindTooltipListeners(tooltip);
+		this.tooltip = tooltip;
+		this.applyDescription(tooltip.id);
+		// Layout can synchronously rebuild and dispose the target while measuring
+		// its anchor. Treat the view as active first so disposal can close it.
+		this._visible = true;
+		const shown = this.contextView.show({
+			anchor: this.element,
+			content: tooltip,
+			anchorAlignment: this.anchorAlignment,
+			anchorAxisAlignment,
+			anchorPosition,
+			gap: this.gap,
+			presentation: "hover",
+			onHide: (reason) => this.didHide(reason),
+		});
+		if (!shown) {
+			if (this._visible) {
+				this.didHide();
+			}
+			return;
+		}
+		this._onDidShow.fire();
+	}
+
+	hide(): void {
+		this.showTimer.clear();
+		this.hideTimer.clear();
+		if (!this._visible) {
+			this.contentLifetime.clear();
+			return;
+		}
+		this.contextView.hide();
+	}
+
+	update(content: HoverContent): void {
+		this.content = content;
+		if (!this._visible || !this.tooltip) return;
+		if (!this.renderContent(this.tooltip)) {
+			this.hide();
+			return;
+		}
+		this.contextView.layout();
+	}
+
+	private resolvePosition(position: HoverPosition | undefined): { anchorAxisAlignment: AnchorAxisAlignment; anchorPosition: AnchorPosition } {
 		let anchorAxisAlignment = this.anchorAxisAlignment;
 		let anchorPosition = this.anchorPosition;
-		switch (hoverOptions?.position?.hoverPosition) {
+		switch (position) {
 			case HoverPosition.LEFT:
 				anchorAxisAlignment = AnchorAxisAlignment.Horizontal;
 				anchorPosition = AnchorPosition.Above;
@@ -191,106 +254,61 @@ export class Hover extends Disposable {
 				anchorPosition = AnchorPosition.Above;
 				break;
 		}
+		return { anchorAxisAlignment, anchorPosition };
+	}
+
+	private bindTooltipListeners(tooltip: HTMLDivElement): void {
+		const ownerDocument = this.element.ownerDocument;
 		this.tooltipListeners.clear();
-		this.tooltipListeners.add(addDisposableListener(
-			tooltip,
-			"pointerenter",
-			() => this.hideTimer.clear(),
-		));
-		this.tooltipListeners.add(addDisposableListener(
-			tooltip,
-			"pointerleave",
-			(event) => {
-				if (
-					isNode(event.relatedTarget) &&
-					this.element.contains(event.relatedTarget)
-				) {
-					return;
-				}
-				this.scheduleHide();
-			},
-		));
-		this.tooltipListeners.add(addDisposableListener(
-			tooltip,
-			"focusin",
-			() => {
-				this.hoverFocused = true;
-				this.hideTimer.clear();
-			},
-		));
-		this.tooltipListeners.add(addDisposableListener(
-			tooltip,
-			"focusout",
-			(event) => {
-				// ContextView hides its DOM before reporting Escape, blurring actions with no next target.
-				if (event.relatedTarget) this.hoverFocused = this.isInsideHover(event.relatedTarget);
-				if (
-					isNode(event.relatedTarget) &&
-					this.element.contains(event.relatedTarget)
-				) {
-					return;
-				}
-				this.scheduleHide();
-			},
-		));
-		this.tooltipListeners.add(addDisposableListener(ownerDocument, "pointermove", event => {
-			if (this.persistence === "sticky" || this.hoverFocused) return;
-			if (isNode(event.target) && (this.element.contains(event.target) || tooltip.contains(event.target))) {
-				this.hideTimer.clear();
+		if (this.trapFocus) this.tooltipListeners.add(trapTabFocus(tooltip));
+		this.tooltipListeners.add(addDisposableListener(tooltip, "pointerenter", () => this.hideTimer.clear()));
+		this.tooltipListeners.add(addDisposableListener(tooltip, "pointerleave", event => {
+			if (isNode(event.relatedTarget) && this.element.contains(event.relatedTarget)) {
 				return;
 			}
-			const target = this.element.getBoundingClientRect();
-			const card = tooltip.getBoundingClientRect();
-			const inside = (rect: DOMRect): boolean => event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
-			// Only the narrow gap between the anchor and card belongs to the hover's pointer region.
-			const horizontalGap = event.clientX >= Math.min(target.right, card.right) && event.clientX <= Math.max(target.left, card.left) && event.clientY >= Math.max(target.top, card.top) && event.clientY <= Math.min(target.bottom, card.bottom);
-			const verticalGap = event.clientY >= Math.min(target.bottom, card.bottom) && event.clientY <= Math.max(target.top, card.top) && event.clientX >= Math.max(target.left, card.left) && event.clientX <= Math.min(target.right, card.right);
-			if (inside(target) || inside(card) || horizontalGap || verticalGap) this.hideTimer.clear();
-			else this.scheduleHide();
+			this.scheduleHide();
 		}));
+		this.tooltipListeners.add(addDisposableListener(tooltip, "focusin", () => {
+			this.hoverFocused = true;
+			this.hideTimer.clear();
+		}));
+		this.tooltipListeners.add(addDisposableListener(tooltip, "focusout", event => {
+			// ContextView hides its DOM before reporting Escape, blurring actions with no next target.
+			if (event.relatedTarget) {
+				this.hoverFocused = this.isInsideHover(event.relatedTarget);
+			}
+			if (isNode(event.relatedTarget) && this.element.contains(event.relatedTarget)) {
+				return;
+			}
+			this.scheduleHide();
+		}));
+
+		this.tooltipListeners.add(addDisposableListener(ownerDocument, "pointermove", event => this.handlePointerMove(event, tooltip)));
 		const dismissOutsideTooltip = (event: Event) => {
-			if (isNode(event.target) && tooltip.contains(event.target)) return;
+			if (isNode(event.target) && tooltip.contains(event.target)) {
+				return;
+			}
 			this.hide();
 		};
 		this.tooltipListeners.add(addDisposableListener(ownerDocument, "pointerdown", dismissOutsideTooltip, true));
 		this.tooltipListeners.add(addDisposableListener(ownerDocument, "click", dismissOutsideTooltip, true));
-		this.tooltip = tooltip;
-		this.applyDescription(tooltip.id);
-		// Layout can synchronously rebuild and dispose the target while measuring
-		// its anchor. Treat the view as active first so disposal can close it.
-		this._visible = true;
-		const shown = this.contextView.show({
-			anchor: this.element,
-			content: tooltip,
-			anchorAlignment: this.anchorAlignment,
-			anchorAxisAlignment,
-			anchorPosition,
-			gap: this.gap,
-			presentation: "hover",
-			onHide: (reason) => this.didHide(reason),
-		});
-		if (!shown) {
-			if (this._visible) this.didHide();
-			return;
-		}
-		this._onDidShow.fire();
 	}
 
-	hide(): void {
-		this.showTimer.clear();
-		this.hideTimer.clear();
-		if (!this._visible) return;
-		this.contextView.hide();
-	}
-
-	update(content: HoverContent): void {
-		this.content = content;
-		if (!this._visible || !this.tooltip) return;
-		if (!this.renderContent(this.tooltip)) {
-			this.hide();
+	private handlePointerMove(event: PointerEvent, tooltip: HTMLDivElement): void {
+		if (this.persistence === "sticky" || this.hoverFocused) {
 			return;
 		}
-		this.contextView.layout();
+		if (isNode(event.target) && (this.element.contains(event.target) || tooltip.contains(event.target))) {
+			this.hideTimer.clear();
+			return;
+		}
+		const targetBounds = this.element.getBoundingClientRect();
+		const tooltipBounds = tooltip.getBoundingClientRect();
+		if (isPointInHoverRegion(event.clientX, event.clientY, targetBounds, tooltipBounds)) {
+			this.hideTimer.clear();
+		} else {
+			this.scheduleHide();
+		}
 	}
 
 	private scheduleShow(trigger: "pointer" | "focus"): void {
@@ -331,7 +349,8 @@ export class Hover extends Disposable {
 	}
 
 	private renderContent(container: HTMLElement, source: HoverContent = this.content): boolean {
-		const content = typeof source === "function" ? source() : source;
+		this.contentLifetime.clear();
+		const content = typeof source === "function" ? source(cancelOnDispose(this.contentLifetime)) : source;
 		container.replaceChildren();
 		if (content === undefined || content === "") return false;
 		if (typeof content === "string") {
@@ -380,9 +399,30 @@ export class Hover extends Disposable {
 		this._visible = false;
 		this.hoverFocused = false;
 		this.tooltip = undefined;
+		if (!this.contentLifetime.isDisposed) this.contentLifetime.clear();
 		if (!this.tooltipListeners.isDisposed) this.tooltipListeners.clear();
 		this.restoreDescription();
 		if (returnFocus) restoreFocus(this.element);
 		if (wasVisible) this._onDidHide.fire();
 	}
+}
+
+function isPointInHoverRegion(x: number, y: number, target: DOMRect, tooltip: DOMRect): boolean {
+	const containsPoint = (bounds: DOMRect): boolean => {
+		return x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
+	};
+	if (containsPoint(target) || containsPoint(tooltip)) {
+		return true;
+	}
+
+	// Only the gap within both rectangles' shared span keeps the hover open.
+	const inHorizontalGap = x >= Math.min(target.right, tooltip.right)
+		&& x <= Math.max(target.left, tooltip.left)
+		&& y >= Math.max(target.top, tooltip.top)
+		&& y <= Math.min(target.bottom, tooltip.bottom);
+	const inVerticalGap = y >= Math.min(target.bottom, tooltip.bottom)
+		&& y <= Math.max(target.top, tooltip.top)
+		&& x >= Math.max(target.left, tooltip.left)
+		&& x <= Math.min(target.right, tooltip.right);
+	return inHorizontalGap || inVerticalGap;
 }

@@ -98,7 +98,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const commit = document.querySelector<HTMLElement>(`[aria-describedby~="${tooltip.id}"]`)!;
 			// Opening the modal dismisses the hover, so capture its readable content and return target first.
 			const content = type === AccessibleViewType.Help
-				? localize('scm.history.detailsHelp', 'Commit details show the author, relative and full time, complete message, and file and line change counts. Use Left and Right Arrow in the actions toolbar to copy the full commit ID or open the commit in a browser. Use Shift+Tab to read and scroll the message. Escape returns to the commit. Press <keybinding:editor.action.accessibleView> to read these details as plain text.')
+				? localize('scm.history.detailsHelp', 'Commit details show the author, relative and full time, complete message, and file and line change counts. Use Left and Right Arrow in the actions toolbar to copy the full commit ID or open the commit in a browser. Use Tab and Shift+Tab to move between the message and actions within the details card. Escape returns to the commit. Press <keybinding:editor.action.accessibleView> to read these details as plain text.')
 				: `${card.innerText}\n${card.querySelector<HTMLElement>('.ash-scm-graph-hover-hash')!.title}`;
 			return new AccessibleContentProvider(AccessibleViewProviderId.ScmHistoryDetails, { type }, () => content, () => restoreFocus(commit), AccessibilityVerbositySettingId.ScmHistoryDetails);
 		},

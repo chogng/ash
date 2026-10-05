@@ -204,7 +204,7 @@
 		"accessibility.explorerVisibleFiles": "可见的工作区文件",
 		"accessibility.explorerFolder": "文件夹",
 		"accessibility.explorerFile": "文件",
-		"accessibility.explorerHelp": "资源管理器\n使用方向键浏览文件和文件夹。按右方向键展开文件夹，按左方向键折叠文件夹。按 Enter 打开文件。按菜单键或 Shift+F10 打开文件操作。按 Ctrl 或 Command+X 剪切所选文件，按 Ctrl 或 Command+C 复制，按 Ctrl 或 Command+V 粘贴到文件夹。也可以粘贴从系统文件管理器复制的文件。在 Windows 和 Linux 中，从系统文件管理器剪切的文件会移动到选中的本地文件夹。在 Mac 上，按 Option+Command+V 可将复制的文件移动到选中的本地文件夹。按 Escape 取消剪切。按 Ctrl+F 查找已加载的文件名。按 Escape 关闭查找。按 Alt+F2 阅读可见文件。在编辑器标签上按 Shift+F10，可关闭编辑器、复制文件路径、拆分所选编辑器，或选择“在资源管理器视图中显示”来定位文件。使用“文件”菜单中的“关闭文件夹”或“关闭工作区”，处理未保存的更改后返回空工作区。",
+		"accessibility.explorerHelp": "资源管理器\n使用方向键浏览文件和文件夹。使用 Page Up 和 Page Down 按可见页面移动。输入文件或文件夹名称，将焦点移到匹配的可见项；重复输入首字母可循环定位匹配项。按右方向键展开文件夹，按左方向键折叠文件夹。按 Enter 打开文件。按菜单键或 Shift+F10 打开文件操作。按 Ctrl 或 Command+X 剪切所选文件，按 Ctrl 或 Command+C 复制，按 Ctrl 或 Command+V 粘贴到文件夹。也可以粘贴从系统文件管理器复制的文件。在 Windows 和 Linux 中，从系统文件管理器剪切的文件会移动到选中的本地文件夹。在 Mac 上，按 Option+Command+V 可将复制的文件移动到选中的本地文件夹。按 Escape 取消剪切。按 Ctrl+F 查找已加载的文件名。按 Escape 关闭查找。按 Alt+F2 阅读可见文件。在编辑器标签上按 Shift+F10，可关闭编辑器、复制文件路径、拆分所选编辑器，或选择“在资源管理器视图中显示”来定位文件。使用“文件”菜单中的“关闭文件夹”或“关闭工作区”，处理未保存的更改后返回空工作区。",
 		"accessibility.explorerSystemFilesPasted": "文件已粘贴到选中的文件夹。",
 		"accessibility.openEditorsVerbosityTitle": "打开的编辑器无障碍帮助",
 		"accessibility.openEditorsVerbosityDescription": "打开的编辑器列表获得焦点时播报打开无障碍帮助的方法。",

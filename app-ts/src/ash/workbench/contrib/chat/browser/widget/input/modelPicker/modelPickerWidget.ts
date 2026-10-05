@@ -10,6 +10,7 @@ import { IContextViewService } from '../../../../../../../platform/contextview/b
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { QuickInputList } from '../../../../../../../platform/quickinput/browser/quickInputList.js';
+import { QuickPickFocus } from '../../../../../../../platform/quickinput/common/quickInput.js';
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { ILanguageModelsService } from '../../../../common/languageModels.js';
@@ -201,8 +202,8 @@ export class ModelPickerWidget extends Disposable {
 				const activeIndex = list.visibleItems.findIndex(item => item.entry.model.provider === activeModel?.provider && item.entry.model.model === activeModel?.model);
 				const currentIndex = list.activeItem ? list.visibleItems.indexOf(list.activeItem) : -1;
 				if (activeIndex >= 0) {
-					for (let index = currentIndex; index < activeIndex; index++) { list.focusNext(); }
-					for (let index = currentIndex; index > activeIndex; index--) { list.focusPrevious(); }
+					for (let index = currentIndex; index < activeIndex; index++) { list.focus(QuickPickFocus.Next); }
+					for (let index = currentIndex; index > activeIndex; index--) { list.focus(QuickPickFocus.Previous); }
 				}
 				updatingModels = false;
 			}
@@ -254,12 +255,12 @@ export class ModelPickerWidget extends Disposable {
 				case 'ArrowDown':
 					stopEvent(event);
 					hasNavigated = true;
-					list.focusNext();
+					list.focus(QuickPickFocus.Next);
 					break;
 				case 'ArrowUp':
 					stopEvent(event);
 					hasNavigated = true;
-					list.focusPrevious();
+					list.focus(QuickPickFocus.Previous);
 					break;
 				case 'ArrowRight':
 					stopEvent(event);

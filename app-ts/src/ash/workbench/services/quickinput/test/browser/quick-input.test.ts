@@ -1,4 +1,7 @@
 import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { CodeEditorService } from '../../../../services/editor/browser/codeEditorService.js';
+import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
 import assert from "node:assert/strict";
@@ -21,6 +24,7 @@ import {
 } from "../../../../../platform/quickinput/browser/quickInputList.js";
 import {
 	IQuickInputService,
+	QuickPickFocus,
 } from "../../../../../platform/quickinput/common/quickInput.js";
 import { IQuickAccessController } from "../../../../../platform/quickinput/common/quickAccess.js";
 import { QuickAccessController } from "../../../../../platform/quickinput/browser/quickAccess.js";
@@ -107,7 +111,7 @@ test("QuickInputList owns filtering, looping focus, and acceptance", () => {
 		{ label: "Third" },
 	];
 	assert.equal(list.activeItem?.label, "First");
-	list.focusPrevious();
+	list.focus(QuickPickFocus.Previous);
 	assert.equal(list.activeItem?.label, "Third");
 	list.acceptActive();
 	assert.deepEqual(acceptedLabels, ["Third"]);
@@ -144,6 +148,8 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 
 	const services = new InstantiationService();
 	services.registerSingleton(IDialogService, () => new DialogService());
+	services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
+	services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 	const contextKeys = new ContextKeyService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	const commands = new CommandService(services);
@@ -216,7 +222,9 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 	installDomGlobals(dom);
 	{
 		using services = new InstantiationService();
-	services.registerSingleton(IDialogService, () => new DialogService());
+		services.registerSingleton(IDialogService, () => new DialogService());
+		services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
+		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		using commands = new CommandService(services);

@@ -112,10 +112,14 @@ export class HoverService extends Disposable implements IHoverService {
 				gap: options.gap,
 				contextViewProvider: this.contextViewService,
 				setupKeyboardEvents: options.setupKeyboardEvents,
+				trapFocus: options.trapFocus,
 			}),
 			groupId: options.groupId,
 			onDidShow: () => this.didShow(managed),
-			onDidHide: () => this.didHide(managed),
+			onDidHide: () => {
+				this.didHide(managed);
+				options.onDidHide?.();
+			},
 			onDispose: () => this.release(managed),
 		});
 		this.managedHovers.add(managed);
@@ -188,6 +192,11 @@ class ManagedHover extends Disposable implements IManagedHover {
 
 	get visible(): boolean {
 		return this.hover.visible;
+	}
+
+	protected override disposeCore(): void {
+		this.hover.hide();
+		super.disposeCore();
 	}
 
 	show(): void {

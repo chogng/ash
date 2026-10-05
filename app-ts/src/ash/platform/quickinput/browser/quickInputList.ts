@@ -3,6 +3,7 @@ import { setRole } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IQuickPickItem, IQuickPickItemButton } from "../common/quickInput.js";
+import { QuickPickFocus } from '../common/quickInput.js';
 import { h, stopEvent } from "../../../base/browser/dom.js";
 import { localize } from '../../../nls.js';
 import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
@@ -94,12 +95,30 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this.render();
 	}
 
-	focusNext(): void {
-		this.list.focusNext();
-	}
-
-	focusPrevious(): void {
-		this.list.focusPrevious();
+	focus(what: QuickPickFocus): void {
+		switch (what) {
+			case QuickPickFocus.First:
+				this.list.setActiveIndex(0);
+				break;
+			case QuickPickFocus.Second:
+				this.list.setActiveIndex(Math.min(1, this._visibleItems.length - 1));
+				break;
+			case QuickPickFocus.Last:
+				this.list.setActiveIndex(this._visibleItems.length - 1);
+				break;
+			case QuickPickFocus.Next:
+				this.list.focusNext();
+				break;
+			case QuickPickFocus.Previous:
+				this.list.focusPrevious();
+				break;
+			case QuickPickFocus.NextPage:
+				void this.list.focusNextPage();
+				break;
+			case QuickPickFocus.PreviousPage:
+				void this.list.focusPreviousPage();
+				break;
+		}
 	}
 
 	acceptActive(): void {

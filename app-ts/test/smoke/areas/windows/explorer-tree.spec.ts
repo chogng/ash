@@ -182,6 +182,11 @@ test('Explorer scrollbar stays at the pane edge while rows remain inset', async 
 	await expect(tree.getByRole('treeitem', { name: names.at(-1), exact: true })).toBeVisible();
 	await tree.press('Home');
 	await expect(first).toBeVisible();
+	await page.keyboard.type('scroll-075');
+	const typedMatch = tree.getByRole('treeitem', { name: names[75], exact: true });
+	await expect(tree).toHaveAttribute('aria-activedescendant', (await typedMatch.getAttribute('id'))!);
+	await expect(typedMatch).toBeInViewport();
+	await expect(tree).toBeFocused();
 	for (const theme of ['Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		await workbench.quickaccess.select(theme);

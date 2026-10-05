@@ -61,7 +61,7 @@ export class Pane extends Disposable implements ISplitViewView {
 
 	constructor(container: HTMLElement, options: IPaneOptions) {
 		super();
-		this.minimumBodySize = options.minimumBodySize ?? 48;
+		this.minimumBodySize = options.minimumBodySize ?? 120;
 		this.maximumBodySize = options.maximumBodySize ?? Number.POSITIVE_INFINITY;
 		if (!Number.isFinite(this.minimumBodySize) || this.minimumBodySize < 0 || this.maximumBodySize < this.minimumBodySize || Number.isNaN(this.maximumBodySize)) {
 			throw new RangeError("Invalid pane body size constraints");

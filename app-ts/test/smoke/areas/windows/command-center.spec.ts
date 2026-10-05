@@ -520,13 +520,55 @@ test('activity bar remains visible and reopens a selected sidebar view in the li
 	await expect(search).toHaveAttribute('aria-selected', 'true');
 });
 
-test('activity bar tooltips follow left, right, top and bottom placement', async ({ application, workbench }) => {
+test('activity bar hover stays open across its gap and closes outside the shared span', async ({ workbench }) => {
+	const page = workbench.page;
+	const trigger = page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Search', exact: true });
+	await trigger.hover();
+	const tooltip = page.getByRole('tooltip');
+	await expect(tooltip).toBeVisible();
+	const id = await tooltip.getAttribute('id');
+	const [anchor, card] = await Promise.all([trigger.boundingBox(), tooltip.boundingBox()]);
+	expect(anchor).not.toBeNull();
+	expect(card).not.toBeNull();
+	expect(card!.x).toBeGreaterThan(anchor!.x + anchor!.width);
+	const sharedTop = Math.max(anchor!.y, card!.y);
+	const sharedBottom = Math.min(anchor!.y + anchor!.height, card!.y + card!.height);
+	expect(sharedBottom).toBeGreaterThan(sharedTop);
+	const gapX = (anchor!.x + anchor!.width + card!.x) / 2;
+	const gapY = (sharedTop + sharedBottom) / 2;
+
+	await page.clock.install();
+	await page.clock.pauseAt(new Date());
+	await page.mouse.move(gapX, gapY);
+	// Advance beyond the hide delay so visibility proves the gap cancelled dismissal.
+	await page.clock.runFor(100);
+	await expect(tooltip).toHaveAttribute('id', id!);
+	await expect(tooltip).toBeVisible();
+	await tooltip.hover();
+	await page.clock.runFor(100);
+	await expect(tooltip).toHaveAttribute('id', id!);
+	await expect(tooltip).toBeVisible();
+
+	await page.mouse.move(gapX, Math.max(anchor!.y + anchor!.height, card!.y + card!.height) + 10);
+	await page.clock.runFor(100);
+	await expect(tooltip).toHaveCount(0);
+	await expect(trigger).not.toHaveAttribute('aria-describedby');
+});
+
+test('activity bar tooltips follow left, right, top and bottom placement', async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const titlebar = page.locator('[data-part="titlebar"]');
 	await activitybar.getByRole('tab', { name: 'Search', exact: true }).click();
 	await expect(sidebar).toBeVisible();
+	// Desktop exposes account APIs even in UI-only runs; disconnected web hosts do not.
+	const hasAccounts = target.kind === 'electron' || target.appServerMode === 'required';
+	if (hasAccounts) {
+		await expect(activitybar.getByRole('button', { name: 'Accounts', exact: true })).toBeVisible();
+	} else {
+		await expect(page.getByRole('button', { name: 'Accounts', exact: true })).toHaveCount(0);
+	}
 
 	const checkTooltip = async (trigger: Locator, direction: 'left' | 'right' | 'above' | 'below', keyboard = false): Promise<void> => {
 		await page.mouse.move(600, 400);
@@ -559,7 +601,7 @@ test('activity bar tooltips follow left, right, top and bottom placement', async
 	for (const name of ['Search', 'Marketplace']) {
 		await checkTooltip(activitybar.getByRole('tab', { name, exact: true }), 'right');
 	}
-	for (const name of ['Accounts', 'Manage']) {
+	for (const name of hasAccounts ? ['Accounts', 'Manage'] : ['Manage']) {
 		await checkTooltip(activitybar.getByRole('button', { name, exact: true }), 'right', true);
 	}
 	const marketplaceElement = await activitybar.getByRole('tab', { name: 'Marketplace', exact: true }).elementHandle();
@@ -573,13 +615,17 @@ test('activity bar tooltips follow left, right, top and bottom placement', async
 	await manageElement!.dispose();
 	await checkTooltip(activitybar.getByRole('tab', { name: 'Marketplace', exact: true }), 'left', true);
 	await checkTooltip(activitybar.getByRole('button', { name: 'Manage', exact: true }), 'left');
-	await checkTooltip(activitybar.getByRole('button', { name: 'Accounts', exact: true }), 'left');
+	if (hasAccounts) {
+		await checkTooltip(activitybar.getByRole('button', { name: 'Accounts', exact: true }), 'left');
+	}
 
 	await setPosition(activitybar.getByRole('button', { name: 'Manage', exact: true }), 'Top');
 	await expect(activitybar).toBeHidden();
 	await checkTooltip(sidebar.getByRole('tab', { name: 'Search', exact: true }), 'below');
 	await checkTooltip(titlebar.getByRole('button', { name: 'Manage', exact: true }), 'below', true);
-	await checkTooltip(titlebar.getByRole('button', { name: 'Accounts', exact: true }), 'below');
+	if (hasAccounts) {
+		await checkTooltip(titlebar.getByRole('button', { name: 'Accounts', exact: true }), 'below');
+	}
 	await setPosition(titlebar.getByRole('button', { name: 'Manage', exact: true }), 'Bottom');
 	await checkTooltip(sidebar.getByRole('tab', { name: 'Search', exact: true }), 'above', true);
 	await checkTooltip(titlebar.getByRole('button', { name: 'Manage', exact: true }), 'below');
@@ -1447,6 +1493,15 @@ test('Quick Access scrolls its results within the list', async ({ workbench }) =
 	expect(bindingBounds).not.toBeNull();
 	expect(scrollbarBounds).not.toBeNull();
 	expect(bindingBounds!.x + bindingBounds!.width).toBeLessThanOrEqual(scrollbarBounds!.x - 4);
+	const combobox = picker.getByRole('combobox');
+	const firstId = await combobox.getAttribute('aria-activedescendant');
+	await combobox.press('PageDown');
+	await expect.poll(() => picker.locator('.ash-list-row.is-active').evaluate(row => Number((row as HTMLElement).dataset.index))).toBeGreaterThan(1);
+	await expect(picker.locator('.ash-list-row.is-active')).toBeInViewport();
+	await expect(combobox).toBeFocused();
+	await expect(combobox).toHaveValue('>');
+	await combobox.press('PageUp');
+	await expect(combobox).toHaveAttribute('aria-activedescendant', firstId!);
 	for (let index = 0; index < 20; index++) {
 		await picker.getByRole('combobox').press('ArrowDown');
 	}

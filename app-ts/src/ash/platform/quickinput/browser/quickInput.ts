@@ -15,6 +15,7 @@ import type {
 	IQuickPickItemButton,
 } from "../common/quickInput.js";
 import { QuickInputList } from "./quickInputList.js";
+import { QuickPickFocus } from '../common/quickInput.js';
 import { localize } from '../../../nls.js';
 
 export interface BrowserQuickInputHostOptions {
@@ -212,11 +213,19 @@ export class QuickPick<TItem extends IQuickPickItem>
 		switch (event.key) {
 			case "ArrowDown":
 				stopEvent(event);
-				this.list.focusNext();
+				this.list.focus(QuickPickFocus.Next);
 				break;
 			case "ArrowUp":
 				stopEvent(event);
-				this.list.focusPrevious();
+				this.list.focus(QuickPickFocus.Previous);
+				break;
+			case 'PageDown':
+				stopEvent(event);
+				this.list.focus(QuickPickFocus.NextPage);
+				break;
+			case 'PageUp':
+				stopEvent(event);
+				this.list.focus(QuickPickFocus.PreviousPage);
 				break;
 			case "Enter":
 				stopEvent(event);

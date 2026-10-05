@@ -1,5 +1,6 @@
 import { addDisposableListener, isNode, h } from "../../dom.js";
 import { DataTransfers } from "../../dnd.js";
+import { equals } from "../../../common/arrays.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { Mimes } from '../../../common/mime.js';
@@ -9,7 +10,15 @@ import { observeResize } from "../../observer.js";
 import { setAriaAttribute, setRole } from "../aria/aria.js";
 import { DndCssClasses, DragAndDropDataKind, type DragAndDropData, type DragAndDropDataKind as DragDataKind } from "../dnd/dnd.js";
 import { ScrollableElement } from "../scrollbar/scrollableElement.js";
-import { ListDragOverPosition, ListDragTargetSector, type ListAccessibilityProvider, type ListDragAndDrop, type ListDragOverReaction, type ListDragOverPosition as DragOverPosition, type ListScrolling, type ListDragTargetSector as DragTargetSector } from "./list.js";
+import { RangeMap } from './rangeMap.js';
+import { RowCache, type IRow } from './rowCache.js';
+import { CombinedSpliceable } from './splice.js';
+import {
+	ListDragOverPosition, ListDragTargetSector,
+	type IListRenderer, type ListAccessibilityProvider, type ListDragAndDrop,
+	type ListDragOverReaction, type ListDragOverPosition as DragOverPosition,
+	type ListScrolling, type ListDragTargetSector as DragTargetSector,
+} from './list.js';
 
 export interface ListViewOptions<T> {
 	readonly ariaLabel?: string;
@@ -31,6 +40,12 @@ export interface ListViewOptions<T> {
 	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 }
 
+interface ListRow<T> {
+	readonly item: T;
+	readonly row: HTMLDivElement;
+	readonly index: number;
+}
+
 /** Low-level flat row view that owns DOM, sizing, scrolling, and DnD. */
 export class ListView<T> extends Disposable {
 	readonly element: HTMLDivElement;
@@ -39,12 +54,16 @@ export class ListView<T> extends Disposable {
 	private readonly _onDidScroll = this._register(new Emitter<number>());
 	private readonly _onDidRenderRows = this._register(new Emitter<void>());
 	private readonly heightOverrides = new Map<string, number>();
-	private readonly renderedRows = new Map<string, { readonly item: T; readonly row: HTMLDivElement; readonly index: number }>();
-	private readonly retainedRows = new Map<string, { readonly item: T; readonly row: HTMLDivElement; readonly index: number }>();
+	private readonly renderedRows = new Map<string, ListRow<T>>();
+	private readonly retainedRows = new Map<string, ListRow<T>>();
 	private readonly itemIdSet = new Set<string>();
 	private _items: readonly T[] = [];
 	private itemIds: readonly string[] = [];
-	private itemOffsets: readonly number[] = [0];
+	private readonly rangeMap = new RangeMap();
+	private readonly rowCache: RowCache<T>;
+	private readonly rowTemplates = new WeakMap<HTMLDivElement, IRow>();
+	private readonly renderer: IListRenderer<T, HTMLDivElement>;
+	private readonly spliceable: CombinedSpliceable<{ readonly item: T; readonly id: string }>;
 
 	readonly onDidScroll: Event<number> = this._onDidScroll.event;
 	readonly onDidRenderRows: Event<void> = this._onDidRenderRows.event;
@@ -52,9 +71,39 @@ export class ListView<T> extends Disposable {
 	constructor(container: HTMLElement, private readonly options: ListViewOptions<T>) {
 		super();
 		const ownerDocument = container.ownerDocument;
+		this.spliceable = new CombinedSpliceable([
+			{
+				splice: (start, deleteCount, inserted) => {
+					this._items = [...this._items.slice(0, start), ...inserted.map(entry => entry.item), ...this._items.slice(start + deleteCount)];
+					this.itemIds = options.getId
+						? [...this.itemIds.slice(0, start), ...inserted.map(entry => entry.id), ...this.itemIds.slice(start + deleteCount)]
+						: this._items.map((_item, index) => String(index));
+				},
+			},
+			{
+				splice: (start, deleteCount, inserted) => {
+					if (options.getId) {
+						this.rangeMap.splice(start, deleteCount, inserted.map((entry, offset) => ({ size: this.itemHeight(entry.item, start + offset) })));
+					} else {
+						this.rangeMap.splice(0, this.rangeMap.count, this._items.map((item, index) => ({ size: this.itemHeight(item, index) })));
+					}
+				},
+			},
+		]);
 		this.element = h(ownerDocument, "div");
 		this.element.className = "ash-list";
 		this.element.id = `ash-list-${listSequence++}`;
+		this.renderer = {
+			templateId: 'row',
+			renderTemplate: container => container as HTMLDivElement,
+			renderElement: (item, index, row) => row.replaceChildren(options.renderItem(item, index, row)),
+			disposeElement: (_item, _index, row) => {
+				options.onDidRemoveRow?.(row);
+				row.replaceChildren();
+			},
+			disposeTemplate: row => row.replaceChildren(),
+		};
+		this.rowCache = this._register(new RowCache(new Map([[this.renderer.templateId, this.renderer]]), ownerDocument));
 		setRole(this.element, options.role ?? "listbox");
 		if (options.ariaLabel) setAriaAttribute(this.element, "label", options.ariaLabel);
 		if (options.domFocusable === true) this.element.tabIndex = 0;
@@ -72,7 +121,7 @@ export class ListView<T> extends Disposable {
 		}
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(toDisposable(() => {
-			for (const row of this.element.querySelectorAll<HTMLDivElement>(":scope > .ash-list-row")) this.options.onDidRemoveRow?.(row);
+			for (const [id, rendered] of [...this.renderedRows]) this.removeRenderedRow(id, rendered);
 			this.clearRetainedRows();
 		}));
 		if (this.scrollable) this._register(this.scrollable.onDidScroll(event => {
@@ -93,7 +142,7 @@ export class ListView<T> extends Disposable {
 
 	get items(): readonly T[] { return this._items; }
 	clearRetainedRows(): void {
-		for (const retained of this.retainedRows.values()) this.options.onDidRemoveRow?.(retained.row);
+		for (const retained of this.retainedRows.values()) this.releaseRow(retained.row, retained.item, retained.index);
 		this.retainedRows.clear();
 	}
 
@@ -109,50 +158,62 @@ export class ListView<T> extends Disposable {
 	}
 
 	splice(start: number, deleteCount: number, elements: readonly T[] = []): readonly T[] {
-		if (!Number.isInteger(start) || start < 0 || start > this._items.length) throw new RangeError(`Invalid List splice position: ${start}`);
-		if (!Number.isInteger(deleteCount) || deleteCount < 0) throw new RangeError("List deleteCount must be a non-negative integer");
+		if (!Number.isInteger(start) || start < 0 || start > this._items.length) {
+			throw new RangeError(`Invalid List splice position: ${start}`);
+		}
+		if (!Number.isInteger(deleteCount) || deleteCount < 0) {
+			throw new RangeError("List deleteCount must be a non-negative integer");
+		}
 		const boundedDeleteCount = Math.min(deleteCount, this._items.length - start);
+		const deleteEnd = start + boundedDeleteCount;
 		const deleted = this._items.slice(start, start + boundedDeleteCount);
 		const getId = this.options.getId;
 		const insertedIds = getId ? elements.map(getId) : [];
-		const nextItems = [...this._items.slice(0, start), ...elements, ...this._items.slice(start + boundedDeleteCount)];
 		const nextIds = getId
-			? [...this.itemIds.slice(0, start), ...insertedIds, ...this.itemIds.slice(start + boundedDeleteCount)]
-			: nextItems.map((_item, index) => String(index));
+			? [...this.itemIds.slice(0, start), ...insertedIds, ...this.itemIds.slice(deleteEnd)]
+			: [];
+
 		if (getId) {
 			if (insertedIds.length > 0) {
-				const removedIds = new Set(this.itemIds.slice(start, start + boundedDeleteCount));
+				const removedIds = new Set(this.itemIds.slice(start, deleteEnd));
 				const inserted = new Set<string>();
 				for (const id of insertedIds) {
-					if (inserted.has(id) || this.itemIdSet.has(id) && !removedIds.has(id)) throw new TypeError(`Duplicate List item ID: ${id}`);
+					if (inserted.has(id) || (this.itemIdSet.has(id) && !removedIds.has(id))) {
+						throw new TypeError(`Duplicate List item ID: ${id}`);
+					}
 					inserted.add(id);
 				}
 			}
 			if (boundedDeleteCount >= nextIds.length) {
 				this.itemIdSet.clear();
-				for (const id of nextIds) this.itemIdSet.add(id);
+				for (const id of nextIds) {
+					this.itemIdSet.add(id);
+				}
 			} else {
-				for (let index = start; index < start + boundedDeleteCount; index += 1) this.itemIdSet.delete(this.itemIds[index]!);
-				for (const id of insertedIds) this.itemIdSet.add(id);
+				for (let index = start; index < deleteEnd; index += 1) {
+					this.itemIdSet.delete(this.itemIds[index]!);
+				}
+				for (const id of insertedIds) {
+					this.itemIdSet.add(id);
+				}
 			}
 		}
+
 		if (!this.options.reuseRows) {
-			for (const [itemId, rendered] of [...this.renderedRows]) this.removeRenderedRow(itemId, rendered.row);
+			for (const [itemId, rendered] of [...this.renderedRows]) {
+				this.removeRenderedRow(itemId, rendered);
+			}
 		}
-		const oldOffsets = this.itemOffsets;
-		this._items = nextItems;
-		this.itemIds = nextIds;
-		if (getId) {
-			const offsets = oldOffsets.slice(0, start + 1);
-			for (let index = start; index < start + elements.length; index += 1) offsets.push(offsets.at(-1)! + this.itemHeight(this._items[index]!, index));
-			const shift = offsets.at(-1)! - oldOffsets[start + boundedDeleteCount]!;
-			for (let index = start + boundedDeleteCount + 1; index < oldOffsets.length; index += 1) offsets.push(oldOffsets[index]! + shift);
-			this.itemOffsets = offsets;
-		} else this.rebuildItemOffsets();
-		if (this.isVirtualized) this.element.style.height = `${this.itemOffsets.at(-1) ?? 0}px`;
+		this.spliceable.splice(start, boundedDeleteCount, elements.map((item, index) => ({ item, id: getId ? insertedIds[index]! : String(start + index) })));
+
+		if (this.isVirtualized) {
+			this.element.style.height = `${this.rangeMap.size}px`;
+		}
 		this.scrollable?.layout();
 		this.renderRows();
-		if (!this.isVirtualized) this.scrollable?.layout();
+		if (!this.isVirtualized) {
+			this.scrollable?.layout();
+		}
 		return deleted;
 	}
 
@@ -167,99 +228,130 @@ export class ListView<T> extends Disposable {
 		}
 		const next = row.nextSibling;
 		const id = this.itemIds[index]!;
-		this.removeRenderedRow(id, row);
-		const replacement = this.createRow(item, index, id);
-		if (this.isVirtualized) {
-			replacement.style.position = "absolute";
-			replacement.style.top = `${this.itemOffsets[index]}px`;
-			replacement.style.right = "0";
-			replacement.style.left = "0";
-		}
-		this.renderedRows.set(id, { item, row: replacement, index });
-		this.element.insertBefore(replacement, next);
+		this.rowCache.transact(() => {
+			this.removeRenderedRow(id, this.renderedRows.get(id)!);
+			const replacement = this.createRow(item, index, id);
+			this.positionRow(replacement, index);
+			this.renderedRows.set(id, { item, row: replacement, index });
+			if (replacement.nextSibling !== next || replacement.parentElement !== this.element) {
+				this.element.insertBefore(replacement, next);
+			}
+		});
 	}
 
 	private renderRows(reason: "content" | "viewport" = "content"): void {
 		const range = this.renderRange();
 		const rows: HTMLDivElement[] = [];
-		const retainedIds = new Set<string>();
+		const visibleIds = new Set<string>();
 		for (let index = range.start; index < range.end; index += 1) {
 			const item = this._items[index]!;
 			const itemId = this.itemIds[index]!;
-			retainedIds.add(itemId);
-			const retained = this.retainedRows.get(itemId);
-			if (retained) this.retainedRows.delete(itemId);
-			const previous = this.renderedRows.get(itemId) ?? retained;
+			visibleIds.add(itemId);
+			const cached = this.retainedRows.get(itemId);
+			if (cached) {
+				this.retainedRows.delete(itemId);
+			}
+			const existing = this.renderedRows.get(itemId) ?? cached;
 			// Scroll and resize change row visibility, not the content or state of attached rows.
-			if (reason === "viewport" && !retained && previous?.item === item && previous.index === index) {
-				rows.push(previous.row);
+			if (reason === "viewport" && !cached && existing?.item === item && existing.index === index) {
+				rows.push(existing.row);
 				continue;
 			}
-			const existing = previous;
+
 			let row: HTMLDivElement;
 			if (existing?.item === item) {
 				row = existing.row;
 				row.dataset.index = String(index);
 				this.updateAccessibility(row, item);
-				this.options.updateItem?.(item, index, row, retained !== undefined);
-				if (retained) {
-					const height = this.heightOverrides.get(itemId) ?? normalizeHeight(this.options.getHeight?.(item));
-					if (height === undefined) row.style.removeProperty("height");
-					else row.style.height = `${height}px`;
+				this.options.updateItem?.(item, index, row, cached !== undefined);
+				if (cached) {
+					this.updateRowHeight(row, item, itemId);
 				}
 			} else {
-				if (previous) this.removeRenderedRow(itemId, previous.row);
+				if (existing) {
+					this.removeRenderedRow(itemId, existing);
+				}
 				row = this.createRow(item, index, itemId);
 			}
-			if (this.isVirtualized) {
-				row.style.position = "absolute";
-				row.style.top = `${this.itemOffsets[index]}px`;
-				row.style.right = "0";
-				row.style.left = "0";
-			}
+			this.positionRow(row, index);
 			this.renderedRows.set(itemId, { item, row, index });
 			rows.push(row);
 		}
+
 		for (const [itemId, rendered] of [...this.renderedRows]) {
-			if (retainedIds.has(itemId)) continue;
-			if (this.options.reuseRows && this.options.getId) this.retainRenderedRow(itemId, rendered);
-			else this.removeRenderedRow(itemId, rendered.row);
+			if (visibleIds.has(itemId)) {
+				continue;
+			}
+			if (this.options.reuseRows && this.options.getId) {
+				this.retainRenderedRow(itemId, rendered);
+			} else {
+				this.removeRenderedRow(itemId, rendered);
+			}
 		}
-		const contentHeight = this.isVirtualized ? `${this.itemOffsets.at(-1) ?? 0}px` : "";
-		if (this.element.style.height !== contentHeight) this.element.style.height = contentHeight;
+
+		const contentHeight = this.isVirtualized ? `${this.rangeMap.size}px` : "";
+		if (this.element.style.height !== contentHeight) {
+			this.element.style.height = contentHeight;
+		}
 		let previous: HTMLDivElement | undefined;
 		for (const row of rows) {
 			const next = previous ? previous.nextSibling : this.element.firstChild;
-			if (row !== next) this.element.insertBefore(row, next);
+			if (row !== next) {
+				this.element.insertBefore(row, next);
+			}
 			previous = row;
 		}
 		this._onDidRenderRows.fire();
 	}
 
 	private createRow(item: T, index: number, itemId: string): HTMLDivElement {
-		const row = h(this.element.ownerDocument, "div");
+		const template = this.rowCache.alloc(this.renderer.templateId).row;
+		const row = template.domNode as HTMLDivElement;
+		this.rowTemplates.set(row, template);
 		row.className = "ash-list-row";
 		row.id = `${this.element.id}-item-${encodeURIComponent(itemId)}`;
 		row.dataset.index = String(index);
 		row.dataset.listId = itemId;
-		const height = this.heightOverrides.get(itemId) ?? normalizeHeight(this.options.getHeight?.(item));
-		if (height !== undefined) row.style.height = `${height}px`;
-		if (this.options.dnd?.getDragURI(item) !== undefined) {
-			row.draggable = true;
+		this.updateRowHeight(row, item, itemId);
+		row.draggable = this.options.dnd?.getDragURI(item) !== undefined;
+		if (row.draggable) {
 			row.classList.add(DndCssClasses.Draggable);
 		}
 		this.updateAccessibility(row, item);
-		row.append(this.options.renderItem(item, index, row));
+		this.renderer.renderElement(item, index, row);
 		return row;
 	}
 
-	private removeRenderedRow(itemId: string, row: HTMLDivElement): void {
-		this.options.onDidRemoveRow?.(row);
-		row.remove();
+	private positionRow(row: HTMLDivElement, index: number): void {
+		if (!this.isVirtualized) {
+			return;
+		}
+		row.style.position = "absolute";
+		row.style.top = `${this.rangeMap.positionAt(index)}px`;
+		row.style.right = "0";
+		row.style.left = "0";
+	}
+
+	private updateRowHeight(row: HTMLElement, item: T, itemId: string): void {
+		const height = this.heightOverrides.get(itemId) ?? normalizeHeight(this.options.getHeight?.(item));
+		if (height === undefined) {
+			row.style.removeProperty("height");
+		} else {
+			row.style.height = `${height}px`;
+		}
+	}
+
+	private removeRenderedRow(itemId: string, rendered: ListRow<T>): void {
+		this.releaseRow(rendered.row, rendered.item, rendered.index);
 		this.renderedRows.delete(itemId);
 	}
 
-	private retainRenderedRow(itemId: string, rendered: { readonly item: T; readonly row: HTMLDivElement; readonly index: number }): void {
+	private releaseRow(row: HTMLDivElement, item: T, index: number): void {
+		this.renderer.disposeElement?.(item, index, row);
+		this.rowCache.release(this.rowTemplates.get(row)!);
+	}
+
+	private retainRenderedRow(itemId: string, rendered: ListRow<T>): void {
 		rendered.row.remove();
 		this.renderedRows.delete(itemId);
 		this.retainedRows.set(itemId, rendered);
@@ -267,7 +359,7 @@ export class ListView<T> extends Disposable {
 		const first = this.retainedRows.keys().next().value!;
 		const evicted = this.retainedRows.get(first)!;
 		this.retainedRows.delete(first);
-		this.options.onDidRemoveRow?.(evicted.row);
+		this.releaseRow(evicted.row, evicted.item, evicted.index);
 	}
 
 	private renderRange(): { readonly start: number; readonly end: number } {
@@ -278,12 +370,6 @@ export class ListView<T> extends Disposable {
 		const start = Math.max(0, this.indexAt(Math.max(0, viewport.top - 200)));
 		const end = Math.min(this._items.length, this.indexAt(viewport.top + viewport.height + 200) + 1);
 		return { start, end };
-	}
-
-	private rebuildItemOffsets(): void {
-		const offsets = [0];
-		for (let index = 0; index < this._items.length; index += 1) offsets.push(offsets[index]! + this.itemHeight(this._items[index]!, index));
-		this.itemOffsets = offsets;
 	}
 
 	private updateAccessibility(row: HTMLDivElement, item: T): void {
@@ -309,6 +395,7 @@ export class ListView<T> extends Disposable {
 	}
 
 	get scrollTop(): number { return this.scrollable?.state.top ?? this.element.scrollTop; }
+	get renderHeight(): number { return this.scrollable?.state.height ?? this.element.clientHeight; }
 
 	reveal(index: number): void {
 		if (!this.scrollable || index < 0 || index >= this._items.length) return;
@@ -348,24 +435,24 @@ export class ListView<T> extends Disposable {
 			if (normalized === undefined) throw new RangeError("List row height must be a positive finite number");
 			this.heightOverrides.set(id, normalized);
 		}
-		this.rebuildItemOffsets();
+		this.rangeMap.splice(index, 1, [{ size: this.itemHeight(item, index) }]);
 		this.scrollable?.layout();
 		this.renderRows();
 		this.scrollable?.layout();
 		const row = this.row(index);
 		if (!row) return;
-		const next = this.heightOverrides.get(id) ?? normalizeHeight(this.options.getHeight?.(item));
-		if (next === undefined) row.style.removeProperty("height");
-		else row.style.height = `${next}px`;
+		this.updateRowHeight(row, item, id);
 	}
 
 	getElementTop(index: number): number {
+		if (this._items.length === 0) return 0;
 		if (!this.isVirtualized) {
 			let top = 0;
 			for (let current = 0; current < index && current < this._items.length; current += 1) top += this.getElementHeight(current);
 			return top;
 		}
-		return this.itemOffsets[Math.max(0, Math.min(index, this._items.length))] ?? 0;
+		if (index >= this._items.length) return this.rangeMap.size;
+		return this.rangeMap.positionAt(Math.max(0, index));
 	}
 
 	getElementHeight(index: number): number {
@@ -387,14 +474,7 @@ export class ListView<T> extends Disposable {
 			}
 			return this._items.length - 1;
 		}
-		let low = 0;
-		let high = this._items.length;
-		while (low < high) {
-			const middle = Math.floor((low + high) / 2);
-			if (this.itemOffsets[middle + 1]! <= position) low = middle + 1;
-			else high = middle;
-		}
-		return Math.min(low, this._items.length - 1);
+		return Math.min(Math.max(0, this.rangeMap.indexAt(position)), this._items.length - 1);
 	}
 
 	private itemHeight(item: T, index: number): number { return this.heightOverrides.get(this.itemIds[index]!) ?? normalizeHeight(this.options.getHeight?.(item)) ?? 22; }
@@ -568,7 +648,9 @@ class ListViewDragAndDrop<T> extends Disposable {
 			normalized = [normalized[0]! + 1];
 			position = ListDragOverPosition.Before;
 		}
-		if (sameFeedback(this.feedbackIndexes, normalized) && this.feedbackPosition === position) return;
+		if (equals(this.feedbackIndexes, normalized) && this.feedbackPosition === position) {
+			return;
+		}
 		this.clearFeedback();
 		this.feedbackIndexes = normalized;
 		this.feedbackPosition = position;
@@ -615,7 +697,12 @@ class ListViewDragAndDrop<T> extends Disposable {
 			const edge = Math.min(35, rect.height / 2);
 			const topDistance = pointerY - rect.top;
 			const bottomDistance = rect.bottom - pointerY;
-			const delta = topDistance < edge ? -Math.max(1, Math.ceil((edge - topDistance) * 0.4)) : bottomDistance < edge ? Math.max(1, Math.ceil((edge - bottomDistance) * 0.4)) : 0;
+			let delta = 0;
+			if (topDistance < edge) {
+				delta = -Math.max(1, Math.ceil((edge - topDistance) * 0.4));
+			} else if (bottomDistance < edge) {
+				delta = Math.max(1, Math.ceil((edge - bottomDistance) * 0.4));
+			}
 			if (delta === 0) return;
 			this.view.scrollBy(Math.max(-14, Math.min(14, delta)));
 			this.scheduleAutoScroll();
@@ -673,6 +760,5 @@ function feedbackClass(position: DragOverPosition): string {
 }
 
 function normalizeHeight(value: number | undefined): number | undefined { return isFiniteNumber(value) && value > 0 ? value : undefined; }
-function sameFeedback(left: readonly number[], right: readonly number[]): boolean { return left.length === right.length && left.every((value, index) => value === right[index]); }
 
 let listSequence = 1;

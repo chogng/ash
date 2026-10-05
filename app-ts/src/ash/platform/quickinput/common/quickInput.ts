@@ -26,6 +26,16 @@ export interface IQuickInputSelection {
 	readonly end: number;
 }
 
+export enum QuickPickFocus {
+	First = 1,
+	Second,
+	Last,
+	Next,
+	Previous,
+	NextPage,
+	PreviousPage,
+}
+
 /** A short-lived searchable selection UI hosted by the current window. */
 export interface IQuickPick<TItem extends IQuickPickItem>
 	extends IDisposable {

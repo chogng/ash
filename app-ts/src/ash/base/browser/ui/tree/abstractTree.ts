@@ -87,6 +87,12 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 			smoothScrolling: options.smoothScrolling,
 			loopNavigation: false,
 			keyboardNavigation: true,
+			keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider ? {
+				getKeyboardNavigationLabel: node => {
+					const label = options.keyboardNavigationLabelProvider!.getKeyboardNavigationLabel(node.element);
+					return typeof label === 'string' || label === undefined ? label : [...label];
+				},
+			} : undefined,
 			multipleSelectionSupport: options.multipleSelectionSupport,
 			focusOnMouseMove: false,
 			acceptOnClick: false,

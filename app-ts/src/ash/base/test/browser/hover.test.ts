@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { h } from "../../browser/dom.js";
+import type { CancellationToken } from '../../common/cancellation.js';
 
 const environment = new JSDOM("<!doctype html><html><body><main></main><button id='target' title='Native title'>Target</button></body></html>");
 Object.defineProperties(globalThis, {
@@ -70,6 +71,59 @@ test("Hover returns focus to its target when Escape dismisses focused content", 
 	action.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(hover.visible, false);
 	assert.equal(environment.window.document.activeElement, target);
+});
+
+test('Hover traps Tab in interactive content and releases the listener when hidden', () => {
+	const target = requiredElement<HTMLButtonElement>('#target');
+	using contextView = new ContextView(requiredElement<HTMLElement>('main'));
+	const content = h(environment.window.document, 'div');
+	const first = h(environment.window.document, 'button', undefined, 'First');
+	const disabled = h(environment.window.document, 'button', undefined, 'Disabled');
+	disabled.disabled = true;
+	const last = h(environment.window.document, 'button', undefined, 'Last');
+	first.getClientRects = last.getClientRects = () => [rectangle(0, 0, 80, 24)] as unknown as DOMRectList;
+	content.append(first, disabled, last);
+	using hover = new Hover({ target, content, trapFocus: true, contextViewProvider: contextView });
+	hover.show();
+	last.focus();
+	const tooltip = contextView.element.querySelector<HTMLElement>('.ash-hover')!;
+	last.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+	assert.equal(environment.window.document.activeElement, first);
+	first.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+	assert.equal(environment.window.document.activeElement, last);
+	last.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.equal(environment.window.document.activeElement, target);
+	const tab = new environment.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+	tooltip.dispatchEvent(tab);
+	assert.equal(tab.defaultPrevented, false);
+});
+
+test('Hover cancels content work on update, hide and disposal', () => {
+	const target = requiredElement<HTMLButtonElement>('#target');
+	using contextView = new ContextView(requiredElement<HTMLElement>('main'));
+	const tokens: CancellationToken[] = [];
+	using hover = new Hover({
+		target,
+		contextViewProvider: contextView,
+		content: token => {
+			tokens.push(token);
+			return 'Commit details';
+		},
+	});
+	hover.show();
+	assert.equal(tokens[0]!.isCancellationRequested, false);
+	hover.update('Updated content');
+	assert.equal(tokens[0]!.isCancellationRequested, true);
+	hover.update(token => { tokens.push(token); return 'New details'; });
+	hover.hide();
+	assert.equal(tokens[1]!.isCancellationRequested, true);
+	hover.show();
+	assert.equal(tokens[2]!.isCancellationRequested, false);
+	let hidden = 0;
+	using listener = hover.onDidHide(() => hidden++);
+	hover.dispose();
+	assert.equal(tokens[2]!.isCancellationRequested, true);
+	assert.equal(hidden, 1);
 });
 
 test("Hover skips empty content and sticky persistence requires explicit dismissal", async () => {

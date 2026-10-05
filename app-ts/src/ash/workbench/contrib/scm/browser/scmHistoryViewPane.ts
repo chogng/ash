@@ -1,6 +1,9 @@
 import { localize2, localize, getNLSLanguage } from '../../../../nls.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { ListView } from '../../../../base/browser/ui/list/listView.js';
+import { PagedList, type IPagedRenderer } from '../../../../base/browser/ui/list/listPaging.js';
+import type { IPagedModel } from '../../../../base/common/paging.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { CancellationError } from '../../../../base/common/errors.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
 import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -11,6 +14,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { Action2, IMenuService, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
@@ -88,7 +92,10 @@ interface HistoryPage {
 	readonly hasMore: boolean;
 }
 
-type HistoryListItem = { readonly type: 'commit'; model: ISCMHistoryItemViewModel } | { readonly type: 'loadMore' };
+interface HistoryRowTemplate {
+	readonly container: HTMLElement;
+	row?: HistoryItemRow;
+}
 
 // Each rendered commit owns its actions and hover independently of viewport updates.
 class HistoryItemRow extends Disposable {
@@ -124,9 +131,10 @@ export class SCMHistoryViewPane extends ViewPane {
 	private loading = false;
 	private moreError: string | undefined;
 	private rows: readonly ISCMHistoryItemViewModel[] = [];
-	private list: ListView<HistoryListItem> | undefined;
+	private list: PagedList<ISCMHistoryItemViewModel> | undefined;
+	private historyLengthChanged: Emitter<number> | undefined;
 	private readonly listResources = this._register(new MutableDisposable<DisposableStore>());
-	private readonly loadMoreItem: HistoryListItem = { type: 'loadMore' };
+
 	private readonly expanded = new Map<string, ExpandedCommit>();
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
@@ -181,6 +189,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.moreError = undefined;
 		this.rows = [];
 		this.listResources.clear();
+		this.historyLengthChanged = undefined;
 		this.list = undefined;
 		this.expanded.clear();
 		this.rowResources.clearAndDisposeAll();
@@ -225,6 +234,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.graphElement.removeAttribute('role');
 		this.graphElement.removeAttribute('aria-live');
 		this.listResources.clear();
+		this.historyLengthChanged = undefined;
 		this.list = undefined;
 		this.more.clear();
 		this.graphElement.replaceChildren();
@@ -237,49 +247,76 @@ export class SCMHistoryViewPane extends ViewPane {
 		} else {
 			const resources = new DisposableStore();
 			this.listResources.value = resources;
-			const list = resources.add(new ListView<HistoryListItem>(this.graphElement, {
+			const lengthChanged = resources.add(new Emitter<number>());
+			const pane = this;
+			const model: IPagedModel<ISCMHistoryItemViewModel> = {
+				get length() { return pane.rows.length + (pane.page?.hasMore ? 1 : 0); },
+				onDidIncrementLength: lengthChanged.event,
+				isResolved: index => index >= 0 && index < this.rows.length,
+				get: index => this.rows[index]!,
+				resolve: async (index, token) => {
+					if (!this.isBodyVisible() || this.moreError || token.isCancellationRequested) {
+						throw new CancellationError();
+					}
+					await this.loadMore();
+					if (token.isCancellationRequested || index >= this.rows.length) {
+						throw new CancellationError();
+					}
+					return this.rows[index]!;
+				},
+			};
+			const renderer: IPagedRenderer<ISCMHistoryItemViewModel, HistoryRowTemplate> = {
+				templateId: 'history',
+				renderTemplate: container => ({ container }),
+				renderElement: (model, index, data) => {
+					if (data.row) {
+						this.updateCommitRow(data.row, model);
+					} else {
+						this.more.clear();
+						data.row = this.renderCommit(model, renderSCMHistoryItemGraph(model, this.rowHeight(model.historyItem), this.graphElement.ownerDocument));
+						data.container.replaceChildren(data.row.element);
+					}
+					this.updateCommitAccessibility(data.row, index);
+				},
+				renderPlaceholder: (_index, data) => {
+					this.more.clear();
+					data.container.replaceChildren(this.renderMore());
+				},
+				disposeTemplate: data => {
+					if (data.row) {
+						this.rowResources.deleteAndDispose(data.row.historyItemViewModel.historyItem.id);
+					} else {
+						this.more.clear();
+					}
+					data.container.replaceChildren();
+				},
+			};
+			const list = resources.add(new PagedList(this.graphLabel, this.graphElement, {
+				getHeight: index => index < this.rows.length ? this.rowHeight(this.rows[index]!.historyItem) : SWIMLANE_HEIGHT * 2,
+				getTemplateId: () => renderer.templateId,
+			}, [renderer], {
 				role: 'tree',
 				ariaLabel: this.graphLabel,
-				scrolling: 'managed',
-				getId: item => item.type === 'commit' ? item.model.historyItem.id : 'loadMore',
-				getHeight: item => item.type === 'commit' ? this.rowHeight(item.model.historyItem) : SWIMLANE_HEIGHT * 2,
-				reuseRows: true,
+				mouseSupport: false,
+				keyboardSupport: false,
 				// The commit contains its own focusable actions and expanded file list.
 				accessibilityProvider: { getRole: () => 'presentation' },
-				renderItem: (item, index) => {
-					if (item.type === 'loadMore') return this.renderMore();
-					const rendered = this.renderCommit(item.model, renderSCMHistoryItemGraph(item.model, this.rowHeight(item.model.historyItem), this.graphElement.ownerDocument));
-					this.updateCommitAccessibility(rendered, index);
-					return rendered.element;
-				},
-				updateItem: (item, index, row) => {
-					if (item.type === 'loadMore') {
-						this.more.clear();
-						row.replaceChildren(this.renderMore());
-						return;
-					}
-					const rendered = this.rowResources.get(item.model.historyItem.id)!;
-					this.updateCommitRow(rendered, item.model);
-					this.updateCommitAccessibility(rendered, index);
-				},
-				onDidRemoveRow: row => {
-					if (row.dataset.listId === 'loadMore') this.more.clear();
-					else this.rowResources.deleteAndDispose(row.dataset.listId!);
-				},
+			}));
+			this.historyLengthChanged = lengthChanged;
+			resources.add(this.onDidChangeBodyVisibility(visible => {
+				if (visible && !this.moreError) list.widget.rerender(this.rows.length);
 			}));
 			this.list = list;
-			list.domNode.classList.add('ash-scm-graph-viewport');
-			list.element.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a commit to expand its files. Press Shift+F10 or the Context Menu key for commit actions: view or compare changes, create a branch, cherry-pick, copy commit information, or add to Chat. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that commit. Press Enter on a reference badge for branch actions. Checkout includes detached commits; More includes creating a tag. Press Alt+Down Arrow to focus commit details and use its actions; Escape returns to the commit.'));
-			resources.add(list.onDidRenderRows(() => {
+			list.widget.domNode.classList.add('ash-scm-graph-viewport');
+			list.widget.element.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a commit to expand its files. Press Shift+F10 or the Context Menu key for commit actions: view or compare changes, create a branch, cherry-pick, copy commit information, or add to Chat. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that commit. Press Enter on a reference badge for branch actions. Checkout includes detached commits; More includes creating a tag. Press Alt+Down Arrow to focus commit details and use its actions; Escape returns to the commit.'));
+			resources.add(list.widget.onDidRenderRows(() => {
 				for (const [, row] of this.rowResources) {
 					if (!row.hover?.visible) continue;
 					if (!row.element.isConnected) row.hover.hide();
 					else this.contextViewService.layout();
 				}
-				// Pagination follows the ListView render range, including its overscan and resize updates.
-				if (list.row(this.rows.length) && this.isBodyVisible() && !this.moreError) void this.loadMore();
 			}));
-			this.updateList();
+			list.model = model;
 		}
 		this.graphElement.setAttribute('aria-busy', this.loading ? 'true' : 'false');
 	}
@@ -289,26 +326,11 @@ export class SCMHistoryViewPane extends ViewPane {
 		row.element.setAttribute('aria-setsize', String(this.rows.length));
 	}
 
-	private updateList(): void {
-		const list = this.list;
-		if (!list) return;
-		// Stable elements let ListView preserve attached commit actions and keyboard focus across pages.
-		const items: HistoryListItem[] = this.rows.map((model, index) => {
-			const existing = list.items[index];
-			if (existing?.type === 'commit' && existing.model.historyItem.id === model.historyItem.id) {
-				existing.model = model;
-				return existing;
-			}
-			return { type: 'commit', model };
-		});
-		if (this.page?.hasMore) items.push(this.loadMoreItem);
-		list.items = items;
-	}
 
 	private updateCommitHeight(historyItem: ISCMHistoryItem): void {
 		const index = this.rows.findIndex(model => model.historyItem.id === historyItem.id);
-		this.list?.updateElementHeight(index, this.rowHeight(historyItem));
-		this.list?.rerender(index);
+		this.list?.widget.updateElementHeight(index, this.rowHeight(historyItem));
+		this.list?.widget.rerender(index);
 	}
 
 	private rowHeight(historyItem: ISCMHistoryItem): number {
@@ -365,7 +387,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.rows = toISCMHistoryItemViewModelArray(this.page.items, new Map(), this.head);
 			this.loading = false;
 			this.updateMore();
-			this.updateList();
+			this.historyLengthChanged?.fire(this.list!.model.length);
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
 			this.loading = false;
@@ -413,10 +435,10 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (menuTarget) {
 			commitHover = resources.add(this.hoverService.setupHover({
 				target: item,
-				content: () => {
+				content: token => {
 					const resources = new DisposableStore();
 					hoverContent.value = resources;
-					const card = this.renderCommitHover(menuTarget, scope, resources, () => {
+					const card = this.renderCommitHover(menuTarget, scope, resources, token, () => {
 						// Relayout loaded details without replacing the lazy factory or its focused actions.
 						if (commitHover!.visible) this.contextViewService.layout();
 					});
@@ -424,6 +446,11 @@ export class SCMHistoryViewPane extends ViewPane {
 					return card.domNode;
 				},
 				groupId: 'scm.history.items',
+				trapFocus: true,
+				onDidHide: () => {
+					hoverContent.clear();
+					hoverToolbar = undefined;
+				},
 				persistence: 'transient',
 				anchorAlignment: AnchorAlignment.Left,
 				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
@@ -709,7 +736,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 	}
 
-	private renderCommitHover(target: SCMHistoryItemViewModelTreeElement, scope: IScopedContextKeyService, resources: DisposableStore, layout: () => void): { domNode: HTMLDivElement; toolbar: MenuWorkbenchToolBar } {
+	private renderCommitHover(target: SCMHistoryItemViewModelTreeElement, scope: IScopedContextKeyService, resources: DisposableStore, token: CancellationToken, layout: () => void): { domNode: HTMLDivElement; toolbar: MenuWorkbenchToolBar } {
 		const historyItem = target.historyItemViewModel.historyItem;
 		const document = this.graphElement.ownerDocument;
 		const hover = h(document, "div");
@@ -749,17 +776,17 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (hint) toolbar.element.setAttribute('aria-description', hint);
 		footer.append(hash, actions);
 		hover.append(details, footer);
-		void this.resolveCommitHover(target, details, status, resources, layout);
+		void this.resolveCommitHover(target, details, status, token, layout);
 		return { domNode: hover, toolbar };
 	}
 
-	private async resolveCommitHover(target: SCMHistoryItemViewModelTreeElement, details: HTMLElement, status: HTMLElement, resources: DisposableStore, layout: () => void): Promise<void> {
+	private async resolveCommitHover(target: SCMHistoryItemViewModelTreeElement, details: HTMLElement, status: HTMLElement, token: CancellationToken, layout: () => void): Promise<void> {
 		try {
 			const result = await target.repository.provider.historyProvider!.resolveHistoryItemDetails(target.historyItemViewModel.historyItem.id);
-			if (resources.isDisposed) { return; }
+			if (token.isCancellationRequested) return;
 			this.renderCommitDetails(details, target.historyItemViewModel.historyItem.subject, result);
 		} catch {
-			if (resources.isDisposed) { return; }
+			if (token.isCancellationRequested) return;
 			status.textContent = localize('scm.history.detailsFailed', 'Unable to load commit details.');
 		}
 		details.setAttribute('aria-busy', 'false');

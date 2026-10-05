@@ -109,6 +109,48 @@ test('multiple view panes resize independently and restore their layout after re
 	await expect.poll(() => height(graph)).toBeCloseTo(resizedHeight, 0);
 });
 
+test('SCM panes retain usable bodies when resized and scroll when the window is too short', async ({ driver, workbench }) => {
+	const page = workbench.page;
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const container = page.locator('[data-view-container-id="ash.git"]');
+	const changes = container.locator('[data-view-id="ash.gitView"]');
+	const review = container.locator('[data-view-id="ash.gitAgentReview"]');
+	const graph = container.locator('[data-view-id="ash.gitGraph"]');
+	await review.locator('.ash-pane-view-header-button').press('ArrowRight');
+	await graph.locator('.ash-pane-view-header-button').press('ArrowRight');
+	const sash = container.locator('.ash-sash').last();
+	const box = await sash.boundingBox();
+	expect(box).not.toBeNull();
+	await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box!.x + box!.width / 2, box!.y - 500, { steps: 3 });
+	await page.mouse.up();
+	await expect.poll(() => review.evaluate(element => element.getBoundingClientRect().height)).toBe(148);
+	const findIssues = review.getByRole('button', { name: 'Find Issues', exact: true });
+	await expect(findIssues).toBeVisible();
+	await expect.poll(() => findIssues.evaluate(element => {
+		const button = element.getBoundingClientRect();
+		const body = element.closest('.ash-pane-view-content')!.getBoundingClientRect();
+		return button.top >= body.top && button.bottom <= body.bottom;
+	})).toBe(true);
+	await review.locator('.ash-pane-view-header-button').focus();
+	await page.keyboard.press('Tab');
+	await expect(findIssues).toBeFocused();
+
+	await driver.setWindowSize({ width: 1000, height: 400 });
+	const scrollContainer = container.locator('.ash-pane-view-container');
+	await expect.poll(() => scrollContainer.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+	for (const pane of [changes, review, graph]) {
+		await expect.poll(() => pane.locator('.ash-pane-view-content').evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(120);
+	}
+	const graphHeader = graph.locator('.ash-pane-view-header-button');
+	await graphHeader.focus();
+	await expect(graphHeader).toBeFocused();
+	await expect(graphHeader).toBeInViewport();
+	await expect.poll(() => scrollContainer.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+});
+
 test.describe('Pane motion', () => {
 	test.use({ openWorkspace: true, gitRepository: true });
 

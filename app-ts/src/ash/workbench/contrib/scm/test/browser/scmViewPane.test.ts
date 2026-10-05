@@ -1,3 +1,4 @@
+import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { EditorInputSerializers } from '../../../../services/editor/common/editorInputSerializer.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -333,7 +334,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		assert.equal(pane.element.querySelector('.ash-scm-graph-metadata'), null);
 		assert.deepEqual(detailRequests, []);
 		const commitHover = hoverOptions.filter(options => options.target.classList.contains('current')).at(-1)!;
-		const content = typeof commitHover.content === 'function' ? commitHover.content() : commitHover.content;
+		const content = typeof commitHover.content === 'function' ? commitHover.content(CancellationToken.None) : commitHover.content;
 		assert.ok(content instanceof browser.window.HTMLElement);
 		assert.equal(content.querySelector('.ash-scm-graph-hover-subject')?.textContent, 'Wire SCM panes');
 		await waitFor(() => content.querySelector('.ash-scm-graph-hover-details')?.getAttribute('aria-busy') === 'false');
@@ -353,7 +354,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		try {
-			const localized = (commitHover.content as () => HTMLElement)();
+			const localized = (commitHover.content as (token: CancellationToken) => HTMLElement)(CancellationToken.None);
 			assert.equal(localized.querySelector('[role="status"]')?.textContent, '正在读取提交详情…');
 			await waitFor(() => localized.querySelector('.ash-scm-graph-hover-details')?.getAttribute('aria-busy') === 'false');
 			assert.deepEqual([...localized.querySelectorAll('.ash-scm-graph-hover-statistics > span')].map(element => element.textContent), ['修改了 3 个文件', '新增 12 行（+）', '删除 4 行（-）']);
@@ -374,7 +375,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 			tooltip.remove();
 			commitHover.target.removeAttribute('aria-describedby');
 			detailsError = new Error('Git command failed');
-			const failed = (commitHover.content as () => HTMLElement)();
+			const failed = (commitHover.content as (token: CancellationToken) => HTMLElement)(CancellationToken.None);
 			await waitFor(() => failed.querySelector('.ash-scm-graph-hover-details')?.getAttribute('aria-busy') === 'false');
 			assert.equal(failed.querySelector('[role="status"]')?.textContent, '无法读取提交详情。');
 			assert.equal(failed.querySelector('.ash-scm-graph-hover-statistics'), null);
@@ -384,8 +385,10 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		}
 		const delayed = new DeferredPromise<GitCommitDetails>();
 		delayedDetails = delayed.p;
-		const retired = (commitHover.content as () => HTMLElement)();
-		const replacement = (commitHover.content as () => HTMLElement)();
+		using retiredContent = new CancellationTokenSource();
+		const retired = (commitHover.content as (token: CancellationToken) => HTMLElement)(retiredContent.token);
+		retiredContent.cancel();
+		const replacement = (commitHover.content as (token: CancellationToken) => HTMLElement)(CancellationToken.None);
 		await delayed.complete({ authorName: 'Late author', authorEmail: '', timestampSeconds: 1_753_000_000, message: 'Wire SCM panes', statistics: { files: 0, additions: 0, deletions: 0 } });
 		await waitFor(() => replacement.querySelector('.ash-scm-graph-hover-details')?.getAttribute('aria-busy') === 'false');
 		assert.equal(retired.querySelector('.ash-scm-graph-hover-author'), null, 'A replaced card ignores its pending details result');

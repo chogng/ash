@@ -8,6 +8,68 @@ import { List } from "../../browser/ui/list/listWidget.js";
 import { h } from "../../browser/dom.js";
 import { isMacintosh } from "../../common/platform.js";
 
+test('List navigates by labels without taking text input or modifier shortcuts', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using list = new List<string>(dom.window.document.body, {
+			keyboardNavigation: true,
+			focusOnMouseMove: false,
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item },
+			renderItem: item => h(dom.window.document, 'span', undefined, item),
+		});
+		list.items = ['Alpha', 'Beta', 'Bravo', 'Charlie'];
+		const press = (key: string, options: KeyboardEventInit = {}): void => {
+			list.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, ...options }));
+		};
+		press('b');
+		assert.equal(list.activeItem, 'Beta');
+		press('b');
+		assert.equal(list.activeItem, 'Bravo');
+		press('r');
+		assert.equal(list.activeItem, 'Bravo');
+		press('c', { ctrlKey: true });
+		press('c', { isComposing: true });
+		assert.equal(list.activeItem, 'Bravo');
+		const input = h(dom.window.document, 'input');
+		list.row(3)!.append(input);
+		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+		assert.equal(list.activeItem, 'Bravo');
+		list.element.dispatchEvent(new dom.window.FocusEvent('focusout'));
+		press('c');
+		assert.equal(list.activeItem, 'Charlie');
+		assert.equal(list.element.getAttribute('aria-activedescendant'), list.row(3)!.id);
+	} finally { dom.window.close(); }
+});
+
+test('List paging reaches the visible edge before scrolling to the next page', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using list = new List<number>(dom.window.document.body, {
+			scrolling: 'managed',
+			getHeight: () => 20,
+			renderItem: item => h(dom.window.document, 'span', undefined, String(item)),
+		});
+		const viewport = list.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		Object.defineProperties(viewport, {
+			clientWidth: { value: 100 },
+			clientHeight: { value: 200 },
+			scrollHeight: { value: 600 },
+		});
+		list.items = Array.from({ length: 30 }, (_, index) => index);
+		await list.focusNextPage();
+		assert.equal(list.activeIndex, 9);
+		assert.equal(viewport.scrollTop, 0);
+		await list.focusNextPage();
+		assert.equal(list.activeIndex, 19);
+		assert.equal(viewport.scrollTop, 200);
+		await list.focusPreviousPage();
+		assert.equal(list.activeIndex, 10);
+		await list.focusPreviousPage();
+		assert.equal(list.activeIndex, 0);
+		assert.equal(viewport.scrollTop, 0);
+	} finally { dom.window.close(); }
+});
+
 test("List range selection retains its anchor through pointer, keyboard and row changes", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	try {

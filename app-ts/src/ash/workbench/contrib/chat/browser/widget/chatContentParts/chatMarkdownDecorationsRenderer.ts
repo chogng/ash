@@ -53,7 +53,12 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 			};
 			this.bindings.add(toDisposable(restore));
 			const card = this.bindings.add(new MutableDisposable<IGitHubResourceHover>());
-			const hover = this.bindings.add(this.hoverService.setupHover({ target: anchor, content: undefined }));
+			const hover = this.bindings.add(this.hoverService.setupHover({
+				target: anchor,
+				content: undefined,
+				trapFocus: true,
+				onDidHide: () => card.clear(),
+			}));
 			this.bindings.add(addDisposableListener(anchor, 'keydown', event => {
 				if (event.key !== 'F2' || !(watcher.presentation.get() instanceof GitHubResourcePresentation)) { return; }
 				event.preventDefault();

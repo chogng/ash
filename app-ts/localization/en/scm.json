@@ -63,7 +63,7 @@
 		"scm.history.deletions": "{0} deletions(-)",
 		"scm.history.verbosityTitle": "Commit details accessibility help",
 		"scm.history.verbosityDescription": "Announce how to open accessibility help when commit details receive focus.",
-		"scm.history.detailsHelp": "Commit details show the author, relative and full time, complete message, and file and line change counts. Use Left and Right Arrow in the actions toolbar to copy the full commit ID or open the commit in a browser. Use Shift+Tab to read and scroll the message. Escape returns to the commit. Press <keybinding:editor.action.accessibleView> to read these details as plain text.",
+		"scm.history.detailsHelp": "Commit details show the author, relative and full time, complete message, and file and line change counts. Use Left and Right Arrow in the actions toolbar to copy the full commit ID or open the commit in a browser. Use Tab and Shift+Tab to move between the message and actions within the details card. Escape returns to the commit. Press <keybinding:editor.action.accessibleView> to read these details as plain text.",
 		"scm.repositories.label": "Source control repositories",
 		"scm.repositories.verbosityInvalid": "Repositories accessibility verbosity must be a boolean.",
 		"scm.repositories.helpHint": "Press Alt+F1 for accessibility help.",

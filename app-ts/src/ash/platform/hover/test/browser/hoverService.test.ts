@@ -88,6 +88,26 @@ test("HoverService coordinates grouped Hovers and context menus", async () => {
 	contextViews.dispose();
 });
 
+test('HoverService reports dismissal so callers release each shown card', () => {
+	using configuration = new InMemoryConfigurationService();
+	using contextViews = new BrowserContextViewService(requiredElement<HTMLElement>('main'));
+	using contextMenus = new TestContextMenuService();
+	using service = new HoverService(configuration, contextViews, contextMenus);
+	let hidden = 0;
+	using hover = service.setupHover({
+		target: requiredElement<HTMLButtonElement>('#first'),
+		content: 'Details',
+		onDidHide: () => hidden++,
+	});
+	hover.show();
+	hover.hide();
+	hover.hide();
+	assert.equal(hidden, 1);
+	hover.show();
+	hover.dispose();
+	assert.equal(hidden, 2);
+});
+
 test("HoverService suppresses replacement Hovers until the pointer moves after activation", async () => {
 	const container = requiredElement<HTMLElement>("main");
 	const previousTarget = h(environment.window.document, "button");

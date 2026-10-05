@@ -57,6 +57,10 @@ test('SCM startup keeps commit hover targets stable in a large history', async (
 	const tooltipId = await tooltip.getAttribute('id');
 	const copy = tooltip.getByRole('button', { name: 'Copy Commit Hash', exact: true });
 	await expect(copy).toBeFocused();
+	await page.keyboard.press('Tab');
+	expect(await tooltip.evaluate(element => element.contains(document.activeElement))).toBe(true);
+	await page.keyboard.press('Shift+Tab');
+	await expect(copy).toBeFocused();
 	const retainedRow = await row.elementHandle();
 	const retainedToolbar = await row.locator('.ash-scm-graph-actions').elementHandle();
 	try {
@@ -407,7 +411,9 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	}
 	await hover.locator('.ash-scm-graph-hover-message').hover();
 	await expect(hover).toBeVisible();
-	await page.getByRole('textbox', { name: /^Commit message/u }).click();
+	const commitInput = page.getByRole('textbox', { name: /^Commit message/u });
+	await page.locator('.stanza-editor').filter({ has: commitInput }).locator('.stanza-editor-content').click();
+	await expect(commitInput).toBeFocused();
 	await expect(hover).toHaveCount(0);
 	await commit.locator('.ash-scm-graph-subject').hover();
 	await expect(hover.locator('.ash-scm-graph-hover-message')).toHaveText(body);
