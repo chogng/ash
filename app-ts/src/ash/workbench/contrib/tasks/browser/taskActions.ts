@@ -1,3 +1,4 @@
+import { AppServerAvailableContext } from '../../../../platform/renderer/common/rendererHost.js';
 import { localize2 } from '../../../../nls.js';
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
@@ -20,7 +21,7 @@ interface TaskRunQuickPickItem extends IQuickPickItem {
 MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
 	command: { id: RUN_TASK_COMMAND_ID, title: localize2({ bundle: "ash", key: "workbench.manageRunTask" }, "Run Task...") },
 	group: "2_configuration",
-	order: 6,
+	order: 6, when: AppServerAvailableContext.isEqualTo(true),
 });
 
 registerAction2(class RunTaskAction extends Action2 {
@@ -28,7 +29,7 @@ registerAction2(class RunTaskAction extends Action2 {
 		super({
 			id: RUN_TASK_COMMAND_ID,
 			title: localize2({ bundle: 'ash.workbench', key: 'command.RunTaskAction' }, "Run Task"),
-			f1: true,
+			f1: true, precondition: AppServerAvailableContext.isEqualTo(true),
 			menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 1 },
 			keybinding: { primary: Keybinding.chord(logicalKey("k", { primaryKey: true }), logicalKey("t", { primaryKey: true })) },
 		});
@@ -59,7 +60,7 @@ registerAction2(class RunTaskAction extends Action2 {
 
 registerAction2(class RerunLastTaskAction extends Action2 {
 	constructor() {
-		super({ id: RERUN_LAST_TASK_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.RerunLastTaskAction' }, "Rerun Last Task"), f1: true, menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 2 } });
+		super({ id: RERUN_LAST_TASK_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.RerunLastTaskAction' }, "Rerun Last Task"), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 2 } });
 	}
 
 	override run(accessor: ServicesAccessor): void {
@@ -77,7 +78,7 @@ registerAction2(class RerunLastTaskAction extends Action2 {
 
 registerAction2(class TerminateTaskAction extends Action2 {
 	constructor() {
-		super({ id: TERMINATE_TASK_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.TerminateTaskAction' }, "Terminate Task"), f1: true, menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 3 } });
+		super({ id: TERMINATE_TASK_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.TerminateTaskAction' }, "Terminate Task"), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 3 } });
 	}
 
 	override run(accessor: ServicesAccessor): void {

@@ -9,7 +9,8 @@ export interface AppServerLanguageDirAccess {
 /** Resolves whether every folder may start executable language services. */
 export async function resolveAppServerLanguageDirAccess(workspaceContext: IWorkspaceContextService, dirPermissions?: IDirPermissionsService): Promise<AppServerLanguageDirAccess> {
 	const workspace = workspaceContext.getWorkspace();
-	if (workspace.folders.length === 0 || workspace.folders.some(folder => folder.uri.scheme !== "file")) return { workspaceId: workspace.id, allowed: false };
+	// Browser handle identities cannot authorize a server process to read the local directory.
+	if (workspace.folders.length === 0 || workspace.folders.some(folder => folder.uri.scheme !== "file" || folder.uri.path.startsWith('/@browser/'))) return { workspaceId: workspace.id, allowed: false };
 	if (!dirPermissions) return { workspaceId: workspace.id, allowed: true };
 	const permissions = await Promise.all(workspace.folders.map(folder => dirPermissions.read(folder.uri.fsPath)));
 	return {

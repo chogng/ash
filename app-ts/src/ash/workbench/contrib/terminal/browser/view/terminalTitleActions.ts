@@ -12,6 +12,7 @@ import { type IContextKeyService } from "../../../../../platform/contextkey/brow
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ITerminalInstance, ITerminalProfile } from "../terminal.js";
 import { terminalProfileIcon } from "./terminalProfileIcon.js";
+import { AppServerAvailableContext } from '../../../../../platform/renderer/common/rendererHost.js';
 
 const ACTIVE_TERMINAL_COMMAND_ID = "ash.terminal.focusActive";
 const NEW_TERMINAL_WITH_PROFILE_COMMAND_ID = "ash.terminal.newWithProfile";
@@ -119,7 +120,7 @@ export class TerminalTitleActions extends Disposable {
 				title: localize2('terminal.title.new', "New Terminal"),
 				tooltip: localize('terminal.title.new', "New Terminal"),
 				icon: Lxicon.add,
-				precondition: TerminalCreatingContext.isEqualTo(false),
+				precondition: ContextKeyExpr.and(AppServerAvailableContext.isEqualTo(true), TerminalCreatingContext.isEqualTo(false)),
 			},
 			group: "navigation",
 			order: 10,

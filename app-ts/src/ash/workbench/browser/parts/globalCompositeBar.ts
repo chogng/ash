@@ -22,6 +22,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../platform/
 import { IGitHubConnectionService } from '../../services/accounts/common/gitHubConnectionService.js';
 import { ILocalizationService } from '../../services/localization/common/localizationService.js';
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation } from '../../common/configuration.js';
+import { IRendererHostService, type IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 
 /** Account and management actions shared by the Activity Bar and title bar. */
 export class GlobalCompositeBar extends Disposable {
@@ -46,6 +47,7 @@ export class GlobalCompositeBar extends Disposable {
 		@ILocalizationService private readonly localizationService: ILocalizationService,
 		@ILogService private readonly logService: ILogService,
 		@IStorageService private readonly storageService: IStorageService,
+		@IRendererHostService private readonly host: IRendererHost,
 	) {
 		super();
 		this.accountsVisible = this.storageService.getBoolean(GlobalCompositeBar.accountsVisibilityKey, StorageScope.PROFILE, true);
@@ -68,9 +70,11 @@ export class GlobalCompositeBar extends Disposable {
 			this.renderActions();
 		}));
 		this._register(this.accountService.onDidChangeAccounts(state => this.updateAccounts(state)));
-		void this.accountService.read().then(state => this.updateAccounts(state), error => {
-			this.logService.error('activitybar', 'Could not read accounts', error);
-		});
+		if (host.hasAppServer) {
+			void this.accountService.read().then(state => this.updateAccounts(state), error => {
+				this.logService.error('activitybar', 'Could not read accounts', error);
+			});
+		}
 	}
 
 	private updateAccounts(state: AccountState): void {
@@ -88,7 +92,7 @@ export class GlobalCompositeBar extends Disposable {
 		const accountsLabel = this.label('workbench.accounts', 'Accounts');
 		const manageLabel = this.label('workbench.manage', 'Manage');
 		return [
-			...(this.accountsVisible ? [{ id: 'ash.activityBar.accounts', label: accountsLabel, tooltip: accountsLabel, icon: Lxicon.account, enabled: true, run() {} }] : []),
+			...(this.accountsVisible && this.host.hasAppServer ? [{ id: 'ash.activityBar.accounts', label: accountsLabel, tooltip: accountsLabel, icon: Lxicon.account, enabled: true, run() {} }] : []),
 			{ id: 'ash.activityBar.manage', label: manageLabel, tooltip: manageLabel, icon: Lxicon.gear, enabled: true, run() {} },
 		];
 	}

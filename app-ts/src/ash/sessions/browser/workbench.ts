@@ -84,7 +84,7 @@ import { ILifecycleService, LifecyclePhase, type ShutdownReason } from "../../wo
 import { NotificationService } from "../../workbench/services/notification/common/notificationService.js";
 import { INotificationsCenter, NotificationsCenter } from "../../workbench/browser/parts/notifications/notificationsCenter.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
-import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { AppServerAvailableContext, IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { IStorageService, WillSaveStateReason, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
 import { IThemeService } from "../../platform/theme/common/themeService.js";
@@ -304,6 +304,7 @@ export class Workbench extends Disposable {
 		}));
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		services.registerInstance(AppServerApiId, options.api.appServer);
+		services.registerInstance(IRendererHostService, options.api);
 		const sessions = this._register(new SessionsManagementService(services.createInstance(AppServerSessionsProvider, {
 			session: options.api.session,
 			workspace: options.workspaceSelection,
@@ -419,6 +420,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ICommandService, commandService);
 		this._register(CommandsRegistry.register(RETURN_TO_WORKBENCH_COMMAND_ID, () => options.returnToWorkbench()));
 		const contextKeys = this._register(new ContextKeyService());
+		AppServerAvailableContext.bindTo(contextKeys).set(options.api.hasAppServer);
 		IsSessionsWindowContext.bindTo(contextKeys).set(true);
 		const workspaceFolderCount = WorkspaceFolderCountContext.bindTo(contextKeys);
 		workspaceFolderCount.set(workspace.getWorkspace().folders.length);

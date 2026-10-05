@@ -5,6 +5,7 @@ import type { IAction } from "../../../../../base/common/actions.js";
 import { Event } from "../../../../../base/common/event.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ITerminalInstance } from "../../browser/terminal.js";
+import { AppServerAvailableContext } from '../../../../../platform/renderer/common/rendererHost.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -66,6 +67,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	let focusCount = 0;
 	let clearCount = 0;
 	using contextKeyService = new ContextKeyService();
+	AppServerAvailableContext.bindTo(contextKeyService).set(true);
 	const commandService = new CommandService(new InstantiationService());
 	const menuService = new MenuService(commandService, contextKeyService);
 	using titleActions = new TerminalTitleActions(ownerDocument.body, {

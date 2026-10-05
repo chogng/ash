@@ -144,6 +144,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 
 		return {
 			...backend,
+			// Desktop supports the server-backed feature set even when its UI development host starts disconnected.
+			hasAppServer: true,
 			dispose: () => resources.dispose(),
 			[Symbol.dispose]: () => resources.dispose(),
 			environment: {

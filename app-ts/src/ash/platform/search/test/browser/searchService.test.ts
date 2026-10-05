@@ -1,13 +1,65 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
-import { BrowserContentSearchService } from '../../browser/searchService.js';
+import { BrowserContentSearchService, FileContentSearchService } from '../../browser/searchService.js';
+import { FileKind } from '../../../files/common/files.js';
+import { URI } from '../../../../base/common/uri.js';
+import type { ContentSearchMatch } from '../../common/search.js';
+import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
+import translatedWorkbench from '../../../../../../localization/zh-CN/workbench.json' with { type: 'json' };
 import type { IContentSearchApi } from '../../common/searchApi.js';
 import type { ContentSearchFreshness, IContentSearchQuery } from '../../common/search.js';
 
 const query: IContentSearchQuery = {
 	text: 'needle', patternKind: 'literal', caseSensitivity: 'sensitive', includePatterns: [], excludePatterns: [],
 };
+
+test('browser search explains its empty workspace in the selected display language', async () => {
+	setNlsMessages('zh-CN', translatedWorkbench);
+	try {
+		const service = new FileContentSearchService({
+			async readDirectory() { assert.fail('an empty workspace has no directory to read'); },
+			async readFileBytes() { assert.fail('an empty workspace has no file to read'); },
+		}, { getWorkspace: () => ({ id: 'empty', folders: [] }) });
+		assert.deepEqual(await service.search(query), { resultCount: 0, limitHit: false, error: '请打开文件夹以搜索文件。' });
+	} finally { resetNlsResolver(); }
+});
+
+test('browser file search applies root and nested globs, case, regex, binary exclusion and limits', async () => {
+	const root = URI.file('/@browser/granted');
+	const bytes = new Map([
+		['/main.txt', new TextEncoder().encode('Needle needle\nneedle')],
+		['/src/nested.txt', new TextEncoder().encode('needle')],
+		['/src/binary.txt', new Uint8Array([0, 110, 101, 101, 100, 108, 101])],
+	]);
+	const service = new FileContentSearchService({
+		async readDirectory(directory) {
+			const names = directory.path === root.path ? ['main.txt', 'src'] : ['nested.txt', 'binary.txt'];
+			return names.map(name => ({ resource: URI.joinPath(directory, name), name, kind: name === 'src' ? FileKind.Directory : FileKind.File }));
+		},
+		async readFileBytes(resource) { return { resource, revision: '1', bytes: bytes.get(resource.path.slice(root.path.length))! }; },
+	}, { getWorkspace: () => ({ id: 'granted', folders: [{ id: 'granted', uri: root, name: 'granted', index: 0 }] }) });
+	const progress: ContentSearchMatch[] = [];
+	const complete = await service.search({ ...query, text: 'n.eedle|needle', patternKind: 'regex', includePatterns: ['**/*.txt'], excludePatterns: ['src/**'], maxResults: 1 }, { onProgress: matches => progress.push(...matches) });
+	assert.deepEqual({ complete, progress }, {
+		complete: { resultCount: 1, limitHit: true, error: undefined },
+		progress: [{ dirId: 'granted', dirName: 'granted', path: 'main.txt', lineNumber: 1, preview: 'Needle needle', ranges: [{ start: 7, end: 13 }] }],
+	});
+	const binary = await service.search({ ...query, text: 'NEEDLE', caseSensitivity: 'insensitive', includePatterns: ['src/**'] });
+	assert.deepEqual(binary, { resultCount: 1, limitHit: false, error: undefined });
+});
+
+test('browser file search stops delivering lines as soon as its caller cancels', async () => {
+	const root = URI.file('/@browser/granted');
+	const controller = new AbortController();
+	let delivered = 0;
+	const service = new FileContentSearchService({
+		async readDirectory() { return [{ resource: URI.joinPath(root, 'main.txt'), name: 'main.txt', kind: FileKind.File }]; },
+		async readFileBytes(resource) { return { resource, revision: '1', bytes: new TextEncoder().encode('needle\nneedle') }; },
+	}, { getWorkspace: () => ({ id: 'granted', folders: [{ id: 'granted', uri: root, name: 'granted', index: 0 }] }) });
+	await assert.rejects(service.search(query, { signal: controller.signal, onProgress: () => { delivered++; controller.abort(); } }), { name: 'AbortError' });
+	assert.equal(delivered, 1);
+});
 
 function page(searchId: string): Awaited<ReturnType<IContentSearchApi['read']>> {
 	return { searchId, matches: [], nextMatch: 0, completed: true, limitHit: false, error: null };

@@ -6,6 +6,30 @@ import type { UnavailableOperation } from "../../renderer/browser/disconnectedHo
 import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
 import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 import bundledThemes from '../common/generated/theme-defaults.json' with { type: 'json' };
+import { localize } from '../../../nls.js';
+
+/** Reads complete package snapshots prepared by the browser build, without server transport. */
+export function createBrowserExtensionApi(): IExtensionApi {
+	// Package bytes are a static asset, not JavaScript imported into every renderer entry.
+	let snapshot: Promise<{ catalog: ReturnType<typeof normalizeExtensionCatalog>; resources: Readonly<Record<string, Readonly<Record<string, string>>>> }> | undefined;
+	const load = () => snapshot ??= (async () => {
+		const response = await fetch(new URL('../common/generated/browser.json', import.meta.url));
+		if (!response.ok) { throw new Error(localize('extensions.browser.catalogFailure', 'Cannot load browser extension catalog: HTTP {0}', response.status)); }
+		const bundle = await response.json();
+		return { catalog: normalizeExtensionCatalog(bundle.catalog), resources: bundle.resources };
+	})();
+	return {
+		list: async () => (await load()).catalog,
+		readResource: async request => {
+			const { catalog, resources } = await load();
+			const extension = resources[request.extensionId];
+			if (request.generation !== catalog.generation || !extension || !Object.hasOwn(extension, request.path)) {
+				throw new Error(localize('extensions.browser.resourceMissing', 'Browser extension resource is not in the current package: {0}/{1}', request.extensionId, request.path));
+			}
+			return decodeBase64(extension[request.path]).buffer;
+		},
+	};
+}
 
 export function createDisconnectedExtensionApi(unavailable: UnavailableOperation): IExtensionApi {
 	const catalog = normalizeExtensionCatalog({ generation: 1, diagnostics: [], extensions: [bundledThemes.descriptor] });

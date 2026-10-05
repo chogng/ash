@@ -47,7 +47,7 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 			this._register(toDisposable(() => subscription.dispose()));
 		}
 		this._register(toDisposable(() => {
-			void host.session.unsubscribeCatalog().catch(error => console.error("Failed to unsubscribe Session catalog", error));
+			if (this.catalogSubscribed) { void host.session.unsubscribeCatalog().catch(error => console.error("Failed to unsubscribe Session catalog", error)); }
 			for (const sessionId of this.subscribed) {
 				void host.session.unsubscribe({ sessionId }).catch(error => console.error(`Failed to unsubscribe Session '${sessionId}'`, error));
 			}

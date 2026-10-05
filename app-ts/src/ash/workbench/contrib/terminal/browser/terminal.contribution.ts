@@ -1,3 +1,4 @@
+import { AppServerAvailableContext } from '../../../../platform/renderer/common/rendererHost.js';
 import { localize2 } from '../../../../nls.js';
 import '../../terminalContrib/voice/browser/terminal.voice.contribution.js';
 import '../../terminalContrib/links/browser/terminal.links.contribution.js';
@@ -33,7 +34,7 @@ registerAction2(class FocusTerminalAction extends Action2 {
 		super({
 			id: "workbench.action.terminal.focus",
 			title: localize2({ bundle: "ash", key: "workbench.focusTerminal" }, "Focus Terminal"),
-			f1: true,
+			f1: true, precondition: AppServerAvailableContext.isEqualTo(true),
 			menu: { id: MenuId.MenubarTerminalMenu, group: "1_terminal", order: 1 },
 		});
 	}

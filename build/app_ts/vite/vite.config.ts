@@ -10,6 +10,7 @@ import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 import { productIconsPlugin } from "./productIconsPlugin.ts";
 import { webAppServerVitePlugin } from "./webAppServerPlugin.ts";
 import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
+import { browserExtensionsPlugin } from './extensionsPlugin.ts';
 
 export default defineConfig(({ mode }) => {
   const desktopRoot = resolve(import.meta.dirname, "../../../app-ts");
@@ -51,6 +52,7 @@ export default defineConfig(({ mode }) => {
       hotReloadPlugin({ desktopRoot }),
       workbenchEntryPlugin(),
       productIconsPlugin(),
+		browserExtensionsPlugin(),
       {
         name: "ash-electron-file-html",
         apply: "build",

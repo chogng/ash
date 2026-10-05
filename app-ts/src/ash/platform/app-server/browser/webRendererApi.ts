@@ -96,6 +96,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 	const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
 	return {
 		appServer,
+		hasAppServer: true,
 		approvalEnvironment: connection.capabilities?.approvalEnvironment ? new AppServerApprovalEnvironmentService(connection) : undefined,
 		accounts: createAppServerAccountApi(connection, connectorHostServices),
 		session: createAppServerSessionApi(connection),

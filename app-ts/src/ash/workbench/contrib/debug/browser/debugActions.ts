@@ -1,3 +1,4 @@
+import { AppServerAvailableContext } from '../../../../platform/renderer/common/rendererHost.js';
 import { localize2 } from '../../../../nls.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
@@ -23,7 +24,7 @@ registerAction2(class ToggleBreakpointAction extends Action2 {
 });
 
 registerAction2(class StartDebugAction extends Action2 {
-	constructor() { super({ id: START_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'debug.start' }, "Start Debugging"), f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5")) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 1 } }); }
+	constructor() { super({ id: START_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'debug.start' }, "Start Debugging"), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), keybinding: { primary: Keybinding.single(logicalKey("F5")) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 1 } }); }
 	override run(accessor: ServicesAccessor): void {
 		const debug = accessor.get(IDebugService);
 		const views = accessor.get(IViewsService);
@@ -38,17 +39,17 @@ registerAction2(class StartDebugAction extends Action2 {
 });
 
 registerAction2(class StopDebugAction extends Action2 {
-	constructor() { super({ id: STOP_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.StopDebugAction' }, "Stop Debugging"), f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5", { shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 2 } }); }
+	constructor() { super({ id: STOP_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.StopDebugAction' }, "Stop Debugging"), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), keybinding: { primary: Keybinding.single(logicalKey("F5", { shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 2 } }); }
 	override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).stop().catch(reportError); }
 });
 
 registerAction2(class RestartDebugAction extends Action2 {
-	constructor() { super({ id: RESTART_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.RestartDebugAction' }, "Restart Debugging"), f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5", { ctrlKey: true, shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 3 } }); }
+	constructor() { super({ id: RESTART_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.RestartDebugAction' }, "Restart Debugging"), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), keybinding: { primary: Keybinding.single(logicalKey("F5", { ctrlKey: true, shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 3 } }); }
 	override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).restart().catch(reportError); }
 });
 
 registerAction2(class StopAllDebugAction extends Action2 {
-	constructor() { super({ id: STOP_ALL_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.StopAllDebugAction' }, "Stop All Debugging"), f1: true, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 4 } }); }
+	constructor() { super({ id: STOP_ALL_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.StopAllDebugAction' }, "Stop All Debugging"), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 4 } }); }
 	override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).stopAll().catch(reportError); }
 });
 
@@ -70,7 +71,7 @@ for (const [id, title, keybinding, operation] of [
 	[STEP_OUT_DEBUG_COMMAND_ID, "Step Out", Keybinding.single(logicalKey("F11", { shiftKey: true })), "stepOut"],
 ] as const) {
 	registerAction2(class DebugSessionAction extends Action2 {
-		constructor() { super({ id, title, f1: true, ...(keybinding ? { keybinding: { primary: keybinding } } : {}) }); }
+		constructor() { super({ id, title, f1: true, precondition: AppServerAvailableContext.isEqualTo(true), ...(keybinding ? { keybinding: { primary: keybinding } } : {}) }); }
 		override run(accessor: ServicesAccessor): void {
 			const session = accessor.get(IDebugService).session;
 			if (!session) return;

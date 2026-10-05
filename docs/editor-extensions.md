@@ -41,7 +41,17 @@ Workbench 的 Commands/Language/Tasks/task-backed Testing、数据通道和链�
 launcher 尚未实现，默认产品仍以 capability=false 失败关闭，不能描述为可启用第三方代码的生产路径。
 后续章节分别说明两条流程、所有权、信任与失败边界、完成度及演进。
 
-## 1. 两条装载与激活路径
+独立 Web 开发入口另有可信开发路径：`build/resources/extensions.ts` 将内置包及显式配置的
+`ASH_WEB_EXTENSION_PATHS` 冻结为 Browser catalog 和资源快照。`platform/extensions/browser/extensionApi.ts`
+提供同一目录与资源契约；`platform/extensionHost/browser/extensionHostApi.ts` 持有每个可执行包的 Worker，
+`extensionHostWorker.ts` 在 Worker 内导入 package 的单文件 ESM `browser` 入口，调用
+`activate({ register })`。注册与调用复用 Ash Host API v1，不提供 `vscode` 模块或 Node API。
+Worker 持有调用的取消信号；到达截止时间后终止 Worker 并撤销该 incarnation 的注册。
+刷新、替换和关闭页面释放 Worker 与入口 Blob URL。Vite 监听开发包文件并重新生成快照、刷新页面。
+该路径仅执行内置或开发者显式指定的可信资源，不属于 Marketplace 执行许可或生产第三方隔离路径。
+Worker 无法访问 Workbench DOM，但仍是同源代码，不宣称具备生产 launcher 的 hard limits。
+
+## 1. 两条 App Server 装载与激活路径
 
 ### 1.1 声明式静态扩展
 

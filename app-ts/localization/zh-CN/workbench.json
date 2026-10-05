@@ -1,5 +1,13 @@
 {
 	"ash": {
+		"search.openFolder": "请打开文件夹以搜索文件。",
+		"extensions.browser.catalogFailure": "无法加载浏览器扩展目录：HTTP {0}",
+		"extensions.browser.resourceMissing": "当前扩展包中不存在浏览器扩展资源：{0}/{1}",
+		"extensionHost.browser.retired": "浏览器扩展调用所属的激活已结束",
+		"extensionHost.browser.stopped": "浏览器扩展 Worker 已停止",
+		"extensionHost.browser.invalidResponse": "浏览器扩展 Worker 返回了无效响应",
+		"extensionHost.browser.cancelled": "浏览器扩展调用已取消",
+		"extensionHost.browser.deadline": "浏览器扩展调用已超时",
 		"tasks.terminalUnavailable": "终端不可用，任务尚未启动。请重新运行任务。",
 		"debug.terminalUnavailable": "终端不可用，调试命令尚未执行。请重新启动调试。",
 		"integrity.failed": "Ash 无法验证桌面运行环境，请查看日志了解详情。",

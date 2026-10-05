@@ -63,7 +63,7 @@ import { IExtensionHostApi } from "../../platform/extensionHost/common/extension
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
 import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
-import { IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { AppServerAvailableContext, IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import { ILocalTranscriptionService } from '../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../services/localTranscription/browser/localTranscriptionService.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
@@ -170,7 +170,7 @@ import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layou
 import type { BrowserStorageServiceOptions } from "../services/storage/browser/storageService.js";
 import { SystemOutputService } from "../services/output/browser/systemOutputService.js";
 import { IContentSearchService } from "../../platform/search/common/search.js";
-import { BrowserContentSearchService } from "../../platform/search/browser/searchService.js";
+import { BrowserContentSearchService, FileContentSearchService } from "../../platform/search/browser/searchService.js";
 import type { WorkbenchPart } from "./part.js";
 import { AuxiliarybarPart } from "./parts/auxiliarybar/auxiliarybarPart.js";
 import { EditorContextKeyController } from './parts/editor/editorContextKeys.js';
@@ -500,6 +500,7 @@ export class Workbench extends Disposable {
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
 		services.registerInstance(IRendererHostService, api);
+		AppServerAvailableContext.bindTo(contextKeys).set(api.hasAppServer);
 		services.registerInstance(IDictationService, api.dictation);
 		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
@@ -653,7 +654,7 @@ export class Workbench extends Disposable {
 		// Only the desktop host may inspect directory grants. Web language requests
 		// are authorized by the server for the authenticated workspace.
 		const languageDirPermissions = nativeHostApi ? dirPermissionsService : undefined;
-		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { dirPermissions: languageDirPermissions, events: api.events }));
+		if (api.hasAppServer) { this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { dirPermissions: languageDirPermissions, events: api.events })); }
 		const diffService = new DiffService();
 		services.registerInstance(IDiffService, diffService);
 		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols);
@@ -670,7 +671,7 @@ export class Workbench extends Disposable {
 		void extensionReady.catch(error => logService.error("extensions", "Declarative extension activation failed", error));
 		services.registerInstance(
 			IContentSearchService,
-			new BrowserContentSearchService(api.contentSearch, workspaceContext),
+			api.hasAppServer ? new BrowserContentSearchService(api.contentSearch, workspaceContext) : new FileContentSearchService(fileService, workspaceContext),
 		);
 		services.registerInstance(ITerminalProcessService, api.terminal);
 		const gitService = this._register(services.createInstance(GitService, { api: api.git, appServerApi: api.appServer, eventApi: api.events, workspaceContext, canCloneRepository: nativeHostApi !== undefined }));

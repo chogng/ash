@@ -38,6 +38,8 @@ import { EMPTY_WORKSPACE_ID_KEY } from '../services/host/browser/browserHostServ
 import { URI } from '../../base/common/uri.js';
 import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
+import { createBrowserExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
+import { BrowserExtensionHostApi } from '../../platform/extensionHost/browser/extensionHostApi.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
 export async function createWebWorkbench(
@@ -99,8 +101,8 @@ function getEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {
 
 /**
  * Starts the Workbench from the optional global Web host and owns page
- * shutdown. A page without an embedder starts in an explicit disconnected
- * state so its UI remains inspectable without claiming backend availability.
+ * shutdown. Without a server host, files, settings and extensions are owned
+ * by the browser; process-backed operations remain unavailable.
  */
 export async function startWebWorkbench(
 	options: Pick<IStartWorkbenchOptions, 'productName'>,
@@ -113,6 +115,11 @@ export async function startWebWorkbench(
 	try {
 		const configurationApi = workbench.add(new IndexedDbConfigurationApi());
 		const initialConfigurationSnapshot = await configurationApi.read();
+		let api = host?.api;
+		if (!api) {
+			const extensions = createBrowserExtensionApi();
+			api = { ...createDisconnectedRendererApi(), extensions, extensionHost: workbench.add(new BrowserExtensionHostApi(extensions)) };
+		}
 		const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> };
 		const browserFileSystemProvider = !host && picker.showDirectoryPicker && globalThis.indexedDB
 			? new HTMLFileSystemProvider(globalThis.indexedDB)
@@ -120,7 +127,7 @@ export async function startWebWorkbench(
 		const instance = await createWebWorkbench({
 			...options,
 			urlCallbackProvider: host?.urlCallbackProvider,
-			api: host?.api ?? createDisconnectedRendererApi(),
+			api,
 			createTextDocumentHost,
 			configurationApi,
 			initialConfigurationSnapshot,

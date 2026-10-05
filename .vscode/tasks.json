@@ -62,7 +62,7 @@
 			}
 		},
 		{
-			"label": "Run Ash Web (UI Only)",
+			"label": "Run Ash Web",
 			"type": "shell",
 			"command": "pnpm --dir app-ts dev:web",
 			"isBackground": true,

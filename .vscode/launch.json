@@ -58,7 +58,7 @@
 			}
 		},
 		{
-			"name": "Ash Web (Chrome, UI Only)",
+			"name": "Ash Web (Chrome)",
 			"type": "node",
 			"request": "launch",
 			"program": "${workspaceFolder}/app-ts/node_modules/vite/bin/vite.js",
@@ -86,7 +86,7 @@
 			"request": "launch",
 			"url": "http://127.0.0.1:5173/",
 			"webRoot": "${workspaceFolder}",
-			"cascadeTerminateToConfigurations": ["Ash Web (Chrome, UI Only)"],
+			"cascadeTerminateToConfigurations": ["Ash Web (Chrome)"],
 			"presentation": { "hidden": true }
 		},
 		{

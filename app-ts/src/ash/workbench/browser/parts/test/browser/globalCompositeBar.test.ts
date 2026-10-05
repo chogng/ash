@@ -35,12 +35,15 @@ const { ContextKeyService } = await import('../../../../../platform/contextkey/b
 const { InstantiationService } = await import('../../../../../platform/instantiation/common/instantiationService.js');
 const { CommandService } = await import('../../../../services/commands/common/commandService.js');
 const { GlobalCompositeBar } = await import('../../globalCompositeBar.js');
+const { IRendererHostService } = await import('../../../../../platform/renderer/common/rendererHost.js');
+const { createDisconnectedRendererApi } = await import('../../../../../platform/app-server/browser/rendererApi.js');
 
 test('Activity Bar global actions open account and management menus', async () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();
 	const services = disposables.add(new InstantiationService());
+	services.registerInstance(IRendererHostService, { ...createDisconnectedRendererApi(), hasAppServer: true });
 	const commands = disposables.add(new CommandService(services));
 	services.registerInstance(ICommandService, commands);
 	const contextKeys = disposables.add(new ContextKeyService());

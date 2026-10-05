@@ -50,12 +50,14 @@ import { ISyntaxApi } from '../platform/syntax/common/syntaxApi.js';
 import { ILanguageFeaturesService } from '../editor/common/services/languageFeatures.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from './common/contributions.js';
 import { AppServerSyntaxProviders } from './services/language/browser/appServerSyntaxProviders.js';
+import { IRendererHostService } from '../platform/renderer/common/rendererHost.js';
+import { Disposable } from '../base/common/lifecycle.js';
 
 registerWorkbenchContribution(
 	'code.contrib.appServerSyntax',
 	WorkbenchPhase.BlockStartup,
-	accessor => new AppServerSyntaxProviders(
+	accessor => accessor.get(IRendererHostService).hasAppServer ? new AppServerSyntaxProviders(
 		accessor.get(ILanguageFeaturesService),
 		accessor.get(ISyntaxApi),
-	),
+	) : Disposable.None,
 );

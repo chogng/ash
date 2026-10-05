@@ -40,6 +40,7 @@ export class GitService extends Disposable implements IGitService {
 	private selectionGeneration = 0;
 	private discovery: Promise<readonly GitRepository[]> | undefined;
 	private connectionRevision = 0;
+	private connectionReady = false;
 	private configRevision = -1;
 	private autoFetchValue: GitAutofetch = false;
 	private autoFetchPeriodValue = 180;
@@ -100,6 +101,7 @@ export class GitService extends Disposable implements IGitService {
 		});
 		this._register(toDisposable(() => events.dispose()));
 		const handleConnectionState = (state: AppServerConnectionState): void => {
+			this.connectionReady = state === 'ready';
 			const revision = ++this.connectionRevision;
 			if (state !== 'ready') this.configRevision = -1;
 			if (state === 'ready') void this.refreshAutoFetch().catch(error => this.logService.error('git', 'Unable to read automatic Git fetch settings', error));
@@ -121,7 +123,7 @@ export class GitService extends Disposable implements IGitService {
 		}).catch(error => this.logService.error('git', 'Unable to read App Server connection state', error));
 		this._register(options.workspaceContext.onDidChangeWorkspace(({ workspace }) => {
 			this.clearRepositories();
-			if (workspace.folders.length > 0) void this.refreshRepositories().catch(error => this.logService.error('git', 'Unable to discover repositories', error));
+			if (this.connectionReady && workspace.folders.length > 0) void this.refreshRepositories().catch(error => this.logService.error('git', 'Unable to discover repositories', error));
 		}));
 	}
 

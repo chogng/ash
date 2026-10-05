@@ -672,7 +672,11 @@ waitingForApproval 或 waitingForUserInput 时，普通文本 Send 调用 `sessi
 当前尚未实现 session/thread picker、附件和图片输入、fork/history 导航、动态工具执行器。
 由于 session 列表当前没有最近活动时间，启动时只能按服务端顺序选择首个活动 thread；
 Browser 入口没有 App Server 连接时会明确显示不可用状态。`dev:web` 是不构建 Rust 的独立
-前端开发入口，本地文件夹由浏览器授权的 `HTMLFileSystemProvider` 直接读写；其他后端操作仍使用 disconnected API。
+Workbench 开发入口，本地文件夹由浏览器授权的 `HTMLFileSystemProvider` 直接读写，内容搜索通过
+`FileContentSearchService` 遍历同一文件服务；用户配置和备份写入 IndexedDB。内置声明式扩展及资源
+由构建生成的 Browser catalog 提供，可信开发扩展的 `browser` 入口通过页面持有的 Worker 执行。
+`IRendererHost.hasAppServer` 区分宿主能力与暂时断线：独立 Web 不创建 App Server 语言和语法 provider，
+不读取后端账户，进程终端、任务和调试命令按能力禁用。Git 和 Agent 操作仍需连接后端。
 `build:web` / `start:web` 提供同一独立 Web 模式。当前本地
 `dev:web:full` 与 `build:web:full` / `start:web:full` 使用受管理 Rust App Server 的认证
 HTTP/WebSocket 浏览器入口。每个浏览器页签独立交换 JSON-RPC，服务仍由 profile registry 管理。

@@ -1,4 +1,5 @@
-import { Disposable, DisposableMap, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { MenuId, MenusRegistry } from '../../../platform/actions/common/actions.js';
 import type { CommandDefinition, CommandRegistration, CommandRegistry } from '../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostLanguageRegistration, type ExtensionHostRegistration, type ExtensionHostRuntime } from '../../../platform/extensionHost/common/extensionHostApi.js';
@@ -40,6 +41,7 @@ interface ExtensionNamedOutputCursor {
 /** Applies executable-extension registrations to Workbench services for one host connection. */
 export class MainThreadExtensionApi extends Disposable {
 	private readonly commandRegistration: CommandRegistration;
+	private readonly commandMenus = this._register(new DisposableStore());
 	private readonly languageRegistration: LanguageProviderBatchRegistration;
 	private readonly taskRegistration: TaskProviderRegistration;
 	private readonly testRegistration: TestProfileProviderRegistration;
@@ -119,7 +121,7 @@ export class MainThreadExtensionApi extends Disposable {
 				}
 				const invoke = this.registrationInvoker(runtime, registration, controller.signal);
 				if (registration.kind === "command") {
-					commands.push(Object.freeze({ id: registration.command, handler: (_accessor: ServicesAccessor, ...args: readonly unknown[]) => invoke("execute", normalizeExtensionHostPayload({ arguments: args }), controller.signal) }));
+					commands.push(Object.freeze({ id: registration.command, metadata: { description: registration.title }, handler: (_accessor: ServicesAccessor, ...args: readonly unknown[]) => invoke("execute", normalizeExtensionHostPayload({ arguments: args }), controller.signal) }));
 					continue;
 				}
 				if (registration.kind === "languageProvider") {
@@ -186,6 +188,7 @@ export class MainThreadExtensionApi extends Disposable {
 				this.activeContributions = previous;
 			} catch (rollbackError) {
 				this.commandRegistration.replace([]);
+				this.commandMenus.clear();
 				this.languageRegistration.replace({});
 				this.taskRegistration.replace([]);
 				this.testRegistration.replace([]);
@@ -196,6 +199,10 @@ export class MainThreadExtensionApi extends Disposable {
 			throw error;
 		}
 		this.activeContributions = next;
+		this.commandMenus.clear();
+		for (const command of next.commands) {
+			this.commandMenus.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: command.id, title: command.metadata!.description } }));
+		}
 		previous?.controller.abort("Extension Host fleet generation was replaced");
 	}
 
@@ -203,6 +210,7 @@ export class MainThreadExtensionApi extends Disposable {
 		const active = this.activeContributions;
 		this.activeContributions = undefined;
 		this.commandRegistration.replace([]);
+		this.commandMenus.clear();
 		this.languageRegistration.replace({});
 		this.taskRegistration.replace([]);
 		this.testRegistration.replace([]);

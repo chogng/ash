@@ -77,7 +77,8 @@ just ash-desktop
 In VS Code, select `Ash (Electron)` and press F5 to run the same command. The three
 product groups are `Ash Code (TUI)`, `Ash (Electron)`, and `Ash App (Rust)`.
 `Ash (Electron, Frontend Watch Only)` also runs the Rust backend but only watches frontend
-and Electron host changes. `Ash Web (Chrome, UI Only)` runs the browser frontend without a backend.
+and Electron host changes. `Ash Web (Chrome)` starts the independent Browser Workbench.
+Stopping either its server or Chrome debug session stops both, so the next F5 can reuse the port.
 
 Desktop starts the Code Workbench and provides a separate Agents window. Academic documents
 open in the same Workbench; startup does not select a product mode.
@@ -88,11 +89,33 @@ For a Linux Electron Desktop, Web, and Rust backend environment, open the reposi
 ### Browser Workbench
 
 ```bash
-pnpm dev:web       # disconnected UI at http://127.0.0.1:5173/
+pnpm dev:web      # Browser Workbench at http://127.0.0.1:5173/, no Rust build
 pnpm dev:web:full # Rust-backed UI at http://127.0.0.1:5174/
 ```
 
 The full Web mode is a local development integration, not a deployable Web service.
+
+Use `Ash Web (Chrome)` with F5 for browser development. This mode opens, edits and saves
+browser-authorized local folders, restores dirty editors after reload, stores settings in IndexedDB,
+and loads the built-in languages, grammars, snippets and themes. Workspace text search reads the
+authorized folder directly. Process-backed terminals, tasks, debugging, Git and agent requests
+require the connected mode. This separation follows VS Code's browser development entrypoint;
+it does not imply full VS Code feature or Extension API compatibility.
+
+For a trusted browser extension under development, set `ASH_WEB_EXTENSION_PATHS` to its package
+directory (multiple directories use the platform path delimiter). The package's `browser` field
+points to a bundled ES module exporting `activate({ register })`. Registrations use Ash Host API v1;
+the module runs in a page-owned Worker. Vite watches package resources and reloads their snapshot.
+For example, in PowerShell:
+
+```powershell
+$env:ASH_WEB_EXTENSION_PATHS = (Resolve-Path app-ts/test/fixtures/web-extension).Path
+pnpm dev:web
+```
+
+This is an explicit trusted development input, with no third-party installation or sandbox claim.
+Use `pnpm --dir app-ts test:smoke:browser:dev` to test the development entry and
+`pnpm --dir app-ts test:smoke:browser` to test the built Web artifacts.
 
 ### Stanza standalone editor
 

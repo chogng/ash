@@ -38,6 +38,7 @@ export { WebAppServerUnavailableError };
 export function createDisconnectedRendererApi(): IRendererHost {
 	const appServer = createDisconnectedAppServerApi(unavailableOperation);
 	return {
+		hasAppServer: false,
 		appServer,
 		accounts: createDisconnectedAccountApi(unavailableOperation),
 		session: createDisconnectedSessionApi(unavailableOperation),

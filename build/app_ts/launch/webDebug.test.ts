@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { _electron, expect } from '@playwright/test';
 
 const repository = resolve(import.meta.dirname, '../../..');
-const serverName = 'Ash Web (Chrome, UI Only)';
+const serverName = 'Ash Web (Chrome)';
 const browserName = 'Ash Web Browser (Chrome)';
 
 interface DebugState {

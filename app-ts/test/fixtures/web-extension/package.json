@@ -1,0 +1,7 @@
+{
+	"name": "web-fixture",
+	"publisher": "ash-test",
+	"version": "1.0.0",
+	"browser": "./extension.js",
+	"engines": { "ash": "1" }
+}

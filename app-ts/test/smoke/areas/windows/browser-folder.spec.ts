@@ -1,7 +1,97 @@
 import { expect, test } from '../../../automation/test.js';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 
 test.use({ openWorkspace: false });
+
+test('standalone browser searches granted files and disables process commands', async ({ target, workbench, driver }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled');
+	const page = workbench.page;
+	await page.evaluate(async () => {
+		const root = await navigator.storage.getDirectory();
+		const folder = await root.getDirectoryHandle(`ash-search-${crypto.randomUUID()}`, { create: true });
+		for (const [name, text] of [['main.txt', 'browser needle\nother line'], ['ignore.txt', 'browser needle'], ['main.js', 'const value = "web";']]) {
+			const writer = await (await folder.getFileHandle(name, { create: true })).createWritable();
+			await writer.write(text);
+			await writer.close();
+		}
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+	});
+	await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+	await page.getByRole('tab', { name: 'Search', exact: true }).click();
+	const search = page.getByRole('textbox', { name: 'Search workspace' });
+	await expect(search).toBeVisible();
+	await page.getByRole('textbox', { name: 'Files to include' }).fill('**/*.txt');
+	await page.getByRole('textbox', { name: 'Files to exclude' }).fill('ignore.txt');
+	await search.fill('browser needle');
+	await search.press('Enter');
+	await expect(page.locator('.ash-search-status')).toContainText('1');
+	await expect(page.locator('.ash-search-results')).toContainText('main.txt');
+	await expect(page.locator('.ash-search-results')).not.toContainText('ignore.txt');
+	await workbench.quickaccess.open('>workbench.action.tasks.runTask');
+	await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('workbench.action.tasks.runTask', { exact: true }) })).toHaveCount(0);
+	await workbench.quickaccess.close();
+	await expect(page.getByRole('button', { name: 'Accounts', exact: true })).toHaveCount(0);
+	await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.js', exact: true }).dblclick();
+	await expect(page.getByRole('button', { name: 'Language JavaScript', exact: true })).toBeVisible();
+	const tokens = workbench.editors.groupAt(0).content.locator('.stanza-editor-token');
+	const keyword = tokens.filter({ hasText: 'const' }).first();
+	const string = tokens.filter({ hasText: 'web' }).first();
+	await expect(keyword).toBeVisible();
+	await expect(string).toBeVisible();
+	await expect.poll(() => keyword.evaluate(element => getComputedStyle(element).color)).not.toBe(await string.evaluate(element => getComputedStyle(element).color));
+	expect(driver.diagnostics.pageErrors).toEqual([]);
+	expect(driver.diagnostics.consoleErrors.filter(error => /WebAppServerUnavailable|Unable to create workbench contribution/.test(error))).toEqual([]);
+});
+
+test('standalone browser executes its extension command in a Worker and retires it on reload', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled' || !process.env.ASH_WEB_EXTENSION_PATHS?.includes('web-extension'));
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('ash.web.fixture.run');
+	let extensionWorker: ReturnType<typeof page.workers>[number] | undefined;
+	await expect.poll(async () => {
+		for (const worker of page.workers()) {
+			const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown }).ashWebExtensionFixture);
+			if (state) { extensionWorker = worker; return state; }
+		}
+		return undefined;
+	}).toEqual({ count: 1, operation: 'execute', payload: { arguments: [] }, worker: true });
+	const stopped = new Promise<void>(resolve => extensionWorker!.once('close', () => resolve()));
+	await page.reload();
+	await stopped;
+	await workbench.waitForReady();
+	await workbench.quickaccess.runCommand('ash.web.fixture.run');
+	await expect.poll(async () => {
+		for (const worker of page.workers()) {
+			const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown }).ashWebExtensionFixture);
+			if (state) { return state; }
+		}
+		return undefined;
+	}).toEqual({ count: 1, operation: 'execute', payload: { arguments: [] }, worker: true });
+	if (process.env.ASH_PLAYWRIGHT_SERVER === 'development') {
+		const entry = new URL('../../../fixtures/web-extension/extension.js', import.meta.url);
+		const original = await readFile(entry, 'utf8');
+		try {
+			const reloaded = page.waitForEvent('domcontentloaded');
+			await writeFile(entry, original.replace('count: 0', 'count: 10'));
+			await reloaded;
+			await workbench.waitForReady();
+			await workbench.quickaccess.runCommand('ash.web.fixture.run');
+			await expect.poll(async () => {
+				for (const worker of page.workers()) {
+					const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown }).ashWebExtensionFixture);
+					if (state) { return state; }
+				}
+				return undefined;
+			}).toEqual({ count: 11, operation: 'execute', payload: { arguments: [] }, worker: true });
+		} finally {
+			const restored = page.waitForEvent('domcontentloaded');
+			await writeFile(entry, original);
+			await restored;
+			await workbench.waitForReady();
+		}
+	}
+});
 
 test('browser reload restores its folder, dirty editor and stable directory identity', async ({ target, driver, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled');

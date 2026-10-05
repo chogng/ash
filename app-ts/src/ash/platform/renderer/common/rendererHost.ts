@@ -43,6 +43,9 @@ import type { IAutomationService } from '../../automation/common/automationServi
 import type { ITeamApi } from '../../teams/common/teamApi.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { ITestExecutionService } from '../../testing/common/testExecutionService.js';
+import { RawContextKey } from '../../contextkey/common/contextkey.js';
+
+export const AppServerAvailableContext = new RawContextKey<boolean>('appServerAvailable', false);
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {
@@ -65,6 +68,8 @@ export function mergeRendererHostCapabilities(capabilities: readonly RendererHos
 
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
+	/** Host support is stable for the window; connection state describes temporary availability. */
+	readonly hasAppServer: boolean;
 	/** Available when the host supplies profile-backed recovery storage. */
 	readonly backup?: IBackupService;
 	readonly assets: IAssetService;
