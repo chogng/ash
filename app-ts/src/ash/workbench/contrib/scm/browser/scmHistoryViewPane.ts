@@ -77,7 +77,6 @@ registerAction2(class extends Action2 {
 });
 
 const PageSize = 50;
-const LoadAhead = 48;
 const Overscan = 8;
 
 type ExpandedCommit =
@@ -141,7 +140,6 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.graphElement.className = "ash-scm-graph";
 		this._register(addDisposableListener(this.graphElement, "scroll", () => {
 			this.renderRows();
-			if (this.graphElement.scrollTop + this.graphElement.clientHeight >= this.graphElement.scrollHeight - LoadAhead) void this.loadMore();
 		}));
 		this.contentElement.append(this.graphElement);
 		this._register(observeElementSize(this.graphElement, () => this.renderRows()));
@@ -271,11 +269,14 @@ export class SCMHistoryViewPane extends ViewPane {
 		let end = start;
 		while (end < this.rows.length && offsets[end] < viewportTop + viewportHeight) end += 1;
 		end = Math.min(this.rows.length, Math.max(start + 1, end + Overscan));
+		const totalHeight = offsets.at(-1)! + this.rowHeight(this.rows.at(-1)!.historyItem);
+		// Grow the spacers before removing rows so the scroll range never collapses mid-update.
+		this.topSpacer!.style.height = `${offsets[start] ?? 0}px`;
+		this.bottomSpacer!.style.height = `${totalHeight - (offsets[end] ?? totalHeight)}px`;
 		const visibleIds = new Set(this.rows.slice(start, end).map(row => row.historyItem.id));
 		for (const [id] of this.renderedRows) {
 			if (!visibleIds.has(id)) this.renderedRows.deleteAndDispose(id);
 		}
-		this.topSpacer!.style.height = `${offsets[start] ?? 0}px`;
 		let previous: Element = this.topSpacer!;
 		for (let index = start; index < end; index += 1) {
 			const model = this.rows[index];
@@ -290,14 +291,14 @@ export class SCMHistoryViewPane extends ViewPane {
 			if (previous.nextElementSibling !== row.element) list.insertBefore(row.element, previous.nextSibling);
 			previous = row.element;
 		}
-		const totalHeight = offsets.at(-1)! + this.rowHeight(this.rows.at(-1)!.historyItem);
-		this.bottomSpacer!.style.height = `${totalHeight - (offsets[end] ?? totalHeight)}px`;
 		for (const [, row] of this.renderedRows) {
 			if (row.hover?.visible) {
 				this.contextViewService.layout();
 				break;
 			}
 		}
+		// The overscan reaches the page boundary before the viewport does; recheck after each page and resize.
+		if (end === this.rows.length && this.graphElement.clientHeight > 0 && this.isBodyVisible() && !this.moreError) void this.loadMore();
 	}
 
 	private rowOffsets(): number[] {
@@ -436,8 +437,7 @@ export class SCMHistoryViewPane extends ViewPane {
 					return card.domNode;
 				},
 				groupId: 'scm.history.items',
-				// Commit details contain actions, so crossing the gap must not dismiss them.
-				persistence: 'sticky',
+				persistence: 'transient',
 				anchorAlignment: AnchorAlignment.Left,
 				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
 				anchorPosition: AnchorPosition.Below,

@@ -41,6 +41,8 @@ test('SCM startup keeps commit hover targets stable in a large history', async (
 		expect(await original!.evaluate(element => element.isConnected)).toBe(true);
 		await expect(row).toHaveAttribute('aria-setsize', '50');
 		await expect(tooltip).toBeVisible();
+		await page.getByRole('tab', { name: /^Explorer(?:,|$)/u }).hover();
+		await expect(tooltip).toHaveCount(0);
 	} finally {
 		await original?.dispose();
 	}
@@ -90,10 +92,49 @@ test('SCM startup keeps commit hover targets stable in a large history', async (
 	await page.keyboard.press('Escape');
 	await expect(row).toBeFocused();
 
-	await graph.evaluate(element => { element.scrollTop = element.scrollHeight; });
+	// Prefetch while several commits remain below the viewport.
+	await graph.evaluate(element => { element.scrollTop = 50 * 22 - element.clientHeight - 120; });
+	await expect(graph.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '100');
+	await graph.evaluate(element => { element.scrollTop = 50 * 22 - element.clientHeight; });
 	await expect(row).toHaveCount(0);
 	await expect(graph.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '100');
 	await expect(graph).toHaveAttribute('aria-busy', 'false');
+	for (const scrollTop of [700, 22, 900, 400, 0]) {
+		await graph.evaluate((element, scrollTop) => { element.scrollTop = scrollTop; }, scrollTop);
+		await restarted.workbench.waitForUiIdle();
+		await expect.poll(() => graph.evaluate(element => element.scrollTop)).toBe(scrollTop);
+		const coverage = await graph.evaluate(element => {
+			const bounds = element.getBoundingClientRect();
+			const rows = [...element.querySelectorAll('.ash-scm-graph-commit')].map(row => row.getBoundingClientRect());
+			return { topCovered: rows.some(row => row.top <= bounds.top + 3 && row.bottom > bounds.top + 3), bottomCovered: rows.some(row => row.top < bounds.bottom - 10 && row.bottom >= bounds.bottom - 10) };
+		});
+		expect(coverage).toEqual({ topCovered: true, bottomCovered: true });
+	}
+});
+
+test('SCM history connects repeated merge parents back to the main lane', async ({ target, testWorkspace, reloadWorkbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+	const cwd = testWorkspace.directory;
+	const git = async (...args: string[]): Promise<string> => (await run('git', args, { cwd })).stdout.trim();
+	const root = await git('rev-parse', 'HEAD');
+	const tree = await git('rev-parse', 'HEAD^{tree}');
+	const createCommit = async (subject: string, parents: readonly string[]): Promise<string> => git('commit-tree', tree, ...parents.flatMap(parent => ['-p', parent]), '-m', subject);
+	const base = await createCommit('Shared branch base', [root]);
+	const main = await createCommit('Main lane commit', [base]);
+	const merge = await createCommit('Inner merge commit', [main, base]);
+	const tip = await createCommit('Outer merge commit', [merge, base]);
+	await git('update-ref', 'refs/heads/main', tip);
+	const restarted = await reloadWorkbench();
+	const page = restarted.workbench.page;
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	await history.locator('.ash-pane-view-header').click();
+	const inner = history.getByRole('treeitem').filter({ hasText: 'Inner merge commit' });
+	await expect(inner).toBeVisible();
+	await expect(inner.locator('path[d$="33 22"]')).toHaveCount(1);
+	const shared = history.getByRole('treeitem').filter({ hasText: 'Shared branch base' });
+	await expect(shared.locator('path[d$="H 11"]')).toHaveCount(2);
+	await expect(shared.locator('.ash-scm-graph-node')).toHaveAttribute('cx', '11');
 });
 
 test('SCM history shows Git commits and opens file and multi-file comparisons', async ({ target, testWorkspace, workbench }) => {

@@ -233,6 +233,21 @@ export class Hover extends Disposable {
 				this.scheduleHide();
 			},
 		));
+		this.tooltipListeners.add(addDisposableListener(ownerDocument, "pointermove", event => {
+			if (this.persistence === "sticky" || this.hoverFocused) return;
+			if (isNode(event.target) && (this.element.contains(event.target) || tooltip.contains(event.target))) {
+				this.hideTimer.clear();
+				return;
+			}
+			const target = this.element.getBoundingClientRect();
+			const card = tooltip.getBoundingClientRect();
+			const inside = (rect: DOMRect): boolean => event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+			// Only the narrow gap between the anchor and card belongs to the hover's pointer region.
+			const horizontalGap = event.clientX >= Math.min(target.right, card.right) && event.clientX <= Math.max(target.left, card.left) && event.clientY >= Math.max(target.top, card.top) && event.clientY <= Math.min(target.bottom, card.bottom);
+			const verticalGap = event.clientY >= Math.min(target.bottom, card.bottom) && event.clientY <= Math.max(target.top, card.top) && event.clientX >= Math.max(target.left, card.left) && event.clientX <= Math.min(target.right, card.right);
+			if (inside(target) || inside(card) || horizontalGap || verticalGap) this.hideTimer.clear();
+			else this.scheduleHide();
+		}));
 		const dismissOutsideTooltip = (event: Event) => {
 			if (isNode(event.target) && tooltip.contains(event.target)) return;
 			this.hide();
@@ -301,6 +316,7 @@ export class Hover extends Disposable {
 		this.showTimer.clear();
 		if (
 			this.persistence === "sticky" ||
+			this.hoverFocused ||
 			!this.visible ||
 			this.hideTimer.value
 		) return;

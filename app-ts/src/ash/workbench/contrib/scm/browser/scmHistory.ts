@@ -1,7 +1,7 @@
 import { svg as createSvgElement } from "../../../../base/browser/dom.js";
+import { findLastIdx } from "../../../../base/common/arraysFind.js";
 import type { ISCMHistoryItem, ISCMHistoryItemRef, ISCMHistoryItemViewModel } from '../common/history.js';
 
-const SvgNamespace = "http://www.w3.org/2000/svg";
 const LaneHeight = 22;
 const LaneWidth = 11;
 const CurveRadius = 5;
@@ -56,19 +56,16 @@ function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: Readonly
 		const inputSwimlanes = lanes.map((lane) => ({ ...lane }));
 		const outputSwimlanes: Lane[] = [];
 		let firstParentAdded = false;
-		const inputIndex = inputSwimlanes.findIndex((lane) => lane.id === historyItem.id);
 
-		if (historyItem.parentIds.length > 0) {
-			for (const lane of inputSwimlanes) {
-				if (lane.id === historyItem.id) {
-					if (!firstParentAdded) {
-						outputSwimlanes.push({ id: historyItem.parentIds[0], colorIndex: referenceColor(historyItem) ?? lane.colorIndex });
-						firstParentAdded = true;
-					}
-					continue;
+		for (const lane of inputSwimlanes) {
+			if (lane.id === historyItem.id) {
+				if (!firstParentAdded && historyItem.parentIds.length > 0) {
+					outputSwimlanes.push({ id: historyItem.parentIds[0], colorIndex: referenceColor(historyItem) ?? lane.colorIndex });
+					firstParentAdded = true;
 				}
-				outputSwimlanes.push({ ...lane });
+				continue;
 			}
+			outputSwimlanes.push({ ...lane });
 		}
 
 		for (let index = firstParentAdded ? 1 : 0; index < historyItem.parentIds.length; index += 1) {
@@ -91,7 +88,7 @@ export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemV
 	svg.setAttribute("aria-hidden", "true");
 	const inputIndex = row.inputSwimlanes.findIndex((lane) => lane.id === row.historyItem.id);
 	const circleIndex = inputIndex === -1 ? row.inputSwimlanes.length : inputIndex;
-	const circleColorIndex = inputIndex === -1 ? row.outputSwimlanes[0]?.color ?? 0 : row.inputSwimlanes[inputIndex].color;
+	const circleColorIndex = row.historyItem.parentIds.length > 0 ? row.outputSwimlanes[circleIndex]?.color ?? 0 : row.inputSwimlanes[circleIndex]?.color ?? 0;
 	let outputSwimlaneIndex = 0;
 
 	for (let index = 0; index < row.inputSwimlanes.length; index += 1) {
@@ -99,7 +96,7 @@ export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemV
 		if (inputLane.id === row.historyItem.id) {
 			if (index !== circleIndex) {
 				appendPath(svg, `M ${LaneWidth * (index + 1)} 0 A ${LaneWidth} ${LaneWidth} 0 0 1 ${LaneWidth * index} ${LaneWidth} H ${LaneWidth * (circleIndex + 1)}`, inputLane.color);
-			} else {
+			} else if (row.historyItem.parentIds.length > 0) {
 				outputSwimlaneIndex += 1;
 			}
 			continue;
@@ -115,14 +112,15 @@ export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemV
 	}
 
 	for (let index = 1; index < row.historyItem.parentIds.length; index += 1) {
-		const parentOutputIndex = row.outputSwimlanes.findIndex((lane) => lane.id === row.historyItem.parentIds[index]);
+		// Repeated parent IDs keep separate branch lanes until that commit is reached.
+		const parentOutputIndex = findLastIdx(row.outputSwimlanes, lane => lane.id === row.historyItem.parentIds[index]);
 		if (parentOutputIndex === -1) continue;
 		const parentColorIndex = row.outputSwimlanes[parentOutputIndex].color;
 		appendPath(svg, `M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} A ${LaneWidth} ${LaneWidth} 0 0 1 ${LaneWidth * (parentOutputIndex + 1)} ${LaneHeight}`, parentColorIndex);
 		appendPath(svg, `M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} H ${LaneWidth * (circleIndex + 1)}`, parentColorIndex);
 	}
 
-	if (inputIndex !== -1) appendPath(svg, `M ${LaneWidth * (circleIndex + 1)} 0 V ${LaneHeight / 2}`, circleColorIndex);
+	if (inputIndex !== -1) appendPath(svg, `M ${LaneWidth * (circleIndex + 1)} 0 V ${LaneHeight / 2}`, row.inputSwimlanes[inputIndex].color);
 	if (row.historyItem.parentIds.length > 0) appendPath(svg, `M ${LaneWidth * (circleIndex + 1)} ${LaneHeight / 2} V ${LaneHeight}`, circleColorIndex);
 	if (expandedHeight > LaneHeight) {
 		for (let index = 0; index < row.outputSwimlanes.length; index += 1) {
