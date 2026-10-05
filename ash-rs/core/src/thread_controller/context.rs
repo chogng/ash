@@ -258,91 +258,22 @@ impl ThreadController {
                     request.turn_id
                 ))
             })?;
-            let mut instruction_fragments = vec![crate::context::InstructionFragment::new(
-                crate::context::InstructionSource::new(
-                    instructions.owner(),
-                    instructions.id(),
-                    instructions.revision(),
-                ),
-                crate::context::InstructionPlacement::System,
-                crate::context::InstructionRetention::Required,
-                instructions.body(),
-            )];
-            let mut shared_fragments = instructions
-                .shared()
-                .iter()
-                .map(|asset| {
-                    crate::context::InstructionFragment::new(
-                        crate::context::InstructionSource::new(
-                            asset.owner.clone(),
-                            asset.id.clone(),
-                            asset.revision.clone(),
-                        ),
-                        crate::context::InstructionPlacement::System,
-                        crate::context::InstructionRetention::Required,
-                        asset.body.clone(),
-                    )
-                })
-                .collect::<Vec<_>>();
-            shared_fragments.append(&mut instruction_fragments);
-            instruction_fragments = shared_fragments;
-            instruction_fragments.splice(
-                0..0,
-                ash_prompts::permissions_instructions(turn.approval_mode)
-                    .into_iter()
-                    .map(|asset| {
-                        crate::context::InstructionFragment::new(
-                            crate::context::InstructionSource::new(
-                                asset.owner(),
-                                asset.id(),
-                                asset.revision(),
-                            ),
-                            crate::context::InstructionPlacement::System,
-                            crate::context::InstructionRetention::Required,
-                            asset.body(),
-                        )
-                    }),
-            );
-            if let Some(ash_protocol::ModelInstructionSelection::Specialized {
-                instructions: asset,
-                ..
-            }) = instructions.model_guidance()
-            {
-                instruction_fragments.push(crate::context::InstructionFragment::new(
-                    crate::context::InstructionSource::new(
-                        asset.owner.clone(),
-                        asset.id.clone(),
-                        asset.revision.clone(),
-                    ),
-                    crate::context::InstructionPlacement::Product,
-                    crate::context::InstructionRetention::Required,
-                    asset.body.clone(),
-                ));
-            }
-            instruction_fragments
-                .extend(request.harness_context.instructions().context_fragments());
-            instruction_fragments.extend(crate::multi_agent::agent_context_fragments(
+            let mut additional = request.harness_context.instructions().context_fragments();
+            additional.extend(crate::multi_agent::agent_context_fragments(
                 &loaded.snapshot,
             ));
-            instruction_fragments.extend(
+            additional.extend(
                 request
                     .extension_fragments
                     .into_iter()
                     .map(crate::context::InstructionFragment::try_from)
                     .collect::<Result<Vec<_>, _>>()?,
             );
-            if let Some(asset) = instructions.mode_instructions() {
-                instruction_fragments.push(crate::context::InstructionFragment::new(
-                    crate::context::InstructionSource::new(
-                        asset.owner.clone(),
-                        asset.id.clone(),
-                        asset.revision.clone(),
-                    ),
-                    crate::context::InstructionPlacement::System,
-                    crate::context::InstructionRetention::Required,
-                    asset.body.clone(),
-                ));
-            }
+            let instruction_fragments = crate::context::turn_instruction_fragments(
+                instructions,
+                turn.approval_mode,
+                additional,
+            );
             let tools = crate::multi_agent::scope_agent_tools(
                 &loaded.snapshot,
                 turn.tool_mode,

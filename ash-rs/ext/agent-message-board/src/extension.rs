@@ -162,13 +162,16 @@ impl TurnInputContributor for Runtime {
         &self,
         context: TurnInputContext<'_>,
     ) -> std::result::Result<Vec<PromptFragment>, ExtensionError> {
+        let Some(thread_id) = context.thread_id() else {
+            return Ok(Vec::new());
+        };
         let session = context
             .session_id()
             .ok_or_else(|| ExtensionError::new("board context requires a Session"))?;
         let threads = self
             .controller()
             .map_err(|error| ExtensionError::new(error.to_string()))?;
-        let scope = Self::scope(&threads, context.thread_id())
+        let scope = Self::scope(&threads, thread_id)
             .map_err(|error| ExtensionError::new(error.to_string()))?;
         if &scope.session != session {
             return Err(ExtensionError::new(
@@ -177,7 +180,7 @@ impl TurnInputContributor for Runtime {
         }
         let unread = self
             .store
-            .unread(&scope, context.thread_id())
+            .unread(&scope, thread_id)
             .map_err(|error| ExtensionError::new(error.to_string()))?;
         if unread.count == 0 {
             return Ok(Vec::new());

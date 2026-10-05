@@ -1494,9 +1494,11 @@ fn session_directory_move_changes_future_context_only_for_that_session() {
         ash_core::HarnessContextProvider::snapshot(
             contributions.as_ref(),
             &ash_core::HarnessContextRequest {
-                session_id: &thread.session_id,
-                thread_id: &thread.thread_id,
-                turn_id: &turn_id,
+                scope: ash_core::HarnessContextScope::Turn {
+                    session_id: &thread.session_id,
+                    thread_id: &thread.thread_id,
+                    turn_id: &turn_id,
+                },
                 read_paths: &[],
             },
         )

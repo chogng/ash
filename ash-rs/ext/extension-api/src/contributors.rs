@@ -50,14 +50,38 @@ pub trait SkillActivationContributor: Send + Sync {
 }
 
 /// Immutable facts exposed at one model-invocation safe point.
+#[derive(Clone, Copy)]
 pub struct TurnInputContext<'a> {
     session_id: Option<&'a SessionId>,
-    thread_id: &'a ThreadId,
-    turn_id: &'a TurnId,
+    thread_id: Option<&'a ThreadId>,
+    turn_id: Option<&'a TurnId>,
     activated_skills: &'a [FrozenSkillActivation],
 }
 
 impl<'a> TurnInputContext<'a> {
+    /// Reads environment contributions without creating a Session or Turn.
+    pub fn for_environment() -> Self {
+        Self {
+            session_id: None,
+            thread_id: None,
+            turn_id: None,
+            activated_skills: &[],
+        }
+    }
+
+    /// Inspects a Thread before its first Turn; Turn-dependent contributions are absent.
+    pub fn for_thread(
+        session_id: &'a SessionId,
+        thread_id: &'a ThreadId,
+        activated_skills: &'a [FrozenSkillActivation],
+    ) -> Self {
+        Self {
+            session_id: Some(session_id),
+            thread_id: Some(thread_id),
+            turn_id: None,
+            activated_skills,
+        }
+    }
     pub fn new(
         thread_id: &'a ThreadId,
         turn_id: &'a TurnId,
@@ -65,8 +89,8 @@ impl<'a> TurnInputContext<'a> {
     ) -> Self {
         Self {
             session_id: None,
-            thread_id,
-            turn_id,
+            thread_id: Some(thread_id),
+            turn_id: Some(turn_id),
             activated_skills,
         }
     }
@@ -79,8 +103,8 @@ impl<'a> TurnInputContext<'a> {
     ) -> Self {
         Self {
             session_id: Some(session_id),
-            thread_id,
-            turn_id,
+            thread_id: Some(thread_id),
+            turn_id: Some(turn_id),
             activated_skills,
         }
     }
@@ -89,11 +113,11 @@ impl<'a> TurnInputContext<'a> {
         self.session_id
     }
 
-    pub fn thread_id(&self) -> &'a ThreadId {
+    pub fn thread_id(&self) -> Option<&'a ThreadId> {
         self.thread_id
     }
 
-    pub fn turn_id(&self) -> &'a TurnId {
+    pub fn turn_id(&self) -> Option<&'a TurnId> {
         self.turn_id
     }
 

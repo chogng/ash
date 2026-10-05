@@ -222,3 +222,86 @@ fn escape_xml(value: &str) -> String {
 #[cfg(test)]
 #[path = "instructions_tests.rs"]
 mod tests;
+
+/// One composition path for inspection and execution; file and extension fragments retain their provenance.
+pub(crate) fn turn_instruction_fragments(
+    instructions: &ash_protocol::TurnInstructions,
+    approval_mode: ash_protocol::ApprovalMode,
+    additional: Vec<InstructionFragment>,
+) -> Vec<InstructionFragment> {
+    let mut instruction_fragments = vec![crate::context::InstructionFragment::new(
+        crate::context::InstructionSource::new(
+            instructions.owner(),
+            instructions.id(),
+            instructions.revision(),
+        ),
+        crate::context::InstructionPlacement::System,
+        crate::context::InstructionRetention::Required,
+        instructions.body(),
+    )];
+    let mut shared_fragments = instructions
+        .shared()
+        .iter()
+        .map(|asset| {
+            crate::context::InstructionFragment::new(
+                crate::context::InstructionSource::new(
+                    asset.owner.clone(),
+                    asset.id.clone(),
+                    asset.revision.clone(),
+                ),
+                crate::context::InstructionPlacement::System,
+                crate::context::InstructionRetention::Required,
+                asset.body.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    shared_fragments.append(&mut instruction_fragments);
+    instruction_fragments = shared_fragments;
+    instruction_fragments.splice(
+        0..0,
+        ash_prompts::permissions_instructions(approval_mode)
+            .into_iter()
+            .map(|asset| {
+                crate::context::InstructionFragment::new(
+                    crate::context::InstructionSource::new(
+                        asset.owner(),
+                        asset.id(),
+                        asset.revision(),
+                    ),
+                    crate::context::InstructionPlacement::System,
+                    crate::context::InstructionRetention::Required,
+                    asset.body(),
+                )
+            }),
+    );
+    if let Some(ash_protocol::ModelInstructionSelection::Specialized {
+        instructions: asset,
+        ..
+    }) = instructions.model_guidance()
+    {
+        instruction_fragments.push(crate::context::InstructionFragment::new(
+            crate::context::InstructionSource::new(
+                asset.owner.clone(),
+                asset.id.clone(),
+                asset.revision.clone(),
+            ),
+            crate::context::InstructionPlacement::Product,
+            crate::context::InstructionRetention::Required,
+            asset.body.clone(),
+        ));
+    }
+    instruction_fragments.extend(additional);
+    if let Some(asset) = instructions.mode_instructions() {
+        instruction_fragments.push(crate::context::InstructionFragment::new(
+            crate::context::InstructionSource::new(
+                asset.owner.clone(),
+                asset.id.clone(),
+                asset.revision.clone(),
+            ),
+            crate::context::InstructionPlacement::System,
+            crate::context::InstructionRetention::Required,
+            asset.body.clone(),
+        ));
+    }
+    instruction_fragments
+}

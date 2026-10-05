@@ -270,7 +270,7 @@ fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
     let messages = vec![
         CellView::plain(
             MessageRole::Reasoning,
-            "first thought\nsecond thought".into(),
+            "first summary\nsecond summary\nthird summary\nfourth summary".into(),
         )
         .with_cell_id("reasoning")
         .with_render_revision(1)
@@ -278,7 +278,7 @@ fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
     ];
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
-    let mut terminal = Terminal::new(TestBackend::new(30, 4)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(30, 8)).unwrap();
 
     let hovered = ChatHistoryView {
         jump_label: "Ctrl+End to jump to bottom ↓",
@@ -293,7 +293,7 @@ fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
     };
     assert_eq!(
         hovered.pointer_target_at(
-            Rect::new(0, 0, 30, 4),
+            Rect::new(0, 0, 30, 8),
             ratatui::layout::Position::new(0, 0),
             test_context(),
         ),
@@ -494,7 +494,7 @@ fn expanded_plain_details_use_the_same_indent_as_command_results() {
         .collect::<Vec<_>>()
         .join("\n");
     insta::assert_snapshot!(visible, @"
-    ● Thought
+    ● Reasoning summary
      └─ one
         two
     ");
@@ -549,6 +549,71 @@ fn detail_action_last_column_uses_the_same_hit_and_hover_bounds_as_drawing() {
         ),
         None
     );
+}
+
+#[test]
+fn collapsed_summary_keeps_a_localized_preview_and_clickable_full_details() {
+    let messages = vec![
+        CellView::plain(MessageRole::Reasoning, "one\ntwo\nthree\nfour".into())
+            .with_cell_id("summary")
+            .with_render_revision(1),
+    ];
+    assert!(messages[0].can_expand);
+    assert!(messages[0].has_details);
+    assert!(!messages[0].expanded);
+    let area = Rect::new(0, 0, 24, 9);
+    let context = test_context().with_language(crate::nls::Language::Chinese);
+    let scroll = ChatHistoryScroll::default();
+    let cache = ChatHistoryRenderCache::default();
+    let view = ChatHistoryView {
+        jump_label: "Jump to bottom",
+        header: None,
+        messages: &messages,
+        scroll: &scroll,
+        render_cache: &cache,
+        pointer: ChatHistoryPointerState {
+            hovered_details: Some("summary"),
+            ..Default::default()
+        },
+    };
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| view.render(frame, area, context))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(1, 1)].symbol(), "└");
+    assert_eq!(buffer[(4, 1)].symbol(), "o");
+    let row = (0..area.height)
+        .find(|&y| buffer[(4, y)].symbol() == "查")
+        .unwrap();
+    assert_eq!(
+        view.pointer_target_at(area, ratatui::layout::Position::new(4, row), context),
+        Some(ChatHistoryPointerTarget::Details("summary".into()))
+    );
+    assert_eq!(buffer[(4, row)].bg, context.hover_background());
+    assert_eq!(
+        messages[0].cell.details().as_deref(),
+        Some("one\ntwo\nthree\nfour")
+    );
+    crate::tui_assert_snapshot!("collapsed_summary_chinese", visible_buffer(buffer));
+
+    let short = CellView::plain(MessageRole::Reasoning, "inspect the code".into());
+    assert!(!short.can_expand);
+    assert!(short.detail().unwrap().contains("inspect the code"));
+    let long_text = "检查启动逻辑。".repeat(100);
+    let long = CellView::plain(MessageRole::Reasoning, long_text.clone());
+    assert!(long.can_expand && long.has_details);
+    let preview = long.detail().unwrap();
+    assert!(preview.chars().count() <= 241);
+    assert!(preview.ends_with('…'));
+    assert_eq!(long.cell.details(), Some(long_text));
+    let literal = CellView::plain(MessageRole::Reasoning, "file".into());
+    let history = literal.cell.history_view().lines(context, None, 30);
+    assert_eq!(history.lines[0].to_string(), "● file");
+    let unavailable = CellView::plain(MessageRole::Reasoning, String::new());
+    assert!(unavailable.detail().is_none());
+    let rendered = unavailable.lines(context, None, 30);
+    assert!(rendered.lines.is_empty());
 }
 
 #[test]

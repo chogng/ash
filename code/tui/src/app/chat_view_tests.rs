@@ -449,6 +449,53 @@ fn permission_survives_tips_dictation_and_narrow_widths_in_both_modes() {
 }
 
 #[test]
+fn escape_interrupt_hint_and_cancellation_render_in_both_modes_and_languages() {
+    let visible_text = |buffer: &Buffer| {
+        crate::terminal::text::text_in_range(
+            buffer,
+            crate::terminal::text::ScreenSelectionRange::new(
+                ratatui::layout::Position::new(0, 0),
+                ratatui::layout::Position::new(buffer.area.width - 1, buffer.area.height - 1),
+            ),
+        )
+        .unwrap()
+    };
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut frames = Vec::new();
+        for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
+            let mut app = configured_app(mode);
+            let mut settings = crate::config::TerminalSettings::default();
+            settings.set_screen_mode(mode);
+            settings.set_language(language);
+            app.update(crate::config::Event::SettingsReceived(settings));
+            app.set_active_turn(ash_protocol::TurnId::new("escape-interrupt").unwrap());
+            app.update(crate::thread::Event::TurnActivityChanged(
+                crate::thread::TurnActivity::Working,
+            ));
+            let area = Rect::new(0, 0, 80, 20);
+            let hint = if language == crate::nls::Language::Chinese {
+                "esc 可中断"
+            } else {
+                "esc to interrupt"
+            };
+            let before = visible_text(&render(&app, area));
+            assert!(before.contains(hint), "{before}");
+            frames.push(format!("{language:?} running\n{before}"));
+            assert_eq!(
+                app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+                Some(AppCommand::Thread(crate::thread::Command::Interrupt))
+            );
+            assert_eq!(app.status(), &crate::app::Status::Cancelling);
+            assert_eq!(app.input(), "keep this draft");
+            let after = visible_text(&render(&app, area));
+            assert!(!after.contains(hint));
+            frames.push(format!("{language:?} cancelling\n{after}"));
+        }
+        crate::tui_assert_snapshot!(mode = mode; "escape_interrupt_flow", frames.join("\n\n"));
+    }
+}
+
+#[test]
 fn chat_progress_stays_fixed_while_history_scrolls_in_both_modes() {
     use crate::thread::Event;
     use crate::thread::TurnActivity;
@@ -476,7 +523,7 @@ fn chat_progress_stays_fixed_while_history_scrolls_in_both_modes() {
             before[(2, regions.progress.y)].fg,
             app.render_context().muted()
         );
-        assert!(row(&before, regions.progress.y).contains("ctrl+c to interrupt"));
+        assert!(row(&before, regions.progress.y).contains("esc to interrupt"));
         assert!(!app.transcript_markdown().contains("Working..."));
         assert_eq!(
             app.handle_key_in_area(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL), area),
@@ -510,7 +557,7 @@ fn chat_progress_stays_fixed_while_history_scrolls_in_both_modes() {
         let waiting = render(&app, area);
         assert!(row(&waiting, areas(&app, area).progress.y).starts_with("○ Waiting for input"));
         assert_eq!(
-            app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+            app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
             Some(AppCommand::Thread(crate::thread::Command::Interrupt))
         );
         assert!(text(&render(&app, area)).contains("Cancelling..."));
@@ -546,5 +593,216 @@ fn chat_progress_yields_to_question_and_input_on_short_terminals() {
             assert_eq!(regions.request.height, 6);
             assert_eq!(regions.composer.height, 3);
         }
+    }
+}
+
+#[test]
+fn operation_details_are_visible_before_expansion_in_both_modes() {
+    use crate::thread::Event;
+    use ash_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
+    use ash_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
+    use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
+    use ash_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
+    use ash_protocol::ThreadItem;
+    use ash_protocol::ToolActivity;
+
+    let visible_text = |buffer: &Buffer| {
+        (0..buffer.area.height)
+            .map(|y| {
+                let mut text = String::new();
+                let mut x = 0;
+                while x < buffer.area.width {
+                    let symbol = buffer[(x, y)].symbol();
+                    text.push_str(symbol);
+                    x += unicode_width::UnicodeWidthStr::width(symbol).max(1) as u16;
+                }
+                text.trim_end().to_owned()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = configured_app(mode);
+        let mut terminal = crate::config::TerminalSettings::default();
+        terminal.set_screen_mode(mode);
+        terminal.set_language(crate::nls::Language::Chinese);
+        app.update(crate::config::Event::SettingsReceived(terminal));
+        let session_id = ash_protocol::SessionId::new("detail-session").unwrap();
+        let thread_id = ash_protocol::ThreadId::new("detail-thread").unwrap();
+        let turn_id = ash_protocol::TurnId::new("detail-turn").unwrap();
+        app.update(Event::ContextChanged {
+            session_id: session_id.clone(),
+            thread_id: thread_id.clone(),
+        });
+        app.set_active_turn(turn_id.clone());
+        let entry = |id: &str, item| ThreadTranscriptEntry::Item {
+            entry_id: id.into(),
+            turn_id: turn_id.clone(),
+            item,
+            transient: false,
+        };
+        let call = |id: &str, name: &str, activity, arguments: serde_json::Value| {
+            entry(
+                id,
+                ThreadItem::ToolCall {
+                    item_id: ash_protocol::ItemId::new(id).unwrap(),
+                    turn_id: turn_id.clone(),
+                    tool_call_id: ash_protocol::ToolCallId::new(id).unwrap(),
+                    name: ash_protocol::ToolName::new(name).unwrap(),
+                    arguments_json: arguments.to_string(),
+                    binding: Some(ash_protocol::ToolCallBinding {
+                        registry_incarnation: None,
+                        registry_generation: 1,
+                        definition_digest: "fixture".into(),
+                        source_chain: Vec::new(),
+                        activity: Some(activity),
+                        caller: ash_protocol::ToolCallCaller::Direct,
+                    }),
+                },
+            )
+        };
+        app.update(Event::TranscriptSnapshotReceived(ThreadTranscriptSnapshot {
+            session_id: session_id.clone(), thread_id: thread_id.clone(),
+            durable_sequence: 1, revision: 1,
+            entries: vec![
+                entry("summary", ThreadItem::Reasoning {
+                    item_id: ash_protocol::ItemId::new("summary").unwrap(), turn_id: turn_id.clone(),
+                    text: "先检查 daemon 的启动逻辑，再搜索调用点。".into(), state: Vec::new(),
+                }),
+                call("read", "read_file", ToolActivity::FileRead { path: "src/daemon.rs".into(), offset: 1, limit: 160 }, serde_json::json!({"path":"src/daemon.rs", "offset":1, "limit":160})),
+                call("search", "grep", ToolActivity::FileSearch { pattern: "start_daemon".into(), path: "src".into() }, serde_json::json!({"pattern":"start_daemon", "path":"src"})),
+                call("run", "shell-command", ToolActivity::Command { program: "just".into(), arguments: vec!["test".into(), "ash-daemon".into(), "startup".into()], working_directory: "/work/ash".into() }, serde_json::json!({"program":"just", "arguments":["test","ash-daemon","startup"], "working_directory":"/work/ash"})),
+            ],
+        }));
+        let area = Rect::new(0, 0, 90, 50);
+        let live = visible_text(&render(&app, area));
+        for expected in [
+            "思考摘要",
+            "先检查 daemon",
+            "src/daemon.rs",
+            "start_daemon",
+            "just test ash-daemon startup",
+        ] {
+            assert!(live.contains(expected), "missing {expected}: {live}");
+        }
+        assert!(app.viewport().expanded_cells.is_empty());
+
+        let result = |id: &str, output: String, is_error| ThreadTranscriptChange::Upsert {
+            entry: entry(
+                &format!("result-{id}"),
+                ThreadItem::ToolResult {
+                    item_id: ash_protocol::ItemId::new(format!("result-{id}")).unwrap(),
+                    turn_id: turn_id.clone(),
+                    tool_call_id: ash_protocol::ToolCallId::new(id).unwrap(),
+                    text: output,
+                    content: None,
+                    is_error,
+                },
+            ),
+        };
+        let output = format!(
+            "{}\ntest result: FAILED. 1 failed.",
+            (0..12)
+                .map(|index| format!("test output {index}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        app.update(Event::TranscriptUpdateReceived(Box::new(
+            ThreadTranscriptUpdateEnvelope {
+                session_id,
+                thread_id,
+                durable_sequence: 2,
+                revision: 2,
+                stream_cursor: None,
+                changes: vec![
+                    result("read", "fn start_daemon() {}".into(), false),
+                    result("search", "src/main.rs:42:start_daemon()".into(), false),
+                    result(
+                        "run",
+                        serde_json::json!({"exit_code":1, "stdout":output}).to_string(),
+                        false,
+                    ),
+                ],
+            },
+        )));
+        let completed = render(&app, area);
+        let visible = visible_text(&completed);
+        for expected in [
+            "src/daemon.rs",
+            "start_daemon",
+            "命令执行失败",
+            "退出码 1",
+            "test result: FAILED. 1 failed.",
+            "查看完整详情",
+            "从第 1 行起，最多 160 行",
+        ] {
+            assert!(visible.contains(expected), "missing {expected}: {visible}");
+        }
+        for hidden in [
+            "read_file",
+            "shell-command",
+            "exit_code",
+            "working_directory",
+            "fn start_daemon()",
+            "test output 0",
+            "test output 11",
+        ] {
+            assert!(!visible.contains(hidden), "raw details leaked: {hidden}");
+        }
+        // The absent summary must not consume a row or become a keyboard stop.
+        app.update(Event::TranscriptUpdateReceived(Box::new(
+            ThreadTranscriptUpdateEnvelope {
+                session_id: ash_protocol::SessionId::new("detail-session").unwrap(),
+                thread_id: ash_protocol::ThreadId::new("detail-thread").unwrap(),
+                durable_sequence: 3,
+                revision: 3,
+                stream_cursor: None,
+                changes: vec![ThreadTranscriptChange::Upsert {
+                    entry: entry(
+                        "empty-summary",
+                        ThreadItem::Reasoning {
+                            item_id: ash_protocol::ItemId::new("empty-summary").unwrap(),
+                            turn_id: turn_id.clone(),
+                            text: String::new(),
+                            state: Vec::new(),
+                        },
+                    ),
+                }],
+            },
+        )));
+        assert_eq!(visible_text(&render(&app, area)), visible);
+        let branch_row = (0..area.height)
+            .find(|&y| {
+                completed[(1, y)].symbol() == "└" && row(&completed, y).contains("daemon.rs")
+            })
+            .unwrap();
+        assert_eq!(completed[(1, branch_row)].symbol(), "└");
+        assert_eq!(completed[(4, branch_row)].symbol(), "已");
+        match mode {
+            ScreenMode::Fullscreen => {
+                crate::tui_assert_snapshot!(app = &app; "operation_details_fullscreen", visible)
+            }
+            ScreenMode::Inline => {
+                crate::tui_assert_snapshot!(app = &app; "operation_details_inline", visible)
+            }
+        }
+        app.handle_key_in_area(KeyEvent::new(KeyCode::Up, KeyModifiers::CONTROL), area);
+        let selected = app.viewport().selected_cell.clone();
+        assert!(selected.is_some());
+        app.handle_key_in_area(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), area);
+        assert!(
+            app.overlay().is_some(),
+            "Enter opens details without expanding first"
+        );
+        let details = app.thread.details(selected.as_ref().unwrap()).unwrap();
+        assert!(details.contains("test output 11"));
+        assert!(details.contains("\"working_directory\": \"/work/ash\""));
+        assert!(details.contains("\"startup\""));
+        assert!(visible_text(&render(&app, area)).contains("test output 11"));
+        app.handle_key_in_area(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), area);
+        assert!(app.overlay().is_none());
+        assert_eq!(app.viewport().selected_cell, selected);
+        assert!(app.viewport().expanded_cells.is_empty());
     }
 }

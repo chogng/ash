@@ -19,6 +19,25 @@ impl ContentCell {
     pub(in crate::thread::transcript) fn new(role: MessageRole, text: String) -> Self {
         Self { role, text }
     }
+
+    fn preview(&self, mode: CellMode, language: crate::nls::Language) -> Option<Cow<'_, str>> {
+        if self.role == MessageRole::Reasoning && self.text.trim().is_empty() {
+            return None;
+        }
+        match (self.role, mode) {
+            (MessageRole::Reasoning, CellMode::Collapsed) => {
+                let mut text = self.text.chars().take(240).collect::<String>();
+                if self.text.chars().count() > 240 {
+                    text.push('…');
+                }
+                Some(Cow::Owned(bounded_preview(&text, 3, language)))
+            }
+            (MessageRole::Reasoning | MessageRole::Error, CellMode::Expanded) => {
+                Some(Cow::Owned(bounded_preview(&self.text, 12, language)))
+            }
+            _ => None,
+        }
+    }
 }
 
 impl HistoryCell for ContentCell {
@@ -31,26 +50,34 @@ impl HistoryCell for ContentCell {
             return Cow::Borrowed(&self.text);
         }
         Cow::Borrowed(match self.role {
-            MessageRole::Reasoning => "Thought",
+            MessageRole::Reasoning => "Reasoning summary",
             MessageRole::Error => self.text.lines().next().unwrap_or("Error"),
             _ => &self.text,
         })
     }
 
     fn detail(&self, mode: CellMode) -> Option<Cow<'_, str>> {
-        (mode == CellMode::Expanded
-            && matches!(self.role, MessageRole::Reasoning | MessageRole::Error))
-        .then(|| Cow::Owned(bounded_preview(&self.text, 12)))
+        self.preview(mode, crate::nls::Language::English)
     }
 
     fn can_expand(&self) -> bool {
-        matches!(self.role, MessageRole::Reasoning | MessageRole::Error)
-            && (self.text.lines().count() > 1 || self.text.chars().count() > 120)
+        match self.role {
+            MessageRole::Reasoning => {
+                self.text.lines().count() > 3 || self.text.chars().count() > 240
+            }
+            MessageRole::Error => self.text.lines().count() > 1 || self.text.chars().count() > 120,
+            _ => false,
+        }
     }
 
     fn has_details(&self) -> bool {
-        matches!(self.role, MessageRole::Reasoning | MessageRole::Error)
-            && self.text.lines().count() > 12
+        match self.role {
+            MessageRole::Reasoning => {
+                self.text.lines().count() > 3 || self.text.chars().count() > 240
+            }
+            MessageRole::Error => self.text.lines().count() > 12,
+            _ => false,
+        }
     }
 
     fn full_details(&self) -> Option<String> {
@@ -64,6 +91,9 @@ impl HistoryCell for ContentCell {
         cache: Option<&MarkdownCache>,
         width: u16,
     ) -> CellLines {
+        if self.role == MessageRole::Reasoning && self.text.trim().is_empty() {
+            return CellLines::default();
+        }
         let (marker, color) = match self.role {
             MessageRole::User => (">", context.muted()),
             MessageRole::Notice => ("●", context.warning()),
@@ -121,9 +151,11 @@ impl HistoryCell for ContentCell {
             )
         } else {
             let summary = self.summary(view.mode);
-            // Stable backend errors use product-owned NLS keys. User and model text keep
-            // their source bytes; localization belongs to rendering so language changes apply.
-            let summary = if self.role == MessageRole::Error {
+            // Product titles and stable backend errors use NLS keys; the model's
+            // summary body remains verbatim when the display language changes.
+            let summary = if self.role == MessageRole::Error
+                || (self.role == MessageRole::Reasoning && view.mode != CellMode::History)
+            {
                 crate::nls::localize(context.language(), &summary)
             } else {
                 Cow::Borrowed(summary.as_ref())
@@ -144,21 +176,30 @@ impl HistoryCell for ContentCell {
             user_input_rows: input_rows,
             details_action: None,
         };
-        if let Some(detail) = self.detail(view.mode) {
-            rendered.append_response(MessageResponse::plain(&detail).layout(width, context));
+        if let Some(detail) = self.preview(view.mode, context.language()) {
+            let response = MessageResponse::plain(&detail);
+            let response = if view.mode == CellMode::Collapsed && view.has_details {
+                response.with_full_details_action()
+            } else {
+                response
+            };
+            rendered.append_response(response.layout(width, context));
         }
         rendered.finish(view, context, width)
     }
 }
 
-fn bounded_preview(text: &str, max_lines: usize) -> String {
+fn bounded_preview(text: &str, max_lines: usize, language: crate::nls::Language) -> String {
     let lines = text.lines().collect::<Vec<_>>();
     if lines.len() <= max_lines {
         return text.to_owned();
     }
     let omitted = lines.len().saturating_sub(max_lines);
-    format!(
-        "{}\n… {omitted} lines omitted",
-        lines[..max_lines].join("\n")
-    )
+    let mut marker = crate::nls::Text::template(
+        "… {0} more lines",
+        vec![crate::nls::Text::literal(omitted.to_string())],
+    );
+    marker.localize(language);
+    let marker = marker.to_string();
+    format!("{}\n{marker}", lines[..max_lines].join("\n"))
 }

@@ -32,11 +32,14 @@ impl TurnInputContributor for runtime::GoalExtension {
         &self,
         input: TurnInputContext<'_>,
     ) -> Result<Vec<PromptFragment>, ExtensionError> {
+        let (Some(thread_id), Some(turn_id)) = (input.thread_id(), input.turn_id()) else {
+            return Ok(Vec::new());
+        };
         let threads = self
             .threads()
             .map_err(|error| ExtensionError::new(error.to_string()))?;
         let snapshot = threads
-            .read_thread(input.thread_id())
+            .read_thread(thread_id)
             .map_err(|error| ExtensionError::new(error.to_string()))?;
         if input.session_id() != Some(&snapshot.session_id) {
             return Err(ExtensionError::new("Goal Session does not own this Thread"));
@@ -44,7 +47,7 @@ impl TurnInputContributor for runtime::GoalExtension {
         let turn = snapshot
             .turns
             .iter()
-            .find(|turn| &turn.turn_id == input.turn_id())
+            .find(|turn| &turn.turn_id == turn_id)
             .ok_or_else(|| ExtensionError::new("Goal Turn is missing"))?;
         let Some(goal) = snapshot.goal.as_ref().filter(|goal| {
             goal.status.is_active()

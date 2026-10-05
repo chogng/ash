@@ -533,6 +533,28 @@ fn inherited_checkpoint_uses_item_provenance_and_preserves_the_raw_tail() {
         panic!("checkpoint plus raw tail must fit");
     };
 
+    let categories = ContextPlanner::inspect_categories(
+        input.instructions(),
+        input.tools(),
+        input.environment(),
+        Some(&input),
+    );
+    assert_eq!(
+        categories
+            .iter()
+            .map(|category| category.tokens)
+            .sum::<u64>(),
+        u64::from(plan.budget().total_input().get())
+    );
+    assert_eq!(
+        categories[4].category,
+        ash_protocol::ModelContextCategory::Conversation
+    );
+    assert_eq!(
+        categories[4].tokens,
+        u64::from(plan.budget().total_input().get())
+    );
+
     assert_eq!(plan.checkpoint().unwrap().summary, "old history summary");
     let super::super::ContextBudgetReport::CoreManaged { history_tokens, .. } = plan.budget()
     else {

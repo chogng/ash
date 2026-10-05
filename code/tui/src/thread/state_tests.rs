@@ -37,7 +37,7 @@ fn transcript_snapshot_replaces_local_rows_and_preserves_rendering() {
             .collect::<Vec<_>>(),
         vec![
             (MessageRole::User, "canonical prompt".to_owned()),
-            (MessageRole::Reasoning, "Thought".to_owned()),
+            (MessageRole::Reasoning, "Reasoning summary".to_owned()),
             (MessageRole::Agent, "canonical response".to_owned()),
         ]
     );

@@ -398,7 +398,8 @@ fn running_tip_follows_inline_chat_progress() {
     ));
     app.handle_tick(std::time::Instant::now() + std::time::Duration::from_secs(9));
 
-    let rendered = text(&render(&app, 140, 20));
+    let buffer = render(&app, 140, 20);
+    let rendered = text(&buffer);
     assert!(rendered.contains("Working"));
     let rows = rendered.lines().collect::<Vec<_>>();
     let progress_row = rows.iter().position(|row| row.contains("Working")).unwrap();
@@ -412,6 +413,13 @@ fn running_tip_follows_inline_chat_progress() {
     )
     .session;
     assert_eq!(tip_row, progress_row + 1);
+    for (column, symbol) in [(0, " "), (1, "└"), (2, "─"), (3, " "), (4, "T")] {
+        assert_eq!(buffer[(column, tip_row as u16)].symbol(), symbol);
+        assert_eq!(
+            buffer[(column, tip_row as u16)].fg,
+            app.render_context().muted()
+        );
+    }
     assert_eq!(progress_row, usize::from(areas.progress.y));
     assert_eq!(areas.progress.height, 2);
     assert_eq!(areas.progress.bottom(), areas.tipline.y);

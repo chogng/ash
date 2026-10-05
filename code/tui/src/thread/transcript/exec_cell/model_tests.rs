@@ -173,3 +173,69 @@ fn advisor_results_present_advice_and_usage_without_json() {
         "outcome unknown"
     );
 }
+
+#[test]
+fn a_nonzero_process_exit_is_visible_even_when_the_tool_returned_successfully() {
+    let first = call_id("first-command");
+    let second = call_id("second-command");
+    let activity = ToolActivity::Command {
+        program: "just".into(),
+        arguments: vec!["test".into(), "a b".into()],
+        working_directory: ".".into(),
+    };
+    let mut cell = ExecCell::start(
+        "first".into(),
+        first.clone(),
+        &tool_name("opaque-command"),
+        "{}".into(),
+        Some(activity.clone()),
+    );
+    cell.complete(
+        "first-result".into(),
+        &first,
+        r#"{"exit_code":0,"stdout":"done"}"#.into(),
+        false,
+    );
+    assert_eq!(cell.status(), CommandStatus::Succeeded);
+    assert!(cell.can_accept(Some(&activity)));
+    cell.push_call(
+        "second".into(),
+        second.clone(),
+        &tool_name("opaque-command"),
+        "{}".into(),
+        Some(activity.clone()),
+    );
+    cell.complete(
+        "second-result".into(),
+        &second,
+        r#"{"result":{"exit_code":1,"stderr":"assertion failed\nfull error"}}"#.into(),
+        false,
+    );
+    assert_eq!(cell.status(), CommandStatus::Failed);
+    assert_eq!(
+        cell.summary(Language::Chinese),
+        "已完成 2 条命令 · 1 条失败"
+    );
+    assert!(!cell.can_accept(Some(&activity)));
+    let view = crate::thread::transcript::history_cell::CellView::plain(
+        crate::thread::transcript::MessageRole::Command,
+        String::new(),
+    );
+    let rendered = crate::thread::transcript::history_cell::HistoryCell::lines(
+        &cell,
+        &view,
+        crate::render::test_context().with_language(Language::Chinese),
+        None,
+        80,
+    );
+    let visible = rendered
+        .lines
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(visible.contains("just test 'a b'"));
+    assert!(visible.contains("退出码 1 · assertion failed"));
+    assert!(!visible.contains("full error"));
+    assert!(cell.full_details().contains("full error"));
+}

@@ -19,9 +19,11 @@ fn home_context_refreshes_global_instructions_without_a_directory() {
     let thread_id = ThreadId::new("thread").unwrap();
     let turn_id = TurnId::new("turn").unwrap();
     let request = HarnessContextRequest {
-        session_id: &session_id,
-        thread_id: &thread_id,
-        turn_id: &turn_id,
+        scope: ash_core::HarnessContextScope::Turn {
+            session_id: &session_id,
+            thread_id: &thread_id,
+            turn_id: &turn_id,
+        },
         read_paths: &[],
     };
 
@@ -64,9 +66,11 @@ fn home_on_demand_body_is_selected_by_an_exact_read_and_expires_with_the_turn() 
     let thread_id = ThreadId::new("thread").unwrap();
     let turn_id = TurnId::new("turn").unwrap();
     let mut request = HarnessContextRequest {
-        session_id: &session_id,
-        thread_id: &thread_id,
-        turn_id: &turn_id,
+        scope: ash_core::HarnessContextScope::Turn {
+            session_id: &session_id,
+            thread_id: &thread_id,
+            turn_id: &turn_id,
+        },
         read_paths: &[],
     };
     let initial = provider.snapshot(&request).unwrap();

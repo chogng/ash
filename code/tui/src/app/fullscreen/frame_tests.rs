@@ -3377,7 +3377,7 @@ fn chat_progress_stays_above_input_without_hiding_top_tip() {
     );
     assert!(rows[usize::from(areas.footer.hintline.y)].contains("Manual"));
     assert!(working.contains("Working..."));
-    assert!(working.contains("ctrl+c to interrupt"));
+    assert!(working.contains("esc to interrupt"));
     assert!(working.contains("Copied 42 chars"));
     crate::tui_assert_snapshot!(app = &app; "chat_progress_with_notice", working);
     app.update(ThreadEvent::TurnActivityChanged(
@@ -3416,6 +3416,12 @@ fn running_tip_follows_chat_progress() {
     let rendered = render(&app, 80, 20);
     assert!(rendered.contains("Working"));
     assert!(rendered.contains("Tip: Ask Ash to list steps for complex tasks"));
+    let buffer = render_buffer(&app, 80, 20);
+    for (column, symbol) in [(0, " "), (1, "└"), (2, "─"), (3, " "), (4, "T")] {
+        let position = (areas.progress.x + column, areas.progress.y + 1);
+        assert_eq!(buffer[position].symbol(), symbol);
+        assert_eq!(buffer[position].fg, app.render_context().muted());
+    }
     assert_eq!(areas.footer.statusline.y, areas.composer.bottom());
     assert_eq!(areas.footer.statusline.bottom(), areas.footer.hintline.y);
     assert_eq!(areas.footer.hintline.height, 1);

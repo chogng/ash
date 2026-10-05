@@ -89,6 +89,8 @@ mod config_operations;
 mod config_runtime;
 mod connector_operations;
 mod connector_runtime;
+#[cfg(test)]
+mod context_read_tests;
 mod debug_operations;
 mod diagnostics_operations;
 mod dictation_operations;
@@ -2432,6 +2434,7 @@ impl AppServer {
             Some(ClientMethod::SessionUnsubscribe) => {
                 self.session_unsubscribe(connection, &request.params)
             }
+            Some(ClientMethod::ContextRead) => self.context_read(&request.params),
             Some(ClientMethod::SessionThreadRead) => self.session_thread_read(&request.params),
             Some(ClientMethod::ThreadGoalGet) => self.thread_goal_get(&request.params),
             Some(ClientMethod::ThreadGoalSet) => self.thread_goal_set(&request.params),

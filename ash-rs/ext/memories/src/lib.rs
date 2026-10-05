@@ -98,12 +98,12 @@ impl TurnInputContributor for MemoriesExtension {
         &self,
         input: TurnInputContext<'_>,
     ) -> Result<Vec<PromptFragment>, ExtensionError> {
-        let Some(session_id) = input.session_id() else {
+        let (Some(session_id), Some(thread_id)) = (input.session_id(), input.thread_id()) else {
             return Ok(Vec::new());
         };
         let scopes = self
             .scopes
-            .scopes(session_id, input.thread_id())
+            .scopes(session_id, thread_id)
             .map_err(|error| ExtensionError::new(error.to_string()))?;
         for scope in scopes {
             let policy = self

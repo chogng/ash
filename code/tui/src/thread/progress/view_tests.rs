@@ -28,7 +28,7 @@ fn progress_renders_waiting_and_deterministic_activity() {
                 TurnProgress {
                     activity,
                     timer: &timer,
-                    interrupt_hint: (activity != TurnActivity::Cancelling).then(|| "ctrl+c".into()),
+                    interrupt_hint: (activity != TurnActivity::Cancelling).then(|| "esc".into()),
                     show_tips: false,
                 }
                 .draw(frame, Rect::new(0, row as u16, 80, 1), test_context());
@@ -176,22 +176,22 @@ fn spinner_verb_changes_between_turns_and_stays_fixed_during_a_turn() {
 #[test]
 fn progress_narrow_row_preserves_interrupt_hint() {
     let timer = StatusTimer::default();
-    let mut terminal = Terminal::new(TestBackend::new(32, 1)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(28, 1)).unwrap();
     terminal
         .draw(|frame| {
             TurnProgress {
                 activity: TurnActivity::Working,
                 timer: &timer,
-                interrupt_hint: Some("ctrl+c".into()),
+                interrupt_hint: Some("esc".into()),
                 show_tips: false,
             }
             .draw(frame, frame.area(), test_context())
         })
         .unwrap();
-    let text = (0..32)
+    let text = (0..28)
         .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
         .collect::<String>();
-    assert!(text.contains("ctrl+c to interrupt"));
+    assert!(text.contains("esc to interrupt"));
     assert!(!text.contains(" · 0s"));
 }
 
@@ -205,22 +205,22 @@ fn long_spinner_verb_keeps_interrupt_hint_visible() {
     for run in 0..=index {
         timer.bind_turn(&TurnId::new(format!("long-word-{run}")).unwrap(), now);
     }
-    let mut terminal = Terminal::new(TestBackend::new(32, 1)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(28, 1)).unwrap();
     terminal
         .draw(|frame| {
             TurnProgress {
                 activity: TurnActivity::Working,
                 timer: &timer,
-                interrupt_hint: Some("ctrl+c".into()),
+                interrupt_hint: Some("esc".into()),
                 show_tips: false,
             }
             .draw(frame, frame.area(), test_context());
         })
         .unwrap();
-    let rendered = (0..32)
+    let rendered = (0..28)
         .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
         .collect::<String>();
-    assert!(rendered.contains("… · ctrl+c to interrupt"), "{rendered}");
+    assert!(rendered.contains("… · esc to interrupt"), "{rendered}");
     crate::tui_assert_snapshot!("long_spinner_verb_narrow", rendered.trim_end());
 }
 
@@ -234,7 +234,7 @@ fn tips_appear_below_the_running_indicator_and_stop_while_waiting() {
         TurnProgress {
             activity: TurnActivity::Working,
             timer,
-            interrupt_hint: Some("ctrl+c".into()),
+            interrupt_hint: Some("esc".into()),
             show_tips: true,
         }
     }
@@ -249,7 +249,11 @@ fn tips_appear_below_the_running_indicator_and_stop_while_waiting() {
     let first = (0..80).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
     let second = (0..80).map(|x| buffer[(x, 1)].symbol()).collect::<String>();
     assert!(first.contains("Working"));
-    assert!(second.starts_with("└ Tip: Ask Ash to list steps for complex tasks"));
+    assert!(second.starts_with(" └─ Tip: Ask Ash to list steps for complex tasks"));
+    for (column, symbol) in [(0, " "), (1, "└"), (2, "─"), (3, " "), (4, "T")] {
+        assert_eq!(buffer[(column, 1)].symbol(), symbol);
+        assert_eq!(buffer[(column, 1)].fg, test_context().muted());
+    }
 
     timer.tick(started + Duration::from_secs(120));
     assert_eq!(working(&timer).tip(), Some(crate::nls::Message::TipPlan));

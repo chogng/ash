@@ -500,9 +500,11 @@ fn instruction_snapshot_with_paths(
     HarnessContextProvider::snapshot(
         customizations,
         &HarnessContextRequest {
-            session_id: &session_id,
-            thread_id: &thread_id,
-            turn_id: &turn_id,
+            scope: ash_core::HarnessContextScope::Turn {
+                session_id: &session_id,
+                thread_id: &thread_id,
+                turn_id: &turn_id,
+            },
             read_paths,
         },
     )
@@ -601,9 +603,11 @@ fn new_file_preflight_loads_rules_before_retry_and_refreshes_deleted_selection()
     let thread_id = ThreadId::new("thread").unwrap();
     let turn_id = TurnId::new("turn").unwrap();
     let mut request = HarnessContextRequest {
-        session_id: &session_id,
-        thread_id: &thread_id,
-        turn_id: &turn_id,
+        scope: ash_core::HarnessContextScope::Turn {
+            session_id: &session_id,
+            thread_id: &thread_id,
+            turn_id: &turn_id,
+        },
         read_paths: &[],
     };
     let call = ash_protocol::ToolCall {
@@ -653,9 +657,11 @@ fn patch_preflight_checks_every_target_without_leaking_outside_rules() {
     let thread_id = ThreadId::new("thread").unwrap();
     let turn_id = TurnId::new("turn").unwrap();
     let request = HarnessContextRequest {
-        session_id: &session_id,
-        thread_id: &thread_id,
-        turn_id: &turn_id,
+        scope: ash_core::HarnessContextScope::Turn {
+            session_id: &session_id,
+            thread_id: &thread_id,
+            turn_id: &turn_id,
+        },
         read_paths: &[],
     };
     let call = ash_protocol::ToolCall {

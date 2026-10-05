@@ -18,11 +18,11 @@ expression: "text(&render(&app, area))"
   │  ?          Keyboard shortcuts                                           │
   │  ←          Dashboard (empty input)                                      │
   │  Esc Esc    Open rewind checkpoints                                      │
+  │  esc        Interrupt task                                               │
   │  shift+tab  Cycle task mode                                              │
   │  shift+↓    Decrease thinking effort                                     │
   │  shift+↑    Increase thinking effort                                     │
   │  ctrl+o     Copy last response                                           │
-  │  ctrl+c     Interrupt or quit                                            │
   └──────────────────────────────────────────────────────────────────────────┘
 
   ↑/↓ scroll · Esc to close

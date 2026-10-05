@@ -10,6 +10,33 @@ use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ContextReadScope {
+    Environment,
+    Thread {
+        session_id: ash_protocol::SessionId,
+        thread_id: ash_protocol::ThreadId,
+    },
+}
+
+/// Inspect loaded context without starting a Turn or invoking a model.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextReadParams {
+    pub scope: ContextReadScope,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextReadResult {
+    pub context: ash_protocol::ModelContextInspection,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogEntry {
     pub model: ModelRef,

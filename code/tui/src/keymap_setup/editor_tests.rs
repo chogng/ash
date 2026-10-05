@@ -86,6 +86,7 @@ fn keymap_choices_lists_keys_before_responsibilities() {
             "shift+arrowup",
             "unbound",
             "ctrl+v",
+            "escape",
             "ctrl+c",
             "ctrl+d",
             "ctrl+o",

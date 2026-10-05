@@ -2,4 +2,4 @@
 source: code/tui/src/thread/progress/view_tests.rs
 expression: rendered.trim_end()
 ---
-⠋ Brainst… · ctrl+c to interrupt
+⠋ Brains… · esc to interrupt

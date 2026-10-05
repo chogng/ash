@@ -530,6 +530,10 @@ impl HarnessContextProvider for DirContributions {
         request: &HarnessContextRequest<'_>,
         call: &ash_protocol::ToolCall,
     ) -> Result<(), CoreError> {
+        let session_id = request
+            .scope
+            .session_id()
+            .ok_or_else(|| CoreError::InvalidInput("tool validation requires a Session".into()))?;
         let targets = match call.name.as_str() {
             "write_file" | "edit" => vec![PathBuf::from(
                 call.arguments
@@ -591,7 +595,7 @@ impl HarnessContextProvider for DirContributions {
             .dirs
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get_mut(request.session_id)
+            .get_mut(session_id)
         {
             for (root, catalog) in catalogs {
                 inspect(root, catalog);
@@ -650,13 +654,16 @@ impl HarnessContextProvider for DirContributions {
         } else {
             Vec::new()
         };
-        let roots = self
-            .dir_grants
-            .snapshot_for(
-                request.session_id,
-                ash_file_access::Permission::InspectRepository,
-            )
+        let roots = request
+            .scope
+            .session_id()
+            .map(|session_id| {
+                self.dir_grants
+                    .snapshot_for(session_id, ash_file_access::Permission::InspectRepository)
+            })
+            .transpose()
             .map_err(|error| CoreError::Context(error.to_string()))?
+            .flatten()
             .into_iter()
             .flat_map(|snapshot| {
                 snapshot
@@ -667,13 +674,17 @@ impl HarnessContextProvider for DirContributions {
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
-        let source = self
+        let environments = self
             .session_environments
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(request.session_id)
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let source = request
+            .scope
+            .session_id()
+            .and_then(|session_id| environments.get(session_id))
             .cloned()
             .unwrap_or_else(|| self.environment.clone());
+        drop(environments);
         let environment = source
             .snapshot(roots)
             .map_err(|error| CoreError::Context(error.to_string()))?;
@@ -683,8 +694,10 @@ impl HarnessContextProvider for DirContributions {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut user_paths = base_paths.clone();
-            let content = dirs
-                .get_mut(request.session_id)
+            let content = request
+                .scope
+                .session_id()
+                .and_then(|session_id| dirs.get_mut(session_id))
                 .into_iter()
                 .flat_map(BTreeMap::iter_mut)
                 .filter(|(_, catalog)| catalog.authorization.ensure_active().is_ok())
@@ -705,7 +718,9 @@ impl HarnessContextProvider for DirContributions {
                 .collect::<Vec<_>>();
             (content, user_paths)
         };
-        self.record_nested_diagnostics(request.session_id, &nested_diagnostics);
+        if let Some(session_id) = request.scope.session_id() {
+            self.record_nested_diagnostics(session_id, &nested_diagnostics);
+        }
         contributions.extend(dir_contributions.into_iter().flatten());
         let instructions = contributions
             .into_iter()

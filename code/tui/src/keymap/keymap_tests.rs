@@ -24,6 +24,7 @@ fn context() -> AppKeymapContext {
         chat_input_focused: true,
         has_selection: false,
         chat_input_empty: true,
+        turn_active: false,
         is_press: true,
     }
 }
@@ -61,7 +62,7 @@ fn crossterm_adapter_normalizes_backtab_and_character_case() {
 }
 
 #[test]
-fn action_hints_only_replace_up_and_down_arrow_names() {
+fn action_hints_abbreviate_escape_and_up_and_down_arrow_names() {
     for platform in [
         HostPlatform::MacOs,
         HostPlatform::Linux,
@@ -232,6 +233,61 @@ fn root_conditions_preserve_input_selection_and_press_boundaries() {
             },
         ),
         None
+    );
+}
+
+#[test]
+fn escape_interrupts_only_an_active_turn_and_can_be_remapped() {
+    let mut keymap = AppKeymap::default();
+    let escape = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+    let active = AppKeymapContext {
+        turn_active: true,
+        chat_input_empty: false,
+        ..context()
+    };
+    assert_eq!(
+        keymap.resolve_single(&escape, active),
+        Some(AppKeymapAction::Interrupt)
+    );
+    assert_eq!(
+        keymap
+            .action_hint(AppKeymapAction::Interrupt, active)
+            .as_deref(),
+        Some("esc")
+    );
+    assert_eq!(
+        keymap.resolve_single(&escape, context()),
+        Some(AppKeymapAction::ScreenEscape)
+    );
+    assert_eq!(
+        keymap.resolve_single(
+            &escape,
+            AppKeymapContext {
+                is_press: false,
+                ..active
+            }
+        ),
+        None
+    );
+    let rules = compile_app_user_bindings(
+        &serde_json::json!([
+            {"key": "ctrl+y", "command": "ashCode.action.interrupt"},
+            {"key": "escape", "block": true}
+        ]),
+        HostPlatform::current(),
+    )
+    .unwrap();
+    keymap.replace_user_bindings(rules).unwrap();
+    assert_eq!(keymap.resolve_single(&escape, active), None);
+    assert_eq!(
+        keymap.resolve_single(&control('y'), active),
+        Some(AppKeymapAction::Interrupt)
+    );
+    assert_eq!(
+        keymap
+            .action_hint(AppKeymapAction::Interrupt, active)
+            .as_deref(),
+        Some("ctrl+y")
     );
 }
 

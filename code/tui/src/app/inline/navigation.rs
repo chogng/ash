@@ -114,7 +114,7 @@ pub(in crate::app) fn handle_key(
         app.inline.sessions.screen(),
         Some(SessionScreen::Session(_))
     ) {
-        if let Some(command) = app.handle_thread_request_key(key) {
+        if let Some(command) = app.handle_thread_request_key(key, now) {
             return command;
         }
         if app.chat_panel.request_active() {
@@ -446,6 +446,7 @@ pub(in crate::app) fn handle_transcript_selection_key(app: &mut App, key: KeyEve
         .thread
         .cells()
         .iter()
+        .filter(|cell| cell.is_visible())
         .map(|cell| cell.cell_id().clone())
         .collect::<Vec<_>>();
     let navigation_key = if key.modifiers == KeyModifiers::CONTROL

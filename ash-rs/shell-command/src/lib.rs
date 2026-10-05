@@ -282,8 +282,10 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
 }
 
 impl<P: ApprovalPolicy, B: SandboxBackend> ToolExecutor for ShellCommandTool<P, B> {
-    fn activity(&self, _call: &ash_tools::ToolCall) -> Option<ash_tools::ToolActivity> {
-        Some(ash_tools::ToolActivity::Run)
+    fn activity(&self, call: &ash_tools::ToolCall) -> Option<ash_tools::ToolActivity> {
+        ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(call.arguments.clone()))
+            .ok()
+            .map(|request| request.activity())
     }
 
     fn definition(&self) -> ToolDefinition {
@@ -311,6 +313,14 @@ pub struct ShellCommandRequest {
 }
 
 impl ShellCommandRequest {
+    /// Supplies transcript facts from the same decoded request used for execution.
+    pub fn activity(&self) -> ash_tools::ToolActivity {
+        ash_tools::ToolActivity::Command {
+            program: self.program.clone(),
+            arguments: self.arguments.clone(),
+            working_directory: self.working_directory.display().to_string(),
+        }
+    }
     /// Creates a request without invoking a shell or expanding arguments.
     pub fn new(
         program: impl Into<String>,

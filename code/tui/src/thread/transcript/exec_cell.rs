@@ -46,10 +46,102 @@ impl ExecCall {
             Some(ToolActivity::Search { target }) => ("Failed to search {0}", target.as_str()),
             Some(ToolActivity::List { target }) => ("Failed to list {0}", target.as_str()),
             Some(ToolActivity::Edit { target }) => ("Failed to update {0}", target.as_str()),
-            Some(ToolActivity::Run) => ("Command failed", ""),
+            Some(ToolActivity::FileRead { path, .. }) => {
+                ("Failed to read file {0}", file_name(path))
+            }
+            Some(ToolActivity::FileSearch { pattern, .. }) => {
+                ("Failed to search for {0}", pattern.as_str())
+            }
+            Some(ToolActivity::FileList { pattern, .. }) => {
+                ("Failed to list files matching {0}", pattern.as_str())
+            }
+            Some(ToolActivity::FileEdit { path }) => ("Failed to update file {0}", file_name(path)),
+            Some(ToolActivity::Run | ToolActivity::Command { .. }) => ("Command failed", ""),
             None => ("{0} failed", self.name.as_str()),
         };
-        if self.activity.is_some() {
+        if matches!(
+            self.activity,
+            Some(
+                ToolActivity::Read { .. }
+                    | ToolActivity::Search { .. }
+                    | ToolActivity::List { .. }
+                    | ToolActivity::Edit { .. }
+            )
+        ) {
+            localized_activity(language, template, target)
+        } else {
+            localized(language, template, &[target])
+        }
+    }
+
+    fn exit_code(&self) -> Option<i64> {
+        if !matches!(
+            self.activity,
+            Some(ToolActivity::Command { .. } | ToolActivity::Run)
+        ) {
+            return None;
+        }
+        let value: serde_json::Value = serde_json::from_str(self.result.as_deref()?).ok()?;
+        let output = value.get("result").unwrap_or(&value);
+        output.get("exit_code")?.as_i64()
+    }
+
+    fn failed(&self) -> bool {
+        self.failed || self.exit_code().is_some_and(|code| code != 0)
+    }
+
+    fn summary(&self, language: Language) -> String {
+        if self.is_complete() && self.failed() {
+            return self.failure_label(language);
+        }
+        let running = !self.is_complete();
+        let (template, target, translate_target) = match (running, self.activity.as_ref()) {
+            (true, Some(ToolActivity::Read { target })) => ("Reading {0}", target.as_str(), true),
+            (false, Some(ToolActivity::Read { target })) => ("Read {0}", target.as_str(), true),
+            (true, Some(ToolActivity::Search { target })) => {
+                ("Searching {0}", target.as_str(), true)
+            }
+            (false, Some(ToolActivity::Search { target })) => {
+                ("Searched {0}", target.as_str(), true)
+            }
+            (true, Some(ToolActivity::List { target })) => ("Listing {0}", target.as_str(), true),
+            (false, Some(ToolActivity::List { target })) => ("Listed {0}", target.as_str(), true),
+            (true, Some(ToolActivity::Edit { target })) => ("Editing {0}", target.as_str(), true),
+            (false, Some(ToolActivity::Edit { target })) => ("Updated {0}", target.as_str(), true),
+            (true, Some(ToolActivity::FileRead { path, .. })) => {
+                ("Reading file {0}", file_name(path), false)
+            }
+            (false, Some(ToolActivity::FileRead { path, .. })) => {
+                ("Read file {0}", file_name(path), false)
+            }
+            (true, Some(ToolActivity::FileSearch { pattern, .. })) => {
+                ("Searching for {0}", pattern.as_str(), false)
+            }
+            (false, Some(ToolActivity::FileSearch { pattern, .. })) => {
+                ("Searched for {0}", pattern.as_str(), false)
+            }
+            (true, Some(ToolActivity::FileList { pattern, .. })) => {
+                ("Listing files matching {0}", pattern.as_str(), false)
+            }
+            (false, Some(ToolActivity::FileList { pattern, .. })) => {
+                ("Listed files matching {0}", pattern.as_str(), false)
+            }
+            (true, Some(ToolActivity::FileEdit { path })) => {
+                ("Updating file {0}", file_name(path), false)
+            }
+            (false, Some(ToolActivity::FileEdit { path })) => {
+                ("Updated file {0}", file_name(path), false)
+            }
+            (true, Some(ToolActivity::Run | ToolActivity::Command { .. })) => {
+                ("Running command", "", false)
+            }
+            (false, Some(ToolActivity::Run | ToolActivity::Command { .. })) => {
+                ("Command finished", "", false)
+            }
+            (true, None) => ("Running {0}", self.name.as_str(), false),
+            (false, None) => ("Completed {0}", self.name.as_str(), false),
+        };
+        if translate_target {
             localized_activity(language, template, target)
         } else {
             localized(language, template, &[target])
@@ -81,6 +173,23 @@ impl ExecCall {
 
     fn is_complete(&self) -> bool {
         self.result.is_some()
+    }
+
+    fn full_details(&self) -> String {
+        let mut sections = vec![format!("{} [{}]", self.name, self.tool_call_id)];
+        for text in [
+            Some(self.arguments.as_str()),
+            Some(self.stdout.as_str()),
+            Some(self.stderr.as_str()),
+            self.result.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|text| !text.is_empty())
+        {
+            sections.push(text.to_owned());
+        }
+        sections.join("\n")
     }
 
     fn is_empty(&self) -> bool {
@@ -190,15 +299,20 @@ impl ExecCell {
                         ToolActivity::Read { .. }
                             | ToolActivity::Search { .. }
                             | ToolActivity::List { .. }
+                            | ToolActivity::FileRead { .. }
+                            | ToolActivity::FileSearch { .. }
+                            | ToolActivity::FileList { .. }
                     )
                 )
             }
             ExecGroup::CompactCommandGroup => {
-                matches!(activity, Some(ToolActivity::Run))
-                    && self
-                        .calls
-                        .iter()
-                        .all(|call| call.is_complete() && !call.failed)
+                matches!(
+                    activity,
+                    Some(ToolActivity::Run | ToolActivity::Command { .. })
+                ) && self
+                    .calls
+                    .iter()
+                    .all(|call| call.is_complete() && !call.failed())
             }
             ExecGroup::SingleExec => false,
         }
@@ -318,7 +432,7 @@ impl ExecCell {
     pub(super) fn status(&self) -> CommandStatus {
         if self.is_live() {
             CommandStatus::Running
-        } else if self.calls.iter().any(|call| call.failed) {
+        } else if self.calls.iter().any(ExecCall::failed) {
             CommandStatus::Failed
         } else {
             CommandStatus::Succeeded
@@ -328,60 +442,16 @@ impl ExecCell {
     pub(super) fn full_details(&self) -> String {
         self.calls
             .iter()
-            .map(|call| {
-                let mut sections = vec![format!("{} [{}]", call.name, call.tool_call_id)];
-                if !call.arguments.is_empty() {
-                    sections.push(call.arguments.clone());
-                }
-                if !call.stdout.is_empty() {
-                    sections.push(call.stdout.clone());
-                }
-                if !call.stderr.is_empty() {
-                    sections.push(call.stderr.clone());
-                }
-                if let Some(result) = &call.result {
-                    sections.push(result.clone());
-                }
-                sections.join("\n")
-            })
+            .map(ExecCall::full_details)
             .collect::<Vec<_>>()
             .join("\n\n")
     }
 
     fn summary(&self, language: Language) -> String {
-        let failed = self.calls.iter().filter(|call| call.failed).count();
+        let failed = self.calls.iter().filter(|call| call.failed()).count();
         let running = self.is_live();
         match (self.group, self.calls.as_slice()) {
-            (_, [call]) => {
-                if !running && call.failed {
-                    return call.failure_label(language);
-                }
-                let (template, target) = match (running, call.activity.as_ref()) {
-                    (true, Some(ToolActivity::Read { target })) => ("Reading {0}", target.as_str()),
-                    (false, Some(ToolActivity::Read { target })) => ("Read {0}", target.as_str()),
-                    (true, Some(ToolActivity::Search { target })) => {
-                        ("Searching {0}", target.as_str())
-                    }
-                    (false, Some(ToolActivity::Search { target })) => {
-                        ("Searched {0}", target.as_str())
-                    }
-                    (true, Some(ToolActivity::List { target })) => ("Listing {0}", target.as_str()),
-                    (false, Some(ToolActivity::List { target })) => ("Listed {0}", target.as_str()),
-                    (true, Some(ToolActivity::Edit { target })) => ("Editing {0}", target.as_str()),
-                    (false, Some(ToolActivity::Edit { target })) => {
-                        ("Updated {0}", target.as_str())
-                    }
-                    (true, Some(ToolActivity::Run)) => ("Running command", ""),
-                    (false, Some(ToolActivity::Run)) => ("Command finished", ""),
-                    (true, None) => ("Running {0}", call.name.as_str()),
-                    (false, None) => ("Completed {0}", call.name.as_str()),
-                };
-                if call.activity.is_some() {
-                    localized_activity(language, template, target)
-                } else {
-                    localized(language, template, &[target])
-                }
-            }
+            (_, [call]) => call.summary(language),
             (ExecGroup::ExploreGroup, calls) => {
                 let count = calls.len().to_string();
                 let failures = failed.to_string();
@@ -395,12 +465,14 @@ impl ExecCell {
             }
             (ExecGroup::CompactCommandGroup, calls) => {
                 let count = calls.len().to_string();
-                let template = if running {
-                    "Running {0} commands"
-                } else {
-                    "Finished {0} commands"
+                let failures = failed.to_string();
+                let template = match (running, failed > 0) {
+                    (true, true) => "Running {0} commands · {1} failed",
+                    (true, false) => "Running {0} commands",
+                    (false, true) => "Finished {0} commands · {1} failed",
+                    (false, false) => "Finished {0} commands",
                 };
-                localized(language, template, &[&count])
+                localized(language, template, &[&count, &failures])
             }
             (ExecGroup::SingleExec, calls) => {
                 let count = calls.len().to_string();
@@ -416,13 +488,26 @@ impl ExecCell {
     }
 }
 
+fn file_name(path: &str) -> &str {
+    path.rsplit(['/', '\\'])
+        .find(|part| !part.is_empty())
+        .unwrap_or(path)
+}
+
 fn group_for(activity: Option<&ToolActivity>) -> ExecGroup {
     match activity {
         Some(
-            ToolActivity::Read { .. } | ToolActivity::Search { .. } | ToolActivity::List { .. },
+            ToolActivity::Read { .. }
+            | ToolActivity::Search { .. }
+            | ToolActivity::List { .. }
+            | ToolActivity::FileRead { .. }
+            | ToolActivity::FileSearch { .. }
+            | ToolActivity::FileList { .. },
         ) => ExecGroup::ExploreGroup,
-        Some(ToolActivity::Run) => ExecGroup::CompactCommandGroup,
-        Some(ToolActivity::Edit { .. }) | None => ExecGroup::SingleExec,
+        Some(ToolActivity::Run | ToolActivity::Command { .. }) => ExecGroup::CompactCommandGroup,
+        Some(ToolActivity::Edit { .. } | ToolActivity::FileEdit { .. }) | None => {
+            ExecGroup::SingleExec
+        }
     }
 }
 

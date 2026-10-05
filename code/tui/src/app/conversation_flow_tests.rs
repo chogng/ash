@@ -139,7 +139,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     );
     assert_eq!(app.status(), &Status::Working);
     let streaming_frame = render(&app);
-    assert!(streaming_frame.contains("Working... · 0s · ctrl+c to interrupt"));
+    assert!(streaming_frame.contains("Working... · 0s · esc to interrupt"));
     let regions =
         super::fullscreen::layout(&app, ratatui::layout::Rect::new(0, 0, 100, 32)).session;
     assert_eq!(regions.progress.bottom(), regions.tipline.y);

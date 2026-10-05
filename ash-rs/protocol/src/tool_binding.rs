@@ -64,13 +64,51 @@ pub enum ToolCallCaller {
 /// This describes transcript presentation. Authorization and side-effect policy remain owned by
 /// the action review path; a command may still change files.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ToolActivity {
-    Read { target: String },
-    Search { target: String },
-    List { target: String },
-    Edit { target: String },
+    Read {
+        target: String,
+    },
+    Search {
+        target: String,
+    },
+    List {
+        target: String,
+    },
+    Edit {
+        target: String,
+    },
     Run,
+    /// File coordinates come from the bound tool's input, not a client-side tool-name table.
+    FileRead {
+        path: String,
+        #[ts(type = "number")]
+        offset: u64,
+        #[ts(type = "number")]
+        limit: u64,
+    },
+    FileSearch {
+        pattern: String,
+        path: String,
+    },
+    FileList {
+        pattern: String,
+        path: String,
+    },
+    FileEdit {
+        path: String,
+    },
+    /// The exact process argv. Command tools return `exit_code`, `stdout`, and `stderr`
+    /// in their JSON result (directly or inside `result`). A tool return is not a zero exit.
+    Command {
+        program: String,
+        arguments: Vec<String>,
+        working_directory: String,
+    },
 }
 
 /// Durable binding between one Tool Call and the exact definition/source generation it selected.

@@ -87,10 +87,10 @@ use std::time::UNIX_EPOCH;
 /// impose a process-local model-invocation count that would reset after approval or recovery.
 #[derive(Clone)]
 pub struct TurnExecutor {
-    threads: Arc<ThreadController>,
+    pub(super) threads: Arc<ThreadController>,
     model: Arc<dyn ModelService>,
     // A continuation starts a new Turn and must read the profile again, even when launched by a frozen executor.
-    model_source: Arc<dyn ModelService>,
+    pub(super) model_source: Arc<dyn ModelService>,
     // Approval waits keep the same runtime. Terminal completion and session closure release it.
     turn_models: Arc<
         std::sync::Mutex<
@@ -98,18 +98,18 @@ pub struct TurnExecutor {
         >,
     >,
     model_compaction: bool,
-    tools: Arc<dyn ToolService>,
+    pub(super) tools: Arc<dyn ToolService>,
     policy: Arc<dyn ActionPolicyService>,
     policy_source: Arc<dyn ActionPolicyService>,
     review_environment: Option<Arc<dyn core_api::ReviewEnvironmentService>>,
     compaction: Arc<dyn ContextCompactionService>,
     updates: Arc<dyn ThreadUpdateSink>,
-    harness_context: Arc<dyn HarnessContextProvider>,
+    pub(super) harness_context: Arc<dyn HarnessContextProvider>,
     context_sources: std::collections::BTreeMap<&'static str, Arc<dyn crate::ContextSource>>,
     hooks: Arc<dyn HookService>,
     execution_observer: Arc<dyn TurnExecutionObserver>,
     activity: Option<Arc<dyn core_api::TurnExecutionActivity>>,
-    extensions: Arc<ash_extension_api::ExtensionRegistry>,
+    pub(super) extensions: Arc<ash_extension_api::ExtensionRegistry>,
     code_mode: CodeModeBroker,
 }
 
@@ -183,6 +183,44 @@ impl TurnExecutor {
         let mut profile = crate::tool_profile::snapshot_tool_profile(&selected)?;
         profile.id = crate::tool_profile::SELECTED_CODING_TOOL_PROFILE_ID.into();
         Ok(profile)
+    }
+
+    /// Shares the execution tool surface with inspections before or during a Turn.
+    pub(super) fn context_tool_catalog(
+        &self,
+        activated: &BTreeSet<ash_protocol::ToolName>,
+        turn: Option<&crate::TurnSnapshot>,
+        mode: ash_protocol::ToolMode,
+    ) -> Result<crate::ModelToolCatalogSnapshot, CoreError> {
+        let catalog = self.tools.model_catalog_snapshot(activated)?;
+        let profile = turn.and_then(|turn| turn.tool_profile.as_ref());
+        let catalog = match profile {
+            Some(profile) if profile.id == crate::tool_profile::SELECTED_CODING_TOOL_PROFILE_ID => {
+                catalog.restrict_to_names(&profile.tool_names)
+            }
+            _ => catalog,
+        };
+        if let Some(profile) = profile {
+            let frozen_definitions = catalog
+                .definitions()
+                .iter()
+                .filter(|definition| !activated.contains(&definition.name))
+                .cloned()
+                .collect::<Vec<_>>();
+            crate::tool_profile::validate_tool_profile_definitions(profile, &frozen_definitions)?;
+        }
+        let catalog = if turn.is_none_or(|turn| turn.advisor.is_none()) {
+            let names = catalog
+                .definitions()
+                .iter()
+                .filter(|tool| tool.name.as_str() != "advisor")
+                .map(|tool| tool.name.clone())
+                .collect::<Vec<_>>();
+            catalog.restrict_to_names(&names)
+        } else {
+            catalog
+        };
+        self.code_mode.augment_catalog(catalog, mode)
     }
 
     /// Freezes the exact durable binding for a host-created Tool Call.
@@ -917,51 +955,13 @@ impl TurnExecutor {
                 .map_err(ExecutionFailure::model)?;
             let activated = activated_tool_names(self.tools.as_ref(), &snapshot.items, turn_id)
                 .map_err(ExecutionFailure::model)?;
-            let ordinary_tool_catalog = self
-                .tools
-                .model_catalog_snapshot(&activated)
-                .map_err(ExecutionFailure::model)?;
             let turn = snapshot
                 .turns
                 .iter()
                 .find(|turn| &turn.turn_id == turn_id)
                 .ok_or_else(|| ExecutionFailure::model(CoreError::NotFound(turn_id.to_string())))?;
-            let ordinary_tool_catalog = if let Some(profile) = &turn.tool_profile {
-                if profile.id == crate::tool_profile::SELECTED_CODING_TOOL_PROFILE_ID {
-                    ordinary_tool_catalog.restrict_to_names(&profile.tool_names)
-                } else {
-                    ordinary_tool_catalog
-                }
-            } else {
-                ordinary_tool_catalog
-            };
-            if let Some(profile) = &turn.tool_profile {
-                let frozen_definitions = ordinary_tool_catalog
-                    .definitions()
-                    .iter()
-                    .filter(|definition| !activated.contains(&definition.name))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                crate::tool_profile::validate_tool_profile_definitions(
-                    profile,
-                    &frozen_definitions,
-                )
-                .map_err(ExecutionFailure::model)?;
-            }
-            let ordinary_tool_catalog = if turn.advisor.is_none() {
-                let names = ordinary_tool_catalog
-                    .definitions()
-                    .iter()
-                    .filter(|tool| tool.name.as_str() != "advisor")
-                    .map(|tool| tool.name.clone())
-                    .collect::<Vec<_>>();
-                ordinary_tool_catalog.restrict_to_names(&names)
-            } else {
-                ordinary_tool_catalog
-            };
             let tool_catalog = self
-                .code_mode
-                .augment_catalog(ordinary_tool_catalog, turn.tool_mode)
+                .context_tool_catalog(&activated, Some(turn), turn.tool_mode)
                 .map_err(ExecutionFailure::model)?;
             let tools = tool_catalog.definitions().to_vec();
             let frozen_model = turn.model.clone();
@@ -983,9 +983,11 @@ impl TurnExecutor {
             let harness_context = self
                 .harness_context
                 .snapshot(&crate::HarnessContextRequest {
-                    session_id: &snapshot.session_id,
-                    thread_id,
-                    turn_id,
+                    scope: crate::HarnessContextScope::Turn {
+                        session_id: &snapshot.session_id,
+                        thread_id: thread_id,
+                        turn_id: turn_id,
+                    },
                     read_paths: &read_paths,
                 })
                 .map_err(ExecutionFailure::model)?;

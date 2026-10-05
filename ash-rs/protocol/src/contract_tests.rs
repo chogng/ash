@@ -1250,3 +1250,39 @@ fn permission_ids_are_closed_and_product_order_does_not_change_the_default() {
         }
     }
 }
+
+#[test]
+fn detailed_tool_activity_roundtrips_literal_targets_and_argv() {
+    let cases = [
+        crate::ToolActivity::FileRead {
+            path: "文件.rs".into(),
+            offset: 7,
+            limit: 40,
+        },
+        crate::ToolActivity::FileSearch {
+            pattern: "start.*daemon".into(),
+            path: "src/".into(),
+        },
+        crate::ToolActivity::FileList {
+            pattern: "*.rs".into(),
+            path: "src/".into(),
+        },
+        crate::ToolActivity::FileEdit {
+            path: "文件.rs".into(),
+        },
+        crate::ToolActivity::Command {
+            program: "just".into(),
+            arguments: vec!["test".into(), "a b".into()],
+            working_directory: "项目/".into(),
+        },
+    ];
+    for activity in cases {
+        let value = serde_json::to_value(&activity).unwrap();
+        let restored: crate::ToolActivity = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(restored, activity);
+        if matches!(activity, crate::ToolActivity::Command { .. }) {
+            assert_eq!(value["workingDirectory"], "项目/");
+            assert_eq!(value["arguments"][1], "a b");
+        }
+    }
+}

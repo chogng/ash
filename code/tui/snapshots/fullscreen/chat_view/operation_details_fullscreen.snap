@@ -1,0 +1,54 @@
+---
+source: code/tui/src/app/chat_view_tests.rs
+expression: visible
+---
+   branch-layout /work/ash                                             [— / —] [仪表盘]
+
+● 思考摘要
+ └─ 先检查 daemon 的启动逻辑，再搜索调用点。
+
+● 已探查 2 项操作
+ └─ 已读取 daemon.rs
+    src/daemon.rs · 从第 1 行起，最多 160 行
+ └─ 已搜索 start_daemon
+    src
+    src/main.rs:42:start_daemon()
+    查看完整详情
+
+● 命令执行失败
+ └─ just test ash-daemon startup
+    退出码 1 · test result: FAILED. 1 failed.
+    查看完整详情
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ──────────────────────────────────────────────────────────────────────────────────────
+  >
+  ───────────────────────────────────────────────────────────────── Shared model (high)
+
+  ⏸ 手动 · ← 仪表盘 · ? 查看快捷键

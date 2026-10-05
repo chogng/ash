@@ -1,6 +1,6 @@
 ---
 source: code/tui/src/app/conversation_flow_tests.rs
-expression: render(&app)
+expression: submitted_frame
 ---
   .                                                                                    [Dashboard]
 
@@ -32,5 +32,5 @@ expression: render(&app)
   ────────────────────────────────────────────────────────────────────────────────────────────────
   >
   ─────────────────────────────────────────────────────────────────────────────── Automatic model
-  ⏸ Manual
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+
+  ⏸ Manual · ← Dashboard · ? for shortcuts

@@ -26,6 +26,7 @@ const PAGE_ROWS: usize = 12;
 pub(crate) struct ListSelectionItem {
     id: Option<ListSelectionItemId>,
     label: Text,
+    identity_swatch: Option<usize>,
     description: Option<Text>,
     details: Option<Text>,
     columns: Option<ListSelectionItemColumns>,
@@ -77,6 +78,7 @@ impl ListSelectionItem {
         Self {
             id: None,
             label: label.into(),
+            identity_swatch: None,
             description: None,
             details: None,
             columns: None,
@@ -95,6 +97,17 @@ impl ListSelectionItem {
     pub(crate) fn with_disabled_suffix(mut self) -> Self {
         self.disabled_suffix = true;
         self
+    }
+
+    /// Swatches use the current theme at draw time; text remains readable without color.
+    pub(crate) fn with_identity_swatch(mut self, index: usize) -> Self {
+        self.identity_swatch = Some(index);
+        self.label = Text::template("{0} {1}", vec![Text::literal("■"), self.label]);
+        self
+    }
+
+    pub(super) fn identity_swatch(&self) -> Option<usize> {
+        self.identity_swatch
     }
 
     pub(super) fn disabled_suffix(&self) -> bool {

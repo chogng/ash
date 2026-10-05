@@ -89,12 +89,15 @@ impl extension_api::TurnInputContributor for ImageExtension {
         &self,
         input: extension_api::TurnInputContext<'_>,
     ) -> Result<Vec<extension_api::PromptFragment>, ExtensionError> {
+        let Some(thread_id) = input.thread_id() else {
+            return Ok(Vec::new());
+        };
         let session = input
             .session_id()
             .ok_or_else(|| ExtensionError::new("image references require a Session"))?;
         let references = self
             .references
-            .list(session, input.thread_id())
+            .list(session, thread_id)
             .map_err(ExtensionError::new)?;
         if references.len() > 20
             || references.iter().any(|reference| {

@@ -59,3 +59,9 @@ pub use invocation::ToolCall;
 pub use invocation::ToolChoice;
 pub use invocation::ToolDefinition;
 pub use invocation::ToolResult;
+
+pub use invocation::ModelContextAllocation;
+pub use invocation::ModelContextCategory;
+pub use invocation::ModelContextCategoryUsage;
+pub use invocation::ModelContextInspection;
+pub use invocation::ModelContextSourceUsage;

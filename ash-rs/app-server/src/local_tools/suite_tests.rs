@@ -70,6 +70,79 @@ fn text_edit_suite(path: &std::path::Path) -> LocalToolSuite<PassThroughBackend>
 }
 
 #[test]
+fn bound_tool_activity_keeps_the_actual_file_search_and_command_inputs() {
+    use ash_protocol::ToolActivity;
+    let dir = tempfile::tempdir().unwrap();
+    let suite = text_edit_suite(dir.path());
+    let path = dir.path().join("daemon.rs").display().to_string();
+    let cases = [
+        (
+            "read_file",
+            json!({"path":path,"offset":7,"limit":40}),
+            ToolActivity::FileRead {
+                path: path.clone(),
+                offset: 7,
+                limit: 40,
+            },
+        ),
+        (
+            "read_file",
+            json!({"path":path,"offset":null,"limit":null}),
+            ToolActivity::FileRead {
+                path: path.clone(),
+                offset: 1,
+                limit: 2000,
+            },
+        ),
+        (
+            "grep",
+            json!({"pattern":"start_daemon","path":null}),
+            ToolActivity::FileSearch {
+                pattern: "start_daemon".into(),
+                path: suite
+                    .authorization
+                    .dir()
+                    .canonical_path()
+                    .display()
+                    .to_string(),
+            },
+        ),
+        (
+            "glob",
+            json!({"pattern":"*.rs","path":path}),
+            ToolActivity::FileList {
+                pattern: "*.rs".into(),
+                path: path.clone(),
+            },
+        ),
+        (
+            "edit",
+            json!({"path":path,"old_string":"old","new_string":"new"}),
+            ToolActivity::FileEdit { path },
+        ),
+        (
+            "shell-command",
+            json!({"program":"just","arguments":["test","a b"],"working_directory":"."}),
+            ToolActivity::Command {
+                program: "just".into(),
+                arguments: vec!["test".into(), "a b".into()],
+                working_directory: ".".into(),
+            },
+        ),
+    ];
+    for (name, arguments, expected) in cases {
+        let binding = suite
+            .bind_call(
+                &tool_call(name, arguments),
+                ash_protocol::ToolCallCaller::Direct,
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(binding.activity, Some(expected));
+    }
+}
+
+#[test]
 fn agent_text_edits_preserve_file_format_and_allow_subsequent_writes() {
     for file_eol in ["\n", "\r\n"] {
         for model_eol in ["\n", "\r\n"] {

@@ -182,6 +182,7 @@ Ash Code 当前可配置 command ID：
 | `ashCode.action.cycleApprovalMode` | 切换下一次提交的权限模式 |
 | `ashCode.action.openRewind` | 直接打开 Rewind picker；不模拟 `Esc Esc` |
 | `ashCode.action.attachClipboardImage` | 从本机剪贴板附加图片 |
+| `ashCode.action.interrupt` | 中断正在运行的任务，默认 Esc；空闲时不退出 |
 | `ashCode.action.interruptOrQuit` | 工作时中断，空闲时退出 |
 | `ashCode.action.copyLastResponse` | 复制最近一条 Agent response |
 | `ashCode.action.suspend` | Unix suspend/resume 流程 |

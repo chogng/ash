@@ -32,6 +32,7 @@ pub(crate) use compaction::ModelContextCompactionService;
 pub use harness::HarnessContext;
 pub use harness::HarnessContextProvider;
 pub use harness::HarnessContextRequest;
+pub use harness::HarnessContextScope;
 pub use instructions::HarnessInstructions;
 pub(crate) use invocation::ContextOverflowRecoveryPreparation;
 pub(crate) use invocation::FrozenModelSelection;
@@ -61,3 +62,5 @@ mod benchmarks;
 pub use instructions::HarnessInstruction;
 pub use instructions::InstructionActivation;
 pub use instructions::InstructionScope;
+
+pub(crate) use instructions::turn_instruction_fragments;

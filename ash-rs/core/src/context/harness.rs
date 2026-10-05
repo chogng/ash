@@ -54,14 +54,32 @@ impl HarnessContext {
 
 /// Stable identities available when the host captures one harness-context snapshot.
 pub struct HarnessContextRequest<'a> {
-    /// Session whose runtime environment is being frozen.
-    pub session_id: &'a SessionId,
-    /// Thread about to invoke the model.
-    pub thread_id: &'a ThreadId,
-    /// Turn about to invoke the model.
-    pub turn_id: &'a TurnId,
+    pub scope: HarnessContextScope<'a>,
     /// Files confirmed by successful reads in this Turn's durable transcript.
     pub read_paths: &'a [PathBuf],
+}
+
+/// Inspection has no fabricated execution identity and cannot acquire Turn authority.
+pub enum HarnessContextScope<'a> {
+    Environment,
+    Thread {
+        session_id: &'a SessionId,
+        thread_id: &'a ThreadId,
+    },
+    Turn {
+        session_id: &'a SessionId,
+        thread_id: &'a ThreadId,
+        turn_id: &'a TurnId,
+    },
+}
+
+impl HarnessContextScope<'_> {
+    pub fn session_id(&self) -> Option<&SessionId> {
+        match self {
+            Self::Environment => None,
+            Self::Thread { session_id, .. } | Self::Turn { session_id, .. } => Some(session_id),
+        }
+    }
 }
 
 /// Supplies one immutable host-context snapshot at each model-invocation boundary.

@@ -1,0 +1,19 @@
+---
+source: code/tui/src/app/inline/output_tests.rs
+expression: rendered
+---
+● 当前回复                                                  
+                                                            
+  • 第一项                                                  
+  • 第二项                                                  
+                                                            
+                                                            
+                                                            
+                                                            
+⠋ Working... · 0s · esc to interrupt                        
+                                                            
+────────────────────────────────────────────────────────────
+>                                                           
+────────────────────────────────────────────────────────────
+                                                            
+  ⏸ Manual · ← Dashboard · ? for shortcuts

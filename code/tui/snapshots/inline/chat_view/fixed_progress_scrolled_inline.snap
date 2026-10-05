@@ -15,7 +15,7 @@ expression: text(&scrolled)
 ● History entry 2                                                               
                                                                                 
                           Ctrl+End to jump to bottom ↓                          
-⠋ Working... · 0s · ctrl+c to interrupt                                         
+⠋ Working... · 0s · esc to interrupt                                            
                                                                                 
 ────────────────────────────────────────────────────────────────────────────────
 > keep this draft                                                               

@@ -725,7 +725,13 @@ fn title_spans<'a>(
     style: Style,
     context: RenderContext<'_>,
 ) -> Vec<Span<'a>> {
-    if item.disabled_suffix()
+    if let Some(index) = item.identity_swatch() {
+        let (swatch, label) = item.label().split_at("■".len());
+        vec![
+            Span::styled(swatch, style.fg(context.identity_colors()[index])),
+            Span::styled(label, style),
+        ]
+    } else if item.disabled_suffix()
         && let Some(title) = item.label().strip_suffix(" [disable]")
     {
         vec![
@@ -807,7 +813,7 @@ fn draw_item(
             Rect::new(
                 area.x,
                 area.y,
-                area.width.saturating_sub(value_width.saturating_add(2)),
+                area.width.saturating_sub(value_width.saturating_add(3)),
                 1,
             ),
         );
@@ -829,7 +835,14 @@ fn draw_item(
         return;
     }
     let Some(columns) = item.columns() else {
-        let spans = item_spans(item, marker, marker_style, label_style, detail_style);
+        let spans = item_spans(
+            item,
+            marker,
+            marker_style,
+            label_style,
+            detail_style,
+            context,
+        );
         frame.render_widget(Paragraph::new(Line::from(spans)), area);
         return;
     };
@@ -935,19 +948,15 @@ fn item_spans<'a>(
     marker_style: Style,
     label_style: Style,
     detail_style: Style,
+    context: RenderContext<'_>,
 ) -> Vec<Span<'a>> {
-    let Some(description) = item.description() else {
-        return vec![
-            Span::styled(marker, marker_style),
-            Span::styled(item.label(), label_style),
-        ];
-    };
-    vec![
-        Span::styled(marker, marker_style),
-        Span::styled(item.label(), label_style),
-        Span::styled("  ·  ", detail_style),
-        Span::styled(description, detail_style),
-    ]
+    let mut spans = vec![Span::styled(marker, marker_style)];
+    spans.extend(title_spans(item, label_style, context));
+    if let Some(description) = item.description() {
+        spans.push(Span::styled("  ·  ", detail_style));
+        spans.push(Span::styled(description, detail_style));
+    }
+    spans
 }
 
 pub(crate) fn item_style(

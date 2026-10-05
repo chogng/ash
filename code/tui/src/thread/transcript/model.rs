@@ -103,6 +103,12 @@ impl TranscriptCell {
         }
     }
 
+    /// Empty provider reasoning can later receive a public summary; retain its
+    /// source identity while omitting it from presentation and keyboard navigation.
+    pub(crate) fn is_visible(&self) -> bool {
+        !matches!(&self.body, TranscriptCellBody::Content(ContentCell { role: MessageRole::Reasoning, text }) if text.trim().is_empty())
+    }
+
     pub(crate) fn can_expand(&self) -> bool {
         self.history_cell().can_expand()
     }
@@ -269,6 +275,7 @@ impl TranscriptModel {
     ) -> Vec<CellView<'_>> {
         self.cells
             .iter()
+            .filter(|cell| cell.is_visible())
             .map(|cell| {
                 cell.view(
                     expanded.contains(cell.cell_id()),

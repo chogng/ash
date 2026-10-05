@@ -238,9 +238,11 @@ impl ToolScheduler {
                 };
                 let paths = crate::services::read_paths_before_call(&snapshot, turn_id, boundary);
                 let request = crate::HarnessContextRequest {
-                    session_id: &snapshot.session_id,
-                    thread_id,
-                    turn_id,
+                    scope: crate::HarnessContextScope::Turn {
+                        session_id: &snapshot.session_id,
+                        thread_id: thread_id,
+                        turn_id: turn_id,
+                    },
                     read_paths: &paths,
                 };
                 match provider.validate_tool_context(&request, &pending.call) {

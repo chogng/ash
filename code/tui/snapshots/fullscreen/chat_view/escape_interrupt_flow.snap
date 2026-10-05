@@ -1,0 +1,91 @@
+---
+source: code/tui/src/app/chat_view_tests.rs
+expression: "frames.join(\"\\n\\n\")"
+---
+English running
+   branch-layo… /work/ash                                 [— / —] [Dashboard]
+
+
+
+
+
+
+
+
+
+
+
+
+⠋ Working... · 0s · esc to interrupt
+
+  ────────────────────────────────────────────────────────────────────────────
+  > keep this draft
+  ──────────────────────────────────────────────── Shared model (high) · Plan
+
+  ⏸ Manual
+
+English cancelling
+   branch-layo… /work/ash                                 [— / —] [Dashboard]
+
+
+
+
+
+
+
+
+
+
+
+
+⠋ Cancelling... · 0s
+
+  ────────────────────────────────────────────────────────────────────────────
+  > keep this draft
+  ──────────────────────────────────────────────── Shared model (high) · Plan
+
+  ⏸ Manual
+
+Chinese running
+   branch-layout /work/ash                                   [— / —] [仪表盘]
+
+
+
+
+
+
+
+
+
+
+
+
+⠋ 正在处理... · 0s · esc 可中断
+
+  ────────────────────────────────────────────────────────────────────────────
+  > keep this draft
+  ──────────────────────────────────────────────── Shared model (high) · 计划
+
+  ⏸ 手动
+
+Chinese cancelling
+   branch-layout /work/ash                                   [— / —] [仪表盘]
+
+
+
+
+
+
+
+
+
+
+
+
+⠋ 正在取消... · 0s
+
+  ────────────────────────────────────────────────────────────────────────────
+  > keep this draft
+  ──────────────────────────────────────────────── Shared model (high) · 计划
+
+  ⏸ 手动

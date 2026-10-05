@@ -8,13 +8,13 @@ expression: "text(&render(&app, area))"
   /                     Commands          ?          Keyboard shortcuts
   @                     Mention files     ←          Dashboard (empty input)
                         and plugins       Esc Esc    Open rewind checkpoints
-  $                     Select a skill    shift+tab  Cycle task mode
-  Enter                 Send message      shift+↓    Decrease thinking effort
-  Shift+Enter / Ctrl+J  New line          shift+↑    Increase thinking effort
-  Ctrl+R                Search input      ctrl+o     Copy last response
-                        history           ctrl+c     Interrupt or quit
-  ctrl+v                Attach            ctrl+z     Suspend Ash
-                        clipboard
+  $                     Select a skill    esc        Interrupt task
+  Enter                 Send message      shift+tab  Cycle task mode
+  Shift+Enter / Ctrl+J  New line          shift+↓    Decrease thinking effort
+  Ctrl+R                Search input      shift+↑    Increase thinking effort
+                        history           ctrl+o     Copy last response
+  ctrl+v                Attach            ctrl+c     Interrupt or quit
+                        clipboard         ctrl+z     Suspend Ash
                         image
 
   Transcript

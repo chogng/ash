@@ -113,7 +113,10 @@ impl<'a> MessageResponse<'a> {
         );
         let details_action = self.full_details.then(|| {
             let action = PrefixedBlock::new("    ", "    ").wrap(
-                vec![Line::from(Span::styled("view full", action_style(context)))],
+                vec![Line::from(Span::styled(
+                    crate::nls::localize(context.language(), "view full").into_owned(),
+                    action_style(context),
+                ))],
                 width,
                 Style::default(),
             );

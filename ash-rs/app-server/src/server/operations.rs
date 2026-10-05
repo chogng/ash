@@ -165,6 +165,70 @@ impl RewritePhase {
 }
 
 impl AppServer {
+    pub(super) fn context_read(&self, params: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::model::ContextReadParams;
+        use ash_app_server_protocol::protocol::model::ContextReadResult;
+        use ash_app_server_protocol::protocol::model::ContextReadScope;
+        let params: ContextReadParams = decode(params)?;
+        let thread = match &params.scope {
+            ContextReadScope::Environment => None,
+            ContextReadScope::Thread {
+                session_id,
+                thread_id,
+            } => Some(self.read_session_thread_snapshot(session_id, thread_id)?),
+        };
+        let latest = thread.as_ref().and_then(|thread| thread.turns.last());
+        let model = match thread
+            .as_ref()
+            .and_then(|thread| thread.agent_configuration())
+            .and_then(|agent| agent.model())
+        {
+            Some(model) => Some(model.clone()),
+            None => self
+                .model_catalog
+                .configured_default()
+                .map_err(core_error)?,
+        };
+        let instructions = match latest
+            .filter(|turn| turn.model == model)
+            .and_then(|turn| turn.instructions.as_ref())
+        {
+            Some(instructions) => instructions.clone(),
+            None => {
+                let base = thread
+                    .as_ref()
+                    .and_then(|thread| thread.agent_configuration())
+                    .and_then(|agent| agent.base_instructions.clone())
+                    .unwrap_or_else(|| ash_prompts::AGENT_INSTRUCTIONS.freeze());
+                let guidance = base
+                    .model_guidance()
+                    .filter(|guidance| guidance.model() == model.as_ref())
+                    .cloned()
+                    .unwrap_or_else(|| self.model_instructions.resolve(model.as_ref()));
+                let mode = latest.map(|turn| turn.mode).unwrap_or_default();
+                base.with_mode(&collaboration_mode_templates::instructions(mode))
+                    .with_model_guidance(guidance)
+            }
+        };
+        let scope = match &params.scope {
+            ContextReadScope::Environment => ash_core::ContextInspectionScope::Environment,
+            ContextReadScope::Thread { thread_id, .. } => {
+                ash_core::ContextInspectionScope::Thread(thread_id)
+            }
+        };
+        let context = self
+            .turn_executor_snapshot()
+            .inspect_context(ash_core::ContextInspectionRequest {
+                scope,
+                model,
+                instructions,
+                approval_mode: latest.map(|turn| turn.approval_mode).unwrap_or_default(),
+                tool_mode: latest.map(|turn| turn.tool_mode).unwrap_or_default(),
+            })
+            .map_err(core_error)?;
+        result(&ContextReadResult { context })
+    }
+
     pub(super) fn initialize(
         &self,
         connection: &mut ConnectionState,

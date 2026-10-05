@@ -98,6 +98,8 @@ use std::time::Instant;
 
 #[path = "activity_tests.rs"]
 mod activity_tests;
+#[path = "context_inspection_tests.rs"]
+mod context_inspection_tests;
 
 #[test]
 fn completes_a_text_turn_from_durable_context() {
@@ -3102,9 +3104,18 @@ impl HarnessContextProvider for MutableInstructions {
         request: &crate::HarnessContextRequest<'_>,
     ) -> Result<Arc<HarnessContext>, CoreError> {
         self.requests.lock().unwrap().push((
-            request.session_id.to_string(),
-            request.thread_id.to_string(),
-            request.turn_id.to_string(),
+            match &request.scope {
+                crate::HarnessContextScope::Turn { session_id, .. } => session_id.to_string(),
+                _ => panic!("expected Turn scope"),
+            },
+            match &request.scope {
+                crate::HarnessContextScope::Turn { thread_id, .. } => thread_id.to_string(),
+                _ => panic!("expected Turn scope"),
+            },
+            match &request.scope {
+                crate::HarnessContextScope::Turn { turn_id, .. } => turn_id.to_string(),
+                _ => panic!("expected Turn scope"),
+            },
         ));
         self.read_paths
             .lock()

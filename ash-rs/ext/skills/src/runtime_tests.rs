@@ -143,6 +143,13 @@ fn extension_owns_explicit_activation_and_model_fragment_contribution() {
     crate::install(&mut builder, runtime.clone());
     let registry = builder.build();
 
+    let initial = registry
+        .contribute_turn_input(TurnInputContext::for_environment())
+        .unwrap();
+    assert_eq!(initial.len(), 1);
+    assert!(initial[0].body().contains("<available-skills"));
+    assert!(!initial[0].body().contains("Instructions."));
+
     let activations = registry
         .contribute_skill_activations(SkillActivationContext::new(&input))
         .unwrap();

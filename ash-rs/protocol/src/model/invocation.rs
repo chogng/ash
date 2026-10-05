@@ -582,6 +582,65 @@ pub enum ModelContextUsageSource {
     Estimated,
 }
 
+/// Read-only local estimate of the currently loaded context. Category counts share one estimator;
+/// a provider's latest-request measurement is separate and is never apportioned across categories.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelContextInspection {
+    pub model: Option<crate::ModelRef>,
+    #[ts(type = "number")]
+    pub estimated_tokens: u64,
+    pub estimator_revision: String,
+    pub categories: Vec<ModelContextCategoryUsage>,
+    pub allocation: Option<ModelContextAllocation>,
+    pub latest_request: Option<ModelContextUsage>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelContextCategory {
+    SystemPrompt,
+    SystemTools,
+    MemoryFiles,
+    Skills,
+    Conversation,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelContextCategoryUsage {
+    pub category: ModelContextCategory,
+    #[ts(type = "number")]
+    pub tokens: u64,
+    pub sources: Vec<ModelContextSourceUsage>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelContextSourceUsage {
+    pub name: String,
+    #[ts(type = "number")]
+    pub tokens: u64,
+}
+
+/// Allocations come from the execution budget, including any model-specific calibration.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelContextAllocation {
+    #[ts(type = "number")]
+    pub context_window: u64,
+    #[ts(type = "number")]
+    pub auto_compact_window: u64,
+    #[ts(type = "number")]
+    pub auto_compact_at: u64,
+    #[ts(type = "number")]
+    pub auto_compact_buffer: u64,
+    #[ts(type = "number")]
+    pub reserved_output: u64,
+    #[ts(type = "number")]
+    pub safety_margin: u64,
+}
+
 /// One aggregate token metric built only from values explicitly reported by providers.
 ///
 /// `reported` remains useful as a lower bound when one or more invocations omitted this metric;

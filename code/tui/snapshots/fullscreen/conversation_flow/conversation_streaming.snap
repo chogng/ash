@@ -27,10 +27,10 @@ expression: streaming_frame
 
 
 
-⠋ Working... · 0s · ctrl+c to interrupt
+⠋ Working... · 0s · esc to interrupt
                                                                  /permission to change permissions
   ────────────────────────────────────────────────────────────────────────────────────────────────
   >
   ─────────────────────────────────────────────────────────────────────────────── Automatic model
-  ⏸ Manual
-  Enter queue  ·  shift+tab mode  ·  shift+↓/↑ effort
+
+  ⏸ Manual · ← Dashboard · ? for shortcuts

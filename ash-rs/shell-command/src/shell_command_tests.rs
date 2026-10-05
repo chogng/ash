@@ -601,3 +601,32 @@ fn resolve(
         Poll::Pending => panic!("local tool future should complete synchronously"),
     }
 }
+
+#[test]
+fn command_activity_uses_the_decoded_request_without_shell_expansion() {
+    let dir = TestDir::new();
+    let tool = ShellCommandTool::new(
+        environment_id(),
+        dir.root(),
+        MustNotPrepare,
+        AllowAll,
+        ShellCommandLimits {
+            timeout: Duration::from_secs(1),
+            max_output_bytes: 1024,
+        },
+    )
+    .unwrap();
+    let call = ash_tools::ToolCall {
+        id: ToolCallId::new("activity").unwrap(),
+        name: ToolName::new("shell-command").unwrap(),
+        arguments: json!({"program":"just", "arguments":["test", "a b", "$(literal)"], "working_directory":"."}),
+    };
+    assert_eq!(
+        tool.activity(&call),
+        Some(ash_tools::ToolActivity::Command {
+            program: "just".into(),
+            arguments: vec!["test".into(), "a b".into(), "$(literal)".into()],
+            working_directory: ".".into(),
+        })
+    );
+}

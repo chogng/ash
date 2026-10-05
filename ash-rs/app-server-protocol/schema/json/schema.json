@@ -5989,6 +5989,22 @@
         {
           "properties": {
             "method": {
+              "const": "context/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ContextReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "session/thread/read",
               "type": "string"
             },
@@ -12014,6 +12030,22 @@
             },
             "result": {
               "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "context/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ContextReadResult"
             }
           },
           "required": [
@@ -19273,6 +19305,65 @@
         "verified"
       ],
       "type": "string"
+    },
+    "ContextReadParams": {
+      "description": "Inspect loaded context without starting a Turn or invoking a model.",
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/ContextReadScope"
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "type": "object"
+    },
+    "ContextReadResult": {
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/ModelContextInspection"
+        }
+      },
+      "required": [
+        "context"
+      ],
+      "type": "object"
+    },
+    "ContextReadScope": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "environment",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "thread",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "threadId"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "ContextSourceDigest": {
       "description": "SHA-256 digest of the canonical source facts covered by a checkpoint.",
@@ -34280,6 +34371,84 @@
       ],
       "type": "object"
     },
+    "ModelContextAllocation": {
+      "description": "Allocations come from the execution budget, including any model-specific calibration.",
+      "properties": {
+        "autoCompactAt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "autoCompactBuffer": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "autoCompactWindow": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contextWindow": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reservedOutput": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "safetyMargin": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "contextWindow",
+        "autoCompactWindow",
+        "autoCompactAt",
+        "autoCompactBuffer",
+        "reservedOutput",
+        "safetyMargin"
+      ],
+      "type": "object"
+    },
+    "ModelContextCategory": {
+      "enum": [
+        "systemPrompt",
+        "systemTools",
+        "memoryFiles",
+        "skills",
+        "conversation"
+      ],
+      "type": "string"
+    },
+    "ModelContextCategoryUsage": {
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/ModelContextCategory"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/ModelContextSourceUsage"
+          },
+          "type": "array"
+        },
+        "tokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "category",
+        "tokens",
+        "sources"
+      ],
+      "type": "object"
+    },
     "ModelContextConfigDto": {
       "description": "Model-specific context limits used by Core's deterministic budget planner.",
       "properties": {
@@ -34299,6 +34468,78 @@
       },
       "required": [
         "contextWindow"
+      ],
+      "type": "object"
+    },
+    "ModelContextInspection": {
+      "description": "Read-only local estimate of the currently loaded context. Category counts share one estimator;\na provider's latest-request measurement is separate and is never apportioned across categories.",
+      "properties": {
+        "allocation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelContextAllocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "categories": {
+          "items": {
+            "$ref": "#/$defs/ModelContextCategoryUsage"
+          },
+          "type": "array"
+        },
+        "estimatedTokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "estimatorRevision": {
+          "type": "string"
+        },
+        "latestRequest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelContextUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "estimatedTokens",
+        "estimatorRevision",
+        "categories"
+      ],
+      "type": "object"
+    },
+    "ModelContextSourceUsage": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "tokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "tokens"
       ],
       "type": "object"
     },
@@ -45476,6 +45717,119 @@
           },
           "required": [
             "type"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "File coordinates come from the bound tool's input, not a client-side tool-name table.",
+          "properties": {
+            "limit": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "const": "fileRead",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "path",
+            "offset",
+            "limit"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "pattern": {
+              "type": "string"
+            },
+            "type": {
+              "const": "fileSearch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "pattern",
+            "path"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "pattern": {
+              "type": "string"
+            },
+            "type": {
+              "const": "fileList",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "pattern",
+            "path"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "const": "fileEdit",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "path"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The exact process argv. Command tools return `exit_code`, `stdout`, and `stderr`\nin their JSON result (directly or inside `result`). A tool return is not a zero exit.",
+          "properties": {
+            "arguments": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "program": {
+              "type": "string"
+            },
+            "type": {
+              "const": "command",
+              "type": "string"
+            },
+            "workingDirectory": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "program",
+            "arguments",
+            "workingDirectory"
           ],
           "type": "object"
         }

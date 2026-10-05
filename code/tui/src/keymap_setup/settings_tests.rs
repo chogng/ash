@@ -20,6 +20,7 @@ fn context() -> AppKeymapContext {
         chat_input_focused: true,
         has_selection: false,
         chat_input_empty: true,
+        turn_active: false,
         is_press: true,
     }
 }

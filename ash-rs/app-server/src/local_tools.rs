@@ -818,8 +818,10 @@ impl<B: SandboxBackend> ToolService for LocalShellToolService<B> {
         vec![self.definition.clone()]
     }
 
-    fn activity(&self, _call: &ToolCall) -> Option<ash_protocol::ToolActivity> {
-        Some(ash_protocol::ToolActivity::Run)
+    fn activity(&self, call: &ToolCall) -> Option<ash_protocol::ToolActivity> {
+        ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(call.arguments.clone()))
+            .ok()
+            .map(|request| request.activity())
     }
 
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {

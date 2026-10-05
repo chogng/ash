@@ -4,6 +4,27 @@ use super::SerializationAccess;
 use schemars::JsonSchema;
 
 #[test]
+fn context_inspection_uses_environment_or_session_read_serialization() {
+    let method = super::client_method_definition("context/read").unwrap();
+    assert_eq!(
+        method
+            .serialization_scope(&serde_json::json!({"scope":{"type":"environment"}}))
+            .unwrap(),
+        Some(ClientRequestSerializationScope::Global {
+            access: SerializationAccess::SharedRead
+        })
+    );
+    assert_eq!(method.serialization_scope(&serde_json::json!({"scope":{"type":"thread","sessionId":"session","threadId":"thread"}})).unwrap(), Some(ClientRequestSerializationScope::Session { session_id: "session".into(), access: SerializationAccess::SharedRead }));
+    assert!(
+        method
+            .serialization_scope(
+                &serde_json::json!({"scope":{"type":"thread","sessionId":"session"}})
+            )
+            .is_err()
+    );
+}
+
+#[test]
 fn github_admission_uses_case_insensitive_hosted_repository_identity_and_connection_operations() {
     let params = serde_json::json!({"operationId":"operation", "repository":{"host":"GitHub.com", "owner":"Team", "name":"Repo"}});
     let read = super::client_method_definition("github/pullRequest/read").unwrap();

@@ -861,6 +861,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::SessionThreadRead, params)
     }
 
+    pub fn read_context(
+        &mut self,
+        params: ash_app_server_protocol::protocol::model::ContextReadParams,
+    ) -> Result<ash_app_server_protocol::protocol::model::ContextReadResult, ClientError> {
+        self.call(ClientMethod::ContextRead, params)
+    }
+
     pub fn subscribe_session_thread(
         &mut self,
         params: SessionThreadSubscribeParams,

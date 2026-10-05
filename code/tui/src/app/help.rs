@@ -110,6 +110,7 @@ impl Shortcuts {
             chat_input_focused: true,
             has_selection: false,
             chat_input_empty: true,
+            turn_active: false,
             is_press: true,
         };
         let mut compose = ShortcutGroup {
@@ -137,6 +138,17 @@ impl Shortcuts {
                 ),
             ],
         };
+        if let Some(key) = keymap.action_hint(
+            AppKeymapAction::Interrupt,
+            AppKeymapContext {
+                turn_active: true,
+                ..context
+            },
+        ) {
+            session
+                .entries
+                .push((key, AppKeymapAction::Interrupt.label()));
+        }
         for action in [
             AppKeymapAction::CycleCollaborationMode,
             AppKeymapAction::DecreaseReasoningEffort,

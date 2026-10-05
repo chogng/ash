@@ -92,7 +92,7 @@ pub(super) fn draw(
         && let Some(tip) = indicator.tip()
     {
         frame.render_widget(
-            Paragraph::new(format!("└ {}", crate::nls::text(context.language(), tip)))
+            Paragraph::new(format!(" └─ {}", crate::nls::text(context.language(), tip)))
                 .style(Style::default().fg(context.muted())),
             Rect {
                 y: area.y + 1,

@@ -1,0 +1,10 @@
+---
+source: code/tui/src/thread/transcript/view/render_tests.rs
+expression: visible_buffer(buffer)
+---
+● 思考摘要
+ └─ one
+    two
+    three
+    … 还有 1 行
+    查看完整详情

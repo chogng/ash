@@ -39,6 +39,14 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 | 连接本地 App Server | 先初始化并校验能力和模式哈希 | 初始化前不能调用产品方法 |
 | 协议发生不兼容变化 | 同步修改 Rust 类型、生成物和调用方 | 开发期不保留隐藏的旧 DTO 入口 |
 
+### 上下文用量
+
+`context/read` 按 `scope.type = environment` 读取当前环境，或按 `thread` 携带 `sessionId` 和 `threadId` 读取所属线程。首次请求前也可调用；不会创建回合、调用模型、检索查询证据或触发压缩。线程选择会校验 Session membership。
+
+结果的分类及总量共用 Core 执行时的本地估算器，区分系统提示词（含环境与时间）、实际暴露的工具定义、已加载记忆／指令文件、技能目录与已激活正文、对话和工具结果。已被 checkpoint 覆盖的历史不重复计入，未加载的文件和技能正文不计入。分类来源只返回身份与估算数量，不返回正文。
+
+`allocation` 来自当前模型执行预算；未知窗口时为 `null`，不推导百分比。完整窗口由自动压缩输入阈值、输出预留、安全余量和压缩 buffer 组成，模型计量校准的额外保留计入安全余量。`autoCompactWindow` 为完整窗口扣除 buffer 的压缩窗口，`autoCompactAt` 再扣除输出和安全预留，表示实际输入触发阈值。`latestRequest` 单独保留同一模型最近请求的测量值及来源，不能按它分摊分类，也不能把分类估算标为服务商实测。
+
 ### 音频通话资源
 
 - `contracts.calls.version = 1` 表示支持通话接口。前端通过领域服务调用生成协议，不持有 LiveKit 管理密钥或入房票据。
@@ -867,6 +875,9 @@ App Server 的 [`TranscriptAccumulator`](../ash-rs/thread-transcript/src/accumul
 | TypeScript 桌面界面 | 通过 Chat 服务保留后端条目字段，再映射为聊天列表单元；见 [服务接口](../app-ts/src/ash/workbench/services/chat/common/chatService.ts)和[列表映射](../app-ts/src/ash/workbench/contrib/chat/browser/widget/chatListItems.ts)。 |
 
 工具执行产生的 `ToolCall`、`ToolResult` 是后端条目；`/status` 等本地斜杠命令是客户端操作，TUI 可在自己的正文中显示操作与结果，但不把它们伪装成持久化的 Thread 条目。当前三端都接入了后端语义条目，具体显示能力仍有差异：TypeScript 聊天列表和 Rust 桌面时间线主要以文字显示工具结果；TypeScript 服务虽保留工具结果的富内容字段，列表尚未逐种呈现这些内容。这是客户端显示范围，不改变后端的内容归属。
+
+`ToolCall.binding.activity` 由工具 owner 提供操作事实。文件操作携带实际路径、搜索模式或请求读取范围；命令携带原始 program、arguments 与 workingDirectory。客户端只负责本地化标签和排版，不按工具名解释参数。命令结果的 JSON（直接对象或 `result` 对象）中的 `exit_code`、`stdout`、`stderr` 是进程证据；工具成功返回并不意味着进程退出码为零，更不代表测试或任务已经通过。没有公开文本的 Reasoning 条目仍可保存并接收后续更新，客户端无需显示空的思考记录。
+
 
 `session/request` 的 `StartTurn` 参数：
 

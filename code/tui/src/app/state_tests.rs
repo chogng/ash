@@ -3167,6 +3167,159 @@ fn screen_escape_gesture_expires_and_is_reset_by_other_input() {
 }
 
 #[test]
+fn escape_interrupts_active_turns_preserves_drafts_and_never_rewinds_while_cancelling() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        for input_mode in [ChatInputMode::Standard, ChatInputMode::Vim] {
+            for activity in [
+                TurnActivity::Starting,
+                TurnActivity::Working,
+                TurnActivity::WaitingForApproval,
+                TurnActivity::WaitingForUserInput,
+                TurnActivity::WaitingForCapability,
+            ] {
+                let mut app = App::new();
+                let mut settings = TerminalSettings::default();
+                settings.set_screen_mode(mode);
+                settings.set_input_mode(input_mode);
+                app.update(ConfigEvent::SettingsReceived(settings));
+                app.insert_text("keep this draft");
+                app.update(ThreadEvent::TurnActivityChanged(activity));
+                let started = Instant::now();
+                let escape = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+                for kind in [
+                    crossterm::event::KeyEventKind::Release,
+                    crossterm::event::KeyEventKind::Repeat,
+                ] {
+                    assert_eq!(
+                        app.handle_key(KeyEvent::new_with_kind(
+                            KeyCode::Esc,
+                            KeyModifiers::NONE,
+                            kind
+                        )),
+                        None
+                    );
+                    assert_ne!(app.status(), &Status::Cancelling);
+                }
+                assert_eq!(
+                    app.handle_key_at(escape, started),
+                    Some(AppCommand::Thread(ThreadCommand::Interrupt))
+                );
+                assert_eq!(app.status(), &Status::Cancelling);
+                assert_eq!(app.input(), "keep this draft");
+                assert_eq!(
+                    app.handle_key_at(escape, started + Duration::from_millis(100)),
+                    None
+                );
+                assert_eq!(app.status(), &Status::Cancelling);
+                app.update(ThreadEvent::TurnCompleted);
+                assert_eq!(
+                    app.handle_key_at(escape, started + Duration::from_millis(200)),
+                    None
+                );
+                assert_eq!(app.input(), "keep this draft");
+            }
+        }
+    }
+}
+
+#[test]
+fn escape_closes_temporary_input_before_interrupting_a_turn() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        for surface in 0..3 {
+            let mut app = App::new();
+            let mut settings = TerminalSettings::default();
+            settings.set_screen_mode(mode);
+            app.update(ConfigEvent::SettingsReceived(settings));
+            app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
+            match surface {
+                0 => {
+                    app.insert_text("/q");
+                    assert!(app.completion().is_some());
+                }
+                1 => {
+                    app.insert_text("keep this draft");
+                    app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+                    assert!(app.input_state().searching_history());
+                }
+                2 => app.update(AppEvent::HelpOpened(ListSelectionModel::new(
+                    "Feature",
+                    vec![ListSelectionGroup::new(
+                        "Items",
+                        vec![ListSelectionItem::new("Item")],
+                    )],
+                ))),
+                _ => unreachable!(),
+            }
+            let escape = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+            assert_eq!(app.handle_key(escape), None);
+            assert!(app.completion().is_none());
+            assert!(!app.input_state().searching_history());
+            assert!(app.command_panel().is_none());
+            assert_eq!(app.status(), &Status::Working);
+            assert_eq!(
+                app.handle_key(escape),
+                Some(AppCommand::Thread(ThreadCommand::Interrupt))
+            );
+        }
+    }
+}
+
+#[test]
+fn escape_interrupts_pending_requests_after_leaving_the_answer_editor() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        enter_test_session(&mut app);
+        app.insert_text("keep this draft");
+        app.update(ThreadEvent::TurnActivityChanged(
+            TurnActivity::WaitingForApproval,
+        ));
+        app.update(ThreadEvent::ApprovalRequested(Approval::new(
+            ApprovalSpec {
+                title: "Approval required".into(),
+                reason: "Run tests".into(),
+                details: vec![],
+            },
+        )));
+        let escape = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        assert_eq!(
+            app.handle_key(escape),
+            Some(AppCommand::Thread(ThreadCommand::Interrupt))
+        );
+        assert_eq!(app.status(), &Status::Cancelling);
+        assert_eq!(app.handle_key(escape), None);
+        assert_eq!(app.input(), "keep this draft");
+        app.update(ThreadEvent::TurnCompleted);
+        app.update(ThreadEvent::TurnActivityChanged(
+            TurnActivity::WaitingForUserInput,
+        ));
+        app.update(ThreadEvent::QueryRequested(
+            Query::new(vec![QueryQuestion {
+                id: "answer".into(),
+                header: "Answer".into(),
+                prompt: "What next?".into(),
+                choices: vec![],
+                custom_answer: QueryCustomAnswer::Allowed,
+            }])
+            .unwrap(),
+        ));
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        app.handle_paste("custom".into());
+        assert_eq!(app.query_view().unwrap().custom_answer, Some("custom"));
+        assert_eq!(app.handle_key(escape), None);
+        assert!(app.query_view().unwrap().custom_answer.is_none());
+        assert_eq!(app.status(), &Status::WaitingForUserInput);
+        assert_eq!(
+            app.handle_key(escape),
+            Some(AppCommand::Thread(ThreadCommand::Interrupt))
+        );
+        assert_eq!(app.input(), "keep this draft");
+    }
+}
+
+#[test]
 fn control_c_interrupts_a_working_turn_without_exiting() {
     let mut app = App::new();
     app.insert_text("hello");

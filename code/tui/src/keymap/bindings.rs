@@ -32,6 +32,7 @@ pub(crate) enum AppKeymapAction {
     ScreenEscape,
     OpenRewind,
     ReadClipboardImage,
+    Interrupt,
     InterruptOrQuit,
     CopyLastResponse,
     Suspend,
@@ -47,6 +48,7 @@ impl AppKeymapAction {
             Self::ScreenEscape => None,
             Self::OpenRewind => Some("ashCode.action.openRewind"),
             Self::ReadClipboardImage => Some("ashCode.action.attachClipboardImage"),
+            Self::Interrupt => Some("ashCode.action.interrupt"),
             Self::InterruptOrQuit => Some("ashCode.action.interruptOrQuit"),
             Self::CopyLastResponse => Some("ashCode.action.copyLastResponse"),
             Self::Suspend => Some("ashCode.action.suspend"),
@@ -59,13 +61,14 @@ impl AppKeymapAction {
             .find(|action| action.command_id() == Some(id))
     }
 
-    const USER_BINDABLE: [Self; 9] = [
+    const USER_BINDABLE: [Self; 10] = [
         Self::CycleApprovalMode,
         Self::CycleCollaborationMode,
         Self::DecreaseReasoningEffort,
         Self::IncreaseReasoningEffort,
         Self::OpenRewind,
         Self::ReadClipboardImage,
+        Self::Interrupt,
         Self::InterruptOrQuit,
         Self::CopyLastResponse,
         Self::Suspend,
@@ -80,6 +83,7 @@ impl AppKeymapAction {
             Self::ScreenEscape => "Rewind escape gesture",
             Self::OpenRewind => "Open rewind checkpoints",
             Self::ReadClipboardImage => "Attach clipboard image",
+            Self::Interrupt => "Interrupt task",
             Self::InterruptOrQuit => "Interrupt or quit",
             Self::CopyLastResponse => "Copy last response",
             Self::Suspend => "Suspend Ash",
@@ -107,6 +111,7 @@ pub(crate) enum AppKeymapCondition {
     AcceptsInput,
     EmptyChatInput,
     PressWithEmptyInput,
+    PressWithActiveTurn,
     PressWithComposerWithoutSelection,
     Expression(ContextExpression),
 }
@@ -118,6 +123,7 @@ pub(crate) struct AppKeymapContext {
     pub(crate) chat_input_focused: bool,
     pub(crate) has_selection: bool,
     pub(crate) chat_input_empty: bool,
+    pub(crate) turn_active: bool,
     pub(crate) is_press: bool,
 }
 
@@ -167,6 +173,11 @@ const APP_KEYBINDINGS: &[AppKeybindingSpec] = &[
         keybinding: "escape",
         action: AppKeymapAction::ScreenEscape,
         condition: AppKeymapCondition::PressWithEmptyInput,
+    },
+    AppKeybindingSpec {
+        keybinding: "escape",
+        action: AppKeymapAction::Interrupt,
+        condition: AppKeymapCondition::PressWithActiveTurn,
     },
     AppKeybindingSpec {
         keybinding: "ctrl+v",
@@ -392,6 +403,7 @@ impl AppKeymap {
                             chord
                                 .split('+')
                                 .map(|key| match key {
+                                    "escape" => "esc",
                                     "arrowup" => "↑",
                                     "arrowdown" => "↓",
                                     key => key,
@@ -492,6 +504,7 @@ pub(super) fn condition_matches(
         AppKeymapCondition::PressWithEmptyInput => {
             context.is_press && context.accepts_input && context.chat_input_empty
         }
+        AppKeymapCondition::PressWithActiveTurn => context.is_press && context.turn_active,
         AppKeymapCondition::PressWithComposerWithoutSelection => {
             context.is_press
                 && context.accepts_input
@@ -771,7 +784,7 @@ pub(crate) static STATUS_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
 });
 pub(crate) static CONTEXT_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     KeyHints::compact()
-        .with_compact_action("↑/↓", "scroll")
+        .with_compact_action("↑/↓", "select")
         .with_compact_action("Enter", "details")
         .with_compact_action("Esc", "close")
 });

@@ -896,20 +896,38 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
 
     fn activity(&self, call: &ToolCall) -> Option<ash_protocol::ToolActivity> {
         use ash_protocol::ToolActivity;
+        let path = || {
+            Some(
+                nullable_string(&call.arguments, "path")
+                    .ok()?
+                    .unwrap_or_else(|| {
+                        self.authorization
+                            .dir()
+                            .canonical_path()
+                            .display()
+                            .to_string()
+                    }),
+            )
+        };
         match call.name.as_str() {
-            "read_file" => Some(ToolActivity::Read {
-                target: "file".into(),
+            "read_file" => Some(ToolActivity::FileRead {
+                path: string_arg(&call.arguments, "path").ok()?,
+                offset: nullable_u64(&call.arguments, "offset").ok()?.unwrap_or(1),
+                limit: nullable_u64(&call.arguments, "limit").ok()?.unwrap_or(2000),
             }),
-            "grep" => Some(ToolActivity::Search {
-                target: "files".into(),
+            "grep" => Some(ToolActivity::FileSearch {
+                pattern: string_arg(&call.arguments, "pattern").ok()?,
+                path: path()?,
             }),
-            "glob" => Some(ToolActivity::List {
-                target: "files".into(),
+            "glob" => Some(ToolActivity::FileList {
+                pattern: string_arg(&call.arguments, "pattern").ok()?,
+                path: path()?,
             }),
-            "write_file" | "edit" => Some(ToolActivity::Edit {
-                target: "file".into(),
+            "write_file" | "edit" => Some(ToolActivity::FileEdit {
+                path: string_arg(&call.arguments, "path").ok()?,
             }),
-            "shell-command" | "shell-session" => Some(ToolActivity::Run),
+            "shell-command" => self.shell.activity(call),
+            "shell-session" => Some(ToolActivity::Run),
             _ => None,
         }
     }

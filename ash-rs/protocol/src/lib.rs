@@ -265,3 +265,9 @@ pub use turn_execution::TurnExecutionBinding;
 #[cfg(test)]
 #[path = "contract_tests.rs"]
 mod contract_tests;
+
+pub use model::ModelContextAllocation;
+pub use model::ModelContextCategory;
+pub use model::ModelContextCategoryUsage;
+pub use model::ModelContextInspection;
+pub use model::ModelContextSourceUsage;

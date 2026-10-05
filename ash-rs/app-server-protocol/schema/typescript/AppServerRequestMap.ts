@@ -107,6 +107,8 @@ import type { ContentSearchReadParams } from './types/ContentSearchReadParams.js
 import type { ContentSearchReadResult } from './types/ContentSearchReadResult.js';
 import type { ContentSearchStartParams } from './types/ContentSearchStartParams.js';
 import type { ContentSearchStartResult } from './types/ContentSearchStartResult.js';
+import type { ContextReadParams } from './types/ContextReadParams.js';
+import type { ContextReadResult } from './types/ContextReadResult.js';
 import type { DebugAdapterCloseParams } from './types/DebugAdapterCloseParams.js';
 import type { DebugAdapterReadParams } from './types/DebugAdapterReadParams.js';
 import type { DebugAdapterReadResult } from './types/DebugAdapterReadResult.js';
@@ -603,6 +605,7 @@ export interface AppServerRequestMap {
   "session/subscribe": { params: SessionSubscribeParams; response: SessionSubscribeResult };
   "session/request": { params: SessionRequestParams; response: SessionRequestResult };
   "session/unsubscribe": { params: SessionUnsubscribeParams; response: null };
+  "context/read": { params: ContextReadParams; response: ContextReadResult };
   "session/thread/read": { params: SessionThreadReadParams; response: SessionThreadReadResult };
   "thread/goal/get": { params: ThreadGoalGetParams; response: ThreadGoalGetResponse };
   "thread/goal/set": { params: ThreadGoalSetParams; response: ThreadGoalSetResponse };
@@ -992,6 +995,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "session/subscribe": { method: "session/subscribe" },
   "session/request": { method: "session/request" },
   "session/unsubscribe": { method: "session/unsubscribe" },
+  "context/read": { method: "context/read" },
   "session/thread/read": { method: "session/thread/read" },
   "thread/goal/get": { method: "thread/goal/get" },
   "thread/goal/set": { method: "thread/goal/set" },

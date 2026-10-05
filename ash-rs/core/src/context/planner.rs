@@ -33,6 +33,85 @@ const MAX_OVERFLOW_CHECKPOINT_TOKENS: u32 = 1_024;
 pub(crate) struct ContextPlanner;
 
 impl ContextPlanner {
+    /// Inspects loaded input without selecting, compacting, or mutating history.
+    /// This shares the execution estimator, but it deliberately does not retrieve query evidence.
+    pub(crate) fn inspect_categories(
+        instructions: &[InstructionFragment],
+        tools: &[ToolDefinition],
+        environment: &str,
+        history: Option<&ContextInput>,
+    ) -> Vec<ash_protocol::ModelContextCategoryUsage> {
+        use ash_protocol::ModelContextCategory;
+        use ash_protocol::ModelContextCategoryUsage;
+        use ash_protocol::ModelContextSourceUsage;
+        let mut categories = [
+            ModelContextCategory::SystemPrompt,
+            ModelContextCategory::SystemTools,
+            ModelContextCategory::MemoryFiles,
+            ModelContextCategory::Skills,
+            ModelContextCategory::Conversation,
+        ]
+        .map(|category| ModelContextCategoryUsage {
+            category,
+            tokens: 0,
+            sources: Vec::new(),
+        });
+        for fragment in instructions {
+            let index = match fragment.placement() {
+                super::InstructionPlacement::User | super::InstructionPlacement::Directory => 2,
+                super::InstructionPlacement::Skill => 3,
+                super::InstructionPlacement::AgentMessage => 4,
+                super::InstructionPlacement::System
+                | super::InstructionPlacement::Product
+                | super::InstructionPlacement::Turn => 0,
+            };
+            let tokens = u64::from(estimate_instruction(fragment).get());
+            categories[index].tokens += tokens;
+            categories[index].sources.push(ModelContextSourceUsage {
+                name: fragment.source().identity().to_owned(),
+                tokens,
+            });
+        }
+        let environment_tokens = u64::from(estimate_environment(environment).get());
+        if environment_tokens > 0 {
+            categories[0].tokens += environment_tokens;
+            categories[0].sources.push(ModelContextSourceUsage {
+                name: "environment".into(),
+                tokens: environment_tokens,
+            });
+        }
+        for tool in tools {
+            let tokens = u64::from(estimate_tools(std::slice::from_ref(tool)).get());
+            categories[1].tokens += tokens;
+            categories[1].sources.push(ModelContextSourceUsage {
+                name: tool.name.to_string(),
+                tokens,
+            });
+        }
+        if let Some(input) = history {
+            let checkpoint = input.checkpoints().last();
+            let covered = checkpoint
+                .map(|checkpoint| checkpoint.referenced_items.iter().collect::<BTreeSet<_>>())
+                .unwrap_or_default();
+            let items = input
+                .items()
+                .iter()
+                .filter(|item| !covered.contains(item.item_id()))
+                .cloned()
+                .collect::<Vec<_>>();
+            let items = limit_model_input_items(&items);
+            categories[4].tokens += u64::from(
+                group_visible_items(&items)
+                    .iter()
+                    .fold(estimate_checkpoint(checkpoint), |total, group| {
+                        total.saturating_add(estimate_group(input, group))
+                    })
+                    .get(),
+            );
+        }
+        categories.into()
+    }
+
     pub(crate) fn prepare(
         input: &ContextInput,
     ) -> Result<ContextPreparation, ContextPreparationError> {

@@ -1,10 +1,10 @@
 use super::App;
 use super::AppCommand;
 use crate::config::TerminalSettings;
-use crate::context::Usage as ContextUsage;
 use crate::keymap::KeyEvent;
 use crate::nls::Language;
 use crate::terminal::ScreenMode;
+use ash_protocol::ModelContextInspection;
 use ash_protocol::ModelContextUsageSource;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyModifiers;
@@ -29,57 +29,97 @@ fn context_panel_inline_flow() {
 fn exercise_panel(mode: ScreenMode) -> String {
     let mut app = app(mode, Language::English);
     app.insert_text("draft to preserve");
-    app.update(crate::context::Event::Opened(panel(
-        ContextUsage::Measured {
-            used_tokens: 12_345,
-            source: ModelContextUsageSource::Estimated,
-        },
-        Some(90_000),
-    )));
+    app.update(crate::context::Event::Opened(panel(12_345, Some(90_000))));
     let mut frames = Vec::new();
-    let (buffer, overview) = frame(&app, 80, 24);
-    assert!(overview.contains("~12.3k / 90k tokens used"));
-    assert!(overview.contains("Latest request · estimated"));
-    let capacity_y = overview
+    let (buffer, overview) = frame(&app, 80, 26);
+    assert!(
+        overview.contains("~12.3k / 100k tokens (12.3%)"),
+        "{overview}"
+    );
+    assert!(overview.contains("Autocompact buffer"));
+    assert!(overview.contains("Latest request · provider reported"));
+    assert!(overview.contains("25k tokens"));
+    assert!(!overview.contains("Capacity details"));
+    let category_y = overview
         .lines()
-        .position(|line| line.contains("Capacity details"))
+        .position(|line| line.contains("System prompt"))
         .unwrap() as u16;
     let marker_x = (0..80)
-        .find(|x| buffer[(*x, capacity_y)].symbol() == ">")
+        .find(|x| buffer[(*x, category_y)].symbol() == ">")
         .unwrap();
-    assert_eq!(buffer[(marker_x + 2, capacity_y)].symbol(), "C");
+    assert_eq!(buffer[(marker_x + 2, category_y)].symbol(), "■");
+    assert_eq!(
+        buffer[(marker_x + 2, category_y)].fg,
+        app.render_context().identity_colors()[0]
+    );
     let used_y = overview
         .lines()
-        .position(|line| line.contains("tokens used"))
+        .position(|line| line.contains("tokens (12.3%)"))
         .unwrap() as u16;
-    assert_eq!(buffer[(marker_x + 2, used_y)].symbol(), "~", "{overview}");
+    assert_eq!(buffer[(marker_x + 2, used_y)].symbol(), "~");
     assert!(
         buffer[(marker_x + 2, used_y)]
             .modifier
             .contains(Modifier::BOLD)
     );
+    let gauge_y = (0..26)
+        .find(|y| (0..80).any(|x| buffer[(x, *y)].symbol() == "▒"))
+        .unwrap();
+    let gauge_end = (0..80)
+        .rfind(|x| buffer[(*x, gauge_y)].symbol() == "▒")
+        .unwrap();
+    assert_eq!(
+        gauge_end,
+        match mode {
+            ScreenMode::Fullscreen => 69,
+            ScreenMode::Inline => 77,
+        },
+        "{overview}"
+    );
+    assert_eq!(
+        buffer[(gauge_end, gauge_y)].fg,
+        app.render_context().accent()
+    );
+    let gauge_colors = (0..80)
+        .filter(|x| buffer[(*x, gauge_y)].symbol() == "█")
+        .map(|x| buffer[(x, gauge_y)].fg)
+        .collect::<std::collections::HashSet<_>>();
+    assert!(
+        gauge_colors.len() >= 3,
+        "used categories must have distinct colors"
+    );
     frames.push(format!("Overview\n{overview}"));
     key(&mut app, KeyCode::Enter);
-    let expanded = frame(&app, 80, 24).1;
-    assert!(expanded.contains("Output and safety reserve: 10,000 tokens"));
-    frames.push(format!("Expanded capacity\n{expanded}"));
-
-    // The mode containers transfer the same editor; expansion and the draft belong to it.
+    let expanded = frame(&app, 80, 26).1;
+    assert!(
+        expanded.contains("system/prompt · 1.5k tokens"),
+        "{expanded}"
+    );
+    frames.push(format!("Expanded system prompt\n{expanded}"));
     let other_mode = match mode {
         ScreenMode::Fullscreen => ScreenMode::Inline,
         ScreenMode::Inline => ScreenMode::Fullscreen,
     };
     settings(&mut app, other_mode, Language::English);
     assert!(
-        frame(&app, 80, 24)
+        frame(&app, 80, 26)
             .1
-            .contains("Output and safety reserve: 10,000 tokens")
+            .contains("system/prompt · 1.5k tokens")
     );
     assert_eq!(app.input(), "draft to preserve");
     settings(&mut app, mode, Language::English);
-    assert!(!expanded.contains("Model calls:"));
+    key(&mut app, KeyCode::Enter);
+    key(&mut app, KeyCode::Down);
+    key(&mut app, KeyCode::Enter);
+    assert!(frame(&app, 80, 26).1.contains("read_file · 5k tokens"));
+    key(&mut app, KeyCode::Enter);
+    key(&mut app, KeyCode::Down);
+    key(&mut app, KeyCode::Enter);
+    let memory = frame(&app, 80, 26).1;
+    assert!(memory.contains("AGENTS.md · 300 tokens"), "{memory}");
+    frames.push(format!("Expanded memory file\n{memory}"));
     assert_eq!(
-        super::frame::process_resource_demand(&app, ratatui::layout::Rect::new(0, 0, 80, 24)),
+        super::frame::process_resource_demand(&app, ratatui::layout::Rect::new(0, 0, 80, 26)),
         ash_memory_diagnostics::ProcessResourceDemand::Disabled
     );
     key(&mut app, KeyCode::Esc);
@@ -89,7 +129,7 @@ fn exercise_panel(mode: ScreenMode) -> String {
     assert_eq!(app.input(), "draft to preserve!");
     frames.push(format!(
         "Closed · input restored\n{}",
-        frame(&app, 80, 24).1
+        frame(&app, 80, 26).1
     ));
     frames.join("\n\n")
 }
@@ -109,67 +149,47 @@ fn context_panel_inline_chinese_narrow_states() {
 fn exercise_narrow_states(mode: ScreenMode) -> String {
     let mut app = app(mode, Language::Chinese);
     let mut frames = Vec::new();
-    for (name, usage, capacity) in [
-        ("Not started", ContextUsage::NotStarted, Some(90_000)),
-        ("Pending measurement", ContextUsage::Pending, Some(90_000)),
-        (
-            "Over budget",
-            ContextUsage::Measured {
-                used_tokens: 99_000,
-                source: ModelContextUsageSource::ProviderReported,
-            },
-            Some(90_000),
-        ),
-        (
-            "Unknown capacity",
-            ContextUsage::Measured {
-                used_tokens: 12_000,
-                source: ModelContextUsageSource::Estimated,
-            },
-            None,
-        ),
+    for (name, tokens, capacity) in [
+        ("Before first request", 12_345, Some(90_000)),
+        ("Over compact threshold", 99_000, Some(90_000)),
+        ("Over full window", 120_000, Some(90_000)),
+        ("Unknown capacity", 12_000, None),
     ] {
-        app.update(crate::context::Event::Opened(panel(usage, capacity)));
-        let (buffer, text) = frame(&app, 40, 14);
+        let mut inspection = inspection(tokens, capacity);
+        inspection.latest_request = None;
+        app.update(crate::context::Event::Opened(crate::context::panel(
+            inspection,
+        )));
+        let (_, text) = frame(&app, 40, 16);
         assert!(text.contains("上下文"), "{text}");
-        assert!(text.contains("容量说明"));
-        let body_text = text
-            .lines()
-            .skip_while(|line| !line.contains("上下文"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        match usage {
-            ContextUsage::NotStarted => {
-                assert!(text.contains("等待首次请求"));
-                assert!(!body_text.contains('█'));
-            }
-            ContextUsage::Pending => {
-                assert!(text.contains("等待上下文统计"));
-                assert!(!body_text.contains('█'));
-            }
-            ContextUsage::Measured { .. } if capacity.is_some() => {
-                assert!(text.contains("110.0%"));
-                let gauge = (0..14)
-                    .flat_map(|y| (0..40).map(move |x| (x, y)))
-                    .find(|position| buffer[*position].symbol() == "█")
-                    .unwrap();
-                assert_eq!(buffer[gauge].fg, app.render_context().warning());
-            }
-            ContextUsage::Measured { .. } => {
-                assert!(text.contains("已用 ~12k tokens"));
-                assert!(!body_text.contains('█'));
-                assert!(!text.contains(" / "));
-            }
+        assert!(text.contains("分类估算用量"));
+        assert!(text.contains("系统提示词"));
+        assert!(!text.contains("等待首次请求"));
+        if capacity.is_some() {
+            assert!(text.contains("▒"));
+        } else {
+            assert!(text.contains("已用 ~12k tokens"));
         }
         frames.push(format!("{name}\n{text}"));
         key(&mut app, KeyCode::Enter);
+        let expanded = frame(&app, 40, 16).1;
+        assert!(expanded.contains("system/prompt"), "{expanded}");
+        frames.push(format!("{name} · expanded source\n{expanded}"));
         app.handle_key_in_area(
             KeyEvent::new(KeyCode::End, KeyModifiers::NONE),
-            ratatui::layout::Rect::new(0, 0, 40, 14),
+            ratatui::layout::Rect::new(0, 0, 40, 16),
         );
-        let expanded = frame(&app, 40, 14).1;
-        assert!(expanded.contains("可用输入预算"), "{name}\n{expanded}");
-        frames.push(format!("{name} · capacity scrolled\n{expanded}"));
+        let bottom = frame(&app, 40, 16).1;
+        if capacity.is_some() {
+            assert!(bottom.contains("自动压缩窗口"), "{bottom}");
+            assert!(bottom.contains("自动压缩 buffer"), "{bottom}");
+            if tokens > 90_000 {
+                assert!(bottom.contains("超过自动压缩阈值"));
+            }
+        } else {
+            assert!(bottom.contains("未提供"), "{bottom}");
+        }
+        frames.push(format!("{name} · allocation scrolled\n{bottom}"));
         key(&mut app, KeyCode::Esc);
         assert!(app.command_panel().is_none());
     }
@@ -200,18 +220,15 @@ fn context_status_and_usage_commands_have_distinct_titles_in_both_modes() {
 }
 
 #[test]
-fn context_capacity_mouse_target_follows_the_summary_and_toggles_details() {
+fn context_source_mouse_target_follows_the_summary_and_toggles_details() {
     let mut app = app(ScreenMode::Fullscreen, Language::English);
-    app.update(crate::context::Event::Opened(panel(
-        ContextUsage::Pending,
-        Some(90_000),
-    )));
+    app.update(crate::context::Event::Opened(panel(12_345, Some(90_000))));
     let area = ratatui::layout::Rect::new(0, 0, 80, 24);
     for (row_offset, expected_expanded) in [(2, false), (0, true), (0, false)] {
         let text = frame(&app, area.width, area.height).1;
         let row = text
             .lines()
-            .position(|line| line.contains("Capacity details"))
+            .position(|line| line.contains("System prompt"))
             .unwrap() as u16;
         let position = ratatui::layout::Position::new(12, row - row_offset);
         for kind in [
@@ -231,7 +248,7 @@ fn context_capacity_mouse_target_follows_the_summary_and_toggles_details() {
         }
         let expanded = frame(&app, area.width, area.height).1;
         assert_eq!(
-            expanded.contains("Available input budget: 90,000 tokens"),
+            expanded.contains("system/prompt · 1.5k tokens"),
             expected_expanded,
             "{expanded}"
         );
@@ -377,7 +394,7 @@ fn context_late_results_do_not_reopen_a_closed_or_replace_a_newer_panel() {
         key(&mut app, KeyCode::Esc);
         app.update_for_panel(
             generation,
-            crate::context::Event::Opened(panel(ContextUsage::NotStarted, Some(90_000))),
+            crate::context::Event::Opened(panel(12_345, Some(90_000))),
         );
         assert!(app.command_panel().is_none());
         app.open_command_panel(super::CommandPanel::loading("Context", "Loading context…"));
@@ -385,7 +402,7 @@ fn context_late_results_do_not_reopen_a_closed_or_replace_a_newer_panel() {
         app.open_command_panel(super::CommandPanel::loading("Usage", "Loading…"));
         app.update_for_panel(
             generation,
-            crate::context::Event::Opened(panel(ContextUsage::NotStarted, Some(90_000))),
+            crate::context::Event::Opened(panel(12_345, Some(90_000))),
         );
         assert!(frame(&app, 80, 24).1.contains("Usage"));
         assert!(
@@ -396,16 +413,56 @@ fn context_late_results_do_not_reopen_a_closed_or_replace_a_newer_panel() {
     }
 }
 
-fn panel(
-    context_usage: ContextUsage,
-    available_context_window: Option<u64>,
-) -> crate::context::Panel {
-    crate::context::panel(crate::context::ViewData {
-        model: "test/model",
-        full_context_window: Some(100_000),
-        available_context_window,
-        context_usage,
+fn panel(tokens: u64, capacity: Option<u64>) -> crate::context::Panel {
+    crate::context::panel(inspection(tokens, capacity))
+}
+
+fn inspection(tokens: u64, capacity: Option<u64>) -> ModelContextInspection {
+    use ash_protocol::ModelContextCategory;
+    use ash_protocol::ModelContextCategoryUsage;
+    use ash_protocol::ModelContextSourceUsage;
+    let categories = [
+        (ModelContextCategory::SystemPrompt, 1_500, "system/prompt"),
+        (ModelContextCategory::SystemTools, 5_000, "read_file"),
+        (ModelContextCategory::MemoryFiles, 300, "AGENTS.md"),
+        (ModelContextCategory::Skills, 1_500, "available"),
+        (
+            ModelContextCategory::Conversation,
+            tokens - 8_300,
+            "history",
+        ),
+    ]
+    .into_iter()
+    .map(|(category, tokens, name)| ModelContextCategoryUsage {
+        category,
+        tokens,
+        sources: vec![ModelContextSourceUsage {
+            name: name.into(),
+            tokens,
+        }],
     })
+    .collect();
+    ModelContextInspection {
+        model: Some(ash_protocol::ModelRef::new(
+            ash_protocol::ProviderId::new("test").unwrap(),
+            ash_protocol::ModelId::new("model").unwrap(),
+        )),
+        estimated_tokens: tokens,
+        estimator_revision: "test".into(),
+        categories,
+        allocation: capacity.map(|capacity| ash_protocol::ModelContextAllocation {
+            context_window: 100_000,
+            auto_compact_window: 93_000,
+            auto_compact_at: capacity,
+            auto_compact_buffer: 7_000,
+            reserved_output: 2_000,
+            safety_margin: 1_000,
+        }),
+        latest_request: Some(ash_protocol::ModelContextUsage {
+            used_tokens: 25_000,
+            source: ModelContextUsageSource::ProviderReported,
+        }),
+    }
 }
 
 fn app(mode: ScreenMode, language: Language) -> App {

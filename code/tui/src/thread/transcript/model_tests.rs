@@ -196,12 +196,12 @@ fn grouped_history_failure_names_the_failed_call_and_command_completion_stays_ne
         render_cache: &render_cache,
         pointer: ChatHistoryPointerState::default(),
     };
-    let mut terminal = Terminal::new(TestBackend::new(50, 5)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(50, 16)).unwrap();
     terminal
         .draw(|frame| view.render(frame, frame.area(), context))
         .unwrap();
     let buffer = terminal.backend().buffer();
-    let visible = (0..5)
+    let visible = (0..16)
         .map(|y| {
             let mut row = String::new();
             let mut continuation = 0;
@@ -222,8 +222,8 @@ fn grouped_history_failure_names_the_failed_call_and_command_completion_stays_ne
     assert_eq!(buffer[(0, 0)].fg, context.muted());
     assert_eq!(buffer[(0, 1)].symbol(), " ");
     assert_eq!(buffer[(1, 1)].symbol(), "└");
-    assert_eq!(buffer[(4, 1)].fg, context.danger());
-    assert_eq!(buffer[(0, 3)].fg, context.muted());
+    assert_eq!(buffer[(4, 3)].fg, context.danger());
+    assert_eq!(buffer[(0, 7)].fg, context.muted());
 }
 
 #[test]
@@ -307,10 +307,15 @@ fn reinstalling_a_cell_advances_its_render_revision() {
 fn a_completed_execution_group_accepts_more_calls_from_the_same_turn() {
     let turn = turn_id("group-turn");
     let mut model = TranscriptModel::default();
-    model.replace(snapshot(vec![
-        tool_call("one", &turn),
-        tool_result("one", &turn),
-    ]));
+    let mut first_result = tool_result("one", &turn);
+    if let ThreadTranscriptEntry::Item {
+        item: ThreadItem::ToolResult { text, .. },
+        ..
+    } = &mut first_result
+    {
+        *text = format!("result one\n{}", "long output\n".repeat(20));
+    }
+    model.replace(snapshot(vec![tool_call("one", &turn), first_result]));
     let id = model.cells()[0].cell_id().clone();
     model.upsert(tool_call("two", &turn));
     model.upsert(tool_result("two", &turn));
@@ -323,6 +328,20 @@ fn a_completed_execution_group_accepts_more_calls_from_the_same_turn() {
         .into_owned();
     assert!(detail.contains("result one"));
     assert!(detail.contains("result two"));
+    let expanded = BTreeSet::from([id]);
+    let views = model.views(&expanded, None);
+    let lines = views[0].lines(crate::render::test_context(), None, 80);
+    let visible = lines
+        .lines
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(visible.contains("result one"));
+    assert!(
+        visible.contains("result two"),
+        "the first call must not consume the entire group preview"
+    );
 }
 
 #[test]
@@ -679,4 +698,51 @@ fn audio_history_is_a_user_message_with_a_visible_duration() {
     assert_eq!(views.len(), 1);
     assert_eq!(model.cells()[0].lifecycle(), CellLifecycle::Final);
     insta::assert_snapshot!(views[0].text(), @"[Audio · 2 seconds]");
+}
+
+#[test]
+fn absent_reasoning_stays_hidden_until_a_public_summary_arrives() {
+    let turn = turn_id("turn");
+    let reasoning = |text: &str| ThreadTranscriptEntry::Item {
+        entry_id: "reasoning".into(),
+        turn_id: turn.clone(),
+        transient: true,
+        item: ThreadItem::Reasoning {
+            item_id: item_id("reasoning"),
+            turn_id: turn.clone(),
+            text: text.into(),
+            state: vec![ash_protocol::ReasoningState {
+                scope: "provider".into(),
+                item: serde_json::json!({"opaque":"state"}),
+            }],
+        },
+    };
+    let mut model = TranscriptModel::default();
+    model.replace(snapshot(vec![reasoning("  ")]));
+    let id = model.cells()[0].cell_id().clone();
+    assert_eq!(model.cells().len(), 1);
+    assert!(!model.cells()[0].is_visible());
+    assert!(model.views(&BTreeSet::new(), None).is_empty());
+    assert!(
+        model.cells()[0]
+            .history_view()
+            .lines(crate::render::test_context(), None, 40)
+            .lines
+            .is_empty()
+    );
+    model.apply(ThreadTranscriptUpdateEnvelope {
+        session_id: session_id("session"),
+        thread_id: thread_id("thread"),
+        durable_sequence: 2,
+        revision: 2,
+        stream_cursor: None,
+        changes: vec![ThreadTranscriptChange::Upsert {
+            entry: reasoning("Inspect daemon startup"),
+        }],
+    });
+    assert_eq!(model.cells()[0].cell_id(), &id);
+    assert!(model.cells()[0].is_visible());
+    let views = model.views(&BTreeSet::new(), None);
+    assert_eq!(views.len(), 1);
+    assert_eq!(views[0].detail().as_deref(), Some("Inspect daemon startup"));
 }

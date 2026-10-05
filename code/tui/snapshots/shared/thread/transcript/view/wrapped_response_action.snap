@@ -2,8 +2,9 @@
 source: code/tui/src/thread/transcript/view/render_tests.rs
 expression: visible_buffer(buffer).trim_end()
 ---
-●
-Thought
+● Reason
+ing
+summary
  └─ line
     line
     line
@@ -17,9 +18,8 @@ Thought
     line
     line
     … 2
+    more
     line
-    s om
-    itte
-    d
+    s
     view
     full

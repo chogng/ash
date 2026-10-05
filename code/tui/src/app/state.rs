@@ -586,7 +586,21 @@ impl App {
     pub(super) fn handle_thread_request_key(
         &mut self,
         key: KeyEvent,
+        now: Instant,
     ) -> Option<Option<AppCommand>> {
+        // Escape first leaves a free-form answer editor; the request itself stays
+        // attached to the turn and can then be interrupted through the app keymap.
+        if self.chat_panel.request_active()
+            && !self
+                .query_view()
+                .is_some_and(|view| view.custom_answer.is_some())
+            && self.app_keymap.resolve_single(
+                &key,
+                self.app_keymap_context(key.kind == crossterm::event::KeyEventKind::Press),
+            ) == Some(AppKeymapAction::Interrupt)
+        {
+            return Some(self.apply_app_keymap_action(AppKeymapAction::Interrupt, now));
+        }
         self.chat_panel
             .handle_request_key(key)
             .map(|response| response.map(|response| ThreadCommand::ResolveRequest(response).into()))
@@ -1637,8 +1651,9 @@ impl App {
     }
 
     pub(super) fn handle_composer_key(&mut self, key: KeyEvent) -> ChatComposerOutcome {
-        // Effort shortcuts take precedence over editor movement. Completion popups
-        // and history search retain their own input until they are dismissed.
+        // Task interruption and effort shortcuts take precedence over editor movement,
+        // including Vim Escape. Completion popups and history search retain their
+        // own input until they are dismissed.
         if self.completion().is_none()
             && !self.input_state().searching_history()
             && matches!(
@@ -1649,6 +1664,7 @@ impl App {
                 Some(
                     AppKeymapAction::DecreaseReasoningEffort
                         | AppKeymapAction::IncreaseReasoningEffort
+                        | AppKeymapAction::Interrupt
                 )
             )
         {
@@ -2114,15 +2130,13 @@ impl App {
             Status::WaitingForCapability => TurnActivity::WaitingForCapability,
             Status::Cancelling => TurnActivity::Cancelling,
         };
-        // Ctrl+C stops dictation first; do not advertise turn interruption during speech input.
+        // Ctrl+C stops dictation first; keep the speech controls visible during capture.
         let interrupt_hint = if self.active_turn().is_some()
             && self.status != Status::Cancelling
             && self.dictation_resource_id.is_none()
         {
-            self.app_keymap.action_hint(
-                AppKeymapAction::InterruptOrQuit,
-                self.app_keymap_context(true),
-            )
+            self.app_keymap
+                .action_hint(AppKeymapAction::Interrupt, self.app_keymap_context(true))
         } else {
             None
         };
@@ -3477,6 +3491,7 @@ impl App {
                 || self.completion().is_some()
                 || self.input_state().searching_history(),
             chat_input_empty: self.input().is_empty(),
+            turn_active: !matches!(self.status, Status::Ready | Status::Error),
             is_press,
         }
     }
@@ -3508,7 +3523,8 @@ impl App {
             && self
                 .thread
                 .cells()
-                .first()
+                .iter()
+                .find(|cell| cell.is_visible())
                 .is_some_and(|cell| cell.cell_id().as_str() == cell_id.as_str())
     }
 
@@ -3517,6 +3533,7 @@ impl App {
             .thread
             .cells()
             .iter()
+            .filter(|cell| cell.is_visible())
             .map(|cell| cell.cell_id().clone())
             .collect();
         self.fullscreen.viewports.active_mut().reconcile(&cells);
@@ -3550,6 +3567,11 @@ impl App {
                 .into(),
             ),
             AppKeymapAction::InterruptOrQuit => self.quit_or_interrupt(),
+            AppKeymapAction::Interrupt => {
+                // An interruption must never arm the idle double-Escape rewind gesture.
+                self.escape_mut().reset();
+                self.interrupt_turn()
+            }
             AppKeymapAction::CopyLastResponse => Some(HostCommand::CopyLastResponse.into()),
             AppKeymapAction::Suspend => Some(AppCommand::Suspend),
         }
@@ -3909,6 +3931,13 @@ impl App {
             self.dictation_send_after_stop = false;
             return self.toggle_dictation();
         }
+        if matches!(self.status, Status::Ready | Status::Error) {
+            return Some(AppCommand::Quit);
+        }
+        self.interrupt_turn()
+    }
+
+    fn interrupt_turn(&mut self) -> Option<AppCommand> {
         match &self.status {
             Status::Working
             | Status::WaitingForApproval
@@ -3917,8 +3946,7 @@ impl App {
                 self.set_status(Status::Cancelling);
                 Some(ThreadCommand::Interrupt.into())
             }
-            Status::Cancelling => None,
-            Status::Ready | Status::Error => Some(AppCommand::Quit),
+            Status::Cancelling | Status::Ready | Status::Error => None,
         }
     }
 }

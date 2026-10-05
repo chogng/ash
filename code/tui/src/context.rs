@@ -3,7 +3,6 @@ use crate::keymap::bindings;
 use crate::nls::Text;
 use crate::render::RenderContext;
 use crate::status::compact_tokens;
-use crate::status::format_token_count;
 use crate::widgets::key_hint::KeyHints;
 use crate::widgets::list_selection;
 use crate::widgets::list_selection::ListSelectionGroup;
@@ -17,7 +16,10 @@ use crate::widgets::navigation::Navigation;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
-use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
+use ash_app_server_protocol::protocol::model::ContextReadParams;
+use ash_app_server_protocol::protocol::model::ContextReadScope;
+use ash_protocol::ModelContextCategory;
+use ash_protocol::ModelContextInspection;
 use ash_protocol::ModelContextUsageSource;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
@@ -28,28 +30,9 @@ use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
+use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
-
-pub(crate) struct ViewData<'a> {
-    pub(crate) model: &'a str,
-    pub(crate) full_context_window: Option<u64>,
-    pub(crate) available_context_window: Option<u64>,
-    pub(crate) context_usage: Usage,
-}
-
-/// The latest request measurement is independent of both cumulative billing and catalog capacity.
-/// Keeping the measured total preserves over-budget usage instead of reconstructing it from a
-/// remaining value that has already been clamped to zero.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Usage {
-    NotStarted,
-    Pending,
-    Measured {
-        used_tokens: u64,
-        source: ModelContextUsageSource,
-    },
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Outcome {
@@ -60,9 +43,8 @@ pub(crate) enum Outcome {
 #[derive(Debug)]
 pub(crate) struct Panel {
     pages: ListSelectionState,
-    model: String,
-    available_context_window: Option<u64>,
-    context_usage: Usage,
+    model: Text,
+    inspection: ash_protocol::ModelContextInspection,
     language: crate::nls::Language,
 }
 
@@ -73,6 +55,7 @@ impl Panel {
     pub(crate) fn localize(&mut self, language: crate::nls::Language) {
         self.language = language;
         self.pages.localize(language);
+        self.model.localize(language);
     }
     pub(crate) fn body_rows(&self, width: u16) -> u16 {
         ((crate::render::wrapped_height(&self.context_lines(width), width) + 1)
@@ -83,7 +66,9 @@ impl Panel {
         if key.kind == KeyEventKind::Press && bindings::CLOSE.matches(key) {
             return Outcome::Dismiss;
         }
-        if let Some(navigation) = Navigation::from_key(key) {
+        if let Some(navigation) = Navigation::from_key(key)
+            && !matches!(navigation, Navigation::Previous | Navigation::Next)
+        {
             self.scroll(navigation, body);
             return Outcome::Consumed;
         }
@@ -106,7 +91,7 @@ impl Panel {
             Navigation::First => i16::MIN,
             Navigation::Last => i16::MAX,
         };
-        self.pages.scroll(list, lines);
+        self.pages.scroll_with_selection(list, lines);
     }
     pub(crate) fn pointer_target_at(
         &self,
@@ -147,23 +132,27 @@ impl Panel {
     ) {
         let [summary, list] = self.context_areas(area);
         let mut lines = self.context_lines(summary.width);
+        if self.inspection.allocation.is_some() {
+            lines[2] = self.gauge_line(summary.width, context);
+        }
         if let Some(line) = lines.first_mut() {
             line.style = Style::default().add_modifier(Modifier::BOLD);
+            if self
+                .inspection
+                .allocation
+                .as_ref()
+                .is_some_and(|allocation| {
+                    self.inspection.estimated_tokens > allocation.auto_compact_at
+                })
+            {
+                line.style = line.style.fg(context.warning());
+            }
         }
         if let Some(line) = lines.get_mut(1) {
             line.style = Style::default().fg(context.muted());
         }
         if let Some(line) = lines.last_mut() {
             line.style = Style::default().fg(context.muted());
-        }
-        if let Usage::Measured { used_tokens, .. } = self.context_usage
-            && let Some(capacity) = self
-                .available_context_window
-                .filter(|capacity| *capacity > 0)
-            && u128::from(used_tokens) * 10 >= u128::from(capacity) * 9
-            && let Some(line) = lines.get_mut(2)
-        {
-            line.style = Style::default().fg(context.warning());
         }
         frame.render_widget(
             Paragraph::new(lines)
@@ -197,124 +186,213 @@ impl Panel {
     }
 
     fn context_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let text = |source: &str, arguments: Vec<Text>| {
-            let mut text = Text::template(source, arguments);
-            text.localize(self.language);
-            Line::raw(text.to_string())
-        };
-        let localized = |source: &str| Line::raw(crate::nls::localize_owned(self.language, source));
-        let capacity = self.available_context_window.map_or_else(
-            || crate::nls::localize_owned(self.language, "Not reported"),
-            compact_tokens,
-        );
-        match self.context_usage {
-            Usage::NotStarted | Usage::Pending => vec![
-                localized(if self.context_usage == Usage::NotStarted {
-                    "Waiting for the first request"
-                } else {
-                    "Waiting for context usage"
-                }),
-                Line::raw(self.model.clone()),
-                text(
-                    "Input budget: {0}",
-                    vec![match self.available_context_window {
-                        Some(_) => Text::template("{0} tokens", vec![Text::literal(capacity)]),
-                        None => Text::from("Not reported"),
-                    }],
-                ),
-                localized("Usage appears after a model request."),
-            ],
-            Usage::Measured {
-                used_tokens,
-                source,
-            } => {
-                let estimated = source == ModelContextUsageSource::Estimated;
-                let prefix = if estimated { "~" } else { "" };
-                let used = Text::literal(format!("{prefix}{}", compact_tokens(used_tokens)));
-                let headline = if self.available_context_window.is_some() {
-                    text("{0} / {1} tokens used", vec![used, Text::literal(capacity)])
-                } else {
-                    text("{0} tokens used", vec![used])
-                };
-                let mut lines = vec![headline, Line::raw(self.model.clone())];
-                if let Some(capacity) = self
-                    .available_context_window
-                    .filter(|capacity| *capacity > 0)
-                {
-                    let tenths = u128::from(used_tokens) * 1_000 / u128::from(capacity);
-                    let percentage = format!("{prefix}{}.{:01}%", tenths / 10, tenths % 10);
-                    let suffix = format!(" {percentage}");
-                    let track_width = usize::from(width).saturating_sub(suffix.len());
-                    let filled = ((u128::from(used_tokens) * track_width as u128
-                        / u128::from(capacity))
-                    .min(track_width as u128)) as usize;
-                    lines.push(Line::raw(format!(
-                        "{}{}{suffix}",
-                        "█".repeat(filled),
-                        "░".repeat(track_width - filled)
-                    )));
-                    lines.push(text(
-                        "Remaining input budget: {0} tokens",
-                        vec![Text::literal(format!(
-                            "{prefix}{}",
-                            compact_tokens(capacity.saturating_sub(used_tokens))
-                        ))],
-                    ));
-                }
-                lines.push(localized(if estimated {
-                    "Latest request · estimated"
-                } else {
-                    "Latest request · provider reported"
-                }));
-                lines
-            }
-        }
-    }
-}
-
-pub(crate) fn panel(data: ViewData<'_>) -> Panel {
-    let capacity = Text::template(
-        "Full context window: {0}\nOutput and safety reserve: {1}\nAvailable input budget: {2}",
-        vec![
-            capacity_tokens(data.full_context_window),
-            capacity_tokens(
-                data.full_context_window
-                    .zip(data.available_context_window)
-                    .map(|(full, available)| full - available),
+        let used = format!("~{}", compact_tokens(self.inspection.estimated_tokens));
+        let headline = match &self.inspection.allocation {
+            Some(allocation) => Text::template(
+                "{0} / {1} tokens ({2})",
+                vec![
+                    Text::literal(used),
+                    Text::literal(compact_tokens(allocation.context_window)),
+                    Text::literal(percentage(
+                        self.inspection.estimated_tokens,
+                        allocation.context_window,
+                    )),
+                ],
             ),
-            capacity_tokens(data.available_context_window),
-        ],
-    );
-    let model = ListSelectionModel::new(
-        "Context",
-        vec![ListSelectionGroup::new(
-            "Context",
-            vec![
-                ListSelectionItem::new("Capacity details")
-                    .with_id(ListSelectionItemId::new("capacity"))
-                    .with_details(capacity),
-            ],
-        )],
-    )
-    .with_expandable_descriptions()
-    .without_scroll_counts()
-    .without_tab_bar();
+            None => Text::template("{0} tokens used", vec![Text::literal(used)]),
+        };
+        let mut headline = headline;
+        headline.localize(self.language);
+        let mut lines = vec![
+            Line::raw(headline.to_string()),
+            Line::raw(self.model.to_string()),
+        ];
+        if self.inspection.allocation.is_some() {
+            lines.push(Line::raw("─".repeat(usize::from(width))));
+        }
+        lines.push(Line::raw(crate::nls::localize_owned(
+            self.language,
+            "Estimated usage by category",
+        )));
+        lines
+    }
 
-    Panel {
-        pages: ListSelectionState::new(model),
-        model: data.model.into(),
-        available_context_window: data.available_context_window,
-        context_usage: data.context_usage,
-        language: crate::nls::Language::English,
+    fn gauge_line(&self, width: u16, context: RenderContext<'_>) -> Line<'static> {
+        let allocation = self.inspection.allocation.as_ref().unwrap();
+        let capacity = allocation.context_window;
+        let colors = context.identity_colors();
+        // Each cell samples one position in the complete window. The buffer is anchored to
+        // the right edge and reservations never become part of the used-context total.
+        let buffer_start = capacity - allocation.auto_compact_buffer;
+        let safety_start = buffer_start - allocation.safety_margin;
+        let output_start = safety_start - allocation.reserved_output;
+        let mut spans = Vec::with_capacity(usize::from(width));
+        for cell in 0..width {
+            let position =
+                u128::from(capacity) * (u128::from(cell) * 2 + 1) / (u128::from(width) * 2);
+            let (symbol, color) = if position >= u128::from(buffer_start) {
+                ("▒", context.accent())
+            } else if position >= u128::from(safety_start) {
+                ("▧", context.warning())
+            } else if position >= u128::from(output_start) {
+                ("▤", context.muted())
+            } else {
+                let mut end = 0u128;
+                match self.inspection.categories.iter().find(|category| {
+                    end += u128::from(category.tokens);
+                    position < end
+                }) {
+                    Some(category) => ("█", colors[category_index(category.category)]),
+                    None => ("░", context.disabled_foreground()),
+                }
+            };
+            spans.push(Span::styled(symbol, Style::default().fg(color)));
+        }
+        Line::from(spans)
     }
 }
-fn capacity_tokens(tokens: Option<u64>) -> Text {
-    match tokens {
-        Some(tokens) => Text::template(
-            "{0} tokens",
-            vec![Text::literal(format_token_count(tokens))],
+
+fn percentage(tokens: u64, capacity: u64) -> String {
+    if capacity == 0 {
+        return "—".into();
+    }
+    let tenths = (u128::from(tokens) * 1_000 + u128::from(capacity) / 2) / u128::from(capacity);
+    format!("{}.{:01}%", tenths / 10, tenths % 10)
+}
+
+fn category_index(category: ModelContextCategory) -> usize {
+    match category {
+        ModelContextCategory::SystemPrompt => 0,
+        ModelContextCategory::SystemTools => 1,
+        ModelContextCategory::MemoryFiles => 2,
+        ModelContextCategory::Skills => 3,
+        ModelContextCategory::Conversation => 4,
+    }
+}
+
+fn category_label(category: ModelContextCategory) -> &'static str {
+    match category {
+        ModelContextCategory::SystemPrompt => "System prompt",
+        ModelContextCategory::SystemTools => "System tools",
+        ModelContextCategory::MemoryFiles => "Memory / instruction files",
+        ModelContextCategory::Skills => "Skills",
+        ModelContextCategory::Conversation => "Conversation and tool results",
+    }
+}
+
+pub(crate) fn panel(inspection: ModelContextInspection) -> Panel {
+    let capacity = inspection
+        .allocation
+        .as_ref()
+        .map(|allocation| allocation.context_window);
+    let value = |tokens: u64| match capacity {
+        Some(capacity) => format!(
+            "{} ({})",
+            compact_tokens(tokens),
+            percentage(tokens, capacity)
         ),
-        None => Text::from("Not reported"),
+        None => compact_tokens(tokens),
+    };
+    let mut items = inspection
+        .categories
+        .iter()
+        .map(|category| {
+            let details = category
+                .sources
+                .iter()
+                .map(|source| format!("{} · {} tokens", source.name, compact_tokens(source.tokens)))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let mut item = ListSelectionItem::new(category_label(category.category))
+                .with_id(ListSelectionItemId::new(format!(
+                    "category-{}",
+                    category_index(category.category)
+                )))
+                .with_identity_swatch(category_index(category.category))
+                .with_columns(
+                    category_label(category.category),
+                    "",
+                    value(category.tokens),
+                );
+            if !details.is_empty() {
+                item = item.with_details(Text::literal(details));
+            }
+            item
+        })
+        .collect::<Vec<_>>();
+    if let Some(allocation) = &inspection.allocation {
+        for (symbol, label, tokens) in [
+            (
+                "░",
+                "Free space",
+                allocation
+                    .auto_compact_at
+                    .saturating_sub(inspection.estimated_tokens),
+            ),
+            ("▤", "Output reserve", allocation.reserved_output),
+            ("▧", "Safety margin", allocation.safety_margin),
+            ("▒", "Autocompact buffer", allocation.auto_compact_buffer),
+        ] {
+            items.push(
+                ListSelectionItem::new(Text::template(
+                    "{0} {1}",
+                    vec![Text::literal(symbol), Text::from(label)],
+                ))
+                .with_columns(label, "", value(tokens)),
+            );
+        }
+        items.push(ListSelectionItem::new("Auto-compact window").with_columns(
+            "Auto-compact window",
+            "",
+            format!("{} tokens", compact_tokens(allocation.auto_compact_window)),
+        ));
+        items.push(
+            ListSelectionItem::new("Auto-compact threshold").with_columns(
+                "Auto-compact threshold",
+                "",
+                format!("{} tokens", compact_tokens(allocation.auto_compact_at)),
+            ),
+        );
+        if inspection.estimated_tokens > allocation.auto_compact_at {
+            items.push(
+                ListSelectionItem::new("Above auto-compact threshold").with_columns(
+                    "Above auto-compact threshold",
+                    "",
+                    value(inspection.estimated_tokens - allocation.auto_compact_at),
+                ),
+            );
+        }
+    } else {
+        items.push(ListSelectionItem::new("Context window").with_columns(
+            "Context window",
+            "",
+            "Not reported",
+        ));
+    }
+    if let Some(usage) = &inspection.latest_request {
+        let label = match usage.source {
+            ModelContextUsageSource::ProviderReported => "Latest request · provider reported",
+            ModelContextUsageSource::Estimated => "Latest request · estimated",
+        };
+        items.push(ListSelectionItem::new(label).with_columns(
+            label,
+            "",
+            format!("{} tokens", compact_tokens(usage.used_tokens)),
+        ));
+    }
+    let pages = ListSelectionModel::new("Context", vec![ListSelectionGroup::new("Context", items)])
+        .with_expandable_descriptions()
+        .without_scroll_counts()
+        .without_tab_bar();
+    Panel {
+        pages: ListSelectionState::new(pages),
+        model: inspection
+            .model
+            .as_ref()
+            .map(|model| Text::literal(format!("{}/{}", model.provider, model.model)))
+            .unwrap_or_else(|| Text::from("Automatic model")),
+        inspection,
+        language: crate::nls::Language::English,
     }
 }
 
@@ -342,79 +420,16 @@ pub(crate) fn load_panel<T>(
 where
     T: JsonRpcTransport,
 {
-    let Some(scope) = scope else {
-        return initial_panel(client);
-    };
-    let thread = client
-        .read_session_thread(SessionThreadReadParams {
+    let scope = match scope {
+        Some(scope) => ContextReadScope::Thread {
             session_id: scope.session_id.clone(),
             thread_id: scope.thread_id.clone(),
-            history: None,
-        })?
-        .thread;
-    if thread.turns.is_empty() {
-        return initial_panel(client);
-    }
-    let model = thread.turns.last().and_then(|turn| turn.model.as_ref());
-    let models = client.list_models()?;
-    let model_entry =
-        model.and_then(|model| models.models.iter().find(|entry| &entry.model == model));
-    let available = model_entry
-        .and_then(|entry| entry.available_context_window)
-        .map(u64::from);
-    let usage = context_usage(&thread);
-    let model = model
-        .map(|model| format!("{}/{}", model.provider, model.model))
-        .unwrap_or_else(|| "not configured".into());
-
-    Ok(panel(ViewData {
-        model: &model,
-        full_context_window: model_entry
-            .and_then(|entry| entry.context_window)
-            .map(u64::from),
-        available_context_window: available,
-        context_usage: usage,
-    }))
-}
-
-fn initial_panel<T: JsonRpcTransport>(
-    client: &mut AppServerClient<T>,
-) -> Result<Panel, ClientError> {
-    let config = client.read_config()?;
-    let catalog = client.list_models()?;
-    let entry = config.model.as_ref().and_then(|selected| {
-        catalog.models.iter().find(|entry| {
-            entry.model.provider.as_str() == selected.provider
-                && entry.model.model.as_str() == selected.model
-        })
-    });
-    let summary = crate::models::ModelSummary::from_catalog(
-        config.model.clone(),
-        config.model_reasoning_effort,
-        Some(&catalog),
-    );
-    let label = summary.model_label();
-    Ok(panel(ViewData {
-        model: &label,
-        full_context_window: entry.and_then(|entry| entry.context_window).map(u64::from),
-        available_context_window: entry
-            .and_then(|entry| entry.available_context_window)
-            .map(u64::from),
-        context_usage: Usage::NotStarted,
-    }))
-}
-
-fn context_usage(thread: &ash_protocol::Thread) -> Usage {
-    let Some(latest_turn) = thread.turns.last() else {
-        return Usage::NotStarted;
-    };
-    match &latest_turn.context_usage {
-        Some(usage) => Usage::Measured {
-            used_tokens: usage.used_tokens,
-            source: usage.source,
         },
-        None => Usage::Pending,
-    }
+        None => ContextReadScope::Environment,
+    };
+    Ok(panel(
+        client.read_context(ContextReadParams { scope })?.context,
+    ))
 }
 
 #[cfg(test)]

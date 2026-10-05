@@ -1429,6 +1429,10 @@ use crate::protocol::memory::MemorySearchParams;
 use crate::protocol::memory::MemoryUpdateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams;
+use crate::protocol::model::ContextReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ContextReadResult;
+use crate::protocol::model::ContextReadScope;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogEntry;
 #[cfg(any(test, feature = "export"))]
@@ -2008,6 +2012,16 @@ use ash_protocol::ModelBillingScope;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelCapabilities;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelContextAllocation;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelContextCategory;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelContextCategoryUsage;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelContextInspection;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelContextSourceUsage;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelContextUsage;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelContextUsageSource;
@@ -2303,6 +2317,7 @@ pub enum SerializationScopeDefinition {
     HostedRepositorySharedRead,
     SessionExclusive,
     SessionSharedRead,
+    ContextSharedRead,
     ResourceExclusive(&'static str),
     ConnectionExclusive(&'static str),
 }
@@ -2380,6 +2395,21 @@ impl ClientMethodDefinition {
             SerializationScopeDefinition::GlobalSharedRead => {
                 Some(ClientRequestSerializationScope::Global {
                     access: SerializationAccess::SharedRead,
+                })
+            }
+            SerializationScopeDefinition::ContextSharedRead => {
+                let params: ContextReadParams = serde_json::from_value(params.clone())
+                    .map_err(|_| SerializationScopeResolutionError)?;
+                Some(match params.scope {
+                    ContextReadScope::Environment => ClientRequestSerializationScope::Global {
+                        access: SerializationAccess::SharedRead,
+                    },
+                    ContextReadScope::Thread { session_id, .. } => {
+                        ClientRequestSerializationScope::Session {
+                            session_id: session_id.to_string(),
+                            access: SerializationAccess::SharedRead,
+                        }
+                    }
                 })
             }
             SerializationScopeDefinition::RepositoryExclusive => {
@@ -2960,6 +2990,11 @@ client_methods! {
         params: SessionUnsubscribeParams,
         response: (),
         serialization: None,
+    },
+    ContextRead => "context/read" {
+        params: ContextReadParams,
+        response: ContextReadResult,
+        serialization: ContextSharedRead,
     },
     SessionThreadRead => "session/thread/read" {
         params: SessionThreadReadParams,
@@ -5185,6 +5220,14 @@ typescript_bindings! {
     AdvisorConfig,
     AdvisorSelection,
     AdvisorConfigureResult,
+    ContextReadParams,
+    ContextReadResult,
+    ContextReadScope,
+    ModelContextInspection,
+    ModelContextCategory,
+    ModelContextCategoryUsage,
+    ModelContextSourceUsage,
+    ModelContextAllocation,
     SessionThreadReadParams,
     SessionThreadReadResult,
     SessionThreadSubscribeParams,
