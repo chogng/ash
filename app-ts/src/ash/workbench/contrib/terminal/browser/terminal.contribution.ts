@@ -17,7 +17,8 @@ import { TerminalMainContribution } from './terminalMainContribution.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 
-registerWorkbenchContribution(TerminalMainContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(TerminalMainContribution));
+// Ash creates its view services with the Parts; host terminal requests need both owners ready.
+registerWorkbenchContribution(TerminalMainContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(TerminalMainContribution));
 
 registerWorkbenchServiceContribution({
 	service: ITerminalService,

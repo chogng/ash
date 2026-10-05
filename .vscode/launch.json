@@ -64,7 +64,8 @@
 			"program": "${workspaceFolder}/app-ts/node_modules/vite/bin/vite.js",
 			"args": ["--config", "../build/app_ts/vite/vite.config.ts", "--mode", "web"],
 			"cwd": "${workspaceFolder}/app-ts",
-			"env": { "ASH_WEB_APP_SERVER": "0" },
+			// serverReadyAction matches raw debug output, including any ANSI color sequences.
+			"env": { "ASH_WEB_APP_SERVER": "0", "NO_COLOR": "1" },
 			"preLaunchTask": "Prepare Ash Web",
 			"console": "internalConsole",
 			"outputCapture": "std",

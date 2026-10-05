@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 test.use({ openWorkspace: false });
 
-test('browser reload restores its folder, dirty editor and stable directory identity', async ({ target, workbench }) => {
+test('browser reload restores its folder, dirty editor and stable directory identity', async ({ target, driver, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled');
 	const page = workbench.page;
 	const folderName = await page.evaluate(async () => {
@@ -73,6 +73,7 @@ test('browser reload restores its folder, dirty editor and stable directory iden
 	await page.reload();
 	await expect(workbench.element).toHaveAttribute('data-workbench-state', 'empty');
 	await expect(file).toHaveCount(0);
+	expect(driver.diagnostics.consoleErrors.filter(message => message.startsWith('Unable to create workbench contribution'))).toEqual([]);
 });
 
 test('Explorer selection stays beneath its scrollbar', async ({ target, workbench }) => {

@@ -43,6 +43,9 @@ test('Web F5 releases its server and browser when either debug session stops and
 	const environment: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
 	environment.ASH_WEB_DEBUG_ENDPOINT = endpointFile;
 	delete environment.ELECTRON_RUN_AS_NODE;
+	// Debugger readiness must work without the terminal tool's inherited color overrides.
+	delete environment.NO_COLOR;
+	delete environment.FORCE_COLOR;
 	const application = await _electron.launch({
 		executablePath: process.env.ASH_VSCODE_EXECUTABLE,
 		args: [

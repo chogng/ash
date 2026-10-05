@@ -28,7 +28,7 @@
 4. 开发过程中执行 `pnpm test:web:dev --grep '<场景标题>'`，通过现有 Playwright Browser UI 项目直接验证 Vite 开发入口。
 5. 提交前执行 `pnpm build:web` 和 `pnpm test:web --grep '<场景标题>'`，验证生产资源。已有构建时用 `pnpm --dir app-ts test:smoke:browser:no-compile`；`pnpm start:web` 启动生产资源预览。
 
-F5 先准备生成资源，再由 VS Code 调试器直接启动 Vite；服务就绪后启动 Chrome 调试。停止 Vite 或 Chrome 调试会一起结束这两个会话并释放服务端口。手动执行 `pnpm dev:web` 或运行 `Run Ash Web (UI Only)` 任务时，服务由对应终端或任务管理，需要用 `Ctrl+C` 或“终止任务”停止。F5 和手动启动共用 5173，选择一种启动方式；已有服务占用端口时启动会报错。
+F5 先准备生成资源，再由 VS Code 调试器直接启动 Vite；服务就绪后启动 Chrome 调试。Vite 输出显示在“调试控制台”，F5 配置关闭输出颜色，保证 VS Code 的 `serverReadyAction` 能匹配就绪地址。停止 Vite 或 Chrome 调试会一起结束这两个会话并释放服务端口。手动执行 `pnpm dev:web` 或运行 `Run Ash Web (UI Only)` 任务时，服务由对应终端或任务管理，需要用 `Ctrl+C` 或“终止任务”停止。F5 和手动启动共用 5173，选择一种启动方式；已有服务占用端口时启动会报错。
 
 F5 生命周期回归测试使用已安装的 VS Code 和 Playwright。设置 `ASH_VSCODE_EXECUTABLE` 为 VS Code 可执行文件的绝对路径，再执行 `pnpm --dir build exec node --test app_ts/launch/webDebug.test.ts`；它使用独立配置目录，验证停止任一调试会话、进程退出、端口释放、再次启动和端口占用失败。未提供该环境变量时，构建工具测试会跳过这一项。
 
