@@ -55,7 +55,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		height: '40px',
 		contentHeight: 100,
 		classes: ['stanza-editor-zone-widget', 'peek-widget', 'test-widget', 'show-frame', 'show-arrow', 'stanza-editor-view-zone'],
-		layout: { heightInPixels: 22, widthInPixels: 160 },
+		layout: { heightInPixels: 22, widthInPixels: 89 },
 		frameColor: '#123456',
 		arrowColor: '#654321',
 		revealedRanges: [Range.fromPositions(new Position((1) + 1, (2) + 1))],
@@ -64,7 +64,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 	viewport.render(true, false);
 	assert.deepEqual({ height: widget.domNode.style.height, layout: widget.layouts.at(-1) }, {
 		height: '40px',
-		layout: { heightInPixels: 22, widthInPixels: 193 },
+		layout: { heightInPixels: 22, widthInPixels: 122 },
 	});
 	editor.layout({ width: 200, height: 100 });
 
@@ -88,7 +88,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		top: '20px',
 		height: '20px',
 		contentHeight: 100,
-		layout: { heightInPixels: 2, widthInPixels: 160 },
+		layout: { heightInPixels: 2, widthInPixels: 89 },
 	});
 
 	widget.style({ frameColor: '#abcdef', arrowColor: null });
@@ -155,7 +155,7 @@ test('ZoneWidget preserves selection on request and exposes an enabled resize sa
 	viewport.render(true, false);
 	assert.deepEqual({ height: widget.domNode.style.height, layout: widget.layouts.at(-1) }, {
 		height: '160px',
-		layout: { heightInPixels: 160, widthInPixels: 160 },
+		layout: { heightInPixels: 160, widthInPixels: 89 },
 	});
 	dom.window.close();
 });

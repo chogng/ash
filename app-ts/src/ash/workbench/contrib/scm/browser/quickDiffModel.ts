@@ -6,10 +6,18 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { LineDiffKind, type LineDiff, type LineDiffHunk, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
-import { type IQuickDiffModel, type IQuickDiffModelService, type IQuickDiffService, type QuickDiffChange, type QuickDiffComparison, type QuickDiffModelReference, type QuickDiffModelState } from '../common/quickDiff.js';
-import { type IDiffService } from '../../../services/diff/common/diffService.js';
+import {
+	type IQuickDiffModel,
+	type IQuickDiffModelService,
+	IQuickDiffService,
+	type QuickDiffChange,
+	type QuickDiffComparison,
+	type QuickDiffModelReference,
+	type QuickDiffModelState,
+	type ScmDiffDecorationsIgnoreTrimWhitespace,
+} from '../common/quickDiff.js';
+import { IDiffService } from '../../../services/diff/common/diffService.js';
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
-import { ScmConfiguration, type ScmDiffDecorationsIgnoreTrimWhitespace } from '../common/scmConfiguration.js';
 
 interface SharedModelEntry {
 	readonly resource: URI;
@@ -25,7 +33,11 @@ export class QuickDiffModelService extends Disposable implements IQuickDiffModel
 	private readonly entries = new WeakMap<TextModel, SharedModelEntry>();
 	private readonly liveEntries = new Set<SharedModelEntry>();
 
-	constructor(private readonly quickDiffService: IQuickDiffService, private readonly diffService: IDiffService, @IConfigurationService private readonly configuration: IConfigurationService) {
+	constructor(
+		@IQuickDiffService private readonly quickDiffService: IQuickDiffService,
+		@IDiffService private readonly diffService: IDiffService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+	) {
 		super();
 		this._register(toDisposable(() => {
 			for (const entry of this.liveEntries) entry.quickDiffModel.dispose();
@@ -78,7 +90,7 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 		super();
 		this.diffProvider = this._register(diffService.createComputationService());
 		this._register(configuration.onDidChangeConfiguration(event => {
-			if (!event.affectsConfiguration(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace)
+			if (!event.affectsConfiguration('scm.diffDecorationsIgnoreTrimWhitespace')
 				&& !event.affectsConfiguration(
 					CodeEditorConfiguration.diffIgnoreTrimWhitespace,
 					{ overrideIdentifier: modified.getLanguageId() },
@@ -154,7 +166,7 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 	}
 
 	private diffOptions(): IDocumentDiffProviderOptions {
-		const setting = this.configuration.getValue<ScmDiffDecorationsIgnoreTrimWhitespace>(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace);
+		const setting = this.configuration.getValue<ScmDiffDecorationsIgnoreTrimWhitespace>('scm.diffDecorationsIgnoreTrimWhitespace');
 		return {
 			ignoreTrimWhitespace: setting === 'inherit'
 				? this.configuration.getValue<boolean>(

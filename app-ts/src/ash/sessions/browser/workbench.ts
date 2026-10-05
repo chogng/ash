@@ -11,6 +11,8 @@ import { IAssetService, type AssetVersion } from '../../platform/assets/common/a
 import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
 import { IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
+import { EditorPanes } from '../../workbench/browser/editor.js';
+import { EditorContextKeyController } from '../../workbench/browser/parts/editor/editorContextKeys.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
 import { ILanguageModelsService, LanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../../workbench/contrib/chat/common/languageModelsConfiguration.js';
@@ -116,6 +118,7 @@ import { getBrowserTextResourceStore } from '../../workbench/contrib/codeEditor/
 import { BrowserTextMateService } from '../../workbench/services/textMate/browser/browserTextMateService.js';
 import { ITextMateService } from '../../workbench/services/textMate/common/textMateService.js';
 import { DiffService } from '../../workbench/services/diff/browser/diffService.js';
+import { IDiffService } from '../../workbench/services/diff/common/diffService.js';
 import { EditorPart, IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
 import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
 import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
@@ -590,6 +593,8 @@ export class Workbench extends Disposable {
 			openConversation: async (sessionId, threadId) => { await this.showChat(); await view.openThread(sessionId, threadId); },
 		});
 
+		const diffService = new DiffService();
+		services.registerInstance(IDiffService, diffService);
 		const editor = this._register(services.createInstance(EditorPart, this.domNode, {
 			configurationService,
 			contextKeyService: contextKeys,
@@ -600,7 +605,7 @@ export class Workbench extends Disposable {
 			textMateService: textMate,
 			languageResolver: languageService,
 			languageFeaturesService: services.get(ILanguageFeaturesService),
-			diffService: new DiffService(),
+			diffService,
 			workingCopyService: workingCopies,
 			accessibilityService: services.get(IAccessibilityService),
 			dialogService: dialogs,
@@ -608,6 +613,7 @@ export class Workbench extends Disposable {
 			titleActions: { menuService: menus, contextMenuProvider: contextMenus },
 		}));
 		services.registerInstance(IEditorPart, editor);
+		this._register(new EditorContextKeyController(contextKeys, editor, EditorPanes, languageService));
 		const editors = this._register(new BrowserEditorService(editor));
 		services.registerInstance(IEditorService, editors);
 		const workbenchPreferences = this._register(services.createInstance(PreferencesService));

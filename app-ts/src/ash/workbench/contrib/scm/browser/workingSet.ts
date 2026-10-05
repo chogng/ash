@@ -5,7 +5,6 @@ import type { IConfigurationService } from '../../../../platform/configuration/c
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import type { EditorWorkingSet } from '../../../services/editor/common/editorWorkingSet.js';
-import { ScmConfiguration } from '../common/scmConfiguration.js';
 import type { ISCMViewService } from '../common/scm.js';
 
 const WorkingSetsStorageKey = 'scm.workingSets';
@@ -39,7 +38,7 @@ export class ScmWorkingSetController extends Disposable {
 
 	constructor(private readonly options: ScmWorkingSetControllerOptions) {
 		super();
-		const enabled = observableConfigValue(ScmConfiguration.workingSetsEnabled, false, options.configurationService);
+		const enabled = observableConfigValue('scm.workingSets.enabled', false, options.configurationService);
 		this._register(autorun(reader => this.configure(enabled.read(reader))));
 	}
 
@@ -88,7 +87,7 @@ export class ScmWorkingSetController extends Disposable {
 			await this.options.editorPart.applyWorkingSet(workingSet, { preserveFocus: !this.hasEditorFocus() });
 			return;
 		}
-		if (this.options.configurationService.getValue(ScmConfiguration.workingSetsDefault) === 'empty') {
+		if (this.options.configurationService.getValue('scm.workingSets.default') === 'empty') {
 			await this.options.editorPart.applyWorkingSet('empty', { preserveFocus: !this.hasEditorFocus() });
 		}
 	}

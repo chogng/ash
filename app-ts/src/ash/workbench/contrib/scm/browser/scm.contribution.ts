@@ -1,13 +1,14 @@
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
-import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { ScmAgentReviewViewPane } from "./scmAgentReviewViewPane.js";
 import { SCMHistoryViewPane } from "./scmHistoryViewPane.js";
-import { ScmStatusContribution } from "./scmStatus.js";
+import { SCMActiveRepositoryController, ScmStatusContribution } from './activity.js';
 import { GIT_VIEW_ID, ScmViewPane } from "./scmViewPane.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
@@ -16,7 +17,6 @@ import { ScmWorkingSetController } from "./workingSet.js";
 import { ScmHistoryChatContextContribution } from "./scmHistoryChatContext.js";
 import { SCMViewPaneContainer } from './scmViewPaneContainer.js';
 import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
-import "../common/scmConfiguration.js";
 import "./quickDiff.contribution.js";
 import { localize, localize2 } from '../../../../nls.js';
 import { registerEditorPane } from '../../../browser/editor.js';
@@ -31,7 +31,6 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import './media/scmMergeEditor.css';
 import './scm.service.contribution.js';
 import { ISCMService, ISCMViewService, SCMHistoryBusyContext } from '../common/scm.js';
-import { SCMActiveRepositoryController } from './activity.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -40,6 +39,26 @@ import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
 import { REPOSITORIES_VIEW_PANE_ID, SCMRepositoriesViewPane } from './scmRepositoriesViewPane.js';
+
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+type ScmWorkingSetDefault = 'current' | 'empty';
+
+configurationRegistry.registerConfiguration<boolean>({
+	key: 'scm.workingSets.enabled',
+	defaultValue: false,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('scm.workingSets.enabled must be a boolean');
+		return value;
+	},
+});
+configurationRegistry.registerConfiguration<ScmWorkingSetDefault>({
+	key: 'scm.workingSets.default',
+	defaultValue: 'current',
+	parse(value: unknown): ScmWorkingSetDefault {
+		if (value !== 'current' && value !== 'empty') throw new TypeError('scm.workingSets.default must be current or empty');
+		return value;
+	},
+});
 
 AccessibleViewRegistry.register({
 	type: AccessibleViewType.Help,
@@ -235,10 +254,7 @@ export function registerGitViews(
 	]);
 }
 
-registerWorkbenchContribution("workbench.contrib.scmStatus", WorkbenchPhase.BlockRestore, accessor => new ScmStatusContribution({
-	statusbarService: accessor.get(IStatusbarService),
-	scmViewService: accessor.get(ISCMViewService),
-}));
+registerWorkbenchContribution("workbench.contrib.scmStatus", WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ScmStatusContribution));
 
 registerWorkbenchContribution("workbench.contrib.scmWorkingSets", WorkbenchPhase.BlockRestore, accessor => new ScmWorkingSetController({
 	configurationService: accessor.get(IConfigurationService),

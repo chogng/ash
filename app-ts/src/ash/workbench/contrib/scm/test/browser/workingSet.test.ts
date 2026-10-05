@@ -1,3 +1,5 @@
+import '../../../../../editor/test/browser/testEditorDom.js';
+import '../../browser/scm.contribution.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
@@ -9,12 +11,11 @@ import type { ISCMProvider } from '../../common/scm.js';
 import { SCMService } from '../../common/scmService.js';
 import { SCMViewService } from '../../browser/scmViewService.js';
 import { ScmWorkingSetController } from '../../browser/workingSet.js';
-import { ScmConfiguration } from '../../common/scmConfiguration.js';
 
 test('SCM working sets save and restore editor state across branch changes', async () => {
 	using configuration = new InMemoryConfigurationService();
-	await configuration.updateValue(ScmConfiguration.workingSetsEnabled, true);
-	await configuration.updateValue(ScmConfiguration.workingSetsDefault, 'empty');
+	await configuration.updateValue('scm.workingSets.enabled', true);
+	await configuration.updateValue('scm.workingSets.default', 'empty');
 	using provider = new TestSCMProvider('main');
 	using scmService = new SCMService();
 	using viewService = new SCMViewService(scmService);
@@ -51,7 +52,7 @@ test('SCM working sets save and restore editor state across branch changes', asy
 	assert.deepEqual(saved, ['main', 'feature']);
 	assert.deepEqual(applied, ['empty', workingSet('main')]);
 
-	await configuration.updateValue(ScmConfiguration.workingSetsEnabled, false);
+	await configuration.updateValue('scm.workingSets.enabled', false);
 	assert.equal(storage.get('scm.workingSets', StorageScope.WORKSPACE), undefined);
 	provider.accept('other');
 	await nextTask();

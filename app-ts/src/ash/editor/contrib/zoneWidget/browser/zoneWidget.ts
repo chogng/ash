@@ -261,7 +261,7 @@ export abstract class ZoneWidget extends Disposable {
 	}
 
 	protected _getWidth(info: EditorLayoutInfo): number {
-		return info.width - info.minimap.minimapWidth - info.verticalScrollbarWidth;
+		return info.contentWidth - info.verticalScrollbarWidth;
 	}
 
 	protected revealRange(range: Range, _isLastLine: boolean): void {
@@ -309,13 +309,14 @@ export abstract class ZoneWidget extends Disposable {
 		const arrowHeight = this.options.showArrow ? Math.round(lineHeight / 3) : 0;
 		const frameWidth = this.options.showFrame ? this.options.frameWidth ?? Math.round(lineHeight / 9) : 0;
 		const containerHeight = Math.max(0, heightInPixels - 2 * arrowHeight - 2 * frameWidth);
-		this.domNode.style.left = `${layout.minimap.minimapWidth > 0 && layout.minimap.minimapLeft === 0 ? layout.minimap.minimapWidth : 0}px`;
+		// ViewZones already supplies the content origin, including a minimap on the left.
+		this.domNode.style.left = '0px';
 		this.domNode.style.width = `${widthInPixels}px`;
 		this.arrowDomNode?.style.setProperty('--stanza-zone-widget-arrow-size', `${arrowHeight}px`);
 		if (this.arrowDomNode) {
 			const anchor = this.anchor.getRange(0)!.getStartPosition();
 			const coordinates = this.editor.getScrolledVisiblePosition(anchor);
-			const relativeLeft = Math.min(Math.max(arrowHeight, coordinates?.left ?? arrowHeight), Math.max(arrowHeight, widthInPixels - arrowHeight));
+			const relativeLeft = Math.min(Math.max(arrowHeight, coordinates ? coordinates.left - layout.contentLeft : arrowHeight), Math.max(arrowHeight, widthInPixels - arrowHeight));
 			this.arrowDomNode.style.left = `${relativeLeft}px`;
 		}
 		if (this.container) {

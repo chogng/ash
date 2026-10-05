@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
@@ -11,6 +11,45 @@ test.describe('SCM editor groups', () => {
 	test.beforeEach(async ({ target, testWorkspace }) => {
 		test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
+	});
+
+	test('Git Quick Diff opens its baseline and updates decorations for unsaved edits', async ({ testWorkspace, workbench }) => {
+		const page = workbench.page;
+		await workbench.openExplorer();
+		await page.locator('.ash-explorer').getByRole('treeitem', { name: /^main\.ts(?:,|$)/u }).dblclick();
+		const editor = workbench.editors.groupAt(0).editor;
+		await editor.waitForEditorFocus();
+		const marker = page.locator('.stanza-editor-line-decoration.ash-quick-diff-modified');
+		await expect(marker).toHaveCount(1);
+		await expect.poll(() => marker.evaluate(element => getComputedStyle(element, '::before').width)).toBe('4px');
+		await expect(marker).toHaveCSS('cursor', 'pointer');
+		await page.emulateMedia({ forcedColors: 'active' });
+		await expect.poll(() => marker.evaluate(element => {
+			const paint = getComputedStyle(element, '::before').backgroundColor;
+			return paint === getComputedStyle(element).color && paint !== 'rgba(0, 0, 0, 0)';
+		})).toBe(true);
+		await page.emulateMedia({ forcedColors: 'none' });
+		await marker.click({ position: { x: 2, y: 8 } });
+		const peek = page.locator('.ash-quick-diff-peek');
+		await expect(peek).toBeVisible();
+		await expect(peek).toContainText('Index — Modified — 1 of 1');
+		await expect(peek.locator('.original .stanza-editor-line-text')).toContainText(['const value = 1;']);
+		await expect(peek.locator('.modified .stanza-editor-input')).toHaveAttribute('aria-readonly', 'true');
+		await workbench.quickaccess.runCommand('scm.quickDiff.close');
+		await expect(peek).toHaveCount(0);
+		await workbench.quickaccess.runCommand('scm.quickDiff.next');
+		await expect(peek).toBeVisible();
+		await peek.getByRole('button', { name: 'Close Quick Diff', exact: true }).click();
+		await expect(peek).toHaveCount(0);
+		await editor.waitForEditorFocus();
+		await editor.input.press('ControlOrMeta+A');
+		await page.keyboard.insertText('const value = 1;\n');
+		await editor.waitForEditorContents(contents => contents.includes('const value = 1;'));
+		await expect(marker).toHaveCount(0);
+		await workbench.quickaccess.runCommand('scm.quickDiff.next');
+		await expect(editor.element.locator('.stanza-editor-accessibility-status')).toHaveText('No Quick Diff changes');
+		await expect(peek).toHaveCount(0);
+		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 2;\n');
 	});
 
 	test('SCM compares edits inside a moved block and exits through the keyboard in a read-only view', async ({ testWorkspace, workbench }) => {

@@ -1,4 +1,4 @@
-import './media/quickDiff.css';
+import './media/dirtydiffDecorator.css';
 import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
@@ -11,7 +11,6 @@ import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
 import { PeekViewWidget } from '../../../../editor/contrib/peekView/browser/peekView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type IQuickDiffEditorController, IQuickDiffEditorControllerService, IQuickDiffModelService, type QuickDiffChange, type QuickDiffModelReference } from '../common/quickDiff.js';
-import { ScmConfiguration } from '../common/scmConfiguration.js';
 import { QuickDiffDecorator } from './quickDiffDecorator.js';
 
 /** Per-editor Quick Diff controller created through constructor injection after first render. */
@@ -56,7 +55,7 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 	}
 
 	private handlePointerDown(event: PointerEvent): void {
-		if (event.button !== 0 || this.configurationService.getValue(ScmConfiguration.diffDecorationsGutterAction) !== 'diff') return;
+		if (event.button !== 0 || this.configurationService.getValue('scm.diffDecorationsGutterAction') !== 'diff') return;
 		if (!isHTMLElement(event.target) || !event.target.closest('.ash-quick-diff-gutter')) return;
 		const target = this.editorView.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
 		if (!target) return;

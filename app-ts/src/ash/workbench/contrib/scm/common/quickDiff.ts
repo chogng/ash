@@ -91,3 +91,5 @@ export interface IQuickDiffEditorControllerService extends IDisposable {
 }
 
 export const IQuickDiffEditorControllerService = createServiceIdentifier<IQuickDiffEditorControllerService>('quickDiffEditorControllerService');
+
+export type ScmDiffDecorationsIgnoreTrimWhitespace = 'true' | 'false' | 'inherit';

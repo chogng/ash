@@ -96,7 +96,7 @@ const { EditorSelectionConfiguration } = await import('../../../../common/editor
 const { CodeEditorConfiguration } = await import('../../../codeEditor/common/editorConfiguration.js');
 const { ContentSearchConfiguration } = await import('../../../search/common/searchConfiguration.js');
 const { GitConfiguration } = await import('../../../git/common/gitConfiguration.js');
-const { ScmConfiguration } = await import('../../../scm/common/scmConfiguration.js');
+await import('../../../scm/browser/scm.contribution.js');
 const { IGitService: GitServiceId } = await import('../../../git/common/gitService.js');
 const { IChatService: ChatServiceId } = await import('../../../../services/chat/common/chatService.js');
 await import('../../../../services/chat/common/modelCatalog.js');
@@ -337,7 +337,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderWhitespace), 'editor');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor');
 	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'editor');
-	assert.equal(findSettingCategory(layout, ScmConfiguration.diffDecorationsIgnoreTrimWhitespace), 'general');
+	assert.equal(findSettingCategory(layout, 'scm.diffDecorationsIgnoreTrimWhitespace'), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'general');

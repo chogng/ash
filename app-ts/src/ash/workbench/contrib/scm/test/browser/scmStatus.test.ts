@@ -2,18 +2,20 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ISCMViewService } from '../../common/scm.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { ScmStatusContribution } from '../../browser/scmStatus.js';
+import { ScmStatusContribution } from '../../browser/activity.js';
 import { SCMService } from '../../common/scmService.js';
 import { SCMViewService } from '../../browser/scmViewService.js';
 import { GitSCMProvider, type GitSCMProviderServices } from '../../../git/browser/gitSCMProvider.js';
 import type { GitHistoryProvider } from '../../../git/browser/gitHistoryProvider.js';
 import { GitSwitchBranchCommandId } from '../../../git/common/gitCommands.js';
 import type { GitStatus, IGitService } from '../../../git/common/gitService.js';
-import { StatusbarAlignment, StatusbarService } from '../../../../services/statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment, StatusbarService } from '../../../../services/statusbar/browser/statusbar.js';
 import type { IViewsService } from '../../../../services/views/common/viewsService.js';
 import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 import type { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
@@ -72,7 +74,10 @@ function createFixture(changes: Emitter<GitStatus>, status: () => Promise<GitSta
 	};
 	const provider = resources.add(new GitSCMProvider(git, { id: 'repo-1', label: 'workspace', path: '/workspace', root: URI.file('/workspace') }, {} as GitHistoryProvider, services));
 	resources.add(scmService.registerSCMProvider(provider));
-	resources.add(new ScmStatusContribution({ statusbarService: statusbar, scmViewService: viewService }));
+	const container = resources.add(new InstantiationService());
+	container.registerInstance(ISCMViewService, viewService);
+	container.registerInstance(IStatusbarService, statusbar);
+	resources.add(container.createInstance(ScmStatusContribution));
 	return Object.assign(resources, { statusbar, viewService });
 }
 

@@ -1,11 +1,16 @@
+import '../../../../../editor/test/browser/testEditorDom.js';
+import '../../browser/quickDiff.contribution.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { AbstractCodeEditorService } from '../../../../../editor/browser/services/abstractCodeEditorService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
+import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { IQuickDiffEditorControllerService, IQuickDiffModelService } from '../../common/quickDiff.js';
+import { IQuickDiffEditorControllerService, IQuickDiffModelService, IQuickDiffService } from '../../common/quickDiff.js';
+import { IDiffService } from '../../../../services/diff/common/diffService.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -19,9 +24,31 @@ import { type GitStatus, type IGitService } from '../../../../contrib/git/common
 import { GitQuickDiffProvider } from '../../../git/browser/gitQuickDiffProvider.js';
 import { QuickDiffDecorator } from '../../browser/quickDiffDecorator.js';
 import { QuickDiffModelService } from '../../browser/quickDiffModel.js';
-import { WorkbenchQuickDiffService } from '../../browser/workbenchQuickDiffService.js';
-import { ScmConfiguration } from '../../common/scmConfiguration.js';
+import { QuickDiffService } from '../../common/quickDiffService.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
+
+test('Quick Diff resolves registered window services and rejects a missing diff dependency', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using incomplete = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors()));
+	incomplete.registerInstance(IConfigurationService, configuration);
+	assert.throws(() => incomplete.get(IQuickDiffModelService), /diffService/);
+	using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors()));
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IDiffService, new DiffService(() => new DiffTestPort()));
+	const quickDiffService = services.get(IQuickDiffService);
+	let requests = 0;
+	using registration = quickDiffService.addProvider({
+		id: 'test', label: 'Index',
+		async provideOriginalResource(resource) {
+			requests++;
+			return { providerId: 'test', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 1, text: 'before' };
+		},
+	});
+	using model = new TextModel('after', { resource: URI.file('/workspace/registered.ts') });
+	using reference = services.get(IQuickDiffModelService).createModelReference(model.uri, model);
+	await waitFor(() => reference.object.state.changes.length === 1);
+	assert.equal(requests, 1);
+});
 
 test('Git Quick Diff supplies the index for a live worktree change', async () => {
 	const fixture = gitFixture();
@@ -38,7 +65,7 @@ test('Git Quick Diff supplies the index for a live worktree change', async () =>
 test('Quick Diff shares one resource model and projects configurable editor targets', async () => {
 	const fixture = gitFixture();
 	using provider = new GitQuickDiffProvider(fixture.gitService);
-	using quickDiffService = new WorkbenchQuickDiffService();
+	using quickDiffService = new QuickDiffService();
 	using providerRegistration = quickDiffService.addProvider(provider);
 	using configuration = new InMemoryConfigurationService();
 	using modelService = new QuickDiffModelService(quickDiffService, new DiffService(() => new DiffTestPort()), configuration);
@@ -47,7 +74,7 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	const secondReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
 	assert.equal(firstReference.object, secondReference.object);
 	firstReference.dispose();
-	await configuration.updateValue(ScmConfiguration.diffDecorations, 'all');
+	await configuration.updateValue('scm.diffDecorations', 'all');
 
 	using source = new QuickDiffDecorator(model, secondReference, configuration);
 	await waitFor(() => model.getAllDecorations().length === 2);
@@ -70,7 +97,7 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 });
 
 test('Quick Diff whitespace option inherits Diff settings without refetching the baseline', async () => {
-	using quickDiffService = new WorkbenchQuickDiffService();
+	using quickDiffService = new QuickDiffService();
 	let baselineRequests = 0;
 	using providerRegistration = quickDiffService.addProvider({
 		id: 'test', label: 'Index',
@@ -84,7 +111,7 @@ test('Quick Diff whitespace option inherits Diff settings without refetching the
 	using model = new TextModel('word ', { resource: URI.file('/workspace/whitespace.ts') });
 	using reference = modelService.createModelReference(URI.file('/workspace/whitespace.ts'), model);
 	await waitFor(() => reference.object.state.changes.length === 1);
-	await configuration.updateValue(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace, 'inherit');
+	await configuration.updateValue('scm.diffDecorationsIgnoreTrimWhitespace', 'inherit');
 	await waitFor(() => reference.object.state.comparisons[0]?.model.state.kind === 'ready' && reference.object.state.changes.length === 0);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
 	assert.equal(reference.object.state.changes.length, 0);
@@ -100,7 +127,7 @@ test('Quick Diff whitespace option inherits Diff settings without refetching the
 });
 
 test('Quick Diff passes its standard one-second computation limit to the diff provider', async () => {
-	using quickDiffService = new WorkbenchQuickDiffService();
+	using quickDiffService = new QuickDiffService();
 	using providerRegistration = quickDiffService.addProvider({
 		id: 'test', label: 'Index',
 		async provideOriginalResource(resource) {
@@ -137,16 +164,16 @@ test('Registered Quick Diff creates after first render and releases decorations 
 	try {
 		const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../../editor/test/browser/testCodeEditor.js');
-		const { QuickDiffEditorController, QuickDiffEditorControllerService } = await import('../../browser/quickDiffEditorController.js');
+		const { QuickDiffEditorController, QuickDiffEditorControllerService } = await import('../../browser/quickDiffWidget.js');
 		await import('../../browser/quickDiff.contribution.js');
 		const fixture = gitFixture();
 		using provider = new GitQuickDiffProvider(fixture.gitService);
-		using quickDiffService = new WorkbenchQuickDiffService();
+		using quickDiffService = new QuickDiffService();
 		using providerRegistration = quickDiffService.addProvider(provider);
 		using configuration = new InMemoryConfigurationService();
 		using modelService = new QuickDiffModelService(quickDiffService, new DiffService(() => new DiffTestPort()), configuration);
 		using controllers = new QuickDiffEditorControllerService();
-		await configuration.updateValue(ScmConfiguration.diffDecorations, 'all');
+		await configuration.updateValue('scm.diffDecorations', 'all');
 		using services = new InstantiationService();
 		using codeEditors = new class extends AbstractCodeEditorService { getActiveCodeEditor() { return this.getFocusedCodeEditor(); } }();
 		services.registerInstance(ICodeEditorService, codeEditors);

@@ -1,18 +1,28 @@
 .stanza-editor-line-decoration.ash-quick-diff-gutter {
-  width: 4px;
   pointer-events: auto;
   cursor: pointer;
 }
 
-.stanza-editor-line-decoration.ash-quick-diff-added {
+/* The editor owns gutter geometry; the marker paints inside its full click target. */
+.stanza-editor-line-decoration.ash-quick-diff-gutter::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  content: '';
+  pointer-events: none;
+}
+
+.stanza-editor-line-decoration.ash-quick-diff-added::before {
   background: var(--ash-diff-editor-inserted-line-marker);
 }
 
-.stanza-editor-line-decoration.ash-quick-diff-modified {
+.stanza-editor-line-decoration.ash-quick-diff-modified::before {
   background: var(--ash-focus-border);
 }
 
-.stanza-editor-line-decoration.ash-quick-diff-deleted {
+.stanza-editor-line-decoration.ash-quick-diff-deleted::before {
   width: 0;
   height: 0;
   top: 50%;
@@ -23,9 +33,13 @@
 }
 
 @media (forced-colors: active) {
-  .stanza-editor-line-decoration.ash-quick-diff-gutter {
+  .stanza-editor-line-decoration.ash-quick-diff-gutter::before {
     background: CanvasText;
     border-left-color: CanvasText;
+  }
+
+  .stanza-editor-line-decoration.ash-quick-diff-deleted::before {
+    background: transparent;
   }
 }
 

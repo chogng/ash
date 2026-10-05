@@ -1739,6 +1739,16 @@ test('accessible zone widgets expose their action to keyboard and accessibility 
 	const action = page.getByRole('button', { name: 'Accessible zone action' });
 	await action.focus();
 	await expect(action).toBeFocused();
+	for (const side of ['left', 'right'] as const) {
+		await page.evaluate(side => window.ashTextModelIntegration.updateOptions({ minimap: { enabled: true, side } }), side);
+		await expect.poll(() => zone.evaluate((element, side) => {
+			const bounds = element.getBoundingClientRect();
+			const minimap = element.closest('.stanza-editor')!.querySelector('.minimap')!.getBoundingClientRect();
+			return side === 'left' ? bounds.left >= minimap.right : bounds.right <= minimap.left;
+		}, side)).toBe(true);
+		await action.click();
+		await expect(action).toBeFocused();
+	}
 });
 
 test('content and glyph margin widgets use the standard editor ports in Chromium', async ({ page }) => {

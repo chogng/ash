@@ -13,7 +13,7 @@ Workbench 的通用展示与 provider 编排层；Git 是当前注册到 SCM 的
 
 ```text
 Desktop SCM History View → Git history provider → Desktop Git domain service
-Desktop SCM Changes View → Desktop Git domain service
+Desktop SCM Changes View → SCM repository/provider → Desktop Git domain service
   → TS Git API adapter → renderer protocol client
   ↔ MessagePort relay（Electron）或 Web transport + Git notification
   ↔ App Server GitRuntime
@@ -134,16 +134,16 @@ VS Code 的 extension-host 进程布局。
 
 | 层级 | 长期 owner | 当前状态 | 边界判断 |
 | --- | --- | --- | --- |
-| Workbench SCM | repository registry、通用 history contract、历史图展示和 Editor 打开语义 | 历史图已通过 `ISCMViewService` 消费 provider；`ScmViewPane` 和 `ScmStatusContribution` 仍直接消费 `IGitService` | 后续需把 Changes 和状态栏接入 SCM contract |
-| Desktop Git history provider | 把 `IGitService` 的仓库、refs、history、changed-file URI 和历史 Chat 上下文映射为 SCM contract | `GitHistoryProvider` 已在 Git contribution 注册；Changes 和状态栏尚未接入 | 只拥有前端映射，不拥有 Git RPC 或 Git output parsing |
+| Workbench SCM | repository registry、通用 history contract、Changes、历史图展示和 Editor 打开语义 | Changes、状态栏和历史图均通过 SCM contract 消费 provider | 不直接消费 `IGitService` 或 Git 状态 |
+| Desktop Git provider | 把 `IGitService` 的仓库、资源组、提交输入、状态栏命令、refs、history 和历史 Chat 上下文映射为 SCM contract | `GitSCMContribution` 注册每个仓库的 `GitSCMProvider` 和 `GitHistoryProvider` | 只拥有前端映射，不拥有 Git RPC 或 Git output parsing |
 | Desktop `IGitService` 与 Git API adapter | 前端 Git 契约、固定操作目标仓库、连接事件和 typed `git/*` transport | 已接入分支、独立 worktree、整合流程、stash、tag、remote、提交修改和部分暂存 | 保持 Git 专属；普通 UI 不消费生成 DTO；不改名为 SCM service |
 | App Server `GitRuntime` / `GitService` | Git operation serialization、`Authorization<InspectRepository>` / `Authorization<MutateRepository>`、repository projection 与通知 | 已实现 | 保持 Git 专属；不新增仅转发 Git DTO 的 `scm/*` facade |
 | `ash-git` | Git executable、命令、解析和 failure semantics | 已实现 | 与 SCM UI 无依赖 |
 | `git-turn-changes` | 按 Session/Thread/Turn 捕获 Git tree、归属 Tool 写入、维护 ChangeSet 与提交状态 | 已实现 | 只接受 Git repository，不拥有 Thread 目录或 GitHub Issue |
 | `worktree` | 组合 `ash-git` inventory、维护 Thread 独占 checkout/目录和持久化绑定 | 已接入 App Server 的 Thread 创建与恢复 | 不拥有 Turn 归属、摘要或提交状态机 |
 
-前端历史图已由通用 `ISCMService`、repository/provider 和 history contract 接收 Git history provider。
-Changes 和状态栏后续也应只依赖通用 contract。不能让
+Changes、状态栏和前端历史图由通用 `ISCMService`、repository/provider 和 history contract 接收 Git provider。
+不能让
 `ISCMService` 直接暴露 `GitStatus`、`GraphPage`、`git/commitFile` 或 `fetch/pull/push` 方法；这些能力
 应由 provider 以 resource group、history item change、status bar command 和 menu action 投影。
 
@@ -151,11 +151,50 @@ Changes 和状态栏后续也应只依赖通用 contract。不能让
 目录名与前端 SCM 对齐而包装 `git/*` 会增加一层同形 DTO、模糊错误 ownership，并使未来 provider
 被迫服从 Git 的 branch/index/worktree 模型，因此明确不采用。
 
+### SCM 文件归属
+
+以下路径相对 `app-ts/src/ash/workbench/contrib/scm/`。这些归属已由用户确认，后续对齐沿用同一决定。
+
+| 职责 | 所属文件 | 已退出的旧文件 |
+| --- | --- | --- |
+| Quick Diff provider 注册与可见性 | `common/quickDiffService.ts` | `browser/workbenchQuickDiffService.ts` |
+| Quick Diff 编辑器控制器、命令目标和 Peek | `browser/quickDiffWidget.ts` | `browser/quickDiffEditorController.ts` |
+| SCM 活动与状态栏 | `browser/activity.ts` | `browser/scmStatus.ts` |
+| SCM 配置注册 | `browser/scm.contribution.ts`；Quick Diff 配置由 `browser/quickDiff.contribution.ts` 注册，供 Sessions 独立装载 | `common/scmConfiguration.ts` |
+| Quick Diff gutter 与 Peek 样式 | `browser/media/dirtydiffDecorator.css` | `browser/media/quickDiff.css` |
+
+Ash 自有的 Agent Review 保留在 `browser/scmAgentReviewViewPane.ts`；冲突编辑保留在
+`browser/scmMergeEditorInput.ts`、`browser/scmMergeEditorPane.ts`、`common/mergeConflict.ts` 和
+`browser/media/scmMergeEditor.css`；仓库列表样式保留在 `browser/media/scmRepositories.css`。
+这些文件不作为 VS Code 同路径对齐项。
+
+Sessions 通过 `sessions.common.main.ts` 装载 SCM 服务和 Quick Diff contribution；普通 Workbench
+继续装载 SCM 视图和 Git provider。两种窗口各自创建服务实例。Sessions 的 Editor Part 和 Quick Diff
+使用同一个窗口内的 `IDiffService`；服务注册不等于已为每个 Session 目录注册 Git provider。
+Sessions 同时使用共享 `EditorContextKeyController` 更新窗口的活动编辑器上下文，Quick Diff
+命令才会在代码编辑器激活时进入命令面板。gutter 的位置和点击区域由编辑器管理；
+`dirtydiffDecorator.css` 在该区域内绘制标记，不覆盖编辑器的内联几何。
+Peek 使用共享 `ZoneWidget`，宽度与锚点按正文区域计算，避免操作按钮落到 minimap 下方。
+
+### 尚未完成的 SCM 对齐
+
+以上完成了已确认的文件迁移、窗口服务装配和现有 Quick Diff 行为验证，不代表 SCM 的公开契约
+已经与 VS Code 全量一致。后续必须沿生产调用方迁移，不能用空声明补齐文件清单。
+
+| 范围 | 当前差异 | 需要闭合的调用链 |
+| --- | --- | --- |
+| Quick Diff provider | 仍使用 `provideOriginalResource` 返回文本快照；注册、可见性和模型引用方法也使用 Ash 契约 | Git provider → URI 原始资源 → 共享文本模型解析服务 → Quick Diff model；迁移后退出旧快照接口 |
+| 仓库视图 | `ISCMViewService` 只管理当前仓库；缺少可见仓库集合、排序、固定、焦点与编辑器跟随 | Repositories → view service → Changes、History、活动和状态栏 |
+| 提交输入 | 输入由 provider 持有，尚未迁到 repository；验证和输入历史契约不完整 | Git provider → repository input → SCM input editor → 提交与草稿恢复 |
+| History refs | remote/base ref、ref 查询、过滤和请求取消契约不完整 | Git history provider → 通用 history contract → History view |
+| 浏览器职责 | `menus.ts`、`scmAccessibilityHelp.ts`、`scmRepositoryRenderer.ts` 和 `util.ts` 尚未按同路径落位 | 从现有菜单、帮助和仓库行调用方迁移其对应职责 |
+| 扩展 SCM | 缺少 `common/artifact.ts` 对应能力和 SCM 的 extension-host 双向注册链 | 先明确扩展端生产入口、资源解析与生命周期，再接入 SCM registry |
+
 ## 所有权
 
 | 层级 | 当前职责 | 不拥有 |
 | --- | --- | --- |
-| Desktop SCM（当前实现） | 历史图通过 SCM history contract 显示 lane/ref/remote、展开文件并打开 Editor；Changes 和状态栏仍直接处理分支/upstream、Merge/Staged/Working Tree 分组、提交输入与 Git intent | Git process、porcelain parser、任意 host path authority |
+| Desktop SCM（当前实现） | 从 provider 显示资源组、提交输入、状态栏命令和历史图；打开操作交给共享 Editor 服务 | Git process、porcelain parser、任意 host path authority |
 | Git API adapter / renderer protocol client | 领域 service 组织输入并转换结果；API adapter 调用协议；protocol client 校验生成协议、配对请求并分发通知；Electron relay 只转发消息 | Git domain semantics、最终路径授权、另一份仓库状态 |
 | App Server `GitRuntime` | 发现目录集合中的仓库，按 repository 串行化 operation、维护 projection/revision、消费 watcher hint、去重并发布状态 | Git command/parsing、Renderer state |
 | App Server `GitService` | 冻结 canonical `Dir` 与 repository projection root、映射目录/仓库路径、持有 Tokio runtime并调用 `ash-git`；按 `InspectRepository`/`MutateRepository` 再校验读写边界 | live projection、notification |

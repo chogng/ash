@@ -10,7 +10,6 @@ import { type IConfigurationService } from '../../../../platform/configuration/c
 import { warningForeground } from '../../../../platform/theme/common/colors/baseColors.js';
 import { diffInsertedLineMarker, diffRemovedLineMarker } from '../../../../platform/theme/common/colors/editorColors.js';
 import { type QuickDiffComparison, type QuickDiffModelReference } from '../common/quickDiff.js';
-import { ScmConfiguration } from '../common/scmConfiguration.js';
 import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions } from '../../../../editor/common/model.js';
 
 interface QuickDiffDecorationMetadata {
@@ -27,13 +26,13 @@ export class QuickDiffDecorator extends Disposable {
 		this.collection = this._register(new TextDecorationCollection<QuickDiffDecorationMetadata>(model));
 		this._register(modelReference.object.onDidChange(() => this.rebuild(modelReference.object.state.comparisons)));
 		this._register(configurationService.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(ScmConfiguration.diffDecorations)) this.rebuild(modelReference.object.state.comparisons);
+			if (event.affectsConfiguration('scm.diffDecorations')) this.rebuild(modelReference.object.state.comparisons);
 		}));
 		this.rebuild(modelReference.object.state.comparisons);
 	}
 
 	private resolve(metadata: QuickDiffDecorationMetadata): Omit<IModelDecorationOptions, 'stickiness'> {
-		const setting = this.configurationService.getValue(ScmConfiguration.diffDecorations);
+		const setting = this.configurationService.getValue('scm.diffDecorations');
 		const gutter = setting === 'all' || setting === 'gutter';
 		const color = themeColorFromId(colorForKind(metadata.kind));
 		return {
@@ -53,7 +52,7 @@ export class QuickDiffDecorator extends Disposable {
 	}
 
 	private rebuild(comparisons: readonly QuickDiffComparison[]): void {
-		const setting = this.configurationService.getValue(ScmConfiguration.diffDecorations);
+		const setting = this.configurationService.getValue('scm.diffDecorations');
 		if (setting === 'none') {
 			this.collection.clear();
 			return;

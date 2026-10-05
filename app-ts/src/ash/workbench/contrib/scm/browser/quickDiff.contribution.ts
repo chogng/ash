@@ -1,35 +1,63 @@
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import type { ScmDiffDecorationsIgnoreTrimWhitespace } from '../common/quickDiff.js';
 import { localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { EditorContributionInstantiation, registerEditorContribution } from '../../../../editor/browser/editorExtensions.js';
-import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
-import { IDiffService } from '../../../services/diff/common/diffService.js';
 import { CODE_EDITOR_ID } from '../../../browser/parts/editor/textResourceEditor.js';
 import { IQuickDiffEditorControllerService, IQuickDiffModelService, IQuickDiffService } from '../common/quickDiff.js';
-import { QuickDiffEditorController, QuickDiffEditorControllerService } from './quickDiffEditorController.js';
+import { QuickDiffEditorController, QuickDiffEditorControllerService } from './quickDiffWidget.js';
 import { QuickDiffModelService } from './quickDiffModel.js';
-import { WorkbenchQuickDiffService } from './workbenchQuickDiffService.js';
+import { QuickDiffService } from '../common/quickDiffService.js';
 
-registerWorkbenchServiceContribution({
-	service: IQuickDiffService,
-	dependencies: [],
-	install: context => context.register(new WorkbenchQuickDiffService()),
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+type ScmDiffDecorations = 'all' | 'gutter' | 'overview' | 'minimap' | 'none';
+type ScmDiffDecorationsGutterAction = 'diff' | 'none';
+
+configurationRegistry.registerConfiguration<ScmDiffDecorations>({
+	key: 'scm.diffDecorations',
+	defaultValue: 'all',
+	parse(value: unknown): ScmDiffDecorations {
+		if (value !== 'all' && value !== 'gutter' && value !== 'overview' && value !== 'minimap' && value !== 'none') {
+			throw new TypeError('scm.diffDecorations must be all, gutter, overview, minimap, or none');
+		}
+		return value;
+	},
+});
+configurationRegistry.registerConfiguration<ScmDiffDecorationsIgnoreTrimWhitespace>({
+	key: 'scm.diffDecorationsIgnoreTrimWhitespace',
+	defaultValue: 'false',
+	parse(value: unknown): ScmDiffDecorationsIgnoreTrimWhitespace {
+		if (value === 'true' || value === 'false' || value === 'inherit') return value;
+		throw new TypeError('scm.diffDecorationsIgnoreTrimWhitespace must be true, false, or inherit');
+	},
+	setting: {
+		title: 'Quick Diff whitespace',
+		description: 'Choose whether Source Control diff decorations ignore leading and trailing whitespace.',
+		valueType: 'select',
+		options: [
+			{ value: 'true', label: 'Ignore whitespace' },
+			{ value: 'false', label: 'Show whitespace changes' },
+			{ value: 'inherit', label: 'Inherit Diff editor setting' },
+		],
+	},
+});
+configurationRegistry.registerConfiguration<ScmDiffDecorationsGutterAction>({
+	key: 'scm.diffDecorationsGutterAction',
+	defaultValue: 'diff',
+	parse(value: unknown): ScmDiffDecorationsGutterAction {
+		if (value !== 'diff' && value !== 'none') throw new TypeError('scm.diffDecorationsGutterAction must be diff or none');
+		return value;
+	},
 });
 
-registerWorkbenchServiceContribution({
-	service: IQuickDiffEditorControllerService,
-	dependencies: [],
-	install: context => context.register(new QuickDiffEditorControllerService()),
-});
-
-registerWorkbenchServiceContribution({
-	service: IQuickDiffModelService,
-	dependencies: [IQuickDiffService, IDiffService, IConfigurationService],
-	install: context => context.register(context.container.createInstance(QuickDiffModelService, context.container.get(IQuickDiffService), context.container.get(IDiffService))),
-});
+registerSingleton(IQuickDiffService, QuickDiffService, InstantiationType.Delayed);
+registerSingleton(IQuickDiffEditorControllerService, QuickDiffEditorControllerService, InstantiationType.Delayed);
+registerSingleton(IQuickDiffModelService, QuickDiffModelService, InstantiationType.Delayed);
 
 registerEditorContribution({
 	id: 'workbench.contrib.quickDiffEditorController',

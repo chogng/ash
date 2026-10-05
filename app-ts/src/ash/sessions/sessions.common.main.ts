@@ -12,6 +12,8 @@ import './contrib/editor/browser/emptyFileEditor.contribution.js';
 import './contrib/design/browser/design.contribution.js';
 import './contrib/library/browser/library.contribution.js';
 import '../workbench/contrib/codeEditor/browser/codeEditor.contribution.js';
+import '../workbench/contrib/scm/browser/scm.service.contribution.js';
+import '../workbench/contrib/scm/browser/quickDiff.contribution.js';
 import '../workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import '../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
 import { registerTerminalView } from '../workbench/contrib/terminal/browser/terminal.contribution.js';

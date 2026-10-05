@@ -7,6 +7,25 @@ import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
 
+test('Code Sessions runs Quick Diff commands through its editor services', async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+	const commands = new QuickAccess(page);
+	await commands.runCommand('workbench.action.files.newUntitledFile');
+	const editor = page.locator('[data-part="editor"]');
+	const input = editor.locator('.stanza-editor-input');
+	await expect(input).toBeVisible();
+	await input.focus();
+	await commands.runCommand('scm.quickDiff.next');
+	await expect(editor.locator('.stanza-editor-accessibility-status')).toHaveText('No Quick Diff changes');
+	await expect(editor.locator('.ash-quick-diff-peek')).toHaveCount(0);
+	await input.focus();
+	await commands.runCommand('scm.quickDiff.previous');
+	await expect(editor.locator('.stanza-editor-accessibility-status')).toHaveText('No Quick Diff changes');
+	await commands.runCommand('scm.quickDiff.close');
+	await expect(editor.locator('.ash-quick-diff-peek')).toHaveCount(0);
+});
+
 test('Code Sessions starts with dialog dependencies and confirms closing a dirty editor', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();

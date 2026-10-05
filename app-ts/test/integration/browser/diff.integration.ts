@@ -1,3 +1,4 @@
+import '../../../src/ash/workbench/contrib/scm/browser/quickDiff.contribution.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { CancellationToken, CancellationTokenSource } from '../../../src/ash/base/common/cancellation.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../src/ash/base/common/lifecycle.js';
@@ -15,8 +16,7 @@ import { Range } from '../../../src/ash/editor/common/core/range.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { DiffService } from '../../../src/ash/workbench/services/diff/browser/diffService.js';
 import { QuickDiffModelService } from '../../../src/ash/workbench/contrib/scm/browser/quickDiffModel.js';
-import { ScmConfiguration } from '../../../src/ash/workbench/contrib/scm/common/scmConfiguration.js';
-import { WorkbenchQuickDiffService } from '../../../src/ash/workbench/contrib/scm/browser/workbenchQuickDiffService.js';
+import { QuickDiffService } from '../../../src/ash/workbench/contrib/scm/common/quickDiffService.js';
 import { CodeEditorConfiguration } from '../../../src/ash/workbench/contrib/codeEditor/common/editorConfiguration.js';
 import { resetNlsResolver, setNlsMessages } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
@@ -67,7 +67,7 @@ input.value = modified.getText();
 resources.add(addDisposableListener(input, 'input', () => modified.setValue(input.value)));
 
 let baselineRequests = 0;
-const baselines = resources.add(new WorkbenchQuickDiffService());
+const baselines = resources.add(new QuickDiffService());
 resources.add(baselines.addProvider({
 	id: 'test', label: 'Index',
 	async provideOriginalResource(resource) {
@@ -343,7 +343,7 @@ const harness = {
 		return timedModel.state.kind === 'ready' && timedModel.state.quitEarly;
 	},
 	async setQuickDiffWhitespace(setting: 'false' | 'inherit'): Promise<void> {
-		await configuration.updateValue(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace, setting);
+		await configuration.updateValue('scm.diffDecorationsIgnoreTrimWhitespace', setting);
 	},
 	async setDiffWhitespace(ignore: boolean): Promise<void> {
 		await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, ignore);
