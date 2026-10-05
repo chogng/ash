@@ -149,7 +149,7 @@ test('App Server server-request decoding validates method, request ID, and param
 		jsonrpc: '2.0',
 		id: 'browser-request-1',
 		method: 'browser/close',
-		params: { targetId: 'target-1' },
+		params: { threadId: 'thread-1', targetId: 'target-1' },
 	};
 
 	assert.deepEqual(decodeAppServerServerRequest(request), request);
@@ -159,6 +159,10 @@ test('App Server server-request decoding validates method, request ID, and param
 	);
 	assert.throws(
 		() => decodeAppServerServerRequest({ ...request, params: {} }),
+		AppServerProtocolDecodeError,
+	);
+	assert.throws(
+		() => decodeAppServerServerRequest({ ...request, params: { targetId: 'target-1' } }),
 		AppServerProtocolDecodeError,
 	);
 });

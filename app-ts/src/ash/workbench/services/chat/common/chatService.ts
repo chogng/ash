@@ -78,7 +78,14 @@ export interface ChatToolCallBinding {
 	readonly registryGeneration: number;
 	readonly definitionDigest: string;
 	readonly sourceChain: readonly ChatToolSource[];
-	readonly activity?: { readonly type: "read" | "search" | "list" | "edit"; readonly target: string } | { readonly type: "run" } | null;
+	readonly activity?:
+		| { readonly type: "read" | "search" | "list" | "edit"; readonly target: string }
+		| { readonly type: "run" }
+		| { readonly type: "fileRead"; readonly path: string; readonly offset: number; readonly limit: number }
+		| { readonly type: "fileSearch" | "fileList"; readonly pattern: string; readonly path: string }
+		| { readonly type: "fileEdit"; readonly path: string }
+		| { readonly type: "command"; readonly program: string; readonly arguments: readonly string[]; readonly workingDirectory: string }
+		| null;
 	readonly caller: { readonly type: "direct" } | { readonly type: "codeMode"; readonly parentToolCallId: string; readonly cellId: string; readonly runtimeCallId: string };
 }
 

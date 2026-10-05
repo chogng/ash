@@ -826,20 +826,20 @@ Electron Main 是 Browser Target 的唯一权威持有者。
 
 ### 7.1 当前实现
 
-`platform/browserView` 以 `IBrowserViewService` 为共同入口。`BrowserViewMainService` 管理窗口内唯一的页面实例表，`BrowserView` 持有每个页面的 `WebContentsView`、导航资源、状态、事件和关闭信号。新页面默认隐藏；Renderer 先通过 `layout(id, bounds)` 提交窗口内容坐标，再通过 `setVisible(id, true)` 显示。
+`platform/browserView` 以 `IBrowserViewService` 为共同入口。`BrowserViewMainService` 管理窗口内唯一的页面实例表，`BrowserView` 持有每个页面的 `WebContentsView`、Session 网络租约、状态、事件和关闭信号。新页面默认隐藏；Renderer 先通过 `layout(id, bounds)` 提交窗口内容坐标，再通过 `setVisible(id, true)` 显示。
 
 | 场景 | 入口 | 执行路径 | 所有权 |
 | --- | --- | --- | --- |
 | Workbench 创建、布局和导航 | `IBrowserViewService` | 可信 IPC → `BrowserViewMainService` → `BrowserView` | Main 管理实例，页面管理资源 |
 | Agent 观察和输入 | Rust 内置浏览器工具 | `BrowserHost` → 反向 JSON-RPC → `AppServerBrowserHost` → 独立 Playwright 进程 → Group/CDP → `BrowserView` | Rust 决定批准，Playwright 执行元素操作，Main 持有页面 |
 | 截图 | `browser_screenshot` 或观察选项 | Playwright 截取同一页面 → Rust `ResourceStore` | 图片按连接隔离 |
-| App Server 断开或重启 | Supervisor 状态迁移 | `AppServerBrowserHost.reset()` | 只关闭该连接创建的页面 |
+| App Server 断开或重启 | Supervisor 状态迁移 | `AppServerBrowserHost.reset()` | 关闭 Agent 页面、撤销用户页面分享并取消待处理权限请求 |
 
-`AppServerBrowserHost` 属于 `platform/app-server`，只绑定协议请求、连接生命周期和取消信号。页面查询由 `BrowserViewMainService` 的唯一实例表决定；宿主只跟踪需释放的页面 ID 和 Thread，不持有第二套页面状态。页面按顺序执行编辑器导航和 agent 的观察、截图、输入；取消请求立即结束调用方等待，已发给 Chromium 的操作结束后才释放顺序。关闭页面统一中止等待并释放监听器、导航资源和 Chromium 页面。
+`AppServerBrowserHost` 属于 `platform/app-server`，只绑定协议请求、连接生命周期和取消信号。页面查询由 `BrowserViewMainService` 的唯一实例表决定；宿主只跟踪需释放的页面 ID 和 Thread，不持有第二套页面状态。页面按顺序执行编辑器导航和 agent 的观察、截图、输入；取消请求立即结束调用方等待，已发给 Chromium 的操作结束后才释放顺序。关闭页面统一中止等待、取消权限请求及下载，并释放监听器、Session 网络租约和 Chromium 页面。
 
 `common/browserView.ts` 定义服务和可序列化参数，`browserViewIpcRoutes()` 校验 IPC 后调用服务。Electron 对象不跨越 IPC。Workbench 的 `BrowserEditorInput` 属于 `contrib/browserView/common`，编辑器 CSS 属于该功能的 `media/browser.css`。
 
-当前已接通 Session、Thread 所有权、Group/CDP、独立进程 Playwright，以及编辑器 Model 和恢复。应用持有一个共享自动化进程，每个窗口持有独立 MessagePort 和 Group 管理器；Playwright 连接按 Thread 管理。Group 只引用符合窗口、页面 owner 与 Agent Session 的页面，释放后页面仍属于 Main。Chromium target ID 保持原值，通过额外的 `browserViewId` 关联 Ash 页面。
+当前已接通 Session、Thread 所有权、Group/CDP、独立进程 Playwright，以及编辑器 Model 和恢复。应用持有一个共享自动化进程，每个窗口持有独立 MessagePort 和 Group 管理器；Playwright 连接按 Thread 管理。Group 只引用该 Thread 的 Agent 页面和用户明确分享给该 Thread 的页面；撤销分享中止访问并移除调试引用，保留用户页面。Chromium target ID 保持原值，通过额外的 `browserViewId` 关联 Ash 页面。
 
 `BrowserViewModel` 镜像 Main 状态，`BrowserEditorInput` 懒加载模型，Workbench 服务拥有输入与编辑器组引用。Renderer 重载接回存活的用户页面，不重建网页；最后一个编辑器引用关闭时才销毁页面。后端连接退场时仍关闭 Agent 页面，包括重载导致连接退场的场景。应用重启恢复用户页签的 URL、标题及工作区 Session。Agent 页签只作为用户临时页面恢复，不恢复任务权限或 Agent 登录。`browserViewService.ts` 与 `browserViewIpc.ts` 保留 Ash 可信 IPC 的适配职责；共享进程使用通用 `ProxyChannel`。
 
@@ -911,16 +911,16 @@ Desktop connection，新建目标、后续观察、动作和关闭同时核对 c
 
 - Workbench 已提供浏览器编辑器、地址栏、标签页及容器布局；Agent 创建和关闭页面同步到页签。
   `F6` 或 `Ctrl+L` 返回地址栏，`Alt+F1` 打开帮助；分组引用与关闭已有验证，同一页面只在当前宿主编辑器显示；
-- 用户工作区 BrowserSession 已持久保存；尚未实现分享及授权受众、下载 UI、权限提示、证书信任或 PDF 导出；
+- 用户工作区 BrowserSession 已持久保存；用户可分享页面给指定 Thread 并撤销访问；网站权限按来源弹窗并支持重置，下载可选择位置、查看进度和取消；证书信任与 PDF 导出尚未提供；
 - 当前观察结果是有界的原始 CDP JSON，还没有面向 Agent 的 locator、ARIA snapshot、trace、console
   或 network inspection；
 - Electron Debugger 的单条在途命令不能被 Chromium 抢占；取消会阻止后续步骤并使 Rust 调用
   终止，但底层命令仍可能在目标关闭前完成；
 - 应用重启只恢复用户页签与工作区登录，不恢复在途任务或 Agent Session；
-- 远程导航已有 URL 与隧道映射，远程 Session 的网络代理及策略仍需补齐。
+- 远程 BrowserSession 在创建页面前配置 SSH SOCKS5，包含域名解析、子资源、fetch、WebSocket 和 loopback；失败后保留代理规则，最后一个页面关闭时释放进程。
 
-后续基座继续补齐用户页面分享及授权受众、远程 Session 网络策略、权限和网页交互。Rust 保留工具注册、
-授权和 App Server 协议，不能把现有私有页面默认交给 Agent。PDF、下载、trace、network、console 和高级 locator
+后续基座继续补齐设备权限选择、证书信任和网页交互。Rust 保留工具注册、
+授权和 App Server 协议，用户页面默认私有，分享只授予指定 Thread 的当前连接。PDF、trace、network inspection、console 和高级 locator
 属于后续独立契约。当前连接、释放与恢复的细节见[前端连接与浏览器能力](../app-ts/docs/design/app-server-connection.md)。
 
 ## 8. Desktop 提交 App Server 能力需求

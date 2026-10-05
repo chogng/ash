@@ -160,7 +160,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			remote: createRemoteAgentApi(),
 			remoteConnections: createRemoteConnectionApi(),
 			remoteTunnels: createRemoteTunnelApi(),
-			browserView: createBrowserViewService(),
+			browserView: createBrowserViewService(client),
 			configuration: createConfigurationApi(),
 			keyboardLayout: createNativeKeyboardLayoutApi(),
 			userKeyboardLayout: createUserKeyboardLayoutApi(),

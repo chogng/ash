@@ -6,6 +6,7 @@ import type { BrowserObserveParams } from './types/BrowserObserveParams.js';
 import type { BrowserObserveResult } from './types/BrowserObserveResult.js';
 import type { BrowserPerformParams } from './types/BrowserPerformParams.js';
 import type { BrowserPerformResult } from './types/BrowserPerformResult.js';
+import type { BrowserSharingSetParams } from './types/BrowserSharingSetParams.js';
 import type { TextDocumentApplyParams } from './types/TextDocumentApplyParams.js';
 import type { TextDocumentApplyResult } from './types/TextDocumentApplyResult.js';
 import type { TextDocumentListParams } from './types/TextDocumentListParams.js';
@@ -21,6 +22,7 @@ export interface AppServerServerRequestMap {
   "textDocument/apply": { params: TextDocumentApplyParams; response: TextDocumentApplyResult };
   "textDocument/release": { params: TextDocumentReleaseParams; response: null };
   "browser/create": { params: BrowserCreateParams; response: BrowserCreateResult };
+  "browser/sharing/set": { params: BrowserSharingSetParams; response: null };
   "browser/observe": { params: BrowserObserveParams; response: BrowserObserveResult };
   "browser/perform": { params: BrowserPerformParams; response: BrowserPerformResult };
   "browser/close": { params: BrowserCloseParams; response: null };
@@ -41,6 +43,7 @@ export const APP_SERVER_SERVER_REQUESTS: { [M in AppServerServerRequestMethod]: 
   "textDocument/apply": { method: "textDocument/apply" },
   "textDocument/release": { method: "textDocument/release" },
   "browser/create": { method: "browser/create" },
+  "browser/sharing/set": { method: "browser/sharing/set" },
   "browser/observe": { method: "browser/observe" },
   "browser/perform": { method: "browser/perform" },
   "browser/close": { method: "browser/close" },

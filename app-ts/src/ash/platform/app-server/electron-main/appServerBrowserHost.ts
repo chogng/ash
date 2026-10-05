@@ -49,7 +49,7 @@ export class AppServerBrowserHost extends Disposable {
 		return this.automate(view, params.threadId, signal, async id => {
 			const observation = await this.playwright.getObservation(id, params.threadId, view.id, params);
 			const state = view.getState();
-			// Main owns requested URLs, including remote tunnel mappings, and the authoritative state.
+			// Main owns the visible URL and authoritative load state; the worker only observes Chromium.
 			return { ...observation, url: state.url, title: state.title, loading: state.loading };
 		});
 	}
@@ -82,10 +82,12 @@ export class AppServerBrowserHost extends Disposable {
 	private target(id: string, sessionId: string, requestSignal: AbortSignal): { view: BrowserView; signal: AbortSignal } {
 		this.assertNotDisposed();
 		const view = this.views.validateAgentAccess(id, sessionId);
-		return { view, signal: AbortSignal.any([requestSignal, this.cancellation.signal]) };
+		return { view, signal: AbortSignal.any([requestSignal, this.cancellation.signal, this.views.agentAccessSignal(id, sessionId)]) };
 	}
 	/** Retiring a connection closes its pages without disturbing pages opened by the user. */
 	reset(): void {
+		this.views.cancelPermissionRequests();
+		this.views.revokeSharing();
 		this.cancellation.abort(new Error('BrowserCapabilityUnavailable'));
 		this.cancellation = new AbortController();
 		for (const id of this.hostedTargets.keys()) this.views.tryGetBrowserView(id)?.dispose();
@@ -111,6 +113,12 @@ export class AppServerBrowserHost extends Disposable {
 			finally { clearTimeout(timer); this.operations.delete(request.id); }
 		};
 		return [
+			{ channel: 'ash:browser-host:sharing', validate: operation, invoke: value => run(value, async params => {
+				const sharing = decodeAppServerServerRequestParams('browser/sharing/set', params);
+				// Revoking a closed page still acknowledges release of the backend's grant record.
+				if (sharing.threadIds.length || this.views.tryGetBrowserView(sharing.targetId)) await this.views.setSharing(sharing.targetId, sharing.threadIds);
+				return null;
+			}) },
 			{ channel: 'ash:browser-host:create', validate: operation, invoke: value => run(value, (params, context) => this.create(decodeAppServerServerRequestParams('browser/create', params), context)) },
 			{ channel: 'ash:browser-host:observe', validate: operation, invoke: value => run(value, (params, context) => this.observe(decodeAppServerServerRequestParams('browser/observe', params), context)) },
 			{ channel: 'ash:browser-host:perform', validate: operation, invoke: value => run(value, (params, context) => this.perform(decodeAppServerServerRequestParams('browser/perform', params), context)) },

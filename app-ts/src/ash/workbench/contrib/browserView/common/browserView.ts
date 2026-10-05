@@ -28,6 +28,8 @@ export interface IBrowserViewModel extends IDisposable {
 	focus(): Promise<void>;
 	layout(bounds: IBrowserViewBounds): Promise<void>;
 	setVisible(visible: boolean): Promise<void>;
+	getSharing(): Promise<readonly string[]>;
+	setSharing(threadIds: readonly string[]): Promise<void>;
 }
 
 /** A renderer read model. Only Main computes page state; commands return to the same page owner. */
@@ -81,4 +83,6 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 	public focus(): Promise<void> { return this.service.focus(this.id); }
 	public layout(bounds: IBrowserViewBounds): Promise<void> { return this.service.layout(this.id, bounds); }
 	public setVisible(visible: boolean): Promise<void> { return this.service.setVisible(this.id, visible); }
+	public getSharing(): Promise<readonly string[]> { return this.service.getSharing(this.id); }
+	public setSharing(threadIds: readonly string[]): Promise<void> { return this.service.setSharing(this.id, threadIds); }
 }

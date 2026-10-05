@@ -217,6 +217,7 @@ fn registry_method_and_notification_names_are_unique() {
         host_methods,
         BTreeSet::from([
             "browser/close",
+            "browser/sharing/set",
             "browser/create",
             "browser/observe",
             "browser/perform",

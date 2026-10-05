@@ -4107,6 +4107,29 @@
       ],
       "type": "object"
     },
+    "BrowserSharingSetParams": {
+      "additionalProperties": false,
+      "description": "Replaces the audience of a user page on this connection; an empty audience revokes access.",
+      "properties": {
+        "targetId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "threadIds": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "type": "array"
+        }
+      },
+      "required": [
+        "targetId",
+        "threadIds"
+      ],
+      "type": "object"
+    },
     "BrowserTextInputTargetDto": {
       "oneOf": [
         {
@@ -5386,6 +5409,22 @@
             },
             "params": {
               "$ref": "#/$defs/InitializeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "browser/sharing/set",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/BrowserSharingSetParams"
             }
           },
           "required": [
@@ -11438,6 +11477,22 @@
             },
             "result": {
               "$ref": "#/$defs/InitializeResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "browser/sharing/set",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [
@@ -27396,6 +27451,22 @@
         {
           "properties": {
             "method": {
+              "const": "browser/sharing/set",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/BrowserSharingSetParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "browser/observe",
               "type": "string"
             },
@@ -27517,6 +27588,22 @@
             },
             "result": {
               "$ref": "#/$defs/BrowserCreateResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "browser/sharing/set",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [

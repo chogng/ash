@@ -4,7 +4,7 @@ import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { localize } from '../../../../nls.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewService, type IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
 import { BrowserEditorInput } from '../common/browserEditorInput.js';
 import type { IBrowserViewModel } from '../common/browserView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -13,6 +13,8 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { IDialogsModel } from '../../../common/dialogs.js';
+import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
+import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import './media/browser.css';
 
 /** Workbench controls and geometry for one Main-owned web page. */
@@ -23,6 +25,7 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 	private addressDomNode!: HTMLInputElement;
 	private viewportDomNode!: HTMLDivElement;
 	private statusDomNode!: HTMLDivElement;
+	private downloadDomNode!: HTMLDivElement;
 	private backDomNode!: HTMLButtonElement;
 	private forwardDomNode!: HTMLButtonElement;
 	private reloadDomNode!: HTMLButtonElement;
@@ -33,12 +36,15 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 	private menuVisible = false;
 	private focusOutside = false;
 	private update: Promise<void> = Promise.resolve();
+	private sharingToolbar!: WorkbenchToolBar;
 
 	constructor(
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IDialogService private readonly dialogService: IDialogService,
 		@IDialogsModel private readonly dialogs: IDialogsModel,
-		@IContextMenuService menus: IContextMenuService,
+		@IContextMenuService private readonly menus: IContextMenuService,
+		@IChatSessionNavigationService private readonly conversations: IChatSessionNavigationService,
+		@IBrowserViewService private readonly pageService: IBrowserViewService,
 	) {
 		super();
 		this._register(dialogs.onWillShowDialog(() => this.refreshLayout()));
@@ -68,17 +74,25 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		this.reloadDomNode = button('Reload', () => this.model?.state.loading ? this.target().stop() : this.target().reload());
 		this.addressDomNode = h(document, 'input');
 		this.addressDomNode.type = 'url'; this.addressDomNode.setAttribute('aria-label', 'Browser address');
+		this.addressDomNode.disabled = true;
 		this.addressDomNode.spellcheck = false;
 		toolbar.append(this.addressDomNode);
 		button('Go', () => this.navigate());
 		button('Help', () => this.showHelp());
+		const sharing = h(document, 'div');
+		toolbar.append(sharing);
+		this.sharingToolbar = this._register(new WorkbenchToolBar(sharing, this.menus, { ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.pageActions' }, 'Page actions') }));
+		this.setPageActions();
 		this.statusDomNode = h(document, 'div'); this.statusDomNode.className = 'ash-browser-status';
 		this.statusDomNode.setAttribute('role', 'status');
+		this.downloadDomNode = h(document, 'div'); this.downloadDomNode.className = 'ash-browser-status';
+		this.downloadDomNode.hidden = true; this.downloadDomNode.setAttribute('role', 'status');
+		this.downloadDomNode.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'browser.downloads' }, 'Downloads'));
 		this.viewportDomNode = h(document, 'div'); this.viewportDomNode.className = 'ash-browser-viewport';
 		this.viewportDomNode.tabIndex = 0;
 		this.viewportDomNode.setAttribute('aria-label', 'Webpage. Press F6 to return to the address field.');
 		this._register(addDisposableListener(this.viewportDomNode, 'focus', () => { this.focusOutside = false; this.refreshLayout(); void this.update.then(() => this.target().focus()).catch(error => this.report(error)); }));
-		this.domNode.append(toolbar, this.statusDomNode, this.viewportDomNode); container.append(this.domNode);
+		this.domNode.append(toolbar, this.statusDomNode, this.downloadDomNode, this.viewportDomNode); container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener<KeyboardEvent>(this.domNode, 'keydown', event => {
 			if (event.key === 'Enter' && event.target === this.addressDomNode) { event.preventDefault(); void this.navigate().catch(error => this.report(error)); }
@@ -111,17 +125,20 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		signal.throwIfAborted();
 		this.modelListeners.clear();
 		this.model = model;
+		this.addressDomNode.disabled = false;
 		this.targetId = model.id;
+		this.setPageActions();
 		this.modelListeners.add(model.onDidChangeState(state => this.render(state)));
 		this.modelListeners.add(model.onDidEvent(event => {
 			if (event.type === 'focusAddress') { this.focus(); }
 			if (event.type === 'loadFailed') { this.statusDomNode.textContent = `Unable to load page: ${event.errorDescription}`; }
 			if (event.type === 'renderProcessGone') { this.statusDomNode.textContent = `Page stopped: ${event.reason}`; }
+			if (event.type === 'downloadProgress') { this.downloadDomNode.hidden = false; this.downloadDomNode.textContent = localize({ bundle: 'ash.workbench', key: 'browser.downloadProgress' }, '{0}: {1} / {2} bytes ({3})', event.filename, event.receivedBytes, event.totalBytes, downloadState(event.state)); }
 		}));
 		this.render(model.state);
 		this.refreshLayout();
 	}
-	clearInput(): void { this.visible = false; this.refreshLayout(); this.modelListeners.clear(); }
+	clearInput(): void { this.visible = false; this.addressDomNode.disabled = true; this.refreshLayout(); this.modelListeners.clear(); }
 	layout(_dimension: IDimension): void { this.refreshLayout(); }
 	setVisible(visibility: EditorPaneVisibility): void { this.visible = visibility === EditorPaneVisibility.Visible; this.refreshLayout(); }
 	focus(): void {
@@ -135,11 +152,38 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		return this.model;
 	}
 	private navigate(): Promise<void> { return this.target().loadURL(this.addressDomNode.value.trim()); }
+	private setPageActions(): void {
+		this.sharingToolbar.setActions([
+			{ id: 'browser.share', label: localize({ bundle: 'ash.workbench', key: 'browser.share' }, 'Share with Agent'), enabled: this.model?.info.owner.type === 'user', tooltip: '', run: () => this.share().catch(error => this.report(error)) },
+			{ id: 'browser.permissions', label: localize({ bundle: 'ash.workbench', key: 'browser.resetPermissions' }, 'Reset all website permissions'), enabled: true, tooltip: '', run: () => this.pageService.clearPermissions(this.target().id).catch(error => this.report(error)) },
+			{ id: 'browser.cancelDownloads', label: localize({ bundle: 'ash.workbench', key: 'browser.cancelDownloads' }, 'Cancel downloads'), enabled: true, tooltip: '', run: () => this.pageService.cancelDownloads(this.target().id).catch(error => this.report(error)) },
+		]);
+	}
+	private async share(): Promise<void> {
+		const model = this.target();
+		if (model.info.owner.type !== 'user') { return; }
+		const audience = await model.getSharing();
+		const choices = this.conversations.getConversations();
+		const result = await this.dialogService.prompt<readonly string[]>({
+			title: localize({ bundle: 'ash.workbench', key: 'browser.share' }, 'Share with Agent'),
+			message: localize({ bundle: 'ash.workbench', key: 'browser.shareDescription' }, 'Allow a conversation to read and operate this page, including its signed-in content. Access ends when you revoke it or this connection closes.'),
+			detail: audience.length ? localize({ bundle: 'ash.workbench', key: 'browser.shared' }, 'This page is currently shared.') : localize({ bundle: 'ash.workbench', key: 'browser.private' }, 'This page is private.'),
+			buttons: [
+				...choices.map(choice => ({ label: choice.title, run: () => [choice.threadId] })),
+				{ label: localize({ bundle: 'ash.workbench', key: 'browser.revoke' }, 'Revoke all access'), run: () => [] },
+			],
+			cancelButton: localize({ bundle: 'ash.workbench', key: 'browser.cancel' }, 'Cancel'),
+		});
+		if (result.result !== undefined) {
+			await model.setSharing(result.result);
+			this.statusDomNode.textContent = result.result.length ? localize({ bundle: 'ash.workbench', key: 'browser.shared' }, 'This page is currently shared.') : localize({ bundle: 'ash.workbench', key: 'browser.private' }, 'This page is private.');
+		}
+	}
 	private render(state: IBrowserViewState): void {
 		if (this.addressDomNode.ownerDocument.activeElement !== this.addressDomNode) { this.addressDomNode.value = state.url; }
 		this.backDomNode.disabled = !state.canGoBack; this.forwardDomNode.disabled = !state.canGoForward;
 		this.reloadDomNode.textContent = state.loading ? 'Stop' : 'Reload';
-		this.statusDomNode.textContent = state.loading ? 'Loading page…' : state.title || state.url;
+		this.statusDomNode.textContent = state.errorDescription ? localize({ bundle: 'ash.workbench', key: 'browser.loadFailure' }, 'Unable to load page: {0}', state.errorDescription) : state.loading ? 'Loading page…' : state.title || state.url;
 	}
 	private refreshLayout(): void {
 		if (!this.targetId || !this.viewportDomNode || this.isDisposed) { return; }
@@ -160,7 +204,7 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 	}
 	private report(error: unknown): void { if (!this.isDisposed) { this.statusDomNode.textContent = error instanceof Error ? error.message : String(error); } }
 	private helpContent(): string {
-		return localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelp' }, 'Use Tab to move through browser controls. Enter in the address field navigates. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. Downloads and website permissions are unavailable in this isolated session.');
+		return localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelp' }, 'Use Tab to move through browser controls. Enter in the address field navigates. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. Share with Agent grants a chosen conversation access to this page. Revoke all access ends that grant. Website permission dialogs name the requesting site. Reset all website permissions removes its decisions. Downloads ask for a save location; Cancel downloads stops active transfers.');
 	}
 
 	private showHelp(): Promise<void> {
@@ -170,3 +214,12 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 
 // A moved tab can create its new pane before the old pane is disposed.
 const visiblePanes = new Map<string, BrowserEditor>();
+
+function downloadState(state: 'progressing' | 'completed' | 'cancelled' | 'interrupted'): string {
+	switch (state) {
+		case 'progressing': return localize({ bundle: 'ash.workbench', key: 'browser.downloading' }, 'downloading');
+		case 'completed': return localize({ bundle: 'ash.workbench', key: 'browser.downloadCompleted' }, 'completed');
+		case 'cancelled': return localize({ bundle: 'ash.workbench', key: 'browser.downloadCancelled' }, 'cancelled');
+		case 'interrupted': return localize({ bundle: 'ash.workbench', key: 'browser.downloadInterrupted' }, 'interrupted');
+	}
+}

@@ -1,4 +1,5 @@
 use super::DECODER_ROOTS;
+use super::compact_definition_names;
 use super::remove_annotations;
 use super::retain_decoder_definitions;
 use serde_json::json;
@@ -34,6 +35,28 @@ fn decoder_entry_points_are_included_in_the_retained_roots() {
         assert!(DECODER_ROOTS.contains(&name), "missing decoder root {name}");
     }
     assert!(DECODER_ROOTS.contains(&"ClientResultSchema"));
+}
+
+#[test]
+fn compact_names_preserve_entry_points_cycles_and_literal_payloads() {
+    let mut schema = json!({ "$defs": {
+        "Root": { "type": "object", "properties": {
+            "Child": {"$ref": "#/$defs/Child"},
+            "literal": {"const": {"$ref": "#/$defs/Child"}}
+        }},
+        "Child": {"anyOf": [{"$ref": "#/$defs/Root"}, {"type": "null"}]}
+    }});
+    compact_definition_names(&mut schema, &["Root"]);
+    assert_eq!(
+        schema,
+        json!({ "$defs": {
+            "Root": { "type": "object", "properties": {
+                "Child": {"$ref": "#/$defs/0"},
+                "literal": {"const": {"$ref": "#/$defs/Child"}}
+            }},
+            "0": {"anyOf": [{"$ref": "#/$defs/Root"}, {"type": "null"}]}
+        }})
+    );
 }
 
 #[test]

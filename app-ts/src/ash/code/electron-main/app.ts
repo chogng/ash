@@ -38,7 +38,6 @@ import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platfo
 import { BROWSER_VIEW_EVENT_CHANNEL } from "../../platform/browserView/common/browserView.js";
 import { browserViewIpcRoutes } from "../../platform/browserView/electron-main/browserViewIpc.js";
 import { BrowserViewMainService, IBrowserViewMainService } from "../../platform/browserView/electron-main/browserViewMainService.js";
-import { IBrowserViewNavigationResolver } from '../../platform/browserView/common/browserViewNavigation.js';
 import { Client as MessagePortClient } from '../../base/parts/ipc/common/ipc.mp.js';
 import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
 import { UtilityProcess } from '../../platform/utilityProcess/electron-main/utilityProcess.js';
@@ -90,7 +89,6 @@ import { RemoteConnections } from "../../platform/remote/electron-main/remoteCon
 import { UnavailableRemoteConnectionService, type IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import type { RemoteConnectionDefinition } from "../../platform/remote/common/remoteConnectionService.js";
 import { createSshRemoteAuthority, getRemoteAuthority, isRemoteResource } from "../../platform/remote/common/remote.js";
-import { RemoteBrowserViewNavigationResolver } from "../../platform/remote/electron-main/remoteBrowserViewNavigationResolver.js";
 import { SshRemoteTunnelService } from "../../platform/remote/electron-main/sshRemoteTunnelService.js";
 import { createRemoteRuntimeInstallProgressLogger } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
 import { RemoteRuntimeBootstrapMainService } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
@@ -1498,16 +1496,14 @@ export class AshApplication extends Disposable {
 	}
 
 	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remoteTunnelService: SshRemoteTunnelService, windowDisposables: DisposableStore): InstantiationService {
-		const browserServices = windowDisposables.add(this.windowServices.createChild(new ServiceCollection(
-			[IBrowserViewNavigationResolver, new RemoteBrowserViewNavigationResolver({
-				getWorkspace: () => workspaceContext.getWorkspace(),
-				tunnels: remoteTunnelService,
-				reportError: (message, error) => console.error(message, error),
-			})],
-		)));
+		const browserServices = windowDisposables.add(this.windowServices.createChild(new ServiceCollection()));
 		const browserViewMainService = windowDisposables.add(browserServices.createInstance(BrowserViewMainService, {
 			window,
 			getWorkspaceId: () => workspaceContext.getWorkspace().id,
+			getRemoteNetwork: () => {
+				const authority = getWorkspaceRemoteAuthority(workspaceContext.getWorkspace());
+				return authority ? { authority, tunnels: remoteTunnelService } : undefined;
+			},
 			createSession: (partition: string) => electronSession.fromPartition(partition),
 			createView: (session: Electron.Session) => new WebContentsView({
 				webPreferences: {

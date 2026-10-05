@@ -142,6 +142,7 @@ export type { BrowserObserveResult } from './BrowserObserveResult.js';
 export type { BrowserPerformActionDto } from './BrowserPerformActionDto.js';
 export type { BrowserPerformParams } from './BrowserPerformParams.js';
 export type { BrowserPerformResult } from './BrowserPerformResult.js';
+export type { BrowserSharingSetParams } from './BrowserSharingSetParams.js';
 export type { BrowserTextInputTargetDto } from './BrowserTextInputTargetDto.js';
 export type { BuildInfo } from './BuildInfo.js';
 export type { CallConnection } from './CallConnection.js';

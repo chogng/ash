@@ -57,6 +57,7 @@ import type { BackupRecordDto } from './types/BackupRecordDto.js';
 import type { BackupWorkspacesParams } from './types/BackupWorkspacesParams.js';
 import type { BackupWorkspacesResult } from './types/BackupWorkspacesResult.js';
 import type { BackupWriteParams } from './types/BackupWriteParams.js';
+import type { BrowserSharingSetParams } from './types/BrowserSharingSetParams.js';
 import type { CallControlParams } from './types/CallControlParams.js';
 import type { CallEndParams } from './types/CallEndParams.js';
 import type { CallInvitation } from './types/CallInvitation.js';
@@ -568,6 +569,7 @@ export interface AppServerRequestMap {
   "automation/runs": { params: AutomationRunsParams; response: AutomationRunsResult };
   "automation/stop": { params: AutomationStopParams; response: AutomationRun };
   "initialize": { params: InitializeParams; response: InitializeResult };
+  "browser/sharing/set": { params: BrowserSharingSetParams; response: null };
   "env/dirs/set": { params: EnvDirsSetParams; response: EnvDirsSetResult };
   "session/dirs/list": { params: SessionDirListParams; response: SessionDirListResult };
   "session/dirs/add": { params: SessionDirAddParams; response: SessionDirAddResult };
@@ -958,6 +960,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "automation/runs": { method: "automation/runs" },
   "automation/stop": { method: "automation/stop" },
   "initialize": { method: "initialize" },
+  "browser/sharing/set": { method: "browser/sharing/set" },
   "env/dirs/set": { method: "env/dirs/set" },
   "session/dirs/list": { method: "session/dirs/list" },
   "session/dirs/add": { method: "session/dirs/add" },

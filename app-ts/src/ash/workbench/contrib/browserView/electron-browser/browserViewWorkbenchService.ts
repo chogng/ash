@@ -6,6 +6,9 @@ import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { BrowserEditorInput, type IBrowserEditorInputData } from '../common/browserEditorInput.js';
 import { type IBrowserViewWorkbenchService } from '../common/browserView.js';
+import { IDialogsModel, type IDialogHandle } from '../../../common/dialogs.js';
+import { DialogResult } from '../../../../platform/dialogs/common/dialogs.js';
+import { localize } from '../../../../nls.js';
 
 /** Owns renderer inputs and reconnects them to pages which can outlive a renderer reload. */
 export class BrowserViewWorkbenchService extends Disposable implements IBrowserViewWorkbenchService {
@@ -13,12 +16,14 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	private readonly initialEvents: BrowserViewEvent[] = [];
 	private initialized = false;
 	private initialization: Promise<void> | undefined;
+	private readonly permissionDialogs = new Map<string, IDialogHandle>();
 
 	constructor(
 		@IBrowserViewService private readonly service: IBrowserViewService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IEditorService private readonly editors: IEditorService,
 		@IEditorPart private readonly editorPart: IEditorPart,
+		@IDialogsModel private readonly dialogs: IDialogsModel,
 	) {
 		super();
 		this._register(service.onDidEvent(event => {
@@ -82,7 +87,23 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	}
 
 	private acceptEvent(event: BrowserViewEvent): void {
-		if (event.type === 'created') {
+		if (event.type === 'permissionRequested') {
+			const handle = this.dialogs.show({ kind: 'confirmation',
+				title: localize({ bundle: 'ash.workbench', key: 'browser.permissionTitle' }, 'Website permission'),
+				message: localize({ bundle: 'ash.workbench', key: 'browser.permissionDescription' }, '{0} requests access to {1}.', event.origin, permissionLabel(event.permission)),
+				primaryButton: localize({ bundle: 'ash.workbench', key: 'browser.allow' }, 'Allow'),
+				cancelButton: localize({ bundle: 'ash.workbench', key: 'browser.deny' }, 'Deny'),
+			});
+			this.permissionDialogs.set(event.requestId, handle);
+			void handle.result.then(async outcome => {
+				if (!this.permissionDialogs.delete(event.requestId)) { return; }
+				await this.service.respondToPermission(event.targetId, event.requestId, outcome.button === DialogResult.Primary);
+			}).catch(error => console.error('Browser permission response failed', error));
+		} else if (event.type === 'permissionRequestClosed') {
+			const handle = this.permissionDialogs.get(event.requestId);
+			this.permissionDialogs.delete(event.requestId);
+			handle?.item.cancel();
+		} else if (event.type === 'created') {
 			const known = this.inputs.has(event.info.id);
 			const input = this.acceptInfo(event.info);
 			if (!known) {
@@ -107,4 +128,17 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			}).catch(error => console.error('Failed to open browser popup', error));
 		}
 	}
+	protected override disposeCore(): void {
+		for (const handle of this.permissionDialogs.values()) { handle.item.cancel(); }
+		this.permissionDialogs.clear();
+		super.disposeCore();
+	}
+}
+
+function permissionLabel(permission: string): string {
+	if (permission.startsWith('media:')) { return localize({ bundle: 'ash.workbench', key: 'browser.media' }, 'camera and microphone'); }
+	if (permission === 'geolocation') { return localize({ bundle: 'ash.workbench', key: 'browser.geolocation' }, 'location'); }
+	if (permission === 'notifications') { return localize({ bundle: 'ash.workbench', key: 'browser.notifications' }, 'notifications'); }
+	if (permission === 'fullscreen') { return localize({ bundle: 'ash.workbench', key: 'browser.fullscreen' }, 'full screen'); }
+	return localize({ bundle: 'ash.workbench', key: 'browser.clipboard' }, 'clipboard');
 }

@@ -349,14 +349,13 @@ fn task_binding_never_borrows_another_window_or_a_replayed_command() {
         host.for_turn(&thread, &other_turn),
         Err(BrowserError::CapabilityUnavailable)
     ));
-    host.state
-        .lock()
-        .unwrap()
-        .target_owners
-        .insert("other-window".into(), BrowserTargetOwner {
+    host.state.lock().unwrap().target_owners.insert(
+        "other-window".into(),
+        BrowserTargetOwner {
             connection_id: 1,
             thread_id: thread.clone(),
-        });
+        },
+    );
     assert_eq!(
         host.for_turn(&thread, &turn).unwrap().target_owner(
             &BrowserTargetId("other-window".into()),
@@ -378,4 +377,80 @@ fn browser_host(resources: Arc<Mutex<ResourceStore>>) -> BrowserHost {
     );
     host.thread_id = Some(ash_protocol::ThreadId::new("browser-thread").unwrap());
     host
+}
+
+#[test]
+fn user_page_sharing_requires_host_acknowledgement_and_the_exact_thread_and_connection() {
+    let mut host = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
+    host.owner = Some(7);
+    let host = Arc::new(host);
+    let outbound = NotificationQueue::default();
+    host.register(
+        7,
+        ClientBrowserCapability {
+            version: 2,
+            observe: true,
+            input: true,
+        },
+        outbound.clone(),
+    );
+    let target = BrowserTargetId("user-page".into());
+    assert_eq!(
+        host.target_owner(&target, BrowserHostOperation::Observe),
+        Err(BrowserError::TargetUnavailable(target.clone()))
+    );
+    for thread_ids in [vec!["browser-thread".into()], Vec::new()] {
+        let worker_host = Arc::clone(&host);
+        let worker = thread::spawn(move || {
+            worker_host.set_sharing(
+                7,
+                &BrowserSharingSetParams {
+                    target_id: "user-page".into(),
+                    thread_ids,
+                },
+                &CancellationSource::new().token(),
+            )
+        });
+        let request = next_request(&outbound);
+        assert_eq!(request["method"], "browser/sharing/set");
+        host.clients
+            .handle_response(
+                7,
+                json!({ "jsonrpc": "2.0", "id": request["id"], "result": null }),
+            )
+            .unwrap();
+        worker.join().unwrap().unwrap();
+        if request["params"]["threadIds"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+        {
+            assert_eq!(
+                host.target_owner(&target, BrowserHostOperation::Observe),
+                Err(BrowserError::TargetUnavailable(target.clone()))
+            );
+        } else {
+            assert_eq!(
+                host.target_owner(&target, BrowserHostOperation::Observe)
+                    .unwrap(),
+                7
+            );
+            let mut other = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
+            other.state = Arc::clone(&host.state);
+            other.owner = Some(7);
+            other.thread_id = Some(ash_protocol::ThreadId::new("another-thread").unwrap());
+            assert_eq!(
+                other.target_owner(&target, BrowserHostOperation::Observe),
+                Err(BrowserError::TargetUnavailable(target.clone()))
+            );
+            other.thread_id = host.thread_id.clone();
+            other.owner = Some(8);
+            assert_eq!(
+                other.target_owner(&target, BrowserHostOperation::Observe),
+                Err(BrowserError::CapabilityUnavailable)
+            );
+        }
+    }
+    host.unregister(7);
+    assert!(host.state.lock().unwrap().shared_targets.is_empty());
 }

@@ -223,6 +223,8 @@ use crate::protocol::browser::BrowserPerformParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserPerformResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserSharingSetParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserTextInputTargetDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::call::CallControlParams;
@@ -2806,6 +2808,11 @@ client_methods! {
         // Capability negotiation belongs to one connection; domain mutations must not gate it.
         serialization: ConnectionExclusive("initialize"),
     },
+    BrowserSharingSet => "browser/sharing/set" {
+        params: BrowserSharingSetParams,
+        response: (),
+        serialization: ConnectionExclusive("browserSharing"),
+    },
     EnvDirsSet => "env/dirs/set" {
         params: EnvDirsSetParams,
         response: EnvDirsSetResult,
@@ -4453,6 +4460,10 @@ host_methods! {
         params: BrowserCreateParams,
         response: BrowserCreateResult,
     },
+    BrowserSharingSet => "browser/sharing/set" {
+        params: BrowserSharingSetParams,
+        response: (),
+    },
     BrowserObserve => "browser/observe" {
         params: BrowserObserveParams,
         response: BrowserObserveResult,
@@ -4888,6 +4899,7 @@ typescript_bindings! {
     BrowserBinaryPayload,
     BrowserCloseParams,
     BrowserCreateParams,
+    BrowserSharingSetParams,
     BrowserCreateResult,
     BrowserElementTargetDto,
     BrowserObserveParams,

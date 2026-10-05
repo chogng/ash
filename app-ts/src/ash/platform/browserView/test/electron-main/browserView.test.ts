@@ -2,12 +2,11 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import type { BrowserWindow, WebContentsView } from 'electron/main';
 import { suite, test } from 'mocha';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { promiseWithResolvers } from '../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../instantiation/common/serviceCollection.js';
-import { IBrowserViewNavigationResolver, directBrowserViewNavigation } from '../../common/browserViewNavigation.js';
 import { BrowserViewStorageScope, type BrowserViewEvent } from '../../common/browserView.js';
 import { BrowserViewMainService, IBrowserViewMainService } from '../../electron-main/browserViewMainService.js';
 import { AppServerBrowserHost } from '../../../app-server/electron-main/appServerBrowserHost.js';
@@ -22,9 +21,8 @@ const signal = () => new AbortController().signal;
 suite('Browser view ownership and operations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('construction requires the page resolver and the host page manager', () => {
+	test('construction requires the host page manager', () => {
 		using instantiation = new InstantiationService();
-		assert.throws(() => instantiation.createInstance(BrowserViewMainService, {}), /browserViewNavigationResolver/);
 		assert.throws(() => instantiation.createInstance(AppServerBrowserHost), /browserViewMainService/);
 	});
 
@@ -52,7 +50,7 @@ suite('Browser view ownership and operations', () => {
 		await f.manager.destroyBrowserView(id);
 		await assert.rejects(pending, /BrowserRequestCancelled/);
 		page.dispose();
-		assert.deepEqual([f.manager.tryGetBrowserView(id), f.children.size, f.contents.eventNames(), f.events.filter(e => e.type === 'closed').length, f.releases], [undefined, 0, [], 1, 1]);
+		assert.deepEqual([f.manager.tryGetBrowserView(id), f.children.size, f.contents.eventNames(), f.events.filter(e => e.type === 'closed').length, f.networkReleases], [undefined, 0, [], 1, 0]);
 	});
 
 	test('a destroyed Chromium page leaves the manager immediately', async () => {
@@ -166,31 +164,33 @@ suite('Browser view ownership and operations', () => {
 		assert.deepEqual([f.manager.tryGetBrowserView(created.targetId), f.manager.tryGetBrowserView(id)?.id], [undefined, id]);
 	});
 
-	test('retiring the manager releases a pending navigation resource without creating a page', async () => {
+	test('retiring the manager releases a pending network owner without creating a page', async () => {
 		using f = fixture();
 		const started = promiseWithResolvers<void>();
 		const finish = promiseWithResolvers<void>();
-		f.resolve = async url => { started.resolve(); await finish.promise; return directBrowserViewNavigation(url); };
+		f.remote = true;
+		f.proxy = async () => { started.resolve(); await finish.promise; return { localPort: 1234, signal: signal(), ...toDisposable(() => { f.networkReleases++; }) }; };
 		const pending = f.manager.createTarget('about:blank', 'thread-one', signal());
 		await started.promise;
 		f.manager.dispose();
 		finish.resolve();
 		await assert.rejects(pending, /BrowserCapabilityUnavailable/);
-		assert.deepEqual([f.children.size, f.releases], [0, 1]);
+		assert.deepEqual([f.children.size, f.networkReleases], [0, 1]);
 	});
 
-	test('retiring the host during creation releases its late navigation resource', async () => {
+	test('retiring the host during creation releases its late network owner', async () => {
 		using f = fixture();
 		using host = f.createHost();
 		const started = promiseWithResolvers<void>();
 		const finish = promiseWithResolvers<void>();
-		f.resolve = async url => { started.resolve(); await finish.promise; return directBrowserViewNavigation(url); };
+		f.remote = true;
+		f.proxy = async () => { started.resolve(); await finish.promise; return { localPort: 1234, signal: signal(), ...toDisposable(() => { f.networkReleases++; }) }; };
 		const pending = host.create({ threadId: 'thread-one', url: 'about:blank' }, { signal: signal() });
 		await started.promise;
 		host.dispose();
 		finish.resolve();
 		await assert.rejects(pending, /BrowserCapabilityUnavailable/);
-		assert.deepEqual([f.children.size, f.releases], [0, 1]);
+		assert.deepEqual([f.children.size, f.networkReleases], [0, 1]);
 	});
 
 	test('agent threads share their own storage and cannot read, drive or close another thread page', async () => {
@@ -217,6 +217,29 @@ suite('Browser view ownership and operations', () => {
 	});
 });
 
+test('sharing grants only the chosen thread and revocation cancels its operation without closing the user page', async () => {
+	using f = fixture();
+	using host = f.createHost();
+	await f.manager.getOrCreateBrowserView(id, { initialUrl: 'about:blank', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
+	await f.manager.setSharing(id, ['thread-one']);
+	assert.throws(() => host.observe({ threadId: 'thread-two', targetId: id, ...observation }, { signal: signal() }), /BrowserTargetAccessDenied/);
+	const started = promiseWithResolvers<void>();
+	const finish = promiseWithResolvers<void>();
+	f.observe = async pageId => { started.resolve(); await finish.promise; return { targetId: pageId, url: f.url, title: f.title, loading: false }; };
+	const pending = host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: signal() });
+	await started.promise;
+	await f.manager.setSharing(id, []);
+	await assert.rejects(pending, /BrowserRequestCancelled/);
+	assert.equal(f.cancelled.length, 1);
+	finish.resolve();
+	assert.throws(() => host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: signal() }), /BrowserTargetAccessDenied/);
+	assert.ok(f.manager.tryGetBrowserView(id));
+	await f.manager.setSharing(id, ['thread-one']);
+	host.reset();
+	assert.deepEqual(await f.manager.getSharing(id), []);
+	assert.ok(f.manager.tryGetBrowserView(id));
+});
+
 export function fixture() {
 	const store = new DisposableStore();
 	const events: BrowserViewEvent[] = [];
@@ -225,27 +248,24 @@ export function fixture() {
 	const partitions = new Map<string, Electron.Session>();
 	const f = {
 		[Symbol.dispose]: () => store.dispose(), events, children, contents, partitions,
-		url: '', title: 'Example', loading: false, attached: false, releases: 0,
+		url: '', title: 'Example', loading: false, attached: false, networkReleases: 0,
 		commands: [] as Array<{ method: string; params: unknown }>,
 		observations: [] as string[], cancelled: [] as string[], retired: [] as string[],
 		observe: async (pageId: string): Promise<IBrowserViewObservation> => ({ targetId: pageId, url: f.url, title: f.title, loading: f.loading }),
 		command: async (_method: string, _params?: unknown): Promise<unknown> => ({}),
 		load: async (url: string): Promise<void> => { f.url = url; },
 		capture: async () => ({ toPNG: () => Buffer.from('png') }),
-		resolve: async (url: string) => directBrowserViewNavigation(url),
+		remote: false,
+		proxy: async () => ({ localPort: 1234, signal: signal(), ...toDisposable(() => { f.networkReleases++; }) }),
 	};
 	const window = { id: 1, contentView: { addChildView: (view: WebContentsView) => children.add(view), removeChildView: (view: WebContentsView) => children.delete(view) }, webContents: { getZoomFactor: () => 2, focus: () => { } }, isDestroyed: () => false } as unknown as BrowserWindow;
-	const instantiation = store.add(new InstantiationService(new ServiceCollection([IBrowserViewNavigationResolver, {
-		resolve: async (url: string) => {
-			const navigation = await f.resolve(url);
-			return { ...navigation, requestedUrl: navigation.requestedUrl, loadUrl: navigation.loadUrl, ownsRequestedUrl: navigation.ownsRequestedUrl.bind(navigation), ownsLoadedUrl: navigation.ownsLoadedUrl.bind(navigation), loadUrlFor: navigation.loadUrlFor.bind(navigation), requestedUrlFor: navigation.requestedUrlFor.bind(navigation), isReusable: navigation.isReusable.bind(navigation), release: () => { f.releases++; navigation.release(); } };
-		},
-	}])));
+	const instantiation = store.add(new InstantiationService());
 	const manager = store.add(instantiation.createInstance(BrowserViewMainService, {
-		window, getWorkspaceId: () => 'workspace-one', createSession: (partition: string) => {
+		window, getWorkspaceId: () => 'workspace-one',
+		getRemoteNetwork() { return f.remote ? { authority: 'ssh-remote+test', tunnels: { openProxy: () => f.proxy() } as unknown as import('../../../remote/electron-main/sshRemoteTunnelService.js').SshRemoteTunnelService } : undefined; }, createSession: (partition: string) => {
 			let session = partitions.get(partition);
 			if (!session) {
-				session = Object.assign(new EventEmitter(), { setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { } }) as unknown as Electron.Session;
+				session = Object.assign(new EventEmitter(), { setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { } }) as unknown as Electron.Session;
 				partitions.set(partition, session);
 			}
 			return session;
@@ -255,6 +275,7 @@ export function fixture() {
 			let destroyed = false;
 			let bounds = { x: 0, y: 0, width: 0, height: 0 };
 			Object.assign(pageContents, {
+				setWebRTCIPHandlingPolicy: () => {},
 				session: browserStorage,
 				setWindowOpenHandler: () => { }, isDestroyed: () => destroyed, isLoading: () => f.loading,
 				getURL: () => f.url, getTitle: () => f.title, focus: () => { }, stop: () => { f.loading = false; }, reload: () => { },

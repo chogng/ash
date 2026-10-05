@@ -2328,6 +2328,23 @@ impl AppServer {
         }
         match client_method(&request.method) {
             Some(ClientMethod::Initialize) => unreachable!("initialize handled before gate"),
+            Some(ClientMethod::BrowserSharingSet) => {
+                if !connection.supports_dir_permissions_host() {
+                    return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+                }
+                let params: ash_app_server_protocol::protocol::browser::BrowserSharingSetParams =
+                    decode(&request.params)?;
+                if params.target_id.is_empty()
+                    || params.target_id.len() > 256
+                    || params.thread_ids.len() > 32
+                {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                self.browser_host
+                    .set_sharing(connection.connection_id, &params, cancellation)
+                    .map_err(|_| RpcError::new(-32000, AppServerErrorName::ResourceNotOwner))?;
+                result(&())
+            }
             Some(ClientMethod::EnvDirsSet) => self.env_dirs_set(connection, &request.params),
             Some(ClientMethod::SessionDirMove) => {
                 self.session_dir_move(connection, &request.params)

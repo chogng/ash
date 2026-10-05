@@ -19,6 +19,10 @@ export const BROWSER_VIEW_FOCUS_CHANNEL = "ash:browser-view:focus";
 export const BROWSER_VIEW_CLOSE_CHANNEL = "ash:browser-view:close";
 export const BROWSER_VIEW_EVENT_CHANNEL = "ash:browser-view:event";
 export const BROWSER_VIEW_LIST_CHANNEL = 'ash:browser-view:list';
+export const BROWSER_VIEW_SHARING_CHANNEL = 'ash:browser-view:sharing';
+export const BROWSER_VIEW_PERMISSION_CHANNEL = 'ash:browser-view:permission';
+export const BROWSER_VIEW_PERMISSIONS_CLEAR_CHANNEL = 'ash:browser-view:permissions:clear';
+export const BROWSER_VIEW_DOWNLOAD_CANCEL_CHANNEL = 'ash:browser-view:download:cancel';
 
 export type BrowserViewTargetId = string;
 
@@ -62,10 +66,15 @@ export interface IBrowserViewState {
 	readonly canGoBack: boolean;
 	readonly canGoForward: boolean;
 	readonly visible: boolean;
+	readonly errorDescription?: string;
 }
 
 export type BrowserViewEvent =
 	| { readonly type: 'created'; readonly info: IBrowserViewInfo }
+	| { readonly type: 'sharingChanged'; readonly targetId: string; readonly threadIds: readonly string[] }
+	| { readonly type: 'permissionRequested'; readonly targetId: string; readonly requestId: string; readonly origin: string; readonly permission: string }
+	| { readonly type: 'permissionRequestClosed'; readonly targetId: string; readonly requestId: string }
+	| { readonly type: 'downloadProgress'; readonly targetId: string; readonly filename: string; readonly receivedBytes: number; readonly totalBytes: number; readonly state: 'progressing' | 'completed' | 'cancelled' | 'interrupted' }
 	| { readonly type: "focusAddress"; readonly targetId: BrowserViewTargetId }
 	| {
 		readonly type: "stateChanged";
@@ -127,6 +136,11 @@ export interface IBrowserViewInfo {
  * serializable commands and state only.
  */
 export interface IBrowserViewService {
+	getSharing(id: string): Promise<readonly string[]>;
+	setSharing(id: string, threadIds: readonly string[]): Promise<void>;
+	respondToPermission(id: string, requestId: string, allowed: boolean): Promise<void>;
+	clearPermissions(id: string): Promise<void>;
+	cancelDownloads(id: string): Promise<void>;
 	getBrowserViews(): Promise<readonly IBrowserViewInfo[]>;
 	getOrCreateBrowserView(id: string, options: IBrowserViewCreateOptions): Promise<IBrowserViewInfo>;
 	getState(id: string): Promise<IBrowserViewState>;

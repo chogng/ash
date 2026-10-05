@@ -1,9 +1,9 @@
 import type { BrowserWindow, WebContentsView, WebContents, Event as ElectronEvent } from 'electron/main';
 import { addAbortListener, type EventEmitter } from 'node:events';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { promiseWithResolvers, raceCancellationError } from '../../../base/common/async.js';
 import { type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewState, type IBrowserViewInfo, type IBrowserViewCreateOptions, normalizeBrowserViewUrl } from '../common/browserView.js';
-import { type BrowserViewNavigation, IBrowserViewNavigationResolver } from '../common/browserViewNavigation.js';
 import type { BrowserSession } from './browserSession.js';
 import { BrowserViewDebugger } from './browserViewDebugger.js';
 
@@ -11,7 +11,8 @@ export interface BrowserViewOptions {
 	readonly id: string;
 	readonly window: BrowserWindow;
 	readonly view: WebContentsView;
-	readonly navigation: BrowserViewNavigation;
+	readonly initialUrl: string;
+	readonly network?: IDisposable;
 	readonly creation: IBrowserViewCreateOptions;
 	readonly session: BrowserSession;
 	readonly emitEvent: (event: BrowserViewEvent) => void;
@@ -26,25 +27,26 @@ export class BrowserView extends Disposable {
 	private readonly window: BrowserWindow;
 	private readonly cancellation = new AbortController();
 	readonly signal = this.cancellation.signal;
-	private readonly navigations: Set<BrowserViewNavigation>;
-	private navigation: BrowserViewNavigation;
-	private pendingNavigation?: BrowserViewNavigation;
 	private operationTurn: Promise<void> = Promise.resolve();
 	private url: string;
+	private errorDescription: string | undefined;
 	private laidOut = false;
 	private visible = false;
 	private readonly emitEvent: (event: BrowserViewEvent) => void;
 
-	constructor(options: BrowserViewOptions, @IBrowserViewNavigationResolver private readonly navigationResolver: IBrowserViewNavigationResolver) {
+	constructor(options: BrowserViewOptions) {
 		super();
 		this.id = options.id;
 		this.view = options.view;
 		this.session = options.session;
 		this.creation = options.creation;
 		this.window = options.window;
-		this.navigation = options.navigation;
-		this.navigations = new Set([options.navigation]);
-		this.url = options.navigation.requestedUrl;
+		this.url = options.initialUrl;
+		if (options.network) {
+			this._register(options.network);
+			// SOCKS carries TCP traffic; WebRTC must not open direct UDP sockets outside that policy.
+			this.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp');
+		}
 		this.emitEvent = options.emitEvent;
 	}
 
@@ -54,9 +56,10 @@ export class BrowserView extends Disposable {
 		this.view.setVisible(false);
 		this.window.contentView.addChildView(this.view);
 		this.configureSecurity();
+		this._register(this.session.permissions.attach(this.id, this.webContents, event => this.emit(event)));
 		this.listen();
 		this.emit({ type: 'created', info: this.getInfo() });
-		void this.view.webContents.loadURL(this.navigation.loadUrl).catch(() => {
+		void this.view.webContents.loadURL(this.url).catch(() => {
 			// did-fail-load carries the failure to the editor and the host caller.
 		});
 	}
@@ -78,9 +81,9 @@ export class BrowserView extends Disposable {
 		this.visible = visible; this.view.setVisible(visible); this.emitState();
 	}
 	loadURL(url: string, signal: AbortSignal = this.signal): Promise<void> { return this.runOperation(signal, s => this.navigate(normalizeBrowserViewUrl(url), s)); }
-	goBack(): Promise<void> { return this.runOperation(this.signal, async () => { const h = this.webContents.navigationHistory; if (h.canGoBack()) h.goBack(); }); }
-	goForward(): Promise<void> { return this.runOperation(this.signal, async () => { const h = this.webContents.navigationHistory; if (h.canGoForward()) h.goForward(); }); }
-	reload(): Promise<void> { return this.runOperation(this.signal, async () => this.webContents.reload()); }
+	goBack(): Promise<void> { return this.runOperation(this.signal, async () => { const h = this.webContents.navigationHistory; if (h.canGoBack()) { this.errorDescription = undefined; h.goBack(); } }); }
+	goForward(): Promise<void> { return this.runOperation(this.signal, async () => { const h = this.webContents.navigationHistory; if (h.canGoForward()) { this.errorDescription = undefined; h.goForward(); } }); }
+	reload(): Promise<void> { return this.runOperation(this.signal, async () => { this.errorDescription = undefined; this.webContents.reload(); }); }
 	stop(): void { this.webContents.stop(); }
 	focus(): void { if (this.visible) this.webContents.focus(); }
 
@@ -119,18 +122,14 @@ export class BrowserView extends Disposable {
 				this.emit({ type: 'focusAddress', targetId: this.id });
 			}
 		});
-		this.on(contents, "did-start-loading", () =>
-			this.emitState());
+		this.on(contents, "did-start-loading", () => this.emitState());
 		this.on(contents, "did-stop-loading", () =>
 			this.emitState());
 		this.on(contents, "did-navigate", (
 			_event: ElectronEvent,
 			url: string,
 		) => {
-			const normalized = normalizeBrowserViewUrl(url);
-			const navigation = this.navigationForLoadedUrl(normalized);
-			if (navigation) this.navigation = navigation;
-			this.url = navigation?.requestedUrlFor(normalized) ?? normalized;
+			this.url = normalizeBrowserViewUrl(url);
 			this.emitState();
 		});
 		this.on(contents, "did-navigate-in-page", (
@@ -139,7 +138,7 @@ export class BrowserView extends Disposable {
 			isMainFrame: boolean,
 		) => {
 			if (!isMainFrame) return;
-			this.url = this.requestedUrlFor(url);
+			this.url = normalizeBrowserViewUrl(url);
 			this.emitState();
 		});
 		this.on(contents, "page-title-updated", () =>
@@ -155,10 +154,11 @@ export class BrowserView extends Disposable {
 				isMainFrame: boolean,
 			) => {
 				if (!isMainFrame) return;
+				this.errorDescription = errorDescription;
 				this.emit({
 					type: "loadFailed",
 					targetId: this.id,
-					url: this.requestedUrlFor(validatedURL),
+					url: validatedURL,
 					errorCode,
 					errorDescription,
 				});
@@ -194,77 +194,26 @@ export class BrowserView extends Disposable {
 	}
 
 	private validateNavigation(event: ElectronEvent, url: string): void {
-		let normalized: string;
-		try {
-			normalized = normalizeBrowserViewUrl(url);
-		} catch {
-			event.preventDefault();
-			return;
-		}
-		if (this.navigationForLoadedUrl(normalized)) return;
-		event.preventDefault();
-		const requestedUrl = this.requestedUrlFor(normalized);
-		void this.loadURL(requestedUrl).catch(error => {
-			if (this.signal.aborted) return;
-			this.emit({
-				type: "loadFailed",
-				targetId: this.id,
-				url: requestedUrl,
-				errorCode: -2,
-				errorDescription: error instanceof Error ? error.message : "Browser navigation resolution failed",
-			});
-			this.emitState();
-		});
+		try { normalizeBrowserViewUrl(url); this.errorDescription = undefined; }
+		catch { event.preventDefault(); }
 	}
 
 	private async navigate(requestedUrl: string, signal: AbortSignal): Promise<void> {
 		signal.throwIfAborted();
-		let navigation = this.reusableNavigationForRequestedUrl(requestedUrl);
-		const created = navigation === undefined;
-		if (!navigation) navigation = await this.navigationResolver.resolve(requestedUrl, signal);
-		if (signal.aborted) {
-			if (created) navigation.release();
-			signal.throwIfAborted();
-		}
-		if (created) this.navigations.add(navigation);
-		this.pendingNavigation = navigation;
-		try {
-			// Stop only this in-flight load; queued cancellation must not stop another navigation.
-			using cancellation = addAbortListener(signal, () => {
-				if (!this.view.webContents.isDestroyed()) this.view.webContents.stop();
-			});
-			await this.view.webContents.loadURL(navigation.loadUrlFor(requestedUrl));
-			signal.throwIfAborted();
-			this.navigation = navigation;
-			const loadedUrl = this.view.webContents.getURL() || navigation.loadUrlFor(requestedUrl);
-			this.url = navigation.requestedUrlFor(loadedUrl);
-		} catch (error) {
-			if (created && !this.signal.aborted && this.navigations.delete(navigation)) navigation.release();
-			throw error;
-		} finally {
-			if (this.pendingNavigation === navigation) this.pendingNavigation = undefined;
-		}
-	}
-
-	private reusableNavigationForRequestedUrl(url: string): BrowserViewNavigation | undefined {
-		if (this.navigation.isReusable() && this.navigation.ownsRequestedUrl(url)) return this.navigation;
-		return [...this.navigations].find(navigation => navigation.isReusable() && navigation.ownsRequestedUrl(url));
-	}
-
-	private navigationForLoadedUrl(url: string): BrowserViewNavigation | undefined {
-		if (this.pendingNavigation?.ownsLoadedUrl(url)) return this.pendingNavigation;
-		if (this.navigation.ownsLoadedUrl(url)) return this.navigation;
-		return [...this.navigations].find(navigation => navigation.ownsLoadedUrl(url));
-	}
-
-	private requestedUrlFor(loadedUrl: string): string {
-		let normalized: string;
-		try {
-			normalized = normalizeBrowserViewUrl(loadedUrl);
-		} catch {
-			return loadedUrl;
-		}
-		return this.navigationForLoadedUrl(normalized)?.requestedUrlFor(normalized) ?? normalized;
+		this.errorDescription = undefined;
+		// Stop the visible load before replacing it. Chromium does not settle every stopped
+		// initial loadURL promise, so page loading events define completion and cancellation.
+		if (this.webContents.isLoading()) this.webContents.stop();
+		await this.waitForLoad(signal);
+		signal.throwIfAborted();
+		// Only an in-flight load may stop Chromium; cancelling a queued operation must leave the current load alone.
+		using cancellation = addAbortListener(signal, () => {
+			if (!this.webContents.isDestroyed()) this.webContents.stop();
+		});
+		await this.webContents.loadURL(requestedUrl);
+		await this.waitForLoad(signal);
+		signal.throwIfAborted();
+		this.url = this.webContents.getURL() || requestedUrl;
 	}
 
 	private on(
@@ -289,12 +238,13 @@ export class BrowserView extends Disposable {
 		const history = contents.navigationHistory;
 		return {
 			targetId: this.id,
-			url: contents.getURL() ? this.requestedUrlFor(contents.getURL()) : this.url,
+			url: contents.getURL() || this.url,
 			title: contents.getTitle(),
 			loading: contents.isLoading(),
 			canGoBack: history.canGoBack(),
 			canGoForward: history.canGoForward(),
 			visible: this.visible,
+			errorDescription: this.errorDescription,
 		};
 	}
 
@@ -306,8 +256,6 @@ export class BrowserView extends Disposable {
 	protected override disposeCore(): void {
 		this.cancellation.abort(new Error('BrowserTargetUnavailable'));
 		super.disposeCore();
-		for (const navigation of this.navigations) navigation.release();
-		this.navigations.clear();
 		if (!this.window.isDestroyed()) this.window.contentView.removeChildView(this.view);
 		if (!this.webContents.isDestroyed()) this.webContents.close();
 		this.emit({ type: 'closed', targetId: this.id });

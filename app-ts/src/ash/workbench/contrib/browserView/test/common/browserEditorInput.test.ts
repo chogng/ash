@@ -82,6 +82,8 @@ function fixture() {
 		info: { id, host: { windowId: 1 }, owner: { type: 'user' }, session: data.session, state: { targetId: id, url: data.url, title: 'Live page', loading: false, visible: false, canGoBack: false, canGoForward: false } } as IBrowserViewInfo,
 	};
 	const service: BrowserService = {
+		getSharing: async () => [], setSharing: async () => {},
+		respondToPermission: async () => {}, clearPermissions: async () => {}, cancelDownloads: async () => {},
 		getBrowserViews: async () => [f.info], getOrCreateBrowserView: async () => { f.creations++; return f.info; }, getState: async () => f.info.state,
 		layout: async () => { }, setVisible: async () => { }, loadURL: async () => { }, goBack: async () => { }, goForward: async () => { }, reload: async () => { }, stop: async () => { }, focus: async () => { },
 		destroyBrowserView: async () => { f.closed++; }, onDidEvent: events.event,

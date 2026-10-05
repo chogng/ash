@@ -5,6 +5,16 @@ use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Replaces the audience of a user page on this connection; an empty audience revokes access.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserSharingSetParams {
+    #[schemars(length(min = 1, max = 256))]
+    pub target_id: String,
+    #[schemars(length(max = 32))]
+    pub thread_ids: Vec<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserCreateParams {

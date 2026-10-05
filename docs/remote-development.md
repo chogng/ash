@@ -268,14 +268,13 @@ SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。
    不会停止 Tunnel，显式 Stop 或产品窗口退出会终止 OpenSSH。已经 Open 的 child 意外退出时，两种 host
    都在 30 秒内按 250ms 到 2s 退避并复用原 local port；首次启动错误仍立即失败。Desktop 通过
    `open/recovering/failed` 状态事件投影生命周期，Close、Workspace 切换或窗口销毁会取消退避和候选
-   child。两条产品路径都不把凭据交给 UI。Desktop 的 Browser 导航还经过 Main-owned
-   `RemoteBrowserViewNavigationResolver`：只有当前 Workspace 为 SSH Remote 且 URL 是 loopback
-   HTTP/HTTPS 时才按远端端口打开 Tunnel；普通 HTTPS、本地 Workspace 和 `about:blank` 保持直接导航。
-   `BrowserViewMainService` 保存 requested origin 与实际 loaded origin 的映射，因此 Workbench 和
-   Browser Automation 始终看到用户输入的远端 loopback URL，而 WebContents 只连接分配后的本机端口。
-   同一个 Browser target 会按 origin 复用可恢复 Tunnel，并为 Back/Forward 保留旧 lease；target
-   关闭、创建被取消、Workspace 变化、Tunnel failed/removed 或异步 Browser host binding 退休都会清理
-   对应资源。
+   child。两条产品路径都不把凭据交给 UI。Desktop 的 Browser 网络由 Main 的
+   `BrowserSessionRemote` 管理：在网页创建前，通过当前 Workspace 的 SSH 主机启动 SOCKS5
+   代理并配置对应 Electron Session。主页面、子资源、fetch、WebSocket 和 loopback 请求使用同一
+   策略，域名交由远端解析；远程页面禁止未经代理的 WebRTC UDP。浏览器不改写地址，远程与本地
+   Session 分区分开，工作区及 Agent Thread 的存储隔离继续生效。代理断开会关闭该 Session 的
+   网络连接并保留代理规则，后续请求失败；最后一个页面关闭、创建被取消或窗口退出时释放代理。
+
 8. Desktop 回滚命令只向 Main 发送无参数 intent。Main 显示确认框，调用
    `ash remote profile rollback` 在独立 SSH connection 上验证 previous runtime 的 availability、
    initialize/schema compatibility 和 profile generation；验证失败时不关闭当前连接。条件交换成功后，
@@ -565,13 +564,14 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - Desktop Main Tunnel coordinator：`app-ts/src/ash/platform/remote/electron-main/sshRemoteTunnelService.ts`
 - Desktop Main Tunnel listener readiness/recovery 测试：
   `app-ts/src/ash/platform/remote/test/electron-main/sshRemoteTunnelService.test.ts`
-- Desktop Remote Browser URL/Tunnel adapter 与生命周期：
-  `app-ts/src/ash/platform/browserView/common/browserViewNavigation.ts`、
+- Desktop Remote BrowserSession 网络策略与生命周期：
+  `app-ts/src/ash/platform/browserView/electron-main/browserSessionRemote.ts`、
   `app-ts/src/ash/platform/browserView/electron-main/browserViewMainService.ts`、
-  `app-ts/src/ash/platform/remote/electron-main/remoteBrowserViewNavigationResolver.ts`
-- Desktop Remote Browser mapping、失败、取消、Workspace fencing 与异步 host retirement 测试：
-  `app-ts/src/ash/platform/remote/test/electron-main/remoteBrowserViewNavigationResolver.test.ts`、
-  `app-ts/src/ash/platform/browserView/test/electron-main/browserView.test.ts`
+  `app-ts/src/ash/platform/remote/electron-main/sshRemoteTunnelService.ts`
+- Desktop Remote BrowserSession 共享租约、失败、取消与异步 host retirement 测试：
+  `app-ts/src/ash/platform/browserView/test/electron-main/browserSession.test.ts`、
+  `app-ts/src/ash/platform/browserView/test/electron-main/browserView.test.ts`、
+  `app-ts/test/smoke/areas/windows/browser-network.spec.ts`
 - Desktop Ports 面板与 Tunnel event projection：
   `app-ts/src/ash/workbench/contrib/remote/browser/remotePortsViewPane.ts`、
   `app-ts/src/ash/workbench/contrib/remote/test/browser/remotePortsViewPane.test.ts`
@@ -579,7 +579,7 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 ## 后续演进
 
 下一阶段应让正式 release publisher/feed 生成并分发已绑定目录，增加 updater 重试/断点续传与
-content-addressed cache/远端旧 generation GC，并让统一 Remote Explorer 连接树与需要 socket/server endpoint 的 Debug adapter 等具体能力消费已有的 host-owned Tunnel service；Browser 后续可增加受约束的绝对 loopback 子资源代理。Tunnel 必须默认绑定
+content-addressed cache/远端旧 generation GC，并让统一 Remote Explorer 连接树与需要 socket/server endpoint 的 Debug adapter 等具体能力消费已有的 host-owned Tunnel service。BrowserSession 已通过 SSH SOCKS5 处理 loopback 及子资源。Tunnel 必须默认绑定
 loopback，公开监听和反向转发必须经过独立授权。
 远程多根 Workspace 需要先定义每个 folder 的 authority 一致性规则，不能让一个 App Server session
 隐式跨越多个主机。

@@ -1,5 +1,6 @@
 use serde_json::Map;
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 pub(crate) fn generate(schema: &Value) -> String {
@@ -7,6 +8,7 @@ pub(crate) fn generate(schema: &Value) -> String {
     let mut runtime_schema = serde_json::json!({ "$defs": schema["$defs"] });
     retain_decoder_definitions(&mut runtime_schema, DECODER_ROOTS);
     remove_annotations(&mut runtime_schema);
+    compact_definition_names(&mut runtime_schema, DECODER_ROOTS);
     // With preserve_order, removing annotations can swap the remaining object keys.
     runtime_schema.sort_all_objects();
     let schema =
@@ -39,6 +41,48 @@ const DECODER_ROOTS: &[&str] = &[
     "AppServerError",
     "JsonRpcError",
 ];
+
+/// Only decoder entry points need public names; internal references never enter the wire contract.
+/// Rewrite schema references, not payload keys or literal values that happen to contain `$ref`.
+fn compact_definition_names(schema: &mut Value, roots: &[&str]) {
+    let mut names: Vec<String> = schema["$defs"]
+        .as_object()
+        .expect("decoder schema must contain definitions")
+        .keys()
+        .cloned()
+        .collect();
+    names.sort();
+    let aliases: BTreeMap<String, String> = names
+        .into_iter()
+        .enumerate()
+        .map(|(index, name)| {
+            let alias = if roots.contains(&name.as_str()) {
+                name.clone()
+            } else {
+                index.to_string()
+            };
+            (name, alias)
+        })
+        .collect();
+    visit_schema(schema, &mut |object| {
+        if let Some(reference) = object.get_mut("$ref") {
+            let target = reference
+                .as_str()
+                .and_then(|value| value.strip_prefix("#/$defs/"))
+                .expect("decoder schema references must use local definitions");
+            let alias = aliases
+                .get(target)
+                .expect("decoder schema reference must resolve to a definition");
+            *reference = Value::String(format!("#/$defs/{alias}"));
+        }
+    });
+    let definitions = schema["$defs"]
+        .as_object_mut()
+        .expect("decoder schema must contain definitions");
+    for (name, definition) in std::mem::take(definitions) {
+        definitions.insert(aliases[&name].clone(), definition);
+    }
+}
 
 /// Keep the transitive reference closure of the decoder entry points, including cycles.
 fn retain_decoder_definitions(schema: &mut Value, roots: &[&str]) {

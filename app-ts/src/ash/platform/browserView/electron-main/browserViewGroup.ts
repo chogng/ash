@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
-import { BrowserViewStorageScope, type IBrowserViewInfo } from '../common/browserView.js';
+import { raceCancellationError } from '../../../base/common/async.js';
+import type { IBrowserViewInfo } from '../common/browserView.js';
 import type { IBrowserViewGroup, IBrowserViewGroupFilter } from '../common/browserViewGroup.js';
 import type { CDPEvent, CDPRequest, CDPResponse, CDPTargetInfo } from '../common/cdp/types.js';
 import type { BrowserView } from './browserView.js';
@@ -29,6 +30,10 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 		this._register(views.onDidEvent(event => {
 			if (event.type === 'created') { void this.accept(event.info).catch(() => this.dispose()); }
 			else if (event.type === 'closed') { this.remove(event.targetId); }
+			else if (event.type === 'sharingChanged') {
+				if (!event.threadIds.includes(this.filter.sandboxSessionId)) { this.remove(event.targetId); }
+				else { const page = this.views.tryGetBrowserView(event.targetId); if (page) { void this.accept(page.getInfo()).catch(() => this.dispose()); } }
+			}
 			else if (event.type === 'stateChanged' && this.pages.has(event.state.targetId)) {
 				for (const parent of this.discover) { this.event('Target.targetInfoChanged', { targetInfo: this.info(event.state.targetId) }, parent); }
 			}
@@ -39,11 +44,10 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 		this.assertNotDisposed();
 	}
 	private accept(info: IBrowserViewInfo): Promise<void> {
-		if (info.owner.type !== 'agent' || info.owner.sessionId !== this.filter.sandboxSessionId
-			|| info.session.scope !== BrowserViewStorageScope.Agent || info.session.affinity !== this.filter.sandboxSessionId
-			|| (this.filter.browserIds && !this.filter.browserIds.includes(info.id)) || this.pages.has(info.id)) { return Promise.resolve(); }
+		if ((this.filter.browserIds && !this.filter.browserIds.includes(info.id)) || this.pages.has(info.id)) { return Promise.resolve(); }
+		try { this.views.validateAgentAccess(info.id, this.filter.sandboxSessionId); } catch { return Promise.resolve(); }
 		const existing = this.pending.get(info.id);
-		if (existing) { return existing; }
+		if (existing) { return existing.then(() => this.accept(info)); }
 		const page = this.views.tryGetBrowserView(info.id);
 		if (!page) { return Promise.resolve(); }
 		const resources = new DisposableStore();
@@ -51,7 +55,8 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 		resources.add(page.debugger.onEvent(event => this.forward(page.id, event)));
 		this.attachments.set(page.id, resources);
 		const pending = page.debugger.getTargetId().then(targetId => {
-			if (this.isDisposed || page.signal.aborted) { this.attachments.deleteAndDispose(page.id); return; }
+			if (this.isDisposed || page.signal.aborted || this.attachments.get(page.id) !== resources) { return; }
+			try { this.views.validateAgentAccess(page.id, this.filter.sandboxSessionId); } catch { this.attachments.deleteAndDispose(page.id); return; }
 			// CDP target identity must remain Chromium's identity: its root frame uses that same ID.
 			this.targetIds.set(page.id, targetId);
 			this.pages.set(page.id, page);
@@ -210,7 +215,7 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 		const page = this.page(session.viewId);
 		if (message.method === 'Target.setAutoAttach') { session.autoAttach = params.autoAttach === true; }
 		// Session-scoped Target commands belong to the selected page, including its child frames.
-		return page.debugger.sendCommand(message.method, params, session.actual);
+		return raceCancellationError(page.debugger.sendCommand(message.method, params, session.actual), this.views.agentAccessSignal(page.id, this.filter.sandboxSessionId), 'BrowserSharingRevoked');
 	}
 	protected override disposeCore(): void {
 		this.retire(this.id);

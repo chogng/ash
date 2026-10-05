@@ -73,6 +73,7 @@ export class SshRemoteTunnelService extends Disposable implements IRemoteTunnelS
 	private readonly wait: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 	private readonly startupTimeoutMs: number;
 	private nextId = 1;
+	private readonly proxies = new Map<ChildProcess, AbortController>();
 
 	constructor(readonly options: SshRemoteTunnelServiceOptions) {
 		super();
@@ -102,11 +103,38 @@ export class SshRemoteTunnelService extends Disposable implements IRemoteTunnelS
 				record.candidateChild?.kill();
 			}
 			this.tunnels.clear();
+			for (const [child, controller] of this.proxies) { controller.abort(); child.kill(); }
+			this.proxies.clear();
 		}));
 	}
 
 	list(): Promise<readonly RemoteTunnel[]> {
 		return Promise.resolve([...this.tunnels.values()].map(record => record.tunnel));
+	}
+
+	/** A storage session owns this SOCKS endpoint; Chromium sends hostname resolution through SSH. */
+	public async openProxy(signal: AbortSignal): Promise<IDisposable & { readonly localPort: number; readonly signal: AbortSignal }> {
+		this.assertNotDisposed();
+		const authority = this.remoteAuthority();
+		const localPort = await this.reserveLocalPort();
+		validatePort(localPort, 'localPort');
+		AbortSignal.any([signal, this.cancellation.signal]).throwIfAborted();
+		const child = this.spawnProcess(this.options.sshExecutable, [
+			'-N', '-T', '-o', 'BatchMode=yes', '-o', 'ExitOnForwardFailure=yes',
+			'-o', `ConnectTimeout=${DEFAULT_CONNECT_TIMEOUT_SECONDS}`, '-D', `127.0.0.1:${localPort}`, authority.host,
+		], { environment: this.options.localEnvironment });
+		const controller = new AbortController();
+		this.proxies.set(child, controller);
+		const closed = (): void => controller.abort(new Error('Remote browser proxy closed'));
+		child.once('exit', closed);
+		child.once('error', closed);
+		const resource = toDisposable(() => {
+			controller.abort(); this.proxies.delete(child); child.removeListener('exit', closed); child.removeListener('error', closed); child.kill();
+		});
+		try {
+			await waitForStartup(child, localPort, this.startupTimeoutMs, this.probeLoopbackListener, this.wait, this.now, AbortSignal.any([signal, this.cancellation.signal, controller.signal]));
+			return Object.assign(resource, { localPort, signal: controller.signal });
+		} catch (error) { resource.dispose(); throw error; }
 	}
 
 	async open(request: RemoteTunnelOpenRequest): Promise<RemoteTunnel> {

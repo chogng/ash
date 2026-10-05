@@ -10,6 +10,7 @@ import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/ele
 import { decodeAppServerServerRequestResult } from '../../../../src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.js';
 import type { Page } from '@playwright/test';
 import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
+import { URI } from '../../../../src/ash/base/common/uri.js';
 
 test('two desktops isolate browser targets and closing one preserves the other', async ({ target, testWorkspace }) => {
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires the shared managed backend');
@@ -120,7 +121,7 @@ test('Web opens a selected server folder with explicit authorization and a separ
 		headers: { Origin: new URL(original.endpoint).origin, Authorization: `Bearer ${original.token}` },
 	});
 	expect(prior.status()).toBe(200);
-	expect((await prior.json() as { workspaceRoot: string }).workspaceRoot).toBe(original.root);
+	expect(URI.file((await prior.json() as { workspaceRoot: string }).workspaceRoot).fsPath).toBe(URI.file(original.root).fsPath);
 });
 
 test('built Web workbench reads workspace files and reconnects after reload', async ({ target, testWorkspace, workbench }) => {

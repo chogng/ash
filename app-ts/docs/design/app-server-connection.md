@@ -117,11 +117,17 @@ flowchart LR
 
 Rust 负责批准和任务归属，Renderer 处理反向请求，Main 保持页面、导航、Session 和显示的所有权。观察及元素操作经过窗口独立 MessagePort 交给应用共享的 Playwright 进程，再由 Thread Group 的 CDP 操作同一可见页面。产品协议只暴露浏览器领域操作。
 
-Group 同时检查页面 owner 和 Agent Session，显式页面 ID 不能扩大授权范围。Group 保留 Chromium 的 target ID，并用 `browserViewId` 关联 Ash 页面；主 frame 与 target 的对应关系不能被页面 ID 替换。多个 Group 借用同一页面调试器，释放 Group 只解绑自动化，不关闭页面。固定页面集合的 Group 不接受新建目标。
+Group 检查 Agent 页面归属或用户页面的指定 Thread 分享记录，显式页面 ID 不能扩大授权范围。Group 保留 Chromium 的 target ID，并用 `browserViewId` 关联 Ash 页面；主 frame 与 target 的对应关系不能被页面 ID 替换。多个 Group 借用同一页面调试器，释放 Group 只解绑自动化，不关闭页面。固定页面集合的 Group 不接受新建目标。
 
 取消会阻止后续步骤，但已经发送给 Chromium 的单条命令无法强制抢占。Main 保持页面操作顺序，等待执行中的 Chromium 命令结束后才允许下一次操作。Playwright 进程退出会拒绝在途 IPC 并释放 Group；Main 页面仍可手动导航和关闭。
 
 用户页面使用工作区持久 Session；Agent 页面按窗口和 Thread 使用内存 Session，同一 Thread 共享登录，其他 Thread 不共享。Renderer 重载重新接入 Main 的现存用户页面，不重建网页；后端连接退场时关闭 Agent 页面，包括重载导致连接退场的场景。应用重启恢复用户页签及工作区登录；保存的 Agent 页签只作为用户临时页面恢复，不恢复任务权限或 Agent 登录。
+
+用户页面分享由 `browser/sharing/set` 进入 Rust，再请求对应连接的 Main 确认页面归属。授权只允许指定 Thread 使用同一连接的页面，不授予其他页面、窗口或网站权限。撤销先取消 Main 操作并释放 CDP 连接，再更新 Rust 记录；关闭页面释放后端授权记录。分享不持久化，任务仍需通过已有动作批准。
+
+网站权限由 BrowserSessionPermissions 管理，按请求来源、嵌入页面来源及权限类别记录允许或拒绝。支持位置、通知、摄像头/麦克风、剪贴板和全屏；页面导航、关闭或 Renderer 连接退场取消未回答的请求，不把取消记成用户拒绝。重置清除该 Session 的记录。USB、HID、串口和蓝牙设备选择、证书信任仍未提供。
+
+远程工作区从当前 Workspace 获取 SSH 主机，BrowserSessionRemote 在创建网页前配置 SOCKS5。Main 不改写 URL；Chromium 把域名传给代理，也把 loopback、网页子资源和 WebSocket 交给它。远程页面禁止未经代理的 WebRTC UDP。最后一个页面关闭时释放代理进程；代理失败时关闭该 Session 的现有连接，后续请求按保留的代理规则失败。本地 Session 使用原有分区，不受远程代理或远端登录影响。
 
 ### 能力边界
 
@@ -133,10 +139,11 @@ Group 同时检查页面 owner 和 Agent Session，显式页面 ID 不能扩大�
 | 桌面 Agent 观察及输入网页 | 按连接和 Thread 路由，独立 Playwright 进程操作同一可见页面 |
 | 纯 Web 控制任意网站 | 未提供浏览器宿主，不能跨站控制其他网页 |
 | 登录与存储隔离 | 用户工作区登录持久化；Agent 登录只在对应窗口和 Thread 的内存 Session 内共享 |
-| 下载、页面权限提示 | 下载和权限请求统一拒绝；尚未提供用户授权交互 |
+| 下载、页面权限提示 | Electron 选择保存位置，页面显示下载进度并可取消；网站权限按请求来源弹窗，决定保存在该 Session 内，可重置 |
 | 浏览器页签跨应用重启恢复 | 用户页签、URL、标题和工作区 Session 可恢复；Agent 页签不会恢复任务权限 |
 | 同一页面在多个编辑器组中引用 | 分组引用和关闭行为已有验证；同一 WebContentsView 只在当前宿主编辑器显示 |
-| 页面分享、授权受众、远程 Session 网络策略 | 尚未完成；用户页面保持私有 |
+| 页面分享与授权受众 | 用户页面默认私有，可分享给指定 Thread；撤销、关闭页面或连接退场后取消访问 |
+| 远程 Session 网络策略 | SSH SOCKS5 代理覆盖域名解析、子资源、fetch、WebSocket 和 loopback；本地与远端存储分区分开，断线保留代理规则并关闭连接 |
 | 任意脚本工具、延迟执行、网页对话框和文件选择器 | 尚未接入 Agent 产品协议 |
 
 浏览器能力与业务连接方式相互独立。保留或移除 Node 消息中转，都不会自动给普通 Web 页面增加跨站控制能力。
@@ -163,13 +170,16 @@ Ash 已接通 MessagePort、应用共享进程、Playwright、Group/CDP、Main �
 
 | 检查 | 结果与范围 |
 | --- | --- |
-| Rust | `ash-app-server` 的 11 项 browser 测试、`ash-app-server-protocol` 的 85 项库测试及 1 项生成器测试通过；两个 owner 的 check 与 warnings 检查通过 |
-| TypeScript 与构建 | IPC、Main 页面及 Group、编辑器模型和序列化共 39 项定向单测通过；生产构建、Main/Preload 构建、协议检查及本次两个自动化测试文件的类型检查通过 |
-| Electron UI 与真实 App Server | 各 4 项通过，覆盖独立进程及崩溃、页面操作与输入、Thread 隔离、Renderer 重载保留用户页面、应用重启恢复工作区登录、分组引用、弹窗、取消和关闭释放 |
-| Web | 双桌面窗口的目标隔离与关闭、Web 授权边界通过；Web 读取并重载场景因退出时语言服务报告 `App Server client disposed` 而失败，不能记为通过 |
-| 完整自动化类型检查 | 未通过：未改动的 `external-uri-openers.spec.ts` 使用了恢复结果中不存在的 `quickaccess` 和 `editors`；本次两个测试文件已使用相同编译选项独立检查通过 |
+| Rust | `ash-app-server` 的 12 项 browser 测试、`ash-app-server-protocol` 的 85 项库测试及 1 项编译 schema 一致性测试通过；协议重新生成成功，两个 owner 的 all-targets warnings 检查通过 |
+| TypeScript 与构建 | IPC、Main 页面及 Group、Session 权限与网络租约、编辑器模型和序列化共 51 项定向单测通过；随后新增 CDP 在途撤销回归，Group 文件的 25 项测试通过。生产 Main/Preload 与 Renderer 构建、严格协议检查通过 |
+| Electron UI 与真实 App Server | UI 的 8 项、真实 App Server 的 7 项通过；覆盖页面操作、Thread 隔离、分享撤销、权限允许与拒绝、下载完成与取消、重载恢复及关闭释放。另单独验证分享对话框的撤销经 Renderer → Rust → Main 生效 |
+| 远程网页网络 | 真实 Chromium 经 SOCKS5 测试端点验证域名解析、子资源、fetch、WebSocket、loopback；代理断开后请求失败、无直连，关闭释放网络租约，本地页面与 Cookie 分区不受影响。SSH 进程参数和共享租约另由单测验证 |
+| Web | 生产 Web 读文件与重载、授权边界及双桌面隔离通过，退出没有再报告 `App Server client disposed`。文件夹授权场景修正 Windows 盘符比较后单独重跑通过 |
+| 完整自动化类型检查 | `tsc -p test/automation/tsconfig.json` 通过；恢复结果通过 `.workbench.quickaccess` 与 `.workbench.editors` 访问，旧失败记录已失效 |
 
-上述 Electron 场景使用真实页面、IPC、Group/CDP 和 Playwright 进程；Rust 任务路由另由测试验证。尚未运行外部模型驱动的完整 Agent 浏览流程。样式检查没有错误，保留 Sessions CSS 的已有字号建议。
+上述 Electron 场景使用真实页面、IPC、Group/CDP 和 Playwright 进程；Rust 任务路由另由测试验证。分享授予选定 Thread 的 Main 路径与 Rust 宿主确认分别验证，尚未运行外部模型选择会话并浏览网页的完整流程。下载测试模拟用户选择保存位置，文件写入、取消和关闭清理均实际执行。远程网络测试使用测试 SOCKS5 端点，没有连接外部 SSH 主机。浏览器功能的样式检查无错误。
+
+对应场景：[桌面浏览器](../../test/smoke/areas/windows/browser-view.spec.ts)、[远程网页网络](../../test/smoke/areas/windows/browser-network.spec.ts)、[Web 连接](../../test/smoke/areas/windows/web-connection.spec.ts)。USB、HID、串口和蓝牙设备选择、证书信任仍不在已完成范围内。
 
 2026-09-16 实施验证：
 

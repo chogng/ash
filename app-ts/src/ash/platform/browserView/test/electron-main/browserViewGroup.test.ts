@@ -139,6 +139,34 @@ suite('Browser view groups', () => {
 		lease.dispose();
 	});
 
+	test('revoking a shared page detaches its Thread and withholds an in-flight CDP result while retaining the page', async () => {
+		using f = fixture();
+		const pageId = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
+		await f.manager.getOrCreateBrowserView(pageId, { initialUrl: 'about:blank', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
+		const groups = f.store.add(f.instantiation.createInstance(BrowserViewGroupMainService));
+		const id = await groups.createGroup({ sandboxSessionId: 'one' });
+		const messages: Array<CDPEvent | CDPResponse> = [];
+		f.store.add(groups.onDynamicCDPMessage(id)(message => messages.push(message)));
+		await f.manager.setSharing(pageId, ['one']);
+		await groups.sendCDPMessage(id, { id: 1, method: 'Target.attachToTarget', params: { targetId: pageId, flatten: true } });
+		const sessionId = ((messages.at(-1) as CDPResponse).result as { sessionId: string }).sessionId;
+		const started = promiseWithResolvers<void>();
+		const finish = promiseWithResolvers<void>();
+		f.command = async () => { started.resolve(); await finish.promise; return { secret: 'signed-in content' }; };
+		const command = groups.sendCDPMessage(id, { id: 2, method: 'Runtime.evaluate', params: { expression: 'document.body.textContent' }, sessionId });
+		await started.promise;
+		await f.manager.setSharing(pageId, []);
+		await command;
+		assert.match((messages.at(-1) as CDPResponse).error!.message, /BrowserSharingRevoked/);
+		assert.equal(messages.some(message => 'method' in message && message.method === 'Target.detachedFromTarget'), true);
+		finish.resolve();
+		await groups.sendCDPMessage(id, { id: 3, method: 'Target.getTargets' });
+		assert.deepEqual((messages.at(-1) as CDPResponse).result, { targetInfos: [] });
+		assert.equal(messages.some(message => 'result' in message && (message.result as { secret?: string } | undefined)?.secret), false);
+		await f.manager.loadURL(pageId, 'https://example.test/still-private');
+		assert.equal((await f.manager.getState(pageId)).url, 'https://example.test/still-private');
+	});
+
 	test('workspace pages remain private even when selected explicitly', async () => {
 		using f = fixture();
 		const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';

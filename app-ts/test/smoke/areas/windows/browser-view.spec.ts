@@ -3,6 +3,153 @@ import type { ElectronApplication } from '@playwright/test';
 import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js";
 import { decodeAppServerServerRequestResult } from '../../../../src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.js';
 import { expect, test } from '../../../automation/test.js';
+interface BrowserPrompt { options: Electron.MessageBoxOptions; respond: (result: Electron.MessageBoxReturnValue) => void; }
+
+import type { IBrowserViewInfo } from '../../../../src/ash/platform/browserView/common/browserView.js';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+test('downloads report completion and cancellation and closing a page releases the active download', async ({ target, application, workbench, testWorkspace }) => {
+	test.skip(target.kind !== 'electron', 'Downloads belong to the desktop page session');
+	const server = createServer((request, response) => {
+		if (request.url === '/') { response.setHeader('Content-Type', 'text/html'); response.end('<title>Download fixture</title>'); return; }
+		response.setHeader('Content-Disposition', `attachment; filename="${request.url === '/complete' ? 'completed.txt' : 'pending.txt'}"`);
+		response.setHeader('Content-Type', 'application/octet-stream');
+		if (request.url === '/complete') { response.end('downloaded content'); return; }
+		response.setHeader('Content-Length', '1048576'); response.write('pending content');
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	const endpoint = server.address();
+	if (!endpoint || typeof endpoint === 'string') throw new Error('Missing download endpoint');
+	const url = `http://127.0.0.1:${endpoint.port}/`;
+	const electron = application as ElectronApplication;
+	const page = workbench.page;
+	try {
+		await workbench.quickaccess.runCommand('ash.browser.open');
+		const editor = page.locator('.ash-browser-editor');
+		const address = editor.getByRole('textbox', { name: 'Browser address' });
+		await address.fill(url); await address.press('Enter');
+		await expect(editor.getByRole('status')).toHaveText('Download fixture');
+		const start = (path: string, filename: string) => electron.evaluate(async ({ BrowserWindow }, { url, path, filename }) => {
+			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView;
+			// Simulate choosing the test directory in Electron's save-location dialog.
+			view.webContents.session.once('will-download', (_event, item) => {
+				item.setSavePath(filename);
+				(globalThis as unknown as { browserDownloadState: string }).browserDownloadState = 'progressing';
+				item.once('done', (_event, state) => { (globalThis as unknown as { browserDownloadState: string }).browserDownloadState = state; });
+			});
+			await view.webContents.executeJavaScript(`(() => { const link = document.createElement('a'); link.href = ${JSON.stringify(path)}; link.click(); })()`, true);
+		}, { url, path, filename });
+		const filename = join(testWorkspace.directory, 'completed.txt');
+		await start('/complete', filename);
+		const progress = editor.getByRole('status', { name: 'Downloads', exact: true });
+		await expect(progress).toHaveText(/bytes \(completed\)$/);
+		expect(await readFile(filename, 'utf8')).toBe('downloaded content');
+		await start('/pending', join(testWorkspace.directory, 'pending.txt'));
+		await expect(progress).toContainText('downloading');
+		await editor.getByRole('button', { name: 'Cancel downloads', exact: true }).click();
+		await expect(progress).toContainText('cancelled');
+		await start('/pending', join(testWorkspace.directory, 'closed.txt'));
+		await expect(progress).toContainText('downloading');
+		await page.getByRole('button', { name: 'Close Download fixture', exact: true }).click();
+		await expect.poll(() => electron.evaluate(() => (globalThis as unknown as { browserDownloadState: string }).browserDownloadState)).toBe('cancelled');
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
+});
+
+test('website permission dialogs allow, remember, reset and deny the requesting site', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron', 'Website permissions belong to the desktop page session');
+	const server = createServer((_request, response) => {
+		response.setHeader('Content-Type', 'text/html');
+		response.end('<title>Permission fixture</title>');
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	const endpoint = server.address();
+	if (!endpoint || typeof endpoint === 'string') throw new Error('Missing fixture endpoint');
+	const url = `http://127.0.0.1:${endpoint.port}/`;
+	const electron = application as ElectronApplication;
+	const page = workbench.page;
+	const original = await electron.evaluateHandle(({ dialog }) => dialog.showMessageBox);
+	await electron.evaluate(({ dialog }) => {
+		const prompts: BrowserPrompt[] = [];
+		(globalThis as unknown as { browserPrompts: BrowserPrompt[] }).browserPrompts = prompts;
+		dialog.showMessageBox = ((...args: [Electron.MessageBoxOptions] | [Electron.BrowserWindow, Electron.MessageBoxOptions]) => new Promise<Electron.MessageBoxReturnValue>(respond => prompts.push({ options: args.at(-1) as Electron.MessageBoxOptions, respond }))) as typeof dialog.showMessageBox;
+	});
+	const prompt = () => electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[] }).browserPrompts.map(item => item.options));
+	const answer = (response: number) => electron.evaluate((_electron, response) => (globalThis as unknown as { browserPrompts: BrowserPrompt[] }).browserPrompts.shift()!.respond({ response, checkboxChecked: false }), response);
+	try {
+		await workbench.quickaccess.runCommand('ash.browser.open');
+		const editor = page.locator('.ash-browser-editor');
+		const location = editor.getByRole('textbox', { name: 'Browser address' });
+		await location.fill(url); await location.press('Enter');
+		await expect(editor.getByRole('status')).toHaveText('Permission fixture');
+		const ask = () => electron.evaluate(({ BrowserWindow }, url) => {
+			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView;
+			void view.webContents.executeJavaScript("Notification.requestPermission().then(value => document.title = 'Permission ' + value)", true);
+		}, url);
+		await ask();
+		await expect.poll(prompt).toMatchObject([{ title: 'Website permission', message: expect.stringContaining(new URL(url).origin), buttons: ['Allow', 'Deny'] }]);
+		expect((await prompt())[0]!.message).toContain('notifications');
+		await answer(0);
+		await expect(editor.getByRole('status')).toHaveText('Permission granted');
+		await ask();
+		expect(await prompt()).toEqual([]);
+		await editor.getByRole('button', { name: 'Reset all website permissions', exact: true }).click();
+		await ask();
+		await expect.poll(prompt).toHaveLength(1);
+		await answer(1);
+		await expect(editor.getByRole('status')).toHaveText('Permission denied');
+		await page.getByRole('button', { name: 'Close Permission denied', exact: true }).click();
+	} finally {
+		await electron.evaluate(({ dialog }, original) => { dialog.showMessageBox = original; }, original);
+		await original.dispose();
+		server.closeAllConnections();
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
+});
+
+test('sharing a user page exposes only that page to the chosen thread and revocation retains the page', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron', 'Page sharing requires a desktop browser host');
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('ash.browser.open');
+	const info = await page.evaluate(async () => {
+		const views = await (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke('ash:browser-view:list') as IBrowserViewInfo[];
+		return views.find(view => view.owner.type === 'user')!;
+	});
+	const call = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
+		return (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params });
+	}, { method, params });
+	const observe = { threadId: 'share-test-thread', targetId: info.id, includeAccessibilityTree: false, includeDomSnapshot: false, includeScreenshot: false };
+	await expect(call('observe', observe)).rejects.toThrow(/BrowserTargetAccessDenied/);
+	await call('sharing', { targetId: info.id, threadIds: ['share-test-thread'] });
+	expect(decodeAppServerServerRequestResult('browser/observe', await call('observe', observe)).targetId).toBe(info.id);
+	await expect(call('observe', { ...observe, threadId: 'another-thread' })).rejects.toThrow(/BrowserTargetAccessDenied/);
+	if (target.appServerMode === 'required') {
+		const electron = application as ElectronApplication;
+		const original = await electron.evaluateHandle(({ dialog }) => dialog.showMessageBox);
+		await electron.evaluate(({ dialog }) => {
+			const prompts: BrowserPrompt[] = [];
+			(globalThis as unknown as { browserPrompts: BrowserPrompt[] }).browserPrompts = prompts;
+			dialog.showMessageBox = ((...args: [Electron.MessageBoxOptions] | [Electron.BrowserWindow, Electron.MessageBoxOptions]) => new Promise<Electron.MessageBoxReturnValue>(respond => prompts.push({ options: args.at(-1) as Electron.MessageBoxOptions, respond }))) as typeof dialog.showMessageBox;
+		});
+		try {
+			await page.getByRole('button', { name: 'Share with Agent', exact: true }).click();
+			await expect.poll(() => electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[] }).browserPrompts.map(prompt => prompt.options))).toMatchObject([{ title: 'Share with Agent', detail: 'This page is currently shared.', buttons: ['Revoke all access', 'Cancel'] }]);
+			await electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[] }).browserPrompts.shift()!.respond({ response: 0, checkboxChecked: false }));
+			await expect(page.locator('.ash-browser-editor').getByRole('status')).toHaveText('This page is private.');
+		} finally {
+			await electron.evaluate(({ dialog }, original) => { dialog.showMessageBox = original; }, original);
+			await original.dispose();
+		}
+	} else {
+		await call('sharing', { targetId: info.id, threadIds: [] });
+	}
+	await expect(call('observe', observe)).rejects.toThrow(/BrowserTargetAccessDenied/);
+	await expect(page.getByRole('tab', { name: 'Browser', exact: true })).toHaveCount(1);
+	await page.getByRole('button', { name: 'Close Browser', exact: true }).click();
+});
 
 test('browser automation runs in one separate process and its crash retains manually usable pages', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron', 'The integrated browser is a desktop capability');

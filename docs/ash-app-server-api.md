@@ -229,6 +229,9 @@ capability 的连接才能成为宿主；`observe` 与 `input` 分别声明页�
 | `browser/observe` | exact target + 三个 include flag | 页面状态 + 可选 AX/DOM/PNG | 不执行脚本，不返回 Electron 对象 |
 | `browser/perform` | tagged semantic action | `{ targetId }` | 导航、node click/type、滚动、后退或刷新 |
 | `browser/close` | `{ targetId }` | `null` | 关闭精确目标 |
+| `browser/sharing/set` | `{ targetId, threadIds }` | `null` | 更新用户页面的授权受众，空数组撤销 |
+
+`browser/sharing/set` 是桌面用户的 Client → Server 请求，也是 Rust → Main 的同名宿主请求。调用连接必须具有桌面授权宿主与浏览器能力，Web 连接被拒绝。Main 确认目标为本窗口用户页面后，Rust 将页面绑定到同一连接的指定 Thread（最多 32 个）；Agent 页面不能由该方法扩大受众。撤销取消在途操作并解绑 CDP；关闭页面或连接释放记录。该授权不持久化，也不替代任务动作批准。
 
 请求 ID 使用保留的非空字符串，与 Client → Server 正整数 ID 隔离。App Server 把 create result 的
 `targetId` 绑定到响应它的连接；此后不能由另一连接响应，也不能把观察或动作结果切换到另一个

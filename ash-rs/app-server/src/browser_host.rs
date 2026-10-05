@@ -10,6 +10,7 @@ use ash_app_server_protocol::protocol::browser::BrowserObserveResult;
 use ash_app_server_protocol::protocol::browser::BrowserPerformActionDto;
 use ash_app_server_protocol::protocol::browser::BrowserPerformParams;
 use ash_app_server_protocol::protocol::browser::BrowserPerformResult;
+use ash_app_server_protocol::protocol::browser::BrowserSharingSetParams;
 use ash_app_server_protocol::protocol::browser::BrowserTextInputTargetDto;
 use ash_app_server_protocol::protocol::common::BrowserCapability as ClientBrowserCapability;
 use ash_app_server_protocol::protocol::registry::HostMethod;
@@ -41,6 +42,7 @@ struct BrowserHostState {
     owners: BTreeMap<u64, BrowserHostOwner>,
     owner_revision: u64,
     target_owners: BTreeMap<String, BrowserTargetOwner>,
+    shared_targets: BTreeMap<String, (u64, Vec<ash_protocol::ThreadId>)>,
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -129,6 +131,60 @@ impl BrowserHost {
         state
             .target_owners
             .retain(|_, owner| owner.connection_id != connection_id);
+        state
+            .shared_targets
+            .retain(|_, (owner, _)| *owner != connection_id);
+    }
+
+    pub(crate) fn set_sharing(
+        &self,
+        connection_id: u64,
+        params: &BrowserSharingSetParams,
+        cancellation: &CancellationToken,
+    ) -> Result<(), BrowserError> {
+        let threads = params
+            .thread_ids
+            .iter()
+            .map(|id| ash_protocol::ThreadId::new(id.clone()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| BrowserError::Failed("invalid sharing audience".into()))?;
+        {
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| BrowserError::Failed("browser host state lock poisoned".into()))?;
+            if !state.owners.contains_key(&connection_id)
+                || state.target_owners.contains_key(&params.target_id)
+                || state
+                    .shared_targets
+                    .get(&params.target_id)
+                    .is_some_and(|(owner, _)| *owner != connection_id)
+            {
+                return Err(BrowserError::CapabilityUnavailable);
+            }
+        }
+        // Main verifies the user page and revokes its CDP leases before the backend publishes the audience.
+        self.request::<_, ()>(
+            connection_id,
+            HostMethod::BrowserSharingSet,
+            params,
+            cancellation,
+        )?;
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| BrowserError::Failed("browser host state lock poisoned".into()))?;
+        if !state.owners.contains_key(&connection_id) {
+            return Err(BrowserError::CapabilityUnavailable);
+        }
+        if threads.is_empty() {
+            state.shared_targets.remove(&params.target_id);
+        } else {
+            state
+                .shared_targets
+                .insert(params.target_id.clone(), (connection_id, threads));
+        }
+        Ok(())
     }
 
     pub(crate) fn owner_availability(&self) -> (u64, bool) {
@@ -181,16 +237,25 @@ impl BrowserHost {
             .state
             .lock()
             .map_err(|_| BrowserError::Failed("browser host state lock poisoned".into()))?;
-        let target_owner = state
-            .target_owners
-            .get(&target_id.0)
-            .ok_or_else(|| BrowserError::TargetUnavailable(target_id.clone()))?;
-        let owner_id = target_owner.connection_id;
+        let thread = self.thread_id()?;
+        let owner_id = if let Some(target_owner) = state.target_owners.get(&target_id.0) {
+            if thread != &target_owner.thread_id {
+                return Err(BrowserError::CapabilityUnavailable);
+            }
+            target_owner.connection_id
+        } else {
+            let (owner, _) = state
+                .shared_targets
+                .get(&target_id.0)
+                .filter(|(_, audience)| audience.contains(thread))
+                .ok_or_else(|| BrowserError::TargetUnavailable(target_id.clone()))?;
+            *owner
+        };
         let owner = state
             .owners
             .get(&owner_id)
             .ok_or(BrowserError::CapabilityUnavailable)?;
-        if self.owner != Some(owner_id) || self.thread_id()? != &target_owner.thread_id {
+        if self.owner != Some(owner_id) {
             return Err(BrowserError::CapabilityUnavailable);
         }
         let supported = match required {
@@ -206,7 +271,9 @@ impl BrowserHost {
     }
 
     fn thread_id(&self) -> Result<&ash_protocol::ThreadId, BrowserError> {
-        self.thread_id.as_ref().ok_or(BrowserError::CapabilityUnavailable)
+        self.thread_id
+            .as_ref()
+            .ok_or(BrowserError::CapabilityUnavailable)
     }
 
     fn register_screenshot(
