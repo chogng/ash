@@ -505,6 +505,22 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-agent-message-board-client"
+version = "0.1.0"
+dependencies = [
+ "ash-agent-message-board",
+ "ash-async-utils",
+ "ash-extension-api",
+ "ash-http-client",
+ "ash-protocol",
+ "log",
+ "serde",
+ "serde_json",
+ "url",
 ]
 
 [[package]]
@@ -562,6 +578,7 @@ dependencies = [
  "ash-agent",
  "ash-agent-environment",
  "ash-agent-message-board",
+ "ash-agent-message-board-client",
  "ash-agent-roles",
  "ash-analytics",
  "ash-app-server-client",
@@ -1202,6 +1219,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "toml 0.9.12+spec-1.1.0",
+ "url",
 ]
 
 [[package]]

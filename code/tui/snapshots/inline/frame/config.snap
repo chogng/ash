@@ -9,6 +9,7 @@ expression: text(&buffer)
     ▝  ▘                                                                                            
                                                                                                     
                                                                                                     
+                                                                                                    
 ─ Config ───────────────────────────────────────────────────────────────────────────────────────────
                                                                                                     
    General    Providers    Issues    Network                                                        
@@ -21,13 +22,12 @@ expression: text(&buffer)
   Automatic updates                                                                       Latest    
   Show Git changes as diff                                                                   off +  
   Language                                                                               English    
-  Status bar style                                                                        Simple    
+  Status bar style                                                                        Simple +  
   Key hint style                                                                        Contrast    
   Screen mode                                                                             inline    
   Memories                                                                                   off +  
   Automatic Git fetch                                                                        Off +  
   Git fetch interval                                                                        180s    
-  Git branch marker                                                                    Powerline    
   Advisor                                                                                    Off    
   Always use half-width punctuation (Chinese only)                                           off +  
   Dictation shortcut                                                                         off    

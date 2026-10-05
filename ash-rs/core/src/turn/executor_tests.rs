@@ -1626,6 +1626,44 @@ fn cancellation_interrupts_the_turn_before_invoking_the_model() {
     );
 }
 
+struct CancelInputContribution(CancellationSource);
+impl ash_extension_api::TurnInputContributor for CancelInputContribution {
+    fn contribute(
+        &self,
+        input: ash_extension_api::TurnInputContext<'_>,
+    ) -> Result<Vec<ash_extension_api::PromptFragment>, ash_extension_api::ExtensionError> {
+        self.0.cancel();
+        input
+            .cancellation()
+            .check()
+            .map_err(|error| ash_extension_api::ExtensionError::new(error.to_string()))?;
+        Ok(Vec::new())
+    }
+}
+
+#[test]
+fn cancellation_during_input_contribution_interrupts_without_invoking_the_model() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let model = Arc::new(ScriptedModel::new([Ok(text_response("unused"))]));
+    let cancellation = CancellationSource::new();
+    let mut extensions = ash_extension_api::ExtensionRegistryBuilder::new();
+    extensions.turn_input_contributor(
+        "remote-input",
+        Arc::new(CancelInputContribution(cancellation.clone())),
+    );
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+        .with_extensions(Arc::new(extensions.build()));
+    assert!(matches!(
+        executor.execute(&thread_id, &turn_id, &cancellation.token()),
+        Err(CoreError::Cancelled(_))
+    ));
+    assert!(model.requests().is_empty());
+    assert_eq!(
+        threads.read_thread(&thread_id).unwrap().turns[0].status,
+        TurnStatus::Interrupted
+    );
+}
+
 #[test]
 fn cancellation_after_a_model_response_preserves_its_usage() {
     let (threads, thread_id, turn_id) = started_turn();

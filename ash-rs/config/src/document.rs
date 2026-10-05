@@ -230,6 +230,8 @@ pub struct UserConfigDocument {
     #[serde(default)]
     pub network: NetworkConfig,
     #[serde(default)]
+    pub message_board: crate::MessageBoardConfig,
+    #[serde(default)]
     pub connections: BTreeMap<ModelConnectionId, ModelProviderConfig>,
     #[serde(default)]
     pub mcp: McpConfig,
@@ -278,6 +280,7 @@ impl UserConfigDocument {
             .validate()
             .map_err(|message| ConfigError(message.into()))?;
         self.network.validate()?;
+        self.message_board.validate()?;
         if let Some(advisor) = &self.agent.advisor {
             advisor
                 .validate()
@@ -423,6 +426,7 @@ pub struct ResolvedConfig {
     pub tool_mode: ash_protocol::ToolMode,
     pub grep_backend: GrepBackend,
     pub network: NetworkConfig,
+    pub message_board: crate::MessageBoardConfig,
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
     pub connections: BTreeMap<ModelConnectionId, ModelProviderConfig>,
     pub active_connections: BTreeMap<ProviderId, ModelConnectionId>,
@@ -612,6 +616,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             tool_mode: document.agent.tool_mode,
             grep_backend: document.grep.backend,
             network: document.network.clone(),
+            message_board: document.message_board.clone(),
             providers,
             connections: document.connections.clone(),
             active_connections,

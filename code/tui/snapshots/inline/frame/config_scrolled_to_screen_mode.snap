@@ -10,9 +10,9 @@ expression: text(&scrolled)
   ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
   5 more above                                                                                      
   Language                                                                               English    
-  Status bar style                                                                        Simple    
+  Status bar style                                                                        Simple +  
   Key hint style                                                                        Contrast    
 > Screen mode                                                                             inline    
-  8 more below                                                                                      
+  7 more below                                                                                      
                                                                                                     
   Enter change · r reset · Tab tabs · / search · Esc close

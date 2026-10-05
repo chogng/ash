@@ -125,3 +125,7 @@ Windows 的后台进程生命周期集成测试使用 `just test-processes ash-a
 - Codebase 检索服务消费文字匹配候选；源码与 chunk 管理不持有搜索引擎。
 - 搜索及索引管理使用 `grep/search/*`、`grep/index/*`；查询支持索引或当前磁盘模式，分页返回实际模式。
 - 验证命令：`just test ash-app-server --lib grep`。
+
+## 远端 Agent 消息板
+
+App Server 按 profile 的 `messageBoard` 配置选择本地存储或外部消息板服务，沿用 `board_read` 与 `board_write` 的授权和参数。默认使用本地存储，同一 App Server 内的主代理和子代理可直接共享消息板。远端模式要求已有服务实现客户端协议；Ash 提供客户端接入，不提供独立消息板服务。配置、接口约定和通知生命周期见 [扩展文档](../docs/extensions.md#远端客户端)。

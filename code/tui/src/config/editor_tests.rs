@@ -922,7 +922,12 @@ fn config_root_uses_the_selected_language_through_nls() {
         Some("切换界面语言 中文")
     );
     assert_eq!(state.visible_items()[7].label(), "按键提示风格");
-    assert_eq!(state.visible_items()[12].label(), "Git 分支标识");
+    assert!(
+        state
+            .visible_items()
+            .iter()
+            .all(|item| item.label() != "Git 分支标识")
+    );
 }
 
 #[test]
@@ -996,6 +1001,13 @@ fn glyph_set_cycles_with_activation() {
                 terminal,
                 StatusLineSettings::default(),
             ));
+            assert!(
+                editor
+                    .selection
+                    .state_mut()
+                    .focus_item(&ListSelectionItemId::new("status-line-style"))
+            );
+            editor.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
             assert!(
                 editor
                     .selection
@@ -1432,6 +1444,15 @@ fn reset_restores_only_the_selected_general_setting() {
     {
         let mut editor =
             super::ConfigEditor::new(config_choices(&config, &catalog, terminal, status.clone()));
+        if id == "glyph-set" {
+            assert!(
+                editor
+                    .selection
+                    .state_mut()
+                    .focus_item(&ListSelectionItemId::new("status-line-style"))
+            );
+            editor.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        }
         assert!(editor.selection.state_mut().focus_item(
             &crate::widgets::list_selection::ListSelectionItemId::new(id)
         ));

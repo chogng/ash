@@ -17,10 +17,10 @@ expression: text
         │  Automatic updates                                  Latest   │        
         │  Show Git changes as diff                              off + │        
         │  Language                                          English   │        
-        │  Status bar style                                   Simple   │        
+        │  Status bar style                                   Simple + │        
         │  Key hint style                                   Contrast   │        
         │  Screen mode                                    fullscreen   │        
-        │  8 more below                                                │        
+        │  7 more below                                                │        
   ──────└──────────────────────────────────────────────────────────────┘──────  
   > keep this draft                                                             
   ─────────────────────────────────────────────────────────── Automatic model   

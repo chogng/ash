@@ -31,3 +31,7 @@ just test ash-config
 ## Agent 上下文策略
 
 `[agent.context]` 选择默认 `summary` 或 `handoff`，通过 `config/update.context` 整体替换或用 `null` 恢复默认。参数、生效点和示例见[上下文压缩](../../docs/config.md#上下文压缩)。策略随 Turn 接受记录冻结，Config 不负责摘要生成或窗口切换。
+
+## Agent 消息板部署
+
+`[messageBoard]` 默认 `type = "local"`。远端模式保存 `type = "remote"`、HTTP(S) `endpoint` 与 `credentialEnv`；配置只保存环境变量名，凭据由后端宿主提供。后端选择在 App Server 打开时生效，变更后重启所属后端。远端模式要求已有服务实现客户端协议；配置与接口约定见 [Agent 共享讨论板](../docs/extensions.md#远端客户端)。

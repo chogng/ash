@@ -4427,3 +4427,19 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
     assert_eq!(config.read_snapshot().unwrap().revision, updated.revision);
     remove_config_files(&path);
 }
+
+#[test]
+fn remote_message_board_configuration_requires_host_credential() {
+    let profile = tempfile::tempdir().unwrap();
+    std::fs::write(profile.path().join("config.toml"), format!(
+        "schemaVersion = {}\n[messageBoard]\ntype = \"remote\"\nendpoint = \"http://127.0.0.1:8092\"\ncredentialEnv = \"ASH_TEST_MISSING_BOARD_CREDENTIAL_987654321\"\n",
+        ash_config::CONFIG_FILE_SCHEMA_VERSION,
+    )).unwrap();
+    let error = open_app_server(AppServerOptions::new(profile.path()))
+        .err()
+        .expect("missing board credential must fail startup");
+    assert!(
+        error.to_string().contains("message-board credential"),
+        "{error}"
+    );
+}

@@ -1,0 +1,23 @@
+[package]
+name = "ash-agent-message-board-client"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+agent-message-board = { workspace = true }
+async-utils = { package = "ash-async-utils", path = "../async-utils" }
+http-client = { package = "ash-http-client", path = "../http-client" }
+extension-api = { package = "ash-extension-api", path = "../ext/extension-api" }
+protocol = { package = "ash-protocol", path = "../protocol" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
+log = { workspace = true }
+
+[lints]
+workspace = true

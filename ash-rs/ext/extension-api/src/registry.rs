@@ -452,7 +452,7 @@ impl ExtensionRegistry {
     ) -> Result<Vec<PromptFragment>, ExtensionError> {
         let mut fragments = Vec::new();
         for (_, contributor) in &self.turn_input {
-            fragments.extend(contributor.contribute(input)?);
+            fragments.extend(contributor.contribute(input.clone())?);
         }
         Ok(fragments)
     }

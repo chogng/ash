@@ -868,7 +868,7 @@ fn queue_focus_and_pointer_target_share_the_visible_row_identity() {
 }
 
 #[test]
-fn permission_uses_a_distinct_color_for_each_approval_mode_symbol() {
+fn permission_uses_a_distinct_color_for_each_approval_mode() {
     let mut app = App::new();
     for (mode, icon, color) in [
         (
@@ -894,10 +894,7 @@ fn permission_uses_a_distinct_color_for_each_approval_mode_symbol() {
             .find(|x| buffer[(*x, row)].symbol() == icon)
             .unwrap();
         assert_eq!(buffer[(column, row)].fg, color);
-        assert_eq!(
-            buffer[(column + icon.width() as u16, row)].fg,
-            test_context().chat_input_chrome()
-        );
+        assert_eq!(buffer[(column + icon.width() as u16, row)].fg, color);
     }
 }
 

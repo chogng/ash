@@ -6,6 +6,8 @@
 mod issues;
 pub use issues::IssueConfig;
 mod codebase;
+mod message_board;
+pub use message_board::MessageBoardConfig;
 mod command;
 mod commit_messages;
 mod dir_config;

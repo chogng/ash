@@ -9,15 +9,16 @@ use serde_json::json;
 
 pub(crate) const OUTPUT_BYTES: usize = 8_000;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub(crate) struct Scope {
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Scope {
     pub session: SessionId,
     pub root: ThreadId,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
-pub(crate) enum Read {
+pub enum Read {
     Channels {
         query: Option<String>,
         cursor: Option<String>,
@@ -50,7 +51,7 @@ pub(crate) enum Read {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
-pub(crate) enum Write {
+pub enum Write {
     CreateChannel {
         channel: String,
     },
@@ -73,7 +74,7 @@ pub(crate) enum Write {
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum Subscription {
+pub enum Subscription {
     On,
     Off,
 }
@@ -152,7 +153,7 @@ impl Message {
     }
 }
 
-pub(crate) struct Commit {
+pub struct Commit {
     pub output: Value,
 }
 

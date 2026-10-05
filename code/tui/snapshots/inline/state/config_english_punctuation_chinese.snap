@@ -14,15 +14,15 @@ expression: render_dictation_frame(&app)
   自 动 更 新                                                               最 新     
   以 差 异 显 示  Git 更 改                                                    关 闭  +  
   语 言                                                                   中 文     
-  状 态 栏 风 格                                                             简 洁     
+  状 态 栏 风 格                                                             简 洁  +  
   按 键 提 示 风 格                                                           对 比     
   屏 幕 模 式                                                             inline    
   记 忆                                                                   关 闭  +  
   自 动 获 取  Git 更 新                                                      关 闭  +  
   Git 获 取 间 隔                                                           180s    
-  Git 分 支 标 识                                                      Powerline    
   顾 问                                                                   关 闭     
 > 始 终 使 用 半 角 标 点 （ 仅 中 文 ）                                             开 启  +  
-  2 项  下 方                                                                      
+  听 写 快 捷 键                                                              off    
+  听 写 按 键                                                             ctrl+g    
                                                                                 
   Enter 更 改  · r 重 置  · ←/→ 详 情  · Tab 标 签 页  · / 搜 索  · Esc 关 闭

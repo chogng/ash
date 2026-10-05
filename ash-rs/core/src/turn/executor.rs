@@ -1026,12 +1026,17 @@ impl TurnExecutor {
             }
             let extension_fragments = self
                 .extensions
-                .contribute_turn_input(ash_extension_api::TurnInputContext::for_session(
-                    &snapshot.session_id,
-                    thread_id,
-                    turn_id,
-                    &turn.activated_skills,
-                ))
+                .contribute_turn_input(
+                    ash_extension_api::TurnInputContext::for_session(
+                        &snapshot.session_id,
+                        thread_id,
+                        turn_id,
+                        &turn.activated_skills,
+                    )
+                    .with_cancellation(cancellation.clone()),
+                );
+            check_cancellation(cancellation)?;
+            let extension_fragments = extension_fragments
                 .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
             let harness_context = harness_context.as_ref().clone().with_time_context(
                 self.threads

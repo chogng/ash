@@ -1,6 +1,6 @@
+use crate::BoardBackend;
 use crate::Error;
 use crate::Result;
-use crate::Store;
 use crate::model::Read;
 use crate::model::Scope;
 use crate::model::Write;
@@ -11,12 +11,13 @@ use extension_api::CapabilityToolContribution;
 use extension_api::CapabilityToolContributor;
 use extension_api::ExtensionError;
 use extension_api::ExtensionRegistryBuilder;
+use extension_api::ExtensionScope;
+use extension_api::ExtensionState;
 use extension_api::ExtensionToolAuthority;
 use extension_api::PromptFragment;
 use extension_api::PromptFragmentLayer;
 use extension_api::PromptFragmentRetention;
 use extension_api::PromptFragmentSource;
-use extension_api::ReadOnlyToolContributor;
 use extension_api::TurnInputContext;
 use extension_api::TurnInputContributor;
 use protocol::ThreadId;
@@ -24,7 +25,6 @@ use protocol::TurnStatus;
 use serde_json::Value;
 use std::sync::Arc;
 use std::sync::Weak;
-use tools::ToolExecutor;
 use tools::ToolInvocation;
 use tools::ToolPayload;
 
@@ -32,40 +32,43 @@ use tools::ToolPayload;
 pub fn install(
     registry: &mut ExtensionRegistryBuilder,
     threads: &Arc<ThreadController>,
-    store: Arc<Store>,
+    store: Arc<dyn BoardBackend>,
 ) {
     let runtime = Arc::new(Runtime {
         threads: Arc::downgrade(threads),
         store,
+        state: registry.state(),
     });
     let contribution = Arc::new(Contribution(runtime.clone()));
-    registry.read_only_tool_contributor("agent-message-board", contribution.clone());
     registry.capability_tool_contributor("agent-message-board", contribution);
     registry.turn_input_contributor("agent-message-board", runtime);
 }
 
 struct Contribution(Arc<Runtime>);
 
-impl ReadOnlyToolContributor for Contribution {
-    fn contribute(&self) -> std::result::Result<Vec<Arc<dyn ToolExecutor>>, ExtensionError> {
-        Ok(vec![crate::tools::executor(self.0.clone(), Access::Read)])
-    }
-}
-
 impl CapabilityToolContributor for Contribution {
     fn contribute(&self) -> std::result::Result<Vec<CapabilityToolContribution>, ExtensionError> {
-        Ok(vec![CapabilityToolContribution::new(
-            crate::tools::executor(self.0.clone(), Access::Write),
-            ExtensionToolAuthority::ManagedStateWrite {
-                resource: "agent-message-board".into(),
-            },
-        )])
+        Ok(vec![
+            CapabilityToolContribution::new(
+                crate::tools::executor(self.0.clone(), Access::Read),
+                ExtensionToolAuthority::ManagedStateRead {
+                    resource: "agent-message-board".into(),
+                },
+            ),
+            CapabilityToolContribution::new(
+                crate::tools::executor(self.0.clone(), Access::Write),
+                ExtensionToolAuthority::ManagedStateWrite {
+                    resource: "agent-message-board".into(),
+                },
+            ),
+        ])
     }
 }
 
 pub(crate) struct Runtime {
     threads: Weak<ThreadController>,
-    store: Arc<Store>,
+    store: Arc<dyn BoardBackend>,
+    state: Arc<ExtensionState>,
 }
 
 impl Runtime {
@@ -117,7 +120,9 @@ impl Runtime {
                 "board access requires the caller's current running Turn",
             ));
         }
-        let scope = Self::scope(&threads, member)?;
+        let (scope, members) = tree_members(&threads, member)?;
+        self.store
+            .register_members(&scope, &members, call.context().cancellation())?;
         let ToolPayload::FunctionArguments(arguments) = call.payload() else {
             return Err(input("board tools accept JSON arguments"));
         };
@@ -127,7 +132,8 @@ impl Runtime {
         match access {
             Access::Read => {
                 let request: Read = serde_json::from_value(arguments.clone())?;
-                self.store.read(&scope, member, &request)
+                self.store
+                    .read(&scope, member, &request, call.context().cancellation())
             }
             Access::Write => {
                 let command: Write = serde_json::from_value(arguments.clone())?;
@@ -148,9 +154,14 @@ impl Runtime {
                     .cancellation()
                     .check()
                     .map_err(runtime_error)?;
-                let commit = self
-                    .store
-                    .write(&scope, member, &operation, time, &command)?;
+                let commit = self.store.write(
+                    &scope,
+                    member,
+                    &operation,
+                    time,
+                    &command,
+                    call.context().cancellation(),
+                )?;
                 Ok(commit.output)
             }
         }
@@ -171,17 +182,31 @@ impl TurnInputContributor for Runtime {
         let threads = self
             .controller()
             .map_err(|error| ExtensionError::new(error.to_string()))?;
-        let scope = Self::scope(&threads, thread_id)
+        let (scope, members) = tree_members(&threads, thread_id)
             .map_err(|error| ExtensionError::new(error.to_string()))?;
         if &scope.session != session {
             return Err(ExtensionError::new(
                 "board context belongs to another Session",
             ));
         }
-        let unread = self
-            .store
-            .unread(&scope, thread_id)
+        let cancellation = context.cancellation();
+        self.store
+            .register_members(&scope, &members, cancellation)
             .map_err(|error| ExtensionError::new(error.to_string()))?;
+        let mut unread = self
+            .store
+            .unread(&scope, thread_id, cancellation)
+            .map_err(|error| ExtensionError::new(error.to_string()))?;
+        if let Some(turn) = context.turn_id()
+            && let Some(live) = self.state.get::<crate::LiveNotices>(&ExtensionScope::Turn(
+                session.clone(),
+                thread_id.clone(),
+                turn.clone(),
+            ))?
+        {
+            live.merge(&mut unread)
+                .map_err(|error| ExtensionError::new(error.to_string()))?;
+        }
         if unread.count == 0 {
             return Ok(Vec::new());
         }
@@ -218,4 +243,23 @@ impl TurnInputContributor for Runtime {
 
 fn runtime_error(error: impl std::fmt::Display) -> Error {
     Error::Runtime(error.to_string())
+}
+
+/// Resolves one caller's tree using the existing Thread owner. Remote registration
+/// must never accept membership or scope supplied as model tool arguments.
+pub fn tree_members(
+    threads: &ThreadController,
+    member: &ThreadId,
+) -> Result<(Scope, Vec<ThreadId>)> {
+    let scope = Runtime::scope(threads, member)?;
+    let mut members = Vec::new();
+    for thread in threads
+        .list_session_threads(&scope.session)
+        .map_err(runtime_error)?
+    {
+        if Runtime::scope(threads, &thread.thread_id)? == scope {
+            members.push(thread.thread_id);
+        }
+    }
+    Ok((scope, members))
 }

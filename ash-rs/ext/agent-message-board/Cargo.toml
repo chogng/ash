@@ -9,6 +9,8 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+zeroize = { workspace = true }
+async-utils = { package = "ash-async-utils", path = "../../async-utils" }
 ash-core = { workspace = true }
 core-api = { workspace = true }
 base64 = { workspace = true }
@@ -25,7 +27,6 @@ thiserror = { workspace = true }
 tools = { package = "ash-tools", path = "../../tools" }
 
 [dev-dependencies]
-async-utils = { package = "ash-async-utils", path = "../../async-utils" }
 pollster = { workspace = true }
 prompts = { package = "ash-prompts", path = "../../prompts" }
 tempfile = { workspace = true }

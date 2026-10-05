@@ -14,6 +14,7 @@ path = "src/lib.rs"
 schema = ["dep:schemars", "ash-execpolicy/schema"]
 
 [dependencies]
+url = { workspace = true }
 ash-agent-environment = { workspace = true }
 schemars = { workspace = true, optional = true }
 features = { workspace = true }

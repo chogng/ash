@@ -101,6 +101,48 @@ fn read_only_extension_contributors_enter_the_shared_registry_and_policy() {
 
 struct NetworkContributor;
 
+struct ManagedReadContributor;
+impl CapabilityToolContributor for ManagedReadContributor {
+    fn contribute(&self) -> Result<Vec<CapabilityToolContribution>, ExtensionError> {
+        let executor = Contributor.contribute()?.remove(0);
+        Ok(vec![CapabilityToolContribution::new(
+            executor,
+            ExtensionToolAuthority::ManagedStateRead {
+                resource: "agent-message-board".into(),
+            },
+        )])
+    }
+}
+
+#[test]
+fn managed_state_reads_receive_only_their_domain_read_permission() {
+    let mut builder = ExtensionRegistryBuilder::new();
+    builder.capability_tool_contributor("managed-read", Arc::new(ManagedReadContributor));
+    let port = compose_extension_tools(&builder.build()).unwrap().unwrap();
+    let combined = combine_tool_ports(vec![port]).unwrap().unwrap();
+    let review = combined
+        .tools
+        .prepare(&ToolCall {
+            id: ToolCallId::new("managed-read").unwrap(),
+            name: ash_protocol::ToolName::new("extension-read").unwrap(),
+            arguments: json!({"key": "value"}),
+        })
+        .unwrap();
+    assert_eq!(
+        review.action().required_capabilities(),
+        &ash_action_policy::CapabilitySet::new([ash_action_policy::Capability::new(
+            ash_action_policy::CapabilityKind::FileRead,
+            "agent-message-board",
+        )]),
+    );
+    assert!(matches!(
+        combined
+            .policy
+            .decide(&review, &CancellationSource::new().token()),
+        Ok(ExecutionDecision::RunUnsandboxed { .. })
+    ));
+}
+
 impl CapabilityToolContributor for NetworkContributor {
     fn contribute(&self) -> Result<Vec<CapabilityToolContribution>, ExtensionError> {
         Ok(vec![CapabilityToolContribution::new(

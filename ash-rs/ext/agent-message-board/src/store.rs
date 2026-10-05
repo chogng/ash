@@ -91,7 +91,8 @@ pub struct Store {
     database: Mutex<Connection>,
 }
 
-pub(crate) struct Unread {
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Unread {
     pub count: i64,
     pub through: i64,
     pub notices: Vec<serde_json::Value>,

@@ -24,7 +24,11 @@ fn switch(app: &mut App, mode: ScreenMode) {
 }
 
 fn render(app: &App) -> String {
-    let mut terminal = Terminal::new(TestBackend::new(50, 16)).unwrap();
+    render_at_size(app, 50, 16)
+}
+
+fn render_at_size(app: &App, width: u16, height: u16) -> String {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal
         .draw(|frame| super::frame::draw(frame, app))
         .unwrap();
@@ -32,10 +36,100 @@ fn render(app: &App) -> String {
         .backend()
         .buffer()
         .content
-        .chunks(50)
+        .chunks(usize::from(width))
         .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[test]
+fn git_branch_marker_is_edited_under_status_bar_style_in_both_modes() {
+    use crate::config::GlyphSet;
+    use crate::status::StatusLineSettings;
+    use crate::widgets::list_selection::ListSelectionItemId;
+    let config = crate::test_support::empty_config_snapshot();
+    let providers =
+        ash_app_server_protocol::protocol::provider::ProviderListResult { providers: vec![] };
+    for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut terminal = TerminalSettings::default();
+        terminal.set_screen_mode(screen);
+        terminal.set_language(crate::nls::Language::Chinese);
+        app.update(ConfigEvent::SettingsReceived(terminal));
+        app.insert_text("keep my draft");
+        app.update(ConfigEvent::EditorOpened(crate::config::config_choices(
+            &config,
+            &providers,
+            terminal,
+            StatusLineSettings::default(),
+        )));
+        assert!(
+            app.list_selection()
+                .unwrap()
+                .visible_items()
+                .iter()
+                .all(|item| item.id() != Some(&ListSelectionItemId::new("glyph-set")))
+        );
+        for _ in 0..6 {
+            app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        }
+        assert_eq!(
+            app.list_selection().unwrap().selected_item().unwrap().id(),
+            Some(&ListSelectionItemId::new("status-line-style"))
+        );
+        assert!(
+            app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))
+                .is_none()
+        );
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(
+            app.list_selection().unwrap().selected_item().unwrap().id(),
+            Some(&ListSelectionItemId::new("glyph-set"))
+        );
+        crate::tui_assert_snapshot!(app = &app; "status_bar_style_branch_marker_expanded", render_at_size(&app, 100, 30));
+        let Some(super::AppCommand::Config(crate::config::Command::Edit(edit))) =
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        else {
+            panic!("the nested marker must use the configuration save command")
+        };
+        assert_eq!(edit.terminal.glyph_set(), GlyphSet::Plain);
+        assert_eq!(edit.status_line, StatusLineSettings::default());
+        app.update(ConfigEvent::Updated(crate::config::ConfigEditResult {
+            terminal: edit.terminal,
+            status_line: edit.status_line.clone(),
+            choices: crate::config::config_choices(
+                &config,
+                &providers,
+                edit.terminal,
+                edit.status_line,
+            ),
+        }));
+        assert_eq!(
+            app.list_selection().unwrap().selected_item().unwrap().id(),
+            Some(&ListSelectionItemId::new("glyph-set"))
+        );
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+        assert!(
+            app.list_selection()
+                .unwrap()
+                .visible_items()
+                .iter()
+                .all(|item| item.id() != Some(&ListSelectionItemId::new("glyph-set")))
+        );
+        crate::tui_assert_snapshot!(app = &app; "status_bar_style_branch_marker_collapsed", render_at_size(&app, 100, 30));
+        app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        app.handle_paste("Git 分支标识".into());
+        assert_eq!(app.list_selection().unwrap().visible_items().len(), 1);
+        assert_eq!(
+            app.list_selection().unwrap().selected_item().unwrap().id(),
+            Some(&ListSelectionItemId::new("glyph-set"))
+        );
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.command_panel().is_none());
+        assert_eq!(app.input(), "keep my draft");
+    }
 }
 
 #[test]

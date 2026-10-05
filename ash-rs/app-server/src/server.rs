@@ -285,7 +285,7 @@ pub struct AppServer {
     pub(super) slash_commands: SlashCommandCatalog,
     agent_extensions: Arc<ExtensionRegistry>,
     notes: Option<Arc<history_notes::NotesStore>>,
-    message_board: Option<Arc<agent_message_board::Store>>,
+    message_board: Option<Arc<dyn agent_message_board::BoardBackend>>,
     workflows: Arc<workflows::Store>,
     pub(super) skills: Option<Arc<SkillRuntime>>,
     _skill_watcher: Option<SkillWatcher>,
@@ -1331,10 +1331,21 @@ impl AppServer {
         self
     }
 
+    pub(crate) fn with_remote_board_notifications(
+        mut self,
+        board: Arc<agent_message_board_client::RemoteMessageBoard>,
+    ) -> Self {
+        let mut builder =
+            ash_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
+        crate::agent_message_board_host::install_notifications(&mut builder, &self.threads, board);
+        self.agent_extensions = Arc::new(builder.build());
+        self
+    }
+
     pub fn with_agent_capabilities(
         mut self,
         notes: Arc<history_notes::NotesStore>,
-        message_board: Arc<agent_message_board::Store>,
+        message_board: Arc<dyn agent_message_board::BoardBackend>,
         image_backend: Option<Arc<dyn image_generation::ImageGenerationBackend>>,
         artifact_root: &std::path::Path,
         attribution: Arc<dyn git_attribution::GitAttributionPolicySource>,

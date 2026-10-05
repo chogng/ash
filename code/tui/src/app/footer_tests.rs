@@ -43,6 +43,61 @@ fn text(buffer: &Buffer) -> String {
 }
 
 #[test]
+fn permission_text_uses_its_mode_color_in_both_screens_and_languages() {
+    use unicode_segmentation::UnicodeSegmentation;
+    use unicode_width::UnicodeWidthStr;
+    for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        for language in [Language::English, Language::Chinese] {
+            let mut app = App::new();
+            let mut terminal = TerminalSettings::default();
+            terminal.set_screen_mode(screen);
+            terminal.set_language(language);
+            app.update(crate::config::Event::SettingsReceived(terminal));
+            for (approval, label, color) in [
+                (
+                    ash_protocol::ApprovalMode::Manual,
+                    "⏸ Manual",
+                    app.render_context().warning(),
+                ),
+                (
+                    ash_protocol::ApprovalMode::Auto,
+                    "⏩ Auto",
+                    app.render_context().accent(),
+                ),
+                (
+                    ash_protocol::ApprovalMode::BypassPermissions,
+                    "▶ Bypass permissions",
+                    app.render_context().danger(),
+                ),
+            ] {
+                app.set_next_approval_mode(approval);
+                let buffer = render(&app, 100, 20);
+                let y = areas(&app, buffer.area).hintline.y;
+                let (icon, label) = label.split_once(' ').unwrap();
+                let label = format!("{icon} {}", crate::nls::localize(language, label));
+                assert!(
+                    row(&buffer, y)
+                        .replace(' ', "")
+                        .contains(&label.replace(' ', ""))
+                );
+                let mut x = 2;
+                for symbol in label.graphemes(true) {
+                    assert_eq!(
+                        buffer[(x, y)].fg,
+                        color,
+                        "{screen:?} {language:?} {approval:?} x={x}"
+                    );
+                    x += symbol.width() as u16;
+                }
+                let separator = 2 + label.width() as u16 + 1;
+                assert_eq!(buffer[(separator, y)].symbol(), "·");
+                assert_eq!(buffer[(separator, y)].fg, app.render_context().muted());
+            }
+        }
+    }
+}
+
+#[test]
 fn dashboard_shares_the_left_hint_row_and_permission_switch_in_both_modes() {
     let mut frames = Vec::new();
     for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {

@@ -26,6 +26,28 @@ pub struct ExtensionState {
     scopes: Mutex<BTreeMap<ExtensionScope, Values>>,
 }
 impl ExtensionState {
+    /// Reads an existing attachment without creating or extending its lifetime.
+    /// Inspection after a Turn ends must not recreate that retired scope.
+    pub fn get<T: Send + Sync + 'static>(
+        &self,
+        scope: &ExtensionScope,
+    ) -> Result<Option<Arc<T>>, ExtensionError> {
+        let scopes = self
+            .scopes
+            .lock()
+            .map_err(|_| ExtensionError::new("extension state lock poisoned"))?;
+        scopes
+            .get(scope)
+            .and_then(|values| values.get(&TypeId::of::<T>()))
+            .cloned()
+            .map(|value| {
+                value
+                    .downcast()
+                    .map_err(|_| ExtensionError::new("extension state type mismatch"))
+            })
+            .transpose()
+    }
+
     pub fn get_or_insert<T: Default + Send + Sync + 'static>(
         &self,
         scope: ExtensionScope,

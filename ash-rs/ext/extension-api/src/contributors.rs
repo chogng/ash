@@ -6,6 +6,8 @@ use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
 use ash_protocol::UserInput;
 use ash_tools::ToolExecutor;
+use async_utils::CancellationSource;
+use async_utils::CancellationToken;
 use std::sync::Arc;
 
 /// Immutable user input available while a new Turn's capability activations are resolved.
@@ -50,12 +52,13 @@ pub trait SkillActivationContributor: Send + Sync {
 }
 
 /// Immutable facts exposed at one model-invocation safe point.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct TurnInputContext<'a> {
     session_id: Option<&'a SessionId>,
     thread_id: Option<&'a ThreadId>,
     turn_id: Option<&'a TurnId>,
     activated_skills: &'a [FrozenSkillActivation],
+    cancellation: CancellationToken,
 }
 
 impl<'a> TurnInputContext<'a> {
@@ -66,6 +69,7 @@ impl<'a> TurnInputContext<'a> {
             thread_id: None,
             turn_id: None,
             activated_skills: &[],
+            cancellation: CancellationSource::new().token(),
         }
     }
 
@@ -80,6 +84,7 @@ impl<'a> TurnInputContext<'a> {
             thread_id: Some(thread_id),
             turn_id: None,
             activated_skills,
+            cancellation: CancellationSource::new().token(),
         }
     }
     pub fn new(
@@ -92,6 +97,7 @@ impl<'a> TurnInputContext<'a> {
             thread_id: Some(thread_id),
             turn_id: Some(turn_id),
             activated_skills,
+            cancellation: CancellationSource::new().token(),
         }
     }
 
@@ -106,6 +112,7 @@ impl<'a> TurnInputContext<'a> {
             thread_id: Some(thread_id),
             turn_id: Some(turn_id),
             activated_skills,
+            cancellation: CancellationSource::new().token(),
         }
     }
 
@@ -123,6 +130,17 @@ impl<'a> TurnInputContext<'a> {
 
     pub fn activated_skills(&self) -> &'a [FrozenSkillActivation] {
         self.activated_skills
+    }
+
+    /// Execution binds all contribution I/O to its Turn. Inspection has a separate
+    /// request lifetime, so inspecting a completed Turn does not inherit its cancellation.
+    pub fn with_cancellation(mut self, cancellation: CancellationToken) -> Self {
+        self.cancellation = cancellation;
+        self
+    }
+
+    pub fn cancellation(&self) -> &CancellationToken {
+        &self.cancellation
     }
 }
 
@@ -159,8 +177,12 @@ pub enum ExtensionToolAuthority {
         credential_reference: Option<String>,
         artifact_root: String,
     },
+    /// Reads extension-owned records through their domain owner. The host selects storage
+    /// and owns its transport and credentials; the caller gains only scoped record access.
+    ManagedStateRead { resource: String },
     /// Writes only extension-owned state through a domain API that atomically enforces user consent.
-    /// This never grants filesystem, process, credential, or network authority.
+    /// The host owns storage transport; this does not grant the caller arbitrary filesystem,
+    /// process, credential, or network authority.
     ManagedStateWrite { resource: String },
     /// Sends read-only requests to explicit network scopes without mutating the remote service.
     ExternalRead {

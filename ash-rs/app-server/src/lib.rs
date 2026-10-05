@@ -74,3 +74,5 @@ mod managed;
 
 mod image_references;
 mod time_context;
+
+mod agent_message_board_host;

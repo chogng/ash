@@ -1278,12 +1278,24 @@ pub(crate) fn config_choices(
                 language.label(),
             ),
         ListSelectionItem::new(nls::text(language, Message::ConfigStatusLineStyle))
-            .with_id(style_id)
+            .with_id(style_id.clone())
+            .with_details(nls::text(language, style_description))
             .with_columns(
                 nls::text(language, Message::ConfigStatusLineStyle),
                 nls::text(language, style_description),
                 nls::text(language, style_label),
             ),
+        ListSelectionItem::new(nls::Text::template(
+            "  {0}",
+            vec![nls::text(language, Message::ConfigGlyphSet).into()],
+        ))
+        .with_id(glyph_set_id)
+        .with_parent(style_id)
+        .with_columns(
+            format!("  {}", nls::text(language, Message::ConfigGlyphSet)),
+            nls::text(language, Message::ConfigGlyphSetDescription),
+            nls::text(language, glyph_set_label),
+        ),
         ListSelectionItem::new(nls::text(language, Message::ConfigKeyHintStyle))
             .with_id(key_hint_style_id)
             .with_columns(
@@ -1333,16 +1345,6 @@ pub(crate) fn config_choices(
                 nls::text(language, Message::ConfigGitAutoFetchPeriod),
                 nls::text(language, Message::ConfigGitAutoFetchPeriodDescription),
                 format!("{}s", config.git.autofetch_period),
-            ),
-    );
-    // Keep the branch marker beside the other Git display and refresh settings.
-    config_items.push(
-        ListSelectionItem::new(nls::text(language, Message::ConfigGlyphSet))
-            .with_id(glyph_set_id)
-            .with_columns(
-                nls::text(language, Message::ConfigGlyphSet),
-                nls::text(language, Message::ConfigGlyphSetDescription),
-                nls::text(language, glyph_set_label),
             ),
     );
     let advisor_id = ListSelectionItemId::new("advisor");

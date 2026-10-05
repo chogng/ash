@@ -1134,6 +1134,45 @@
         }
       ]
     },
+    "MessageBoardConfig": {
+      "description": "Deployment choice for task discussion storage. Credential values remain outside configuration.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "local",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "credentialEnv": {
+              "type": "string"
+            },
+            "endpoint": {
+              "type": "string"
+            },
+            "type": {
+              "const": "remote",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "endpoint",
+            "credentialEnv"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "ModelConnectionId": {
       "type": "string"
     },
@@ -1642,6 +1681,12 @@
       "$ref": "#/$defs/McpConfig",
       "default": {
         "servers": {}
+      }
+    },
+    "messageBoard": {
+      "$ref": "#/$defs/MessageBoardConfig",
+      "default": {
+        "type": "local"
       }
     },
     "network": {

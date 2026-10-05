@@ -204,7 +204,8 @@ impl ActionPolicyService for ExtensionToolPolicy {
             .authority
         {
             RegisteredExtensionAuthority::Capability(
-                ExtensionToolAuthority::ManagedStateWrite { .. },
+                ExtensionToolAuthority::ManagedStateRead { .. }
+                | ExtensionToolAuthority::ManagedStateWrite { .. },
             ) => Ok(ExecutionDecision::RunUnsandboxed {
                 grant_id: GrantId::new(format!(
                     "host-managed-state:{}",
@@ -217,13 +218,14 @@ impl ActionPolicyService for ExtensionToolPolicy {
                     request.provenance().source_id()
                 )),
             }),
-            RegisteredExtensionAuthority::Capability(_) => {
-                Ok(ExecutionDecision::AskUser(ApprovalRequest::new(
-                    request.action().digest().clone(),
-                    request.action().required_capabilities().clone(),
-                    "extension tool requires exact one-time external access approval",
-                )))
-            }
+            RegisteredExtensionAuthority::Capability(
+                ExtensionToolAuthority::ExternalRead { .. }
+                | ExtensionToolAuthority::ExternalWrite { .. },
+            ) => Ok(ExecutionDecision::AskUser(ApprovalRequest::new(
+                request.action().digest().clone(),
+                request.action().required_capabilities().clone(),
+                "extension tool requires exact one-time external access approval",
+            ))),
         }
     }
 }
@@ -252,6 +254,9 @@ fn extension_capabilities(
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateWrite {
             resource,
         }) => CapabilitySet::new([Capability::new(CapabilityKind::FileWrite, resource)]),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateRead {
+            resource,
+        }) => CapabilitySet::new([Capability::new(CapabilityKind::FileRead, resource)]),
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalWrite {
             service,
             network_scopes,
@@ -292,6 +297,9 @@ fn extension_capabilities(
 fn extension_action_kind(authority: &RegisteredExtensionAuthority) -> ActionKind {
     match authority {
         RegisteredExtensionAuthority::ReadOnlyLocal
+        | RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateRead {
+            ..
+        })
         | RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateWrite {
             ..
         }) => ActionKind::SystemOperation,
@@ -312,6 +320,9 @@ fn extension_summary(name: &ToolName, authority: &RegisteredExtensionAuthority) 
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateWrite {
             resource,
         }) => format!("write {resource} through extension tool '{name}' with domain consent"),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateRead {
+            resource,
+        }) => format!("read {resource} through extension tool '{name}' with domain ownership"),
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead {
             service,
             ..
@@ -326,8 +337,9 @@ fn extension_summary(name: &ToolName, authority: &RegisteredExtensionAuthority) 
 fn extension_sandbox_reason(authority: &RegisteredExtensionAuthority) -> String {
     match authority {
         RegisteredExtensionAuthority::ReadOnlyLocal => "the host extension executes in process and is constrained to the read-only extension contract".into(),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateRead { .. }) => "the selected domain storage owner enforces scoped record access and owns its transport".into(),
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateWrite { .. }) => "the domain storage transaction enforces current user consent and record ownership".into(),
-        RegisteredExtensionAuthority::Capability(_) => "external network access cannot be enforced by the local process sandbox".into(),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead { .. } | ExtensionToolAuthority::ExternalWrite { .. }) => "external network access cannot be enforced by the local process sandbox".into(),
     }
 }
 
@@ -345,6 +357,9 @@ fn authority_digest_value(authority: &RegisteredExtensionAuthority) -> serde_jso
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateWrite {
             resource,
         }) => json!({"type": "managed_state_write", "resource": resource}),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateRead {
+            resource,
+        }) => json!({"type": "managed_state_read", "resource": resource}),
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead {
             service,
             network_scopes,

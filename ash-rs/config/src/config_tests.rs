@@ -2852,3 +2852,36 @@ fn context_compaction_policy_persists_and_rejects_invalid_updates_atomically() {
     drop(store);
     remove_config_files(&path);
 }
+
+#[test]
+fn message_board_remote_configuration_roundtrips_without_credentials() {
+    let mut document = crate::UserConfigDocument::default();
+    document.message_board = crate::MessageBoardConfig::Remote {
+        endpoint: "https://boards.example.test/service".into(),
+        credential_env: "ASH_BOARD_HOST_TOKEN".into(),
+    };
+    document.validate().unwrap();
+    let source = crate::document_migration::encode(&document).unwrap();
+    assert!(source.contains("credentialEnv"));
+    assert_eq!(
+        crate::document_migration::decode(&source).unwrap().document,
+        document
+    );
+    for endpoint in [
+        "file:///tmp/board",
+        "https://user:secret@board.test",
+        "https://board.test/?token=x",
+        "https://board.test/#x",
+    ] {
+        document.message_board = crate::MessageBoardConfig::Remote {
+            endpoint: endpoint.into(),
+            credential_env: "ASH_BOARD_HOST_TOKEN".into(),
+        };
+        assert!(document.validate().is_err());
+    }
+    document.message_board = crate::MessageBoardConfig::Remote {
+        endpoint: "https://board.test".into(),
+        credential_env: "invalid name".into(),
+    };
+    assert!(document.validate().is_err());
+}

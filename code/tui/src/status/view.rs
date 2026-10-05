@@ -132,7 +132,7 @@ fn styled_policy_line(
         ),
         Span::styled(
             format!(" {}", context.localize(permission.label)),
-            Style::default().fg(context.chat_input_chrome()),
+            Style::default().fg(mode_color(mode, context)),
         ),
     ];
     Line::from(spans)

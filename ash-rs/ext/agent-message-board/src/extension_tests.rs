@@ -26,6 +26,18 @@ use tools::ToolInvocation;
 use tools::ToolOutputStatus;
 
 #[test]
+fn unread_context_queries_honor_the_receiving_turn_cancellation() {
+    let runtime = Runtime::new();
+    let cancellation = async_utils::CancellationSource::new();
+    cancellation.cancel();
+    let result = runtime.registry.contribute_turn_input(
+        TurnInputContext::for_session(&runtime.session, &runtime.root, &runtime.turn, &[])
+        .with_cancellation(cancellation.token()),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
 fn configured_clock_controls_timestamps_and_its_failure_prevents_writes() {
     let runtime = Runtime::new();
     let clock = Arc::new(Clock {
@@ -896,12 +908,23 @@ fn cancellation_prevents_writes_and_read_tools_need_no_write_authority() {
     let runtime = Runtime::new();
     assert_eq!(
         runtime.registry.contribute_read_only_tools().unwrap().len(),
-        1
+        0
     );
-    let write = runtime.registry.contribute_capability_tools().unwrap();
-    assert_eq!(write.len(), 1);
+    let capabilities = runtime.registry.contribute_capability_tools().unwrap();
+    assert_eq!(capabilities.len(), 2);
+    let read = capabilities
+        .iter()
+        .find(|tool| tool.executor().definition().name().as_str() == "board_read")
+        .unwrap();
     assert!(
-        matches!(write[0].authority(), extension_api::ExtensionToolAuthority::ManagedStateWrite { resource } if resource == "agent-message-board")
+        matches!(read.authority(), extension_api::ExtensionToolAuthority::ManagedStateRead { resource } if resource == "agent-message-board")
+    );
+    let write = capabilities
+        .iter()
+        .find(|tool| tool.executor().definition().name().as_str() == "board_write")
+        .unwrap();
+    assert!(
+        matches!(write.authority(), extension_api::ExtensionToolAuthority::ManagedStateWrite { resource } if resource == "agent-message-board")
     );
     let source = async_utils::CancellationSource::new();
     let definition = runtime.executor("board_write").definition();

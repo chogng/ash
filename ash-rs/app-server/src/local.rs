@@ -1632,7 +1632,7 @@ pub fn open_app_server_with_codebase_providers(
     }
     if let Some(target) = report_issue_url {
         server = server.with_issue_reporter(
-            github::GitHubIssueReporter::new(&target, application_http).map_err(open_error)?,
+            github::GitHubIssueReporter::new(&target, application_http.clone()).map_err(open_error)?,
         );
     }
     if options.session_state_mode == SessionStateMode::Durable {
@@ -1664,6 +1664,37 @@ pub fn open_app_server_with_codebase_providers(
             options.web_search_backend.take(),
         )
         .map_err(OpenAppServerError)?;
+    let message_board: Arc<dyn agent_message_board::BoardBackend> =
+        match &user_config.values.message_board {
+            ash_config::MessageBoardConfig::Local => Arc::new(
+                match options.session_state_mode {
+                    SessionStateMode::Durable => agent_message_board::Store::open(&database_path),
+                    SessionStateMode::Ephemeral => agent_message_board::Store::in_memory(),
+                }
+                .map_err(open_error)?,
+            ),
+            ash_config::MessageBoardConfig::Remote {
+                endpoint,
+                credential_env,
+            } => {
+                let credential = std::env::var(credential_env).map_err(|_| {
+                    OpenAppServerError(
+                        "configured message-board credential is missing or invalid".into(),
+                    )
+                })?;
+                let board = Arc::new(
+                    agent_message_board_client::RemoteMessageBoard::new(
+                        application_http.clone(),
+                        endpoint,
+                        agent_message_board_client::AccessToken::new(credential)
+                            .map_err(open_error)?,
+                    )
+                    .map_err(open_error)?,
+                );
+                server = server.with_remote_board_notifications(board.clone());
+                board
+            }
+        };
     server = server
         .with_agent_capabilities(
             Arc::new(
@@ -1673,13 +1704,7 @@ pub fn open_app_server_with_codebase_providers(
                 }
                 .map_err(OpenAppServerError)?,
             ),
-            Arc::new(
-                match options.session_state_mode {
-                    SessionStateMode::Durable => agent_message_board::Store::open(&database_path),
-                    SessionStateMode::Ephemeral => agent_message_board::Store::in_memory(),
-                }
-                .map_err(open_error)?,
-            ),
+            message_board,
             options.image_generation_backend.take(),
             &options.profile_root.join("generated-images"),
             options

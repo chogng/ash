@@ -79,3 +79,47 @@ fn the_same_thread_name_in_another_session_has_no_access_to_state() {
         .unwrap();
     assert_eq!(b.load(Ordering::Relaxed), 0);
 }
+
+#[test]
+fn inspecting_retired_turn_state_does_not_recreate_its_lifetime() {
+    let registry = ExtensionRegistryBuilder::new().build();
+    let session = SessionId::new("s").unwrap();
+    let thread = ThreadId::new("t").unwrap();
+    let turn = TurnId::new("turn").unwrap();
+    let scope = ExtensionScope::Turn(session.clone(), thread.clone(), turn.clone());
+    assert!(
+        registry
+            .state()
+            .get::<AtomicUsize>(&scope)
+            .unwrap()
+            .is_none()
+    );
+    let data = registry
+        .state()
+        .get_or_insert::<AtomicUsize>(scope.clone())
+        .unwrap();
+    data.store(3, Ordering::Relaxed);
+    assert!(Arc::ptr_eq(
+        &data,
+        &registry
+            .state()
+            .get::<AtomicUsize>(&scope)
+            .unwrap()
+            .unwrap()
+    ));
+    registry.thread_changed(
+        ThreadContext {
+            session_id: &session,
+            thread_id: &thread,
+            sequence: 2,
+        },
+        &ThreadLifecycle::TurnCompleted(turn),
+    );
+    assert!(
+        registry
+            .state()
+            .get::<AtomicUsize>(&scope)
+            .unwrap()
+            .is_none()
+    );
+}
