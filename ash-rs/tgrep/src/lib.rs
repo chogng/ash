@@ -18,8 +18,9 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
-pub const VERSION: &str = "1.0.11";
+pub const VERSION: &str = "1.0.12-ash.1";
 const TIMEOUT: Duration = Duration::from_secs(30);
+const INDEX_TIMEOUT: Duration = Duration::from_secs(600);
 
 #[derive(Debug)]
 pub enum Error {
@@ -85,6 +86,25 @@ impl Executable {
         }
         Ok(Self(path))
     }
+    /// Search-engine identity used to share storage and serving across linked worktrees.
+    pub fn directory_identity(
+        &self,
+        root: &Path,
+        cancellation: &CancellationToken,
+    ) -> Result<PathBuf, Error> {
+        let mut command = std::process::Command::new(&self.0);
+        command.arg("identity").arg(root);
+        let lines = process::capture(command, cancellation, Instant::now() + TIMEOUT, 1)?;
+        let value: Value = serde_json::from_str(
+            lines
+                .first()
+                .ok_or_else(|| failed("missing search identity"))?,
+        )?;
+        let directory = value["directory"]
+            .as_str()
+            .ok_or_else(|| failed("invalid search identity"))?;
+        dunce::canonicalize(directory).map_err(Into::into)
+    }
 }
 
 pub struct Query<'a> {
@@ -111,8 +131,7 @@ pub struct SearchResult {
     pub index_stats: Option<IndexStats>,
 }
 
-/// Statistics from the initial indexed file-selection query, before the Ash edit overlay.
-/// Content batches repeat that query with exact paths and must not be added to these counts.
+/// Candidate statistics from one worktree query, including acknowledged Ash edits.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct IndexStats {
     pub query_plan: String,
@@ -129,12 +148,13 @@ pub struct Status {
     pub watcher_active: bool,
 }
 
-/// One workspace's owned server. Edited paths are read directly until an explicit rebuild.
-/// tgrep owns filesystem watching; this small path set provides read-after-write for Ash edits.
+/// A worktree registration in an owned shared search service.
+/// Pending Ash writes are acknowledged by the engine before the next indexed search.
 pub struct Session {
     executable: Executable,
     root: PathBuf,
-    process: process::Server,
+    process: std::sync::Arc<process::Server>,
+    worktree_id: u64,
     changed: Mutex<BTreeSet<PathBuf>>,
 }
 impl Session {
@@ -145,18 +165,28 @@ impl Session {
         cancellation: &CancellationToken,
     ) -> Result<Self, Error> {
         let root = dunce::canonicalize(root)?;
-        let process = process::Server::start(&executable, &root, index, cancellation)?;
+        let process = process::Server::shared(&executable, &root, index, cancellation)?;
+        let registration = process.rpc(
+            "attach",
+            json!({"root":root}),
+            cancellation,
+            Instant::now() + INDEX_TIMEOUT,
+        )?;
+        let worktree_id = registration["worktree_id"]
+            .as_u64()
+            .ok_or_else(|| failed("missing worktree registration"))?;
         Ok(Self {
             executable,
             root,
             process,
+            worktree_id,
             changed: Mutex::new(BTreeSet::new()),
         })
     }
     pub fn status(&self, cancellation: &CancellationToken) -> Result<Status, Error> {
-        serde_json::from_value(self.process.rpc(
+        serde_json::from_value(self.rpc(
             "status",
-            Value::Null,
+            json!({}),
             cancellation,
             Instant::now() + TIMEOUT,
         )?)
@@ -165,12 +195,7 @@ impl Session {
     pub fn rebuild(&self, cancellation: &CancellationToken) -> Result<Status, Error> {
         // Serialize the edit set across reload so writes racing publication remain dirty afterwards.
         let mut changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
-        self.process.rpc(
-            "reload",
-            Value::Null,
-            cancellation,
-            Instant::now() + TIMEOUT,
-        )?;
+        self.rpc("reload", json!({}), cancellation, Instant::now() + TIMEOUT)?;
         changed.clear();
         self.status(cancellation)
     }
@@ -211,92 +236,43 @@ impl Session {
         if !canonical.starts_with(&self.root) {
             return Err(failed("search scope escapes its workspace"));
         }
-        let status = self.status(cancellation)?;
-        // Current searches and explicit files may include ignored files. Directory queries
-        // requesting the index retain corpus admission even while initialization needs a scan.
-        if query.current || scope.is_file() || !status.hidden_complete {
+        // Current searches and explicit files may include ignored files.
+        if query.current || scope.is_file() {
             let mut result = self.scan(query, &[scope], cancellation, deadline)?;
             result.matches.truncate(limit);
             return Ok(result);
         }
-        let changed = self
-            .changed
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let mut changed = self.changed.lock().unwrap();
+        if !changed.is_empty() {
+            self.rpc(
+                "refresh",
+                json!({"paths":changed.iter().collect::<Vec<_>>()}),
+                cancellation,
+                deadline,
+            )?;
+            changed.clear();
+        }
+        drop(changed);
         let mut globs: Vec<String> = query.include.iter().map(|s| (*s).to_owned()).collect();
         globs.extend(query.exclude.iter().map(|g| format!("!{g}")));
-        let params = json!({"pattern":query.pattern,"case_insensitive":query.case_insensitive,
-            "scope":portable(query.scope)?,"glob":globs,"files_only":true,"max_count":1,"detail":false,"positions":false,"stats":true});
-        // One row per matching file bounds broad queries before asking for content. The server
-        // has only a per-file max_count; the adapter enforces the caller's global limit.
-        let files = self
-            .process
-            .rpc("search", params.clone(), cancellation, deadline)?;
-        let index_stats = serde_json::from_value(files["index_stats"].clone())?;
-        let mut paths = BTreeSet::new();
-        for value in rows(&files)? {
+        let result = self.rpc("search", json!({
+            "pattern":query.pattern,"case_insensitive":query.case_insensitive,
+            "scope":portable(query.scope)?,"glob":globs,"files_only":false,
+            "max_count":limit+1,"max_results":limit+1,"detail":false,"positions":false,"stats":true
+        }), cancellation, deadline)?;
+        let index_stats = serde_json::from_value(result["index_stats"].clone())?;
+        let mut matches = Vec::new();
+        for value in rows(&result)? {
             if value.get("type").and_then(Value::as_str) != Some("match") {
                 continue;
             }
-            let path = response_path(value)?;
-            self.validate_result_path(&path, query.scope)?;
-            if !changed.contains(&path) {
-                paths.insert(path);
+            let found: Match = serde_json::from_value(value.clone())?;
+            self.validate_result_path(&found.path, query.scope)?;
+            if found.line_number == 0 {
+                return Err(failed("invalid tgrep match"));
             }
+            matches.push(found);
         }
-        let mut matches = Vec::new();
-        // The edit overlay is delegated to the same executable. Admission traverses each
-        // file's ancestors so ignored parent directories remain excluded.
-        let dirty: Vec<_> = changed
-            .iter()
-            .filter(|p| p.starts_with(query.scope))
-            .filter(|p| self.root.join(p).is_file() && self.admitted(p, query.scope))
-            .map(|p| self.root.join(p))
-            .collect();
-        if !dirty.is_empty() {
-            matches.extend(self.scan(query, &dirty, cancellation, deadline)?.matches);
-        }
-        let paths: Vec<_> = paths.into_iter().collect();
-        for chunk in paths.chunks(8) {
-            check(cancellation, deadline)?;
-            if matches.len() > limit {
-                order(&mut matches);
-                if matches[limit].path < chunk[0] {
-                    break;
-                }
-            }
-            let mut request = params.clone();
-            request["files_only"] = json!(false);
-            request["stats"] = json!(false);
-            request["max_count"] = json!(limit + 1);
-            request["glob"] = json!(
-                chunk
-                    .iter()
-                    .map(|p| p
-                        .strip_prefix(query.scope)
-                        .map_err(|_| failed("tgrep returned an out-of-scope path"))
-                        .and_then(exact_glob))
-                    .collect::<Result<Vec<_>, _>>()?
-            );
-            let result = self
-                .process
-                .rpc("search", request, cancellation, deadline)?;
-            for value in rows(&result)? {
-                if value.get("type").and_then(Value::as_str) != Some("match") {
-                    continue;
-                }
-                let found: Match = serde_json::from_value(value.clone())?;
-                self.validate_result_path(&found.path, query.scope)?;
-                if !chunk.contains(&found.path) || found.line_number == 0 {
-                    return Err(failed("invalid tgrep match"));
-                }
-                matches.push(found);
-            }
-            order(&mut matches);
-            matches.truncate(limit + 1);
-        }
-        order(&mut matches);
         let limit_hit = matches.len() > limit;
         matches.truncate(limit);
         Ok(SearchResult {
@@ -306,6 +282,17 @@ impl Session {
             index_stats: Some(index_stats),
         })
     }
+    fn rpc(
+        &self,
+        method: &str,
+        mut params: Value,
+        cancellation: &CancellationToken,
+        deadline: Instant,
+    ) -> Result<Value, Error> {
+        params["worktree_id"] = json!(self.worktree_id);
+        self.process.rpc(method, params, cancellation, deadline)
+    }
+
     fn admitted(&self, relative: &Path, scope: &Path) -> bool {
         let absolute = self.root.join(relative);
         if !absolute.exists() {
@@ -469,7 +456,7 @@ impl Session {
             });
         }
         order(&mut matches);
-        // Retain an extra row when merging changed files with indexed matches.
+        // Retain one extra row so the caller can report the global result limit.
         let limit_hit = matches.len() > query.max_results;
         Ok(SearchResult {
             matches,
@@ -479,6 +466,18 @@ impl Session {
         })
     }
 }
+impl Drop for Session {
+    fn drop(&mut self) {
+        let cancellation = ash_async_utils::CancellationSource::new();
+        let _ = self.rpc(
+            "detach",
+            json!({}),
+            &cancellation.token(),
+            Instant::now() + Duration::from_secs(1),
+        );
+    }
+}
+
 fn validate_relative(path: &Path) -> Result<(), Error> {
     if !path.components().all(|c| matches!(c, Component::Normal(_))) {
         return Err(failed("search path must be workspace-relative"));
@@ -496,12 +495,7 @@ fn portable(path: &Path) -> Result<String, Error> {
         })
         .ok_or_else(|| failed("tgrep requires UTF-8 paths"))
 }
-fn response_path(value: &Value) -> Result<PathBuf, Error> {
-    value["file"]
-        .as_str()
-        .map(PathBuf::from)
-        .ok_or_else(|| failed("tgrep returned a missing path"))
-}
+
 fn rows(result: &Value) -> Result<&Vec<Value>, Error> {
     result["matches"]
         .as_array()
@@ -510,26 +504,6 @@ fn rows(result: &Value) -> Result<&Vec<Value>, Error> {
 fn order(matches: &mut Vec<Match>) {
     matches.sort_by(|a, b| (&a.path, a.line_number).cmp(&(&b.path, b.line_number)));
     matches.dedup_by(|a, b| a.path == b.path && a.line_number == b.line_number);
-}
-fn exact_glob(path: &Path) -> Result<String, Error> {
-    let mut glob = String::from("/");
-    for c in portable(path)?.chars() {
-        match c {
-            '[' => glob.push_str("[[]"),
-            ']' => glob.push_str("[]]"),
-            '*' => glob.push_str("[*]"),
-            '?' => glob.push_str("[?]"),
-            '{' => glob.push_str("[{]"),
-            '}' => glob.push_str("[}]"),
-            '\\' => {
-                return Err(failed(
-                    "backslashes in filenames are unsupported by tgrep glob filters",
-                ));
-            }
-            _ => glob.push(c),
-        }
-    }
-    Ok(glob)
 }
 
 #[cfg(test)]

@@ -83,6 +83,24 @@ struct Discovery {
     port: u16,
 }
 impl Server {
+    pub(super) fn shared(
+        executable: &Executable,
+        root: &Path,
+        index: &Path,
+        cancellation: &CancellationToken,
+    ) -> Result<Arc<Self>, Error> {
+        type Pool = std::collections::BTreeMap<(PathBuf, PathBuf), Weak<Server>>;
+        static SERVERS: OnceLock<Mutex<Pool>> = OnceLock::new();
+        let mut servers = SERVERS.get_or_init(Mutex::default).lock().unwrap();
+        servers.retain(|_, server| server.strong_count() != 0);
+        let key = (executable.0.clone(), index.to_path_buf());
+        if let Some(server) = servers.get(&key).and_then(Weak::upgrade) {
+            return Ok(server);
+        }
+        let server = Arc::new(Self::start(executable, root, index, cancellation)?);
+        servers.insert(key, Arc::downgrade(&server));
+        Ok(server)
+    }
     pub(super) fn start(
         executable: &Executable,
         root: &Path,
@@ -99,7 +117,7 @@ impl Server {
         std::fs::create_dir_all(index)?;
         let child = Arc::new(Mutex::new(OwnedChild(
             Command::new(&executable.0)
-                .arg("serve")
+                .arg("shared-serve")
                 .arg(root)
                 .arg("--index-path")
                 .arg(index)
@@ -140,7 +158,10 @@ impl Server {
             address,
             index: index.into(),
         };
-        server.rpc("status", Value::Null, cancellation, deadline)?;
+        let capabilities = server.rpc("capabilities", Value::Null, cancellation, deadline)?;
+        if capabilities["shared_worktrees"] != 1 {
+            return Err(failed("unsupported shared search protocol"));
+        }
         Ok(server)
     }
     pub(super) fn index(&self) -> &Path {
@@ -230,7 +251,7 @@ pub(super) fn scan(
         .map(|line| serde_json::from_str(&line).map_err(Into::into))
         .collect()
 }
-fn capture(
+pub(super) fn capture(
     command: Command,
     cancellation: &CancellationToken,
     deadline: Instant,

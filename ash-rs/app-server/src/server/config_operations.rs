@@ -83,7 +83,6 @@ use ash_model_provider_config::ModelProviderConfig;
 use ash_protocol::HookEvent;
 use ash_protocol::Patch;
 use ash_state::ClearOutcome;
-use ash_state::DirIndexKind;
 use core_api::HookEventDecision;
 use core_api::HookEventRequest;
 use core_api::HookEventScope;
@@ -257,9 +256,7 @@ impl AppServer {
 
     pub(super) fn grep_index_disable_and_delete(&self, params: &Value) -> Result<Value, RpcError> {
         let params: GrepIndexDisableAndDeleteParams = decode(params)?;
-        let dir = self
-            .active_dir_id()
-            .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
+        let (grep, dir) = self.grep_index_context()?;
         let store = self
             .config
             .clone()
@@ -293,16 +290,9 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?
             .reconcile_grep_backend(backend)
             .map_err(|_| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
-        let deletion =
-            match &self.env_state {
-                super::EnvStateMode::Persistent(state) => state
-                    .clear_index(&dir, DirIndexKind::Grep)
-                    .map_err(|_| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?,
-                super::EnvStateMode::Ephemeral => ClearOutcome::AlreadyAbsent,
-                super::EnvStateMode::Unconfigured => {
-                    return Err(RpcError::new(-32050, AppServerErrorName::SearchUnavailable));
-                }
-            };
+        let deletion = grep
+            .clear_index(&dir, &ash_async_utils::CancellationSource::new().token())
+            .map_err(|_| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
         result(&GrepIndexDisableAndDeleteResult {
             config: config_command_result(outcome),
             deletion: match deletion {

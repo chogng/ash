@@ -157,7 +157,7 @@ fn indexed_globs_keep_corpus_admission_and_bound_filtered_matches() {
         max_results: 2,
         current: false,
     };
-    // Exercise the initialization scan directly so watcher timing cannot skip that branch.
+    // Compare explicit disk scanning with the same indexed query and admission rules.
     let mut scan = session
         .scan(
             &request,
@@ -441,4 +441,55 @@ fn indexed_case_flags_match_current_search() {
         assert!(!current.indexed);
         assert_eq!(indexed.matches, current.matches, "{pattern}");
     }
+}
+
+#[test]
+fn linked_worktrees_share_one_process_and_keep_committed_changes_private() {
+    use std::process::Command;
+    let root = tempfile::tempdir().unwrap();
+    let git = |root: &Path, args: &[&str]| {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+    git(root.path(), &["init", "-b", "main"]);
+    git(root.path(), &["config", "user.name", "Search Test"]);
+    git(
+        root.path(),
+        &["config", "user.email", "search@example.test"],
+    );
+    fs::write(root.path().join("source.rs"), "base_marker\n").unwrap();
+    git(root.path(), &["add", "."]);
+    git(root.path(), &["commit", "-m", "base"]);
+    let linked = tempfile::tempdir().unwrap();
+    let worktree = linked.path().join("worktree");
+    git(
+        root.path(),
+        &["worktree", "add", "-b", "agent", worktree.to_str().unwrap()],
+    );
+    let index = tempfile::tempdir().unwrap();
+    let executable = Executable::resolve(&InstallContext::current()).unwrap();
+    let token = CancellationSource::new().token();
+    let first = Session::open(executable.clone(), root.path(), index.path(), &token).unwrap();
+    let second = Session::open(executable, &worktree, index.path(), &token).unwrap();
+    assert!(std::sync::Arc::ptr_eq(&first.process, &second.process));
+    assert_ne!(first.worktree_id, second.worktree_id);
+    assert_eq!(fs::read_dir(index.path().join("bases")).unwrap().count(), 1);
+    fs::write(worktree.join("source.rs"), "branch_marker\n").unwrap();
+    git(&worktree, &["add", "."]);
+    git(&worktree, &["commit", "-m", "branch change"]);
+    second.paths_changed(&[second.root.join("source.rs")]);
+    assert!(search(&second, "base_marker").matches.is_empty());
+    assert_eq!(search(&second, "branch_marker").matches.len(), 1);
+    assert_eq!(search(&first, "base_marker").matches.len(), 1);
+    drop(first);
+    assert_eq!(search(&second, "branch_marker").matches.len(), 1);
 }

@@ -1,64 +1,25 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "runtime": "tgrep",
-  "version": "1.0.11",
+  "version": "1.0.12-ash.1",
   "source": {
     "repository": "https://github.com/microsoft/tgrep",
-    "release": "v1.0.11",
-    "commit": "7b706715ad3b620c350c73209523ba5034cd66a8"
+    "commit": "ad8fffa01de96c8b3ce2505a306f8a255c1f4bfb",
+    "file": "source.tar.gz",
+    "sha256": "4baec1c465a117f3680aba48730b6256320f7e3c3491e9c2f55a0157fa55abdb"
   },
-  "packageTargets": {
-    "aarch64-apple-darwin": "aarch64-apple-darwin",
-    "aarch64-pc-windows-msvc": "aarch64-pc-windows-msvc",
-    "aarch64-unknown-linux-gnu": "aarch64-unknown-linux-musl",
-    "aarch64-unknown-linux-musl": "aarch64-unknown-linux-musl",
-    "x86_64-apple-darwin": "x86_64-apple-darwin",
-    "x86_64-pc-windows-msvc": "x86_64-pc-windows-msvc",
-    "x86_64-unknown-linux-gnu": "x86_64-unknown-linux-musl",
-    "x86_64-unknown-linux-musl": "x86_64-unknown-linux-musl"
+  "patch": {
+    "file": "shared-worktrees.patch",
+    "sha256": "3d733401689cc7b1bbe30efec2bf9bd5d42f602b9971ef236d5f9d36e440fd0d"
   },
-  "artifacts": {
-    "aarch64-apple-darwin": {
-      "archive": "tgrep-v1.0.11-aarch64-apple-darwin.tar.gz",
-      "size": 2397086,
-      "sha256": "f2ddfaa1943162fb4ce5ebc1c182f56d5c0d6f67eb280d89352ea7f238e895fb",
-      "format": "tar.gz",
-      "executable": "./tgrep"
-    },
-    "aarch64-pc-windows-msvc": {
-      "archive": "tgrep-v1.0.11-aarch64-pc-windows-msvc.zip",
-      "size": 2279867,
-      "sha256": "0a4e14c4cc4d018e11f6a8bb941b1711028e1b5ed931c37eb5042fff71a0298b",
-      "format": "zip",
-      "executable": "tgrep.exe"
-    },
-    "aarch64-unknown-linux-musl": {
-      "archive": "tgrep-v1.0.11-aarch64-unknown-linux-musl.tar.gz",
-      "size": 2706387,
-      "sha256": "272ce6235fb13b3aed6bbd31ff8a494eb506c4a74ffb9af9faeb74d87eb114b1",
-      "format": "tar.gz",
-      "executable": "./tgrep"
-    },
-    "x86_64-apple-darwin": {
-      "archive": "tgrep-v1.0.11-x86_64-apple-darwin.tar.gz",
-      "size": 2536557,
-      "sha256": "e1c7c63d7730f2d47acd16751a2ac372cf00ccb5ad15b96819082b5a721b338d",
-      "format": "tar.gz",
-      "executable": "./tgrep"
-    },
-    "x86_64-pc-windows-msvc": {
-      "archive": "tgrep-v1.0.11-x86_64-pc-windows-msvc.zip",
-      "size": 2441333,
-      "sha256": "7964b69834a30f38d1948faa83f77cad0cb368044ff5ba245e46471ec795782d",
-      "format": "zip",
-      "executable": "tgrep.exe"
-    },
-    "x86_64-unknown-linux-musl": {
-      "archive": "tgrep-v1.0.11-x86_64-unknown-linux-musl.tar.gz",
-      "size": 2882446,
-      "sha256": "d1bb1f843c82b0285723e76c2a8ae983acfa623f56962127ac9f505be356f887",
-      "format": "tar.gz",
-      "executable": "./tgrep"
-    }
-  }
+  "targets": [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "aarch64-pc-windows-msvc",
+    "x86_64-pc-windows-msvc",
+    "aarch64-unknown-linux-gnu",
+    "aarch64-unknown-linux-musl",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl"
+  ]
 }

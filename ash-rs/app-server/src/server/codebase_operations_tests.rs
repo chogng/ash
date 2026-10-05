@@ -211,7 +211,13 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
 fn grep_rpc_shares_search_with_codebase_and_editor_then_releases_the_index() {
     let dir = tempfile::tempdir().unwrap();
     let profile = tempfile::tempdir().unwrap();
-    std::fs::create_dir(dir.path().join(".git")).unwrap();
+    let initialized = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir.path())
+        .args(["init", "--quiet"])
+        .output()
+        .unwrap();
+    assert!(initialized.status.success());
     std::fs::write(dir.path().join("source.rs"), "tgrep_rpc_marker\n").unwrap();
     let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
     let index_storage = Arc::new(ash_state::StateRuntime::open(profile.path()).unwrap());
@@ -231,8 +237,10 @@ fn grep_rpc_shares_search_with_codebase_and_editor_then_releases_the_index() {
     server
         .switch_local_dir_root(dir.path().to_path_buf())
         .unwrap();
-    let dir_id = server.active_dir_id().unwrap();
-    let index_directory = index_storage.index_directory(&dir_id, DirIndexKind::Grep);
+    // Search storage belongs to the common Git directory; deletion must release
+    // that repository lease even though the active Directory is its worktree.
+    let common = ash_file_access::Dir::open_local(dir.path().join(".git")).unwrap();
+    let index_directory = index_storage.index_directory(&common.id(), DirIndexKind::Grep);
     let mut connection = server.connection();
     call(
         &server,
@@ -280,7 +288,7 @@ fn grep_rpc_shares_search_with_codebase_and_editor_then_releases_the_index() {
     );
     assert_eq!(rebuilt["result"]["ready"], true);
     assert!(rebuilt["result"]["indexedFileCount"].as_u64().unwrap() >= 1);
-    assert!(index_directory.join("tgrep-1.0.11").is_dir());
+    assert!(index_directory.join("tgrep-1.0.12-ash.1").is_dir());
 
     // A substring inside an FTS token must be supplied by the shared grep capability.
     server.codebase_service().unwrap().rebuild().unwrap();

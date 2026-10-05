@@ -187,7 +187,48 @@ fn consumers_share_one_session_and_observed_writes_across_backend_changes() {
         IndexStatus::default()
     );
     assert_eq!(
-        storage.clear_index(&root.id(), DirIndexKind::Grep).unwrap(),
+        service.clear_index(&root, &token).unwrap(),
+        ash_state::ClearOutcome::Cleared
+    );
+}
+
+#[test]
+fn concurrent_first_consumers_publish_one_registration_and_release_extra_references() {
+    let (_temporary, root) = fixture();
+    let path = root.canonical_path().join("source.rs");
+    fs::write(&path, "before_marker\n").unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    let storage = Arc::new(StateRuntime::open(profile.path()).unwrap());
+    let service = Service::new(Backend::Tgrep, ripgrep(), Some(storage)).unwrap();
+    let token = CancellationSource::new().token();
+    let barrier = std::sync::Barrier::new(3);
+    let (first, second) = std::thread::scope(|scope| {
+        let register = || {
+            barrier.wait();
+            let state = service.state.read().unwrap();
+            service.index_for(&state, &root, &token).unwrap()
+        };
+        let first = scope.spawn(register);
+        let second = scope.spawn(register);
+        barrier.wait();
+        (first.join().unwrap(), second.join().unwrap())
+    });
+    assert!(Arc::ptr_eq(&first, &second));
+    fs::write(&path, "after_marker\n").unwrap();
+    service.paths_changed(&root, &[path]);
+    assert_eq!(
+        service
+            .search(&root, &query("after_marker"), &token)
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    drop(first);
+    drop(second);
+    service.configure(Backend::Ripgrep).unwrap();
+    assert_eq!(
+        service.clear_index(&root, &token).unwrap(),
         ash_state::ClearOutcome::Cleared
     );
 }
@@ -532,4 +573,82 @@ fn unsaved_documents_replace_disk_matches_without_starving_search_limits() {
                 .is_empty()
         );
     }
+}
+
+#[test]
+fn linked_worktrees_use_repository_storage_and_delete_it_after_disabling() {
+    use std::process::Command;
+    let temporary = tempfile::tempdir().unwrap();
+    let git = |root: &Path, args: &[&str]| {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+    git(temporary.path(), &["init", "-b", "main"]);
+    git(temporary.path(), &["config", "user.name", "Search Test"]);
+    git(
+        temporary.path(),
+        &["config", "user.email", "search@example.test"],
+    );
+    fs::write(temporary.path().join("source.rs"), "base_marker\n").unwrap();
+    git(temporary.path(), &["add", "."]);
+    git(temporary.path(), &["commit", "-m", "base"]);
+    let linked = tempfile::tempdir().unwrap();
+    let path = linked.path().join("worktree");
+    git(
+        temporary.path(),
+        &["worktree", "add", "-b", "agent", path.to_str().unwrap()],
+    );
+    let root = Dir::open_local(temporary.path()).unwrap();
+    let worktree = Dir::open_local(path).unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    let storage = Arc::new(StateRuntime::open(profile.path()).unwrap());
+    let service = Service::new(Backend::Tgrep, ripgrep(), Some(Arc::clone(&storage))).unwrap();
+    let token = CancellationSource::new().token();
+    assert_eq!(
+        service
+            .search(&root, &query("base_marker"), &token)
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    assert_eq!(
+        service
+            .search(&worktree, &query("base_marker"), &token)
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    let common = Dir::open_local(root.canonical_path().join(".git")).unwrap();
+    let directory = storage.index_directory(&common.id(), DirIndexKind::Grep);
+    assert_eq!(
+        fs::read_dir(
+            directory
+                .join(format!("tgrep-{}", tgrep::VERSION))
+                .join("bases")
+        )
+        .unwrap()
+        .count(),
+        1
+    );
+    assert_eq!(
+        service.clear_index(&worktree, &token).unwrap(),
+        ash_state::ClearOutcome::InUse
+    );
+    service.configure(Backend::Ripgrep).unwrap();
+    assert_eq!(
+        service.clear_index(&worktree, &token).unwrap(),
+        ash_state::ClearOutcome::Cleared
+    );
+    assert!(!directory.exists());
 }

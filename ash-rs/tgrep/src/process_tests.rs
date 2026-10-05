@@ -21,7 +21,7 @@ fn exited_server_returns_an_error_instead_of_using_its_stale_index() {
     }
     let error = server
         .rpc(
-            "status",
+            "capabilities",
             Value::Null,
             &cancellation.token(),
             Instant::now() + TIMEOUT,

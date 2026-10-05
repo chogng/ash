@@ -21,14 +21,13 @@ use ash_state::DirIndexKind;
 use ash_state::DirIndexLease;
 use ash_state::StateRuntime;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::path::Component;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 
-/// Shared engine selection and one owned index session per directory, independent of consumers.
+/// Shared engine selection, repository storage, and independent directory registrations.
 pub struct Service {
     ripgrep: RipgrepExecutable,
     storage: Option<Arc<StateRuntime>>,
@@ -38,10 +37,13 @@ struct State {
     backend: Backend,
     executable: Option<tgrep::Executable>,
     indexes: Mutex<BTreeMap<DirId, Arc<Index>>>,
-    changed_paths: Mutex<BTreeMap<DirId, BTreeSet<PathBuf>>>,
+    storage: Mutex<BTreeMap<PathBuf, Arc<IndexStorage>>>,
 }
 struct Index {
     search: tgrep::Session,
+    _storage: Arc<IndexStorage>,
+}
+struct IndexStorage {
     _lease: Option<DirIndexLease>,
     _temporary: Option<tempfile::TempDir>,
 }
@@ -77,13 +79,13 @@ impl Service {
                 backend,
                 executable,
                 indexes: Mutex::new(BTreeMap::new()),
-                changed_paths: Mutex::new(BTreeMap::new()),
+                storage: Mutex::new(BTreeMap::new()),
             }),
         })
     }
 
     /// Updates the same shared service. Existing searches finish before engines are retired;
-    /// every caller observes the new selection and observed writes survive the change.
+    /// every caller observes the new selection. Registration reconciles writes made while disabled.
     pub fn configure(&self, backend: Backend) -> Result<(), Error> {
         let mut state = self.state.write().unwrap_or_else(|e| e.into_inner());
         if state.backend == backend {
@@ -98,6 +100,7 @@ impl Service {
             .get_mut()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
+        state.storage.get_mut().unwrap().clear();
         state.executable = executable;
         state.backend = backend;
         Ok(())
@@ -110,13 +113,6 @@ impl Service {
         if let Some(index) = indexes.get(&root.id()) {
             index.search.paths_changed(paths);
         }
-        state
-            .changed_paths
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .entry(root.id())
-            .or_default()
-            .extend(paths.iter().cloned());
     }
 
     pub fn index_status(
@@ -150,12 +146,24 @@ impl Service {
             .index_for(&state, root, cancellation)?
             .search
             .rebuild(cancellation)?;
-        state
-            .changed_paths
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&root.id());
         Ok(status(result))
+    }
+
+    /// Clears repository-owned search storage after its worktree registrations are released.
+    pub fn clear_index(
+        &self,
+        root: &Dir,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_state::ClearOutcome, Error> {
+        let Some(storage) = &self.storage else {
+            return Ok(ash_state::ClearOutcome::AlreadyAbsent);
+        };
+        let executable = tgrep::Executable::resolve(&InstallContext::current())?;
+        let identity = executable.directory_identity(root.canonical_path(), cancellation)?;
+        let directory = Dir::open_local(identity).map_err(|e| Error::Failed(e.to_string()))?;
+        storage
+            .clear_index(&directory.id(), DirIndexKind::Grep)
+            .map_err(Into::into)
     }
 
     fn index_for(
@@ -168,24 +176,44 @@ impl Service {
             .executable
             .as_ref()
             .ok_or_else(|| Error::Failed("selected grep engine does not use an index".into()))?;
-        let mut indexes = state.indexes.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(index) = indexes.get(&root.id()) {
-            return Ok(Arc::clone(index));
+        if let Some(index) = state
+            .indexes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&root.id())
+            .cloned()
+        {
+            return Ok(index);
         }
-        let lease = self
-            .storage
-            .as_ref()
-            .map(|s| s.acquire(&root.id(), DirIndexKind::Grep))
-            .transpose()?;
-        let temporary = if lease.is_none() {
-            Some(tempfile::tempdir()?)
+        let identity = executable.directory_identity(root.canonical_path(), cancellation)?;
+        let mut repositories = state.storage.lock().unwrap();
+        let storage = if let Some(storage) = repositories.get(&identity) {
+            Arc::clone(storage)
         } else {
-            None
+            let directory = Dir::open_local(&identity).map_err(|e| Error::Failed(e.to_string()))?;
+            let lease = self
+                .storage
+                .as_ref()
+                .map(|s| s.acquire(&directory.id(), DirIndexKind::Grep))
+                .transpose()?;
+            let temporary = if lease.is_none() {
+                Some(tempfile::tempdir()?)
+            } else {
+                None
+            };
+            let storage = Arc::new(IndexStorage {
+                _lease: lease,
+                _temporary: temporary,
+            });
+            repositories.insert(identity, Arc::clone(&storage));
+            storage
         };
-        let base = lease
+        drop(repositories);
+        let base = storage
+            ._lease
             .as_ref()
             .map(|l| l.directory())
-            .or_else(|| temporary.as_ref().map(|t| t.path()))
+            .or_else(|| storage._temporary.as_ref().map(|t| t.path()))
             .expect("index storage");
         let search = tgrep::Session::open(
             executable.clone(),
@@ -193,21 +221,22 @@ impl Service {
             &base.join(format!("tgrep-{}", tgrep::VERSION)),
             cancellation,
         )?;
-        if let Some(paths) = state
-            .changed_paths
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(&root.id())
-        {
-            search.paths_changed(&paths.iter().cloned().collect::<Vec<_>>());
-        }
         let index = Arc::new(Index {
             search,
-            _lease: lease,
-            _temporary: temporary,
+            _storage: storage,
         });
-        indexes.insert(root.id(), Arc::clone(&index));
-        Ok(index)
+        // Registration can construct a large base; keep the directory map
+        // available to existing searches. Concurrent registrations share one
+        // engine view, and dropping the unpublished Session releases its reference.
+        let published = {
+            let mut indexes = state.indexes.lock().unwrap_or_else(|e| e.into_inner());
+            Arc::clone(
+                indexes
+                    .entry(root.id())
+                    .or_insert_with(|| Arc::clone(&index)),
+            )
+        };
+        Ok(published)
     }
 }
 impl Search for Service {

@@ -1,0 +1,1154 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 485b896..7fc76b8 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1263,7 +1263,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
+ 
+ [[package]]
+ name = "tgrep-cli"
+-version = "1.0.11"
++version = "1.0.12-ash.1"
+ dependencies = [
+  "anyhow",
+  "assert_cmd",
+@@ -1289,7 +1289,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "tgrep-core"
+-version = "1.0.11"
++version = "1.0.12-ash.1"
+ dependencies = [
+  "anyhow",
+  "blake3",
+diff --git a/Cargo.toml b/Cargo.toml
+index 05595f2..d1a53d3 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -3,7 +3,7 @@ members = ["tgrep-core", "tgrep-cli"]
+ resolver = "2"
+ 
+ [workspace.package]
+-version = "1.0.11"
++version = "1.0.12-ash.1"
+ edition = "2024"
+ license = "MIT"
+ repository = "https://github.com/microsoft/tgrep"
+diff --git a/README.md b/README.md
+index 0e21a3c..c6c45d3 100644
+--- a/README.md
++++ b/README.md
+@@ -798,3 +798,13 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
+ ## License
+ 
+ [MIT](LICENSE)
++
++## Shared repository service (Ash protocol patch)
++
++`tgrep shared-serve <root> --index-path <cache> --no-require-git` serves independently registered worktrees from one repository. `tgrep identity <root>` returns the canonical Git common directory, or the root for a plain directory. This explicit service uses JSON-RPC capabilities version 1; ordinary `serve`, CLI discovery and existing index readers retain their existing contracts.
++
++RPC operations are `capabilities`, `attach(root, expected_head?)`, `search(worktree_id, ...)`, `files(worktree_id, ...)`, `refresh(worktree_id, paths?)`, `reload(worktree_id)`, `status(worktree_id)` and `detach(worktree_id)`. Paths in a refresh are relative to the registered worktree. Search accepts `max_results` (1–5001) as a global row limit and returns paths in order. Registrations of the same root are reference counted. Another repository is rejected.
++
++Bases are immutable generations keyed by Git tree, index format and file-size profile. They contain committed blobs without running checkout hooks or filters. Decoded content identities decide reuse against each actual worktree, including checkout transformations, committed branch differences, untracked files and ignore changes. Unborn repositories and plain directories use an empty base and a private content overlay. Bases live outside disposable worktrees; delta checkpoints bind the exact base bytes and root. Startup reconciles restored checkpoints before answering indexed queries.
++
++Each view owns its watcher, membership and visibility. Known edits are acknowledged by `refresh`; notifications and the 120-second reconciliation interval are checked before the next request. Initial attach reads eligible contents to establish trusted identities; later reconciliation rereads changed versions and explicitly notified paths. No shared content cache is keyed only by relative filename. Incomplete traversal or unstable reads return errors. Queries in other established worktrees do not take the base-build lock.
+diff --git a/tgrep-cli/Cargo.toml b/tgrep-cli/Cargo.toml
+index eeaa75f..b2c891f 100644
+--- a/tgrep-cli/Cargo.toml
++++ b/tgrep-cli/Cargo.toml
+@@ -26,6 +26,7 @@ regex = "1"
+ fancy-regex = "0.14"
+ lru = "0.16.3"
+ fs2 = "0.4.3"
++tempfile = "3"
+ globset = "0.4.18"
+ memmap2 = "0.9"
+ memchr = "2"
+diff --git a/tgrep-cli/src/main.rs b/tgrep-cli/src/main.rs
+index 447fb5d..cc9df86 100644
+--- a/tgrep-cli/src/main.rs
++++ b/tgrep-cli/src/main.rs
+@@ -581,6 +581,16 @@ impl From<IndexStrategyArg> for builder::IndexStrategy {
+ 
+ #[derive(Subcommand)]
+ enum Command {
++    /// Describe the canonical repository identity used by shared serving.
++    Identity {
++        #[arg(default_value = ".")]
++        path: PathBuf,
++    },
++    /// Serve independent worktrees over one shared repository index.
++    SharedServe {
++        #[arg(default_value = ".")]
++        path: PathBuf,
++    },
+     /// Build or rebuild the trigram index.
+     Index {
+         /// Root directory to index.
+@@ -1110,10 +1120,21 @@ fn run_cli() {
+     match &cli.command {
+         Some(Command::Index { .. }) => reject_unsupported_discovery_flags(&cli, "index"),
+         Some(Command::Serve { .. }) => reject_unsupported_discovery_flags(&cli, "serve"),
++        Some(Command::SharedServe { .. }) => {
++            reject_unsupported_discovery_flags(&cli, "shared-serve")
++        }
+         _ => {}
+     }
+ 
+     let result = match cli.command {
++        Some(Command::Identity { path }) => serve::shared::print_identity(&path),
++        Some(Command::SharedServe { path }) => serve::shared::run(
++            &path,
++            cli.index_path.as_deref(),
++            max_filesize,
++            cli.no_require_git,
++            no_ignore,
++        ),
+         Some(Command::Index {
+             path,
+             exclude,
+diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
+index 91aa081..51cff3c 100644
+--- a/tgrep-cli/src/serve.rs
++++ b/tgrep-cli/src/serve.rs
+@@ -25,6 +25,7 @@ use tgrep_core::hybrid::HybridIndex;
+ use tgrep_core::query;
+ 
+ mod index_cleanup;
++pub mod shared;
+ 
+ #[cfg(test)]
+ #[path = "serve/poll_tests.rs"]
+diff --git a/tgrep-cli/src/serve/shared.rs b/tgrep-cli/src/serve/shared.rs
+new file mode 100644
+index 0000000..cf9712a
+--- /dev/null
++++ b/tgrep-cli/src/serve/shared.rs
+@@ -0,0 +1,741 @@
++//! Repository-scoped serving. Every view pins immutable index bytes; all
++//! admission and final matching use the requesting worktree's filesystem.
++use super::{
++    DecodedFile, SearchScope, json_rpc_error, json_rpc_result, open_within_root,
++    parse_search_params, search_file_matches,
++};
++use anyhow::{Context, Result, bail, ensure};
++use notify::{RecommendedWatcher, RecursiveMode, Watcher};
++use serde::{Deserialize, Serialize};
++use serde_json::{Value, json};
++use std::collections::{BTreeMap, HashMap, HashSet};
++use std::io::{BufRead, BufReader, Read, Write};
++use std::net::TcpListener;
++use std::path::{Path, PathBuf};
++use std::process::{Child, Command, Stdio};
++use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
++use std::sync::{Arc, Mutex, RwLock};
++use std::time::{Duration, Instant};
++use tgrep_core::{builder, hybrid::HybridIndex, live::LiveIndex, meta, shared::SharedBase, walker};
++
++const PROTOCOL: u32 = 1;
++const RECONCILE_INTERVAL: Duration = Duration::from_secs(120);
++
++#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
++pub struct Identity {
++    pub directory: PathBuf,
++    pub repository: bool,
++}
++
++pub fn identity(root: &Path) -> Result<Identity> {
++    let root = std::fs::canonicalize(root)?;
++    // Plain directories remain usable without Git on PATH. Only repository
++    // discovery needs Git to resolve linked worktrees and common directories.
++    if std::env::var_os("GIT_DIR").is_none()
++        && !root.ancestors().any(|path| path.join(".git").exists())
++    {
++        return Ok(Identity {
++            directory: root,
++            repository: false,
++        });
++    }
++    let output = Command::new("git")
++        .env("LC_ALL", "C")
++        .arg("-C")
++        .arg(&root)
++        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
++        .output()?;
++    if output.status.success() {
++        let directory = std::fs::canonicalize(std::str::from_utf8(&output.stdout)?.trim())?;
++        Ok(Identity {
++            directory,
++            repository: true,
++        })
++    } else {
++        // A plain directory is a supported corpus. Other Git failures cannot
++        // change a repository into a separate, unshared search identity.
++        ensure!(
++            String::from_utf8_lossy(&output.stderr).contains("not a git repository"),
++            "Git identity failed: {}",
++            String::from_utf8_lossy(&output.stderr)
++        );
++        Ok(Identity {
++            directory: root,
++            repository: false,
++        })
++    }
++}
++
++pub fn print_identity(root: &Path) -> Result<()> {
++    println!("{}", serde_json::to_string(&identity(root)?)?);
++    Ok(())
++}
++
++fn git(root: &Path, args: &[&str]) -> Result<String> {
++    let output = Command::new("git")
++        .arg("-C")
++        .arg(root)
++        .args(args)
++        .output()?;
++    ensure!(
++        output.status.success(),
++        "Git command failed: {}",
++        String::from_utf8_lossy(&output.stderr)
++    );
++    Ok(std::str::from_utf8(&output.stdout)?.trim().to_owned())
++}
++
++struct Base {
++    shared: SharedBase,
++    evidence: meta::FileEvidence,
++    revision: Option<String>,
++    key: String,
++}
++
++// Git blobs are read without creating worktrees or running checkout hooks and
++// filters. A view compares decoded content identities, so CRLF, LFS and smudge
++// differences become ordinary private overrides rather than incorrect reuse.
++struct ObjectProcess(Child);
++impl Drop for ObjectProcess {
++    fn drop(&mut self) {
++        let _ = self.0.kill();
++        let _ = self.0.wait();
++    }
++}
++
++fn materialize_tree(
++    repository: &Path,
++    revision: &str,
++    destination: &Path,
++    max_file_size: Option<u64>,
++) -> Result<()> {
++    let entries = Command::new("git")
++        .arg("-C")
++        .arg(repository)
++        .args(["ls-tree", "-r", "-z", revision])
++        .output()?;
++    ensure!(
++        entries.status.success(),
++        "could not enumerate the base tree"
++    );
++    let child = Command::new("git")
++        .arg("-C")
++        .arg(repository)
++        .args(["cat-file", "--batch"])
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .spawn()?;
++    let mut process = ObjectProcess(child);
++    let mut input = process.0.stdin.take().unwrap();
++    let mut output = BufReader::new(process.0.stdout.take().unwrap());
++    for entry in entries
++        .stdout
++        .split(|b| *b == 0)
++        .filter(|entry| !entry.is_empty())
++    {
++        let separator = entry
++            .iter()
++            .position(|b| *b == b'\t')
++            .context("invalid Git tree entry")?;
++        let (metadata, path) = (&entry[..separator], &entry[separator + 1..]);
++        let fields = std::str::from_utf8(metadata)?
++            .split_whitespace()
++            .collect::<Vec<_>>();
++        ensure!(fields.len() == 3, "invalid Git tree metadata");
++        if fields[0] != "100644" && fields[0] != "100755" {
++            continue;
++        }
++        let path = Path::new(std::str::from_utf8(path)?);
++        ensure!(
++            path.components()
++                .all(|part| matches!(part, std::path::Component::Normal(_))),
++            "invalid base path"
++        );
++        writeln!(input, "{}", fields[2])?;
++        input.flush()?;
++        let mut header = String::new();
++        output.read_line(&mut header)?;
++        let object = header.split_whitespace().collect::<Vec<_>>();
++        ensure!(
++            object.len() == 3 && object[0] == fields[2] && object[1] == "blob",
++            "invalid Git object reply"
++        );
++        let length = object[2].parse::<u64>()?;
++        let copied = if max_file_size.is_some_and(|limit| length > limit) {
++            std::io::copy(&mut (&mut output).take(length), &mut std::io::sink())?
++        } else {
++            let absolute = destination.join(path);
++            std::fs::create_dir_all(absolute.parent().unwrap())?;
++            let mut file = std::fs::File::create(absolute)?;
++            std::io::copy(&mut (&mut output).take(length), &mut file)?
++        };
++        ensure!(copied == length, "truncated Git object");
++        let mut newline = [0];
++        output.read_exact(&mut newline)?;
++        ensure!(newline == *b"\n", "invalid Git object delimiter");
++    }
++    drop(input);
++    ensure!(process.0.wait()?.success(), "Git object reader failed");
++    Ok(())
++}
++
++fn starting_revision(root: &Path) -> Result<Option<String>> {
++    let output = Command::new("git")
++        .arg("-C")
++        .arg(root)
++        .args(["rev-parse", "--verify", "--quiet", "HEAD"])
++        .output()?;
++    if output.status.success() {
++        return Ok(Some(std::str::from_utf8(&output.stdout)?.trim().to_owned()));
++    }
++    ensure!(
++        output.status.code() == Some(1),
++        "could not resolve starting revision"
++    );
++    Ok(None)
++}
++
++struct View {
++    index: HybridIndex,
++    base: Arc<Base>,
++    contents: HashMap<String, meta::ContentId>,
++    versions: HashMap<String, meta::FileVersion>,
++    visibility: tgrep_core::visibility::PathVisibility,
++    filenames: Vec<String>,
++    dirty: Arc<AtomicBool>,
++    _watcher: RecommendedWatcher,
++    reconciled: Instant,
++    checkpoint: PathBuf,
++    registrations: usize,
++    ready: bool,
++}
++
++struct Service {
++    identity: Identity,
++    storage: PathBuf,
++    bases: Mutex<HashMap<String, Arc<Base>>>,
++    views: RwLock<BTreeMap<u64, Arc<Mutex<View>>>>,
++    attach_gate: Mutex<()>,
++    next_id: AtomicU64,
++    max_file_size: Option<u64>,
++    no_require_git: bool,
++}
++
++impl Service {
++    fn new(
++        root: &Path,
++        storage: &Path,
++        max_file_size: Option<u64>,
++        no_require_git: bool,
++    ) -> Result<Self> {
++        let identity = identity(root)?;
++        std::fs::create_dir_all(storage)?;
++        let storage = std::fs::canonicalize(storage)?;
++        ensure!(
++            !root.starts_with(&storage),
++            "storage must not contain the search root"
++        );
++        Ok(Self {
++            identity,
++            storage,
++            bases: Mutex::new(HashMap::new()),
++            views: RwLock::new(BTreeMap::new()),
++            attach_gate: Mutex::new(()),
++            next_id: AtomicU64::new(1),
++            max_file_size,
++            no_require_git,
++        })
++    }
++
++    fn base(&self, root: &Path) -> Result<Arc<Base>> {
++        let revision = if self.identity.repository {
++            starting_revision(root)?
++        } else {
++            None
++        };
++        let tree = match &revision {
++            Some(revision) => git(root, &["rev-parse", &format!("{revision}^{{tree}}")])?,
++            None => "empty".into(),
++        };
++        let key = format!(
++            "{tree}-{}-{}",
++            meta::INDEX_FORMAT_VERSION,
++            self.max_file_size
++                .map_or("unlimited".into(), |n| n.to_string())
++        );
++        let mut registered_bases = self.bases.lock().unwrap();
++        if let Some(base) = registered_bases.get(&key) {
++            return Ok(Arc::clone(base));
++        }
++        let bases = self.storage.join("bases");
++        std::fs::create_dir_all(&bases)?;
++        let destination = bases.join(&key);
++        if !destination.exists() {
++            let staging = tempfile::tempdir_in(&bases)?;
++            let source = tempfile::tempdir_in(&self.storage)?;
++            let source_root = source.path().join("tree");
++            std::fs::create_dir(&source_root)?;
++            if let Some(revision) = &revision {
++                materialize_tree(root, revision, &source_root, self.max_file_size)?;
++            }
++            // Ignore policy belongs to each view. The base retains a tracked
++            // superset so another branch can admit a path this one ignores.
++            builder::build_index_with_options(
++                &source_root,
++                Some(staging.path()),
++                &builder::BuildOptions {
++                    no_ignore: true,
++                    include_hidden: true,
++                    exclude_dirs: vec![".git".into()],
++                    exclude_paths: vec![source_root.join(".git")],
++                    max_file_size: self.max_file_size,
++                    ..Default::default()
++                },
++            )?;
++            let _ = SharedBase::open(staging.path())?;
++            std::fs::rename(staging.path(), &destination)?;
++        }
++        let base = Arc::new(Base {
++            shared: SharedBase::open(&destination)?,
++            evidence: meta::read_file_evidence(&destination)?,
++            revision,
++            key: key.clone(),
++        });
++        registered_bases.insert(key, Arc::clone(&base));
++        Ok(base)
++    }
++
++    fn attach(&self, params: &Value) -> Result<Value> {
++        let _attach = self.attach_gate.lock().unwrap();
++        let root = std::fs::canonicalize(required_path(params, "root")?)?;
++        ensure!(
++            identity(&root)? == self.identity,
++            "worktree belongs to another repository"
++        );
++        if let Some(expected) = params.get("expected_head").and_then(Value::as_str) {
++            ensure!(
++                self.identity.repository && git(&root, &["rev-parse", "HEAD"])? == expected,
++                "worktree HEAD changed before registration"
++            );
++        }
++        for (id, view) in self.views.read().unwrap().iter() {
++            let mut view = view.lock().unwrap();
++            if view.index.root == root {
++                view.refresh(self.max_file_size, self.no_require_git, &self.storage)?;
++                view.registrations += 1;
++                return Ok(
++                    json!({"worktree_id":id,"protocol":PROTOCOL,"base_revision":view.base.revision,"ready":true}),
++                );
++            }
++        }
++        let base = self.base(&root)?;
++        let dirty = Arc::new(AtomicBool::new(true));
++        let pending = Arc::clone(&dirty);
++        let excluded_storage = self.storage.clone();
++        let mut watcher =
++            notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
++                // Checkpoint writes must not schedule another reconciliation
++                // when the configured cache lives inside the search root.
++                let changed = event.as_ref().map_or(true, |event| {
++                    super::event_changes_index(&event.kind)
++                        && (event.paths.is_empty()
++                            || event
++                                .paths
++                                .iter()
++                                .any(|path| !path.starts_with(&excluded_storage)))
++                });
++                if changed {
++                    pending.store(true, Ordering::SeqCst);
++                }
++            })?;
++        // Subscribe before traversal; notifications during the walk remain
++        // dirty and are reconciled before the following indexed query.
++        watcher.watch(&root, RecursiveMode::Recursive)?;
++        if self.identity.repository {
++            watcher.watch(&self.identity.directory, RecursiveMode::Recursive)?;
++        }
++        let overlays = self.storage.join("overlays");
++        std::fs::create_dir_all(&overlays)?;
++        // The file-table digest is only a stable filename; SharedBase also
++        // validates the canonical root and exact base bytes when restoring.
++        let name =
++            meta::ContentId::from_indexed_bytes(root.as_os_str().as_encoded_bytes()).to_hex();
++        let checkpoint = overlays.join(format!("{name}-{}.json", base.key));
++        let index = if checkpoint.exists() {
++            base.shared.restore_worktree(&root, &checkpoint)?
++        } else {
++            base.shared.create_worktree(&root)?
++        };
++        let mut view = View {
++            index,
++            base,
++            contents: HashMap::new(),
++            versions: HashMap::new(),
++            visibility: Default::default(),
++            filenames: Vec::new(),
++            dirty,
++            _watcher: watcher,
++            reconciled: Instant::now(),
++            checkpoint,
++            registrations: 1,
++            ready: false,
++        };
++        view.refresh(self.max_file_size, self.no_require_git, &self.storage)?;
++        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
++        let result = json!({"worktree_id":id,"protocol":PROTOCOL,"base_revision":view.base.revision,"ready":true});
++        self.views
++            .write()
++            .unwrap()
++            .insert(id, Arc::new(Mutex::new(view)));
++        Ok(result)
++    }
++}
++
++fn required_path<'a>(params: &'a Value, name: &str) -> Result<&'a Path> {
++    Ok(Path::new(
++        params
++            .get(name)
++            .and_then(Value::as_str)
++            .context("missing path")?,
++    ))
++}
++
++impl View {
++    fn refresh(
++        &mut self,
++        max_file_size: Option<u64>,
++        no_require_git: bool,
++        storage: &Path,
++    ) -> Result<()> {
++        self.ready = false;
++        self.dirty.store(false, Ordering::SeqCst);
++        let walk = walker::walk_dir(
++            &self.index.root,
++            &walker::WalkOptions {
++                include_hidden: true,
++                collect_gitignore_files: true,
++                no_require_git,
++                max_file_size,
++                exclude_dirs: vec![".git".into()],
++                exclude_paths: vec![storage.to_path_buf(), self.index.root.join(".git")],
++                ..Default::default()
++            },
++        );
++        ensure!(walk.skipped_error == 0, "worktree traversal was incomplete");
++        let mut present = HashSet::new();
++        for path in &walk.files {
++            let relative = relative_path(&self.index.root, path)?;
++            let mut file = open_within_root(&self.index.root, path)?;
++            let before = builder::file_version(&file.metadata()?);
++            if before.is_trusted()
++                && self.versions.get(&relative) == Some(&before)
++                && self.contents.contains_key(&relative)
++            {
++                present.insert(relative);
++                continue;
++            }
++            let bytes = match super::read_within_limit(
++                &mut file,
++                max_file_size,
++                before.stamp().size.min(1 << 20) as usize,
++            ) {
++                super::CappedRead::Data(bytes) => bytes,
++                super::CappedRead::TooLarge => continue,
++                super::CappedRead::Failed => bail!("could not read worktree file: {relative}"),
++            };
++            ensure!(
++                before == builder::file_version(&file.metadata()?)
++                    && super::file_still_has_bytes(&self.index.root, path, &before, &bytes)?,
++                "file changed during reconciliation: {relative}"
++            );
++            let text = tgrep_core::encoding::decode_for_index(&bytes);
++            if tgrep_core::trigram::is_binary(&text) {
++                continue;
++            }
++            let content_id = meta::ContentId::from_indexed_bytes(&text);
++            present.insert(relative.clone());
++            if self.base.evidence.content_id(&relative) == Some(content_id) {
++                self.index
++                    .live
++                    .clear_reconciled_paths(std::slice::from_ref(&relative));
++            } else if self.contents.get(&relative) != Some(&content_id)
++                || !self.index.live.has_path(&relative)
++            {
++                self.index
++                    .live
++                    .commit_upsert(&relative, LiveIndex::compute_trigram_masks(&text));
++            }
++            self.versions.insert(relative.clone(), before);
++            self.contents.insert(relative, content_id);
++        }
++        // Includes committed branch divergence and changes to corpus admission,
++        // rather than assuming a clean HEAD means the base is still correct.
++        let absent: Vec<_> = self
++            .index
++            .all_paths()
++            .into_iter()
++            .filter(|p| !present.contains(p))
++            .collect();
++        for path in absent {
++            self.index.live.delete_file(&path);
++        }
++        self.contents.retain(|p, _| present.contains(p));
++        self.versions.retain(|p, _| present.contains(p));
++        self.filenames = walk
++            .listed_files
++            .iter()
++            .map(|p| relative_path(&self.index.root, p))
++            .collect::<Result<_>>()?;
++        self.filenames.sort();
++        self.visibility = walk.visibility;
++        self.base
++            .shared
++            .save_overlay(&self.index, &self.checkpoint)?;
++        self.reconciled = Instant::now();
++        self.ready = true;
++        Ok(())
++    }
++
++    fn search(&self, params: &Value) -> Result<Value> {
++        let request = parse_search_params(params).map_err(anyhow::Error::msg)?;
++        let (ids, reader) = self.index.execute_query_with_masks(&request.plan);
++        let raw_candidates = ids.len();
++        let mut paths = ids
++            .into_iter()
++            .filter_map(|id| self.index.resolve_path(id, &reader))
++            .filter(|path| {
++                request.scope.relative(path).is_some_and(|scoped| {
++                    self.visibility
++                        .is_visible(path, &request.scope.prefix, request.scope.hidden)
++                        && request.type_filter.matches(scoped)
++                        && request.glob_filter.matches(scoped)
++                })
++            })
++            .collect::<Vec<_>>();
++        paths.sort();
++        let candidates = paths.len();
++        let limit = match params.get("max_results") {
++            Some(value) => {
++                let limit = value
++                    .as_u64()
++                    .context("max_results must be a positive integer")?;
++                ensure!((1..=5001).contains(&limit), "invalid max_results");
++                Some(limit as usize)
++            }
++            None => None,
++        };
++        let mut matches = Vec::new();
++        let mut file_stats = Vec::new();
++        for path in paths {
++            let mut file = match open_within_root(&self.index.root, &self.index.root.join(&path)) {
++                Ok(file) => file,
++                Err(error) if super::proves_ineligible(&error) => continue,
++                Err(error) => return Err(error.into()),
++            };
++            if request
++                .opts
++                .max_filesize
++                .is_some_and(|limit| file.metadata().is_ok_and(|m| m.len() > limit))
++            {
++                continue;
++            }
++            let mut bytes = Vec::new();
++            file.read_to_end(&mut bytes)?;
++            let content = DecodedFile::new(bytes, request.encoding);
++            let found = search_file_matches(&path, &content, &request.matcher, &request.opts)?;
++            matches.extend(found.rows);
++            file_stats.extend(found.stats);
++            if limit.is_some_and(|limit| matches.len() >= limit) {
++                matches.truncate(limit.unwrap());
++                break;
++            }
++        }
++        let mut result =
++            json!({"num_matches":matches.len(),"matches":matches,"hidden_complete":true});
++        if request.opts.stats {
++            result["file_stats"] = json!(file_stats);
++            result["index_stats"] = json!({"query_plan":crate::search::plan_summary(&request.plan),"raw_candidates":raw_candidates,"candidates":candidates,"total_files":self.index.num_files_using(&reader)});
++        }
++        Ok(result)
++    }
++}
++
++fn relative_path(root: &Path, path: &Path) -> Result<String> {
++    Ok(path
++        .strip_prefix(root)?
++        .to_str()
++        .context("worktree paths must be UTF-8")?
++        .replace(std::path::MAIN_SEPARATOR, "/"))
++}
++
++fn request(line: &str, service: &Arc<Service>) -> String {
++    let parsed: Value = match serde_json::from_str(line) {
++        Ok(value) => value,
++        Err(error) => return json_rpc_error(None, -32700, &error.to_string()),
++    };
++    let id = parsed.get("id").cloned();
++    let result = dispatch(&parsed, service);
++    match result {
++        Ok(value) => json_rpc_result(id, value),
++        Err(error) => json_rpc_error(id, -32000, &format!("{error:#}")),
++    }
++}
++
++fn dispatch(request: &Value, service: &Arc<Service>) -> Result<Value> {
++    let method = request
++        .get("method")
++        .and_then(Value::as_str)
++        .context("missing method")?;
++    let params = &request["params"];
++    match method {
++        "capabilities" => {
++            return Ok(json!({"shared_worktrees":PROTOCOL,"identity":service.identity}));
++        }
++        "attach" => return service.attach(params),
++        "detach" => {
++            let id = params["worktree_id"]
++                .as_u64()
++                .context("missing worktree_id")?;
++            let mut registered_views = service.views.write().unwrap();
++            let view = registered_views
++                .get(&id)
++                .context("unknown worktree")?
++                .clone();
++            let mut registration = view.lock().unwrap();
++            registration.registrations -= 1;
++            if registration.registrations == 0 {
++                registered_views.remove(&id);
++            }
++            drop(registration);
++            drop(view);
++            drop(registered_views);
++            service
++                .bases
++                .lock()
++                .unwrap()
++                .retain(|_, base| Arc::strong_count(base) > 1);
++            return Ok(Value::Null);
++        }
++        _ => {}
++    }
++    let id = params["worktree_id"]
++        .as_u64()
++        .context("missing worktree_id")?;
++    let view = Arc::clone(
++        service
++            .views
++            .read()
++            .unwrap()
++            .get(&id)
++            .context("unknown worktree")?,
++    );
++    let (max_file_size, no_require_git, storage) = (
++        service.max_file_size,
++        service.no_require_git,
++        service.storage.clone(),
++    );
++    let mut view = view.lock().unwrap();
++    if method == "refresh"
++        && let Some(paths) = params.get("paths")
++    {
++        for path in paths.as_array().context("refresh paths must be an array")? {
++            let path = Path::new(path.as_str().context("invalid refresh path")?);
++            ensure!(
++                path.components()
++                    .all(|c| matches!(c, std::path::Component::Normal(_))),
++                "refresh paths must be worktree-relative"
++            );
++            let path = path
++                .to_str()
++                .unwrap()
++                .replace(std::path::MAIN_SEPARATOR, "/");
++            view.versions.retain(|known, _| {
++                known != &path
++                    && !known
++                        .strip_prefix(&path)
++                        .is_some_and(|suffix| suffix.starts_with('/'))
++            });
++        }
++    }
++    if method == "refresh"
++        || method == "reload"
++        || !view.ready
++        || view.dirty.load(Ordering::SeqCst)
++        || view.reconciled.elapsed() >= RECONCILE_INTERVAL
++    {
++        view.refresh(max_file_size, no_require_git, &storage)?;
++    }
++    match method {
++        "search" => view.search(params),
++        "files" => {
++            let scope = SearchScope::parse(params).map_err(anyhow::Error::msg)?;
++            let files = view
++                .filenames
++                .iter()
++                .filter(|p| {
++                    scope.relative(p).is_some()
++                        && view.visibility.is_visible(p, &scope.prefix, scope.hidden)
++                })
++                .collect::<Vec<_>>();
++            Ok(json!({"files":files,"hidden_complete":true}))
++        }
++        "status" | "refresh" | "reload" => Ok(
++            json!({"num_files":view.index.num_files(),"indexing":false,"hidden_complete":true,"watcher_active":true,"base_revision":view.base.revision,"overlay_files":view.index.live.num_files()}),
++        ),
++        _ => bail!("unknown shared method: {method}"),
++    }
++}
++
++pub fn run(
++    root: &Path,
++    index_path: Option<&Path>,
++    max_file_size: Option<u64>,
++    no_require_git: bool,
++    no_ignore: bool,
++) -> Result<()> {
++    ensure!(
++        !no_ignore,
++        "shared-serve requires worktree ignore admission; use --no-index for unrestricted scans"
++    );
++    let root = std::fs::canonicalize(root)?;
++    let storage = index_path.context("shared-serve requires --index-path")?;
++    let lock = super::try_acquire_server_lock(storage)?;
++    let service = Arc::new(Service::new(&root, storage, max_file_size, no_require_git)?);
++    let listener = TcpListener::bind("127.0.0.1:0")?;
++    super::ServerInfo {
++        pid: std::process::id(),
++        port: listener.local_addr()?.port(),
++    }
++    .save(storage)?;
++    let shutdown_storage = storage.to_path_buf();
++    super::ctrlc_handler(move || {
++        super::ServerInfo::cleanup(&shutdown_storage);
++        std::process::exit(0);
++    });
++    let _lock = lock;
++    for stream in listener.incoming() {
++        let stream = stream?;
++        let service = Arc::clone(&service);
++        std::thread::spawn(move || {
++            let result = (|| -> Result<()> {
++                let mut reader = BufReader::new(stream.try_clone()?);
++                let mut writer = stream;
++                let mut line = String::new();
++                while reader.read_line(&mut line)? > 0 {
++                    writeln!(writer, "{}", request(&line, &service))?;
++                    writer.flush()?;
++                    line.clear();
++                }
++                Ok(())
++            })();
++            if let Err(error) = result {
++                eprintln!("shared connection: {error:#}");
++            }
++        });
++    }
++    Ok(())
++}
++
++#[cfg(test)]
++#[path = "shared_tests.rs"]
++mod tests;
+diff --git a/tgrep-cli/src/serve/shared_tests.rs b/tgrep-cli/src/serve/shared_tests.rs
+new file mode 100644
+index 0000000..bb29e9d
+--- /dev/null
++++ b/tgrep-cli/src/serve/shared_tests.rs
+@@ -0,0 +1,281 @@
++use super::*;
++
++fn repository() -> tempfile::TempDir {
++    let root = tempfile::tempdir().unwrap();
++    git(root.path(), &["init", "-b", "main"]).unwrap();
++    git(root.path(), &["config", "user.name", "Search Test"]).unwrap();
++    git(
++        root.path(),
++        &["config", "user.email", "search@example.test"],
++    )
++    .unwrap();
++    std::fs::write(root.path().join("source.rs"), "base_marker\n").unwrap();
++    std::fs::write(root.path().join("deleted.rs"), "delete_marker\n").unwrap();
++    std::fs::write(root.path().join("ignored.rs"), "ignore_marker\n").unwrap();
++    git(root.path(), &["add", "."]).unwrap();
++    git(root.path(), &["commit", "-m", "base"]).unwrap();
++    root
++}
++
++fn query(service: &Arc<Service>, id: u64, pattern: &str) -> Value {
++    dispatch(
++        &json!({"method":"search","params":{"worktree_id":id,"pattern":pattern,"stats":true}}),
++        service,
++    )
++    .unwrap()
++}
++
++#[test]
++fn shared_views_isolate_commits_deletes_admission_and_registration_lifetimes() {
++    let root = repository();
++    let linked = tempfile::tempdir().unwrap();
++    let path = linked.path().join("linked");
++    git(
++        root.path(),
++        &["worktree", "add", "-b", "agent", path.to_str().unwrap()],
++    )
++    .unwrap();
++    let storage = tempfile::tempdir().unwrap();
++    let service = Arc::new(
++        Service::new(
++            root.path(),
++            storage.path(),
++            walker::DEFAULT_MAX_FILE_SIZE,
++            true,
++        )
++        .unwrap(),
++    );
++    let a = service.attach(&json!({"root":root.path()})).unwrap()["worktree_id"]
++        .as_u64()
++        .unwrap();
++    let b = service.attach(&json!({"root":path})).unwrap()["worktree_id"]
++        .as_u64()
++        .unwrap();
++    {
++        let views = service.views.read().unwrap();
++        let a = views[&a].lock().unwrap();
++        let b = views[&b].lock().unwrap();
++        assert!(Arc::ptr_eq(&a.index.reader_arc(), &b.index.reader_arc()));
++        assert_eq!(a.index.live.num_files(), 0);
++        assert_eq!(b.index.live.num_files(), 0);
++    }
++    std::fs::write(path.join("source.rs"), "branch_marker\n").unwrap();
++    std::fs::remove_file(path.join("deleted.rs")).unwrap();
++    std::fs::write(path.join(".gitignore"), "ignored.rs\n").unwrap();
++    std::fs::write(path.join("new.rs"), "new_marker\n").unwrap();
++    git(&path, &["add", "."]).unwrap();
++    git(&path, &["commit", "-m", "branch differences"]).unwrap();
++    dispatch(
++        &json!({"method":"refresh","params":{"worktree_id":b}}),
++        &service,
++    )
++    .unwrap();
++    assert_eq!(
++        query(&service, a, "base_marker")["matches"]
++            .as_array()
++            .unwrap()
++            .len(),
++        1
++    );
++    assert!(
++        query(&service, b, "base_marker")["matches"]
++            .as_array()
++            .unwrap()
++            .is_empty()
++    );
++    assert_eq!(
++        query(&service, b, "branch_marker")["matches"]
++            .as_array()
++            .unwrap()
++            .len(),
++        1
++    );
++    assert!(
++        query(&service, b, "delete_marker|ignore_marker")["matches"]
++            .as_array()
++            .unwrap()
++            .is_empty()
++    );
++    assert_eq!(
++        query(&service, b, "new_marker")["matches"]
++            .as_array()
++            .unwrap()
++            .len(),
++        1
++    );
++    let files = dispatch(
++        &json!({"method":"files","params":{"worktree_id":b}}),
++        &service,
++    )
++    .unwrap();
++    assert!(
++        !files["files"]
++            .as_array()
++            .unwrap()
++            .contains(&json!("ignored.rs"))
++    );
++    let repeated = service.attach(&json!({"root":root.path()})).unwrap();
++    assert_eq!(repeated["worktree_id"], a);
++    dispatch(
++        &json!({"method":"detach","params":{"worktree_id":a}}),
++        &service,
++    )
++    .unwrap();
++    assert_eq!(query(&service, a, "base_marker")["num_matches"], 1);
++    dispatch(
++        &json!({"method":"detach","params":{"worktree_id":a}}),
++        &service,
++    )
++    .unwrap();
++    assert!(!service.views.read().unwrap().contains_key(&a));
++    assert_eq!(query(&service, b, "branch_marker")["num_matches"], 1);
++    drop(service);
++    // Restart restores a compatible checkpoint and reconciles against current
++    // HEAD; committed branch changes cannot vanish just because status is clean.
++    let restarted = Arc::new(
++        Service::new(
++            root.path(),
++            storage.path(),
++            walker::DEFAULT_MAX_FILE_SIZE,
++            true,
++        )
++        .unwrap(),
++    );
++    let c = restarted.attach(&json!({"root":path})).unwrap()["worktree_id"]
++        .as_u64()
++        .unwrap();
++    assert_eq!(query(&restarted, c, "branch_marker")["num_matches"], 1);
++    assert_eq!(
++        git(root.path(), &["worktree", "list", "--porcelain"])
++            .unwrap()
++            .matches("worktree ")
++            .count(),
++        2
++    );
++}
++
++#[test]
++fn restored_overlay_reconciles_reverts_and_preserves_global_path_order() {
++    let root = repository();
++    let storage = tempfile::tempdir().unwrap();
++    let create = || {
++        Arc::new(
++            Service::new(
++                root.path(),
++                storage.path(),
++                walker::DEFAULT_MAX_FILE_SIZE,
++                true,
++            )
++            .unwrap(),
++        )
++    };
++    let service = create();
++    let a = service.attach(&json!({"root":root.path()})).unwrap()["worktree_id"]
++        .as_u64()
++        .unwrap();
++    std::fs::write(root.path().join("source.rs"), "edited_marker\n").unwrap();
++    dispatch(
++        &json!({"method":"refresh","params":{"worktree_id":a}}),
++        &service,
++    )
++    .unwrap();
++    drop(service);
++    std::fs::write(root.path().join("source.rs"), "base_marker\n").unwrap();
++    std::fs::write(root.path().join("a.rs"), "base_marker\n".repeat(4)).unwrap();
++    let service = create();
++    let a = service.attach(&json!({"root":root.path()})).unwrap()["worktree_id"]
++        .as_u64()
++        .unwrap();
++    assert!(
++        query(&service, a, "edited_marker")["matches"]
++            .as_array()
++            .unwrap()
++            .is_empty()
++    );
++    let result = dispatch(&json!({"method":"search","params":{"worktree_id":a,"pattern":"base_marker","max_results":3,"max_count":3,"stats":true,"glob":["*.rs"]}}), &service).unwrap();
++    assert_eq!(result["matches"].as_array().unwrap().len(), 3);
++    assert_eq!(result["matches"][2]["file"], "a.rs");
++    assert_eq!(result["matches"][2]["line"], 3);
++    assert_eq!(
++        service.views.read().unwrap()[&a]
++            .lock()
++            .unwrap()
++            .index
++            .live
++            .num_files(),
++        1
++    );
++}
++
++#[test]
++fn foreign_repositories_and_changed_starting_revisions_are_rejected() {
++    let root = repository();
++    let other = repository();
++    let storage = tempfile::tempdir().unwrap();
++    let service = Service::new(
++        root.path(),
++        storage.path(),
++        walker::DEFAULT_MAX_FILE_SIZE,
++        true,
++    )
++    .unwrap();
++    assert!(service.attach(&json!({"root":other.path()})).is_err());
++    assert!(
++        service
++            .attach(&json!({"root":root.path(),"expected_head":"wrong"}))
++            .is_err()
++    );
++}
++
++#[test]
++fn unborn_repository_indexes_untracked_files_without_a_committed_base() {
++    let root = tempfile::tempdir().unwrap();
++    git(root.path(), &["init", "-b", "main"]).unwrap();
++    std::fs::write(root.path().join("source.rs"), "untracked_marker\n").unwrap();
++    let storage = tempfile::tempdir().unwrap();
++    let service = Arc::new(
++        Service::new(
++            root.path(),
++            storage.path(),
++            walker::DEFAULT_MAX_FILE_SIZE,
++            true,
++        )
++        .unwrap(),
++    );
++    let a = service.attach(&json!({"root":root.path()})).unwrap()["worktree_id"]
++        .as_u64()
++        .unwrap();
++    assert_eq!(query(&service, a, "untracked_marker")["num_matches"], 1);
++}
++
++#[test]
++fn hidden_scope_exposes_children_but_globs_do_not_expose_hidden_descendants() {
++    let root = repository();
++    std::fs::create_dir(root.path().join(".github")).unwrap();
++    for path in [
++        "visible.rs",
++        ".secret.rs",
++        ".github/visible.rs",
++        ".github/.secret.rs",
++    ] {
++        std::fs::write(root.path().join(path), "visibility_marker\n").unwrap();
++    }
++    let storage = tempfile::tempdir().unwrap();
++    let service = Arc::new(
++        Service::new(
++            root.path(),
++            storage.path(),
++            walker::DEFAULT_MAX_FILE_SIZE,
++            true,
++        )
++        .unwrap(),
++    );
++    let id = service.attach(&json!({"root":root.path()})).unwrap()["worktree_id"]
++        .as_u64()
++        .unwrap();
++    for (scope, expected) in [("", "visible.rs"), (".github", ".github/visible.rs")] {
++        let result = dispatch(&json!({"method":"search","params":{"worktree_id":id,"pattern":"visibility_marker","scope":scope,"glob":["*.rs"]}}), &service).unwrap();
++        assert_eq!(result["num_matches"], 1);
++        assert_eq!(result["matches"][0]["file"], expected);
++    }
++}

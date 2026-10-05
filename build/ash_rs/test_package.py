@@ -106,6 +106,7 @@ class PackageTests(unittest.TestCase):
                 for name in names
             ]
             rg = executable_file(root / "rg", b"ripgrep")
+            tgrep = executable_file(root / "tgrep", b"tgrep")
             output = root / "package"
 
             def run_command(command, **kwargs):
@@ -133,6 +134,8 @@ class PackageTests(unittest.TestCase):
                             str(output),
                             "--rg-bin",
                             str(rg),
+                            "--tgrep-bin",
+                            str(tgrep),
                             "--javascript-runtime",
                             "host-provided-node",
                         ]
@@ -1092,7 +1095,10 @@ def test_node_resolution(root: Path, spec) -> NodeResolution:
 def test_tgrep_resolution(root):
     executable = executable_file(root / "tgrep-source", b"tgrep")
     return ExecutableResolution(
-        executable, "1.0.11", "local-override", hashlib.sha256(b"tgrep").hexdigest()
+        executable,
+        "1.0.12-ash.1",
+        "local-override",
+        hashlib.sha256(b"tgrep").hexdigest(),
     )
 
 

@@ -1,7 +1,9 @@
 # tgrep runtime
 
-- Pins the Agent grep executable, target mapping, archive size and SHA-256 in `runtime-lock.json`.
-- Development and release resolve the same verified artifacts into `third_party/.cache/tgrep/`; downloaded binaries are not committed.
-- Packages carry `ash-resources/tgrep/tgrep[.exe]` and `ash-resources/licenses/tgrep/LICENSE`.
-- `ash-tgrep` owns process lifetime and the version-specific protocol. The application never downloads the runtime during a search.
-- Upgrade the lock and adapter together, verify all release assets, and run package and real-engine integration tests.
+Ash builds tgrep 1.0.12-ash.1 from the fixed upstream source archive and shared-worktree service patch in `runtime-lock.json`. The upstream commit is `ad8fffa01de96c8b3ce2505a306f8a255c1f4bfb`; the patch owns Ash's repository-scoped service protocol.
+
+- Source and patch SHA-256 values are checked before applying or compiling. Cargo uses `--locked`; build caches are keyed by source, patch, toolchain and target and verify the resulting binary digest.
+- Development, release and Remote packages use the same resolver. Builds require Rust and Git; searches do not download or compile the runtime.
+- Packages retain `ash-resources/tgrep/tgrep[.exe]` and the upstream MIT license.
+- `ash-tgrep` supervises the service and registers independent worktrees. Search correctness, base generations, admission and delta checkpoints belong to tgrep.
+- To update the source, create `source.tar.gz` with `git archive` at the new exact upstream commit, update `shared-worktrees.patch`, refresh both lock digests, and verify the source build and real-engine integration tests. The archive is a source snapshot, not a platform executable.
