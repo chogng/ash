@@ -807,6 +807,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "open-preview",
+      "file": "open-preview.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "openai",
       "file": "openai.svg",
       "rendering": "symbolic"

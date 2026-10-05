@@ -169,6 +169,7 @@ mod artwork {
     pub(crate) const MULTITASK: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/multitask.svg"));
     pub(crate) const NEW_FILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/new-file.svg"));
     pub(crate) const NEW_FOLDER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/new-folder.svg"));
+    pub(crate) const OPEN_PREVIEW: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/open-preview.svg"));
     pub(crate) const OPENAI: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/openai.svg"));
     pub(crate) const ORIGIN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/origin.svg"));
     pub(crate) const PAPERCLIP: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/paperclip.svg"));
@@ -415,6 +416,7 @@ pub mod icons {
     pub const MULTITASK: Icon = Icon::new(IconId::new("multitask"), artwork::MULTITASK);
     pub const NEW_FILE: Icon = Icon::new(IconId::new("new-file"), artwork::NEW_FILE);
     pub const NEW_FOLDER: Icon = Icon::new(IconId::new("new-folder"), artwork::NEW_FOLDER);
+    pub const OPEN_PREVIEW: Icon = Icon::new(IconId::new("open-preview"), artwork::OPEN_PREVIEW);
     pub const OPENAI: Icon = Icon::new(IconId::new("openai"), artwork::OPENAI);
     pub const ORIGIN: Icon = Icon::new(IconId::new("origin"), artwork::ORIGIN);
     pub const PAPERCLIP: Icon = Icon::new(IconId::new("paperclip"), artwork::PAPERCLIP);
@@ -657,6 +659,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::MULTITASK,
     icons::NEW_FILE,
     icons::NEW_FOLDER,
+    icons::OPEN_PREVIEW,
     icons::OPENAI,
     icons::ORIGIN,
     icons::PAPERCLIP,
@@ -900,6 +903,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("multitask", artwork::MULTITASK),
     ("new-file", artwork::NEW_FILE),
     ("new-folder", artwork::NEW_FOLDER),
+    ("open-preview", artwork::OPEN_PREVIEW),
     ("openai", artwork::OPENAI),
     ("origin", artwork::ORIGIN),
     ("paperclip", artwork::PAPERCLIP),
