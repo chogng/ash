@@ -9,6 +9,93 @@ const run = promisify(execFile);
 
 test.use({ gitRepository: true });
 
+test('SCM startup keeps commit hover targets stable in a large history', async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+	const cwd = testWorkspace.directory;
+	const { stdout } = await run('git', ['rev-parse', 'HEAD'], { cwd });
+	const commits = Array.from({ length: 2000 }, (_, index) => {
+		const message = `Startup history ${index}`;
+		return `commit refs/heads/main\nmark :${index + 1}\ncommitter History Author <history@example.invalid> ${1_700_000_000 + index} +0000\ndata ${message.length}\n${message}\nfrom ${index === 0 ? stdout.trim() : `:${index}`}\n\n`;
+	}).join('');
+	await new Promise<void>((resolve, reject) => {
+		const importer = execFile('git', ['fast-import', '--quiet'], { cwd }, error => error ? reject(error) : resolve());
+		importer.stdin!.end(commits);
+	});
+	const restarted = await reloadWorkbench();
+	const page = restarted.workbench.page;
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	await history.locator('.ash-pane-view-header').click();
+	const graph = history.locator('.ash-scm-graph');
+	await expect(graph).toHaveAttribute('aria-busy', 'false');
+	const row = graph.getByRole('treeitem').filter({ hasText: 'Startup history 1997' });
+	await expect(row).toHaveAttribute('aria-setsize', '50');
+	const original = await row.elementHandle();
+	try {
+		await row.locator('.ash-scm-graph-subject').hover({ position: { x: 3, y: 8 } });
+		const tooltip = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
+		await expect(tooltip.locator('.ash-scm-graph-hover-subject')).toHaveText('Startup history 1997');
+		await expect(tooltip.locator('.ash-scm-graph-hover-author > span')).toHaveText('History Author');
+		await expect(row).toHaveAttribute('aria-describedby', (await tooltip.getAttribute('id'))!);
+		await restarted.workbench.waitForUiIdle();
+		expect(await original!.evaluate(element => element.isConnected)).toBe(true);
+		await expect(row).toHaveAttribute('aria-setsize', '50');
+		await expect(tooltip).toBeVisible();
+	} finally {
+		await original?.dispose();
+	}
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('tooltip')).toHaveCount(0);
+	// Keep the pointer outside the graph so viewport changes do not hover another commit.
+	await page.mouse.move(900, 100);
+	await row.focus();
+	await page.keyboard.press('Alt+ArrowDown');
+	const tooltip = page.getByRole('tooltip');
+	const tooltipId = await tooltip.getAttribute('id');
+	const copy = tooltip.getByRole('button', { name: 'Copy Commit Hash', exact: true });
+	await expect(copy).toBeFocused();
+	const retainedRow = await row.elementHandle();
+	const retainedToolbar = await row.locator('.ash-scm-graph-actions').elementHandle();
+	try {
+		if (target.kind === 'electron') {
+			const window = await (restarted.application as ElectronApplication).browserWindow(page);
+			try { await window.evaluate(window => window.setSize(1100, 820)); }
+			finally { await window.dispose(); }
+		} else {
+			await page.setViewportSize({ width: 1100, height: 820 });
+		}
+		await restarted.workbench.waitForUiIdle();
+		await expect(tooltip).toHaveAttribute('id', tooltipId!);
+		await expect(copy).toBeFocused();
+		await graph.evaluate(element => { element.scrollTop = 22; });
+		await restarted.workbench.waitForUiIdle();
+		expect(await retainedRow!.evaluate(element => element.isConnected)).toBe(true);
+		expect(await retainedToolbar!.evaluate(element => element.isConnected)).toBe(true);
+		await expect(tooltip).toHaveAttribute('id', tooltipId!);
+		await expect(copy).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(row).toBeFocused();
+		await row.press('Enter');
+		await expect(row).toHaveAttribute('aria-expanded', 'true');
+		await expect(row.locator('.ash-scm-graph-change-state')).toHaveText('No changed files.');
+		expect(await retainedRow!.evaluate(element => element.isConnected)).toBe(true);
+		expect(await retainedToolbar!.evaluate(element => element.isConnected)).toBe(true);
+		await expect(row).toBeFocused();
+		await row.press('Enter');
+		await expect(row).toHaveAttribute('aria-expanded', 'false');
+	} finally {
+		await retainedRow?.dispose();
+		await retainedToolbar?.dispose();
+	}
+	await page.keyboard.press('Escape');
+	await expect(row).toBeFocused();
+
+	await graph.evaluate(element => { element.scrollTop = element.scrollHeight; });
+	await expect(row).toHaveCount(0);
+	await expect(graph.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '100');
+	await expect(graph).toHaveAttribute('aria-busy', 'false');
+});
+
 test('SCM history shows Git commits and opens file and multi-file comparisons', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 
@@ -121,7 +208,7 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	await expect(latest).toHaveAttribute('aria-expanded', 'false');
 	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['main.ts', 'other.ts']);
 	await expect(comparisons.locator('.stanza-multi-diff-editor-section')).toHaveCount(2);
-	await latest.click({ button: 'right' });
+	await latest.locator('.ash-scm-graph-subject').click({ button: 'right', position: { x: 3, y: 8 } });
 	await page.getByRole('menuitem', { name: 'Open Changes', exact: true }).click();
 	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['main.ts', 'other.ts']);
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Review all files' })).toHaveCount(1);
@@ -130,7 +217,7 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 test('SCM history reserves title width and reveals commit details on pointer and keyboard focus', async ({ application, target, testWorkspace, workbench, restartWorkbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 	const cwd = testWorkspace.directory;
-	const subject = 'History metadata: a long title that uses the space previously occupied by the commit hash and date';
+	const subject = `History metadata: a long title that uses the space previously occupied by the commit hash and date ${'long-commit-identifier'.repeat(6)}`;
 	const body = '    The complete explanation remains available without taking space from the history title.';
 	await writeFile(join(cwd, 'details.txt'), 'first line\nsecond line\n');
 	await writeFile(join(cwd, 'binary.dat'), Buffer.from([0, 1, 2]));
@@ -149,6 +236,8 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	await expect(commit).toBeVisible();
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
+	const retainedCommit = await commit.elementHandle();
+	const retainedActions = await commit.locator('.ash-scm-graph-actions').elementHandle();
 	for (const width of [280, 560]) {
 		const sidebarBounds = (await sidebar.boundingBox())!;
 		const sashBounds = (await sash.boundingBox())!;
@@ -159,6 +248,8 @@ test('SCM history reserves title width and reveals commit details on pointer and
 		await page.mouse.move(x + width - sidebarBounds.width, y);
 		await page.mouse.up();
 		await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeCloseTo(width, 0);
+		expect(await retainedCommit!.evaluate(element => element.isConnected)).toBe(true);
+		expect(await retainedActions!.evaluate(element => element.isConnected)).toBe(true);
 		await expect(commit.locator('.ash-scm-graph-metadata')).toHaveCount(0);
 		const geometry = await commit.evaluate(element => {
 			const graph = element.querySelector('.ash-scm-graph-graph')!.getBoundingClientRect();
@@ -169,6 +260,8 @@ test('SCM history reserves title width and reveals commit details on pointer and
 		expect(geometry.left).toBeCloseTo(0, 1);
 		expect(geometry.right).toBeCloseTo(8, 1);
 	}
+	await retainedCommit?.dispose();
+	await retainedActions?.dispose();
 	const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
 	await commit.locator('.ash-scm-graph-subject').hover();
 	await expect(hover.locator('.ash-scm-graph-hover-subject')).toHaveText(subject);
@@ -179,6 +272,17 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	expect(await hover.locator('.ash-scm-graph-hover-message').textContent()).toBe(body);
 	await expect(hover.locator('.ash-scm-graph-hover-statistics > span')).toHaveText(['2 files changed', '2 insertions(+)', '0 deletions(-)']);
 	await expect(hover.locator('.ash-scm-graph-hover-hash')).toHaveAttribute('title', hash);
+	const contentGeometry = await hover.evaluate(element => {
+		const tooltip = element.closest<HTMLElement>('.ash-hover')!;
+		const bounds = tooltip.getBoundingClientRect();
+		const range = element.ownerDocument.createRange();
+		range.selectNodeContents(element.querySelector('.ash-scm-graph-hover-subject')!);
+		return {
+			horizontalOverflow: tooltip.scrollWidth > tooltip.clientWidth,
+			fullTitleInsideCard: [...range.getClientRects()].every(rect => rect.left >= bounds.left && rect.right <= bounds.right),
+		};
+	});
+	expect(contentGeometry).toEqual({ horizontalOverflow: false, fullTitleInsideCard: true });
 	const openOnGitHub = hover.getByRole('button', { name: 'Open on GitHub', exact: true });
 	await expect(openOnGitHub).toBeVisible();
 	await expect(openOnGitHub).toHaveText('Open on GitHub');
@@ -280,7 +384,7 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	const language = page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
 	await language.press('Enter');
-	({ workbench } = await restartWorkbench());
+	({ application, workbench } = await restartWorkbench());
 	const localizedHistory = workbench.page.locator('[data-view-id="ash.gitGraph"]');
 	await expect(localizedHistory).toBeVisible();
 	const localizedCommit = localizedHistory.getByRole('treeitem', { name: /History metadata:/u });
@@ -289,6 +393,27 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	const localizedHover = workbench.page.getByRole('tooltip').filter({ has: workbench.page.locator('.ash-scm-graph-hover') });
 	await expect(localizedHover.getByRole('button', { name: '复制提交哈希', exact: true })).toHaveText('');
 	await expect(localizedHover.getByRole('button', { name: '在 GitHub 上打开', exact: true })).toHaveText('在 GitHub 上打开');
+	await workbench.page.mouse.move(900, 100);
+	for (const width of target.kind === 'electron' ? [1100, 640] : [1100, 360]) {
+		if (target.kind === 'electron') {
+			const window = await (application as ElectronApplication).browserWindow(workbench.page);
+			try { await window.evaluate((window, width) => window.setSize(width, 820), width); }
+			finally { await window.dispose(); }
+		} else {
+			await workbench.page.setViewportSize({ width, height: 820 });
+		}
+		await workbench.waitForUiIdle();
+		const geometry = await localizedHover.evaluate(element => {
+			const tooltip = element.closest<HTMLElement>('.ash-hover')!;
+			const bounds = tooltip.getBoundingClientRect();
+			return {
+				horizontalOverflow: tooltip.scrollWidth > tooltip.clientWidth,
+				insideWindow: bounds.left >= 0 && bounds.right <= element.ownerDocument.defaultView!.innerWidth,
+			};
+		});
+		expect(geometry).toEqual({ horizontalOverflow: false, insideWindow: true });
+		await expect(localizedHover.locator('.ash-scm-graph-hover-subject')).toHaveText(subject);
+	}
 });
 
 test('SCM history references and actions overlay long titles without changing row widths', async ({ target, testWorkspace, workbench }) => {

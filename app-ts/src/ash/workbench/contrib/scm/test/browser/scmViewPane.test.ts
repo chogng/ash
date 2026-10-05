@@ -413,7 +413,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 	}
 });
 
-test("SCMHistoryViewPane loads the complete history across graph pages", async () => {
+test("SCMHistoryViewPane loads another history page only on demand", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	const graphRequests: GraphQuery[] = [];
@@ -451,19 +451,19 @@ test("SCMHistoryViewPane loads the complete history across graph pages", async (
 		branches: async () => [],
 		graph: async (query: GraphQuery) => {
 			graphRequests.push(query);
-			const firstPage = [
-				{ objectId: "commit-1", parentObjectIds: ["commit-2"], timestampSeconds: 1_753_000_000, subject: "First page one" },
-				{ objectId: "commit-2", parentObjectIds: ["commit-3"], timestampSeconds: 1_752_900_000, subject: "First page two" },
-			];
-			const secondPage = [
-				{ objectId: "commit-3", parentObjectIds: [], timestampSeconds: 1_752_800_000, subject: "Second page one" },
-			];
+			const start = query.cursor ? Number(query.cursor) : 0;
+			const commits = Array.from({ length: Math.min(50, 101 - start) }, (_, index) => ({
+				objectId: `commit-${start + index + 1}`,
+				parentObjectIds: start + index === 100 ? [] : [`commit-${start + index + 2}`],
+				timestampSeconds: 1_753_000_000 - start - index,
+				subject: `History item ${start + index + 1}`,
+			}));
 			return {
-				commits: query.cursor ? secondPage : firstPage,
+				commits,
 				references: [],
 				remotes: [],
-				hasMore: !query.cursor,
-				nextCursor: query.cursor ? undefined : "cursor-1",
+				hasMore: start < 100,
+				nextCursor: start < 100 ? String(start + 50) : undefined,
 			};
 		},
 	} as unknown as IGitService;
@@ -475,12 +475,28 @@ test("SCMHistoryViewPane loads the complete history across graph pages", async (
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-graph-list") !== null);
 		const list = pane.element.querySelector(".ash-scm-graph-list");
-		await waitFor(() => pane.element.querySelectorAll(".ash-scm-graph-commit").length === 3);
+		const graph = pane.element.querySelector<HTMLElement>('.ash-scm-graph')!;
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
+		const first = list!.querySelector('.ash-scm-graph-commit');
+		assert.equal(first?.getAttribute('aria-setsize'), '50');
+		assert.deepEqual(graphRequests, [{ limit: 50 }, { limit: 50, cursor: '50' }]);
+		assert.equal(pane.element.querySelector('.ash-scm-graph-list'), list);
 
-		assert.deepEqual(graphRequests, [{ limit: 50 }, { limit: 50, cursor: "cursor-1" }]);
-		assert.equal(pane.element.querySelector(".ash-scm-graph-list"), list);
-		assert.deepEqual([...pane.element.querySelectorAll(".ash-scm-graph-subject")].map((element) => element.textContent), ["First page one", "First page two", "Second page one"]);
-		assert.equal(pane.element.querySelector(".ash-scm-graph-load-more"), null);
+		pane.element.querySelector<HTMLButtonElement>('.ash-scm-graph-load-more button')!.click();
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
+		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '100');
+		assert.deepEqual(graphRequests, [{ limit: 50 }, { limit: 50, cursor: '50' }, { limit: 50, cursor: '100' }]);
+		assert.ok(pane.element.querySelector('.ash-scm-graph-load-more'));
+
+		Object.defineProperty(graph, 'clientHeight', { configurable: true, value: 22 });
+		Object.defineProperty(graph, 'scrollHeight', { configurable: true, value: 2200 });
+		graph.scrollTop = 2178;
+		graph.dispatchEvent(new browser.window.Event('scroll'));
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
+		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '101');
+		assert.equal(pane.element.querySelector('.ash-scm-graph-load-more'), null);
+		assert.equal(graphRequests.length, 3);
+		assert.equal(pane.element.querySelector('.ash-scm-graph-list'), list);
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -533,9 +549,14 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		branches: async () => [],
 		graph: async (_query: GraphQuery) => ({ commits, references: [], remotes: [], hasMore: false, nextCursor: undefined }),
 	} as unknown as IGitService;
+	const hoverTargets: HTMLElement[] = [];
+	const disposedHoverTargets = new Set<HTMLElement>();
 	const hoverService: IHoverService = {
 		setupDelayedHover: () => testManagedHover(),
-		setupHover: () => testManagedHover(),
+		setupHover: options => {
+			hoverTargets.push(options.target);
+			return Object.assign(toDisposable(() => disposedHoverTargets.add(options.target)), { visible: false, show() {}, hide() {}, update() {} });
+		},
 		showHover: () => testManagedHover(),
 		hideHover() {},
 	};
@@ -549,15 +570,40 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		Object.defineProperty(graph, "clientHeight", { configurable: true, value: 100 });
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelectorAll(".ash-scm-graph-commit").length > 0);
+		pane.element.querySelector<HTMLButtonElement>('.ash-scm-graph-load-more button')!.click();
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
 
 		const initialRows = pane.element.querySelectorAll(".ash-scm-graph-commit").length;
 		assert.ok(initialRows < commits.length);
 		assert.equal(pane.element.querySelectorAll(".ash-scm-graph-spacer").length, 2);
 		assert.equal(pane.element.querySelectorAll<HTMLElement>(".ash-scm-graph-spacer")[1].style.height, `${(commits.length - initialRows) * 22}px`);
 
+		const firstCommit = pane.element.querySelector<HTMLElement>('.ash-scm-graph-commit')!;
+		const firstToolbar = firstCommit.querySelector('.ash-scm-graph-actions')!;
+		const hoverCount = hoverTargets.length;
+		firstCommit.focus();
+		graph.dispatchEvent(new browser.window.Event('scroll'));
+		assert.equal(pane.element.querySelector('.ash-scm-graph-commit'), firstCommit, 'Scrolling within the same range retains the row');
+		assert.equal(hoverTargets.length, hoverCount, 'Unchanged rows do not create more hover handles');
+		assert.ok(!disposedHoverTargets.has(firstCommit));
+		assert.equal(browser.window.document.activeElement, firstCommit);
+
 		Object.defineProperty(graph, "clientHeight", { configurable: true, value: 320 });
 		resizeCallback?.([{ borderBoxSize: [{ inlineSize: 320, blockSize: 320 }], contentRect: { width: 320, height: 320 } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
 		assert.ok(pane.element.querySelectorAll(".ash-scm-graph-commit").length > initialRows);
+		assert.equal(pane.element.querySelector('.ash-scm-graph-commit'), firstCommit, 'Growing the viewport keeps existing rows');
+		assert.equal(firstCommit.querySelector('.ash-scm-graph-actions'), firstToolbar);
+		assert.equal(browser.window.document.activeElement, firstCommit);
+		graph.scrollTop = 220;
+		graph.dispatchEvent(new browser.window.Event('scroll'));
+		assert.ok(!firstCommit.isConnected, 'Leaving the overscan range removes the row');
+		assert.ok(disposedHoverTargets.has(firstCommit), 'Removed rows dispose their hover handles');
+		const overlapping = [...pane.element.querySelectorAll<HTMLElement>('.ash-scm-graph-commit')].find(element => element.textContent?.includes('Commit 12'))!;
+		overlapping.focus();
+		graph.scrollTop = 242;
+		graph.dispatchEvent(new browser.window.Event('scroll'));
+		assert.ok(overlapping.isConnected, 'An overlapping visible row remains connected');
+		assert.equal(browser.window.document.activeElement, overlapping);
 
 		const list = pane.element.querySelector<HTMLElement>(".ash-scm-graph-list");
 		assert.ok(list);
@@ -647,8 +693,11 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		commit.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
 		assert.equal(contextMenus[0]?.menuId, MenuId.SCMHistoryItemContext);
 		assert.equal((contextMenus[0]?.menuActionOptions?.arg as { readonly historyItemViewModel: { readonly historyItem: { readonly id: string } } }).historyItemViewModel.historyItem.id, objectId);
+		commit.focus();
 		commit.click();
 		await waitFor(() => pane.element.querySelector(".ash-scm-graph-change") !== null);
+		assert.equal(pane.element.querySelector('.ash-scm-graph-commit'), commit);
+		assert.equal(browser.window.document.activeElement, commit);
 		assert.equal(changeRequests, 1);
 		assert.equal(fileRequests, 0);
 		assert.equal(pane.element.querySelector(".ash-scm-graph-commit")?.getAttribute("aria-expanded"), "true");
@@ -683,6 +732,13 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		assert.deepEqual(opened[2].options, { pinned: false, preserveFocus: true });
 		change?.dispatchEvent(new browser.window.KeyboardEvent("keydown", { bubbles: true, key: "Enter", altKey: true }));
 		assert.equal(opened.length, 3);
+		change?.focus();
+		commit.click();
+		assert.equal(commit.getAttribute('aria-expanded'), 'false');
+		assert.equal(browser.window.document.activeElement, commit, 'Collapsing a focused child returns focus to its commit');
+		assert.ok(!change?.isConnected);
+		change?.click();
+		assert.equal(opened.length, 3, 'Collapsing files disposes their action listeners');
 		pane.dispose();
 		change?.click();
 		assert.equal(opened.length, 3);
